@@ -20,6 +20,8 @@ export const toTransaction = (record: Record<string, unknown>): Transaction => {
     classification: { method: p['classificationMethod'] ?? 'none', confidence: p['confidence'] ?? 0 },
     accountId: record['accountId'] ?? undefined,
     accountName: record['accountName'] ?? undefined,
+    cardId: record['cardId'] ?? undefined,
+    cardName: record['cardName'] ?? undefined,
     categoryId: record['categoryId'] ?? undefined,
     categoryName: record['categoryName'] ?? undefined,
     merchant: record['merchant'] ?? undefined,

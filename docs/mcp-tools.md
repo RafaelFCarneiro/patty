@@ -2,18 +2,42 @@
 
 Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All tools share these conventions:
 
-- **Natural inputs**: `account` and `category` take names (case/accent-insensitive, partial match allowed). Resolution failures return structured errors the agent can self-correct from.
-- **Errors**: `{ "error": { "code": "...", ... } }` with `isError: true`. Codes: `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `unknown_transaction`, `duplicate_name`, `validation`. Ambiguous/unknown errors include `candidates` (names) to retry with.
-- **Currency**: BRL or USD; from the account when one is linked, else the `currency` field, else BRL. Summaries group per currency, never converting.
+- **Natural inputs**: `account`, `card`, and `category` take names (case/accent-insensitive, partial match allowed). Resolution failures return structured errors the agent can self-correct from.
+- **Errors**: `{ "error": { "code": "...", ... } }` with `isError: true`. Codes: `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `unknown_card`, `ambiguous_card`, `unknown_transaction`, `unknown_bill`, `duplicate_name`, `validation`. Ambiguous/unknown errors include `candidates` (names) to retry with.
+- **Currency**: BRL or USD; from the account/card when one is linked, else the `currency` field, else BRL. Summaries group per currency, never converting.
 - **Dates**: `YYYY-MM-DD`.
 
 ## create_transaction
 
 Create an expense/income. Omitting `category` triggers auto-classification via the merchant graph; the result reports `classification.method` (`rule|graph|user|none`) and `confidence` (confirm with the user below 0.6). Idempotent: same `idempotencyKey` returns the existing transaction with `created: false`.
 
-Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account`, `category`, `currency`, `rawInput` (original user phrasing).
+Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `category`, `currency`, `rawInput` (original user phrasing).
 
 Example: `{"description": "Uber para o aeroporto", "amount": 32.5, "type": "expense", "account": "nubank", "idempotencyKey": "2026-06-09-uber-32.50"}` → transaction classified as Transporte (`rule`, 0.8).
+
+## create_transactions_bulk
+
+Statement paste / import (1–200 items). Each item is classified and idempotent — `idempotencyKey` is derived from `date+description+amount` when absent, so re-importing the same statement is a no-op. Top-level `account`/`card` act as defaults for items without their own.
+
+Returns `summary` counts plus per-item `status`: `created`, `needs_review` (no category or confidence < 0.6 — confirm with the user), `duplicate`, or `error` (with the structured AppError).
+
+## create_credit_card / list_credit_cards
+
+`create_credit_card`: `name`, `closingDay` (1–28; transactions after it belong to next month's bill), `dueDay` (1–28), `currency` (default BRL), optional `limit`. Error: `duplicate_name`.
+
+## get_bill
+
+Input: `card` (name), `month`, `year`. Returns the fatura: `bill` (`status: open|closed|paid`, `closeDate`, `dueDate`), `cardName`, `total`, and `transactions`. Bills are created automatically (status `open`) when the first card transaction of a cycle arrives. Error: `unknown_bill`.
+
+## pay_bill
+
+Input: `card`, `month`, `year`. Marks the bill `paid`. Deliberately does **not** create a payment transaction — card expenses already count; a payment expense would double-count. Account-balance transfers come in a later phase.
+
+## create_recurring / list_recurring / apply_due_recurring
+
+`create_recurring`: `description`, `amount`, `type`, `period` (`weekly|monthly|yearly`), `startDate` (first due), optional `account`, `category`, `currency`. Recurring transactions are classified as `user` with confidence 1.
+
+`apply_due_recurring` (no input): materializes a transaction for every rule due on/before today, catching up missed periods (bounded at 36). Idempotent via key `rec-<ruleId>-<dueDate>` — safe to call any time, e.g. at the start of a monthly review.
 
 ## update_transaction
 

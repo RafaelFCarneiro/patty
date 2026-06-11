@@ -29,6 +29,8 @@ export const Transaction = z.object({
   rawInput: z.string().optional(),
   accountId: Id.optional(),
   accountName: z.string().optional(),
+  cardId: Id.optional(),
+  cardName: z.string().optional(),
   categoryId: Id.optional(),
   categoryName: z.string().optional(),
   merchant: z.string().optional(),
@@ -42,12 +44,31 @@ export const CreateTransactionInput = z.object({
   type: TransactionType,
   date: IsoDate.optional(),
   account: z.string().optional(),
+  card: z.string().optional(),
   category: z.string().optional(),
   currency: CurrencyCode.optional(),
   idempotencyKey: z.string().min(1),
   rawInput: z.string().optional(),
 })
 export type CreateTransactionInput = z.infer<typeof CreateTransactionInput>
+
+/** Bulk item: idempotencyKey optional — derived from date+description+amount when absent. */
+export const BulkTransactionItem = CreateTransactionInput.omit({
+  idempotencyKey: true,
+  rawInput: true,
+}).extend({
+  idempotencyKey: z.string().min(1).optional(),
+})
+export type BulkTransactionItem = z.infer<typeof BulkTransactionItem>
+
+export const CreateTransactionsBulkInput = z.object({
+  items: z.array(BulkTransactionItem).min(1).max(200),
+  /** Defaults applied to every item that doesn't set its own. */
+  account: z.string().optional(),
+  card: z.string().optional(),
+  rawInput: z.string().optional(),
+})
+export type CreateTransactionsBulkInput = z.infer<typeof CreateTransactionsBulkInput>
 
 export const UpdateTransactionInput = z.object({
   id: Id,

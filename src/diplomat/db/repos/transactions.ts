@@ -34,9 +34,16 @@ export type SearchFilters = {
 const RETURN_TX = `
   RETURN t,
          a.id AS accountId, a.name AS accountName,
+         cc.id AS cardId, cc.name AS cardName,
          c.id AS categoryId, c.name AS categoryName,
          m.key AS merchant,
          created`
+
+const MATCH_REFS = `
+  OPTIONAL MATCH (t)-[:FROM]->(a:Account)
+  OPTIONAL MATCH (t)-[:CHARGED_TO]->(cc:CreditCard)
+  OPTIONAL MATCH (t)-[:IN]->(c:Category)
+  OPTIONAL MATCH (t)-[:AT]->(m:Merchant)`
 
 export type UpdateProps = Partial<
   Pick<TransactionProps, 'description' | 'amount' | 'type' | 'date' | 'currency'> & {
@@ -48,7 +55,7 @@ export type UpdateProps = Partial<
 export type TransactionsRepo = {
   create: (
     props: TransactionProps,
-    refs: { accountId: string | null; categoryId: string | null; merchantKey: string | null },
+    refs: { accountId: string | null; cardId: string | null; categoryId: string | null; merchantKey: string | null },
   ) => Promise<CreateTxResult>
   getById: (id: string) => Promise<Transaction | null>
   update: (
@@ -91,14 +98,17 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
        FOREACH (_ IN CASE WHEN created AND mer IS NOT NULL THEN [1] ELSE [] END |
          MERGE (t)-[:AT]->(mer))
        WITH t, created
-       OPTIONAL MATCH (t)-[:FROM]->(a:Account)
-       OPTIONAL MATCH (t)-[:IN]->(c:Category)
-       OPTIONAL MATCH (t)-[:AT]->(m:Merchant)
+       OPTIONAL MATCH (card:CreditCard {id: $cardId})
+       FOREACH (_ IN CASE WHEN created AND card IS NOT NULL THEN [1] ELSE [] END |
+         MERGE (t)-[:CHARGED_TO]->(card))
+       WITH t, created
+       ${MATCH_REFS}
        ${RETURN_TX}`,
       {
         idempotencyKey: props.idempotencyKey,
         props,
         accountId: refs.accountId,
+        cardId: refs.cardId,
         categoryId: refs.categoryId,
         merchantKey: refs.merchantKey,
       },
@@ -112,9 +122,7 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
       driver,
       `MATCH (t:Transaction {id: $id})
        WITH t, true AS created
-       OPTIONAL MATCH (t)-[:FROM]->(a:Account)
-       OPTIONAL MATCH (t)-[:IN]->(c:Category)
-       OPTIONAL MATCH (t)-[:AT]->(m:Merchant)
+       ${MATCH_REFS}
        ${RETURN_TX}`,
       { id },
     )
@@ -138,9 +146,7 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
        FOREACH (_ IN CASE WHEN newAcc IS NOT NULL AND oldFrom IS NOT NULL THEN [1] ELSE [] END | DELETE oldFrom)
        FOREACH (_ IN CASE WHEN newAcc IS NOT NULL THEN [1] ELSE [] END | MERGE (t)-[:FROM]->(newAcc))
        WITH DISTINCT t, true AS created
-       OPTIONAL MATCH (t)-[:FROM]->(a:Account)
-       OPTIONAL MATCH (t)-[:IN]->(c:Category)
-       OPTIONAL MATCH (t)-[:AT]->(m:Merchant)
+       ${MATCH_REFS}
        ${RETURN_TX}`,
       { id, props, categoryId: refs.categoryId, accountId: refs.accountId },
     )
@@ -162,10 +168,8 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
     const rows = await run(
       driver,
       `MATCH (t:Transaction)
-       OPTIONAL MATCH (t)-[:FROM]->(a:Account)
-       OPTIONAL MATCH (t)-[:IN]->(c:Category)
-       OPTIONAL MATCH (t)-[:AT]->(m:Merchant)
-       WITH t, a, c, m, true AS created
+       ${MATCH_REFS}
+       WITH t, a, cc, c, m, true AS created
        WHERE ($from IS NULL OR t.date >= $from)
          AND ($to IS NULL OR t.date < $to)
          AND ($type IS NULL OR t.type = $type)

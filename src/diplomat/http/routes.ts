@@ -3,11 +3,15 @@ import type { Result } from 'neverthrow'
 import { z } from 'zod'
 import { httpStatus, type AppError } from '../../common/errors.js'
 import { createAccount, listAccounts } from '../../controllers/accounts.js'
+import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, listCategories } from '../../controllers/categories.js'
+import { createCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
+import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
 import { getSpendingSummary } from '../../controllers/summary.js'
 import {
   createTransaction,
+  createTransactionsBulk,
   deleteTransaction,
   searchTransactions,
   updateTransaction,
@@ -15,8 +19,11 @@ import {
 import { CreateAccount } from '../../models/account.js'
 import { CreateCategory } from '../../models/category.js'
 import { Period } from '../../models/common.js'
+import { CreateCreditCard } from '../../models/creditCard.js'
+import { CreateRecurringInput } from '../../models/recurring.js'
 import {
   CreateTransactionInput,
+  CreateTransactionsBulkInput,
   SearchTransactionsInput,
   UpdateTransactionInput,
 } from '../../models/transaction.js'
@@ -64,6 +71,43 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
       (e) => reply.status(httpStatus(e)).send({ error: e }),
     )
   })
+
+  app.post('/api/transactions/bulk', async (req, reply) => {
+    const input = parse(CreateTransactionsBulkInput, req.body, reply) as CreateTransactionsBulkInput
+    if (!input) return
+    return send(reply, await createTransactionsBulk(deps, input, 'import'), 201)
+  })
+
+  app.get('/api/credit-cards', async () => listCreditCards(deps))
+  app.post('/api/credit-cards', async (req, reply) => {
+    const input = parse(CreateCreditCard, req.body, reply) as CreateCreditCard
+    if (!input) return
+    return send(reply, await createCreditCard(deps, input), 201)
+  })
+
+  const BillQuery = z.object({
+    card: z.string().min(1),
+    month: z.coerce.number().int().min(1).max(12),
+    year: z.coerce.number().int().min(2000).max(2100),
+  })
+  app.get('/api/bills', async (req, reply) => {
+    const input = parse(BillQuery, req.query, reply) as z.infer<typeof BillQuery>
+    if (!input) return
+    return send(reply, await getBill(deps, input))
+  })
+  app.post('/api/bills/pay', async (req, reply) => {
+    const input = parse(BillQuery, req.body, reply) as z.infer<typeof BillQuery>
+    if (!input) return
+    return send(reply, await payBill(deps, input))
+  })
+
+  app.get('/api/recurring', async () => listRecurring(deps))
+  app.post('/api/recurring', async (req, reply) => {
+    const input = parse(CreateRecurringInput, req.body, reply) as CreateRecurringInput
+    if (!input) return
+    return send(reply, await createRecurring(deps, input), 201)
+  })
+  app.post('/api/recurring/apply-due', async (_req, reply) => reply.send(await applyDueRecurring(deps)))
 
   app.patch('/api/transactions/:id', async (req, reply) => {
     const { id } = req.params as { id: string }

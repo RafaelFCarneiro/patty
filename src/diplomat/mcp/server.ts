@@ -3,11 +3,15 @@ import type { Result } from 'neverthrow'
 import { z } from 'zod'
 import type { AppError } from '../../common/errors.js'
 import { createAccount, listAccounts } from '../../controllers/accounts.js'
+import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, listCategories } from '../../controllers/categories.js'
+import { createCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
+import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
 import { getSpendingSummary } from '../../controllers/summary.js'
 import {
   createTransaction,
+  createTransactionsBulk,
   deleteTransaction,
   searchTransactions,
   updateTransaction,
@@ -45,6 +49,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         type: z.enum(['expense', 'income']),
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD; defaults to today'),
         account: z.string().optional().describe('Account name, e.g. "Nubank"'),
+        card: z.string().optional().describe('Credit card name — transaction joins the cycle bill (fatura). Use account OR card, not both'),
         category: z.string().optional().describe('Category name; omit to auto-classify'),
         currency: z.enum(['BRL', 'USD']).optional(),
         idempotencyKey: z.string().min(1),
@@ -52,6 +57,133 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       },
     },
     async (args) => fromResult(await createTransaction(deps, args, 'mcp')),
+  )
+
+  server.registerTool(
+    'create_transactions_bulk',
+    {
+      title: 'Create transactions in bulk',
+      description:
+        'Import many transactions at once (pasted statement, CSV lines). Each item is auto-classified ' +
+        'and idempotent (key derived from date+description+amount — re-importing is safe). Returns a ' +
+        'per-item status: created, needs_review (low confidence — confirm categories with the user), ' +
+        'duplicate, or error. Top-level account/card apply to items that do not set their own.',
+      inputSchema: {
+        items: z
+          .array(
+            z.object({
+              description: z.string().min(1),
+              amount: z.number().positive(),
+              type: z.enum(['expense', 'income']),
+              date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+              account: z.string().optional(),
+              card: z.string().optional(),
+              category: z.string().optional(),
+              currency: z.enum(['BRL', 'USD']).optional(),
+              idempotencyKey: z.string().optional(),
+            }),
+          )
+          .min(1)
+          .max(200),
+        account: z.string().optional().describe('Default account for all items'),
+        card: z.string().optional().describe('Default credit card for all items'),
+        rawInput: z.string().optional().describe('The original pasted statement text'),
+      },
+    },
+    async (args) => fromResult(await createTransactionsBulk(deps, args, 'import')),
+  )
+
+  server.registerTool(
+    'create_credit_card',
+    {
+      title: 'Create credit card',
+      description:
+        'Create a credit card. closingDay: day the fatura closes (transactions after it go to next ' +
+        "month's bill). dueDay: payment due day. Currency defaults to BRL.",
+      inputSchema: {
+        name: z.string().min(1),
+        closingDay: z.number().int().min(1).max(28),
+        dueDay: z.number().int().min(1).max(28),
+        currency: z.enum(['BRL', 'USD']).default('BRL'),
+        limit: z.number().positive().optional(),
+      },
+    },
+    async (args) => fromResult(await createCreditCard(deps, args)),
+  )
+
+  server.registerTool(
+    'list_credit_cards',
+    { title: 'List credit cards', description: 'List all credit cards.', inputSchema: {} },
+    async () => json(await listCreditCards(deps)),
+  )
+
+  server.registerTool(
+    'get_bill',
+    {
+      title: 'Get credit card bill (fatura)',
+      description:
+        'Get a card bill for a month: status (open/closed/paid), close/due dates, total, and its transactions.',
+      inputSchema: {
+        card: z.string().min(1).describe('Card name'),
+        month: z.number().int().min(1).max(12),
+        year: z.number().int().min(2000).max(2100),
+      },
+    },
+    async (args) => fromResult(await getBill(deps, args)),
+  )
+
+  server.registerTool(
+    'pay_bill',
+    {
+      title: 'Pay credit card bill',
+      description:
+        'Mark a bill as paid. Does NOT create a payment transaction (card expenses are already counted; ' +
+        'a payment expense would double-count).',
+      inputSchema: {
+        card: z.string().min(1),
+        month: z.number().int().min(1).max(12),
+        year: z.number().int().min(2000).max(2100),
+      },
+    },
+    async (args) => fromResult(await payBill(deps, args)),
+  )
+
+  server.registerTool(
+    'create_recurring',
+    {
+      title: 'Create recurring rule',
+      description:
+        'Create a recurring transaction rule (salary, rent, subscription). Materialized by apply_due_recurring.',
+      inputSchema: {
+        description: z.string().min(1),
+        amount: z.number().positive(),
+        type: z.enum(['expense', 'income']),
+        period: z.enum(['weekly', 'monthly', 'yearly']),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('First due date'),
+        account: z.string().optional(),
+        category: z.string().optional(),
+        currency: z.enum(['BRL', 'USD']).optional(),
+      },
+    },
+    async (args) => fromResult(await createRecurring(deps, args)),
+  )
+
+  server.registerTool(
+    'list_recurring',
+    { title: 'List recurring rules', description: 'List all recurring rules with next due dates.', inputSchema: {} },
+    async () => json(await listRecurring(deps)),
+  )
+
+  server.registerTool(
+    'apply_due_recurring',
+    {
+      title: 'Apply due recurring rules',
+      description:
+        'Materialize transactions for every rule due on/before today (catches up missed periods). ' +
+        'Idempotent — safe to call any time.',
+      inputSchema: {},
+    },
+    async () => json(await applyDueRecurring(deps)),
   )
 
   server.registerTool(
