@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Result } from 'neverthrow'
 import { z } from 'zod'
 import type { AppError } from '../../common/errors.js'
-import { createAccount, listAccounts } from '../../controllers/accounts.js'
+import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, listCategories } from '../../controllers/categories.js'
 import { createCreditCard, listCreditCards } from '../../controllers/creditCards.js'
@@ -267,9 +267,25 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         name: z.string().min(1),
         type: z.enum(['checking', 'savings', 'wallet', 'investment']).default('checking'),
         currency: z.enum(['BRL', 'USD']).default('BRL'),
+        initialBalance: z.number().default(0).describe('Balance at account creation'),
       },
     },
     async (args) => fromResult(await createAccount(deps, args)),
+  )
+
+  server.registerTool(
+    'get_account_balances',
+    {
+      title: 'Get account balances',
+      description:
+        'Current balance per account, derived from the graph: initialBalance + income − expenses ' +
+        '+ transfers in − transfers out. Optionally filter by account name or type.',
+      inputSchema: {
+        account: z.string().optional().describe('Single account by name'),
+        type: z.enum(['checking', 'savings', 'wallet', 'investment']).optional(),
+      },
+    },
+    async (args) => fromResult(await getAccountBalances(deps, args)),
   )
 
   server.registerTool(

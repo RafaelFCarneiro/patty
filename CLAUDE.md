@@ -74,6 +74,7 @@ Layer rules (enforce in review — violations are bugs):
 - Recurring: `:RecurringRule` with `nextDue`; materialized by `apply_due_recurring` with stable keys `rec-<ruleId>-<date>`.
 - Bulk import: idempotency keys derived from `date+description+amount`; items with confidence < 0.6 are flagged `needs_review`, not blocked.
 - Transfers: `:Transfer` nodes (`[:FROM]`/`[:TO]` accounts) — never expenses/income, never in summaries. Same-currency only until FX lands.
+- Balances: derived, never stored — `initialBalance + income − expenses + transfers in − transfers out`. Transactions AND transfers both move balances.
 
 ## Process
 
