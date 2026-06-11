@@ -16,7 +16,7 @@ services:
       retries: 20
 
   backend:
-    build: ./backend
+    build: .
     container_name: fintrack-backend
     ports:
       - "3001:3001"

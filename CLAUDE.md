@@ -4,31 +4,40 @@ Guidance for AI agents working in this repository.
 
 ## Project overview
 
-FinTrack v2 is an AI-first personal finance manager. The primary interface is AI chat (Claude clients) talking to the backend's **MCP server**; REST is a secondary surface. Backend: TypeScript, Fastify, zod, Neo4j, diplomat architecture, functional programming style. Full plan: `docs/PLAN.md`. v1 (NestJS/Mongo/React) is archived under `legacy/` as functional reference only — never modify it.
+FinTrack v2 is an AI-first personal finance manager. The primary interface is AI chat (Claude clients) talking to the backend's **MCP server**; REST is a secondary surface. Backend: TypeScript, Fastify, zod, Neo4j, diplomat architecture, functional programming style. Full plan: `docs/PLAN.md`. v1 (NestJS/Mongo/React) is archived in the sibling repo folder `../fintrack-legacy` as functional reference only — never modify it.
 
 ## Development setup
 
 ```bash
-docker compose up -d neo4j        # graph db (browser UI: http://localhost:7474, neo4j / fintrack123)
-cd backend && npm install && npm run dev   # REST + MCP on http://localhost:3001
+npm install
+npm run infra:up:db   # Neo4j only (browser UI: http://localhost:7474, neo4j / fintrack123)
+npm run dev           # REST + MCP on http://localhost:3001
 # or run everything containerized:
-docker compose up --build
+npm run infra:up
 ```
 
 - REST API: `http://localhost:3001/api`
 - MCP endpoint (streamable HTTP): `http://localhost:3001/mcp`
+- Run `npx ntl` for an interactive, described list of all scripts.
 
-## Commands (`cd backend`)
+## Commands
 
 ```bash
-npm run dev          # tsx watch
-npm run build        # tsc (tsconfig.build.json)
-npm start            # node dist/main.js
-npm test             # vitest run (unit tests, colocated *.test.ts)
-npm run typecheck    # tsc --noEmit (includes tests)
+npm run dev             # tsx watch
+npm run build           # tsc (tsconfig.build.json)
+npm start               # node dist/main.js
+npm test                # vitest run (unit tests, colocated *.test.ts)
+npm run typecheck       # tsc --noEmit (includes tests)
+npm run infra:up        # build + start all containers (neo4j + backend)
+npm run infra:up:db     # start only neo4j
+npm run infra:down      # stop containers (keeps data)
+npm run infra:down:clean # stop containers and WIPE the db volume
+npm run mcp:inspect     # MCP Inspector — connect to http://127.0.0.1:3001/mcp
 ```
 
 Run a single test file: `npx vitest run src/logic/classify.test.ts`
+
+The backend lives at the repo root (`src/`, `package.json`) — there is no `backend/` subfolder.
 
 ## Architecture — diplomat (STRICT layer rules)
 

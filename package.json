@@ -1,0 +1,48 @@
+{
+  "name": "fintrack",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "infra:up": "docker compose up -d --build --wait",
+    "infra:up:db": "docker compose up -d --wait neo4j",
+    "infra:down": "docker compose down",
+    "infra:down:clean": "docker compose down --volumes",
+    "mcp:inspect": "npx @modelcontextprotocol/inspector"
+  },
+  "ntl": {
+    "descriptions": {
+      "dev": "Run backend in watch mode (REST + MCP on :3001)",
+      "build": "Compile TypeScript to dist/",
+      "start": "Run compiled backend",
+      "test": "Run unit tests (vitest)",
+      "test:watch": "Run unit tests in watch mode",
+      "typecheck": "Type-check everything, including tests",
+      "infra:up": "Build and start all containers (neo4j + backend)",
+      "infra:up:db": "Start only Neo4j (for local npm run dev)",
+      "infra:down": "Stop containers (keep data volume)",
+      "infra:down:clean": "Stop containers and WIPE the database volume",
+      "mcp:inspect": "Open MCP Inspector — connect to http://127.0.0.1:3001/mcp (Streamable HTTP)"
+    }
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "fastify": "^5.3.0",
+    "neo4j-driver": "^5.28.0",
+    "neverthrow": "^8.2.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "ntl": "^5.1.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
+  }
+}

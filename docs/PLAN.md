@@ -123,25 +123,26 @@ Every user correction updates edge weights. `classificationMethod` (`rule | grap
 ## Project structure
 
 ```
-backend/
-  src/
-    main.ts                      # Fastify boot: REST plugin + MCP transport
-    diplomat/
-      http/                      # Fastify route plugins per domain
-      mcp/                       # MCP tool/resource/prompt registrations
-      db/                        # neo4j-driver queries (parameterized Cypher)
-    controllers/                 # one per domain: transactions, accounts, ...
-    logic/                       # pure: classification, budgets, recurring, summaries
-    adapters/                    # wire ↔ model ↔ cypher-record translations
-    models/                      # zod schemas (single source of truth)
-    common/                      # Result helpers, idempotency, name resolution
-  Dockerfile                     # multi-stage: deps → build → slim runtime
+src/                             # backend lives at repo root
+  main.ts                        # Fastify boot: REST plugin + MCP transport
+  diplomat/
+    http/                        # Fastify route plugins per domain
+    mcp/                         # MCP tool/resource/prompt registrations
+    db/                          # neo4j-driver queries (parameterized Cypher)
+  controllers/                   # one per domain: transactions, accounts, ...
+  logic/                         # pure: classification, budgets, recurring, summaries
+  adapters/                      # wire ↔ model ↔ cypher-record translations
+  models/                        # zod schemas (single source of truth)
+  common/                        # Result helpers, idempotency, name resolution
 docs/
   PLAN.md
   adr/                           # architecture decision records
 skills/                          # Claude skills: monthly-review, import-statement, ...
+Dockerfile                       # multi-stage: deps → build → slim runtime
 docker-compose.yml               # neo4j + backend
 CLAUDE.md                        # dev guidance for AI agents (commands, layer rules)
+
+../fintrack-legacy/              # archived v1 (NestJS/Mongo/React), reference only
 ```
 
 Config via env (`NEO4J_URI`, `NEO4J_AUTH`, `PORT`, `MCP_PATH`) — no hardcoded connections.
