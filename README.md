@@ -26,3 +26,7 @@ Or fully containerized: `npm run infra:up`.
 - `docs/adr/` — architecture decision records
 - `CLAUDE.md` — conventions and layer rules (for AI agents and humans alike)
 - `../fintrack-legacy` — archived v1 (NestJS + MongoDB + React), reference only
+
+## License
+
+[Apache-2.0](LICENSE)
