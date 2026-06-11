@@ -16,6 +16,7 @@ import {
   searchTransactions,
   updateTransaction,
 } from '../../controllers/transactions.js'
+import { createTransfer, listTransfers } from '../../controllers/transfers.js'
 
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. */
 
@@ -273,8 +274,48 @@ export const buildMcpServer = (deps: Deps): McpServer => {
 
   server.registerTool(
     'list_accounts',
-    { title: 'List accounts', description: 'List all accounts with their currencies.', inputSchema: {} },
-    async () => json(await listAccounts(deps)),
+    {
+      title: 'List accounts',
+      description: 'List accounts with their currencies, optionally filtered by type (checking = conta corrente).',
+      inputSchema: {
+        type: z.enum(['checking', 'savings', 'wallet', 'investment']).optional(),
+      },
+    },
+    async (args) => json(await listAccounts(deps, args.type)),
+  )
+
+  server.registerTool(
+    'create_transfer',
+    {
+      title: 'Transfer between accounts',
+      description:
+        'Move value between two accounts (e.g. conta corrente → investimentos). Transfers are NOT ' +
+        'expenses/income and never appear in spending summaries. Both accounts must share the same ' +
+        'currency (cross-currency needs FX support, not available yet). Idempotent via idempotencyKey.',
+      inputSchema: {
+        from: z.string().min(1).describe('Source account name'),
+        to: z.string().min(1).describe('Destination account name'),
+        amount: z.number().positive(),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD; defaults to today'),
+        description: z.string().optional().describe('e.g. "aporte mensal"'),
+        idempotencyKey: z.string().min(1),
+      },
+    },
+    async (args) => fromResult(await createTransfer(deps, args)),
+  )
+
+  server.registerTool(
+    'list_transfers',
+    {
+      title: 'List transfers',
+      description: 'List transfers, optionally by month/year and/or account (matches either side).',
+      inputSchema: {
+        month: z.number().int().min(1).max(12).optional(),
+        year: z.number().int().min(2000).max(2100).optional(),
+        account: z.string().optional(),
+      },
+    },
+    async (args) => fromResult(await listTransfers(deps, args)),
   )
 
   server.registerTool(

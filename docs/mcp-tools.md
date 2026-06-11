@@ -62,7 +62,15 @@ Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `bala
 
 ## create_account / list_accounts
 
-`create_account`: `name` (required), `type` (`checking|savings|wallet|investment`, default checking), `currency` (default BRL). Error: `duplicate_name`.
+`create_account`: `name` (required), `type` (`checking|savings|wallet|investment`, default checking — checking = conta corrente), `currency` (default BRL). Error: `duplicate_name`.
+
+`list_accounts`: optional `type` filter (e.g. all investment accounts).
+
+## create_transfer / list_transfers
+
+`create_transfer`: move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, optional `date`, `description`). Transfers are **not** expenses/income — they never appear in spending summaries. Both accounts must share a currency; cross-currency returns a `validation` error (FX support pending). Idempotent like transactions.
+
+`list_transfers`: optional `month`/`year` and `account` (matches either side).
 
 ## create_category / list_categories
 
