@@ -40,7 +40,8 @@ const main = async (): Promise<void> => {
   process.on('SIGINT', close)
   process.on('SIGTERM', close)
 
-  await app.listen({ port: config.PORT, host: '0.0.0.0' })
+  // '::' binds dual-stack (IPv6 + IPv4) so both localhost (::1) and 127.0.0.1 work
+  await app.listen({ port: config.PORT, host: '::' })
   console.log(`fintrack: REST http://localhost:${config.PORT}/api · MCP http://localhost:${config.PORT}/mcp`)
 }
 
