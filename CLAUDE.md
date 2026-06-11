@@ -61,6 +61,14 @@ Layer rules (enforce in review — violations are bugs):
 - Controllers return `Result<T, AppError>` (neverthrow) for **expected** failures (unknown account, ambiguous category…); unexpected errors throw and become 500s.
 - Decode at the boundary: every external input (HTTP body, MCP args, Cypher records) is zod-parsed before entering the domain.
 
+## FP conventions (ADR-001, ADR-003)
+
+One concern per library — don't cross them:
+
+- **zod**: schemas + boundary decoding only.
+- **neverthrow**: control flow for fallible operations. Controllers' sequential resolve-then-act is control flow — neverthrow idioms or readable awaits, never forced pipes.
+- **remeda**: pure data reshaping in `logic/`/`adapters/` (`pipe`, `groupBy`, `sortBy`, `sumBy`, `countBy`, `firstBy`). Use when a transformation has ≥2 stages or needs grouping; native `map`/`filter` is fine for trivial cases.
+
 ## Data conventions
 
 - IDs: `crypto.randomUUID()`; seeded nodes use stable slugs (`cat-transporte`).

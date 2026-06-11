@@ -1,3 +1,4 @@
+import * as R from 'remeda'
 import type { Classification } from '../models/transaction.js'
 
 /** A merchant→category edge candidate returned by the graph. */
@@ -24,7 +25,7 @@ export const weightToConfidence = (weight: number): number =>
   Math.min(0.95, 0.5 + 0.1 * Math.max(0, weight))
 
 export const pickClassification = (matches: readonly MerchantMatch[]): ClassifyOutcome => {
-  const best = [...matches].sort((a, b) => b.weight - a.weight)[0]
+  const best = R.firstBy(matches, [(m) => m.weight, 'desc'])
   if (!best) return { method: 'none', confidence: 0 }
   return {
     method: best.origin,
