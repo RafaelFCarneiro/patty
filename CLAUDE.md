@@ -84,8 +84,15 @@ One concern per library — don't cross them:
 - Transfers: transactions with `type: 'transfer'` and BOTH `[:FROM]`/`[:TO]` account edges (ADR-002) — one structure for the whole extrato. Summary/classification queries MUST exclude `t.type = 'transfer'`. Same-currency only until FX lands.
 - Balances: derived, never stored — `initialBalance + income − expenses + transfers in − transfers out`. Transactions AND transfers both move balances.
 
+## Documentation map (read before generating)
+
+- `docs/architecture.md` — the system **as built**: graph model, invariants, layer rules. The source of truth when generating code; if your change alters it, update it in the same change.
+- `docs/PLAN.md` — roadmap/vision; updated at phase boundaries, may lag the as-built state.
+- `docs/adr/` — decisions with rationale; never contradict an accepted ADR without writing a new one.
+- `docs/mcp-tools.md` — MCP tool contract. `docs/mcp-clients.md` — client connection guide.
+
 ## Process
 
 - Architecture decisions get an ADR in `docs/adr/` (use the engineering:architecture skill).
-- Docs are updated in the same change that alters behavior.
+- Docs are updated in the same change that alters behavior — `docs/architecture.md` for structural changes, `docs/mcp-tools.md` for tool changes.
 - New MCP tools must be documented in `docs/mcp-tools.md` with schema, error codes, and an example.
