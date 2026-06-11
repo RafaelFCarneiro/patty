@@ -6,11 +6,20 @@ import { createAccount, listAccounts } from '../../controllers/accounts.js'
 import { createCategory, listCategories } from '../../controllers/categories.js'
 import type { Deps } from '../../controllers/deps.js'
 import { getSpendingSummary } from '../../controllers/summary.js'
-import { createTransaction, searchTransactions } from '../../controllers/transactions.js'
+import {
+  createTransaction,
+  deleteTransaction,
+  searchTransactions,
+  updateTransaction,
+} from '../../controllers/transactions.js'
 import { CreateAccount } from '../../models/account.js'
 import { CreateCategory } from '../../models/category.js'
 import { Period } from '../../models/common.js'
-import { CreateTransactionInput, SearchTransactionsInput } from '../../models/transaction.js'
+import {
+  CreateTransactionInput,
+  SearchTransactionsInput,
+  UpdateTransactionInput,
+} from '../../models/transaction.js'
 
 /** Thin diplomat: zod-parse → controller → map Result to HTTP. */
 
@@ -34,14 +43,14 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
 
   app.get('/api/accounts', async () => listAccounts(deps))
   app.post('/api/accounts', async (req, reply) => {
-    const input = parse(CreateAccount, req.body, reply)
+    const input = parse(CreateAccount, req.body, reply) as CreateAccount
     if (!input) return
     return send(reply, await createAccount(deps, input), 201)
   })
 
   app.get('/api/categories', async () => listCategories(deps))
   app.post('/api/categories', async (req, reply) => {
-    const input = parse(CreateCategory, req.body, reply)
+    const input = parse(CreateCategory, req.body, reply) as CreateCategory
     if (!input) return
     return send(reply, await createCategory(deps, input), 201)
   })
@@ -56,8 +65,21 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     )
   })
 
+  app.patch('/api/transactions/:id', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const input = parse(UpdateTransactionInput, { ...(req.body as object), id }, reply) as UpdateTransactionInput
+    if (!input) return
+    return send(reply, await updateTransaction(deps, input))
+  })
+
+  app.delete('/api/transactions/:id', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const confirm = (req.query as { confirm?: string }).confirm === 'true'
+    return send(reply, await deleteTransaction(deps, { id, confirm }))
+  })
+
   app.get('/api/transactions', async (req, reply) => {
-    const input = parse(SearchTransactionsInput, req.query, reply)
+    const input = parse(SearchTransactionsInput, req.query, reply) as SearchTransactionsInput
     if (!input) return
     return send(reply, await searchTransactions(deps, input))
   })

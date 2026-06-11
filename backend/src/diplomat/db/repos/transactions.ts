@@ -38,11 +38,25 @@ const RETURN_TX = `
          m.key AS merchant,
          created`
 
+export type UpdateProps = Partial<
+  Pick<TransactionProps, 'description' | 'amount' | 'type' | 'date' | 'currency'> & {
+    classificationMethod: string
+    confidence: number
+  }
+>
+
 export type TransactionsRepo = {
   create: (
     props: TransactionProps,
     refs: { accountId: string | null; categoryId: string | null; merchantKey: string | null },
   ) => Promise<CreateTxResult>
+  getById: (id: string) => Promise<Transaction | null>
+  update: (
+    id: string,
+    props: UpdateProps,
+    refs: { accountId: string | null; categoryId: string | null },
+  ) => Promise<Transaction | null>
+  delete: (id: string) => Promise<boolean>
   search: (filters: SearchFilters) => Promise<Transaction[]>
   summaryRows: (from: string, to: string) => Promise<SummaryRow[]>
 }
@@ -91,6 +105,57 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
     )
     const row = rows[0]!
     return { transaction: toTransaction(row), created: Boolean(row['created']) }
+  },
+
+  getById: async (id) => {
+    const rows = await run(
+      driver,
+      `MATCH (t:Transaction {id: $id})
+       WITH t, true AS created
+       OPTIONAL MATCH (t)-[:FROM]->(a:Account)
+       OPTIONAL MATCH (t)-[:IN]->(c:Category)
+       OPTIONAL MATCH (t)-[:AT]->(m:Merchant)
+       ${RETURN_TX}`,
+      { id },
+    )
+    return rows[0] ? toTransaction(rows[0]) : null
+  },
+
+  /** Patch scalar props; re-link [:IN]/[:FROM] edges when new refs are provided. */
+  update: async (id, props, refs) => {
+    const rows = await run(
+      driver,
+      `MATCH (t:Transaction {id: $id})
+       SET t += $props
+       WITH t
+       OPTIONAL MATCH (newCat:Category {id: $categoryId})
+       OPTIONAL MATCH (t)-[oldIn:IN]->(:Category)
+       FOREACH (_ IN CASE WHEN newCat IS NOT NULL AND oldIn IS NOT NULL THEN [1] ELSE [] END | DELETE oldIn)
+       FOREACH (_ IN CASE WHEN newCat IS NOT NULL THEN [1] ELSE [] END | MERGE (t)-[:IN]->(newCat))
+       WITH DISTINCT t
+       OPTIONAL MATCH (newAcc:Account {id: $accountId})
+       OPTIONAL MATCH (t)-[oldFrom:FROM]->(:Account)
+       FOREACH (_ IN CASE WHEN newAcc IS NOT NULL AND oldFrom IS NOT NULL THEN [1] ELSE [] END | DELETE oldFrom)
+       FOREACH (_ IN CASE WHEN newAcc IS NOT NULL THEN [1] ELSE [] END | MERGE (t)-[:FROM]->(newAcc))
+       WITH DISTINCT t, true AS created
+       OPTIONAL MATCH (t)-[:FROM]->(a:Account)
+       OPTIONAL MATCH (t)-[:IN]->(c:Category)
+       OPTIONAL MATCH (t)-[:AT]->(m:Merchant)
+       ${RETURN_TX}`,
+      { id, props, categoryId: refs.categoryId, accountId: refs.accountId },
+    )
+    return rows[0] ? toTransaction(rows[0]) : null
+  },
+
+  delete: async (id) => {
+    const rows = await run(
+      driver,
+      `MATCH (t:Transaction {id: $id})
+       DETACH DELETE t
+       RETURN count(t) AS deleted`,
+      { id },
+    )
+    return Number(rows[0]?.['deleted'] ?? 0) > 0
   },
 
   search: async (filters) => {

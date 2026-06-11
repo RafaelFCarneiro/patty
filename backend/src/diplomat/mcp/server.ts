@@ -6,7 +6,12 @@ import { createAccount, listAccounts } from '../../controllers/accounts.js'
 import { createCategory, listCategories } from '../../controllers/categories.js'
 import type { Deps } from '../../controllers/deps.js'
 import { getSpendingSummary } from '../../controllers/summary.js'
-import { createTransaction, searchTransactions } from '../../controllers/transactions.js'
+import {
+  createTransaction,
+  deleteTransaction,
+  searchTransactions,
+  updateTransaction,
+} from '../../controllers/transactions.js'
 
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. */
 
@@ -47,6 +52,42 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       },
     },
     async (args) => fromResult(await createTransaction(deps, args, 'mcp')),
+  )
+
+  server.registerTool(
+    'update_transaction',
+    {
+      title: 'Update transaction',
+      description:
+        'Update fields of an existing transaction by id (from search_transactions). Only provided fields ' +
+        'change. Setting category counts as a user correction (confidence 1) and teaches the merchant graph. ' +
+        'Changing the account also updates the currency to match it.',
+      inputSchema: {
+        id: z.string().min(1).describe('Transaction id'),
+        description: z.string().min(1).optional(),
+        amount: z.number().positive().optional(),
+        type: z.enum(['expense', 'income']).optional(),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        account: z.string().optional().describe('New account name'),
+        category: z.string().optional().describe('New category name (user correction)'),
+      },
+    },
+    async (args) => fromResult(await updateTransaction(deps, args)),
+  )
+
+  server.registerTool(
+    'delete_transaction',
+    {
+      title: 'Delete transaction',
+      description:
+        'Delete a transaction by id. Without confirm:true it is a DRY RUN returning what would be deleted — ' +
+        'show it to the user, get explicit confirmation, then call again with confirm: true.',
+      inputSchema: {
+        id: z.string().min(1).describe('Transaction id'),
+        confirm: z.boolean().default(false).describe('Must be true to actually delete'),
+      },
+    },
+    async (args) => fromResult(await deleteTransaction(deps, args)),
   )
 
   server.registerTool(

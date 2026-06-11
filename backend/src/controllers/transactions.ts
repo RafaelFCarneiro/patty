@@ -9,6 +9,7 @@ import type {
   SearchTransactionsInput,
   Transaction,
   TransactionSource,
+  UpdateTransactionInput,
 } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 
@@ -77,6 +78,79 @@ export const createTransaction = async (
     merchantKey: classification.merchantKey ?? null,
   })
   return ok({ transaction, created, classification })
+}
+
+export const updateTransaction = async (
+  deps: Deps,
+  input: UpdateTransactionInput,
+): Promise<Result<Transaction, AppError>> => {
+  const existing = await deps.transactions.getById(input.id)
+  if (!existing) return err({ code: 'unknown_transaction', id: input.id })
+
+  // Resolve new account, if provided — currency follows the account
+  let accountId: string | null = null
+  let accountCurrency: string | null = null
+  if (input.account) {
+    const res = resolveByName(await deps.accounts.list(), input.account)
+    if (res.kind === 'none')
+      return err({ code: 'unknown_account', query: res.query, candidates: res.candidates })
+    if (res.kind === 'ambiguous')
+      return err({ code: 'ambiguous_account', query: res.query, candidates: res.candidates })
+    accountId = res.entity.id
+    accountCurrency = res.entity.currency
+  }
+
+  // Resolve new category, if provided — a user correction, full confidence
+  let categoryId: string | null = null
+  if (input.category) {
+    const res = resolveByName(await deps.categories.list(), input.category)
+    if (res.kind === 'none')
+      return err({ code: 'unknown_category', query: res.query, candidates: res.candidates })
+    if (res.kind === 'ambiguous')
+      return err({ code: 'ambiguous_category', query: res.query, candidates: res.candidates })
+    categoryId = res.entity.id
+  }
+
+  const props = {
+    ...(input.description !== undefined && { description: input.description }),
+    ...(input.amount !== undefined && { amount: input.amount }),
+    ...(input.type !== undefined && { type: input.type }),
+    ...(input.date !== undefined && { date: input.date }),
+    ...(accountCurrency !== null && { currency: accountCurrency }),
+    ...(categoryId !== null && { classificationMethod: 'user', confidence: 1 }),
+  }
+
+  const updated = await deps.transactions.update(input.id, props, { accountId, categoryId })
+  if (!updated) return err({ code: 'unknown_transaction', id: input.id })
+
+  // Learning loop: correcting the category teaches the merchant graph
+  if (categoryId && categoryId !== existing.categoryId)
+    await deps.merchants.strengthenFromTransaction(input.id, categoryId)
+
+  return ok(updated)
+}
+
+export type DeleteTransactionResult =
+  | { deleted: true; transaction: Transaction }
+  | { deleted: false; dryRun: true; wouldDelete: Transaction; hint: string }
+
+export const deleteTransaction = async (
+  deps: Deps,
+  input: { id: string; confirm: boolean },
+): Promise<Result<DeleteTransactionResult, AppError>> => {
+  const existing = await deps.transactions.getById(input.id)
+  if (!existing) return err({ code: 'unknown_transaction', id: input.id })
+
+  if (!input.confirm)
+    return ok({
+      deleted: false,
+      dryRun: true,
+      wouldDelete: existing,
+      hint: 'Destructive action: show the transaction to the user and call again with confirm: true.',
+    })
+
+  await deps.transactions.delete(input.id)
+  return ok({ deleted: true, transaction: existing })
 }
 
 export const searchTransactions = async (

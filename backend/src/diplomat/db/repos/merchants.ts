@@ -14,6 +14,8 @@ const MatchRow = z.object({
 export type MerchantsRepo = {
   /** Find merchant→category candidates whose key appears in the normalized description. */
   matchCandidates: (normalizedDescription: string) => Promise<MerchantMatch[]>
+  /** Learning write-back: a user correction strengthens the merchant→category edge. */
+  strengthenFromTransaction: (transactionId: string, categoryId: string) => Promise<void>
 }
 
 export const merchantsRepo = (driver: Driver): MerchantsRepo => ({
@@ -29,5 +31,17 @@ export const merchantsRepo = (driver: Driver): MerchantsRepo => ({
       { desc: normalizedDescription },
     )
     return rows.map((r) => MatchRow.parse(r))
+  },
+
+  strengthenFromTransaction: async (transactionId, categoryId) => {
+    await run(
+      driver,
+      `MATCH (:Transaction {id: $transactionId})-[:AT]->(m:Merchant)
+       MATCH (c:Category {id: $categoryId})
+       MERGE (m)-[u:USUALLY]->(c)
+       ON CREATE SET u.weight = 1, u.origin = 'graph'
+       ON MATCH SET u.weight = u.weight + 1`,
+      { transactionId, categoryId },
+    )
   },
 })

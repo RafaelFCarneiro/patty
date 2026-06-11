@@ -49,6 +49,17 @@ export const CreateTransactionInput = z.object({
 })
 export type CreateTransactionInput = z.infer<typeof CreateTransactionInput>
 
+export const UpdateTransactionInput = z.object({
+  id: Id,
+  description: z.string().min(1).optional(),
+  amount: Money.optional(),
+  type: TransactionType.optional(),
+  date: IsoDate.optional(),
+  account: z.string().optional(),
+  category: z.string().optional(),
+})
+export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInput>
+
 export const SearchTransactionsInput = z.object({
   month: z.number().int().min(1).max(12).optional(),
   year: z.number().int().min(2000).max(2100).optional(),
