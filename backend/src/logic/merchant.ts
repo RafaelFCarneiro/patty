@@ -1,0 +1,15 @@
+/** Pure merchant-name normalization: bank-statement noise → stable merchant key. */
+
+const NOISE_PREFIXES = /^(pag\*?|pix\s+(enviado|recebido)?|compra\s+(no\s+)?(debito|credito)\s*|dbt\s+|crd\s+|tef\s+)/i
+
+export const normalizeMerchant = (description: string): string =>
+  description
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // strip accents
+    .replace(NOISE_PREFIXES, '')
+    .replace(/[*_#-]/g, ' ')
+    .replace(/\d+/g, ' ') // card suffixes, dates, amounts
+    .replace(/[^a-z\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
