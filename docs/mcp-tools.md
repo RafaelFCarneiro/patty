@@ -66,6 +66,10 @@ Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `bala
 
 `list_accounts`: optional `type` filter (e.g. all investment accounts).
 
+## get_account_balances
+
+Current balance per account, **derived** from the graph (never stored): `initialBalance + income − expenses + transfers in − transfers out`. Returns the parts alongside the balance. Optional filters: `account` (name), `type`. Note: `create_account` accepts `initialBalance` (default 0).
+
 ## create_transfer / list_transfers
 
 `create_transfer`: move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, optional `date`, `description`). Transfers are **not** expenses/income — they never appear in spending summaries. Both accounts must share a currency; cross-currency returns a `validation` error (FX support pending). Idempotent like transactions.

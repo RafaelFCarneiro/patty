@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify'
 import type { Result } from 'neverthrow'
 import { z } from 'zod'
 import { httpStatus, type AppError } from '../../common/errors.js'
-import { createAccount, listAccounts } from '../../controllers/accounts.js'
+import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, listCategories } from '../../controllers/categories.js'
 import { createCreditCard, listCreditCards } from '../../controllers/creditCards.js'
@@ -55,6 +55,13 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     const q = z.object({ type: AccountType.optional() }).safeParse(req.query)
     if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid type'] } })
     return listAccounts(deps, q.data.type)
+  })
+  app.get('/api/accounts/balances', async (req, reply) => {
+    const q = z
+      .object({ account: z.string().optional(), type: AccountType.optional() })
+      .safeParse(req.query)
+    if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid query'] } })
+    return send(reply, await getAccountBalances(deps, q.data))
   })
   app.post('/api/accounts', async (req, reply) => {
     const input = parse(CreateAccount, req.body, reply) as CreateAccount
