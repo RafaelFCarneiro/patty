@@ -66,7 +66,7 @@ Layer rules (enforce in review — violations are bugs):
 One concern per library — don't cross them:
 
 - **zod**: schemas + boundary decoding only.
-- **neverthrow**: control flow for fallible operations. Controllers' sequential resolve-then-act is control flow — neverthrow idioms or readable awaits, never forced pipes.
+- **neverthrow**: control flow for fallible operations. Controllers compose via `safeTry` generator pipelines — each `yield*` short-circuits on `err` (Railway-Oriented). Shared combinators: `guard`/`okOr` (`common/result.ts`), entity resolvers (`controllers/resolve.ts`). Controllers return `ResultAsync`; diplomats just `await` them.
 - **remeda**: pure data reshaping in `logic/`/`adapters/` (`pipe`, `groupBy`, `sortBy`, `sumBy`, `countBy`, `firstBy`). Use when a transformation has ≥2 stages or needs grouping; native `map`/`filter` is fine for trivial cases.
 
 ## Data conventions

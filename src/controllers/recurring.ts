@@ -1,54 +1,36 @@
-import { err, ok, type Result } from 'neverthrow'
+import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { nextDue, recurringIdempotencyKey } from '../logic/recurring.js'
 import { toIsoDate } from '../logic/period.js'
-import { resolveByName } from '../logic/resolve.js'
 import type { CreateRecurringInput, RecurringRule } from '../models/recurring.js'
 import type { Transaction } from '../models/transaction.js'
 import type { Deps } from './deps.js'
+import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
 
 export const listRecurring = (deps: Deps): Promise<RecurringRule[]> => deps.recurring.list()
 
-export const createRecurring = async (
+export const createRecurring = (
   deps: Deps,
   input: CreateRecurringInput,
-): Promise<Result<RecurringRule, AppError>> => {
-  let accountId: string | null = null
-  let currency = input.currency ?? 'BRL'
-  if (input.account) {
-    const res = resolveByName(await deps.accounts.list(), input.account)
-    if (res.kind === 'none')
-      return err({ code: 'unknown_account', query: res.query, candidates: res.candidates })
-    if (res.kind === 'ambiguous')
-      return err({ code: 'ambiguous_account', query: res.query, candidates: res.candidates })
-    accountId = res.entity.id
-    currency = res.entity.currency
-  }
+): ResultAsync<RecurringRule, AppError> =>
+  safeTry(async function* () {
+    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
+    const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null
 
-  let categoryId: string | null = null
-  if (input.category) {
-    const res = resolveByName(await deps.categories.list(), input.category)
-    if (res.kind === 'none')
-      return err({ code: 'unknown_category', query: res.query, candidates: res.candidates })
-    if (res.kind === 'ambiguous')
-      return err({ code: 'ambiguous_category', query: res.query, candidates: res.candidates })
-    categoryId = res.entity.id
-  }
-
-  const rule = await deps.recurring.create(
-    {
-      id: deps.newId(),
-      description: input.description,
-      amount: input.amount,
-      type: input.type,
-      period: input.period,
-      nextDue: input.startDate,
-      currency,
-    },
-    { accountId, categoryId },
-  )
-  return ok(rule)
-}
+    const rule = await deps.recurring.create(
+      {
+        id: deps.newId(),
+        description: input.description,
+        amount: input.amount,
+        type: input.type,
+        period: input.period,
+        nextDue: input.startDate,
+        currency: account?.currency ?? input.currency ?? 'BRL',
+      },
+      { accountId: account?.id ?? null, categoryId: category?.id ?? null },
+    )
+    return ok(rule)
+  })
 
 export type ApplyDueResult = {
   applied: Array<{ rule: string; date: string; transaction: Transaction }>

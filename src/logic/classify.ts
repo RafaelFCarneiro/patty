@@ -24,6 +24,14 @@ export type ClassifyOutcome = Classification & {
 export const weightToConfidence = (weight: number): number =>
   Math.min(0.95, 0.5 + 0.1 * Math.max(0, weight))
 
+/** An explicit category from the user is a classification with full confidence. */
+export const userClassification = (category: { id: string; name: string }): ClassifyOutcome => ({
+  method: 'user',
+  confidence: 1,
+  categoryId: category.id,
+  categoryName: category.name,
+})
+
 export const pickClassification = (matches: readonly MerchantMatch[]): ClassifyOutcome => {
   const best = R.firstBy(matches, [(m) => m.weight, 'desc'])
   if (!best) return { method: 'none', confidence: 0 }
