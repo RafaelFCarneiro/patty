@@ -1,4 +1,5 @@
 import { err, ok, type Result } from 'neverthrow'
+import * as R from 'remeda'
 import type { AppError } from '../common/errors.js'
 import { billPeriodFor } from '../logic/bill.js'
 import { deriveIdempotencyKey, needsReview } from '../logic/bulk.js'
@@ -149,12 +150,13 @@ export const createTransactionsBulk = async (
       ),
     )
   }
+  const counts = R.countBy(items, (i) => i.status)
   return ok({
     summary: {
-      created: items.filter((i) => i.status === 'created').length,
-      needsReview: items.filter((i) => i.status === 'needs_review').length,
-      duplicates: items.filter((i) => i.status === 'duplicate').length,
-      errors: items.filter((i) => i.status === 'error').length,
+      created: counts['created'] ?? 0,
+      needsReview: counts['needs_review'] ?? 0,
+      duplicates: counts['duplicate'] ?? 0,
+      errors: counts['error'] ?? 0,
     },
     items,
   })
