@@ -2,6 +2,10 @@
 
 **Date:** 2026-06-09 · **Status:** Draft v2 (stack revised: diplomat / Fastify / zod / Neo4j)
 
+> This is the **roadmap/vision** document — it reflects the plan as written and is updated at phase
+> boundaries. For the system **as built today**, read `docs/architecture.md` (kept current with every
+> architectural change). Decisions + rationale live in `docs/adr/`.
+
 ## Decisions
 
 | Decision | Choice |
