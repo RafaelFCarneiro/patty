@@ -1,8 +1,13 @@
 import { z } from 'zod'
 import { CurrencyCode, Id, IsoDate, Money } from './common.js'
 
-export const TransactionType = z.enum(['expense', 'income'])
+/** 'transfer' moves value between accounts: FROM + TO edges, excluded from summaries. */
+export const TransactionType = z.enum(['expense', 'income', 'transfer'])
 export type TransactionType = z.infer<typeof TransactionType>
+
+/** Types accepted by create_transaction / bulk — transfers go through create_transfer. */
+export const MovementType = z.enum(['expense', 'income'])
+export type MovementType = z.infer<typeof MovementType>
 
 export const ClassificationMethod = z.enum(['rule', 'graph', 'user', 'none'])
 export type ClassificationMethod = z.infer<typeof ClassificationMethod>
@@ -29,6 +34,9 @@ export const Transaction = z.object({
   rawInput: z.string().optional(),
   accountId: Id.optional(),
   accountName: z.string().optional(),
+  /** Destination account — present only on type 'transfer'. */
+  toAccountId: Id.optional(),
+  toAccountName: z.string().optional(),
   cardId: Id.optional(),
   cardName: z.string().optional(),
   categoryId: Id.optional(),
@@ -41,7 +49,7 @@ export type Transaction = z.infer<typeof Transaction>
 export const CreateTransactionInput = z.object({
   description: z.string().min(1),
   amount: Money,
-  type: TransactionType,
+  type: MovementType,
   date: IsoDate.optional(),
   account: z.string().optional(),
   card: z.string().optional(),
@@ -70,11 +78,21 @@ export const CreateTransactionsBulkInput = z.object({
 })
 export type CreateTransactionsBulkInput = z.infer<typeof CreateTransactionsBulkInput>
 
+export const CreateTransferInput = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  amount: Money,
+  date: IsoDate.optional(),
+  description: z.string().optional(),
+  idempotencyKey: z.string().min(1),
+})
+export type CreateTransferInput = z.infer<typeof CreateTransferInput>
+
 export const UpdateTransactionInput = z.object({
   id: Id,
   description: z.string().min(1).optional(),
   amount: Money.optional(),
-  type: TransactionType.optional(),
+  type: MovementType.optional(),
   date: IsoDate.optional(),
   account: z.string().optional(),
   category: z.string().optional(),

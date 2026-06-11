@@ -73,7 +73,7 @@ Layer rules (enforce in review — violations are bugs):
 - Credit cards: transactions are `[:CHARGED_TO]` a card and `[:CONTAINS]`-ed by the cycle's `:Bill` (fatura), auto-created `open` based on the card's `closingDay`. `pay_bill` only flips status — never creates a payment transaction (would double-count).
 - Recurring: `:RecurringRule` with `nextDue`; materialized by `apply_due_recurring` with stable keys `rec-<ruleId>-<date>`.
 - Bulk import: idempotency keys derived from `date+description+amount`; items with confidence < 0.6 are flagged `needs_review`, not blocked.
-- Transfers: `:Transfer` nodes (`[:FROM]`/`[:TO]` accounts) — never expenses/income, never in summaries. Same-currency only until FX lands.
+- Transfers: transactions with `type: 'transfer'` and BOTH `[:FROM]`/`[:TO]` account edges (ADR-002) — one structure for the whole extrato. Summary/classification queries MUST exclude `t.type = 'transfer'`. Same-currency only until FX lands.
 - Balances: derived, never stored — `initialBalance + income − expenses + transfers in − transfers out`. Transactions AND transfers both move balances.
 
 ## Process
