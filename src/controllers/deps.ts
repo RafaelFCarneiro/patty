@@ -5,7 +5,6 @@ import type { CreditCardsRepo } from '../diplomat/db/repos/creditCards.js'
 import type { MerchantsRepo } from '../diplomat/db/repos/merchants.js'
 import type { RecurringRepo } from '../diplomat/db/repos/recurring.js'
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js'
-import type { TransfersRepo } from '../diplomat/db/repos/transfers.js'
 
 /** Side-effect dependencies, injected so controllers stay testable. */
 export type Deps = {
@@ -16,7 +15,6 @@ export type Deps = {
   merchants: MerchantsRepo
   recurring: RecurringRepo
   transactions: TransactionsRepo
-  transfers: TransfersRepo
   clock: () => Date
   newId: () => string
 }

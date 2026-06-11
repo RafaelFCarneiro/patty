@@ -54,7 +54,7 @@ Input: `id` (required), `confirm` (default false).
 
 ## search_transactions
 
-Filter by `month`+`year` (or `from`/`to`), `type`, `category`/`account` (names), free-text `text` (description substring), `limit` (default 50, max 200). Returns newest first.
+Filter by `month`+`year` (or `from`/`to`), `type` (`expense|income|transfer`), `category`/`account` (names), free-text `text` (description substring), `limit` (default 50, max 200). Returns newest first. With an `account` filter this is the full extrato: the account matches as source OR destination, so transfers in both directions are included.
 
 ## get_spending_summary
 
@@ -70,11 +70,9 @@ Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `bala
 
 Current balance per account, **derived** from the graph (never stored): `initialBalance + income − expenses + transfers in − transfers out`. Returns the parts alongside the balance. Optional filters: `account` (name), `type`. Note: `create_account` accepts `initialBalance` (default 0).
 
-## create_transfer / list_transfers
+## create_transfer
 
-`create_transfer`: move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, optional `date`, `description`). Transfers are **not** expenses/income — they never appear in spending summaries. Both accounts must share a currency; cross-currency returns a `validation` error (FX support pending). Idempotent like transactions.
-
-`list_transfers`: optional `month`/`year` and `account` (matches either side).
+Move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, optional `date`, `description`). Creates a **transaction with `type: 'transfer'`** carrying both FROM and TO accounts (ADR-002): debits one balance, credits the other, excluded from spending summaries, and appears in both accounts' statements via `search_transactions` (which is also how you list transfers — `type: 'transfer'`). Both accounts must share a currency; cross-currency returns a `validation` error (FX pending). Idempotent.
 
 ## create_category / list_categories
 

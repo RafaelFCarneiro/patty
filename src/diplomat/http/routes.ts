@@ -16,8 +16,7 @@ import {
   searchTransactions,
   updateTransaction,
 } from '../../controllers/transactions.js'
-import { createTransfer, listTransfers } from '../../controllers/transfers.js'
-import { CreateTransferInput } from '../../models/transfer.js'
+import { createTransfer } from '../../controllers/transfers.js'
 import { AccountType } from '../../models/account.js'
 import { CreateAccount } from '../../models/account.js'
 import { CreateCategory } from '../../models/category.js'
@@ -27,6 +26,7 @@ import { CreateRecurringInput } from '../../models/recurring.js'
 import {
   CreateTransactionInput,
   CreateTransactionsBulkInput,
+  CreateTransferInput,
   SearchTransactionsInput,
   UpdateTransactionInput,
 } from '../../models/transaction.js'
@@ -124,17 +124,6 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
       (e) => reply.status(httpStatus(e)).send({ error: e }),
     )
   })
-  const TransfersQuery = z.object({
-    month: z.coerce.number().int().min(1).max(12).optional(),
-    year: z.coerce.number().int().min(2000).max(2100).optional(),
-    account: z.string().optional(),
-  })
-  app.get('/api/transfers', async (req, reply) => {
-    const input = parse(TransfersQuery, req.query, reply) as z.infer<typeof TransfersQuery>
-    if (!input) return
-    return send(reply, await listTransfers(deps, input))
-  })
-
   app.get('/api/recurring', async () => listRecurring(deps))
   app.post('/api/recurring', async (req, reply) => {
     const input = parse(CreateRecurringInput, req.body, reply) as CreateRecurringInput

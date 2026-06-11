@@ -16,7 +16,7 @@ import {
   searchTransactions,
   updateTransaction,
 } from '../../controllers/transactions.js'
-import { createTransfer, listTransfers } from '../../controllers/transfers.js'
+import { createTransfer } from '../../controllers/transfers.js'
 
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. */
 
@@ -228,13 +228,15 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     {
       title: 'Search transactions',
       description:
-        'Search transactions by period (month/year or from/to), type, category/account name, or free text.',
+        'Search transactions by period (month/year or from/to), type (including transfers), ' +
+        'category/account name, or free text. With an account filter this is the full account ' +
+        'statement (extrato): expenses, income, and transfers in either direction.',
       inputSchema: {
         month: z.number().int().min(1).max(12).optional(),
         year: z.number().int().min(2000).max(2100).optional(),
         from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-        type: z.enum(['expense', 'income']).optional(),
+        type: z.enum(['expense', 'income', 'transfer']).optional(),
         category: z.string().optional(),
         account: z.string().optional(),
         text: z.string().optional(),
@@ -305,9 +307,10 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     {
       title: 'Transfer between accounts',
       description:
-        'Move value between two accounts (e.g. conta corrente → investimentos). Transfers are NOT ' +
-        'expenses/income and never appear in spending summaries. Both accounts must share the same ' +
-        'currency (cross-currency needs FX support, not available yet). Idempotent via idempotencyKey.',
+        'Move value between two accounts (e.g. conta corrente → investimentos). Creates a transaction ' +
+        "with type 'transfer' (FROM + TO accounts): debits one balance, credits the other, never appears " +
+        'in spending summaries, and shows in both account histories (search_transactions). Both accounts ' +
+        'must share the same currency (FX not available yet). Idempotent via idempotencyKey.',
       inputSchema: {
         from: z.string().min(1).describe('Source account name'),
         to: z.string().min(1).describe('Destination account name'),
@@ -320,19 +323,6 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     async (args) => fromResult(await createTransfer(deps, args)),
   )
 
-  server.registerTool(
-    'list_transfers',
-    {
-      title: 'List transfers',
-      description: 'List transfers, optionally by month/year and/or account (matches either side).',
-      inputSchema: {
-        month: z.number().int().min(1).max(12).optional(),
-        year: z.number().int().min(2000).max(2100).optional(),
-        account: z.string().optional(),
-      },
-    },
-    async (args) => fromResult(await listTransfers(deps, args)),
-  )
 
   server.registerTool(
     'create_category',

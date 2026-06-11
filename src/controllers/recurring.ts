@@ -80,6 +80,7 @@ export const applyDueRecurring = async (deps: Deps): Promise<ApplyDueResult> => 
         },
         {
           accountId: rule.accountId ?? null,
+          toAccountId: null,
           cardId: null,
           categoryId: rule.categoryId ?? null,
           merchantKey: null,

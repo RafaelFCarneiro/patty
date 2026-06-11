@@ -54,17 +54,16 @@ export const accountsRepo = (driver: Driver): AccountsRepo => ({
   },
 
   balanceParts: async (accountId) => {
-    // Sequential aggregation (one WITH per pattern) avoids row-multiplication
+    // Single structure: outflow via [:FROM] (expense | transfer), inflow via income + [:TO]
     const rows = await run(
       driver,
       `MATCH (a:Account {id: $accountId})
        OPTIONAL MATCH (t:Transaction)-[:FROM]->(a)
        WITH a,
             sum(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END) AS income,
-            sum(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END) AS expenses
-       OPTIONAL MATCH (tout:Transfer)-[:FROM]->(a)
-       WITH a, income, expenses, sum(coalesce(tout.amount, 0)) AS transfersOut
-       OPTIONAL MATCH (tin:Transfer)-[:TO]->(a)
+            sum(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END) AS expenses,
+            sum(CASE WHEN t.type = 'transfer' THEN t.amount ELSE 0 END) AS transfersOut
+       OPTIONAL MATCH (tin:Transaction {type: 'transfer'})-[:TO]->(a)
        RETURN income, expenses, transfersOut, sum(coalesce(tin.amount, 0)) AS transfersIn`,
       { accountId },
     )

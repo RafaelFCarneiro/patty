@@ -11,7 +11,6 @@ import { creditCardsRepo } from './diplomat/db/repos/creditCards.js'
 import { merchantsRepo } from './diplomat/db/repos/merchants.js'
 import { recurringRepo } from './diplomat/db/repos/recurring.js'
 import { transactionsRepo } from './diplomat/db/repos/transactions.js'
-import { transfersRepo } from './diplomat/db/repos/transfers.js'
 import { registerRoutes } from './diplomat/http/routes.js'
 import { registerMcpRoute } from './diplomat/mcp/route.js'
 
@@ -31,7 +30,6 @@ const main = async (): Promise<void> => {
     merchants: merchantsRepo(driver),
     recurring: recurringRepo(driver),
     transactions: transactionsRepo(driver),
-    transfers: transfersRepo(driver),
     clock: () => new Date(),
     newId: () => randomUUID(),
   }

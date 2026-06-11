@@ -92,6 +92,7 @@ export const createTransaction = async (
 
   const { transaction, created } = await deps.transactions.create(props, {
     accountId,
+    toAccountId: null,
     cardId: card?.id ?? null,
     categoryId,
     merchantKey: classification.merchantKey ?? null,
