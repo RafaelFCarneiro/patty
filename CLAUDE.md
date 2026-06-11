@@ -87,6 +87,7 @@ One concern per library — don't cross them:
 ## Documentation map (read before generating)
 
 - `docs/architecture.md` — the system **as built**: graph model, invariants, layer rules. The source of truth when generating code; if your change alters it, update it in the same change.
+- `docs/code-style.md` — code style with do/don't examples (safeTry controllers, remeda pipelines, zod-only types). Generated code MUST match these patterns.
 - `docs/PLAN.md` — roadmap/vision; updated at phase boundaries, may lag the as-built state.
 - `docs/adr/` — decisions with rationale; never contradict an accepted ADR without writing a new one.
 - `docs/mcp-tools.md` — MCP tool contract. `docs/mcp-clients.md` — client connection guide.
