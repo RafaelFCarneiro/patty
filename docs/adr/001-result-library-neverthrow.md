@@ -1,6 +1,6 @@
 # ADR-001: Use neverthrow for Result types
 
-**Status:** Accepted · **Date:** 2026-06-09
+**Status:** Accepted (reaffirmed 2026-06-11) · **Date:** 2026-06-09
 
 ## Context
 
@@ -20,3 +20,17 @@ Use **neverthrow**.
 
 - No `pipe`/`flow` composition idioms; plain function composition and `andThen` chains.
 - If we ever need structured concurrency/effects, revisit with Effect as a separate ADR.
+
+## Reaffirmation (2026-06-11)
+
+Challenged after Phase 1 with the argument that neverthrow is "about exceptions" while fp-ts suits a strictly functional backend (npm trends comparison: effect 19.4M weekly downloads, ramda 14.5M, fp-ts 5.2M, neverthrow 2.0M).
+
+Decision held, on three grounds:
+
+1. **Mischaracterization**: neverthrow is errors-as-values (Railway-Oriented Programming), not exception tooling. Our usage — `ok/err/match` over typed domain outcomes like `unknown_account` — is precisely FP error handling; `fromThrowable` is barely used.
+2. **fp-ts is sunsetting**: in maintenance mode and officially merging into Effect; adopting it in 2026 means adopting a legacy library. The real alternative is Effect.
+3. **Effect is a framework commitment**: it would also replace our `Deps` injection (Layers), add retries/concurrency/observability — valuable for Phase 4 importers, but it rewrites controller/diplomat idioms and steepens onboarding. The diplomat architecture derives its FP-ness from layer purity, not typeclasses; neverthrow is right-sized today.
+
+Ramda was also considered and rejected as orthogonal (data transformation, weak TS inference); native array methods suffice in `logic/`, with remeda as the typed option if needed.
+
+**Trigger to revisit**: when bank-sync importers (Phase 4) need typed retries, structured concurrency, or richer dependency wiring — write ADR for Effect migration then.
