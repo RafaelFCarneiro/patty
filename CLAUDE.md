@@ -73,6 +73,7 @@ Layer rules (enforce in review — violations are bugs):
 - Credit cards: transactions are `[:CHARGED_TO]` a card and `[:CONTAINS]`-ed by the cycle's `:Bill` (fatura), auto-created `open` based on the card's `closingDay`. `pay_bill` only flips status — never creates a payment transaction (would double-count).
 - Recurring: `:RecurringRule` with `nextDue`; materialized by `apply_due_recurring` with stable keys `rec-<ruleId>-<date>`.
 - Bulk import: idempotency keys derived from `date+description+amount`; items with confidence < 0.6 are flagged `needs_review`, not blocked.
+- Transfers: `:Transfer` nodes (`[:FROM]`/`[:TO]` accounts) — never expenses/income, never in summaries. Same-currency only until FX lands.
 
 ## Process
 

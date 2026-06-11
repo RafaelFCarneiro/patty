@@ -16,6 +16,9 @@ import {
   searchTransactions,
   updateTransaction,
 } from '../../controllers/transactions.js'
+import { createTransfer, listTransfers } from '../../controllers/transfers.js'
+import { CreateTransferInput } from '../../models/transfer.js'
+import { AccountType } from '../../models/account.js'
 import { CreateAccount } from '../../models/account.js'
 import { CreateCategory } from '../../models/category.js'
 import { Period } from '../../models/common.js'
@@ -48,7 +51,11 @@ const parse = <T>(schema: z.ZodType<T>, body: unknown, reply: FastifyReply): T |
 export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   app.get('/api/health', async () => ({ status: 'ok' }))
 
-  app.get('/api/accounts', async () => listAccounts(deps))
+  app.get('/api/accounts', async (req, reply) => {
+    const q = z.object({ type: AccountType.optional() }).safeParse(req.query)
+    if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid type'] } })
+    return listAccounts(deps, q.data.type)
+  })
   app.post('/api/accounts', async (req, reply) => {
     const input = parse(CreateAccount, req.body, reply) as CreateAccount
     if (!input) return
@@ -99,6 +106,26 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     const input = parse(BillQuery, req.body, reply) as z.infer<typeof BillQuery>
     if (!input) return
     return send(reply, await payBill(deps, input))
+  })
+
+  app.post('/api/transfers', async (req, reply) => {
+    const input = parse(CreateTransferInput, req.body, reply) as CreateTransferInput
+    if (!input) return
+    const result = await createTransfer(deps, input)
+    return result.match(
+      (value) => reply.status(value.created ? 201 : 200).send(value),
+      (e) => reply.status(httpStatus(e)).send({ error: e }),
+    )
+  })
+  const TransfersQuery = z.object({
+    month: z.coerce.number().int().min(1).max(12).optional(),
+    year: z.coerce.number().int().min(2000).max(2100).optional(),
+    account: z.string().optional(),
+  })
+  app.get('/api/transfers', async (req, reply) => {
+    const input = parse(TransfersQuery, req.query, reply) as z.infer<typeof TransfersQuery>
+    if (!input) return
+    return send(reply, await listTransfers(deps, input))
   })
 
   app.get('/api/recurring', async () => listRecurring(deps))
