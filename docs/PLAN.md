@@ -203,7 +203,7 @@ Rule: docs are updated in the same change that alters behavior — checked durin
 ### Phase 1 — Skeleton + MCP MVP
 Docker-compose (neo4j + backend) with healthchecks; Fastify + zod scaffold with diplomat layout; constraints + seed (currencies BRL/USD, BR categories, merchant rules); models and controllers for accounts, categories, transactions; MCP diplomats for `create_transaction`, `search_transactions`, `get_spending_summary`; idempotency; root `CLAUDE.md` + first ADRs. **Exit:** `docker compose up`, then create and query transactions (in BRL or USD) from Claude chat, classified via seeded merchant edges.
 
-### Phase 2 — Classification loop + bulk input
+### Phase 2 — Classification loop + bulk input ✅ (2026-06-11)
 Merchant normalization logic; `[:USUALLY]` weight learning from corrections; `create_transactions_bulk`; credit cards with `:Bill` lifecycle (open → closed → paid) + recurring rules. **Exit:** paste a statement → classified transactions with confidence flags; corrections improve future classification.
 
 ### Phase 3 — Insights + graph analysis

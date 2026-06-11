@@ -1,11 +1,14 @@
 import { err, ok, type Result } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
+import { billPeriodFor } from '../logic/bill.js'
+import { deriveIdempotencyKey, needsReview } from '../logic/bulk.js'
 import { pickClassification, type ClassifyOutcome } from '../logic/classify.js'
 import { normalizeMerchant } from '../logic/merchant.js'
 import { periodRange, toIsoDate } from '../logic/period.js'
 import { resolveByName } from '../logic/resolve.js'
 import type {
   CreateTransactionInput,
+  CreateTransactionsBulkInput,
   SearchTransactionsInput,
   Transaction,
   TransactionSource,
@@ -24,7 +27,10 @@ export const createTransaction = async (
   input: CreateTransactionInput,
   source: TransactionSource,
 ): Promise<Result<CreateTransactionResult, AppError>> => {
-  // 1. Resolve account by name, if given
+  if (input.account && input.card)
+    return err({ code: 'validation', issues: ['provide account OR card, not both'] })
+
+  // 1a. Resolve account by name, if given
   let accountId: string | null = null
   let accountCurrency: string | null = null
   if (input.account) {
@@ -36,6 +42,17 @@ export const createTransaction = async (
       return err({ code: 'ambiguous_account', query: res.query, candidates: res.candidates })
     accountId = res.entity.id
     accountCurrency = res.entity.currency
+  }
+
+  // 1b. Resolve credit card by name, if given — transaction joins the cycle's bill
+  let card: { id: string; currency: string; closingDay: number; dueDay: number } | null = null
+  if (input.card) {
+    const res = resolveByName(await deps.creditCards.list(), input.card)
+    if (res.kind === 'none')
+      return err({ code: 'unknown_card', query: res.query, candidates: res.candidates })
+    if (res.kind === 'ambiguous')
+      return err({ code: 'ambiguous_card', query: res.query, candidates: res.candidates })
+    card = res.entity
   }
 
   // 2. Resolve category: explicit name wins; otherwise classify via merchant graph
@@ -57,14 +74,15 @@ export const createTransaction = async (
     categoryId = classification.categoryId ?? null
   }
 
-  // 3. Build node props; currency comes from the account when resolved
+  // 3. Build node props; currency follows the account/card when resolved
+  const date = input.date ?? toIsoDate(deps.clock())
   const props = {
     id: deps.newId(),
     description: input.description,
     amount: input.amount,
     type: input.type,
-    date: input.date ?? toIsoDate(deps.clock()),
-    currency: accountCurrency ?? input.currency ?? 'BRL',
+    date,
+    currency: accountCurrency ?? card?.currency ?? input.currency ?? 'BRL',
     source,
     idempotencyKey: input.idempotencyKey,
     classificationMethod: classification.method,
@@ -74,10 +92,71 @@ export const createTransaction = async (
 
   const { transaction, created } = await deps.transactions.create(props, {
     accountId,
+    cardId: card?.id ?? null,
     categoryId,
     merchantKey: classification.merchantKey ?? null,
   })
+
+  // 4. Card transactions join their cycle's bill (fatura), created open on demand
+  if (card && created) {
+    const period = billPeriodFor(date, card.closingDay, card.dueDay)
+    await deps.bills.ensureAndAttach(card.id, transaction.id, period, deps.newId())
+  }
+
   return ok({ transaction, created, classification })
+}
+
+export type BulkItemResult =
+  | { status: 'created' | 'needs_review'; transaction: Transaction; classification: ClassifyOutcome }
+  | { status: 'duplicate'; transaction: Transaction }
+  | { status: 'error'; description: string; error: AppError }
+
+export type BulkResult = {
+  summary: { created: number; needsReview: number; duplicates: number; errors: number }
+  items: BulkItemResult[]
+}
+
+/** Statement paste/import: each line idempotent, classified, and flagged for review when uncertain. */
+export const createTransactionsBulk = async (
+  deps: Deps,
+  input: CreateTransactionsBulkInput,
+  source: TransactionSource,
+): Promise<Result<BulkResult, AppError>> => {
+  const items: BulkItemResult[] = []
+  for (const item of input.items) {
+    const date = item.date ?? toIsoDate(deps.clock())
+    const single: CreateTransactionInput = {
+      ...item,
+      date,
+      account: item.account ?? input.account,
+      card: item.card ?? input.card,
+      idempotencyKey: item.idempotencyKey ?? deriveIdempotencyKey({ ...item, date }),
+      rawInput: input.rawInput,
+    }
+    const result = await createTransaction(deps, single, source)
+    items.push(
+      result.match<BulkItemResult>(
+        (r) =>
+          !r.created
+            ? { status: 'duplicate', transaction: r.transaction }
+            : {
+                status: needsReview(r.classification) ? 'needs_review' : 'created',
+                transaction: r.transaction,
+                classification: r.classification,
+              },
+        (error) => ({ status: 'error', description: item.description, error }),
+      ),
+    )
+  }
+  return ok({
+    summary: {
+      created: items.filter((i) => i.status === 'created').length,
+      needsReview: items.filter((i) => i.status === 'needs_review').length,
+      duplicates: items.filter((i) => i.status === 'duplicate').length,
+      errors: items.filter((i) => i.status === 'error').length,
+    },
+    items,
+  })
 }
 
 export const updateTransaction = async (

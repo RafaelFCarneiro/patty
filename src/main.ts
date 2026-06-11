@@ -5,8 +5,11 @@ import type { Deps } from './controllers/deps.js'
 import { bootstrap } from './diplomat/db/bootstrap.js'
 import { createDriver, waitForNeo4j } from './diplomat/db/driver.js'
 import { accountsRepo } from './diplomat/db/repos/accounts.js'
+import { billsRepo } from './diplomat/db/repos/bills.js'
 import { categoriesRepo } from './diplomat/db/repos/categories.js'
+import { creditCardsRepo } from './diplomat/db/repos/creditCards.js'
 import { merchantsRepo } from './diplomat/db/repos/merchants.js'
+import { recurringRepo } from './diplomat/db/repos/recurring.js'
 import { transactionsRepo } from './diplomat/db/repos/transactions.js'
 import { registerRoutes } from './diplomat/http/routes.js'
 import { registerMcpRoute } from './diplomat/mcp/route.js'
@@ -21,8 +24,11 @@ const main = async (): Promise<void> => {
 
   const deps: Deps = {
     accounts: accountsRepo(driver),
+    bills: billsRepo(driver),
     categories: categoriesRepo(driver),
+    creditCards: creditCardsRepo(driver),
     merchants: merchantsRepo(driver),
+    recurring: recurringRepo(driver),
     transactions: transactionsRepo(driver),
     clock: () => new Date(),
     newId: () => randomUUID(),

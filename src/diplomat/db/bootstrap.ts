@@ -8,6 +8,9 @@ const CONSTRAINTS = [
   'CREATE CONSTRAINT merchant_key IF NOT EXISTS FOR (m:Merchant) REQUIRE m.key IS UNIQUE',
   'CREATE CONSTRAINT tx_id IF NOT EXISTS FOR (t:Transaction) REQUIRE t.id IS UNIQUE',
   'CREATE CONSTRAINT tx_idempotency IF NOT EXISTS FOR (t:Transaction) REQUIRE t.idempotencyKey IS UNIQUE',
+  'CREATE CONSTRAINT creditcard_id IF NOT EXISTS FOR (cc:CreditCard) REQUIRE cc.id IS UNIQUE',
+  'CREATE CONSTRAINT bill_id IF NOT EXISTS FOR (b:Bill) REQUIRE b.id IS UNIQUE',
+  'CREATE CONSTRAINT recurring_id IF NOT EXISTS FOR (r:RecurringRule) REQUIRE r.id IS UNIQUE',
   'CREATE INDEX tx_date IF NOT EXISTS FOR (t:Transaction) ON (t.date)',
 ]
 
