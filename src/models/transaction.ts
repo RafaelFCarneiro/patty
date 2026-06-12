@@ -21,29 +21,27 @@ export type Classification = z.infer<typeof Classification>
 export const TransactionSource = z.enum(['mcp', 'rest', 'import'])
 export type TransactionSource = z.infer<typeof TransactionSource>
 
-/**
- * Domain entity: core node properties + edge refs handed to the persistence diplomat.
- * Pure write-side shape — flattening to db properties happens in diplomat/db via adapters/.
- */
-export type Transaction = {
-  id: string
-  description: string
-  amount: number
-  type: TransactionType
-  date: string
-  currency: CurrencyCode
-  source: TransactionSource
-  idempotencyKey: string
-  classification: Classification
-  rawInput?: string
-  refs: {
-    accountId?: string
-    toAccountId?: string
-    cardId?: string
-    categoryId?: string
-    merchantKey?: string
-  }
-}
+/** Domain entity: core node properties + edge refs handed to the persistence diplomat. */
+export const Transaction = z.object({
+  id: Id,
+  description: z.string().min(1),
+  amount: Money,
+  type: TransactionType,
+  date: IsoDate,
+  currency: CurrencyCode,
+  source: TransactionSource,
+  idempotencyKey: z.string().min(1),
+  classification: Classification,
+  rawInput: z.string().optional(),
+  refs: z.object({
+    accountId: Id.optional(),
+    toAccountId: Id.optional(),
+    cardId: Id.optional(),
+    categoryId: Id.optional(),
+    merchantKey: z.string().optional(),
+  }),
+})
+export type Transaction = z.infer<typeof Transaction>
 
 /** Read projection: Transaction node properties with graph-traversal names resolved. */
 export const TransactionView = z.object({
