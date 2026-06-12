@@ -40,6 +40,9 @@ export const payBill = async (deps, input) => {
 - Controllers work with **models only**: hand repos domain drafts (e.g. `TransactionDraft`); never build
   flat db props (`classificationMethod`, `rawInput: null`) and never import `adapters/` — model→db
   flattening lives in `diplomat/db` via `adapters/`.
+- All boundary adaptation lives outside controllers: diplomats adapt `wire/in -> model` before controller
+  calls and `model -> wire/out` after controller results. Repos may use adapters internally for
+  `model <-> wire/db`.
 - Name resolution: ALWAYS via `controllers/resolve.ts` (`resolveAccountRef`, `resolveCategoryRef`,
   `resolveCardRef`) — never inline `resolveByName` + error mapping in a controller.
 - Expected failures are `AppError` values; unexpected errors throw (become 500s). Never `try/catch`
@@ -63,6 +66,13 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 - Native `map`/`filter` is fine for single-stage transforms. Don't force pipes onto control flow.
 - Every logic function gets a colocated `*.test.ts` (vitest) — pure functions, no mocks.
 
+## Testing requirements
+
+- Behavior changes MUST include unit tests in the same change.
+- New logic functions MUST ship with colocated tests; controller/repo/adapter changes MUST update or add
+  focused unit tests that cover success and expected-failure paths.
+- Prefer small, deterministic tests; avoid network/db side effects in unit tests.
+
 ## models/ — zod single source of truth
 
 - Types are ALWAYS `z.infer<typeof Schema>` — never hand-written interfaces for domain data.
@@ -72,12 +82,31 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 
 ## diplomat/ — thin, no business logic
 
-- http/mcp handlers: zod-parse → call controller → translate Result. Nothing else.
+- http/mcp handlers: zod-parse (`wire/in`) → adapt to model → call controller → adapt model to `wire/out`
+  → translate Result. Nothing else.
 - db: parameterized Cypher ONLY — interpolating user input into a query string is a security bug.
-  Decode every record through `adapters/` zod parsing. Aggregations that could multiply rows use
+  Decode every record through `wire/db` + `adapters/` zod parsing. Aggregations that could multiply rows use
   sequential `WITH` aggregation (see `balanceParts`).
 - New MCP tools: rich `description` (the agent reads it!), `.describe()` on non-obvious fields,
   documented in `docs/mcp-tools.md` in the same change.
+
+## Schema validation requirements (Zod)
+
+- Every external boundary must validate with Zod before entering the domain (HTTP/MCP inputs, DB records,
+  and external client/resource payloads).
+- Use schema parsing (`parse`/`safeParse`) at the boundary; do not pass unvalidated unknown data to
+  controllers, logic, or models.
+- Prefer `safeParse` when returning expected validation errors on the Result track; use `parse` when a
+  throw-on-invalid boundary is intentional and handled at the edge.
+
+## adapters/ and wire/
+
+- Adapters are pure translators for boundary directions: `wireInToModel`, `modelToWireOut`, `modelToDb`,
+  `dbToModel`.
+- Use namespace imports for clarity at call sites, e.g. `import * as transactionAdapters from ...` then
+  `transactionAdapters.modelToDb(...)`.
+- Wire contracts belong under `src/wire/in`, `src/wire/out`, and `src/wire/db`; do not place boundary
+  contracts in `models/`.
 
 ## Naming & misc
 
