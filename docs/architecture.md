@@ -29,8 +29,10 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 
 1. Schema stack: zod is the schema system used for models and boundary decoding.
 2. Controller dependency style: controllers orchestrate through injected deps interfaces (`controllers/deps.ts`) and must not import `diplomat/` modules directly. **Documented exception**: `import type` of repo contracts from `diplomat/db/repos` is allowed (type-only imports erase at runtime; the contracts live next to their implementations until a dedicated ports module is warranted).
-3. Diplomat role: `diplomat/http` and `diplomat/mcp` remain thin edges (parse/delegate/translate), while side effects are composed in controllers via deps.
-4. Persistence adaptation: controllers hand repos **domain drafts** (models — e.g. `TransactionDraft` with nested `classification`); `diplomat/db` flattens model→db via `adapters/` (`transactionDraftToDb`). Controllers never build db-wire shapes and never call adapters — canonical wire-in → controller → wire-out.
+3. Diplomat role: `diplomat/http` and `diplomat/mcp` remain thin edges (parse/delegate/translate), while side effects are composed in controllers via deps. **FinTrack restriction**: unlike the generic Diplomat pattern, controllers here must NOT import `diplomat/` modules — they interact exclusively through injected deps interfaces (`controllers/deps.ts`). The generic dependency table in `docs/diplomatic-architecture.md` lists `diplomat.*` as a valid controller dependency; that does not apply here.
+4. Adaptation boundaries: adapters are pure translators for all boundary crossings, not only db. They convert `wire/in -> model`, `model -> wire/out`, and `model <-> wire/db`.
+5. Persistence adaptation: controllers hand repos **domain drafts** (models — e.g. `TransactionDraft` with nested `classification`); `diplomat/db` may use adapters internally to flatten model→db and decode db→model. Controllers never build db-wire shapes and never call adapters.
+6. Edge flow contract: `diplomat/http`, `diplomat/mcp`, and other diplomats adapt external payloads with wire schemas + adapters before calling controllers, then adapt controller results back to wire/out.
 
 ### Dependency direction (enforced)
 
@@ -41,6 +43,20 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | `models/` | zod/schema helpers only |
 | `adapters/` | `models/`, `wire/*` |
 | `diplomat/*` | `controllers/`, `adapters/`, `models/`, wire schemas, runtime clients |
+
+### Boundary schemas and adapter naming
+
+- External shapes belong to `src/wire/`, split by intent:
+  - `wire/in`: inbound contracts from clients/resources (request payloads, tool args, events).
+  - `wire/out`: outbound contracts exposed by this service (responses, published payloads).
+  - `wire/db`: storage-facing contracts (db rows/records/properties).
+- Domain layer (`controllers/`, `logic/`, `models/`) stays agnostic to wire schemas and infrastructure tools.
+- Adapter functions should be grouped per domain and named by direction, for example:
+  - `wireInToModel`
+  - `modelToWireOut`
+  - `modelToDb`
+  - `dbToModel`
+- In call sites, prefer namespace imports for clarity, e.g. `import * as transactionAdapters from '../adapters/transactions.js'` then `transactionAdapters.modelToDb(...)`.
 
 ## Graph model (as built)
 
@@ -74,6 +90,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 5. **Classification is graph traversal**: normalized description → `:Merchant` → strongest `[:USUALLY]` edge; user corrections strengthen edges (learning loop in `update_transaction`).
 6. **pay_bill flips status only** — a payment transaction would double-count card expenses.
 7. Decode at the boundary: every external input and Cypher record is zod-parsed.
+8. Behavior changes require tests: domain and boundary behavior updates must include unit tests in the same change (success and expected-failure paths).
 
 ## Tool surface
 

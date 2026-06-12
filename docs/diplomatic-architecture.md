@@ -49,7 +49,7 @@ Controllers orchestrate a domain flow. They typically call logic plus external c
 Rules:
 * Controllers orchestrate flows; they do not own input adaptation or storage concerns.
 * Controllers should work with models, not wire schemas directly.
-* Controllers may call diplomats and may receive components needed for orchestration.
+* Controllers should be infrastructure-agnostic and interact through domain deps/ports.
 * Controllers should not call adapters directly; adaptation is the diplomat's responsibility.
 
 A good controller shape is query external state first, run logic on models, then emit effects if needed.
@@ -91,6 +91,8 @@ Producers send asynchronous output. They usually receive models, adapt them to w
 
 HTTP server code handles inbound synchronous requests. It should parse and externalize data at the edge, adapt request wire to models, call controllers, then adapt results back to response wire.
 
+In this repository, `diplomat/http` and `diplomat/mcp` follow the same rule: decode/validate with `wire/in`, adapt to models, call controllers, then adapt model results to `wire/out`.
+
 #### HTTP client
 
 HTTP client code handles outbound synchronous requests. It should encapsulate request details and return only the data the domain needs, usually after adapting or extracting it from the response.
@@ -99,26 +101,30 @@ HTTP client code handles outbound synchronous requests. It should encapsulate re
 
 Database and resource namespaces communicate with external storage or files and should contain no business logic. They adapt between model schemas and external representations before or after I/O as needed.
 
+Repositories may receive models and use adapters internally for `model -> wire/db` and `wire/db -> model` transformations.
+
 ### Adapters
 
 Adapters translate between wire schemas and model schemas, and between database schemas and model schemas. They must be pure functions.
 
 Naming conventions:
-* `wire->model`
-* `model->wire`
-* `datomic->model`
-* `model->datomic`
+* `wireInToModel`
+* `modelToWireOut`
+* `dbToModel`
+* `modelToDb`
 
 Adapters belong at the service boundary, not inside the domain flow itself.
+
+For readability, prefer namespace imports at call sites (for example `transactionAdapters.modelToDb(...)`) rather than many flat function imports.
 
 ### Wire
 
 Wire schemas represent external data structures and should exist only at the service boundary, never inside the Domain Layer.
 
 Rules:
-* `wire.in` is for inbound external data and should usually be loose to support tolerant readers.
-* `wire.out` is for outbound data exposed by this service and should be strict.
-* `wire.databases` should strictly model database entities and be converted to and from models when crossing the boundary.
+* `wire/in` is for inbound external data and should usually be loose to support tolerant readers.
+* `wire/out` is for outbound data exposed by this service and should be strict.
+* `wire/db` should strictly model database entities and be converted to and from models when crossing the boundary.
 
 ### Components / Main / Deps
 
