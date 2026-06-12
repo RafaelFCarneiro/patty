@@ -2,17 +2,17 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { nextDue, recurringIdempotencyKey } from '../logic/recurring.js'
 import { toIsoDate } from '../logic/period.js'
-import type { CreateRecurringInput, RecurringRule } from '../models/recurring.js'
-import type { Transaction } from '../models/transaction.js'
+import type { CreateRecurringInput, RecurringRuleView } from '../models/recurring.js'
+import type { TransactionView } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
 
-export const listRecurring = (deps: Deps): Promise<RecurringRule[]> => deps.recurring.list()
+export const listRecurring = (deps: Deps): Promise<RecurringRuleView[]> => deps.recurring.list()
 
 export const createRecurring = (
   deps: Deps,
   input: CreateRecurringInput,
-): ResultAsync<RecurringRule, AppError> =>
+): ResultAsync<RecurringRuleView, AppError> =>
   safeTry(async function* () {
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
     const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null
@@ -33,7 +33,7 @@ export const createRecurring = (
   })
 
 export type ApplyDueResult = {
-  applied: Array<{ rule: string; date: string; transaction: Transaction }>
+  applied: Array<{ rule: string; date: string; transaction: TransactionView }>
   count: number
 }
 
