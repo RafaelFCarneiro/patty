@@ -1,4 +1,4 @@
-import type { TransactionDraft } from '../models/transaction.js'
+import type { TransactionDraft, TransactionPatch } from '../models/transaction.js'
 
 /** Db-wire shape: flat node properties as stored on (:Transaction). */
 export type TransactionDbProps = {
@@ -23,6 +23,19 @@ export type TransactionDbRefs = {
   categoryId: string | null
   merchantKey: string | null
 }
+
+/** model->db: flatten a domain patch into SET-able node properties. Pure. */
+export const transactionPatchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> => ({
+  ...(patch.description !== undefined && { description: patch.description }),
+  ...(patch.amount !== undefined && { amount: patch.amount }),
+  ...(patch.type !== undefined && { type: patch.type }),
+  ...(patch.date !== undefined && { date: patch.date }),
+  ...(patch.currency !== undefined && { currency: patch.currency }),
+  ...(patch.classification !== undefined && {
+    classificationMethod: patch.classification.method,
+    confidence: patch.classification.confidence,
+  }),
+})
 
 /** model->db: flatten a domain TransactionDraft into node properties + edge refs. Pure. */
 export const transactionDraftToDb = (

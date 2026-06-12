@@ -155,12 +155,12 @@ export const updateTransaction = (
       await deps.transactions.update(
         input.id,
         {
-          ...(input.description !== undefined && { description: input.description }),
-          ...(input.amount !== undefined && { amount: input.amount }),
-          ...(input.type !== undefined && { type: input.type }),
-          ...(input.date !== undefined && { date: input.date }),
-          ...(account && { currency: account.currency }),
-          ...(category && { classificationMethod: 'user', confidence: 1 }),
+          description: input.description,
+          amount: input.amount,
+          type: input.type,
+          date: input.date,
+          currency: account?.currency,
+          classification: category ? { method: 'user', confidence: 1 } : undefined,
         },
         { accountId: account?.id ?? null, categoryId: category?.id ?? null },
       ),

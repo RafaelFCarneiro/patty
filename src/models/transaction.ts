@@ -69,6 +69,16 @@ export type TransactionDraft = {
   }
 }
 
+/** Domain patch for updates — only provided fields change; classification set on user correction. */
+export type TransactionPatch = {
+  description?: string
+  amount?: number
+  type?: MovementType
+  date?: string
+  currency?: CurrencyCode
+  classification?: Classification
+}
+
 /** Natural input accepted by MCP/REST: names instead of ids, optional date/currency. */
 export const CreateTransactionInput = z.object({
   description: z.string().min(1),
