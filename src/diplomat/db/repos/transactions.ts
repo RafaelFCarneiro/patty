@@ -1,9 +1,9 @@
 import neo4j, { type Driver } from 'neo4j-driver'
 import { z } from 'zod'
 import { toTransaction } from '../../../adapters/records.js'
-import { transactionDraftToDb, type TransactionDbProps } from '../../../adapters/transactions.js'
+import { transactionDraftToDb, transactionPatchToDb } from '../../../adapters/transactions.js'
 import type { SummaryRow } from '../../../logic/summary.js'
-import type { Transaction, TransactionDraft } from '../../../models/transaction.js'
+import type { Transaction, TransactionDraft, TransactionPatch } from '../../../models/transaction.js'
 import { run } from '../driver.js'
 
 export type CreateTxResult = { transaction: Transaction; created: boolean }
@@ -34,20 +34,13 @@ const MATCH_REFS = `
   OPTIONAL MATCH (t)-[:IN]->(c:Category)
   OPTIONAL MATCH (t)-[:AT]->(m:Merchant)`
 
-export type UpdateProps = Partial<
-  Pick<TransactionDbProps, 'description' | 'amount' | 'type' | 'date' | 'currency'> & {
-    classificationMethod: string
-    confidence: number
-  }
->
-
 export type TransactionsRepo = {
-  /** Receives a domain draft; model→db flattening happens here (adapters/transactions.ts). */
+  /** Receives domain shapes; model→db flattening happens here (adapters/transactions.ts). */
   create: (draft: TransactionDraft) => Promise<CreateTxResult>
   getById: (id: string) => Promise<Transaction | null>
   update: (
     id: string,
-    props: UpdateProps,
+    patch: TransactionPatch,
     refs: { accountId: string | null; categoryId: string | null },
   ) => Promise<Transaction | null>
   delete: (id: string) => Promise<boolean>
@@ -123,7 +116,8 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
   },
 
   /** Patch scalar props; re-link [:IN]/[:FROM] edges when new refs are provided. */
-  update: async (id, props, refs) => {
+  update: async (id, patch, refs) => {
+    const props = transactionPatchToDb(patch)
     const rows = await run(
       driver,
       `MATCH (t:Transaction {id: $id})
