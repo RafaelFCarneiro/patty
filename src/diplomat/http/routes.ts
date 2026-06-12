@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify'
 import type { Result } from 'neverthrow'
 import { z } from 'zod'
 import { httpStatus, type AppError } from '../../common/errors.js'
+import { BillQuery, type BillQuery as BillQueryInput } from '../../wire/in/bills.js'
 import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, listCategories } from '../../controllers/categories.js'
@@ -99,18 +100,13 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     return send(reply, await createCreditCard(deps, input), 201)
   })
 
-  const BillQuery = z.object({
-    card: z.string().min(1),
-    month: z.coerce.number().int().min(1).max(12),
-    year: z.coerce.number().int().min(2000).max(2100),
-  })
   app.get('/api/bills', async (req, reply) => {
-    const input = parse(BillQuery, req.query, reply) as z.infer<typeof BillQuery>
+    const input = parse(BillQuery, req.query, reply) as BillQueryInput
     if (!input) return
     return send(reply, await getBill(deps, input))
   })
   app.post('/api/bills/pay', async (req, reply) => {
-    const input = parse(BillQuery, req.body, reply) as z.infer<typeof BillQuery>
+    const input = parse(BillQuery, req.body, reply) as BillQueryInput
     if (!input) return
     return send(reply, await payBill(deps, input))
   })

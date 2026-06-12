@@ -1,16 +1,10 @@
 import type { Driver } from 'neo4j-driver'
-import { z } from 'zod'
-import { toAccount } from '../../../adapters/records.js'
+import * as accountAdapters from '../../../adapters/accounts.js'
 import type { Account } from '../../../models/account.js'
+import { BalancePartsRow } from '../../../wire/db/accounts.js'
 import { run } from '../driver.js'
 
-const BalancePartsRow = z.object({
-  income: z.number(),
-  expenses: z.number(),
-  transfersIn: z.number(),
-  transfersOut: z.number(),
-})
-export type BalancePartsRow = z.infer<typeof BalancePartsRow>
+export type { BalancePartsRow }
 
 export type AccountsRepo = {
   list: () => Promise<Account[]>
@@ -27,7 +21,7 @@ export const accountsRepo = (driver: Driver): AccountsRepo => ({
       `MATCH (a:Account)-[:DENOMINATED_IN]->(cur:Currency)
        RETURN a, cur.code AS currency ORDER BY a.name`,
     )
-    return rows.map(toAccount)
+    return rows.map(accountAdapters.dbToModel)
   },
 
   create: async (account) => {
@@ -39,7 +33,7 @@ export const accountsRepo = (driver: Driver): AccountsRepo => ({
        RETURN a, cur.code AS currency`,
       { ...account },
     )
-    return toAccount(rows[0]!)
+    return accountAdapters.dbToModel(rows[0]!)
   },
 
   findByName: async (name) => {
@@ -50,7 +44,7 @@ export const accountsRepo = (driver: Driver): AccountsRepo => ({
        RETURN a, cur.code AS currency LIMIT 1`,
       { name },
     )
-    return rows[0] ? toAccount(rows[0]) : null
+    return rows[0] ? accountAdapters.dbToModel(rows[0]) : null
   },
 
   balanceParts: async (accountId) => {
