@@ -12,8 +12,3 @@ export const CreditCard = z.object({
   limit: z.number().positive().optional(),
 })
 export type CreditCard = z.infer<typeof CreditCard>
-
-export const CreateCreditCard = CreditCard.omit({ id: true }).extend({
-  currency: CurrencyCode.default('BRL'),
-})
-export type CreateCreditCard = z.infer<typeof CreateCreditCard>

@@ -38,7 +38,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 
 | Namespace | Can depend on |
 | --- | --- |
-| `controllers/` | `logic/`, `models/`, `common/`, injected deps interfaces |
+| `controllers/` | `logic/`, `models/`, `wire/in`, `common/`, injected deps interfaces |
 | `logic/` | `logic/`, `models/` only |
 | `models/` | zod/schema helpers only |
 | `adapters/` | `models/`, `wire/*` |

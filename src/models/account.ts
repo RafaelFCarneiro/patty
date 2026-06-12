@@ -14,11 +14,6 @@ export const Account = z.object({
 })
 export type Account = z.infer<typeof Account>
 
-export const CreateAccount = Account.omit({ id: true }).extend({
-  currency: CurrencyCode.default('BRL'),
-})
-export type CreateAccount = z.infer<typeof CreateAccount>
-
 /** An account with its derived current balance. */
 export const AccountBalance = Account.extend({
   balance: z.number(),
