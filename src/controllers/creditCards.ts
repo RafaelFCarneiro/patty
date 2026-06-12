@@ -1,7 +1,8 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
-import type { CreateCreditCard, CreditCard } from '../models/creditCard.js'
+import type { CreditCard } from '../models/creditCard.js'
+import type { CreateCreditCard } from '../wire/in/creditCards.js'
 import type { Deps } from './deps.js'
 
 export const listCreditCards = (deps: Deps): Promise<CreditCard[]> => deps.creditCards.list()

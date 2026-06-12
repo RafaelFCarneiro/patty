@@ -1,7 +1,8 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
-import type { Category, CreateCategory } from '../models/category.js'
+import type { Category } from '../models/category.js'
+import type { CreateCategory } from '../wire/in/categories.js'
 import type { Deps } from './deps.js'
 
 export const listCategories = (deps: Deps): Promise<Category[]> => deps.categories.list()

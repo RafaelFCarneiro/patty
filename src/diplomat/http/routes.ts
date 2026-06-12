@@ -19,18 +19,18 @@ import {
 } from '../../controllers/transactions.js'
 import { createTransfer } from '../../controllers/transfers.js'
 import { AccountType } from '../../models/account.js'
-import { CreateAccount } from '../../models/account.js'
-import { CreateCategory } from '../../models/category.js'
 import { Period } from '../../models/common.js'
-import { CreateCreditCard } from '../../models/creditCard.js'
-import { CreateRecurringInput } from '../../models/recurring.js'
+import { CreateAccount } from '../../wire/in/accounts.js'
+import { CreateCategory } from '../../wire/in/categories.js'
+import { CreateCreditCard } from '../../wire/in/creditCards.js'
+import { CreateRecurringInput } from '../../wire/in/recurring.js'
 import {
   CreateTransactionInput,
   CreateTransactionsBulkInput,
   CreateTransferInput,
   SearchTransactionsInput,
   UpdateTransactionInput,
-} from '../../models/transaction.js'
+} from '../../wire/in/transactions.js'
 
 /** Thin diplomat: zod-parse → controller → map Result to HTTP. */
 
