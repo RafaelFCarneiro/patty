@@ -320,7 +320,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         idempotencyKey: z.string().min(1),
       },
     },
-    async (args) => fromResult(await createTransfer(deps, args)),
+    async (args) => fromResult(await createTransfer(deps, args, 'mcp')),
   )
 
 
