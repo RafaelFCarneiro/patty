@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { CurrencyCode, IsoDate, Money } from '../../models/common.js'
 import { MovementType, TransactionType } from '../../models/transaction.js'
+import type { SearchTransactionsInput as DomainSearchTransactionsInput } from '../../models/transaction.js'
 
 export const CreateTransactionInput = z.object({
   description: z.string().min(1),
@@ -55,15 +56,17 @@ export const UpdateTransactionInput = z.object({
 })
 export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInput>
 
-export const SearchTransactionsInput = z.object({
-  month: z.number().int().min(1).max(12).optional(),
-  year: z.number().int().min(2000).max(2100).optional(),
-  from: IsoDate.optional(),
-  to: IsoDate.optional(),
-  type: TransactionType.optional(),
-  category: z.string().optional(),
-  account: z.string().optional(),
-  text: z.string().optional(),
-  limit: z.number().int().min(1).max(200).default(50),
-})
+export const SearchTransactionsInput = z
+  .object({
+    month: z.number().int().min(1).max(12).optional(),
+    year: z.number().int().min(2000).max(2100).optional(),
+    from: IsoDate.optional(),
+    to: IsoDate.optional(),
+    type: TransactionType.optional(),
+    category: z.string().optional(),
+    account: z.string().optional(),
+    text: z.string().optional(),
+    limit: z.number().int().min(1).max(200).optional(),
+  })
+  .transform((input): DomainSearchTransactionsInput => ({ ...input, limit: input.limit ?? 50 }))
 export type SearchTransactionsInput = z.infer<typeof SearchTransactionsInput>

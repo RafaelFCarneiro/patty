@@ -20,3 +20,14 @@ export const RecurringRule = z.object({
   categoryName: z.string().optional(),
 })
 export type RecurringRule = z.infer<typeof RecurringRule>
+
+export type CreateRecurringInput = {
+  description: string
+  amount: number
+  type: MovementType
+  period: RecurringPeriod
+  startDate: string
+  account?: string
+  category?: string
+  currency?: CurrencyCode
+}

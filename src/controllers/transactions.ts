@@ -11,13 +11,14 @@ import {
 } from '../logic/classify.js'
 import { normalizeMerchant } from '../logic/merchant.js'
 import { periodRange, toIsoDate } from '../logic/period.js'
-import type { Transaction, TransactionSource } from '../models/transaction.js'
 import type {
   CreateTransactionInput,
   CreateTransactionsBulkInput,
   SearchTransactionsInput,
+  Transaction,
+  TransactionSource,
   UpdateTransactionInput,
-} from '../wire/in/transactions.js'
+} from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCardRef, resolveCategoryRef } from './resolve.js'
 

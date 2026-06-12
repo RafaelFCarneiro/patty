@@ -10,3 +10,8 @@ export const Category = z.object({
   kind: CategoryKind,
 })
 export type Category = z.infer<typeof Category>
+
+export type CreateCategory = {
+  name: string
+  kind: CategoryKind
+}
