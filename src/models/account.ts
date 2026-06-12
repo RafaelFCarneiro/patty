@@ -23,3 +23,10 @@ export const AccountBalance = Account.extend({
   transfersOut: z.number(),
 })
 export type AccountBalance = z.infer<typeof AccountBalance>
+
+export type CreateAccount = {
+  name: string
+  type: AccountType
+  currency: CurrencyCode
+  initialBalance: number
+}

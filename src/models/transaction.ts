@@ -78,3 +78,59 @@ export type TransactionPatch = {
   currency?: CurrencyCode
   classification?: Classification
 }
+
+/** Natural input accepted by controllers: names instead of ids, optional date/currency. */
+export type CreateTransactionInput = {
+  description: string
+  amount: number
+  type: MovementType
+  date?: string
+  account?: string
+  card?: string
+  category?: string
+  currency?: CurrencyCode
+  idempotencyKey: string
+  rawInput?: string
+}
+
+export type BulkTransactionItem = Omit<CreateTransactionInput, 'idempotencyKey' | 'rawInput'> & {
+  idempotencyKey?: string
+}
+
+export type CreateTransactionsBulkInput = {
+  items: BulkTransactionItem[]
+  account?: string
+  card?: string
+  rawInput?: string
+}
+
+export type CreateTransferInput = {
+  from: string
+  to: string
+  amount: number
+  date?: string
+  description?: string
+  idempotencyKey: string
+}
+
+export type UpdateTransactionInput = {
+  id: string
+  description?: string
+  amount?: number
+  type?: MovementType
+  date?: string
+  account?: string
+  category?: string
+}
+
+export type SearchTransactionsInput = {
+  month?: number
+  year?: number
+  from?: string
+  to?: string
+  type?: TransactionType
+  category?: string
+  account?: string
+  text?: string
+  limit: number
+}

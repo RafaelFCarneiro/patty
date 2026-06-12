@@ -12,3 +12,11 @@ export const CreditCard = z.object({
   limit: z.number().positive().optional(),
 })
 export type CreditCard = z.infer<typeof CreditCard>
+
+export type CreateCreditCard = {
+  name: string
+  currency: CurrencyCode
+  closingDay: number
+  dueDay: number
+  limit?: number
+}

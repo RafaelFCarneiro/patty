@@ -2,7 +2,11 @@ import type { FastifyInstance, FastifyReply } from 'fastify'
 import type { Result } from 'neverthrow'
 import { z } from 'zod'
 import { httpStatus, type AppError } from '../../common/errors.js'
-import { BillQuery, type BillQuery as BillQueryInput } from '../../wire/in/bills.js'
+import * as accountAdapters from '../../adapters/accounts.js'
+import * as categoryAdapters from '../../adapters/categories.js'
+import * as creditCardAdapters from '../../adapters/creditCards.js'
+import * as recurringAdapters from '../../adapters/recurring.js'
+import * as transactionAdapters from '../../adapters/transactions.js'
 import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, listCategories } from '../../controllers/categories.js'
@@ -20,19 +24,14 @@ import {
 import { createTransfer } from '../../controllers/transfers.js'
 import { AccountType } from '../../models/account.js'
 import { Period } from '../../models/common.js'
-import { CreateAccount } from '../../wire/in/accounts.js'
-import { CreateCategory } from '../../wire/in/categories.js'
-import { CreateCreditCard } from '../../wire/in/creditCards.js'
-import { CreateRecurringInput } from '../../wire/in/recurring.js'
-import {
-  CreateTransactionInput,
-  CreateTransactionsBulkInput,
-  CreateTransferInput,
-  SearchTransactionsInput,
-  UpdateTransactionInput,
-} from '../../wire/in/transactions.js'
+import { BillQuery, type BillQuery as BillQueryInput } from '../../wire/in/bills.js'
+import * as wireInAccounts from '../../wire/in/accounts.js'
+import * as wireInCategories from '../../wire/in/categories.js'
+import * as wireInCreditCards from '../../wire/in/creditCards.js'
+import * as wireInRecurring from '../../wire/in/recurring.js'
+import * as wireInTransactions from '../../wire/in/transactions.js'
 
-/** Thin diplomat: zod-parse → controller → map Result to HTTP. */
+/** Thin diplomat: zod-parse (wire/in) → wireInToModel → controller → map Result to HTTP. */
 
 const send = <T>(reply: FastifyReply, result: Result<T, AppError>, okStatus = 200) =>
   result.match(
@@ -40,13 +39,13 @@ const send = <T>(reply: FastifyReply, result: Result<T, AppError>, okStatus = 20
     (e) => reply.status(httpStatus(e)).send({ error: e }),
   )
 
-const parse = <T>(schema: z.ZodType<T>, body: unknown, reply: FastifyReply): T | null => {
+const parse = <S extends z.ZodTypeAny>(schema: S, body: unknown, reply: FastifyReply): z.output<S> | null => {
   const r = schema.safeParse(body)
   if (!r.success) {
     void reply.status(422).send({ error: { code: 'validation', issues: r.error.issues.map((i) => i.message) } })
     return null
   }
-  return r.data
+  return r.data as z.output<S>
 }
 
 export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
@@ -65,22 +64,22 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     return send(reply, await getAccountBalances(deps, q.data))
   })
   app.post('/api/accounts', async (req, reply) => {
-    const input = parse(CreateAccount, req.body, reply) as CreateAccount
-    if (!input) return
-    return send(reply, await createAccount(deps, input), 201)
+    const wireIn = parse(wireInAccounts.CreateAccount, req.body, reply)
+    if (!wireIn) return
+    return send(reply, await createAccount(deps, accountAdapters.wireInToModel(wireIn)), 201)
   })
 
   app.get('/api/categories', async () => listCategories(deps))
   app.post('/api/categories', async (req, reply) => {
-    const input = parse(CreateCategory, req.body, reply) as CreateCategory
-    if (!input) return
-    return send(reply, await createCategory(deps, input), 201)
+    const wireIn = parse(wireInCategories.CreateCategory, req.body, reply)
+    if (!wireIn) return
+    return send(reply, await createCategory(deps, categoryAdapters.wireInToModel(wireIn)), 201)
   })
 
   app.post('/api/transactions', async (req, reply) => {
-    const input = parse(CreateTransactionInput, req.body, reply)
-    if (!input) return
-    const result = await createTransaction(deps, input, 'rest')
+    const wireIn = parse(wireInTransactions.CreateTransactionInput, req.body, reply)
+    if (!wireIn) return
+    const result = await createTransaction(deps, transactionAdapters.createWireInToModel(wireIn), 'rest')
     return result.match(
       (value) => reply.status(value.created ? 201 : 200).send(value),
       (e) => reply.status(httpStatus(e)).send({ error: e }),
@@ -88,16 +87,16 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   })
 
   app.post('/api/transactions/bulk', async (req, reply) => {
-    const input = parse(CreateTransactionsBulkInput, req.body, reply) as CreateTransactionsBulkInput
-    if (!input) return
-    return send(reply, await createTransactionsBulk(deps, input, 'import'), 201)
+    const wireIn = parse(wireInTransactions.CreateTransactionsBulkInput, req.body, reply)
+    if (!wireIn) return
+    return send(reply, await createTransactionsBulk(deps, transactionAdapters.bulkWireInToModel(wireIn), 'import'), 201)
   })
 
   app.get('/api/credit-cards', async () => listCreditCards(deps))
   app.post('/api/credit-cards', async (req, reply) => {
-    const input = parse(CreateCreditCard, req.body, reply) as CreateCreditCard
-    if (!input) return
-    return send(reply, await createCreditCard(deps, input), 201)
+    const wireIn = parse(wireInCreditCards.CreateCreditCard, req.body, reply)
+    if (!wireIn) return
+    return send(reply, await createCreditCard(deps, creditCardAdapters.wireInToModel(wireIn)), 201)
   })
 
   app.get('/api/bills', async (req, reply) => {
@@ -112,27 +111,28 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   })
 
   app.post('/api/transfers', async (req, reply) => {
-    const input = parse(CreateTransferInput, req.body, reply) as CreateTransferInput
-    if (!input) return
-    const result = await createTransfer(deps, input, 'rest')
+    const wireIn = parse(wireInTransactions.CreateTransferInput, req.body, reply)
+    if (!wireIn) return
+    const result = await createTransfer(deps, transactionAdapters.transferWireInToModel(wireIn), 'rest')
     return result.match(
       (value) => reply.status(value.created ? 201 : 200).send(value),
       (e) => reply.status(httpStatus(e)).send({ error: e }),
     )
   })
+
   app.get('/api/recurring', async () => listRecurring(deps))
   app.post('/api/recurring', async (req, reply) => {
-    const input = parse(CreateRecurringInput, req.body, reply) as CreateRecurringInput
-    if (!input) return
-    return send(reply, await createRecurring(deps, input), 201)
+    const wireIn = parse(wireInRecurring.CreateRecurringInput, req.body, reply)
+    if (!wireIn) return
+    return send(reply, await createRecurring(deps, recurringAdapters.wireInToModel(wireIn)), 201)
   })
   app.post('/api/recurring/apply-due', async (_req, reply) => reply.send(await applyDueRecurring(deps)))
 
   app.patch('/api/transactions/:id', async (req, reply) => {
     const { id } = req.params as { id: string }
-    const input = parse(UpdateTransactionInput, { ...(req.body as object), id }, reply) as UpdateTransactionInput
-    if (!input) return
-    return send(reply, await updateTransaction(deps, input))
+    const wireIn = parse(wireInTransactions.UpdateTransactionInput, { ...(req.body as object), id }, reply)
+    if (!wireIn) return
+    return send(reply, await updateTransaction(deps, transactionAdapters.updateWireInToModel(wireIn)))
   })
 
   app.delete('/api/transactions/:id', async (req, reply) => {
@@ -142,9 +142,9 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   })
 
   app.get('/api/transactions', async (req, reply) => {
-    const input = parse(SearchTransactionsInput, req.query, reply) as SearchTransactionsInput
-    if (!input) return
-    return send(reply, await searchTransactions(deps, input))
+    const wireIn = parse(wireInTransactions.SearchTransactionsInput, req.query, reply)
+    if (!wireIn) return
+    return send(reply, await searchTransactions(deps, transactionAdapters.searchWireInToModel(wireIn)))
   })
 
   app.get('/api/summary', async (req, reply) => {

@@ -1,8 +1,14 @@
 import { z } from 'zod'
-import { Category } from '../../models/category.js'
 import { CategoryKind } from '../../models/category.js'
+import type { CreateCategory as Domain } from '../../models/category.js'
 
-export const CreateCategory = Category.omit({ id: true }).extend({
-  kind: CategoryKind.default('expense'),
-})
+export const CreateCategory = z
+  .object({
+    name: z.string().min(1),
+    kind: CategoryKind.optional(),
+  })
+  .transform((input): Domain => ({
+    name: input.name,
+    kind: input.kind ?? 'expense',
+  }))
 export type CreateCategory = z.infer<typeof CreateCategory>

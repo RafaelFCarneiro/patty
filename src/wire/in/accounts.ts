@@ -1,8 +1,19 @@
 import { z } from 'zod'
 import { CurrencyCode } from '../../models/common.js'
-import { Account } from '../../models/account.js'
+import { AccountType } from '../../models/account.js'
+import type { CreateAccount as Domain } from '../../models/account.js'
 
-export const CreateAccount = Account.omit({ id: true }).extend({
-  currency: CurrencyCode.default('BRL'),
-})
+export const CreateAccount = z
+  .object({
+    name: z.string().min(1),
+    type: AccountType,
+    currency: CurrencyCode.optional(),
+    initialBalance: z.number().optional(),
+  })
+  .transform((input): Domain => ({
+    name: input.name,
+    type: input.type,
+    currency: input.currency ?? 'BRL',
+    initialBalance: input.initialBalance ?? 0,
+  }))
 export type CreateAccount = z.infer<typeof CreateAccount>

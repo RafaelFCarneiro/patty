@@ -1,5 +1,13 @@
 import { Transaction, type TransactionDraft, type TransactionPatch } from '../models/transaction.js'
+import type {
+  CreateTransactionInput,
+  CreateTransactionsBulkInput,
+  CreateTransferInput,
+  SearchTransactionsInput,
+  UpdateTransactionInput,
+} from '../models/transaction.js'
 import type { TransactionDbProps, TransactionDbRefs } from '../wire/db/transactions.js'
+import type * as wireIn from '../wire/in/transactions.js'
 
 export type { TransactionDbProps, TransactionDbRefs }
 
@@ -63,3 +71,10 @@ export const patchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> 
     confidence: patch.classification.confidence,
   }),
 })
+
+/** wire/in→model: adapt parsed wire input to domain input types. */
+export const createWireInToModel = (input: wireIn.CreateTransactionInput): CreateTransactionInput => input
+export const bulkWireInToModel = (input: wireIn.CreateTransactionsBulkInput): CreateTransactionsBulkInput => input
+export const transferWireInToModel = (input: wireIn.CreateTransferInput): CreateTransferInput => input
+export const updateWireInToModel = (input: wireIn.UpdateTransactionInput): UpdateTransactionInput => input
+export const searchWireInToModel = (input: wireIn.SearchTransactionsInput): SearchTransactionsInput => input
