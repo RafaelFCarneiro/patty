@@ -39,29 +39,33 @@ Run a single test file: `npx vitest run src/logic/classify.test.ts`
 
 The backend lives at the repo root (`src/`, `package.json`) — there is no `backend/` subfolder.
 
-## Architecture — diplomat (STRICT layer rules)
+## Architecture guidance
 
-```
-src/
-  models/        zod schemas — single source of truth for types (REST, MCP, db decoding)
-  logic/         PURE functions only. No I/O, no Date.now(), no imports from diplomat/ or controllers/
-  adapters/      pure translation: cypher records ↔ models, wire ↔ models
-  controllers/   orchestration; the ONLY place side effects are composed. Receives deps (repos, clock) as arguments
-  diplomat/
-    db/          neo4j-driver, parameterized Cypher ONLY (never interpolate user input), constraints + seed
-    http/        Fastify routes — thin: zod-parse body → call controller → map Result to status
-    mcp/         MCP tool registrations — thin, same controllers as http
-  common/        AppError types, shared helpers
-```
+Architecture and domain behavior are documented in canonical docs and should not be duplicated here.
+
+Before changing architecture-related code, read:
+
+- `docs/architecture.md` (as-built project architecture, invariants, dependency direction)
+- `docs/diplomatic-architecture.md` (core Diplomat concepts)
+- `docs/code-style.md` (controller/logic/adapters implementation patterns)
+
+Agent-level non-negotiables:
+
+- Keep `diplomat/*` thin (parse/delegate/translate) and put orchestration in controllers.
+- Keep `logic/*` pure (no I/O or runtime state reads).
+- Decode external boundaries with zod and keep expected failures on the Result track.
+- If behavior changes, update `docs/architecture.md` in the same change.
 
 Layer rules (enforce in review — violations are bugs):
 
 - `logic/` never imports `diplomat/`, `controllers/`, or anything that does I/O.
 - `diplomat/` contains no business logic — it parses, delegates, and translates.
-- Controllers return `Result<T, AppError>` (neverthrow) for **expected** failures (unknown account, ambiguous category…); unexpected errors throw and become 500s.
+- Controllers return `ResultAsync<T, AppError>` (neverthrow) for **expected** failures (unknown account, ambiguous category…); unexpected errors throw and become 500s.
 - Decode at the boundary: every external input (HTTP body, MCP args, Cypher records) is zod-parsed before entering the domain.
 
 ## FP conventions (ADR-001, ADR-003)
+
+This is a quick operational summary for agents. Canonical wording lives in `docs/architecture.md` and `docs/code-style.md`.
 
 One concern per library — don't cross them:
 
@@ -70,6 +74,8 @@ One concern per library — don't cross them:
 - **remeda**: pure data reshaping in `logic/`/`adapters/` (`pipe`, `groupBy`, `sortBy`, `sumBy`, `countBy`, `firstBy`). Use when a transformation has ≥2 stages or needs grouping; native `map`/`filter` is fine for trivial cases.
 
 ## Data conventions
+
+This is a quick operational summary for agents. Canonical wording lives in `docs/architecture.md`.
 
 - IDs: `crypto.randomUUID()`; seeded nodes use stable slugs (`cat-transporte`).
 - Currency: BRL and USD seeded. Accounts/cards are `[:DENOMINATED_IN]` one `:Currency`; transactions carry a denormalized `currency` property. Summaries always group per currency — never convert implicitly.
@@ -87,6 +93,7 @@ One concern per library — don't cross them:
 ## Documentation map (read before generating)
 
 - `docs/architecture.md` — the system **as built**: graph model, invariants, layer rules. The source of truth when generating code; if your change alters it, update it in the same change.
+- `docs/diplomatic-architecture.md`: The Diplomatic Architecture core concepts.
 - `docs/code-style.md` — code style with do/don't examples (safeTry controllers, remeda pipelines, zod-only types). Generated code MUST match these patterns.
 - `docs/PLAN.md` — roadmap/vision; updated at phase boundaries, may lag the as-built state.
 - `docs/adr/` — decisions with rationale; never contradict an accepted ADR without writing a new one.

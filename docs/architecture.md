@@ -22,6 +22,25 @@ diplomat/http (Fastify)   diplomat/mcp (tools)        ← thin edges: parse, del
 
 FP stack (ADR-001, ADR-003): zod = schemas/decoding · neverthrow = fallible control flow (`safeTry` + `guard`/`okOr`) · remeda = data reshaping in logic/adapters. One concern per library.
 
+## Diplomat alignment in this project
+
+This section records how FinTrack applies Diplomat core concepts in the current codebase.
+If any generic concept is ambiguous, this file is the source of truth for implementation choices.
+
+1. Schema stack: zod is the schema system used for models and boundary decoding.
+2. Controller dependency style: controllers orchestrate through injected deps interfaces (`controllers/deps.ts`) and must not import `diplomat/` modules directly.
+3. Diplomat role: `diplomat/http` and `diplomat/mcp` remain thin edges (parse/delegate/translate), while side effects are composed in controllers via deps.
+
+### Dependency direction (enforced)
+
+| Namespace | Can depend on |
+| --- | --- |
+| `controllers/` | `logic/`, `models/`, `common/`, injected deps interfaces |
+| `logic/` | `logic/`, `models/` only |
+| `models/` | zod/schema helpers only |
+| `adapters/` | `models/`, `wire/*` |
+| `diplomat/*` | `controllers/`, `adapters/`, `models/`, wire schemas, runtime clients |
+
 ## Graph model (as built)
 
 ```
