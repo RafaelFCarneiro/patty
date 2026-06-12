@@ -37,6 +37,9 @@ export const payBill = async (deps, input) => {
 ```
 
 - Preconditions: `yield* guard(cond, error)`. Nullables: `yield* okOr(value, error)` (`common/result.ts`).
+- Controllers work with **models only**: hand repos domain drafts (e.g. `TransactionDraft`); never build
+  flat db props (`classificationMethod`, `rawInput: null`) and never import `adapters/` — model→db
+  flattening lives in `diplomat/db` via `adapters/`.
 - Name resolution: ALWAYS via `controllers/resolve.ts` (`resolveAccountRef`, `resolveCategoryRef`,
   `resolveCardRef`) — never inline `resolveByName` + error mapping in a controller.
 - Expected failures are `AppError` values; unexpected errors throw (become 500s). Never `try/catch`

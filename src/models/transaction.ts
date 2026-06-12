@@ -45,6 +45,30 @@ export const Transaction = z.object({
 })
 export type Transaction = z.infer<typeof Transaction>
 
+/**
+ * Domain draft a controller hands to the persistence diplomat.
+ * Pure model shape — flattening to db properties happens in diplomat/db via adapters/.
+ */
+export type TransactionDraft = {
+  id: string
+  description: string
+  amount: number
+  type: TransactionType
+  date: string
+  currency: CurrencyCode
+  source: TransactionSource
+  idempotencyKey: string
+  classification: Classification
+  rawInput?: string
+  refs: {
+    accountId?: string
+    toAccountId?: string
+    cardId?: string
+    categoryId?: string
+    merchantKey?: string
+  }
+}
+
 /** Natural input accepted by MCP/REST: names instead of ids, optional date/currency. */
 export const CreateTransactionInput = z.object({
   description: z.string().min(1),

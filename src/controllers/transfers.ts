@@ -1,5 +1,4 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
-import { toTransferCreateProps } from '../adapters/transactions.js'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
 import { toIsoDate } from '../logic/period.js'
@@ -39,18 +38,17 @@ export const createTransfer = (
 
     yield* validateTransferAccounts(from, to)
 
-    const txProps = toTransferCreateProps({
+    const { transaction, created } = await deps.transactions.create({
       id: deps.newId(),
+      description: input.description ?? `Transferência: ${from.name} → ${to.name}`,
+      amount: input.amount,
+      type: 'transfer',
       date: input.date ?? toIsoDate(deps.clock()),
-      input,
-      from,
-      to,
+      currency: from.currency,
       source,
+      idempotencyKey: input.idempotencyKey,
+      classification: { method: 'none', confidence: 0 },
+      refs: { accountId: from.id, toAccountId: to.id },
     })
-
-    const { transaction, created } = await deps.transactions.create(
-      txProps,
-      { accountId: from.id, toAccountId: to.id, cardId: null, categoryId: null, merchantKey: null },
-    )
     return ok({ transaction, created })
   })
