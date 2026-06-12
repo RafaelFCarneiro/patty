@@ -21,7 +21,32 @@ export type Classification = z.infer<typeof Classification>
 export const TransactionSource = z.enum(['mcp', 'rest', 'import'])
 export type TransactionSource = z.infer<typeof TransactionSource>
 
-export const Transaction = z.object({
+/**
+ * Domain entity: core node properties + edge refs handed to the persistence diplomat.
+ * Pure write-side shape — flattening to db properties happens in diplomat/db via adapters/.
+ */
+export type Transaction = {
+  id: string
+  description: string
+  amount: number
+  type: TransactionType
+  date: string
+  currency: CurrencyCode
+  source: TransactionSource
+  idempotencyKey: string
+  classification: Classification
+  rawInput?: string
+  refs: {
+    accountId?: string
+    toAccountId?: string
+    cardId?: string
+    categoryId?: string
+    merchantKey?: string
+  }
+}
+
+/** Read projection: Transaction node properties with graph-traversal names resolved. */
+export const TransactionView = z.object({
   id: Id,
   description: z.string().min(1),
   amount: Money,
@@ -43,31 +68,7 @@ export const Transaction = z.object({
   categoryName: z.string().optional(),
   merchant: z.string().optional(),
 })
-export type Transaction = z.infer<typeof Transaction>
-
-/**
- * Domain draft a controller hands to the persistence diplomat.
- * Pure model shape — flattening to db properties happens in diplomat/db via adapters/.
- */
-export type TransactionDraft = {
-  id: string
-  description: string
-  amount: number
-  type: TransactionType
-  date: string
-  currency: CurrencyCode
-  source: TransactionSource
-  idempotencyKey: string
-  classification: Classification
-  rawInput?: string
-  refs: {
-    accountId?: string
-    toAccountId?: string
-    cardId?: string
-    categoryId?: string
-    merchantKey?: string
-  }
-}
+export type TransactionView = z.infer<typeof TransactionView>
 
 /** Domain patch for updates — only provided fields change; classification set on user correction. */
 export type TransactionPatch = {

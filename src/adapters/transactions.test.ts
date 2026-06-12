@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { TransactionDraft } from '../models/transaction.js'
+import type { Transaction } from '../models/transaction.js'
 import * as wireInTransactions from '../wire/in/transactions.js'
 import * as transactionAdapters from './transactions.js'
 
-const draft: TransactionDraft = {
+const draft: Transaction = {
   id: 'tx-1',
   description: 'Uber para o aeroporto',
   amount: 32.5,

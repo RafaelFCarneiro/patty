@@ -5,6 +5,7 @@ import { MovementType } from './transaction.js'
 export const RecurringPeriod = z.enum(['weekly', 'monthly', 'yearly'])
 export type RecurringPeriod = z.infer<typeof RecurringPeriod>
 
+/** Domain entity: node properties and resolved edge target ids. */
 export const RecurringRule = z.object({
   id: Id,
   description: z.string().min(1),
@@ -15,11 +16,16 @@ export const RecurringRule = z.object({
   nextDue: IsoDate,
   currency: CurrencyCode,
   accountId: Id.optional(),
-  accountName: z.string().optional(),
   categoryId: Id.optional(),
-  categoryName: z.string().optional(),
 })
 export type RecurringRule = z.infer<typeof RecurringRule>
+
+/** Read projection: RecurringRule with graph-traversal names resolved. */
+export const RecurringRuleView = RecurringRule.extend({
+  accountName: z.string().optional(),
+  categoryName: z.string().optional(),
+})
+export type RecurringRuleView = z.infer<typeof RecurringRuleView>
 
 export type CreateRecurringInput = {
   description: string
