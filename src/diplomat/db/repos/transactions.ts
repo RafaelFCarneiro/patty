@@ -1,9 +1,8 @@
 import neo4j, { type Driver } from 'neo4j-driver'
-import { z } from 'zod'
-import { toTransaction } from '../../../adapters/records.js'
-import { transactionDraftToDb, transactionPatchToDb } from '../../../adapters/transactions.js'
+import * as transactionAdapters from '../../../adapters/transactions.js'
 import type { SummaryRow } from '../../../logic/summary.js'
 import type { Transaction, TransactionDraft, TransactionPatch } from '../../../models/transaction.js'
+import { SummaryRowSchema } from '../../../wire/db/transactions.js'
 import { run } from '../driver.js'
 
 export type CreateTxResult = { transaction: Transaction; created: boolean }
@@ -48,18 +47,10 @@ export type TransactionsRepo = {
   summaryRows: (from: string, to: string) => Promise<SummaryRow[]>
 }
 
-const SummaryRowSchema = z.object({
-  currency: z.enum(['BRL', 'USD']),
-  type: z.enum(['expense', 'income']),
-  category: z.string().nullable(),
-  total: z.number(),
-  count: z.number(),
-})
-
 export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
   /** Idempotent create: MERGE on idempotencyKey; edges attached only on first write. */
   create: async (draft) => {
-    const { props, refs } = transactionDraftToDb(draft)
+    const { props, refs } = transactionAdapters.modelToDb(draft)
     const rows = await run(
       driver,
       `MERGE (t:Transaction {idempotencyKey: $idempotencyKey})
@@ -100,7 +91,7 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
       },
     )
     const row = rows[0]!
-    return { transaction: toTransaction(row), created: Boolean(row['created']) }
+    return { transaction: transactionAdapters.dbToModel(row), created: Boolean(row['created']) }
   },
 
   getById: async (id) => {
@@ -112,12 +103,12 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
        ${RETURN_TX}`,
       { id },
     )
-    return rows[0] ? toTransaction(rows[0]) : null
+    return rows[0] ? transactionAdapters.dbToModel(rows[0]) : null
   },
 
   /** Patch scalar props; re-link [:IN]/[:FROM] edges when new refs are provided. */
   update: async (id, patch, refs) => {
-    const props = transactionPatchToDb(patch)
+    const props = transactionAdapters.patchToDb(patch)
     const rows = await run(
       driver,
       `MATCH (t:Transaction {id: $id})
@@ -137,7 +128,7 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
        ${RETURN_TX}`,
       { id, props, categoryId: refs.categoryId, accountId: refs.accountId },
     )
-    return rows[0] ? toTransaction(rows[0]) : null
+    return rows[0] ? transactionAdapters.dbToModel(rows[0]) : null
   },
 
   delete: async (id) => {
@@ -168,7 +159,7 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
        LIMIT $limit`,
       { ...filters, limit: neo4j.int(filters.limit) },
     )
-    return rows.map(toTransaction)
+    return rows.map(transactionAdapters.dbToModel)
   },
 
   summaryRows: async (from, to) => {

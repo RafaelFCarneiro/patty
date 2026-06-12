@@ -1,44 +1,32 @@
-import type { TransactionDraft, TransactionPatch } from '../models/transaction.js'
+import { Transaction, type TransactionDraft, type TransactionPatch } from '../models/transaction.js'
+import type { TransactionDbProps, TransactionDbRefs } from '../wire/db/transactions.js'
 
-/** Db-wire shape: flat node properties as stored on (:Transaction). */
-export type TransactionDbProps = {
-  id: string
-  description: string
-  amount: number
-  type: string
-  date: string
-  currency: string
-  source: string
-  idempotencyKey: string
-  classificationMethod: string
-  confidence: number
-  rawInput: string | null
+export type { TransactionDbProps, TransactionDbRefs }
+
+type NodeLike = { properties: Record<string, unknown> }
+const props = (v: unknown): Record<string, unknown> => (v as NodeLike).properties
+
+/** db→model: decode a Cypher record into a Transaction domain model. */
+export const dbToModel = (record: Record<string, unknown>): Transaction => {
+  const p = props(record['t'])
+  return Transaction.parse({
+    ...p,
+    classification: { method: p['classificationMethod'] ?? 'none', confidence: p['confidence'] ?? 0 },
+    accountId: record['accountId'] ?? undefined,
+    accountName: record['accountName'] ?? undefined,
+    toAccountId: record['toAccountId'] ?? undefined,
+    toAccountName: record['toAccountName'] ?? undefined,
+    cardId: record['cardId'] ?? undefined,
+    cardName: record['cardName'] ?? undefined,
+    categoryId: record['categoryId'] ?? undefined,
+    categoryName: record['categoryName'] ?? undefined,
+    merchant: record['merchant'] ?? undefined,
+    rawInput: p['rawInput'] ?? undefined,
+  })
 }
 
-/** Edge refs with explicit nulls, as Cypher parameters expect. */
-export type TransactionDbRefs = {
-  accountId: string | null
-  toAccountId: string | null
-  cardId: string | null
-  categoryId: string | null
-  merchantKey: string | null
-}
-
-/** model->db: flatten a domain patch into SET-able node properties. Pure. */
-export const transactionPatchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> => ({
-  ...(patch.description !== undefined && { description: patch.description }),
-  ...(patch.amount !== undefined && { amount: patch.amount }),
-  ...(patch.type !== undefined && { type: patch.type }),
-  ...(patch.date !== undefined && { date: patch.date }),
-  ...(patch.currency !== undefined && { currency: patch.currency }),
-  ...(patch.classification !== undefined && {
-    classificationMethod: patch.classification.method,
-    confidence: patch.classification.confidence,
-  }),
-})
-
-/** model->db: flatten a domain TransactionDraft into node properties + edge refs. Pure. */
-export const transactionDraftToDb = (
+/** model→db: flatten a domain TransactionDraft into node properties + edge refs. */
+export const modelToDb = (
   draft: TransactionDraft,
 ): { props: TransactionDbProps; refs: TransactionDbRefs } => ({
   props: {
@@ -61,4 +49,17 @@ export const transactionDraftToDb = (
     categoryId: draft.refs.categoryId ?? null,
     merchantKey: draft.refs.merchantKey ?? null,
   },
+})
+
+/** model→db: flatten a domain patch into SET-able node properties. */
+export const patchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> => ({
+  ...(patch.description !== undefined && { description: patch.description }),
+  ...(patch.amount !== undefined && { amount: patch.amount }),
+  ...(patch.type !== undefined && { type: patch.type }),
+  ...(patch.date !== undefined && { date: patch.date }),
+  ...(patch.currency !== undefined && { currency: patch.currency }),
+  ...(patch.classification !== undefined && {
+    classificationMethod: patch.classification.method,
+    confidence: patch.classification.confidence,
+  }),
 })
