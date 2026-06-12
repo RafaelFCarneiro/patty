@@ -47,28 +47,24 @@ export const createTransaction = (
       : pickClassification(await deps.merchants.matchCandidates(normalizeMerchant(input.description)))
 
     const date = input.date ?? toIsoDate(deps.clock())
-    const { transaction, created } = await deps.transactions.create(
-      {
-        id: deps.newId(),
-        description: input.description,
-        amount: input.amount,
-        type: input.type,
-        date,
-        currency: account?.currency ?? card?.currency ?? input.currency ?? 'BRL',
-        source,
-        idempotencyKey: input.idempotencyKey,
-        classificationMethod: classification.method,
-        confidence: classification.confidence,
-        rawInput: input.rawInput ?? null,
+    const { transaction, created } = await deps.transactions.create({
+      id: deps.newId(),
+      description: input.description,
+      amount: input.amount,
+      type: input.type,
+      date,
+      currency: account?.currency ?? card?.currency ?? input.currency ?? 'BRL',
+      source,
+      idempotencyKey: input.idempotencyKey,
+      classification,
+      rawInput: input.rawInput,
+      refs: {
+        accountId: account?.id,
+        cardId: card?.id,
+        categoryId: classification.categoryId,
+        merchantKey: classification.merchantKey,
       },
-      {
-        accountId: account?.id ?? null,
-        toAccountId: null,
-        cardId: card?.id ?? null,
-        categoryId: classification.categoryId ?? null,
-        merchantKey: classification.merchantKey ?? null,
-      },
-    )
+    })
 
     // Card transactions join their cycle's bill (fatura), created open on demand
     if (card && created)

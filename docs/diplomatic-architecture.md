@@ -50,7 +50,7 @@ Rules:
 * Controllers orchestrate flows; they do not own input adaptation or storage concerns.
 * Controllers should work with models, not wire schemas directly.
 * Controllers may call diplomats and may receive components needed for orchestration.
-* Controllers should not call adapters directly; adaptation is the diplomat's responsibility. (FinTrack records a narrow deviation — see `docs/architecture.md` § Diplomat alignment.)
+* Controllers should not call adapters directly; adaptation is the diplomat's responsibility.
 
 A good controller shape is query external state first, run logic on models, then emit effects if needed.
 

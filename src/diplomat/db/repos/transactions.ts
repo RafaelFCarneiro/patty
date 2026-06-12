@@ -1,23 +1,10 @@
 import neo4j, { type Driver } from 'neo4j-driver'
 import { z } from 'zod'
 import { toTransaction } from '../../../adapters/records.js'
+import { transactionDraftToDb, type TransactionDbProps } from '../../../adapters/transactions.js'
 import type { SummaryRow } from '../../../logic/summary.js'
-import type { Transaction } from '../../../models/transaction.js'
+import type { Transaction, TransactionDraft } from '../../../models/transaction.js'
 import { run } from '../driver.js'
-
-export type TransactionProps = {
-  id: string
-  description: string
-  amount: number
-  type: string
-  date: string
-  currency: string
-  source: string
-  idempotencyKey: string
-  classificationMethod: string
-  confidence: number
-  rawInput: string | null
-}
 
 export type CreateTxResult = { transaction: Transaction; created: boolean }
 
@@ -48,23 +35,15 @@ const MATCH_REFS = `
   OPTIONAL MATCH (t)-[:AT]->(m:Merchant)`
 
 export type UpdateProps = Partial<
-  Pick<TransactionProps, 'description' | 'amount' | 'type' | 'date' | 'currency'> & {
+  Pick<TransactionDbProps, 'description' | 'amount' | 'type' | 'date' | 'currency'> & {
     classificationMethod: string
     confidence: number
   }
 >
 
 export type TransactionsRepo = {
-  create: (
-    props: TransactionProps,
-    refs: {
-      accountId: string | null
-      toAccountId: string | null
-      cardId: string | null
-      categoryId: string | null
-      merchantKey: string | null
-    },
-  ) => Promise<CreateTxResult>
+  /** Receives a domain draft; model→db flattening happens here (adapters/transactions.ts). */
+  create: (draft: TransactionDraft) => Promise<CreateTxResult>
   getById: (id: string) => Promise<Transaction | null>
   update: (
     id: string,
@@ -86,7 +65,8 @@ const SummaryRowSchema = z.object({
 
 export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
   /** Idempotent create: MERGE on idempotencyKey; edges attached only on first write. */
-  create: async (props, refs) => {
+  create: async (draft) => {
+    const { props, refs } = transactionDraftToDb(draft)
     const rows = await run(
       driver,
       `MERGE (t:Transaction {idempotencyKey: $idempotencyKey})

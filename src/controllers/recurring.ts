@@ -46,28 +46,18 @@ export const applyDueRecurring = async (deps: Deps): Promise<ApplyDueResult> => 
     let due = rule.nextDue
     // catch up missed periods, bounded to avoid runaway loops on ancient rules
     for (let i = 0; i < 36 && due <= today; i++) {
-      const { transaction } = await deps.transactions.create(
-        {
-          id: deps.newId(),
-          description: rule.description,
-          amount: rule.amount,
-          type: rule.type,
-          date: due,
-          currency: rule.currency,
-          source: 'mcp',
-          idempotencyKey: recurringIdempotencyKey(rule.id, due),
-          classificationMethod: 'user',
-          confidence: 1,
-          rawInput: null,
-        },
-        {
-          accountId: rule.accountId ?? null,
-          toAccountId: null,
-          cardId: null,
-          categoryId: rule.categoryId ?? null,
-          merchantKey: null,
-        },
-      )
+      const { transaction } = await deps.transactions.create({
+        id: deps.newId(),
+        description: rule.description,
+        amount: rule.amount,
+        type: rule.type,
+        date: due,
+        currency: rule.currency,
+        source: 'mcp',
+        idempotencyKey: recurringIdempotencyKey(rule.id, due),
+        classification: { method: 'user', confidence: 1 },
+        refs: { accountId: rule.accountId, categoryId: rule.categoryId },
+      })
       applied.push({ rule: rule.description, date: due, transaction })
       due = nextDue(due, rule.period)
     }
