@@ -118,7 +118,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   app.post('/api/transfers', async (req, reply) => {
     const input = parse(CreateTransferInput, req.body, reply) as CreateTransferInput
     if (!input) return
-    const result = await createTransfer(deps, input)
+    const result = await createTransfer(deps, input, 'rest')
     return result.match(
       (value) => reply.status(value.created ? 201 : 200).send(value),
       (e) => reply.status(httpStatus(e)).send({ error: e }),

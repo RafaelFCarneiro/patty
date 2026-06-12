@@ -28,8 +28,9 @@ This section records how FinTrack applies Diplomat core concepts in the current 
 If any generic concept is ambiguous, this file is the source of truth for implementation choices.
 
 1. Schema stack: zod is the schema system used for models and boundary decoding.
-2. Controller dependency style: controllers orchestrate through injected deps interfaces (`controllers/deps.ts`) and must not import `diplomat/` modules directly.
+2. Controller dependency style: controllers orchestrate through injected deps interfaces (`controllers/deps.ts`) and must not import `diplomat/` modules directly. **Documented exception**: `import type` of repo contracts from `diplomat/db/repos` is allowed (type-only imports erase at runtime; the contracts live next to their implementations until a dedicated ports module is warranted).
 3. Diplomat role: `diplomat/http` and `diplomat/mcp` remain thin edges (parse/delegate/translate), while side effects are composed in controllers via deps.
+4. **Documented deviation from canon**: controllers MAY call pure `adapters/` functions when the translation requires resolved domain context that only exists mid-orchestration (e.g. `toTransferCreateProps` needs both resolved accounts). Diplomats remain the default site for wire↔model adaptation.
 
 ### Dependency direction (enforced)
 

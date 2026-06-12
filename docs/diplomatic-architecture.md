@@ -16,7 +16,7 @@ This file condenses the Diplomat Architecture concepts page into an AI-loadable 
 
 ## Overview
 
-Diplomat Architecture is an Nubank pattern based on Hexagonal Architecture. Its main goal is to isolate the service's domain layer from external concerns such as databases, HTTP, Kafka, files, and other services, reducing coupling and protecting business logic from infrastructure details.
+Diplomat Architecture is a Nubank pattern based on Hexagonal Architecture. Its main goal is to isolate the service's domain layer from external concerns such as databases, HTTP, Kafka, files, and other services, reducing coupling and protecting business logic from infrastructure details.
 
 The architecture is organized around two main zones:
 * Domain Layer: controllers, logic, models.
@@ -50,7 +50,7 @@ Rules:
 * Controllers orchestrate flows; they do not own input adaptation or storage concerns.
 * Controllers should work with models, not wire schemas directly.
 * Controllers may call diplomats and may receive components needed for orchestration.
-* Controllers should not call adapters directly; adaptation is the diplomat's responsibility.
+* Controllers should not call adapters directly; adaptation is the diplomat's responsibility. (FinTrack records a narrow deviation — see `docs/architecture.md` § Diplomat alignment.)
 
 A good controller shape is query external state first, run logic on models, then emit effects if needed.
 
@@ -70,7 +70,7 @@ Models represent domain entities and should be the only data structures used ins
 
 Rules:
 * Prefer strict schemas that reject undeclared attributes.
-* Use the Schema Framewrok/Lib for model definitions.
+* Use the schema framework/lib for model definitions (zod in this project).
 * Do not make models mirror database entities; database representations belong in wire database schemas and adapters.
 
 ## External Layer
