@@ -1,5 +1,5 @@
 import type { Driver } from 'neo4j-driver'
-import { toTransaction } from '../../../adapters/records.js'
+import * as transactionAdapters from '../../../adapters/transactions.js'
 import { Bill } from '../../../models/bill.js'
 import type { Transaction } from '../../../models/transaction.js'
 import type { BillPeriod } from '../../../logic/bill.js'
@@ -55,7 +55,7 @@ export const billsRepo = (driver: Driver): BillsRepo => ({
     const items = (row['items'] as Array<Record<string, unknown> | null>).filter(
       (i): i is Record<string, unknown> => i !== null,
     )
-    const transactions = items.map(toTransaction)
+    const transactions = items.map(transactionAdapters.dbToModel)
     return {
       bill: toBill(row),
       cardName: String(row['cardName']),
