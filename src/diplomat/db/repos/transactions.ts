@@ -147,7 +147,7 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
       driver,
       `MATCH (t:Transaction)
        ${MATCH_REFS}
-       WITH t, a, cc, c, m, true AS created
+       WITH t, a, ta, cc, c, m, true AS created
        WHERE ($from IS NULL OR t.date >= $from)
          AND ($to IS NULL OR t.date < $to)
          AND ($type IS NULL OR t.type = $type)
