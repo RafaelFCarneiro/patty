@@ -1,6 +1,6 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
-import { guard } from '../common/result.js'
+import { guard, okOr } from '../common/result.js'
 import type { Tag } from '../models/tag.js'
 import type { Deps } from './deps.js'
 
@@ -13,7 +13,9 @@ export const createTag = (deps: Deps, name: string): ResultAsync<Tag, AppError> 
       entity: 'tag',
       name,
     })
-    return ok(await deps.tags.create({ id: deps.newId(), name }))
+    const tag = await deps.tags.create({ id: deps.newId(), name })
+    // null = concurrent create won the race; okOr short-circuits as duplicate_name
+    return ok(yield* okOr(tag, { code: 'duplicate_name', entity: 'tag', name }))
   })
 
 export const deleteTag = (deps: Deps, id: string): ResultAsync<{ deleted: boolean }, AppError> =>

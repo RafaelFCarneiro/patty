@@ -177,7 +177,9 @@ describe('MCP integration > transactions', () => {
 
       const workTag = (await callTool(client, { name: 'create_tag', args: { name: `work-${stamp}` } })) as { id?: string }
       const travelTag = (await callTool(client, { name: 'create_tag', args: { name: `travel-${stamp}` } })) as { id?: string }
-      createdTagIds.push(workTag.id!, travelTag.id!)
+      ensure(workTag.id, 'Work tag id missing')
+      ensure(travelTag.id, 'Travel tag id missing')
+      createdTagIds.push(workTag.id, travelTag.id)
 
       const created = (await callTool(client, {
         name: 'create_transaction',
@@ -214,7 +216,9 @@ describe('MCP integration > transactions', () => {
 
       const tagA = (await callTool(client, { name: 'create_tag', args: { name: `tag-a-${stamp}` } })) as { id?: string }
       const tagB = (await callTool(client, { name: 'create_tag', args: { name: `tag-b-${stamp}` } })) as { id?: string }
-      createdTagIds.push(tagA.id!, tagB.id!)
+      ensure(tagA.id, 'Tag A id missing')
+      ensure(tagB.id, 'Tag B id missing')
+      createdTagIds.push(tagA.id, tagB.id)
 
       const created = (await callTool(client, {
         name: 'create_transaction',
@@ -255,7 +259,8 @@ describe('MCP integration > transactions', () => {
       await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
 
       const tag = (await callTool(client, { name: 'create_tag', args: { name: `clear-tag-${stamp}` } })) as { id?: string }
-      createdTagIds.push(tag.id!)
+      ensure(tag.id, 'Tag id missing')
+      createdTagIds.push(tag.id)
 
       const created = (await callTool(client, {
         name: 'create_transaction',
@@ -294,7 +299,8 @@ describe('MCP integration > transactions', () => {
       await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
 
       const tag = (await callTool(client, { name: 'create_tag', args: { name: `search-tag-${stamp}` } })) as { id?: string }
-      createdTagIds.push(tag.id!)
+      ensure(tag.id, 'Tag id missing')
+      createdTagIds.push(tag.id)
 
       const today = new Date().toISOString().slice(0, 10)
 
@@ -357,7 +363,9 @@ describe('MCP integration > transactions', () => {
 
       const tagA = (await callTool(client, { name: 'create_tag', args: { name: `full-a-${stamp}` } })) as { id?: string }
       const tagB = (await callTool(client, { name: 'create_tag', args: { name: `full-b-${stamp}` } })) as { id?: string }
-      createdTagIds.push(tagA.id!, tagB.id!)
+      ensure(tagA.id, 'Tag A id missing')
+      ensure(tagB.id, 'Tag B id missing')
+      createdTagIds.push(tagA.id, tagB.id)
 
       const created = (await callTool(client, {
         name: 'create_transaction',
@@ -428,10 +436,10 @@ describe('MCP integration > transactions', () => {
     }
   })
 
-  // Issue: attachTags and search filter were case-sensitive, but create_tag rejects
-  // duplicates case-insensitively — so "Work" and "work" would resolve to the same tag
-  // at creation time but miss each other at attach/search time.
-  it('attaches tags case-insensitively and search filter is also case-insensitive', async () => {
+  // Tags are case-sensitive: "Work" and "work" are distinct tags.
+  // Attaching with a different casing silently drops the tag (no match), and
+  // search by a different casing returns no results.
+  it('tags are case-sensitive — different casing does not match', async () => {
     const stamp = Date.now()
     const { client, transport } = makeClient()
     try {
@@ -440,11 +448,12 @@ describe('MCP integration > transactions', () => {
       const account = `Case Tag ${stamp}`
       await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
 
-      // Create tag in uppercase
+      // Create tag with uppercase name
       const tag = (await callTool(client, { name: 'create_tag', args: { name: `CASE-TAG-${stamp}` } })) as { id?: string }
-      createdTagIds.push(tag.id!)
+      ensure(tag.id, 'Tag id missing')
+      createdTagIds.push(tag.id)
 
-      // Attach using lowercase variant
+      // Attach using exact same casing — must succeed
       const created = (await callTool(client, {
         name: 'create_transaction',
         args: {
@@ -454,21 +463,21 @@ describe('MCP integration > transactions', () => {
           account,
           category: 'Outros',
           idempotencyKey: `case-tag-${stamp}`,
-          tags: [`case-tag-${stamp}`],  // lowercase — must match CASE-TAG-${stamp}
+          tags: [`CASE-TAG-${stamp}`],
         },
       })) as { transaction?: { id?: string; tags?: string[] } }
       const txId = created.transaction?.id
       ensure(txId, 'Transaction id missing')
       createdTxIds.push(txId)
 
-      expect(created.transaction?.tags).toHaveLength(1)
+      expect(created.transaction?.tags).toContain(`CASE-TAG-${stamp}`)
 
-      // Search using mixed-case — must still find the transaction
+      // Search using wrong casing — must NOT find the transaction
       const results = (await callTool(client, {
         name: 'search_transactions',
-        args: { tags: [`Case-Tag-${stamp}`], limit: 50 },
+        args: { tags: [`case-tag-${stamp}`], limit: 50 },
       })) as Array<{ id?: string }>
-      expect(results.some((tx) => tx.id === txId)).toBe(true)
+      expect(results.some((tx) => tx.id === txId)).toBe(false)
     } finally {
       await transport.close()
     }
