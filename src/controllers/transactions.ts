@@ -47,24 +47,27 @@ export const createTransaction = (
       : pickClassification(await deps.merchants.matchCandidates(normalizeMerchant(input.description)))
 
     const date = input.date ?? toIsoDate(deps.clock())
-    const { transaction, created } = await deps.transactions.create({
-      id: deps.newId(),
-      description: input.description,
-      amount: input.amount,
-      type: input.type,
-      date,
-      currency: account?.currency ?? card?.currency ?? input.currency ?? 'BRL',
-      source,
-      idempotencyKey: input.idempotencyKey,
-      classification,
-      rawInput: input.rawInput,
-      refs: {
-        accountId: account?.id,
-        cardId: card?.id,
-        categoryId: classification.categoryId,
-        merchantKey: classification.merchantKey,
+    const { transaction, created } = await deps.transactions.create(
+      {
+        id: deps.newId(),
+        description: input.description,
+        amount: input.amount,
+        type: input.type,
+        date,
+        currency: account?.currency ?? card?.currency ?? input.currency ?? 'BRL',
+        source,
+        idempotencyKey: input.idempotencyKey,
+        classification,
+        rawInput: input.rawInput,
+        refs: {
+          accountId: account?.id,
+          cardId: card?.id,
+          categoryId: classification.categoryId,
+          merchantKey: classification.merchantKey,
+        },
       },
-    })
+      input.tags ?? [],
+    )
 
     // Card transactions join their cycle's bill (fatura), created open on demand
     if (card && created)
@@ -162,7 +165,7 @@ export const updateTransaction = (
           currency: account?.currency,
           classification: category ? { method: 'user', confidence: 1 } : undefined,
         },
-        { accountId: account?.id ?? null, categoryId: category?.id ?? null },
+        { accountId: account?.id ?? null, categoryId: category?.id ?? null, tagNames: input.tags ?? null },
       ),
       { code: 'unknown_transaction', id: input.id },
     )
@@ -217,6 +220,7 @@ export const searchTransactions = (
         text: input.text ?? null,
         accountId: account?.id ?? null,
         categoryId: category?.id ?? null,
+        tagNames: input.tags ?? [],
         limit: input.limit,
       }),
     )

@@ -14,6 +14,7 @@ export const CreateTransactionInput = z.object({
   currency: CurrencyCode.optional(),
   idempotencyKey: z.string().min(1),
   rawInput: z.string().optional(),
+  tags: z.array(z.string().min(1)).optional(),
 })
 export type CreateTransactionInput = z.infer<typeof CreateTransactionInput>
 
@@ -53,6 +54,7 @@ export const UpdateTransactionInput = z.object({
   date: IsoDate.optional(),
   account: z.string().optional(),
   category: z.string().optional(),
+  tags: z.array(z.string().min(1)).optional(),
 })
 export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInput>
 
@@ -66,6 +68,7 @@ export const SearchTransactionsInput = z
     category: z.string().optional(),
     account: z.string().optional(),
     text: z.string().optional(),
+    tags: z.array(z.string().min(1)).optional(),
     limit: z.number().int().min(1).max(200).optional(),
   })
   .transform((input): DomainSearchTransactionsInput => ({ ...input, limit: input.limit ?? 50 }))

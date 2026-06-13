@@ -29,6 +29,7 @@ export const dbToModel = (record: Record<string, unknown>): TransactionView => {
     categoryId: record['categoryId'] ?? undefined,
     categoryName: record['categoryName'] ?? undefined,
     merchant: record['merchant'] ?? undefined,
+    tags: record['tags'] ?? [],
     rawInput: p['rawInput'] ?? undefined,
   })
 }

@@ -57,7 +57,7 @@ export const applyDueRecurring = async (deps: Deps): Promise<ApplyDueResult> => 
         idempotencyKey: recurringIdempotencyKey(rule.id, due),
         classification: { method: 'user', confidence: 1 },
         refs: { accountId: rule.accountId, categoryId: rule.categoryId },
-      })
+      }, [])
       applied.push({ rule: rule.description, date: due, transaction })
       due = nextDue(due, rule.period)
     }
