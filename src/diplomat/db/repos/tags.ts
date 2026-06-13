@@ -6,7 +6,7 @@ import { run } from '../driver.js'
 export type TagsRepo = {
   list: () => Promise<Tag[]>
   findByName: (name: string) => Promise<Tag | null>
-  /** Returns `null` when a tag with the same name already exists (case-insensitive). */
+  /** Returns `null` when a tag with the same name already exists. */
   create: (tag: Tag) => Promise<Tag | null>
   delete: (id: string) => Promise<boolean>
 }
