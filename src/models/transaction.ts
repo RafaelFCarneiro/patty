@@ -21,7 +21,30 @@ export type Classification = z.infer<typeof Classification>
 export const TransactionSource = z.enum(['mcp', 'rest', 'import'])
 export type TransactionSource = z.infer<typeof TransactionSource>
 
+/** Domain entity: core node properties + edge refs handed to the persistence diplomat. */
 export const Transaction = z.object({
+  id: Id,
+  description: z.string().min(1),
+  amount: Money,
+  type: TransactionType,
+  date: IsoDate,
+  currency: CurrencyCode,
+  source: TransactionSource,
+  idempotencyKey: z.string().min(1),
+  classification: Classification,
+  rawInput: z.string().optional(),
+  refs: z.object({
+    accountId: Id.optional(),
+    toAccountId: Id.optional(),
+    cardId: Id.optional(),
+    categoryId: Id.optional(),
+    merchantKey: z.string().optional(),
+  }),
+})
+export type Transaction = z.infer<typeof Transaction>
+
+/** Read projection: Transaction node properties with graph-traversal names resolved. */
+export const TransactionView = z.object({
   id: Id,
   description: z.string().min(1),
   amount: Money,
@@ -43,31 +66,7 @@ export const Transaction = z.object({
   categoryName: z.string().optional(),
   merchant: z.string().optional(),
 })
-export type Transaction = z.infer<typeof Transaction>
-
-/**
- * Domain draft a controller hands to the persistence diplomat.
- * Pure model shape — flattening to db properties happens in diplomat/db via adapters/.
- */
-export type TransactionDraft = {
-  id: string
-  description: string
-  amount: number
-  type: TransactionType
-  date: string
-  currency: CurrencyCode
-  source: TransactionSource
-  idempotencyKey: string
-  classification: Classification
-  rawInput?: string
-  refs: {
-    accountId?: string
-    toAccountId?: string
-    cardId?: string
-    categoryId?: string
-    merchantKey?: string
-  }
-}
+export type TransactionView = z.infer<typeof TransactionView>
 
 /** Domain patch for updates — only provided fields change; classification set on user correction. */
 export type TransactionPatch = {
@@ -79,69 +78,58 @@ export type TransactionPatch = {
   classification?: Classification
 }
 
-/** Natural input accepted by MCP/REST: names instead of ids, optional date/currency. */
-export const CreateTransactionInput = z.object({
-  description: z.string().min(1),
-  amount: Money,
-  type: MovementType,
-  date: IsoDate.optional(),
-  account: z.string().optional(),
-  card: z.string().optional(),
-  category: z.string().optional(),
-  currency: CurrencyCode.optional(),
-  idempotencyKey: z.string().min(1),
-  rawInput: z.string().optional(),
-})
-export type CreateTransactionInput = z.infer<typeof CreateTransactionInput>
+/** Natural input accepted by controllers: names instead of ids, optional date/currency. */
+export type CreateTransactionInput = {
+  description: string
+  amount: number
+  type: MovementType
+  date?: string
+  account?: string
+  card?: string
+  category?: string
+  currency?: CurrencyCode
+  idempotencyKey: string
+  rawInput?: string
+}
 
-/** Bulk item: idempotencyKey optional — derived from date+description+amount when absent. */
-export const BulkTransactionItem = CreateTransactionInput.omit({
-  idempotencyKey: true,
-  rawInput: true,
-}).extend({
-  idempotencyKey: z.string().min(1).optional(),
-})
-export type BulkTransactionItem = z.infer<typeof BulkTransactionItem>
+export type BulkTransactionItem = Omit<CreateTransactionInput, 'idempotencyKey' | 'rawInput'> & {
+  idempotencyKey?: string
+}
 
-export const CreateTransactionsBulkInput = z.object({
-  items: z.array(BulkTransactionItem).min(1).max(200),
-  /** Defaults applied to every item that doesn't set its own. */
-  account: z.string().optional(),
-  card: z.string().optional(),
-  rawInput: z.string().optional(),
-})
-export type CreateTransactionsBulkInput = z.infer<typeof CreateTransactionsBulkInput>
+export type CreateTransactionsBulkInput = {
+  items: BulkTransactionItem[]
+  account?: string
+  card?: string
+  rawInput?: string
+}
 
-export const CreateTransferInput = z.object({
-  from: z.string().min(1),
-  to: z.string().min(1),
-  amount: Money,
-  date: IsoDate.optional(),
-  description: z.string().optional(),
-  idempotencyKey: z.string().min(1),
-})
-export type CreateTransferInput = z.infer<typeof CreateTransferInput>
+export type CreateTransferInput = {
+  from: string
+  to: string
+  amount: number
+  date?: string
+  description?: string
+  idempotencyKey: string
+}
 
-export const UpdateTransactionInput = z.object({
-  id: Id,
-  description: z.string().min(1).optional(),
-  amount: Money.optional(),
-  type: MovementType.optional(),
-  date: IsoDate.optional(),
-  account: z.string().optional(),
-  category: z.string().optional(),
-})
-export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInput>
+export type UpdateTransactionInput = {
+  id: string
+  description?: string
+  amount?: number
+  type?: MovementType
+  date?: string
+  account?: string
+  category?: string
+}
 
-export const SearchTransactionsInput = z.object({
-  month: z.number().int().min(1).max(12).optional(),
-  year: z.number().int().min(2000).max(2100).optional(),
-  from: IsoDate.optional(),
-  to: IsoDate.optional(),
-  type: TransactionType.optional(),
-  category: z.string().optional(),
-  account: z.string().optional(),
-  text: z.string().optional(),
-  limit: z.number().int().min(1).max(200).default(50),
-})
-export type SearchTransactionsInput = z.infer<typeof SearchTransactionsInput>
+export type SearchTransactionsInput = {
+  month?: number
+  year?: number
+  from?: string
+  to?: string
+  type?: TransactionType
+  category?: string
+  account?: string
+  text?: string
+  limit: number
+}

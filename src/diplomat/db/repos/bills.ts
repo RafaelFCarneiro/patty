@@ -1,7 +1,7 @@
 import type { Driver } from 'neo4j-driver'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { Bill } from '../../../models/bill.js'
-import type { Transaction } from '../../../models/transaction.js'
+import type { TransactionView } from '../../../models/transaction.js'
 import type { BillPeriod } from '../../../logic/bill.js'
 import { run } from '../driver.js'
 
@@ -9,7 +9,7 @@ type NodeLike = { properties: Record<string, unknown> }
 
 const toBill = (record: Record<string, unknown>): Bill => Bill.parse((record['b'] as NodeLike).properties)
 
-export type BillWithItems = { bill: Bill; cardName: string; total: number; transactions: Transaction[] }
+export type BillWithItems = { bill: Bill; cardName: string; total: number; transactions: TransactionView[] }
 
 export type BillsRepo = {
   /** MERGE the cycle's bill for a card (created open) and attach the transaction. */

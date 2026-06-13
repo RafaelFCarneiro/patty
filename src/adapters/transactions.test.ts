@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { TransactionDraft } from '../models/transaction.js'
+import type { Transaction } from '../models/transaction.js'
+import * as wireInTransactions from '../wire/in/transactions.js'
 import * as transactionAdapters from './transactions.js'
 
-const draft: TransactionDraft = {
+const draft: Transaction = {
   id: 'tx-1',
   description: 'Uber para o aeroporto',
   amount: 32.5,
@@ -93,6 +94,33 @@ const txNode = node({
   idempotencyKey: 'k1',
   classificationMethod: 'rule',
   confidence: 0.8,
+})
+
+describe('wireIn adapters', () => {
+  it('searchWireInToModel applies limit default of 50 when omitted', () => {
+    const parsed = wireInTransactions.SearchTransactionsInput.parse({})
+    expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({ limit: 50 })
+  })
+
+  it('searchWireInToModel preserves explicit limit when provided', () => {
+    const parsed = wireInTransactions.SearchTransactionsInput.parse({ limit: 10, month: 6, year: 2026 })
+    expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({ limit: 10, month: 6, year: 2026 })
+  })
+
+  it('createWireInToModel passes transaction input through unchanged', () => {
+    const parsed = wireInTransactions.CreateTransactionInput.parse({
+      description: 'Uber',
+      amount: 32.5,
+      type: 'expense',
+      idempotencyKey: 'k1',
+    })
+    expect(transactionAdapters.createWireInToModel(parsed)).toMatchObject({
+      description: 'Uber',
+      amount: 32.5,
+      type: 'expense',
+      idempotencyKey: 'k1',
+    })
+  })
 })
 
 describe('dbToModel', () => {

@@ -11,7 +11,7 @@ export const Category = z.object({
 })
 export type Category = z.infer<typeof Category>
 
-export const CreateCategory = Category.omit({ id: true }).extend({
-  kind: CategoryKind.default('expense'),
-})
-export type CreateCategory = z.infer<typeof CreateCategory>
+export type CreateCategory = {
+  name: string
+  kind: CategoryKind
+}

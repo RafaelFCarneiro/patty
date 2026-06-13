@@ -1,11 +1,11 @@
 import neo4j, { type Driver } from 'neo4j-driver'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import type { SummaryRow } from '../../../logic/summary.js'
-import type { Transaction, TransactionDraft, TransactionPatch } from '../../../models/transaction.js'
+import type { Transaction, TransactionView, TransactionPatch } from '../../../models/transaction.js'
 import { SummaryRowSchema } from '../../../wire/db/transactions.js'
 import { run } from '../driver.js'
 
-export type CreateTxResult = { transaction: Transaction; created: boolean }
+export type CreateTxResult = { transaction: TransactionView; created: boolean }
 
 export type SearchFilters = {
   from: string | null
@@ -34,23 +34,23 @@ const MATCH_REFS = `
   OPTIONAL MATCH (t)-[:AT]->(m:Merchant)`
 
 export type TransactionsRepo = {
-  /** Receives domain shapes; model→db flattening happens here (adapters/transactions.ts). */
-  create: (draft: TransactionDraft) => Promise<CreateTxResult>
-  getById: (id: string) => Promise<Transaction | null>
+  /** Receives domain entity; model→db flattening happens here (adapters/transactions.ts). */
+  create: (entity: Transaction) => Promise<CreateTxResult>
+  getById: (id: string) => Promise<TransactionView | null>
   update: (
     id: string,
     patch: TransactionPatch,
     refs: { accountId: string | null; categoryId: string | null },
-  ) => Promise<Transaction | null>
+  ) => Promise<TransactionView | null>
   delete: (id: string) => Promise<boolean>
-  search: (filters: SearchFilters) => Promise<Transaction[]>
+  search: (filters: SearchFilters) => Promise<TransactionView[]>
   summaryRows: (from: string, to: string) => Promise<SummaryRow[]>
 }
 
 export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
   /** Idempotent create: MERGE on idempotencyKey; edges attached only on first write. */
-  create: async (draft) => {
-    const { props, refs } = transactionAdapters.modelToDb(draft)
+  create: async (entity) => {
+    const { props, refs } = transactionAdapters.modelToDb(entity)
     const rows = await run(
       driver,
       `MERGE (t:Transaction {idempotencyKey: $idempotencyKey})

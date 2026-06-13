@@ -15,7 +15,7 @@ import type {
   CreateTransactionInput,
   CreateTransactionsBulkInput,
   SearchTransactionsInput,
-  Transaction,
+  TransactionView,
   TransactionSource,
   UpdateTransactionInput,
 } from '../models/transaction.js'
@@ -23,7 +23,7 @@ import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCardRef, resolveCategoryRef } from './resolve.js'
 
 export type CreateTransactionResult = {
-  transaction: Transaction
+  transaction: TransactionView
   created: boolean
   classification: ClassifyOutcome
 }
@@ -79,8 +79,8 @@ export const createTransaction = (
   })
 
 export type BulkItemResult =
-  | { status: 'created' | 'needs_review'; transaction: Transaction; classification: ClassifyOutcome }
-  | { status: 'duplicate'; transaction: Transaction }
+  | { status: 'created' | 'needs_review'; transaction: TransactionView; classification: ClassifyOutcome }
+  | { status: 'duplicate'; transaction: TransactionView }
   | { status: 'error'; description: string; error: AppError }
 
 export type BulkResult = {
@@ -141,7 +141,7 @@ export const createTransactionsBulk = (
 export const updateTransaction = (
   deps: Deps,
   input: UpdateTransactionInput,
-): ResultAsync<Transaction, AppError> =>
+): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), {
       code: 'unknown_transaction',
@@ -175,8 +175,8 @@ export const updateTransaction = (
   })
 
 export type DeleteTransactionResult =
-  | { deleted: true; transaction: Transaction }
-  | { deleted: false; dryRun: true; wouldDelete: Transaction; hint: string }
+  | { deleted: true; transaction: TransactionView }
+  | { deleted: false; dryRun: true; wouldDelete: TransactionView; hint: string }
 
 export const deleteTransaction = (
   deps: Deps,
@@ -203,7 +203,7 @@ export const deleteTransaction = (
 export const searchTransactions = (
   deps: Deps,
   input: SearchTransactionsInput,
-): ResultAsync<Transaction[], AppError> =>
+): ResultAsync<TransactionView[], AppError> =>
   safeTry(async function* () {
     const range = input.month && input.year ? periodRange({ month: input.month, year: input.year }) : null
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
