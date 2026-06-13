@@ -436,6 +436,55 @@ describe('MCP integration > transactions', () => {
     }
   })
 
+  // Regression guard: collect(DISTINCT tag.name) on an OPTIONAL MATCH returns []
+  // (not [null]) for transactions with no TAGGED_WITH edges, because Cypher's
+  // collect() skips nulls by design. This test confirms untagged transactions
+  // parse without error and expose tags: [].
+  it('create_transaction without tags returns tags: [] — not null or [null]', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `No Tags ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      // Create with no tags field at all
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `No tags tx ${stamp}`,
+          amount: 5,
+          type: 'expense',
+          account,
+          category: 'Outros',
+          idempotencyKey: `no-tags-${stamp}`,
+        },
+      })) as { transaction?: { id?: string; tags?: string[] } }
+
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      // create response: tags must be an empty array, not null or [null]
+      expect(Array.isArray(created.transaction?.tags)).toBe(true)
+      expect(created.transaction?.tags).toEqual([])
+
+      // search response: same guarantee on the read path
+      const results = (await callTool(client, {
+        name: 'search_transactions',
+        args: { text: `No tags tx ${stamp}`, limit: 10 },
+      })) as Array<{ id?: string; tags?: string[] }>
+
+      const match = results.find((tx) => tx.id === txId)
+      expect(match).toBeDefined()
+      expect(Array.isArray(match?.tags)).toBe(true)
+      expect(match?.tags).toEqual([])
+    } finally {
+      await transport.close()
+    }
+  })
+
   // Tags are case-sensitive: "Work" and "work" are distinct tags.
   // Attaching with a different casing silently drops the tag (no match), and
   // search by a different casing returns no results.
