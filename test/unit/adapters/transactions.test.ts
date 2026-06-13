@@ -156,4 +156,24 @@ describe('dbToModel', () => {
     expect(tx.type).toBe('transfer')
     expect(tx.toAccountName).toBe('Poupança')
   })
+
+  it('maps tags from db record to TransactionView', () => {
+    const tx = transactionAdapters.dbToModel({ t: txNode, accountId: 'acc-1', tags: ['work', 'travel'] })
+    expect(tx.tags).toEqual(['work', 'travel'])
+  })
+
+  it('defaults tags to empty array when absent in db record', () => {
+    const tx = transactionAdapters.dbToModel({ t: txNode, accountId: 'acc-1' })
+    expect(tx.tags).toEqual([])
+  })
+
+  it('handles explicit empty tags array from db', () => {
+    const tx = transactionAdapters.dbToModel({ t: txNode, accountId: 'acc-1', tags: [] })
+    expect(tx.tags).toEqual([])
+  })
+
+  // Issue: TransactionView.tags used z.string() allowing empty strings from db
+  it('rejects empty string tags coming from db', () => {
+    expect(() => transactionAdapters.dbToModel({ t: txNode, accountId: 'acc-1', tags: [''] })).toThrow()
+  })
 })

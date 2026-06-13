@@ -8,6 +8,7 @@ import { createCategory, listCategories } from '../../controllers/categories.js'
 import { createCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
+import { createTag, deleteTag, listTags } from '../../controllers/tags.js'
 import { getSpendingSummary } from '../../controllers/summary.js'
 import {
   createTransaction,
@@ -55,6 +56,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         currency: z.enum(['BRL', 'USD']).optional(),
         idempotencyKey: z.string().min(1),
         rawInput: z.string().optional().describe('Original user phrasing, for audit'),
+        tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
       },
     },
     async (args) => fromResult(await createTransaction(deps, args, 'mcp')),
@@ -203,6 +205,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         account: z.string().optional().describe('New account name'),
         category: z.string().optional().describe('New category name (user correction)'),
+        tags: z.array(z.string().min(1)).optional().describe('Replaces the full tag set when provided; pass [] to remove all tags'),
       },
     },
     async (args) => fromResult(await updateTransaction(deps, args)),
@@ -240,6 +243,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         category: z.string().optional(),
         account: z.string().optional(),
         text: z.string().optional(),
+        tags: z.array(z.string().min(1)).optional().describe('Filter to transactions having any of these tags'),
         limit: z.number().int().min(1).max(200).default(50),
       },
     },
@@ -341,6 +345,32 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     'list_categories',
     { title: 'List categories', description: 'List all categories.', inputSchema: {} },
     async () => json(await listCategories(deps)),
+  )
+
+  server.registerTool(
+    'list_tags',
+    { title: 'List tags', description: 'List all tags.', inputSchema: {} },
+    async () => json(await listTags(deps)),
+  )
+
+  server.registerTool(
+    'create_tag',
+    {
+      title: 'Create tag',
+      description: 'Create a tag. Tags can be attached to transactions to label them (e.g. "work", "travel", "reembolsável").',
+      inputSchema: { name: z.string().min(1) },
+    },
+    async (args) => fromResult(await createTag(deps, args.name)),
+  )
+
+  server.registerTool(
+    'delete_tag',
+    {
+      title: 'Delete tag',
+      description: 'Delete a tag by id. Removes the tag and all its associations with transactions.',
+      inputSchema: { id: z.string().min(1) },
+    },
+    async (args) => fromResult(await deleteTag(deps, args.id)),
   )
 
   return server

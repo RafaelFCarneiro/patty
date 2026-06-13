@@ -6,7 +6,7 @@ export type AppError =
   | { code: 'ambiguous_category'; query: string; candidates: string[] }
   | { code: 'unknown_card'; query: string; candidates: string[] }
   | { code: 'ambiguous_card'; query: string; candidates: string[] }
-  | { code: 'duplicate_name'; entity: 'account' | 'category' | 'credit_card'; name: string }
+  | { code: 'duplicate_name'; entity: 'account' | 'category' | 'credit_card' | 'tag'; name: string }
   | { code: 'unknown_transaction'; id: string }
   | { code: 'unknown_bill'; card: string; month: number; year: number }
   | { code: 'validation'; issues: string[] }

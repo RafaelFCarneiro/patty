@@ -10,6 +10,7 @@ import { categoriesRepo } from './diplomat/db/repos/categories.js'
 import { creditCardsRepo } from './diplomat/db/repos/creditCards.js'
 import { merchantsRepo } from './diplomat/db/repos/merchants.js'
 import { recurringRepo } from './diplomat/db/repos/recurring.js'
+import { tagsRepo } from './diplomat/db/repos/tags.js'
 import { transactionsRepo } from './diplomat/db/repos/transactions.js'
 import { registerRoutes } from './diplomat/http/routes.js'
 import { registerMcpRoute } from './diplomat/mcp/route.js'
@@ -29,6 +30,7 @@ const main = async (): Promise<void> => {
     creditCards: creditCardsRepo(driver),
     merchants: merchantsRepo(driver),
     recurring: recurringRepo(driver),
+    tags: tagsRepo(driver),
     transactions: transactionsRepo(driver),
     clock: () => new Date(),
     newId: () => randomUUID(),

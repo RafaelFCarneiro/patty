@@ -65,6 +65,7 @@ export const TransactionView = z.object({
   categoryId: Id.optional(),
   categoryName: z.string().optional(),
   merchant: z.string().optional(),
+  tags: z.array(z.string().min(1)).default([]),
 })
 export type TransactionView = z.infer<typeof TransactionView>
 
@@ -90,6 +91,7 @@ export type CreateTransactionInput = {
   currency?: CurrencyCode
   idempotencyKey: string
   rawInput?: string
+  tags?: string[]
 }
 
 export type BulkTransactionItem = Omit<CreateTransactionInput, 'idempotencyKey' | 'rawInput'> & {
@@ -120,6 +122,8 @@ export type UpdateTransactionInput = {
   date?: string
   account?: string
   category?: string
+  /** When provided (including empty array), replaces the full tag set. Omit to leave tags unchanged. */
+  tags?: string[]
 }
 
 export type SearchTransactionsInput = {
@@ -131,5 +135,6 @@ export type SearchTransactionsInput = {
   category?: string
   account?: string
   text?: string
+  tags?: string[]
   limit: number
 }
