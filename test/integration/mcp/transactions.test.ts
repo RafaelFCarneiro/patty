@@ -427,4 +427,50 @@ describe('MCP integration > transactions', () => {
       await transport.close()
     }
   })
+
+  // Issue: attachTags and search filter were case-sensitive, but create_tag rejects
+  // duplicates case-insensitively — so "Work" and "work" would resolve to the same tag
+  // at creation time but miss each other at attach/search time.
+  it('attaches tags case-insensitively and search filter is also case-insensitive', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `Case Tag ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      // Create tag in uppercase
+      const tag = (await callTool(client, { name: 'create_tag', args: { name: `CASE-TAG-${stamp}` } })) as { id?: string }
+      createdTagIds.push(tag.id!)
+
+      // Attach using lowercase variant
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Case tag tx ${stamp}`,
+          amount: 4,
+          type: 'expense',
+          account,
+          category: 'Outros',
+          idempotencyKey: `case-tag-${stamp}`,
+          tags: [`case-tag-${stamp}`],  // lowercase — must match CASE-TAG-${stamp}
+        },
+      })) as { transaction?: { id?: string; tags?: string[] } }
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      expect(created.transaction?.tags).toHaveLength(1)
+
+      // Search using mixed-case — must still find the transaction
+      const results = (await callTool(client, {
+        name: 'search_transactions',
+        args: { tags: [`Case-Tag-${stamp}`], limit: 50 },
+      })) as Array<{ id?: string }>
+      expect(results.some((tx) => tx.id === txId)).toBe(true)
+    } finally {
+      await transport.close()
+    }
+  })
 })
