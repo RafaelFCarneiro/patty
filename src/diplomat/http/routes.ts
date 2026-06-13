@@ -42,7 +42,7 @@ const send = <T>(reply: FastifyReply, result: Result<T, AppError>, okStatus = 20
 const parse = <S extends z.ZodTypeAny>(schema: S, body: unknown, reply: FastifyReply): z.output<S> | null => {
   const r = schema.safeParse(body)
   if (!r.success) {
-    void reply.status(422).send({ error: { code: 'validation', issues: r.error.issues.map((i) => i.message) } })
+    reply.status(422).send({ error: { code: 'validation', issues: r.error.issues.map((i) => i.message) } })
     return null
   }
   return r.data as z.output<S>
@@ -54,7 +54,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   app.get('/api/accounts', async (req, reply) => {
     const q = z.object({ type: AccountType.optional() }).safeParse(req.query)
     if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid type'] } })
-    return listAccounts(deps, q.data.type)
+    return reply.send(await listAccounts(deps, q.data.type))
   })
   app.get('/api/accounts/balances', async (req, reply) => {
     const q = z
@@ -65,20 +65,20 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   })
   app.post('/api/accounts', async (req, reply) => {
     const wireIn = parse(wireInAccounts.CreateAccount, req.body, reply)
-    if (!wireIn) return
+    if (!wireIn) return reply
     return send(reply, await createAccount(deps, accountAdapters.wireInToModel(wireIn)), 201)
   })
 
   app.get('/api/categories', async () => listCategories(deps))
   app.post('/api/categories', async (req, reply) => {
     const wireIn = parse(wireInCategories.CreateCategory, req.body, reply)
-    if (!wireIn) return
+    if (!wireIn) return reply
     return send(reply, await createCategory(deps, categoryAdapters.wireInToModel(wireIn)), 201)
   })
 
   app.post('/api/transactions', async (req, reply) => {
     const wireIn = parse(wireInTransactions.CreateTransactionInput, req.body, reply)
-    if (!wireIn) return
+    if (!wireIn) return reply
     const result = await createTransaction(deps, transactionAdapters.createWireInToModel(wireIn), 'rest')
     return result.match(
       (value) => reply.status(value.created ? 201 : 200).send(value),
@@ -88,31 +88,31 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
 
   app.post('/api/transactions/bulk', async (req, reply) => {
     const wireIn = parse(wireInTransactions.CreateTransactionsBulkInput, req.body, reply)
-    if (!wireIn) return
+    if (!wireIn) return reply
     return send(reply, await createTransactionsBulk(deps, transactionAdapters.bulkWireInToModel(wireIn), 'import'), 201)
   })
 
   app.get('/api/credit-cards', async () => listCreditCards(deps))
   app.post('/api/credit-cards', async (req, reply) => {
     const wireIn = parse(wireInCreditCards.CreateCreditCard, req.body, reply)
-    if (!wireIn) return
+    if (!wireIn) return reply
     return send(reply, await createCreditCard(deps, creditCardAdapters.wireInToModel(wireIn)), 201)
   })
 
   app.get('/api/bills', async (req, reply) => {
     const input = parse(BillQuery, req.query, reply) as BillQueryInput
-    if (!input) return
+    if (!input) return reply
     return send(reply, await getBill(deps, input))
   })
   app.post('/api/bills/pay', async (req, reply) => {
     const input = parse(BillQuery, req.body, reply) as BillQueryInput
-    if (!input) return
+    if (!input) return reply
     return send(reply, await payBill(deps, input))
   })
 
   app.post('/api/transfers', async (req, reply) => {
     const wireIn = parse(wireInTransactions.CreateTransferInput, req.body, reply)
-    if (!wireIn) return
+    if (!wireIn) return reply
     const result = await createTransfer(deps, transactionAdapters.transferWireInToModel(wireIn), 'rest')
     return result.match(
       (value) => reply.status(value.created ? 201 : 200).send(value),
@@ -123,7 +123,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   app.get('/api/recurring', async () => listRecurring(deps))
   app.post('/api/recurring', async (req, reply) => {
     const wireIn = parse(wireInRecurring.CreateRecurringInput, req.body, reply)
-    if (!wireIn) return
+    if (!wireIn) return reply
     return send(reply, await createRecurring(deps, recurringAdapters.wireInToModel(wireIn)), 201)
   })
   app.post('/api/recurring/apply-due', async (_req, reply) => reply.send(await applyDueRecurring(deps)))
@@ -131,7 +131,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   app.patch('/api/transactions/:id', async (req, reply) => {
     const { id } = req.params as { id: string }
     const wireIn = parse(wireInTransactions.UpdateTransactionInput, { ...(req.body as object), id }, reply)
-    if (!wireIn) return
+    if (!wireIn) return reply
     return send(reply, await updateTransaction(deps, transactionAdapters.updateWireInToModel(wireIn)))
   })
 
@@ -143,13 +143,13 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
 
   app.get('/api/transactions', async (req, reply) => {
     const wireIn = parse(wireInTransactions.SearchTransactionsInput, req.query, reply)
-    if (!wireIn) return
+    if (!wireIn) return reply
     return send(reply, await searchTransactions(deps, transactionAdapters.searchWireInToModel(wireIn)))
   })
 
   app.get('/api/summary', async (req, reply) => {
     const input = parse(Period.extend({ month: z.coerce.number(), year: z.coerce.number() }), req.query, reply)
-    if (!input) return
+    if (!input) return reply
     return reply.send(await getSpendingSummary(deps, input))
   })
 }
