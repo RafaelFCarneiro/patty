@@ -25,7 +25,7 @@ const RETURN_TX = `
          cc.id AS cardId, cc.name AS cardName,
          c.id AS categoryId, c.name AS categoryName,
          m.key AS merchant,
-         collect(tag.name) AS tags,
+         collect(DISTINCT tag.name) AS tags,
          created`
 
 const MATCH_REFS = `
@@ -55,7 +55,7 @@ const attachTags = async (driver: Driver, txId: string, tagNames: string[]): Pro
     driver,
     `MATCH (t:Transaction {id: $id})
      UNWIND $tagNames AS tagName
-     MERGE (tag:Tag {name: tagName})
+     MATCH (tag:Tag {name: tagName})
      MERGE (t)-[:TAGGED_WITH]->(tag)`,
     { id: txId, tagNames },
   )
@@ -192,7 +192,7 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
          AND ($text IS NULL OR toLower(t.description) CONTAINS toLower($text))
          AND ($accountId IS NULL OR a.id = $accountId OR ta.id = $accountId)
          AND ($categoryId IS NULL OR c.id = $categoryId)
-         AND (size($tagNames) = 0 OR tag.name IN $tagNames)
+         AND (size($tagNames) = 0 OR size([(t)-[:TAGGED_WITH]->(ft:Tag) WHERE ft.name IN $tagNames | 1]) > 0)
        ${RETURN_TX}
        ORDER BY t.date DESC, t.id
        LIMIT $limit`,

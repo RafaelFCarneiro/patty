@@ -311,7 +311,9 @@ describe('MCP integration > transactions', () => {
           tags: [`search-tag-${stamp}`],
         },
       })) as { transaction?: { id?: string } }
-      createdTxIds.push(taggedTx.transaction?.id!)
+      const taggedTxId = taggedTx.transaction?.id
+      ensure(taggedTxId, 'Tagged transaction id missing')
+      createdTxIds.push(taggedTxId)
 
       const untaggedTx = (await callTool(client, {
         name: 'create_transaction',
@@ -325,7 +327,9 @@ describe('MCP integration > transactions', () => {
           idempotencyKey: `untagged-search-${stamp}`,
         },
       })) as { transaction?: { id?: string } }
-      createdTxIds.push(untaggedTx.transaction?.id!)
+      const untaggedTxId = untaggedTx.transaction?.id
+      ensure(untaggedTxId, 'Untagged transaction id missing')
+      createdTxIds.push(untaggedTxId)
 
       const results = (await callTool(client, {
         name: 'search_transactions',
@@ -333,8 +337,8 @@ describe('MCP integration > transactions', () => {
       })) as Array<{ id?: string }>
 
       const ids = results.map((t) => t.id)
-      expect(ids).toContain(taggedTx.transaction?.id)
-      expect(ids).not.toContain(untaggedTx.transaction?.id)
+      expect(ids).toContain(taggedTxId)
+      expect(ids).not.toContain(untaggedTxId)
     } finally {
       await transport.close()
     }
