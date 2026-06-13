@@ -65,7 +65,7 @@ export const TransactionView = z.object({
   categoryId: Id.optional(),
   categoryName: z.string().optional(),
   merchant: z.string().optional(),
-  tags: z.array(z.string()).default([]),
+  tags: z.array(z.string().min(1)).default([]),
 })
 export type TransactionView = z.infer<typeof TransactionView>
 

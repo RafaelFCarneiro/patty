@@ -171,4 +171,9 @@ describe('dbToModel', () => {
     const tx = transactionAdapters.dbToModel({ t: txNode, accountId: 'acc-1', tags: [] })
     expect(tx.tags).toEqual([])
   })
+
+  // Issue: TransactionView.tags used z.string() allowing empty strings from db
+  it('rejects empty string tags coming from db', () => {
+    expect(() => transactionAdapters.dbToModel({ t: txNode, accountId: 'acc-1', tags: [''] })).toThrow()
+  })
 })
