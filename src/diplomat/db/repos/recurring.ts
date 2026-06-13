@@ -1,11 +1,11 @@
 import type { Driver } from 'neo4j-driver'
-import { RecurringRule } from '../../../models/recurring.js'
+import { RecurringRuleView } from '../../../models/recurring.js'
 import { run } from '../driver.js'
 
 type NodeLike = { properties: Record<string, unknown> }
 
-const toRule = (record: Record<string, unknown>): RecurringRule =>
-  RecurringRule.parse({
+const toRule = (record: Record<string, unknown>): RecurringRuleView =>
+  RecurringRuleView.parse({
     ...(record['r'] as NodeLike).properties,
     accountId: record['accountId'] ?? undefined,
     accountName: record['accountName'] ?? undefined,
@@ -20,9 +20,9 @@ export type RecurringRepo = {
   create: (
     rule: { id: string; description: string; amount: number; type: string; period: string; nextDue: string; currency: string },
     refs: { accountId: string | null; categoryId: string | null },
-  ) => Promise<RecurringRule>
-  list: () => Promise<RecurringRule[]>
-  due: (onOrBefore: string) => Promise<RecurringRule[]>
+  ) => Promise<RecurringRuleView>
+  list: () => Promise<RecurringRuleView[]>
+  due: (onOrBefore: string) => Promise<RecurringRuleView[]>
   advance: (ruleId: string, newNextDue: string) => Promise<void>
 }
 

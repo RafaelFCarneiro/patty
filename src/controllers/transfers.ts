@@ -3,7 +3,7 @@ import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
 import { toIsoDate } from '../logic/period.js'
 import type { Account } from '../models/account.js'
-import type { CreateTransferInput, Transaction, TransactionSource } from '../models/transaction.js'
+import type { CreateTransferInput, TransactionView, TransactionSource } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef } from './resolve.js'
 
@@ -31,7 +31,7 @@ export const createTransfer = (
   deps: Deps,
   input: CreateTransferInput,
   source: TransactionSource,
-): ResultAsync<{ transaction: Transaction; created: boolean }, AppError> =>
+): ResultAsync<{ transaction: TransactionView; created: boolean }, AppError> =>
   safeTry(async function* () {
     const from = yield* resolveAccountRef(deps, input.from)
     const to = yield* resolveAccountRef(deps, input.to)
