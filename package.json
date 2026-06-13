@@ -4,12 +4,17 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
+  "engines": {
+    "node": ">=25 <26",
+    "npm": ">=11"
+  },
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "test": "vitest run --config vitest.unit.config.ts",
-    "test:integration": "RUN_INTEGRATION_TESTS=true vitest run --config vitest.integration.config.ts",
+    "test:integration": "bash scripts/run-integration-tests.sh",
+    "test:integration:raw": "RUN_INTEGRATION_TESTS=true vitest run --config vitest.integration.config.ts",
     "test:all": "npm test && npm run test:integration",
     "test:watch": "vitest --config vitest.unit.config.ts",
     "typecheck": "tsc --noEmit",
@@ -25,7 +30,8 @@
       "build": "Compile TypeScript to dist/",
       "start": "Run compiled backend",
       "test": "Run only unit tests (Vitest project: unit)",
-      "test:integration": "Run MCP integration tests (Vitest project: integration; requires backend + Neo4j)",
+      "test:integration": "Run MCP integration tests with automatic startup/teardown (Neo4j + backend)",
+      "test:integration:raw": "Run MCP integration tests only (expects backend + Neo4j already running)",
       "test:all": "Run unit + integration Vitest projects",
       "test:watch": "Run unit tests in watch mode (Vitest project: unit)",
       "typecheck": "Type-check everything, including tests",
