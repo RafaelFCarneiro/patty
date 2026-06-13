@@ -11,9 +11,7 @@ type ToolCallOptions = {
   args?: JsonObject
 }
 
-const shouldRun = process.env.RUN_INTEGRATION_TESTS === 'true'
-const describeIf = shouldRun ? describe : describe.skip
-
+const describeIf = describe
 const mcpUrl = process.env.MCP_URL ?? 'http://127.0.0.1:3001/mcp'
 const preferredAccount = process.env.MCP_SMOKE_ACCOUNT
 
