@@ -76,5 +76,5 @@ else
 fi
 
 log "Running integration tests against $MCP_URL"
-MCP_URL="$MCP_URL" RUN_INTEGRATION_TESTS=true npm run test:integration:raw
+MCP_URL="$MCP_URL" npm run test:integration:raw
 log 'Integration tests completed successfully'
