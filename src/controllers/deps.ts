@@ -4,6 +4,7 @@ import type { CategoriesRepo } from '../diplomat/db/repos/categories.js'
 import type { CreditCardsRepo } from '../diplomat/db/repos/creditCards.js'
 import type { MerchantsRepo } from '../diplomat/db/repos/merchants.js'
 import type { RecurringRepo } from '../diplomat/db/repos/recurring.js'
+import type { TagsRepo } from '../diplomat/db/repos/tags.js'
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js'
 
 /** Side-effect dependencies, injected so controllers stay testable. */
@@ -14,6 +15,7 @@ export type Deps = {
   creditCards: CreditCardsRepo
   merchants: MerchantsRepo
   recurring: RecurringRepo
+  tags: TagsRepo
   transactions: TransactionsRepo
   clock: () => Date
   newId: () => string
