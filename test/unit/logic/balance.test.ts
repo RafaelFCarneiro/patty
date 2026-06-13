@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeBalance } from './balance.js'
+import { computeBalance } from '../../../src/logic/balance.js'
 
 describe('computeBalance', () => {
   it('combines initial balance, transactions, and transfers', () => {

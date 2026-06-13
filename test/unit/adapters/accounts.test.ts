@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import * as wireInAccounts from '../wire/in/accounts.js'
-import * as accountAdapters from './accounts.js'
+import * as wireInAccounts from '../../../src/wire/in/accounts.js'
+import * as accountAdapters from '../../../src/adapters/accounts.js'
 
 const node = (properties: Record<string, unknown>) => ({ properties })
 

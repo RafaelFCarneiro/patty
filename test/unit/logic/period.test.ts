@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { periodRange } from './period.js'
+import { periodRange } from '../../../src/logic/period.js'
 
 describe('periodRange', () => {
   it('builds half-open month range', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { summarize } from './summary.js'
+import { summarize } from '../../../src/logic/summary.js'
 
 describe('summarize', () => {
   it('groups strictly per currency — never mixes', () => {
@@ -21,5 +21,18 @@ describe('summarize', () => {
       { currency: 'BRL', type: 'expense', category: 'Lazer', total: 200, count: 2 },
     ])
     expect(out[0]!.byCategory.map((c) => c.category)).toEqual(['Lazer', 'Sem categoria'])
+  })
+
+  it('rounds monetary totals to 2 decimal places', () => {
+    const out = summarize([
+      { currency: 'BRL', type: 'income', category: 'Renda Extra', total: 0.1, count: 1 },
+      { currency: 'BRL', type: 'income', category: 'Renda Extra', total: 0.2, count: 1 },
+      { currency: 'BRL', type: 'expense', category: 'Transporte', total: 0.05, count: 1 },
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.income).toBe(0.3)
+    expect(out[0]!.expenses).toBe(0.05)
+    expect(out[0]!.balance).toBe(0.25)
   })
 })

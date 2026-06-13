@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pickClassification, weightToConfidence } from './classify.js'
+import { pickClassification, weightToConfidence } from '../../../src/logic/classify.js'
 
 describe('weightToConfidence', () => {
   it('is monotonic and saturating', () => {
