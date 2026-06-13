@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveIdempotencyKey, needsReview } from './bulk.js'
+import { deriveIdempotencyKey, needsReview } from '../../../src/logic/bulk.js'
 
 describe('deriveIdempotencyKey', () => {
   it('is stable for the same statement line', () => {

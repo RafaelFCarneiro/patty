@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import * as wireInCreditCards from '../wire/in/creditCards.js'
-import * as creditCardAdapters from './creditCards.js'
+import * as wireInCreditCards from '../../../src/wire/in/creditCards.js'
+import * as creditCardAdapters from '../../../src/adapters/creditCards.js'
 
 describe('wireInToModel', () => {
   it('applies BRL currency default when omitted', () => {

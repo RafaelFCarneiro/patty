@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import * as wireInRecurring from '../wire/in/recurring.js'
-import * as recurringAdapters from './recurring.js'
+import * as wireInRecurring from '../../../src/wire/in/recurring.js'
+import * as recurringAdapters from '../../../src/adapters/recurring.js'
 
 describe('wireInToModel', () => {
   it('passes all required fields through unchanged', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextDue, recurringIdempotencyKey } from './recurring.js'
+import { nextDue, recurringIdempotencyKey } from '../../../src/logic/recurring.js'
 
 describe('nextDue', () => {
   it('advances monthly, clamping short months', () => {

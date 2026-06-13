@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import * as wireInCategories from '../wire/in/categories.js'
-import * as categoryAdapters from './categories.js'
+import * as wireInCategories from '../../../src/wire/in/categories.js'
+import * as categoryAdapters from '../../../src/adapters/categories.js'
 
 const node = (properties: Record<string, unknown>) => ({ properties })
 
