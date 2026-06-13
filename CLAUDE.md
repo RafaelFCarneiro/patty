@@ -62,6 +62,7 @@ Layer rules (enforce in review — violations are bugs):
 - `diplomat/` contains no business logic — it parses, delegates, and translates.
 - Controllers return `ResultAsync<T, AppError>` (neverthrow) for **expected** failures (unknown account, ambiguous category…); unexpected errors throw and become 500s.
 - Decode at the boundary: every external input (HTTP body, MCP args, Cypher records) is zod-parsed before entering the domain.
+- Fastify routes: use `reply.send()` consistently — never mix with bare `return` in the same handler, as it causes hard-to-debug double-send issues.
 
 ## FP conventions (ADR-001, ADR-003)
 
@@ -89,6 +90,7 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 - Bulk import: idempotency keys derived from `date+description+amount`; items with confidence < 0.6 are flagged `needs_review`, not blocked.
 - Transfers: transactions with `type: 'transfer'` and BOTH `[:FROM]`/`[:TO]` account edges (ADR-002) — one structure for the whole extrato. Summary/classification queries MUST exclude `t.type = 'transfer'`. Same-currency only until FX lands.
 - Balances: derived, never stored — `initialBalance + income − expenses + transfers in − transfers out`. Transactions AND transfers both move balances.
+- Cypher queries: always use parameterized queries (`$param`) — never interpolate user input into query strings.
 
 ## Documentation map (read before generating)
 
@@ -104,3 +106,4 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 - Architecture decisions get an ADR in `docs/adr/` (use the engineering:architecture skill).
 - Docs are updated in the same change that alters behavior — `docs/architecture.md` for structural changes, `docs/mcp-tools.md` for tool changes.
 - New MCP tools must be documented in `docs/mcp-tools.md` with schema, error codes, and an example.
+- Commit messages follow Conventional Commits: `type(scope): description`. Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`. Use `!` or `BREAKING CHANGE:` footer for incompatible changes.
