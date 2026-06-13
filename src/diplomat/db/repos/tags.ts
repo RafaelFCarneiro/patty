@@ -1,4 +1,4 @@
-import type { Driver } from 'neo4j-driver'
+import { Neo4jError, type Driver } from 'neo4j-driver'
 import * as tagAdapters from '../../../adapters/tags.js'
 import type { Tag } from '../../../models/tag.js'
 import { run } from '../driver.js'
@@ -6,9 +6,13 @@ import { run } from '../driver.js'
 export type TagsRepo = {
   list: () => Promise<Tag[]>
   findByName: (name: string) => Promise<Tag | null>
-  create: (tag: Tag) => Promise<Tag>
+  /** Returns `null` when a tag with the same name already exists (case-insensitive). */
+  create: (tag: Tag) => Promise<Tag | null>
   delete: (id: string) => Promise<boolean>
 }
+
+const isConstraintError = (e: unknown): boolean =>
+  e instanceof Neo4jError && e.code === 'Neo.ClientError.Schema.ConstraintValidationFailed'
 
 export const tagsRepo = (driver: Driver): TagsRepo => ({
   list: async () => {
@@ -19,19 +23,24 @@ export const tagsRepo = (driver: Driver): TagsRepo => ({
   findByName: async (name) => {
     const rows = await run(
       driver,
-      'MATCH (t:Tag) WHERE toLower(t.name) = toLower($name) RETURN t LIMIT 1',
+      'MATCH (t:Tag {name: $name}) RETURN t LIMIT 1',
       { name },
     )
     return rows[0] ? tagAdapters.dbToModel(rows[0]) : null
   },
 
   create: async (tag) => {
-    const rows = await run(
-      driver,
-      'CREATE (t:Tag {id: $id, name: $name}) RETURN t',
-      { ...tag },
-    )
-    return tagAdapters.dbToModel(rows[0]!)
+    try {
+      const rows = await run(
+        driver,
+        'CREATE (t:Tag {id: $id, name: $name}) RETURN t',
+        { ...tag },
+      )
+      return tagAdapters.dbToModel(rows[0]!)
+    } catch (e: unknown) {
+      if (isConstraintError(e)) return null
+      throw e
+    }
   },
 
   delete: async (id) => {

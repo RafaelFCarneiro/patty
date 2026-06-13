@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { callTool, makeClient } from './helpers.js'
+import { callTool, ensure, makeClient } from './helpers.js'
 
 const createdTagIds: string[] = []
 
@@ -31,9 +31,9 @@ describe('MCP integration > tags', () => {
         id?: string
         name?: string
       }
-      expect(tag.id).toBeTruthy()
+      ensure(tag.id, 'Tag id missing')
       expect(tag.name).toBe(`work-${stamp}`)
-      createdTagIds.push(tag.id!)
+      createdTagIds.push(tag.id)
     } finally {
       await transport.close()
     }
@@ -47,7 +47,8 @@ describe('MCP integration > tags', () => {
       const tag = (await callTool(client, { name: 'create_tag', args: { name: `dup-tag-${stamp}` } })) as {
         id?: string
       }
-      createdTagIds.push(tag.id!)
+      ensure(tag.id, 'Tag id missing')
+      createdTagIds.push(tag.id)
 
       await expect(
         callTool(client, { name: 'create_tag', args: { name: `dup-tag-${stamp}` } }),
@@ -66,7 +67,8 @@ describe('MCP integration > tags', () => {
         id?: string
         name?: string
       }
-      createdTagIds.push(tag.id!)
+      ensure(tag.id, 'Tag id missing')
+      createdTagIds.push(tag.id)
 
       const tags = (await callTool(client, { name: 'list_tags', args: {} })) as Array<{ id?: string; name?: string }>
       expect(Array.isArray(tags)).toBe(true)
@@ -84,7 +86,8 @@ describe('MCP integration > tags', () => {
       const tag = (await callTool(client, { name: 'create_tag', args: { name: `del-tag-${stamp}` } })) as {
         id?: string
       }
-      const tagId = tag.id!
+      ensure(tag.id, 'Tag id missing')
+      const tagId = tag.id
 
       const result = (await callTool(client, { name: 'delete_tag', args: { id: tagId } })) as { deleted?: boolean }
       expect(result.deleted).toBe(true)
