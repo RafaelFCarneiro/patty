@@ -1,0 +1,23 @@
+import { ok, safeTry, type ResultAsync } from 'neverthrow'
+import type { AppError } from '../common/errors.js'
+import { guard } from '../common/result.js'
+import type { Tag } from '../models/tag.js'
+import type { Deps } from './deps.js'
+
+export const listTags = (deps: Deps): Promise<Tag[]> => deps.tags.list()
+
+export const createTag = (deps: Deps, name: string): ResultAsync<Tag, AppError> =>
+  safeTry(async function* () {
+    yield* guard(!(await deps.tags.findByName(name)), {
+      code: 'duplicate_name',
+      entity: 'tag',
+      name,
+    })
+    return ok(await deps.tags.create({ id: deps.newId(), name }))
+  })
+
+export const deleteTag = (deps: Deps, id: string): ResultAsync<{ deleted: boolean }, AppError> =>
+  safeTry(async function* () {
+    const deleted = await deps.tags.delete(id)
+    return ok({ deleted })
+  })
