@@ -4,10 +4,28 @@ import { callTool, deleteTransactions, ensure, makeClient, preferredAccount } fr
 
 describe('MCP integration > transactions', () => {
   let createdTxIds: string[] = []
+  const createdTagIds: string[] = []
 
   afterEach(async () => {
     await deleteTransactions(createdTxIds)
     createdTxIds = []
+
+    if (createdTagIds.length) {
+      const { client, transport } = makeClient()
+      try {
+        await client.connect(transport)
+        for (const id of [...createdTagIds]) {
+          try {
+            await callTool(client, { name: 'delete_tag', args: { id } })
+          } catch {
+            // best-effort
+          }
+        }
+      } finally {
+        await transport.close()
+        createdTagIds.length = 0
+      }
+    }
   })
 
   it('executes a full create/search/update/delete flow', async () => {
@@ -143,6 +161,180 @@ describe('MCP integration > transactions', () => {
         },
       })) as { summary?: { duplicates?: number } }
       expect(reimport.summary?.duplicates).toBe(1)
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('creates transaction with tags and returns them in the view', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `Tags Tx ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      const workTag = (await callTool(client, { name: 'create_tag', args: { name: `work-${stamp}` } })) as { id?: string }
+      const travelTag = (await callTool(client, { name: 'create_tag', args: { name: `travel-${stamp}` } })) as { id?: string }
+      createdTagIds.push(workTag.id!, travelTag.id!)
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Tagged tx ${stamp}`,
+          amount: 10,
+          type: 'expense',
+          account,
+          category: 'Outros',
+          idempotencyKey: `tagged-${stamp}`,
+          tags: [`work-${stamp}`, `travel-${stamp}`],
+        },
+      })) as { transaction?: { id?: string; tags?: string[] } }
+
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      expect(created.transaction?.tags).toContain(`work-${stamp}`)
+      expect(created.transaction?.tags).toContain(`travel-${stamp}`)
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('update_transaction replaces the tag set', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `Tags Update ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      const tagA = (await callTool(client, { name: 'create_tag', args: { name: `tag-a-${stamp}` } })) as { id?: string }
+      const tagB = (await callTool(client, { name: 'create_tag', args: { name: `tag-b-${stamp}` } })) as { id?: string }
+      createdTagIds.push(tagA.id!, tagB.id!)
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Update tags tx ${stamp}`,
+          amount: 5,
+          type: 'expense',
+          account,
+          category: 'Outros',
+          idempotencyKey: `update-tags-${stamp}`,
+          tags: [`tag-a-${stamp}`],
+        },
+      })) as { transaction?: { id?: string } }
+
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      // Replace tag-a with tag-b
+      const updated = (await callTool(client, {
+        name: 'update_transaction',
+        args: { id: txId, tags: [`tag-b-${stamp}`] },
+      })) as { tags?: string[] }
+      expect(updated.tags).toContain(`tag-b-${stamp}`)
+      expect(updated.tags).not.toContain(`tag-a-${stamp}`)
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('update_transaction with empty tags removes all tags', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `Tags Clear ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      const tag = (await callTool(client, { name: 'create_tag', args: { name: `clear-tag-${stamp}` } })) as { id?: string }
+      createdTagIds.push(tag.id!)
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Clear tags tx ${stamp}`,
+          amount: 3,
+          type: 'expense',
+          account,
+          category: 'Outros',
+          idempotencyKey: `clear-tags-${stamp}`,
+          tags: [`clear-tag-${stamp}`],
+        },
+      })) as { transaction?: { id?: string } }
+
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      const updated = (await callTool(client, {
+        name: 'update_transaction',
+        args: { id: txId, tags: [] },
+      })) as { tags?: string[] }
+      expect(updated.tags).toEqual([])
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('search_transactions filters by tag', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `Tags Search ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      const tag = (await callTool(client, { name: 'create_tag', args: { name: `search-tag-${stamp}` } })) as { id?: string }
+      createdTagIds.push(tag.id!)
+
+      const today = new Date().toISOString().slice(0, 10)
+
+      const taggedTx = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Tagged for search ${stamp}`,
+          amount: 7,
+          type: 'expense',
+          date: today,
+          account,
+          category: 'Outros',
+          idempotencyKey: `tagged-search-${stamp}`,
+          tags: [`search-tag-${stamp}`],
+        },
+      })) as { transaction?: { id?: string } }
+      createdTxIds.push(taggedTx.transaction?.id!)
+
+      const untaggedTx = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Untagged for search ${stamp}`,
+          amount: 8,
+          type: 'expense',
+          date: today,
+          account,
+          category: 'Outros',
+          idempotencyKey: `untagged-search-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } }
+      createdTxIds.push(untaggedTx.transaction?.id!)
+
+      const results = (await callTool(client, {
+        name: 'search_transactions',
+        args: { tags: [`search-tag-${stamp}`], limit: 50 },
+      })) as Array<{ id?: string }>
+
+      const ids = results.map((t) => t.id)
+      expect(ids).toContain(taggedTx.transaction?.id)
+      expect(ids).not.toContain(untaggedTx.transaction?.id)
     } finally {
       await transport.close()
     }
