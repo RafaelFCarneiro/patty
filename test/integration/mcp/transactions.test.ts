@@ -343,4 +343,88 @@ describe('MCP integration > transactions', () => {
       await transport.close()
     }
   })
+
+  // Issue #3: tag filter was applied per-row, truncating the tags[] of matched transactions
+  // to only the matching subset instead of returning all tags.
+  it('search_transactions returns the full tag set on matched transactions, not just the filter tag', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `Tags Full Set ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      const tagA = (await callTool(client, { name: 'create_tag', args: { name: `full-a-${stamp}` } })) as { id?: string }
+      const tagB = (await callTool(client, { name: 'create_tag', args: { name: `full-b-${stamp}` } })) as { id?: string }
+      createdTagIds.push(tagA.id!, tagB.id!)
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Full tagset tx ${stamp}`,
+          amount: 11,
+          type: 'expense',
+          account,
+          category: 'Outros',
+          idempotencyKey: `full-tagset-${stamp}`,
+          tags: [`full-a-${stamp}`, `full-b-${stamp}`],
+        },
+      })) as { transaction?: { id?: string; tags?: string[] } }
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      // Search by only one of the two tags — the result must still carry both
+      const results = (await callTool(client, {
+        name: 'search_transactions',
+        args: { tags: [`full-a-${stamp}`], limit: 50 },
+      })) as Array<{ id?: string; tags?: string[] }>
+
+      const match = results.find((tx) => tx.id === txId)
+      expect(match).toBeDefined()
+      expect(match?.tags).toContain(`full-a-${stamp}`)
+      expect(match?.tags).toContain(`full-b-${stamp}`)
+    } finally {
+      await transport.close()
+    }
+  })
+
+  // Issue #1: attachTags used MERGE instead of MATCH, creating orphan (:Tag) nodes without
+  // id when a non-existent tag name was passed — violating the Tag schema.
+  it('create_transaction silently ignores tag names that do not exist', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `Ghost Tag ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Ghost tag tx ${stamp}`,
+          amount: 1,
+          type: 'expense',
+          account,
+          category: 'Outros',
+          idempotencyKey: `ghost-tag-${stamp}`,
+          tags: [`nonexistent-tag-${stamp}`],
+        },
+      })) as { transaction?: { id?: string; tags?: string[] } }
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      // Non-existent tag must be silently dropped — no orphan node created
+      expect(created.transaction?.tags).toEqual([])
+
+      // Orphan node must not appear in list_tags
+      const tags = (await callTool(client, { name: 'list_tags', args: {} })) as Array<{ name?: string }>
+      expect(tags.some((t) => t.name === `nonexistent-tag-${stamp}`)).toBe(false)
+    } finally {
+      await transport.close()
+    }
+  })
 })
