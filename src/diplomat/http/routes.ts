@@ -13,6 +13,7 @@ import { createCategory, listCategories } from '../../controllers/categories.js'
 import { createCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
+import { createTag, deleteTag, listTags } from '../../controllers/tags.js'
 import { getSpendingSummary } from '../../controllers/summary.js'
 import {
   createTransaction,
@@ -145,6 +146,17 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     const wireIn = parse(wireInTransactions.SearchTransactionsInput, req.query, reply)
     if (!wireIn) return reply
     return send(reply, await searchTransactions(deps, transactionAdapters.searchWireInToModel(wireIn)))
+  })
+
+  app.get('/api/tags', async () => listTags(deps))
+  app.post('/api/tags', async (req, reply) => {
+    const input = parse(z.object({ name: z.string().min(1) }), req.body, reply)
+    if (!input) return reply
+    return send(reply, await createTag(deps, input.name), 201)
+  })
+  app.delete('/api/tags/:id', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    return send(reply, await deleteTag(deps, id))
   })
 
   app.get('/api/summary', async (req, reply) => {

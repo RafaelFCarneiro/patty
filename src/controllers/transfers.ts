@@ -49,6 +49,6 @@ export const createTransfer = (
       idempotencyKey: input.idempotencyKey,
       classification: { method: 'none', confidence: 0 },
       refs: { accountId: from.id, toAccountId: to.id },
-    })
+    }, [])
     return ok({ transaction, created })
   })
