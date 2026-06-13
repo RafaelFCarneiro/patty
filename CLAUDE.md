@@ -107,3 +107,16 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 - Docs are updated in the same change that alters behavior — `docs/architecture.md` for structural changes, `docs/mcp-tools.md` for tool changes.
 - New MCP tools must be documented in `docs/mcp-tools.md` with schema, error codes, and an example.
 - Commit messages follow Conventional Commits: `type(scope): description`. Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`. Use `!` or `BREAKING CHANGE:` footer for incompatible changes.
+
+## Tech debt
+
+When a known trade-off is deliberately deferred during a PR or feature — a performance optimization, a correctness edge case, a refactor — create a **GitHub Issue** to track it. Do not create local markdown files for this purpose.
+
+The issue body should include:
+- What the current code does and why it's suboptimal
+- The improved approach (with code/query snippet if applicable)
+- Why it was deferred
+- When it should be tackled (trigger condition or milestone)
+- Rough effort estimate
+
+After creating the issue, reference it in the PR description or review thread so the connection is traceable.
