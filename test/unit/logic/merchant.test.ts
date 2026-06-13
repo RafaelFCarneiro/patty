@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeMerchant } from './merchant.js'
+import { normalizeMerchant } from '../../../src/logic/merchant.js'
 
 describe('normalizeMerchant', () => {
   it('strips bank-statement noise', () => {
