@@ -21,11 +21,15 @@ export type CurrencySummary = {
   byCategory: CategoryTotal[]
 }
 
+const roundMoney = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
+
 const sumOf = (rows: readonly SummaryRow[], type: TransactionType): number =>
-  R.pipe(
-    rows,
-    R.filter((r) => r.type === type),
-    R.sumBy((r) => r.total),
+  roundMoney(
+    R.pipe(
+      rows,
+      R.filter((r) => r.type === type),
+      R.sumBy((r) => r.total),
+    ),
   )
 
 const toCurrencySummary = ([currency, rows]: [string, SummaryRow[]]): CurrencySummary => {
@@ -35,13 +39,13 @@ const toCurrencySummary = ([currency, rows]: [string, SummaryRow[]]): CurrencySu
     currency: currency as CurrencyCode,
     income,
     expenses,
-    balance: income - expenses,
+    balance: roundMoney(income - expenses),
     byCategory: R.pipe(
       rows,
       R.map((r) => ({
         category: r.category ?? 'Sem categoria',
         type: r.type,
-        total: r.total,
+        total: roundMoney(r.total),
         count: r.count,
       })),
       R.sortBy([(c) => c.total, 'desc']),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { billPeriodFor } from './bill.js'
+import { billPeriodFor } from '../../../src/logic/bill.js'
 
 describe('billPeriodFor', () => {
   // card closes on the 20th, due on the 5th of the following month

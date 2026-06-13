@@ -4,12 +4,19 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=25 <26",
+    "npm": ">=11"
+  },
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --config vitest.unit.config.ts",
+    "test:integration": "bash scripts/run-integration-tests.sh",
+    "test:integration:raw": "vitest run --config vitest.integration.config.ts",
+    "test:all": "npm test && npm run test:integration",
+    "test:watch": "vitest --config vitest.unit.config.ts",
     "typecheck": "tsc --noEmit",
     "infra:up": "docker compose up -d --build --wait",
     "infra:up:db": "docker compose up -d --wait neo4j",
@@ -22,8 +29,11 @@
       "dev": "Run backend in watch mode (REST + MCP on :3001)",
       "build": "Compile TypeScript to dist/",
       "start": "Run compiled backend",
-      "test": "Run unit tests (vitest)",
-      "test:watch": "Run unit tests in watch mode",
+      "test": "Run only unit tests (Vitest project: unit)",
+      "test:integration": "Run MCP integration tests with automatic startup/teardown (Neo4j + backend)",
+      "test:integration:raw": "Run MCP integration tests only (expects backend + Neo4j already running)",
+      "test:all": "Run unit + integration Vitest projects",
+      "test:watch": "Run unit tests in watch mode (Vitest project: unit)",
       "typecheck": "Type-check everything, including tests",
       "infra:up": "Build and start all containers (neo4j + backend)",
       "infra:up:db": "Start only Neo4j (for local npm run dev)",
@@ -41,9 +51,9 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@types/node": "^22.15.0",
+    "@types/node": "^25.9.3",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
-    "vitest": "^3.1.0"
+    "vitest": "^4.1.8"
   }
 }

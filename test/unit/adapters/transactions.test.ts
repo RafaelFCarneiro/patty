@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { Transaction } from '../models/transaction.js'
-import * as wireInTransactions from '../wire/in/transactions.js'
-import * as transactionAdapters from './transactions.js'
+import type { Transaction } from '../../../src/models/transaction.js'
+import * as wireInTransactions from '../../../src/wire/in/transactions.js'
+import * as transactionAdapters from '../../../src/adapters/transactions.js'
 
 const draft: Transaction = {
   id: 'tx-1',

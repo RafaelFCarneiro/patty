@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveByName } from './resolve.js'
+import { resolveByName } from '../../../src/logic/resolve.js'
 
 const accounts = [
   { id: '1', name: 'Nubank' },
