@@ -400,4 +400,36 @@ describe('MCP integration > sub-categories', () => {
       await transport.close()
     }
   })
+
+  it('update_transaction rejects type: transfer at the wire boundary (validation error)', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: 'Despesa qualquer',
+          amount: 20,
+          type: 'expense',
+          category: 'Alimentação',
+          idempotencyKey: `test-type-transfer-${stamp}`,
+        },
+      })) as { transaction?: TransactionView }
+      const tx = created.transaction ?? (created as TransactionView)
+      ensure(tx.id, 'transaction id missing')
+      createdTxIds.push(tx.id)
+
+      // type: 'transfer' is not in MovementType — zod rejects it before the controller runs
+      const result = (await callToolError(client, {
+        name: 'update_transaction',
+        args: { id: tx.id, type: 'transfer' },
+      })) as { error?: { code?: string } }
+
+      expect(result.error?.code).toBe('validation')
+    } finally {
+      await transport.close()
+    }
+  })
 })
