@@ -11,7 +11,7 @@ import type {
 import type { BulkItemResult, BulkResult } from '../logic/transaction.js'
 import type { TransactionDbProps, TransactionDbRefs } from '../wire/db/transactions.js'
 import type * as wireIn from '../wire/in/transactions.js'
-import type { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wire/out/transactions.js'
+import type { BulkItemOut, BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wire/out/transactions.js'
 
 export type { TransactionDbProps, TransactionDbRefs }
 
@@ -91,7 +91,7 @@ export const searchWireInToModel = (input: wireIn.SearchTransactionsInput): Sear
 
 export const createResultToWireOut = (result: CreateTransactionResult): CreateTransactionOut => result
 
-const bulkItemToWireOut = (item: BulkItemResult): import('../wire/out/transactions.js').BulkItemOut => {
+const bulkItemToWireOut = (item: BulkItemResult): BulkItemOut => {
   if (item.status === 'error') {
     const { code } = item.error
     const msg = 'issues' in item.error
