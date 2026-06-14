@@ -48,5 +48,6 @@ export const guardCategoryKind = (
     transactionType: txType,
     categoryName: category.name,
     categoryKind: category.kind,
+    hint: `Category "${category.name}" is ${category.kind}-only; to use it, set type: "${category.kind}"`,
   })
 }
