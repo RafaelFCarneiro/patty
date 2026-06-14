@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { callTool, deleteTransactions, ensure, makeClient } from './helpers.js'
+import { callTool, callToolError, deleteTransactions, ensure, makeClient } from './helpers.js'
 
 // Sub-categories have no delete tool — the ephemeral test DB is wiped per run.
 // We only need to clean up transactions to avoid cross-test interference.
@@ -293,6 +293,29 @@ describe('MCP integration > sub-categories', () => {
 
       expect(results.some((t) => t.id === t1.id)).toBe(true)
       expect(results.some((t) => t.id === t2.id)).toBe(false)
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('category_kind_mismatch error includes a hint with the corrective type', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+      const result = (await callToolError(client, {
+        name: 'create_transaction',
+        args: {
+          description: 'Teste hint',
+          amount: 100,
+          type: 'expense',
+          category: 'Salário',
+          idempotencyKey: `test-hint-${stamp}`,
+        },
+      })) as { error?: { code?: string; hint?: string } }
+
+      expect(result.error?.code).toBe('category_kind_mismatch')
+      expect(result.error?.hint).toContain('set type: "income"')
     } finally {
       await transport.close()
     }
