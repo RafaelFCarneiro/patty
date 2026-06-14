@@ -11,7 +11,8 @@ import type {
 import type { BulkItemResult, BulkResult } from '../logic/transaction.js'
 import type { TransactionDbProps, TransactionDbRefs } from '../wire/db/transactions.js'
 import type * as wireIn from '../wire/in/transactions.js'
-import { BulkItemOut, BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wire/out/transactions.js'
+import type { BulkItemOut } from '../wire/out/transactions.js'
+import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wire/out/transactions.js'
 import { formatAppError } from '../common/errors.js'
 
 type NodeLike = { properties: Record<string, unknown> }
