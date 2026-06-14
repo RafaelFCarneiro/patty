@@ -108,6 +108,12 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 - New MCP tools must be documented in `docs/mcp-tools.md` with schema, error codes, and an example.
 - Commit messages follow Conventional Commits: `type(scope): description`. Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`. Use `!` or `BREAKING CHANGE:` footer for incompatible changes.
 
+## Pull request comments
+
+When working on a PR — addressing review feedback, pushing fixes, or responding to comments — always reply to every open review comment on that PR after the work is done. Use `gh api graphql` with `addPullRequestReviewThreadReply` to post replies (the REST replies endpoint is unreliable). Each reply should reference the commit SHA that resolves it so the thread is traceable.
+
+Do this automatically without waiting to be asked.
+
 ## Tech debt
 
 When a known trade-off is deliberately deferred during a PR or feature — a performance optimization, a correctness edge case, a refactor — create a **GitHub Issue** to track it. Do not create local markdown files for this purpose.
