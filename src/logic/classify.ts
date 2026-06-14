@@ -1,8 +1,6 @@
 import * as R from 'remeda'
 import type { Classification, ClassifyOutcome } from '../models/transaction.js'
 
-export type { ClassifyOutcome }
-
 /** A merchant→category edge candidate returned by the graph. */
 export type MerchantMatch = {
   merchantKey: string

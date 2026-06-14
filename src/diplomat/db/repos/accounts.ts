@@ -4,7 +4,6 @@ import type { Account } from '../../../models/account.js'
 import { BalancePartsRow } from '../../../wire/db/accounts.js'
 import { run } from '../driver.js'
 
-export type { BalancePartsRow }
 
 export type AccountsRepo = {
   list: () => Promise<Account[]>
