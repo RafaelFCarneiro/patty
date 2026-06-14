@@ -28,7 +28,6 @@ import type {
 import type { Deps } from './deps.js'
 import { guardCategoryKind, resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
 
-export type { BulkItemResult, BulkResult, CreateTransactionResult, DeleteTransactionResult }
 
 export const createTransaction = (
   deps: Deps,
