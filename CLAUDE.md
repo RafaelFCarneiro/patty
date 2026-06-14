@@ -51,6 +51,9 @@ Before changing architecture-related code, read:
 
 Agent-level non-negotiables:
 
+- **Diplomatic architecture is non-negotiable.** Follow the layer rules below exactly unless `docs/architecture.md` explicitly states otherwise for a specific case.
+- **Constants over string literals.** Zod enums expose `.enum.*` — always use it. Never pass `'mcp'`, `'expense'`, or any other value that has a named constant. See `docs/code-quality.md`.
+- **Code quality principles apply to every line.** Read `docs/code-quality.md` before generating code. Violations will be caught in review.
 - Keep `diplomat/*` thin (parse/delegate/translate) and put orchestration in controllers.
 - Keep `logic/*` pure (no I/O or runtime state reads).
 - Decode external boundaries with zod and keep expected failures on the Result track.
@@ -97,6 +100,7 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 - `docs/architecture.md` — the system **as built**: graph model, invariants, layer rules. The source of truth when generating code; if your change alters it, update it in the same change.
 - `docs/diplomatic-architecture.md`: The Diplomatic Architecture core concepts.
 - `docs/code-style.md` — code style with do/don't examples (safeTry controllers, remeda pipelines, zod-only types). Generated code MUST match these patterns.
+- `docs/code-quality.md` — quality principles: constants over literals, naming, single responsibility, no magic values. Read before generating any code.
 - `docs/PLAN.md` — roadmap/vision; updated at phase boundaries, may lag the as-built state.
 - `docs/adr/` — decisions with rationale; never contradict an accepted ADR without writing a new one.
 - `docs/mcp-tools.md` — MCP tool contract. `docs/mcp-clients.md` — client connection guide.
