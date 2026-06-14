@@ -3,7 +3,7 @@ import type { AppError } from '../common/errors.js'
 import { nextDue, recurringIdempotencyKey } from '../logic/recurring.js'
 import { toIsoDate } from '../logic/period.js'
 import type { CreateRecurringInput, RecurringRuleView } from '../models/recurring.js'
-import type { TransactionView } from '../models/transaction.js'
+import { TransactionSource, type TransactionView } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
 
@@ -53,7 +53,7 @@ export const applyDueRecurring = async (deps: Deps): Promise<ApplyDueResult> => 
         type: rule.type,
         date: due,
         currency: rule.currency,
-        source: 'mcp',
+        source: TransactionSource.enum.mcp,
         idempotencyKey: recurringIdempotencyKey(rule.id, due),
         classification: { method: 'user', confidence: 1 },
         refs: { accountId: rule.accountId, categoryId: rule.categoryId },
