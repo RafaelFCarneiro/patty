@@ -14,8 +14,6 @@ import type * as wireIn from '../wire/in/transactions.js'
 import { BulkItemOut, BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wire/out/transactions.js'
 import { formatAppError } from '../common/errors.js'
 
-export type { TransactionDbProps, TransactionDbRefs }
-
 type NodeLike = { properties: Record<string, unknown> }
 const props = (v: unknown): Record<string, unknown> => (v as NodeLike).properties
 
