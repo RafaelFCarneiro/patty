@@ -41,6 +41,48 @@ const checkTransfer = ...
 - Booleans: `is*`, `has*`, `can*`, `needs*` (`isUserCorrection`, `needsReview`).
 - Variables: name the domain concept, not the type (`account`, not `accountResult`).
 
+### Names carry the context of their module — don't repeat it
+
+A function name should not restate the file or namespace it lives in. The call site already
+provides that context via the import or namespace prefix.
+
+```ts
+// ✅ DO — file is adapters/transactions.ts, imported as transactionAdapters.*
+export const modelToDb = ...
+export const dbToModel = ...
+export const wireInToModel = ...
+
+// at call site: transactionAdapters.modelToDb(entity)  — "transaction" is clear from the prefix
+
+// ❌ DON'T — redundant: the file name already says "transactions"
+export const modelTransactionToDb = ...
+export const transactionDbToModel = ...
+```
+
+```ts
+// ✅ DO — file is logic/transaction.ts
+export const resolveCurrency = ...      // not resolveTransactionCurrency
+export const guardTransferMutability = ... // not guardTransactionTransferMutability
+
+// ✅ DO — file is controllers/categories.ts
+export const createSubCategory = ...    // not createCategorySubCategory
+```
+
+When two exports from different modules would collide at a call site, rely on namespacing
+rather than adding redundant words to the name:
+
+```ts
+// ✅ DO
+import * as transactionAdapters from './adapters/transactions.js'
+import * as categoryAdapters from './adapters/categories.js'
+transactionAdapters.modelToDb(...)
+categoryAdapters.modelToDb(...)
+
+// ❌ DON'T — solve collision by polluting the name
+transactionModelToDb(...)
+categoryModelToDb(...)
+```
+
 ## Single responsibility
 
 One function, one job. If you find yourself writing "and" in a function description, split it.
@@ -73,6 +115,41 @@ if (c.confidence < 0.6)
 
 Thresholds, limits, and domain constants belong in `models/` or `logic/` with a name that
 encodes intent.
+
+## Declarative over imperative
+
+Prefer expressions that describe *what* the result is over statements that describe *how* to
+build it. Reach for remeda before writing a loop.
+
+```ts
+// ✅ DO
+const counts = R.countBy(items, (i) => i.status)
+const totals = R.pipe(rows, R.groupBy((r) => r.currency), R.mapValues(R.sumBy((r) => r.amount)))
+const active = R.filter(rules, R.anyPass([isRecent, isHighPriority]))
+
+// ❌ DON'T
+let counts: Record<string, number> = {}
+for (const item of items) {
+  counts[item.status] = (counts[item.status] ?? 0) + 1
+}
+```
+
+Remeda functions to prefer over manual imperative equivalents:
+
+| Instead of… | Use… |
+|---|---|
+| `let count = 0; for...` | `R.countBy` |
+| `arr.reduce((acc, x) => ..., {})` | `R.groupBy`, `R.mapValues`, `R.sumBy` |
+| `if (a \|\| b \|\| c)` on functions | `R.anyPass([...])` |
+| `if (a && b && c)` on functions | `R.allPass([...])` |
+| chained `.filter().map().sort()` | `R.pipe(...)` |
+| `{...a, ...b, ...c}` across many objects | `R.mergeAll([...])` |
+| `arr.find(fn) ?? fallback` | `R.firstBy` |
+| `switch` over a value to transform it | `R.conditional` |
+
+The rule of thumb from `docs/code-style.md` still applies: native `map`/`filter` is fine for
+single-stage transforms. Reach for remeda when there are ≥2 stages, grouping, counting, or
+predicate composition.
 
 ## Avoid unnecessary complexity
 

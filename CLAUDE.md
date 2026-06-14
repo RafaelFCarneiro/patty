@@ -53,6 +53,8 @@ Agent-level non-negotiables:
 
 - **Diplomatic architecture is non-negotiable.** Follow the layer rules below exactly unless `docs/architecture.md` explicitly states otherwise for a specific case.
 - **Constants over string literals.** Zod enums expose `.enum.*` — always use it. Never pass `'mcp'`, `'expense'`, or any other value that has a named constant. See `docs/code-quality.md`.
+- **Declarative over imperative.** Prefer remeda (`countBy`, `groupBy`, `anyPass`, `allPass`, `pipe`, `conditional`, `mergeAll`, `firstBy`, …) over manual loops and mutation. See `docs/code-quality.md`.
+- **Names don't repeat their module.** A function in `adapters/transactions.ts` is `modelToDb`, not `modelTransactionToDb` — the namespace at the call site provides context. See `docs/code-quality.md`.
 - **Code quality principles apply to every line.** Read `docs/code-quality.md` before generating code. Violations will be caught in review.
 - Keep `diplomat/*` thin (parse/delegate/translate) and put orchestration in controllers.
 - Keep `logic/*` pure (no I/O or runtime state reads).
