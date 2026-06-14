@@ -3,11 +3,11 @@ import type { AppError } from '../common/errors.js'
 import { guard, okOr } from '../common/result.js'
 import { billPeriodFor } from '../logic/bill.js'
 import { pickClassification, userClassification } from '../logic/classify.js'
+import type { ClassifyOutcome } from '../models/transaction.js'
 import { normalizeMerchant } from '../logic/merchant.js'
 import { periodRange, toIsoDate } from '../logic/period.js'
+import type { BulkItemResult, BulkResult } from '../logic/transaction.js'
 import {
-  BulkItemResult,
-  BulkResult,
   deriveIdempotencyKey,
   guardTransferMutability,
   resolveCurrency,
@@ -47,7 +47,7 @@ export const createTransaction = (
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
     const card = input.card ? yield* resolveCardRef(deps, input.card) : null
 
-    let classification
+    let classification: ClassifyOutcome
     let subCategoryId: string | undefined
 
     if (input.subCategory) {
