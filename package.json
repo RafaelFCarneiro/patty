@@ -30,7 +30,7 @@
       "build": "Compile TypeScript to dist/",
       "start": "Run compiled backend",
       "test": "Run only unit tests (Vitest project: unit)",
-      "test:integration": "Run MCP integration tests against an isolated, ephemeral Neo4j volume (wiped on teardown)",
+      "test:integration": "Run MCP integration tests on port 3002 against an isolated, ephemeral Neo4j volume (wiped on teardown)",
       "test:integration:raw": "Run MCP integration tests only (expects backend + Neo4j already running)",
       "test:all": "Run unit + integration Vitest projects",
       "test:watch": "Run unit tests in watch mode (Vitest project: unit)",

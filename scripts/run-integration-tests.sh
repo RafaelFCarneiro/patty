@@ -5,8 +5,9 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 TEST_NEO4J_URI="${TEST_NEO4J_URI:-bolt://127.0.0.1:7688}"
-MCP_URL="${MCP_URL:-http://127.0.0.1:3001/mcp}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3001/api/health}"
+TEST_PORT="${TEST_PORT:-3002}"
+MCP_URL="${MCP_URL:-http://127.0.0.1:${TEST_PORT}/mcp}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${TEST_PORT}/api/health}"
 STARTUP_TIMEOUT_SECONDS="${STARTUP_TIMEOUT_SECONDS:-60}"
 DEV_LOG_FILE="${DEV_LOG_FILE:-/tmp/fintrack-integration-dev.log}"
 
@@ -59,8 +60,8 @@ trap cleanup EXIT INT TERM
 log "Starting isolated test Neo4j on bolt port 7688"
 $COMPOSE up -d --wait neo4j
 
-log "Starting backend pointed at test DB (logs at $DEV_LOG_FILE)"
-NEO4J_URI="$TEST_NEO4J_URI" npm run dev >"$DEV_LOG_FILE" 2>&1 &
+log "Starting backend on port $TEST_PORT pointed at test DB (logs at $DEV_LOG_FILE)"
+NEO4J_URI="$TEST_NEO4J_URI" PORT="$TEST_PORT" npm run dev >"$DEV_LOG_FILE" 2>&1 &
 backend_pid="$!"
 wait_for_health
 
