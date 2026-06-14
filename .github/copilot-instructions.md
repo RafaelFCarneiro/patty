@@ -54,7 +54,7 @@ These are hard rules. Violations will be rejected in review.
 - **zod**: schemas + boundary decoding only.
 - **neverthrow**: `safeTry` generator pipelines in controllers — each `yield*` short-circuits on error.
   Guards: `guard(condition, error)` and `okOr(nullable, error)` from `common/result.ts`.
-- **remeda**: pure data reshaping in `logic/` and `adapters/` when ≥2 stages or grouping is needed.
+- **remeda** ([docs](https://remedajs.com/docs/)): pure data reshaping in `logic/` and `adapters/` when ≥2 stages or grouping is needed.
 
 ## Process
 
