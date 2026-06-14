@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { CurrencyCode } from '../../../src/models/common.js'
 import {
   deriveIdempotencyKey,
   guardTransferMutability,
@@ -31,23 +32,24 @@ describe('needsReview', () => {
 })
 
 describe('resolveCurrency', () => {
-  const acc = (currency: 'BRL' | 'USD') => ({ currency })
-  const card = (currency: 'BRL' | 'USD') => ({ currency })
+  const { BRL, USD } = CurrencyCode.enum
+  const acc = (currency: typeof BRL | typeof USD) => ({ currency })
+  const card = (currency: typeof BRL | typeof USD) => ({ currency })
 
   it('prefers account currency', () => {
-    expect(resolveCurrency(acc('USD'), card('BRL'), { currency: 'BRL' })).toBe('USD')
+    expect(resolveCurrency(acc(USD), card(BRL), { currency: BRL })).toBe(USD)
   })
 
   it('falls back to card when no account', () => {
-    expect(resolveCurrency(null, card('USD'), { currency: 'BRL' })).toBe('USD')
+    expect(resolveCurrency(null, card(USD), { currency: BRL })).toBe(USD)
   })
 
   it('falls back to explicit currency when no account or card', () => {
-    expect(resolveCurrency(null, null, { currency: 'USD' })).toBe('USD')
+    expect(resolveCurrency(null, null, { currency: USD })).toBe(USD)
   })
 
   it('defaults to BRL when nothing is provided', () => {
-    expect(resolveCurrency(null, null, {})).toBe('BRL')
+    expect(resolveCurrency(null, null, {})).toBe(BRL)
   })
 })
 
