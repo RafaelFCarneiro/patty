@@ -47,9 +47,9 @@ Patch fields by `id`. Only provided fields change. Setting `category` is a **use
 
 Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `category`, `subCategory`, `tags`.
 
-**Kind validation on update**: if `category`/`subCategory` is provided without `type`, the existing transaction type is used for kind validation. On mismatch, the error includes a `hint` field with the exact `type` value to pass to resolve it (e.g. `"set type: 'income'"`).
+**Kind validation on update**: if `category`/`subCategory` is provided without `type`, the existing transaction type is used for kind validation. On mismatch, the error includes a `hint` field with the exact `type` value to pass to resolve it (e.g. `"Category \"Salário\" is income-only; to use it, set type: \"income\""`). Cannot change `type` to `transfer` while a category/sub-category is linked.
 
-Errors: `unknown_transaction`, resolution errors, `category_kind_mismatch`.
+Errors: `unknown_transaction`, resolution errors, `category_kind_mismatch`, `validation`.
 
 ## delete_transaction
 

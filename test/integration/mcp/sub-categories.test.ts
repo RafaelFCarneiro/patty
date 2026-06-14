@@ -325,12 +325,15 @@ describe('MCP integration > sub-categories', () => {
     const { client, transport } = makeClient()
     try {
       await client.connect(transport)
-      await expect(
-        callTool(client, {
-          name: 'create_sub_category',
-          args: { name: 'Anything', parentId: 'cat-does-not-exist' },
-        }),
-      ).rejects.toThrow()
+      const result = (await callToolError(client, {
+        name: 'create_sub_category',
+        args: { name: 'Anything', parentId: 'cat-does-not-exist' },
+      })) as { error?: { code?: string; query?: string; candidates?: unknown[] } }
+
+      expect(result.error?.code).toBe('unknown_category')
+      expect(result.error?.query).toBe('cat-does-not-exist')
+      expect(Array.isArray(result.error?.candidates)).toBe(true)
+      expect((result.error?.candidates ?? []).length).toBeGreaterThan(0)
     } finally {
       await transport.close()
     }
