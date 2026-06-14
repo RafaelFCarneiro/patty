@@ -45,8 +45,11 @@ Input: `card`, `month`, `year`. Marks the bill `paid`. Deliberately does **not**
 
 Patch fields by `id`. Only provided fields change. Setting `category` is a **user correction**: confidence becomes 1 and the merchant→category `[:USUALLY]` edge is strengthened (the system learns). Changing `account` also updates `currency` to match.
 
-Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `category`.
-Errors: `unknown_transaction`, resolution errors.
+Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `category`, `subCategory`, `tags`.
+
+**Kind validation on update**: if `category`/`subCategory` is provided without `type`, the existing transaction type is used for kind validation. On mismatch, the error includes a `hint` field with the exact `type` value to pass to resolve it (e.g. `"set type: 'income'"`).
+
+Errors: `unknown_transaction`, resolution errors, `category_kind_mismatch`.
 
 ## delete_transaction
 
