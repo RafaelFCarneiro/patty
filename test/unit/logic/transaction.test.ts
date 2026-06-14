@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CurrencyCode } from '../../../src/models/common.js'
+import { TransactionSource, TransactionView } from '../../../src/models/transaction.js'
 import {
   deriveIdempotencyKey,
   guardTransferMutability,
@@ -96,7 +97,12 @@ describe('resolveEffectiveType', () => {
 })
 
 describe('summarizeBulkItems', () => {
-  const tx = { id: '1' } as never
+  const tx = TransactionView.parse({
+    id: 'tx-1', description: 'Test', amount: 1, type: 'expense',
+    date: '2026-01-01', currency: CurrencyCode.enum.BRL,
+    source: TransactionSource.enum.mcp, idempotencyKey: 'k1',
+    classification: { method: 'none', confidence: 0 },
+  })
 
   it('counts each status correctly', () => {
     const items = [
