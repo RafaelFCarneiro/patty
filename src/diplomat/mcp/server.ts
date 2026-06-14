@@ -18,6 +18,7 @@ import {
   updateTransaction,
 } from '../../controllers/transactions.js'
 import { createTransfer } from '../../controllers/transfers.js'
+import { TransactionSource } from '../../models/transaction.js'
 import {
   bulkResultToWireOut,
   createResultToWireOut,
@@ -65,7 +66,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
       },
     },
-    async (args) => fromResult((await createTransaction(deps, args, 'mcp')).map(createResultToWireOut)),
+    async (args) => fromResult((await createTransaction(deps, args, TransactionSource.enum.mcp)).map(createResultToWireOut)),
   )
 
   server.registerTool(
@@ -99,7 +100,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         rawInput: z.string().optional().describe('The original pasted statement text'),
       },
     },
-    async (args) => fromResult((await createTransactionsBulk(deps, args, 'import')).map(bulkResultToWireOut)),
+    async (args) => fromResult((await createTransactionsBulk(deps, args, TransactionSource.enum.import)).map(bulkResultToWireOut)),
   )
 
   server.registerTool(
@@ -332,7 +333,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         idempotencyKey: z.string().min(1),
       },
     },
-    async (args) => fromResult(await createTransfer(deps, args, 'mcp')),
+    async (args) => fromResult(await createTransfer(deps, args, TransactionSource.enum.mcp)),
   )
 
 
