@@ -30,6 +30,14 @@ These are hard rules. Violations will be rejected in review.
   Never write `source: 'mcp'` when `TransactionSource.enum.mcp` exists.
   Never repeat a magic string or number — name it.
 
+- **Declarative over imperative** — prefer remeda (`countBy`, `groupBy`, `anyPass`, `allPass`,
+  `pipe`, `conditional`, `mergeAll`, `firstBy`, …) over manual loops and mutation.
+  See `docs/code-quality.md` for the full reference table.
+
+- **Names don't repeat their module** — a function in `adapters/transactions.ts` is named
+  `modelToDb`, not `modelTransactionToDb`. The namespace at the call site (`transactionAdapters.modelToDb`)
+  already provides context. When names would collide across modules, use namespace imports.
+
 - **Code quality** — every line must follow `docs/code-quality.md`: single responsibility,
   clear naming, no magic values, no premature abstraction, consistency with existing patterns.
 
