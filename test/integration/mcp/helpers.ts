@@ -41,6 +41,18 @@ export const callTool = async (client: Client, { name, args = {} }: ToolCallOpti
   return payload
 }
 
+/** Like callTool but returns the error payload instead of throwing — use when asserting on error shape. */
+export const callToolError = async (client: Client, { name, args = {} }: ToolCallOptions): Promise<unknown> => {
+  const result = await client.request(
+    { method: 'tools/call', params: { name, arguments: args } },
+    CallToolResultSchema,
+  )
+  const payload = parseToolPayload(name, result)
+  const isError = Boolean((result as { isError?: boolean }).isError)
+  if (!isError) throw new Error(`Tool ${name} succeeded but an error was expected`)
+  return payload
+}
+
 export const deleteTransactions = async (ids: string[]): Promise<void> => {
   if (!ids.length) return
   const { client, transport } = makeClient()

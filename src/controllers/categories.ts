@@ -25,6 +25,15 @@ export const createSubCategory = (
   input: { name: string; parentId: string },
 ): ResultAsync<SubCategory, AppError> =>
   safeTry(async function* () {
+    const allCategories = await deps.categories.list()
+    yield* guard(
+      allCategories.some((c) => c.id === input.parentId),
+      {
+        code: 'unknown_category',
+        query: input.parentId,
+        candidates: allCategories.map((c) => `${c.id} (${c.name})`),
+      },
+    )
     const siblings = await deps.subCategories.listByParent(input.parentId)
     yield* guard(!siblings.some((s) => s.name.toLowerCase() === input.name.toLowerCase()), {
       code: 'duplicate_name',

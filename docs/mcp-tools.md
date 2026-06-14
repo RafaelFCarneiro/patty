@@ -45,8 +45,11 @@ Input: `card`, `month`, `year`. Marks the bill `paid`. Deliberately does **not**
 
 Patch fields by `id`. Only provided fields change. Setting `category` is a **user correction**: confidence becomes 1 and the merchant→category `[:USUALLY]` edge is strengthened (the system learns). Changing `account` also updates `currency` to match.
 
-Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `category`.
-Errors: `unknown_transaction`, resolution errors.
+Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `category`, `subCategory`, `tags`.
+
+**Kind validation on update**: if `category`/`subCategory` is provided without `type`, the existing transaction type is used for kind validation. On mismatch, the error includes a `hint` field with the exact `type` value to pass to resolve it (e.g. `"Category \"Salário\" is income-only; to use it, set type: \"income\""`). Transfer transactions (`type: transfer`) cannot have a `category`/`subCategory` and cannot have their `type` changed — both are rejected with a `validation` error. Note: `type` on this endpoint accepts `expense|income` only; use `create_transfer` to create transfers.
+
+Errors: `unknown_transaction`, resolution errors, `category_kind_mismatch`, `validation`.
 
 ## delete_transaction
 
@@ -82,8 +85,10 @@ Move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, opt
 
 ## create_sub_category / list_sub_categories
 
-`create_sub_category`: `name` (required), `parentId` (required — use `list_categories` to find it). Sub-categories inherit their parent's `kind`; the same kind validation applies to transactions. Names must be unique within the same parent. Error: `duplicate_name`.
+`create_sub_category`: `name` (required), `parentId` (required — use `list_categories` to find it). Sub-categories inherit their parent's `kind`; the same kind validation applies to transactions. Names must be unique within the same parent. Error: `duplicate_name`, `unknown_category`.
 
 `list_sub_categories`: optional `parentId` filter. Returns `{ id, name, parentId, parentName, kind }`.
+
+**Name resolution**: `subCategory` is resolved by name across all parents. If two sub-categories under different parents share the same name (e.g., "Outros" under Alimentação and Transporte), resolution returns `ambiguous_sub_category` — retry with a more specific name or use `list_sub_categories` to disambiguate.
 
 TransactionView includes `subCategoryId` and `subCategoryName` when a sub-category is linked.

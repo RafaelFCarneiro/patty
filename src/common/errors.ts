@@ -11,7 +11,7 @@ export type AppError =
   | { code: 'duplicate_name'; entity: 'account' | 'category' | 'sub_category' | 'credit_card' | 'tag'; name: string }
   | { code: 'unknown_transaction'; id: string }
   | { code: 'unknown_bill'; card: string; month: number; year: number }
-  | { code: 'category_kind_mismatch'; transactionType: string; categoryName: string; categoryKind: string }
+  | { code: 'category_kind_mismatch'; transactionType: string; categoryName: string; categoryKind: string; hint: string }
   | { code: 'validation'; issues: string[] }
 
 export const httpStatus = (e: AppError): number => {
