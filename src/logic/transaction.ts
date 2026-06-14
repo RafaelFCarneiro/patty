@@ -25,6 +25,12 @@ export const resolveCurrency = (
 
 // ─── Transfer mutability guards ───────────────────────────────────────────────
 
+const isTransfer = (t: Pick<TransactionView, 'type'>) => t.type === 'transfer'
+const wouldBeTransfer = (existing: Pick<TransactionView, 'type'>, input: Pick<UpdateTransactionInput, 'type'>) =>
+  (input.type ?? existing.type) === 'transfer'
+const hasCategoryInput = (input: Pick<UpdateTransactionInput, 'category' | 'subCategory'>) =>
+  !!(input.category || input.subCategory)
+
 /**
  * Enforce transfer invariants on update:
  * - A transfer's type cannot be changed.
@@ -34,10 +40,9 @@ export const guardTransferMutability = (
   existing: Pick<TransactionView, 'type'>,
   input: Pick<UpdateTransactionInput, 'type' | 'category' | 'subCategory'>,
 ): Result<void, AppError> => {
-  if (existing.type === 'transfer' && input.type)
+  if (isTransfer(existing) && input.type)
     return err({ code: 'validation', issues: ['cannot change the type of a transfer transaction'] })
-  const resolvedType = input.type ?? existing.type
-  if (resolvedType === 'transfer' && (input.category || input.subCategory))
+  if (wouldBeTransfer(existing, input) && hasCategoryInput(input))
     return err({ code: 'validation', issues: ['transfer transactions cannot have a category or sub-category'] })
   return ok(undefined)
 }
