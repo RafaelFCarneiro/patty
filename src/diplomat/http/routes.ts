@@ -24,6 +24,7 @@ import {
 } from '../../controllers/transactions.js'
 import { createTransfer } from '../../controllers/transfers.js'
 import { AccountType } from '../../models/account.js'
+import { TransactionSource } from '../../models/transaction.js'
 import { Period } from '../../models/common.js'
 import { BillQuery, type BillQuery as BillQueryInput } from '../../wire/in/bills.js'
 import * as wireInAccounts from '../../wire/in/accounts.js'
@@ -90,7 +91,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   app.post('/api/transactions', async (req, reply) => {
     const wireIn = parse(wireInTransactions.CreateTransactionInput, req.body, reply)
     if (!wireIn) return reply
-    const result = await createTransaction(deps, transactionAdapters.createWireInToModel(wireIn), 'rest')
+    const result = await createTransaction(deps, transactionAdapters.createWireInToModel(wireIn), TransactionSource.enum.rest)
     return result.match(
       (value) => {
         const out = transactionAdapters.createResultToWireOut(value)
@@ -103,7 +104,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   app.post('/api/transactions/bulk', async (req, reply) => {
     const wireIn = parse(wireInTransactions.CreateTransactionsBulkInput, req.body, reply)
     if (!wireIn) return reply
-    return send(reply, (await createTransactionsBulk(deps, transactionAdapters.bulkWireInToModel(wireIn), 'import')).map(transactionAdapters.bulkResultToWireOut), 201)
+    return send(reply, (await createTransactionsBulk(deps, transactionAdapters.bulkWireInToModel(wireIn), TransactionSource.enum.import)).map(transactionAdapters.bulkResultToWireOut), 201)
   })
 
   app.get('/api/credit-cards', async () => listCreditCards(deps))
@@ -127,7 +128,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   app.post('/api/transfers', async (req, reply) => {
     const wireIn = parse(wireInTransactions.CreateTransferInput, req.body, reply)
     if (!wireIn) return reply
-    const result = await createTransfer(deps, transactionAdapters.transferWireInToModel(wireIn), 'rest')
+    const result = await createTransfer(deps, transactionAdapters.transferWireInToModel(wireIn), TransactionSource.enum.rest)
     return result.match(
       (value) => reply.status(value.created ? 201 : 200).send(value),
       (e) => reply.status(httpStatus(e)).send({ error: e }),
