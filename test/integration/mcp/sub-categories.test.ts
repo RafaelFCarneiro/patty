@@ -358,12 +358,12 @@ describe('MCP integration > sub-categories', () => {
       ensure(tx.id, 'transfer id missing')
       createdTxIds.push(tx.id)
 
-      await expect(
-        callTool(client, {
-          name: 'update_transaction',
-          args: { id: tx.id, category: 'Alimentação' },
-        }),
-      ).rejects.toThrow()
+      const result = (await callToolError(client, {
+        name: 'update_transaction',
+        args: { id: tx.id, category: 'Alimentação' },
+      })) as { error?: { code?: string } }
+
+      expect(result.error?.code).toBe('validation')
     } finally {
       await transport.close()
     }
@@ -375,7 +375,6 @@ describe('MCP integration > sub-categories', () => {
     try {
       await client.connect(transport)
 
-      // Create an expense transaction (no category)
       const created = (await callTool(client, {
         name: 'create_transaction',
         args: {
@@ -389,13 +388,12 @@ describe('MCP integration > sub-categories', () => {
       ensure(tx.id, 'transaction id missing')
       createdTxIds.push(tx.id)
 
-      // Attempt to update to a income-only category without providing type
-      await expect(
-        callTool(client, {
-          name: 'update_transaction',
-          args: { id: tx.id, category: 'Salário' },
-        }),
-      ).rejects.toThrow()
+      const result = (await callToolError(client, {
+        name: 'update_transaction',
+        args: { id: tx.id, category: 'Salário' },
+      })) as { error?: { code?: string } }
+
+      expect(result.error?.code).toBe('category_kind_mismatch')
     } finally {
       await transport.close()
     }
