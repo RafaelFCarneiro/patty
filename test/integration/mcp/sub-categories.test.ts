@@ -401,7 +401,7 @@ describe('MCP integration > sub-categories', () => {
     }
   })
 
-  it('update_transaction rejects type: transfer at the wire boundary (validation error)', async () => {
+  it('update_transaction rejects type: transfer at the wire boundary', async () => {
     const stamp = Date.now()
     const { client, transport } = makeClient()
     try {
@@ -421,13 +421,11 @@ describe('MCP integration > sub-categories', () => {
       ensure(tx.id, 'transaction id missing')
       createdTxIds.push(tx.id)
 
-      // type: 'transfer' is not in MovementType — zod rejects it before the controller runs
-      const result = (await callToolError(client, {
-        name: 'update_transaction',
-        args: { id: tx.id, type: 'transfer' },
-      })) as { error?: { code?: string } }
-
-      expect(result.error?.code).toBe('validation')
+      // type:'transfer' is not in MovementType (income|expense) — the MCP SDK rejects it
+      // at the protocol level before the controller runs, so no JSON AppError is returned
+      await expect(
+        callTool(client, { name: 'update_transaction', args: { id: tx.id, type: 'transfer' } }),
+      ).rejects.toThrow()
     } finally {
       await transport.close()
     }
