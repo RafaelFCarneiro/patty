@@ -181,6 +181,10 @@ export const updateTransaction = (
     let categoryId: string | null = null
     let subCategoryId: string | null = null
 
+    yield* guard(
+      !(existing.type === 'transfer' && input.type),
+      { code: 'validation', issues: ['cannot change the type of a transfer transaction'] },
+    )
     const resolvedType = input.type ?? existing.type
     yield* guard(
       !(resolvedType === 'transfer' && (input.category || input.subCategory)),
