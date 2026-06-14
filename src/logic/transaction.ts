@@ -66,8 +66,11 @@ export const deriveIdempotencyKey = (item: {
 }): string =>
   `${item.date}-${normalizeMerchant(item.description).replace(/\s+/g, '-') || 'tx'}-${item.amount.toFixed(2)}`
 
+export const LOW_CONFIDENCE_THRESHOLD = 0.6
+
 /** Items the agent should surface to the user for category confirmation. */
-export const needsReview = (c: Classification): boolean => c.method === 'none' || c.confidence < 0.6
+export const needsReview = (c: Classification): boolean =>
+  c.method === 'none' || c.confidence < LOW_CONFIDENCE_THRESHOLD
 
 export type BulkItemResult =
   | { status: 'created' | 'needs_review'; transaction: TransactionView; classification: ClassifyOutcome }
