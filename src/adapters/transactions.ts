@@ -28,6 +28,8 @@ export const dbToModel = (record: Record<string, unknown>): TransactionView => {
     cardName: record['cardName'] ?? undefined,
     categoryId: record['categoryId'] ?? undefined,
     categoryName: record['categoryName'] ?? undefined,
+    subCategoryId: record['subCategoryId'] ?? undefined,
+    subCategoryName: record['subCategoryName'] ?? undefined,
     merchant: record['merchant'] ?? undefined,
     tags: record['tags'] ?? [],
     rawInput: p['rawInput'] ?? undefined,
@@ -56,6 +58,7 @@ export const modelToDb = (
     toAccountId: entity.refs.toAccountId ?? null,
     cardId: entity.refs.cardId ?? null,
     categoryId: entity.refs.categoryId ?? null,
+    subCategoryId: entity.refs.subCategoryId ?? null,
     merchantKey: entity.refs.merchantKey ?? null,
   },
 })

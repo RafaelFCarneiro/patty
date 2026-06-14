@@ -9,7 +9,7 @@ import * as recurringAdapters from '../../adapters/recurring.js'
 import * as transactionAdapters from '../../adapters/transactions.js'
 import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
-import { createCategory, listCategories } from '../../controllers/categories.js'
+import { createCategory, createSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
 import { createCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
@@ -75,6 +75,16 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     const wireIn = parse(wireInCategories.CreateCategory, req.body, reply)
     if (!wireIn) return reply
     return send(reply, await createCategory(deps, categoryAdapters.wireInToModel(wireIn)), 201)
+  })
+  app.get('/api/sub-categories', async (req, reply) => {
+    const q = z.object({ parentId: z.string().optional() }).safeParse(req.query)
+    if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid query'] } })
+    return reply.send(await listSubCategories(deps, q.data.parentId))
+  })
+  app.post('/api/sub-categories', async (req, reply) => {
+    const wireIn = parse(wireInCategories.CreateSubCategory, req.body, reply)
+    if (!wireIn) return reply
+    return send(reply, await createSubCategory(deps, wireIn), 201)
   })
 
   app.post('/api/transactions', async (req, reply) => {

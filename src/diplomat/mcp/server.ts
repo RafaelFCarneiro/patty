@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { AppError } from '../../common/errors.js'
 import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
-import { createCategory, listCategories } from '../../controllers/categories.js'
+import { createCategory, createSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
 import { createCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
@@ -52,7 +52,8 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD; defaults to today'),
         account: z.string().optional().describe('Account name, e.g. "Nubank"'),
         card: z.string().optional().describe('Credit card name — transaction joins the cycle bill (fatura). Use account OR card, not both'),
-        category: z.string().optional().describe('Category name; omit to auto-classify'),
+        category: z.string().optional().describe('Category name; omit when using subCategory or to auto-classify. expense transactions need an expense/both category; income needs income/both'),
+        subCategory: z.string().optional().describe('Sub-category name (implies its parent category — do not set both category and subCategory)'),
         currency: z.enum(['BRL', 'USD']).optional(),
         idempotencyKey: z.string().min(1),
         rawInput: z.string().optional().describe('Original user phrasing, for audit'),
@@ -204,7 +205,8 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         type: z.enum(['expense', 'income']).optional(),
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         account: z.string().optional().describe('New account name'),
-        category: z.string().optional().describe('New category name (user correction)'),
+        category: z.string().optional().describe('New category name (user correction). Do not set together with subCategory'),
+        subCategory: z.string().optional().describe('New sub-category name (implies parent category; do not set together with category)'),
         tags: z.array(z.string().min(1)).optional().describe('Replaces the full tag set when provided; pass [] to remove all tags'),
       },
     },
@@ -241,6 +243,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         type: z.enum(['expense', 'income', 'transfer']).optional(),
         category: z.string().optional(),
+        subCategory: z.string().optional().describe('Filter to transactions with this sub-category'),
         account: z.string().optional(),
         text: z.string().optional(),
         tags: z.array(z.string().min(1)).optional().describe('Filter to transactions having any of these tags'),
@@ -345,6 +348,33 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     'list_categories',
     { title: 'List categories', description: 'List all categories.', inputSchema: {} },
     async () => json(await listCategories(deps)),
+  )
+
+  server.registerTool(
+    'create_sub_category',
+    {
+      title: 'Create sub-category',
+      description:
+        'Create a sub-category under an existing category. Sub-categories inherit the kind (expense/income/both) ' +
+        'of their parent. Use list_categories to find the parent id. Names must be unique within the same parent.',
+      inputSchema: {
+        name: z.string().min(1),
+        parentId: z.string().min(1).describe('ID of the parent category (from list_categories)'),
+      },
+    },
+    async (args) => fromResult(await createSubCategory(deps, args)),
+  )
+
+  server.registerTool(
+    'list_sub_categories',
+    {
+      title: 'List sub-categories',
+      description: 'List all sub-categories, optionally filtered by parent category id.',
+      inputSchema: {
+        parentId: z.string().optional().describe('Filter to sub-categories of this parent category id'),
+      },
+    },
+    async (args) => json(await listSubCategories(deps, args.parentId)),
   )
 
   server.registerTool(

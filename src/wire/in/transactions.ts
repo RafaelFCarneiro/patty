@@ -11,6 +11,7 @@ export const CreateTransactionInput = z.object({
   account: z.string().optional(),
   card: z.string().optional(),
   category: z.string().optional(),
+  subCategory: z.string().optional(),
   currency: CurrencyCode.optional(),
   idempotencyKey: z.string().min(1),
   rawInput: z.string().optional(),
@@ -54,6 +55,7 @@ export const UpdateTransactionInput = z.object({
   date: IsoDate.optional(),
   account: z.string().optional(),
   category: z.string().optional(),
+  subCategory: z.string().optional(),
   tags: z.array(z.string().min(1)).optional(),
 })
 export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInput>
@@ -66,6 +68,7 @@ export const SearchTransactionsInput = z
     to: IsoDate.optional(),
     type: TransactionType.optional(),
     category: z.string().optional(),
+    subCategory: z.string().optional(),
     account: z.string().optional(),
     text: z.string().optional(),
     tags: z.array(z.string().min(1)).optional(),
