@@ -297,4 +297,51 @@ describe('MCP integration > sub-categories', () => {
       await transport.close()
     }
   })
+
+  it('create_sub_category rejects unknown parentId with structured error', async () => {
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+      await expect(
+        callTool(client, {
+          name: 'create_sub_category',
+          args: { name: 'Anything', parentId: 'cat-does-not-exist' },
+        }),
+      ).rejects.toThrow()
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('update_transaction rejects kind mismatch when only subCategory changes (no type provided)', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      // Create an expense transaction (no category)
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: 'Despesa genérica',
+          amount: 50,
+          type: 'expense',
+          idempotencyKey: `test-kind-update-${stamp}`,
+        },
+      })) as { transaction?: TransactionView }
+      const tx = created.transaction ?? (created as TransactionView)
+      ensure(tx.id, 'transaction id missing')
+      createdTxIds.push(tx.id)
+
+      // Attempt to update to a income-only category without providing type
+      await expect(
+        callTool(client, {
+          name: 'update_transaction',
+          args: { id: tx.id, category: 'Salário' },
+        }),
+      ).rejects.toThrow()
+    } finally {
+      await transport.close()
+    }
+  })
 })

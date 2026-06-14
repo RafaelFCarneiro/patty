@@ -182,6 +182,10 @@ export const updateTransaction = (
     let subCategoryId: string | null = null
 
     const resolvedType = input.type ?? existing.type
+    yield* guard(
+      !(resolvedType === 'transfer' && (input.category || input.subCategory)),
+      { code: 'validation', issues: ['transfer transactions cannot have a category or sub-category'] },
+    )
     const effectiveType = resolvedType !== 'transfer' ? resolvedType : undefined
     if (input.subCategory) {
       const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)

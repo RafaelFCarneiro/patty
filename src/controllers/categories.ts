@@ -28,7 +28,11 @@ export const createSubCategory = (
     const allCategories = await deps.categories.list()
     yield* guard(
       allCategories.some((c) => c.id === input.parentId),
-      { code: 'unknown_category', query: input.parentId, candidates: allCategories.map((c) => c.name) },
+      {
+        code: 'unknown_category',
+        query: input.parentId,
+        candidates: allCategories.map((c) => `${c.id} (${c.name})`),
+      },
     )
     const siblings = await deps.subCategories.listByParent(input.parentId)
     yield* guard(!siblings.some((s) => s.name.toLowerCase() === input.name.toLowerCase()), {
