@@ -2,11 +2,12 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard, okOr } from '../common/result.js'
 import { billPeriodFor } from '../logic/bill.js'
-import { pickClassification, userClassification, type ClassifyOutcome } from '../logic/classify.js'
+import { pickClassification, userClassification } from '../logic/classify.js'
 import { normalizeMerchant } from '../logic/merchant.js'
 import { periodRange, toIsoDate } from '../logic/period.js'
 import {
   BulkItemResult,
+  BulkResult,
   deriveIdempotencyKey,
   guardTransferMutability,
   resolveCurrency,
@@ -16,7 +17,9 @@ import {
 } from '../logic/transaction.js'
 import type {
   CreateTransactionInput,
+  CreateTransactionResult,
   CreateTransactionsBulkInput,
+  DeleteTransactionResult,
   SearchTransactionsInput,
   TransactionView,
   TransactionSource,
@@ -25,18 +28,7 @@ import type {
 import type { Deps } from './deps.js'
 import { guardCategoryKind, resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
 
-export type { BulkItemResult }
-
-export type CreateTransactionResult = {
-  transaction: TransactionView
-  created: boolean
-  classification: ClassifyOutcome
-}
-
-export type BulkResult = {
-  summary: { created: number; needsReview: number; duplicates: number; errors: number }
-  items: BulkItemResult[]
-}
+export type { BulkItemResult, BulkResult, CreateTransactionResult, DeleteTransactionResult }
 
 export const createTransaction = (
   deps: Deps,
@@ -56,7 +48,7 @@ export const createTransaction = (
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
     const card = input.card ? yield* resolveCardRef(deps, input.card) : null
 
-    let classification: ClassifyOutcome
+    let classification
     let subCategoryId: string | undefined
 
     if (input.subCategory) {
@@ -196,10 +188,6 @@ export const updateTransaction = (
 
     return ok(updated)
   })
-
-export type DeleteTransactionResult =
-  | { deleted: true; transaction: TransactionView }
-  | { deleted: false; dryRun: true; wouldDelete: TransactionView; hint: string }
 
 export const deleteTransaction = (
   deps: Deps,

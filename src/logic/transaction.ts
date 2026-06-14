@@ -2,10 +2,16 @@ import type { AppError } from '../common/errors.js'
 import type { Account } from '../models/account.js'
 import type { CreditCard } from '../models/creditCard.js'
 import type { CurrencyCode } from '../models/common.js'
-import type { Classification, CreateTransactionInput, TransactionView, UpdateTransactionInput } from '../models/transaction.js'
+import type {
+  Classification,
+  ClassifyOutcome,
+  CreateTransactionInput,
+  CreateTransactionResult,
+  TransactionView,
+  UpdateTransactionInput,
+} from '../models/transaction.js'
 import { err, ok, type Result } from 'neverthrow'
 import { normalizeMerchant } from './merchant.js'
-import type { ClassifyOutcome } from './classify.js'
 
 // ─── Currency ────────────────────────────────────────────────────────────────
 
@@ -63,7 +69,7 @@ export type BulkItemResult =
   | { status: 'error'; description: string; error: AppError }
 
 export const toBulkItemResult = (
-  result: Result<{ transaction: TransactionView; created: boolean; classification: ClassifyOutcome }, AppError>,
+  result: Result<CreateTransactionResult, AppError>,
   description: string,
 ): BulkItemResult =>
   result.match(
@@ -77,6 +83,11 @@ export const toBulkItemResult = (
           },
     (error) => ({ status: 'error', description, error }),
   )
+
+export type BulkResult = {
+  summary: { created: number; needsReview: number; duplicates: number; errors: number }
+  items: BulkItemResult[]
+}
 
 export const summarizeBulkItems = (
   items: BulkItemResult[],

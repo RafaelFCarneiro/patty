@@ -18,6 +18,11 @@ import {
   updateTransaction,
 } from '../../controllers/transactions.js'
 import { createTransfer } from '../../controllers/transfers.js'
+import {
+  bulkResultToWireOut,
+  createResultToWireOut,
+  deleteResultToWireOut,
+} from '../../adapters/transactions.js'
 
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. */
 
@@ -60,7 +65,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
       },
     },
-    async (args) => fromResult(await createTransaction(deps, args, 'mcp')),
+    async (args) => fromResult((await createTransaction(deps, args, 'mcp')).map(createResultToWireOut)),
   )
 
   server.registerTool(
@@ -94,7 +99,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         rawInput: z.string().optional().describe('The original pasted statement text'),
       },
     },
-    async (args) => fromResult(await createTransactionsBulk(deps, args, 'import')),
+    async (args) => fromResult((await createTransactionsBulk(deps, args, 'import')).map(bulkResultToWireOut)),
   )
 
   server.registerTool(
@@ -225,7 +230,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         confirm: z.boolean().default(false).describe('Must be true to actually delete'),
       },
     },
-    async (args) => fromResult(await deleteTransaction(deps, args)),
+    async (args) => fromResult((await deleteTransaction(deps, args)).map(deleteResultToWireOut)),
   )
 
   server.registerTool(
