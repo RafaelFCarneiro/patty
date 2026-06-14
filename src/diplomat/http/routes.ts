@@ -92,7 +92,10 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     if (!wireIn) return reply
     const result = await createTransaction(deps, transactionAdapters.createWireInToModel(wireIn), 'rest')
     return result.match(
-      (value) => reply.status(value.created ? 201 : 200).send(value),
+      (value) => {
+        const out = transactionAdapters.createResultToWireOut(value)
+        return reply.status(out.created ? 201 : 200).send(out)
+      },
       (e) => reply.status(httpStatus(e)).send({ error: e }),
     )
   })
@@ -100,7 +103,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   app.post('/api/transactions/bulk', async (req, reply) => {
     const wireIn = parse(wireInTransactions.CreateTransactionsBulkInput, req.body, reply)
     if (!wireIn) return reply
-    return send(reply, await createTransactionsBulk(deps, transactionAdapters.bulkWireInToModel(wireIn), 'import'), 201)
+    return send(reply, (await createTransactionsBulk(deps, transactionAdapters.bulkWireInToModel(wireIn), 'import')).map(transactionAdapters.bulkResultToWireOut), 201)
   })
 
   app.get('/api/credit-cards', async () => listCreditCards(deps))
@@ -149,7 +152,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   app.delete('/api/transactions/:id', async (req, reply) => {
     const { id } = req.params as { id: string }
     const confirm = (req.query as { confirm?: string }).confirm === 'true'
-    return send(reply, await deleteTransaction(deps, { id, confirm }))
+    return send(reply, (await deleteTransaction(deps, { id, confirm })).map(transactionAdapters.deleteResultToWireOut))
   })
 
   app.get('/api/transactions', async (req, reply) => {

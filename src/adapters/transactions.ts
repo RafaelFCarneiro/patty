@@ -1,13 +1,17 @@
 import { TransactionView, type Transaction, type TransactionPatch } from '../models/transaction.js'
 import type {
   CreateTransactionInput,
+  CreateTransactionResult,
   CreateTransactionsBulkInput,
   CreateTransferInput,
+  DeleteTransactionResult,
   SearchTransactionsInput,
   UpdateTransactionInput,
 } from '../models/transaction.js'
+import type { BulkItemResult, BulkResult } from '../logic/transaction.js'
 import type { TransactionDbProps, TransactionDbRefs } from '../wire/db/transactions.js'
 import type * as wireIn from '../wire/in/transactions.js'
+import type { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wire/out/transactions.js'
 
 export type { TransactionDbProps, TransactionDbRefs }
 
@@ -82,3 +86,25 @@ export const bulkWireInToModel = (input: wireIn.CreateTransactionsBulkInput): Cr
 export const transferWireInToModel = (input: wireIn.CreateTransferInput): CreateTransferInput => input
 export const updateWireInToModel = (input: wireIn.UpdateTransactionInput): UpdateTransactionInput => input
 export const searchWireInToModel = (input: wireIn.SearchTransactionsInput): SearchTransactionsInput => input
+
+// ─── model→wire/out ───────────────────────────────────────────────────────────
+
+export const createResultToWireOut = (result: CreateTransactionResult): CreateTransactionOut => result
+
+const bulkItemToWireOut = (item: BulkItemResult): import('../wire/out/transactions.js').BulkItemOut => {
+  if (item.status === 'error') {
+    const { code } = item.error
+    const msg = 'issues' in item.error
+      ? `${code}: ${item.error.issues.join(', ')}`
+      : code
+    return { status: 'error', description: item.description, error: msg }
+  }
+  return item
+}
+
+export const bulkResultToWireOut = (result: BulkResult): BulkResultOut => ({
+  summary: result.summary,
+  items: result.items.map(bulkItemToWireOut),
+})
+
+export const deleteResultToWireOut = (result: DeleteTransactionResult): DeleteTransactionOut => result

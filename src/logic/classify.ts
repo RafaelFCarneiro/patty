@@ -1,5 +1,7 @@
 import * as R from 'remeda'
-import type { Classification } from '../models/transaction.js'
+import type { Classification, ClassifyOutcome } from '../models/transaction.js'
+
+export type { ClassifyOutcome }
 
 /** A merchant→category edge candidate returned by the graph. */
 export type MerchantMatch = {
@@ -9,12 +11,6 @@ export type MerchantMatch = {
   weight: number
   /** seeded rules vs learned-from-history edges */
   origin: 'rule' | 'graph'
-}
-
-export type ClassifyOutcome = Classification & {
-  categoryId?: string
-  categoryName?: string
-  merchantKey?: string
 }
 
 /**
