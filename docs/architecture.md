@@ -92,9 +92,9 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 5. **Classification is graph traversal**: normalized description → `:Merchant` → strongest `[:USUALLY]` edge; user corrections strengthen edges (learning loop in `update_transaction`).
 6. **Category kind must match transaction type**: `expense` transactions may only link to `expense` or `both` categories/sub-categories; `income` transactions may only link to `income` or `both`. Enforced in `controllers/resolve.ts#guardCategoryKind`. Auto-classified transactions (no category given) bypass this guard — the merchant graph already uses correctly-typed categories from seed.
 7. **Sub-category always paired with parent**: when `[:IN_SUB]->(:SubCategory)` is set, `[:IN]->(:Category)` must also be set to the sub-category's parent (derived via `[:BELONGS_TO]`). This keeps summary/search queries using the category edge unchanged.
-6. **pay_bill flips status only** — a payment transaction would double-count card expenses.
-7. Decode at the boundary: every external input and Cypher record is zod-parsed.
-8. Behavior changes require tests: domain and boundary behavior updates must include unit tests in the same change (success and expected-failure paths).
+8. **pay_bill flips status only** — a payment transaction would double-count card expenses.
+9. Decode at the boundary: every external input and Cypher record is zod-parsed.
+10. Behavior changes require tests: domain and boundary behavior updates must include unit tests in the same change (success and expected-failure paths).
 
 ## Tool surface
 

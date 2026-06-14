@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { callTool, deleteTransactions, ensure, makeClient } from './helpers.js'
+import { callTool, callToolError, deleteTransactions, ensure, makeClient } from './helpers.js'
 
 // Sub-categories have no delete tool — the ephemeral test DB is wiped per run.
 // We only need to clean up transactions to avoid cross-test interference.
@@ -293,6 +293,167 @@ describe('MCP integration > sub-categories', () => {
 
       expect(results.some((t) => t.id === t1.id)).toBe(true)
       expect(results.some((t) => t.id === t2.id)).toBe(false)
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('category_kind_mismatch error includes a hint with the corrective type', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+      const result = (await callToolError(client, {
+        name: 'create_transaction',
+        args: {
+          description: 'Teste hint',
+          amount: 100,
+          type: 'expense',
+          category: 'Salário',
+          idempotencyKey: `test-hint-${stamp}`,
+        },
+      })) as { error?: { code?: string; hint?: string } }
+
+      expect(result.error?.code).toBe('category_kind_mismatch')
+      expect(result.error?.hint).toContain('set type: "income"')
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('create_sub_category rejects unknown parentId with structured error', async () => {
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+      const result = (await callToolError(client, {
+        name: 'create_sub_category',
+        args: { name: 'Anything', parentId: 'cat-does-not-exist' },
+      })) as { error?: { code?: string; query?: string; candidates?: unknown[] } }
+
+      expect(result.error?.code).toBe('unknown_category')
+      expect(result.error?.query).toBe('cat-does-not-exist')
+      expect(Array.isArray(result.error?.candidates)).toBe(true)
+      expect((result.error?.candidates ?? []).length).toBeGreaterThan(0)
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('update_transaction rejects setting a category on a transfer transaction', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const srcName = `TransferSrc-${stamp}`
+      const dstName = `TransferDst-${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: srcName, type: 'checking', currency: 'BRL', initialBalance: 500 } })
+      await callTool(client, { name: 'create_account', args: { name: dstName, type: 'savings', currency: 'BRL', initialBalance: 0 } })
+
+      const transfer = (await callTool(client, {
+        name: 'create_transfer',
+        args: { from: srcName, to: dstName, amount: 100, idempotencyKey: `test-transfer-cat-${stamp}` },
+      })) as { transaction?: TransactionView }
+      const tx = transfer.transaction ?? (transfer as TransactionView)
+      ensure(tx.id, 'transfer id missing')
+      createdTxIds.push(tx.id)
+
+      const result = (await callToolError(client, {
+        name: 'update_transaction',
+        args: { id: tx.id, category: 'Alimentação' },
+      })) as { error?: { code?: string } }
+
+      expect(result.error?.code).toBe('validation')
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('update_transaction rejects kind mismatch when only category changes (no type provided)', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: 'Despesa genérica',
+          amount: 50,
+          type: 'expense',
+          idempotencyKey: `test-kind-update-${stamp}`,
+        },
+      })) as { transaction?: TransactionView }
+      const tx = created.transaction ?? (created as TransactionView)
+      ensure(tx.id, 'transaction id missing')
+      createdTxIds.push(tx.id)
+
+      const result = (await callToolError(client, {
+        name: 'update_transaction',
+        args: { id: tx.id, category: 'Salário' },
+      })) as { error?: { code?: string } }
+
+      expect(result.error?.code).toBe('category_kind_mismatch')
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('update_transaction rejects changing type of an existing transfer transaction', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const srcName = `TransferSrc2-${stamp}`
+      const dstName = `TransferDst2-${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: srcName, type: 'checking', currency: 'BRL', initialBalance: 500 } })
+      await callTool(client, { name: 'create_account', args: { name: dstName, type: 'savings', currency: 'BRL', initialBalance: 0 } })
+
+      const transfer = (await callTool(client, {
+        name: 'create_transfer',
+        args: { from: srcName, to: dstName, amount: 50, idempotencyKey: `test-retype-transfer-${stamp}` },
+      })) as { transaction?: TransactionView }
+      const tx = transfer.transaction ?? (transfer as TransactionView)
+      ensure(tx.id, 'transfer id missing')
+      createdTxIds.push(tx.id)
+
+      const result = (await callToolError(client, {
+        name: 'update_transaction',
+        args: { id: tx.id, type: 'expense' },
+      })) as { error?: { code?: string } }
+
+      expect(result.error?.code).toBe('validation')
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('update_transaction rejects type: transfer at the wire boundary', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: 'Despesa qualquer',
+          amount: 20,
+          type: 'expense',
+          category: 'Alimentação',
+          idempotencyKey: `test-type-transfer-${stamp}`,
+        },
+      })) as { transaction?: TransactionView }
+      const tx = created.transaction ?? (created as TransactionView)
+      ensure(tx.id, 'transaction id missing')
+      createdTxIds.push(tx.id)
+
+      // type:'transfer' is not in MovementType (income|expense) — the MCP SDK rejects it
+      // at the protocol level before the controller runs, so no JSON AppError is returned
+      await expect(
+        callTool(client, { name: 'update_transaction', args: { id: tx.id, type: 'transfer' } }),
+      ).rejects.toThrow()
     } finally {
       await transport.close()
     }

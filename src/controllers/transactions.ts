@@ -181,14 +181,24 @@ export const updateTransaction = (
     let categoryId: string | null = null
     let subCategoryId: string | null = null
 
+    yield* guard(
+      !(existing.type === 'transfer' && input.type),
+      { code: 'validation', issues: ['cannot change the type of a transfer transaction'] },
+    )
+    const resolvedType = input.type ?? existing.type
+    yield* guard(
+      !(resolvedType === 'transfer' && (input.category || input.subCategory)),
+      { code: 'validation', issues: ['transfer transactions cannot have a category or sub-category'] },
+    )
+    const effectiveType = resolvedType !== 'transfer' ? resolvedType : undefined
     if (input.subCategory) {
       const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)
-      if (input.type) yield* guardCategoryKind(subCat, input.type)
+      if (effectiveType) yield* guardCategoryKind(subCat, effectiveType)
       subCategoryId = subCat.id
       categoryId = subCat.parentId
     } else if (input.category) {
       const cat = yield* resolveCategoryRef(deps, input.category)
-      if (input.type) yield* guardCategoryKind(cat, input.type)
+      if (effectiveType) yield* guardCategoryKind(cat, effectiveType)
       categoryId = cat.id
     }
 
