@@ -119,7 +119,7 @@ encodes intent.
 ## Declarative over imperative
 
 Prefer expressions that describe *what* the result is over statements that describe *how* to
-build it. Reach for remeda before writing a loop.
+build it. Reach for [remeda](https://remedajs.com/docs/) before writing a loop.
 
 ```ts
 // ✅ DO
