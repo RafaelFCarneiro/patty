@@ -313,6 +313,36 @@ describe('MCP integration > sub-categories', () => {
     }
   })
 
+  it('update_transaction rejects setting a category on a transfer transaction', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const srcName = `TransferSrc-${stamp}`
+      const dstName = `TransferDst-${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: srcName, type: 'checking', currency: 'BRL', initialBalance: 500 } })
+      await callTool(client, { name: 'create_account', args: { name: dstName, type: 'savings', currency: 'BRL', initialBalance: 0 } })
+
+      const transfer = (await callTool(client, {
+        name: 'create_transfer',
+        args: { from: srcName, to: dstName, amount: 100, idempotencyKey: `test-transfer-cat-${stamp}` },
+      })) as { transaction?: TransactionView }
+      const tx = transfer.transaction ?? (transfer as TransactionView)
+      ensure(tx.id, 'transfer id missing')
+      createdTxIds.push(tx.id)
+
+      await expect(
+        callTool(client, {
+          name: 'update_transaction',
+          args: { id: tx.id, category: 'Alimentação' },
+        }),
+      ).rejects.toThrow()
+    } finally {
+      await transport.close()
+    }
+  })
+
   it('update_transaction rejects kind mismatch when only subCategory changes (no type provided)', async () => {
     const stamp = Date.now()
     const { client, transport } = makeClient()
