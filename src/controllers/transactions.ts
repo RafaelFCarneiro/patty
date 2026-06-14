@@ -20,7 +20,7 @@ import type {
   UpdateTransactionInput,
 } from '../models/transaction.js'
 import type { Deps } from './deps.js'
-import { resolveAccountRef, resolveCardRef, resolveCategoryRef } from './resolve.js'
+import { guardCategoryKind, resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
 
 export type CreateTransactionResult = {
   transaction: TransactionView
@@ -38,13 +38,32 @@ export const createTransaction = (
       code: 'validation',
       issues: ['provide account OR card, not both'],
     })
+    yield* guard(!(input.category && input.subCategory), {
+      code: 'validation',
+      issues: ['provide category OR subCategory, not both — subCategory implies its parent category'],
+    })
 
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
     const card = input.card ? yield* resolveCardRef(deps, input.card) : null
 
-    const classification = input.category
-      ? userClassification(yield* resolveCategoryRef(deps, input.category))
-      : pickClassification(await deps.merchants.matchCandidates(normalizeMerchant(input.description)))
+    // Sub-category implies category: resolve parent from graph, then validate kind
+    let classification: ClassifyOutcome
+    let subCategoryId: string | undefined
+
+    if (input.subCategory) {
+      const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)
+      yield* guardCategoryKind(subCat, input.type)
+      subCategoryId = subCat.id
+      classification = userClassification({ id: subCat.parentId, name: subCat.parentName })
+    } else if (input.category) {
+      const cat = yield* resolveCategoryRef(deps, input.category)
+      yield* guardCategoryKind(cat, input.type)
+      classification = userClassification(cat)
+    } else {
+      classification = pickClassification(
+        await deps.merchants.matchCandidates(normalizeMerchant(input.description)),
+      )
+    }
 
     const date = input.date ?? toIsoDate(deps.clock())
     const { transaction, created } = await deps.transactions.create(
@@ -63,6 +82,7 @@ export const createTransaction = (
           accountId: account?.id,
           cardId: card?.id,
           categoryId: classification.categoryId,
+          subCategoryId,
           merchantKey: classification.merchantKey,
         },
       },
@@ -146,13 +166,33 @@ export const updateTransaction = (
   input: UpdateTransactionInput,
 ): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
+    yield* guard(!(input.category && input.subCategory), {
+      code: 'validation',
+      issues: ['provide category OR subCategory, not both'],
+    })
+
     const existing = yield* okOr(await deps.transactions.getById(input.id), {
       code: 'unknown_transaction',
       id: input.id,
     })
 
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
-    const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null
+
+    let categoryId: string | null = null
+    let subCategoryId: string | null = null
+
+    if (input.subCategory) {
+      const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)
+      if (input.type) yield* guardCategoryKind(subCat, input.type)
+      subCategoryId = subCat.id
+      categoryId = subCat.parentId
+    } else if (input.category) {
+      const cat = yield* resolveCategoryRef(deps, input.category)
+      if (input.type) yield* guardCategoryKind(cat, input.type)
+      categoryId = cat.id
+    }
+
+    const isUserCorrection = !!(input.category || input.subCategory)
 
     const updated = yield* okOr(
       await deps.transactions.update(
@@ -163,16 +203,16 @@ export const updateTransaction = (
           type: input.type,
           date: input.date,
           currency: account?.currency,
-          classification: category ? { method: 'user', confidence: 1 } : undefined,
+          classification: isUserCorrection ? { method: 'user', confidence: 1 } : undefined,
         },
-        { accountId: account?.id ?? null, categoryId: category?.id ?? null, tagNames: input.tags ?? null },
+        { accountId: account?.id ?? null, categoryId, subCategoryId, tagNames: input.tags ?? null },
       ),
       { code: 'unknown_transaction', id: input.id },
     )
 
     // Learning loop: correcting the category teaches the merchant graph
-    if (category && category.id !== existing.categoryId)
-      await deps.merchants.strengthenFromTransaction(input.id, category.id)
+    if (categoryId && categoryId !== existing.categoryId)
+      await deps.merchants.strengthenFromTransaction(input.id, categoryId)
 
     return ok(updated)
   })
@@ -211,6 +251,7 @@ export const searchTransactions = (
     const range = input.month && input.year ? periodRange({ month: input.month, year: input.year }) : null
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
     const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null
+    const subCategory = input.subCategory ? yield* resolveSubCategoryRef(deps, input.subCategory) : null
 
     return ok(
       await deps.transactions.search({
@@ -220,6 +261,7 @@ export const searchTransactions = (
         text: input.text ?? null,
         accountId: account?.id ?? null,
         categoryId: category?.id ?? null,
+        subCategoryId: subCategory?.id ?? null,
         tagNames: input.tags ?? [],
         limit: input.limit,
       }),

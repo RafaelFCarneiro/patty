@@ -19,6 +19,7 @@ export type TransactionDbRefs = {
   toAccountId: string | null
   cardId: string | null
   categoryId: string | null
+  subCategoryId: string | null
   merchantKey: string | null
 }
 

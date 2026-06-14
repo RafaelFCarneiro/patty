@@ -42,6 +42,7 @@ describe('modelToDb', () => {
       toAccountId: 'acc-2',
       cardId: null,
       categoryId: null,
+      subCategoryId: null,
       merchantKey: null,
     })
   })

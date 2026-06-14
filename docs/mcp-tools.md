@@ -2,18 +2,20 @@
 
 Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All tools share these conventions:
 
-- **Natural inputs**: `account`, `card`, and `category` take names (case/accent-insensitive, partial match allowed). Resolution failures return structured errors the agent can self-correct from.
-- **Errors**: `{ "error": { "code": "...", ... } }` with `isError: true`. Codes: `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `unknown_card`, `ambiguous_card`, `unknown_transaction`, `unknown_bill`, `duplicate_name`, `validation`. Ambiguous/unknown errors include `candidates` (names) to retry with.
+- **Natural inputs**: `account`, `card`, `category`, and `subCategory` take names (case/accent-insensitive, partial match allowed). Resolution failures return structured errors the agent can self-correct from.
+- **Errors**: `{ "error": { "code": "...", ... } }` with `isError: true`. Codes: `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `unknown_sub_category`, `ambiguous_sub_category`, `unknown_card`, `ambiguous_card`, `unknown_transaction`, `unknown_bill`, `duplicate_name`, `category_kind_mismatch`, `validation`. Ambiguous/unknown errors include `candidates` (names) to retry with.
 - **Currency**: BRL or USD; from the account/card when one is linked, else the `currency` field, else BRL. Summaries group per currency, never converting.
 - **Dates**: `YYYY-MM-DD`.
 
 ## create_transaction
 
-Create an expense/income. Omitting `category` triggers auto-classification via the merchant graph; the result reports `classification.method` (`rule|graph|user|none`) and `confidence` (confirm with the user below 0.6). Idempotent: same `idempotencyKey` returns the existing transaction with `created: false`.
+Create an expense/income. Omitting `category`/`subCategory` triggers auto-classification via the merchant graph; the result reports `classification.method` (`rule|graph|user|none`) and `confidence` (confirm with the user below 0.6). Idempotent: same `idempotencyKey` returns the existing transaction with `created: false`.
 
-Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `category`, `currency`, `rawInput` (original user phrasing).
+Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `category` OR `subCategory` (not both — `subCategory` implies its parent category), `currency`, `rawInput` (original user phrasing), `tags`.
 
-Example: `{"description": "Uber para o aeroporto", "amount": 32.5, "type": "expense", "account": "nubank", "idempotencyKey": "2026-06-09-uber-32.50"}` → transaction classified as Transporte (`rule`, 0.8).
+**Kind validation**: `expense` transactions must use a category/sub-category with `kind: expense` or `both`; `income` transactions must use `kind: income` or `both`. Violation returns `category_kind_mismatch`.
+
+Example: `{"description": "Almoço restaurante", "amount": 45.0, "type": "expense", "account": "nubank", "subCategory": "Restaurante", "idempotencyKey": "2026-06-14-almoco-45"}` → linked to sub-category Restaurante under Alimentação.
 
 ## create_transactions_bulk
 
@@ -54,7 +56,7 @@ Input: `id` (required), `confirm` (default false).
 
 ## search_transactions
 
-Filter by `month`+`year` (or `from`/`to`), `type` (`expense|income|transfer`), `category`/`account` (names), free-text `text` (description substring), `limit` (default 50, max 200). Returns newest first. With an `account` filter this is the full extrato: the account matches as source OR destination, so transfers in both directions are included.
+Filter by `month`+`year` (or `from`/`to`), `type` (`expense|income|transfer`), `category`/`subCategory`/`account` (names), free-text `text` (description substring), `tags`, `limit` (default 50, max 200). Returns newest first. With an `account` filter this is the full extrato: the account matches as source OR destination, so transfers in both directions are included. Results include `subCategoryId`/`subCategoryName` when set.
 
 ## get_spending_summary
 
@@ -77,3 +79,11 @@ Move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, opt
 ## create_category / list_categories
 
 `create_category`: `name` (required), `kind` (`expense|income|both`, default expense). Prefer existing categories (`list_categories`) before creating. Error: `duplicate_name`.
+
+## create_sub_category / list_sub_categories
+
+`create_sub_category`: `name` (required), `parentId` (required — use `list_categories` to find it). Sub-categories inherit their parent's `kind`; the same kind validation applies to transactions. Names must be unique within the same parent. Error: `duplicate_name`.
+
+`list_sub_categories`: optional `parentId` filter. Returns `{ id, name, parentId, parentName, kind }`.
+
+TransactionView includes `subCategoryId` and `subCategoryName` when a sub-category is linked.

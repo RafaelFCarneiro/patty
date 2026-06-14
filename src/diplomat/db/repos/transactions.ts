@@ -14,6 +14,7 @@ export type SearchFilters = {
   text: string | null
   accountId: string | null
   categoryId: string | null
+  subCategoryId: string | null
   tagNames: string[]
   limit: number
 }
@@ -24,6 +25,7 @@ const RETURN_TX = `
          ta.id AS toAccountId, ta.name AS toAccountName,
          cc.id AS cardId, cc.name AS cardName,
          c.id AS categoryId, c.name AS categoryName,
+         sc.id AS subCategoryId, sc.name AS subCategoryName,
          m.key AS merchant,
          collect(DISTINCT tag.name) AS tags,
          created`
@@ -33,6 +35,7 @@ const MATCH_REFS = `
   OPTIONAL MATCH (t)-[:TO]->(ta:Account)
   OPTIONAL MATCH (t)-[:CHARGED_TO]->(cc:CreditCard)
   OPTIONAL MATCH (t)-[:IN]->(c:Category)
+  OPTIONAL MATCH (t)-[:IN_SUB]->(sc:SubCategory)
   OPTIONAL MATCH (t)-[:AT]->(m:Merchant)
   OPTIONAL MATCH (t)-[:TAGGED_WITH]->(tag:Tag)`
 
@@ -43,7 +46,7 @@ export type TransactionsRepo = {
   update: (
     id: string,
     patch: TransactionPatch,
-    refs: { accountId: string | null; categoryId: string | null; tagNames: string[] | null },
+    refs: { accountId: string | null; categoryId: string | null; subCategoryId: string | null; tagNames: string[] | null },
   ) => Promise<TransactionView | null>
   delete: (id: string) => Promise<boolean>
   search: (filters: SearchFilters) => Promise<TransactionView[]>
@@ -98,6 +101,10 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
        FOREACH (_ IN CASE WHEN created AND cat IS NOT NULL THEN [1] ELSE [] END |
          MERGE (t)-[:IN]->(cat))
        WITH t, created
+       OPTIONAL MATCH (subCat:SubCategory {id: $subCategoryId})
+       FOREACH (_ IN CASE WHEN created AND subCat IS NOT NULL THEN [1] ELSE [] END |
+         MERGE (t)-[:IN_SUB]->(subCat))
+       WITH t, created
        OPTIONAL MATCH (mer:Merchant {key: $merchantKey})
        FOREACH (_ IN CASE WHEN created AND mer IS NOT NULL THEN [1] ELSE [] END |
          MERGE (t)-[:AT]->(mer))
@@ -115,6 +122,7 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
         toAccountId: refs.toAccountId,
         cardId: refs.cardId,
         categoryId: refs.categoryId,
+        subCategoryId: refs.subCategoryId,
         merchantKey: refs.merchantKey,
       },
     )
@@ -139,7 +147,7 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
     return rows[0] ? transactionAdapters.dbToModel(rows[0]) : null
   },
 
-  /** Patch scalar props; re-link [:IN]/[:FROM] edges and replace tags when provided. */
+  /** Patch scalar props; re-link [:IN]/[:IN_SUB]/[:FROM] edges and replace tags when provided. */
   update: async (id, patch, refs) => {
     const props = transactionAdapters.patchToDb(patch)
     const rows = await run(
@@ -152,6 +160,11 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
        FOREACH (_ IN CASE WHEN newCat IS NOT NULL AND oldIn IS NOT NULL THEN [1] ELSE [] END | DELETE oldIn)
        FOREACH (_ IN CASE WHEN newCat IS NOT NULL THEN [1] ELSE [] END | MERGE (t)-[:IN]->(newCat))
        WITH DISTINCT t
+       OPTIONAL MATCH (newSubCat:SubCategory {id: $subCategoryId})
+       OPTIONAL MATCH (t)-[oldInSub:IN_SUB]->(:SubCategory)
+       FOREACH (_ IN CASE WHEN newSubCat IS NOT NULL AND oldInSub IS NOT NULL THEN [1] ELSE [] END | DELETE oldInSub)
+       FOREACH (_ IN CASE WHEN newSubCat IS NOT NULL THEN [1] ELSE [] END | MERGE (t)-[:IN_SUB]->(newSubCat))
+       WITH DISTINCT t
        OPTIONAL MATCH (newAcc:Account {id: $accountId})
        OPTIONAL MATCH (t)-[oldFrom:FROM]->(:Account)
        FOREACH (_ IN CASE WHEN newAcc IS NOT NULL AND oldFrom IS NOT NULL THEN [1] ELSE [] END | DELETE oldFrom)
@@ -159,7 +172,7 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
        WITH DISTINCT t, true AS created
        ${MATCH_REFS}
        ${RETURN_TX}`,
-      { id, props, categoryId: refs.categoryId, accountId: refs.accountId },
+      { id, props, categoryId: refs.categoryId, subCategoryId: refs.subCategoryId, accountId: refs.accountId },
     )
     if (!rows[0]) return null
     if (refs.tagNames !== null) {
@@ -185,13 +198,14 @@ export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
       driver,
       `MATCH (t:Transaction)
        ${MATCH_REFS}
-       WITH t, a, ta, cc, c, m, tag, true AS created
+       WITH t, a, ta, cc, c, sc, m, tag, true AS created
        WHERE ($from IS NULL OR t.date >= $from)
          AND ($to IS NULL OR t.date < $to)
          AND ($type IS NULL OR t.type = $type)
          AND ($text IS NULL OR toLower(t.description) CONTAINS toLower($text))
          AND ($accountId IS NULL OR a.id = $accountId OR ta.id = $accountId)
          AND ($categoryId IS NULL OR c.id = $categoryId)
+         AND ($subCategoryId IS NULL OR sc.id = $subCategoryId)
          AND (size($tagNames) = 0 OR size([(t)-[:TAGGED_WITH]->(ft:Tag) WHERE ft.name IN $tagNames | 1]) > 0)
        ${RETURN_TX}
        ORDER BY t.date DESC, t.id

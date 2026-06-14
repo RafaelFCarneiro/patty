@@ -7,6 +7,7 @@ import { createDriver, waitForNeo4j } from './diplomat/db/driver.js'
 import { accountsRepo } from './diplomat/db/repos/accounts.js'
 import { billsRepo } from './diplomat/db/repos/bills.js'
 import { categoriesRepo } from './diplomat/db/repos/categories.js'
+import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js'
 import { creditCardsRepo } from './diplomat/db/repos/creditCards.js'
 import { merchantsRepo } from './diplomat/db/repos/merchants.js'
 import { recurringRepo } from './diplomat/db/repos/recurring.js'
@@ -27,6 +28,7 @@ const main = async (): Promise<void> => {
     accounts: accountsRepo(driver),
     bills: billsRepo(driver),
     categories: categoriesRepo(driver),
+    subCategories: subCategoriesRepo(driver),
     creditCards: creditCardsRepo(driver),
     merchants: merchantsRepo(driver),
     recurring: recurringRepo(driver),

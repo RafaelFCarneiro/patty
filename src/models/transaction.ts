@@ -38,6 +38,7 @@ export const Transaction = z.object({
     toAccountId: Id.optional(),
     cardId: Id.optional(),
     categoryId: Id.optional(),
+    subCategoryId: Id.optional(),
     merchantKey: z.string().optional(),
   }),
 })
@@ -64,6 +65,8 @@ export const TransactionView = z.object({
   cardName: z.string().optional(),
   categoryId: Id.optional(),
   categoryName: z.string().optional(),
+  subCategoryId: Id.optional(),
+  subCategoryName: z.string().optional(),
   merchant: z.string().optional(),
   tags: z.array(z.string().min(1)).default([]),
 })
@@ -88,6 +91,7 @@ export type CreateTransactionInput = {
   account?: string
   card?: string
   category?: string
+  subCategory?: string
   currency?: CurrencyCode
   idempotencyKey: string
   rawInput?: string
@@ -122,6 +126,7 @@ export type UpdateTransactionInput = {
   date?: string
   account?: string
   category?: string
+  subCategory?: string
   /** When provided (including empty array), replaces the full tag set. Omit to leave tags unchanged. */
   tags?: string[]
 }
@@ -133,6 +138,7 @@ export type SearchTransactionsInput = {
   to?: string
   type?: TransactionType
   category?: string
+  subCategory?: string
   account?: string
   text?: string
   tags?: string[]

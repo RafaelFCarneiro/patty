@@ -13,6 +13,7 @@ const CONSTRAINTS = [
   'CREATE CONSTRAINT recurring_id IF NOT EXISTS FOR (r:RecurringRule) REQUIRE r.id IS UNIQUE',
   'CREATE CONSTRAINT tag_id IF NOT EXISTS FOR (t:Tag) REQUIRE t.id IS UNIQUE',
   'CREATE CONSTRAINT tag_name IF NOT EXISTS FOR (t:Tag) REQUIRE t.name IS UNIQUE',
+  'CREATE CONSTRAINT subcategory_id IF NOT EXISTS FOR (sc:SubCategory) REQUIRE sc.id IS UNIQUE',
   'CREATE INDEX tx_date IF NOT EXISTS FOR (t:Transaction) ON (t.date)',
 ]
 
