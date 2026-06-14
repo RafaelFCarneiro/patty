@@ -14,6 +14,9 @@ export type AppError =
   | { code: 'category_kind_mismatch'; transactionType: string; categoryName: string; categoryKind: string; hint: string }
   | { code: 'validation'; issues: string[] }
 
+export const formatAppError = (e: AppError): string =>
+  'issues' in e ? `${e.code}: ${e.issues.join(', ')}` : e.code
+
 export const httpStatus = (e: AppError): number => {
   switch (e.code) {
     case 'unknown_account':

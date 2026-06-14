@@ -1,7 +1,7 @@
 import type { AppError } from '../common/errors.js'
 import type { Account } from '../models/account.js'
 import type { CreditCard } from '../models/creditCard.js'
-import type { CurrencyCode } from '../models/common.js'
+import { CurrencyCode } from '../models/common.js'
 import type {
   Classification,
   ClassifyOutcome,
@@ -11,6 +11,7 @@ import type {
   UpdateTransactionInput,
 } from '../models/transaction.js'
 import { err, ok, type Result } from 'neverthrow'
+import * as R from 'remeda'
 import { normalizeMerchant } from './merchant.js'
 
 // ─── Currency ────────────────────────────────────────────────────────────────
@@ -20,7 +21,7 @@ export const resolveCurrency = (
   account: Pick<Account, 'currency'> | null,
   card: Pick<CreditCard, 'currency'> | null,
   input: Pick<CreateTransactionInput, 'currency'>,
-): CurrencyCode => account?.currency ?? card?.currency ?? input.currency ?? 'BRL'
+): CurrencyCode => account?.currency ?? card?.currency ?? input.currency ?? CurrencyCode.enum.BRL
 
 // ─── Transfer mutability guards ───────────────────────────────────────────────
 
@@ -92,12 +93,11 @@ export type BulkResult = {
 export const summarizeBulkItems = (
   items: BulkItemResult[],
 ): { created: number; needsReview: number; duplicates: number; errors: number } => {
-  let created = 0, needsReviewCount = 0, duplicates = 0, errors = 0
-  for (const item of items) {
-    if (item.status === 'created') created++
-    else if (item.status === 'needs_review') needsReviewCount++
-    else if (item.status === 'duplicate') duplicates++
-    else errors++
+  const counts = R.countBy(items, (i) => i.status)
+  return {
+    created: counts['created'] ?? 0,
+    needsReview: counts['needs_review'] ?? 0,
+    duplicates: counts['duplicate'] ?? 0,
+    errors: counts['error'] ?? 0,
   }
-  return { created, needsReview: needsReviewCount, duplicates, errors }
 }

@@ -11,7 +11,8 @@ import type {
 import type { BulkItemResult, BulkResult } from '../logic/transaction.js'
 import type { TransactionDbProps, TransactionDbRefs } from '../wire/db/transactions.js'
 import type * as wireIn from '../wire/in/transactions.js'
-import type { BulkItemOut, BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wire/out/transactions.js'
+import { BulkItemOut, BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wire/out/transactions.js'
+import { formatAppError } from '../common/errors.js'
 
 export type { TransactionDbProps, TransactionDbRefs }
 
@@ -89,22 +90,16 @@ export const searchWireInToModel = (input: wireIn.SearchTransactionsInput): Sear
 
 // ─── model→wire/out ───────────────────────────────────────────────────────────
 
-export const createResultToWireOut = (result: CreateTransactionResult): CreateTransactionOut => result
+export const createResultToWireOut = (result: CreateTransactionResult): CreateTransactionOut =>
+  CreateTransactionOut.parse(result)
 
-const bulkItemToWireOut = (item: BulkItemResult): BulkItemOut => {
-  if (item.status === 'error') {
-    const { code } = item.error
-    const msg = 'issues' in item.error
-      ? `${code}: ${item.error.issues.join(', ')}`
-      : code
-    return { status: 'error', description: item.description, error: msg }
-  }
-  return item
-}
+const bulkItemToWireOut = (item: BulkItemResult): BulkItemOut =>
+  item.status === 'error'
+    ? { status: 'error', description: item.description, error: formatAppError(item.error) }
+    : item
 
-export const bulkResultToWireOut = (result: BulkResult): BulkResultOut => ({
-  summary: result.summary,
-  items: result.items.map(bulkItemToWireOut),
-})
+export const bulkResultToWireOut = (result: BulkResult): BulkResultOut =>
+  BulkResultOut.parse({ summary: result.summary, items: result.items.map(bulkItemToWireOut) })
 
-export const deleteResultToWireOut = (result: DeleteTransactionResult): DeleteTransactionOut => result
+export const deleteResultToWireOut = (result: DeleteTransactionResult): DeleteTransactionOut =>
+  DeleteTransactionOut.parse(result)

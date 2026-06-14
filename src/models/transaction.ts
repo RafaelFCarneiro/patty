@@ -163,5 +163,3 @@ export type CreateTransactionResult = {
 export type DeleteTransactionResult =
   | { deleted: true; transaction: TransactionView }
   | { deleted: false; dryRun: true; wouldDelete: TransactionView; hint: string }
-
-export type BulkItemStatus = 'created' | 'needs_review' | 'duplicate' | 'error'
