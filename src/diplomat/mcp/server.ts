@@ -283,7 +283,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       description: 'Create a bank account / wallet. Currency defaults to BRL.',
       inputSchema: {
         name: z.string().min(1),
-        type: AccountType.default('checking'),
+        type: AccountType.default(AccountType.enum.checking),
         currency: CurrencyCode.default(CurrencyCode.enum.BRL),
         initialBalance: z.number().default(0).describe('Balance at account creation'),
       },

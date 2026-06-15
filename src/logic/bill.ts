@@ -1,6 +1,6 @@
 /** Pure fatura-cycle math: which bill a card transaction belongs to. */
 
-import type { TransactionView } from '../models/transaction.js'
+import { TransactionType, type TransactionView } from '../models/transaction.js'
 
 export type BillPeriod = { month: number; year: number; closeDate: string; dueDate: string }
 
@@ -14,9 +14,13 @@ const nextMonth = (month: number, year: number): { month: number; year: number }
  * The due date falls in the month after close when dueDay <= closingDay
  * (e.g. closes on the 28th, due on the 5th of the following month).
  */
-/** Bill amount due: expenses increase the total, income (refunds/credits) decrease it. */
+/** Bill amount due: expenses increase the total, income (refunds/credits) decrease it, transfers are excluded. */
 export const computeBillTotal = (transactions: TransactionView[]): number =>
-  transactions.reduce((acc, t) => (t.type === 'expense' ? acc + t.amount : acc - t.amount), 0)
+  transactions.reduce((acc, t) => {
+    if (t.type === TransactionType.enum.expense) return acc + t.amount
+    if (t.type === TransactionType.enum.income)  return acc - t.amount
+    return acc
+  }, 0)
 
 export const billPeriodFor = (txDate: string, closingDay: number, dueDay: number): BillPeriod => {
   const [y, m, d] = txDate.split('-').map(Number) as [number, number, number]

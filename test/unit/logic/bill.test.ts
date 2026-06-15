@@ -1,23 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { CurrencyCode } from '../../../src/models/common.js'
-import { TransactionSource, TransactionView } from '../../../src/models/transaction.js'
+import { ClassificationMethod, TransactionSource, TransactionType, TransactionView } from '../../../src/models/transaction.js'
 import { billPeriodFor, computeBillTotal } from '../../../src/logic/bill.js'
 
-const tx = (type: 'expense' | 'income', amount: number): TransactionView =>
+const tx = (type: TransactionType, amount: number): TransactionView =>
   TransactionView.parse({
     id: crypto.randomUUID(), description: 'test', amount, type,
     date: '2026-06-01', currency: CurrencyCode.enum.BRL,
     source: TransactionSource.enum.mcp, idempotencyKey: `k-${amount}-${type}`,
-    classification: { method: 'none', confidence: 0 },
+    classification: { method: ClassificationMethod.enum.none, confidence: 0 },
   })
 
 describe('computeBillTotal', () => {
+  const { expense, income, transfer } = TransactionType.enum
+
   it('sums expenses as positive', () => {
-    expect(computeBillTotal([tx('expense', 100), tx('expense', 50)])).toBe(150)
+    expect(computeBillTotal([tx(expense, 100), tx(expense, 50)])).toBe(150)
   })
 
   it('subtracts income (refunds/credits) from the total', () => {
-    expect(computeBillTotal([tx('expense', 100), tx('income', 30)])).toBe(70)
+    expect(computeBillTotal([tx(expense, 100), tx(income, 30)])).toBe(70)
+  })
+
+  it('excludes transfers from the total', () => {
+    expect(computeBillTotal([tx(expense, 100), tx(transfer, 200)])).toBe(100)
   })
 
   it('returns 0 for an empty bill', () => {
