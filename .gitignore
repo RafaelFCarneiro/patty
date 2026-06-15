@@ -5,3 +5,8 @@ dist/
 .DS_Store
 .claude/
 coverage/
+
+# SQLite database files (encrypted at rest — never commit the file itself)
+*.db
+*.db-wal
+*.db-shm
