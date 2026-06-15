@@ -7,5 +7,12 @@ export default defineConfig({
     testTimeout: 30_000,
     reporters: ['default', 'verbose'],
     globalSetup: 'test/integration/setup.ts',
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/main.ts', 'src/diplomat/**', 'src/wire/**'],
+      reporter: ['json'],
+      reportsDirectory: 'coverage/.tmp/integration',
+    },
   },
 })
