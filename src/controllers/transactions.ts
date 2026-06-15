@@ -1,19 +1,25 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
-import * as R from 'remeda'
 import type { AppError } from '../common/errors.js'
 import { guard, okOr } from '../common/result.js'
 import { billPeriodFor } from '../logic/bill.js'
-import { deriveIdempotencyKey, needsReview } from '../logic/bulk.js'
-import {
-  pickClassification,
-  userClassification,
-  type ClassifyOutcome,
-} from '../logic/classify.js'
+import { pickClassification, userClassification } from '../logic/classify.js'
+import type { ClassifyOutcome } from '../models/transaction.js'
 import { normalizeMerchant } from '../logic/merchant.js'
 import { periodRange, toIsoDate } from '../logic/period.js'
+import type { BulkItemResult, BulkResult } from '../logic/transaction.js'
+import {
+  deriveIdempotencyKey,
+  guardTransferMutability,
+  resolveCurrency,
+  resolveEffectiveType,
+  summarizeBulkItems,
+  toBulkItemResult,
+} from '../logic/transaction.js'
 import type {
   CreateTransactionInput,
+  CreateTransactionResult,
   CreateTransactionsBulkInput,
+  DeleteTransactionResult,
   SearchTransactionsInput,
   TransactionView,
   TransactionSource,
@@ -22,11 +28,6 @@ import type {
 import type { Deps } from './deps.js'
 import { guardCategoryKind, resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
 
-export type CreateTransactionResult = {
-  transaction: TransactionView
-  created: boolean
-  classification: ClassifyOutcome
-}
 
 export const createTransaction = (
   deps: Deps,
@@ -46,7 +47,6 @@ export const createTransaction = (
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
     const card = input.card ? yield* resolveCardRef(deps, input.card) : null
 
-    // Sub-category implies category: resolve parent from graph, then validate kind
     let classification: ClassifyOutcome
     let subCategoryId: string | undefined
 
@@ -73,7 +73,7 @@ export const createTransaction = (
         amount: input.amount,
         type: input.type,
         date,
-        currency: account?.currency ?? card?.currency ?? input.currency ?? 'BRL',
+        currency: resolveCurrency(account, card, input),
         source,
         idempotencyKey: input.idempotencyKey,
         classification,
@@ -101,29 +101,6 @@ export const createTransaction = (
     return ok({ transaction, created, classification })
   })
 
-export type BulkItemResult =
-  | { status: 'created' | 'needs_review'; transaction: TransactionView; classification: ClassifyOutcome }
-  | { status: 'duplicate'; transaction: TransactionView }
-  | { status: 'error'; description: string; error: AppError }
-
-export type BulkResult = {
-  summary: { created: number; needsReview: number; duplicates: number; errors: number }
-  items: BulkItemResult[]
-}
-
-const toBulkItemResult = (result: Awaited<ReturnType<typeof createTransaction>>, description: string) =>
-  result.match<BulkItemResult>(
-    (r) =>
-      !r.created
-        ? { status: 'duplicate', transaction: r.transaction }
-        : {
-            status: needsReview(r.classification) ? 'needs_review' : 'created',
-            transaction: r.transaction,
-            classification: r.classification,
-          },
-    (error) => ({ status: 'error', description, error }),
-  )
-
 /** Statement paste/import: each line idempotent, classified, flagged for review when uncertain. */
 export const createTransactionsBulk = (
   deps: Deps,
@@ -149,16 +126,7 @@ export const createTransactionsBulk = (
       items.push(toBulkItemResult(result, item.description))
     }
 
-    const counts = R.countBy(items, (i) => i.status)
-    return ok({
-      summary: {
-        created: counts['created'] ?? 0,
-        needsReview: counts['needs_review'] ?? 0,
-        duplicates: counts['duplicate'] ?? 0,
-        errors: counts['error'] ?? 0,
-      },
-      items,
-    })
+    return ok({ summary: summarizeBulkItems(items), items })
   })
 
 export const updateTransaction = (
@@ -176,21 +144,14 @@ export const updateTransaction = (
       id: input.id,
     })
 
+    yield* guardTransferMutability(existing, input)
+
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
+    const effectiveType = resolveEffectiveType(existing, input)
 
     let categoryId: string | null = null
     let subCategoryId: string | null = null
 
-    yield* guard(
-      !(existing.type === 'transfer' && input.type),
-      { code: 'validation', issues: ['cannot change the type of a transfer transaction'] },
-    )
-    const resolvedType = input.type ?? existing.type
-    yield* guard(
-      !(resolvedType === 'transfer' && (input.category || input.subCategory)),
-      { code: 'validation', issues: ['transfer transactions cannot have a category or sub-category'] },
-    )
-    const effectiveType = resolvedType !== 'transfer' ? resolvedType : undefined
     if (input.subCategory) {
       const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)
       if (effectiveType) yield* guardCategoryKind(subCat, effectiveType)
@@ -226,10 +187,6 @@ export const updateTransaction = (
 
     return ok(updated)
   })
-
-export type DeleteTransactionResult =
-  | { deleted: true; transaction: TransactionView }
-  | { deleted: false; dryRun: true; wouldDelete: TransactionView; hint: string }
 
 export const deleteTransaction = (
   deps: Deps,

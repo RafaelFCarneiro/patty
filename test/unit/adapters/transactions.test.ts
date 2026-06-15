@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Transaction } from '../../../src/models/transaction.js'
+import { CurrencyCode } from '../../../src/models/common.js'
+import { TransactionSource, type Transaction } from '../../../src/models/transaction.js'
 import * as wireInTransactions from '../../../src/wire/in/transactions.js'
 import * as transactionAdapters from '../../../src/adapters/transactions.js'
 
@@ -9,8 +10,8 @@ const draft: Transaction = {
   amount: 32.5,
   type: 'expense',
   date: '2026-06-09',
-  currency: 'BRL',
-  source: 'mcp',
+  currency: CurrencyCode.enum.BRL,
+  source: TransactionSource.enum.mcp,
   idempotencyKey: '2026-06-09-uber-32.50',
   classification: { method: 'rule', confidence: 0.8 },
   rawInput: 'paguei 32,50 de uber',
@@ -90,8 +91,8 @@ const txNode = node({
   amount: 32.5,
   type: 'expense',
   date: '2026-06-09',
-  currency: 'BRL',
-  source: 'mcp',
+  currency: CurrencyCode.enum.BRL,
+  source: TransactionSource.enum.mcp,
   idempotencyKey: 'k1',
   classificationMethod: 'rule',
   confidence: 0.8,
