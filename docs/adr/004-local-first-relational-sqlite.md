@@ -1,6 +1,6 @@
 # ADR-004: Local-first persistence — relational SQLite via libSQL (encrypted), dropping the graph DB
 
-**Status:** Accepted · **Date:** 2026-06-15 · Supersedes the Neo4j/graph decisions in PLAN.md and the graph model in `architecture.md`.
+**Status:** Accepted · **Date:** 2026-06-15 · Supersedes the Neo4j/graph decisions in `docs/PLAN.md` and the graph model in `docs/architecture.md`.
 
 ## Context
 
