@@ -284,7 +284,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       inputSchema: {
         name: z.string().min(1),
         type: AccountType.default('checking'),
-        currency: CurrencyCode.default('BRL'),
+        currency: CurrencyCode.default(CurrencyCode.enum.BRL),
         initialBalance: z.number().default(0).describe('Balance at account creation'),
       },
     },
@@ -347,7 +347,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       description: 'Create a category. Prefer existing categories (list_categories) before creating new ones.',
       inputSchema: {
         name: z.string().min(1),
-        kind: CategoryKind.default('expense'),
+        kind: CategoryKind.default(CategoryKind.enum.expense),
       },
     },
     async (args) => fromResult(await createCategory(deps, args)),

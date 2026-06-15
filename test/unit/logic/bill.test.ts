@@ -1,5 +1,29 @@
 import { describe, expect, it } from 'vitest'
-import { billPeriodFor } from '../../../src/logic/bill.js'
+import { CurrencyCode } from '../../../src/models/common.js'
+import { TransactionSource, TransactionView } from '../../../src/models/transaction.js'
+import { billPeriodFor, computeBillTotal } from '../../../src/logic/bill.js'
+
+const tx = (type: 'expense' | 'income', amount: number): TransactionView =>
+  TransactionView.parse({
+    id: crypto.randomUUID(), description: 'test', amount, type,
+    date: '2026-06-01', currency: CurrencyCode.enum.BRL,
+    source: TransactionSource.enum.mcp, idempotencyKey: `k-${amount}-${type}`,
+    classification: { method: 'none', confidence: 0 },
+  })
+
+describe('computeBillTotal', () => {
+  it('sums expenses as positive', () => {
+    expect(computeBillTotal([tx('expense', 100), tx('expense', 50)])).toBe(150)
+  })
+
+  it('subtracts income (refunds/credits) from the total', () => {
+    expect(computeBillTotal([tx('expense', 100), tx('income', 30)])).toBe(70)
+  })
+
+  it('returns 0 for an empty bill', () => {
+    expect(computeBillTotal([])).toBe(0)
+  })
+})
 
 describe('billPeriodFor', () => {
   // card closes on the 20th, due on the 5th of the following month

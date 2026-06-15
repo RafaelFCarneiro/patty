@@ -2,7 +2,7 @@ import type { Driver } from 'neo4j-driver'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { Bill } from '../../../models/bill.js'
 import type { TransactionView } from '../../../models/transaction.js'
-import type { BillPeriod } from '../../../logic/bill.js'
+import { computeBillTotal, type BillPeriod } from '../../../logic/bill.js'
 import { run } from '../driver.js'
 
 type NodeLike = { properties: Record<string, unknown> }
@@ -59,7 +59,7 @@ export const billsRepo = (driver: Driver): BillsRepo => ({
     return {
       bill: toBill(row),
       cardName: String(row['cardName']),
-      total: transactions.reduce((acc, t) => acc + t.amount, 0),
+      total: computeBillTotal(transactions),
       transactions,
     }
   },
