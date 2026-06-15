@@ -144,3 +144,22 @@ export type SearchTransactionsInput = {
   tags?: string[]
   limit: number
 }
+
+// ─── Domain result types ──────────────────────────────────────────────────────
+
+/** Classification enriched with resolved category/merchant — returned alongside every transaction write. */
+export type ClassifyOutcome = Classification & {
+  categoryId?: string
+  categoryName?: string
+  merchantKey?: string
+}
+
+export type CreateTransactionResult = {
+  transaction: TransactionView
+  created: boolean
+  classification: ClassifyOutcome
+}
+
+export type DeleteTransactionResult =
+  | { deleted: true; transaction: TransactionView }
+  | { deleted: false; dryRun: true; wouldDelete: TransactionView; hint: string }

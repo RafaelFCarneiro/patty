@@ -14,6 +14,30 @@ export type AppError =
   | { code: 'category_kind_mismatch'; transactionType: string; categoryName: string; categoryKind: string; hint: string }
   | { code: 'validation'; issues: string[] }
 
+export const formatAppError = (e: AppError): string => {
+  switch (e.code) {
+    case 'unknown_account':
+    case 'ambiguous_account':
+    case 'unknown_category':
+    case 'ambiguous_category':
+    case 'unknown_sub_category':
+    case 'ambiguous_sub_category':
+    case 'unknown_card':
+    case 'ambiguous_card':
+      return `${e.code}: "${e.query}" (candidates: ${e.candidates.join(', ')})`
+    case 'validation':
+      return `${e.code}: ${e.issues.join(', ')}`
+    case 'category_kind_mismatch':
+      return `${e.code}: ${e.hint}`
+    case 'duplicate_name':
+      return `${e.code}: ${e.entity} "${e.name}"`
+    case 'unknown_transaction':
+      return `${e.code}: ${e.id}`
+    case 'unknown_bill':
+      return `${e.code}: ${e.card} ${e.year}-${String(e.month).padStart(2, '0')}`
+  }
+}
+
 export const httpStatus = (e: AppError): number => {
   switch (e.code) {
     case 'unknown_account':

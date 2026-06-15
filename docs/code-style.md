@@ -51,7 +51,7 @@ export const payBill = async (deps, input) => {
 ## logic/ — pure and declarative
 
 - No I/O, no `Date.now()`/`new Date()` (clock comes from deps), no imports from `controllers/` or `diplomat/`.
-- Data transformation with **remeda** when ≥2 stages or grouping is involved (ADR-003):
+- Data transformation with **[remeda](https://remedajs.com/docs/)** when ≥2 stages or grouping is involved (ADR-003):
 
 ```ts
 // ✅ DO
