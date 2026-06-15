@@ -9,7 +9,8 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.ts'],
       exclude: ['src/main.ts', 'src/diplomat/**', 'src/wire/**'],
-      reporter: ['text', 'html'],
+      reporter: ['text', 'html', 'json'],
+      reportsDirectory: 'coverage/.tmp/unit',
     },
   },
 })
