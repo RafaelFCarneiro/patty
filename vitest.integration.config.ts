@@ -6,5 +6,15 @@ export default defineConfig({
     include: ['test/integration/**/*.test.ts'],
     testTimeout: 30_000,
     reporters: ['default', 'verbose'],
+    globalSetup: 'test/integration/setup.ts',
+    setupFiles: ['test/integration/server-setup.ts'],
+    fileParallelism: false,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/main.ts', 'src/diplomat/**', 'src/wire/**'],
+      reporter: ['json'],
+      reportsDirectory: 'coverage/.tmp/integration',
+    },
   },
 })
