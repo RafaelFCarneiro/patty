@@ -22,6 +22,7 @@ import { TransactionSource, TransactionType, MovementType } from '../../models/t
 import { CurrencyCode } from '../../models/common.js'
 import { CategoryKind } from '../../models/category.js'
 import { AccountType } from '../../models/account.js'
+import { RecurringPeriod } from '../../models/recurring.js'
 import {
   bulkResultToWireOut,
   createResultToWireOut,
@@ -171,7 +172,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         description: z.string().min(1),
         amount: z.number().positive(),
         type: MovementType,
-        period: z.enum(['weekly', 'monthly', 'yearly']),
+        period: RecurringPeriod,
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('First due date'),
         account: z.string().optional(),
         category: z.string().optional(),
