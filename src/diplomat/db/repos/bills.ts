@@ -9,7 +9,7 @@ type NodeLike = { properties: Record<string, unknown> }
 
 const toBill = (record: Record<string, unknown>): Bill => Bill.parse((record['b'] as NodeLike).properties)
 
-export type BillWithItems = { bill: Bill; cardName: string; total: number; transactions: TransactionView[] }
+export type BillWithItems = { bill: Bill; cardName: string; transactions: TransactionView[] }
 
 export type BillsRepo = {
   /** MERGE the cycle's bill for a card (created open) and attach the transaction. */
@@ -59,7 +59,6 @@ export const billsRepo = (driver: Driver): BillsRepo => ({
     return {
       bill: toBill(row),
       cardName: String(row['cardName']),
-      total: transactions.reduce((acc, t) => acc + (t.type === 'expense' ? t.amount : -t.amount), 0),
       transactions,
     }
   },

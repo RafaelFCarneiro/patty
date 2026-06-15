@@ -18,7 +18,11 @@ import {
   updateTransaction,
 } from '../../controllers/transactions.js'
 import { createTransfer } from '../../controllers/transfers.js'
-import { TransactionSource } from '../../models/transaction.js'
+import { TransactionSource, TransactionType, MovementType } from '../../models/transaction.js'
+import { CurrencyCode } from '../../models/common.js'
+import { CategoryKind } from '../../models/category.js'
+import { AccountType } from '../../models/account.js'
+import { RecurringPeriod } from '../../models/recurring.js'
 import {
   bulkResultToWireOut,
   createResultToWireOut,
@@ -54,13 +58,13 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       inputSchema: {
         description: z.string().describe('What was paid/received, e.g. "Uber para o aeroporto"'),
         amount: z.number().positive().describe('Positive amount in full units (reais/dollars)'),
-        type: z.enum(['expense', 'income']),
+        type: MovementType,
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD; defaults to today'),
         account: z.string().optional().describe('Account name, e.g. "Nubank"'),
         card: z.string().optional().describe('Credit card name — transaction joins the cycle bill (fatura). Use account OR card, not both'),
         category: z.string().optional().describe('Category name; omit when using subCategory or to auto-classify. expense transactions need an expense/both category; income needs income/both'),
         subCategory: z.string().optional().describe('Sub-category name (implies its parent category — do not set both category and subCategory)'),
-        currency: z.enum(['BRL', 'USD']).optional(),
+        currency: CurrencyCode.optional(),
         idempotencyKey: z.string().min(1),
         rawInput: z.string().optional().describe('Original user phrasing, for audit'),
         tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
@@ -84,12 +88,12 @@ export const buildMcpServer = (deps: Deps): McpServer => {
             z.object({
               description: z.string().min(1),
               amount: z.number().positive(),
-              type: z.enum(['expense', 'income']),
+              type: MovementType,
               date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
               account: z.string().optional(),
               card: z.string().optional(),
               category: z.string().optional(),
-              currency: z.enum(['BRL', 'USD']).optional(),
+              currency: CurrencyCode.optional(),
               idempotencyKey: z.string().optional(),
             }),
           )
@@ -167,12 +171,12 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       inputSchema: {
         description: z.string().min(1),
         amount: z.number().positive(),
-        type: z.enum(['expense', 'income']),
-        period: z.enum(['weekly', 'monthly', 'yearly']),
+        type: MovementType,
+        period: RecurringPeriod,
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('First due date'),
         account: z.string().optional(),
         category: z.string().optional(),
-        currency: z.enum(['BRL', 'USD']).optional(),
+        currency: CurrencyCode.optional(),
       },
     },
     async (args) => fromResult(await createRecurring(deps, args)),
@@ -208,7 +212,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         id: z.string().min(1).describe('Transaction id'),
         description: z.string().min(1).optional(),
         amount: z.number().positive().optional(),
-        type: z.enum(['expense', 'income']).optional(),
+        type: MovementType.optional(),
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         account: z.string().optional().describe('New account name'),
         category: z.string().optional().describe('New category name (user correction). Do not set together with subCategory'),
@@ -247,7 +251,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         year: z.number().int().min(2000).max(2100).optional(),
         from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-        type: z.enum(['expense', 'income', 'transfer']).optional(),
+        type: TransactionType.optional(),
         category: z.string().optional(),
         subCategory: z.string().optional().describe('Filter to transactions with this sub-category'),
         account: z.string().optional(),
@@ -280,8 +284,8 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       description: 'Create a bank account / wallet. Currency defaults to BRL.',
       inputSchema: {
         name: z.string().min(1),
-        type: z.enum(['checking', 'savings', 'wallet', 'investment']).default('checking'),
-        currency: z.enum(['BRL', 'USD']).default('BRL'),
+        type: AccountType.default(AccountType.enum.checking),
+        currency: CurrencyCode.default(CurrencyCode.enum.BRL),
         initialBalance: z.number().default(0).describe('Balance at account creation'),
       },
     },
@@ -297,7 +301,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         '+ transfers in − transfers out. Optionally filter by account name or type.',
       inputSchema: {
         account: z.string().optional().describe('Single account by name'),
-        type: z.enum(['checking', 'savings', 'wallet', 'investment']).optional(),
+        type: AccountType.optional(),
       },
     },
     async (args) => fromResult(await getAccountBalances(deps, args)),
@@ -309,7 +313,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       title: 'List accounts',
       description: 'List accounts with their currencies, optionally filtered by type (checking = conta corrente).',
       inputSchema: {
-        type: z.enum(['checking', 'savings', 'wallet', 'investment']).optional(),
+        type: AccountType.optional(),
       },
     },
     async (args) => json(await listAccounts(deps, args.type)),
@@ -344,7 +348,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       description: 'Create a category. Prefer existing categories (list_categories) before creating new ones.',
       inputSchema: {
         name: z.string().min(1),
-        kind: z.enum(['expense', 'income', 'both']).default('expense'),
+        kind: CategoryKind.default(CategoryKind.enum.expense),
       },
     },
     async (args) => fromResult(await createCategory(deps, args)),
