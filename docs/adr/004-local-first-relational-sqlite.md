@@ -1,6 +1,6 @@
 # ADR-004: Local-first persistence — relational SQLite via libSQL (encrypted), dropping the graph DB
 
-**Status:** Accepted · **Date:** 2026-06-15 · Supersedes the Neo4j/graph decisions in `docs/PLAN.md` and the graph model in `docs/architecture.md`.
+**Status:** Accepted · **Date:** 2026-06-15 · Supersedes the Neo4j/graph decisions in `docs/PLAN.md` and the graph model in `docs/architecture.md`. · Companions: [ADR-005](005-keychain-key-storage.md) (keychain key storage), [ADR-006](006-drizzle-orm-schema-and-migrations.md) (Drizzle ORM for schema and migrations).
 
 ## Context
 
