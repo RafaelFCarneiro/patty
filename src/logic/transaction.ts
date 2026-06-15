@@ -10,6 +10,7 @@ import type {
   TransactionView,
   UpdateTransactionInput,
 } from '../models/transaction.js'
+import { TransactionType } from '../models/transaction.js'
 import { err, ok, type Result } from 'neverthrow'
 import * as R from 'remeda'
 import { normalizeMerchant } from './merchant.js'
@@ -25,9 +26,9 @@ export const resolveCurrency = (
 
 // ─── Transfer mutability guards ───────────────────────────────────────────────
 
-const isTransfer = (t: Pick<TransactionView, 'type'>) => t.type === 'transfer'
+const isTransfer = (t: Pick<TransactionView, 'type'>) => t.type === TransactionType.enum.transfer
 const wouldBeTransfer = (existing: Pick<TransactionView, 'type'>, input: Pick<UpdateTransactionInput, 'type'>) =>
-  (input.type ?? existing.type) === 'transfer'
+  (input.type ?? existing.type) === TransactionType.enum.transfer
 const hasCategoryInput = (input: Pick<UpdateTransactionInput, 'category' | 'subCategory'>) =>
   !!(input.category || input.subCategory)
 
@@ -53,7 +54,7 @@ export const resolveEffectiveType = (
   input: Pick<UpdateTransactionInput, 'type'>,
 ): 'income' | 'expense' | undefined => {
   const resolved = input.type ?? existing.type
-  return resolved !== 'transfer' ? resolved : undefined
+  return resolved !== TransactionType.enum.transfer ? resolved : undefined
 }
 
 // ─── Bulk ─────────────────────────────────────────────────────────────────────

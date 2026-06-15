@@ -5,5 +5,11 @@ export default defineConfig({
     name: 'unit',
     include: ['test/unit/**/*.test.ts'],
     testTimeout: 5_000,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/main.ts', 'src/diplomat/**', 'src/wire/**'],
+      reporter: ['text', 'html'],
+    },
   },
 })

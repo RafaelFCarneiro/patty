@@ -3,13 +3,16 @@ import type { AppError } from '../common/errors.js'
 import { okOr } from '../common/result.js'
 import type { Bill } from '../models/bill.js'
 import type { BillWithItems } from '../diplomat/db/repos/bills.js'
+import { computeBillTotal } from '../logic/bill.js'
 import type { Deps } from './deps.js'
 import { resolveCardRef } from './resolve.js'
+
+export type BillView = BillWithItems & { total: number }
 
 export const getBill = (
   deps: Deps,
   input: { card: string; month: number; year: number },
-): ResultAsync<BillWithItems, AppError> =>
+): ResultAsync<BillView, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card)
     const bill = yield* okOr(await deps.bills.get(card.id, input.month, input.year), {
@@ -18,7 +21,7 @@ export const getBill = (
       month: input.month,
       year: input.year,
     })
-    return ok(bill)
+    return ok({ ...bill, total: computeBillTotal(bill.transactions) })
   })
 
 /**
