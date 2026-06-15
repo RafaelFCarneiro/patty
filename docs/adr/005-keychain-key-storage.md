@@ -15,7 +15,7 @@ Use **`@napi-rs/keyring`** for OS keychain access.
 Key lifecycle:
 - **First run**: generate a 32-byte cryptographically random key (`crypto.randomBytes(32).toString('hex')`), store it in the keychain under service `fintrack` / account `db-encryption-key`, then open the DB with that key.
 - **Subsequent runs**: retrieve the key from the keychain; open the DB.
-- **CI / headless override**: if `FINTRACK_DB_KEY` is set in the environment (64-char hex string), use it directly — no keychain read or write. This is also the documented recovery path if the keychain entry is lost.
+- **CI / headless override**: if `FINTRACK_DB_KEY` is set in the environment (64-char hex string), use it directly — no keychain read or write. This is also the documented recovery path if the keychain entry is lost. **`FINTRACK_DB_KEY` must be treated as a secret**: store it in CI secret storage (GitHub Actions Secrets, etc.), never log it, never commit it. The implementation must not echo or surface the key value in any log line.
 - **Rotation** (out of scope for v1): export plaintext → generate new key → re-encrypt; documented as a future CLI command.
 
 ## Options Considered
