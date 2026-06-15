@@ -6,5 +6,6 @@ export default defineConfig({
     include: ['test/integration/**/*.test.ts'],
     testTimeout: 30_000,
     reporters: ['default', 'verbose'],
+    globalSetup: 'test/integration/setup.ts',
   },
 })
