@@ -23,11 +23,11 @@ let container: StartedNeo4jContainer
 let app: FastifyInstance
 
 export const setup = async () => {
-  container = await new Neo4jContainer().start()
+  container = await new Neo4jContainer('neo4j:5-community').start()
 
   const driver = createDriver({
     NEO4J_URI: container.getBoltUri(),
-    NEO4J_USER: container.getUsername(),
+    NEO4J_USER: 'neo4j',
     NEO4J_PASSWORD: container.getPassword(),
     PORT: TEST_PORT,
   })
