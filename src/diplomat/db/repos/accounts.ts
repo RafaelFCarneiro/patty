@@ -1,9 +1,9 @@
-import type { Driver } from 'neo4j-driver'
+import { sql } from 'drizzle-orm'
 import * as accountAdapters from '../../../adapters/accounts.js'
 import type { Account } from '../../../models/account.js'
 import { BalancePartsRow } from '../../../wire/db/accounts.js'
-import { run } from '../driver.js'
-
+import type { Db } from '../driver.js'
+import { accounts } from '../schema.js'
 
 export type AccountsRepo = {
   list: () => Promise<Account[]>
@@ -13,53 +13,55 @@ export type AccountsRepo = {
   balanceParts: (accountId: string) => Promise<BalancePartsRow>
 }
 
-export const accountsRepo = (driver: Driver): AccountsRepo => ({
+export const accountsRepo = (db: Db): AccountsRepo => ({
   list: async () => {
-    const rows = await run(
-      driver,
-      `MATCH (a:Account)-[:DENOMINATED_IN]->(cur:Currency)
-       RETURN a, cur.code AS currency ORDER BY a.name`,
-    )
+    const rows = await db.select().from(accounts).orderBy(accounts.name)
     return rows.map(accountAdapters.dbToModel)
   },
 
   create: async (account) => {
-    const rows = await run(
-      driver,
-      `MATCH (cur:Currency {code: $currency})
-       CREATE (a:Account {id: $id, name: $name, type: $type, initialBalance: $initialBalance})
-       MERGE (a)-[:DENOMINATED_IN]->(cur)
-       RETURN a, cur.code AS currency`,
-      { ...account },
-    )
-    return accountAdapters.dbToModel(rows[0]!)
+    const [row] = await db
+      .insert(accounts)
+      .values({
+        id:             account.id,
+        name:           account.name,
+        type:           account.type,
+        initialBalance: account.initialBalance,
+        currency:       account.currency,
+      })
+      .returning()
+    return accountAdapters.dbToModel(row!)
   },
 
   findByName: async (name) => {
-    const rows = await run(
-      driver,
-      `MATCH (a:Account)-[:DENOMINATED_IN]->(cur:Currency)
-       WHERE toLower(a.name) = toLower($name)
-       RETURN a, cur.code AS currency LIMIT 1`,
-      { name },
-    )
+    const rows = await db
+      .select()
+      .from(accounts)
+      .where(sql`lower(${accounts.name}) = lower(${name})`)
+      .limit(1)
     return rows[0] ? accountAdapters.dbToModel(rows[0]) : null
   },
 
   balanceParts: async (accountId) => {
-    // Single structure: outflow via [:FROM] (expense | transfer), inflow via income + [:TO]
-    const rows = await run(
-      driver,
-      `MATCH (a:Account {id: $accountId})
-       OPTIONAL MATCH (t:Transaction)-[:FROM]->(a)
-       WITH a,
-            sum(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END) AS income,
-            sum(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END) AS expenses,
-            sum(CASE WHEN t.type = 'transfer' THEN t.amount ELSE 0 END) AS transfersOut
-       OPTIONAL MATCH (tin:Transaction {type: 'transfer'})-[:TO]->(a)
-       RETURN income, expenses, transfersOut, sum(coalesce(tin.amount, 0)) AS transfersIn`,
-      { accountId },
-    )
-    return BalancePartsRow.parse(rows[0] ?? { income: 0, expenses: 0, transfersIn: 0, transfersOut: 0 })
+    const [row] = await db.all<{
+      income: number; expenses: number; transfers_out: number; transfers_in: number
+    }>(sql`
+      SELECT
+        COALESCE(SUM(CASE WHEN t.type = 'income'   THEN t.amount ELSE 0 END), 0) AS income,
+        COALESCE(SUM(CASE WHEN t.type = 'expense'  THEN t.amount ELSE 0 END), 0) AS expenses,
+        COALESCE(SUM(CASE WHEN t.type = 'transfer' THEN t.amount ELSE 0 END), 0) AS transfers_out,
+        COALESCE((
+          SELECT SUM(t2.amount) FROM transactions t2
+          WHERE t2.to_account_id = ${accountId} AND t2.type = 'transfer'
+        ), 0) AS transfers_in
+      FROM transactions t
+      WHERE t.from_account_id = ${accountId}
+    `)
+    return BalancePartsRow.parse({
+      income:       row?.income        ?? 0,
+      expenses:     row?.expenses      ?? 0,
+      transfersIn:  row?.transfers_in  ?? 0,
+      transfersOut: row?.transfers_out ?? 0,
+    })
   },
 })

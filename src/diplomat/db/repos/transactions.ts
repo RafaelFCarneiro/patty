@@ -1,9 +1,10 @@
-import neo4j, { type Driver } from 'neo4j-driver'
+import { eq, sql } from 'drizzle-orm'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import type { SummaryRow } from '../../../logic/summary.js'
 import type { Transaction, TransactionView, TransactionPatch } from '../../../models/transaction.js'
 import { SummaryRowSchema } from '../../../wire/db/transactions.js'
-import { run } from '../driver.js'
+import type { Db } from '../driver.js'
+import { merchantCategory, merchants, transactionTags, transactions } from '../schema.js'
 
 export type CreateTxResult = { transaction: TransactionView; created: boolean }
 
@@ -19,25 +20,46 @@ export type SearchFilters = {
   limit: number
 }
 
-const RETURN_TX = `
-  RETURN t,
-         a.id AS accountId, a.name AS accountName,
-         ta.id AS toAccountId, ta.name AS toAccountName,
-         cc.id AS cardId, cc.name AS cardName,
-         c.id AS categoryId, c.name AS categoryName,
-         sc.id AS subCategoryId, sc.name AS subCategoryName,
-         m.key AS merchant,
-         collect(DISTINCT tag.name) AS tags,
-         created`
+// Full transaction SELECT with all LEFT JOINs for name resolution and tag aggregation.
+const fullTxSelect = (whereClause: ReturnType<typeof sql>) => sql`
+  SELECT t.*,
+    fa.name AS from_account_name, ta.name AS to_account_name,
+    cc.name AS credit_card_name,
+    c.name AS category_name, sc.name AS subcategory_name,
+    json_group_array(tg.name) FILTER (WHERE tg.name IS NOT NULL) AS tags
+  FROM transactions t
+  LEFT JOIN accounts fa   ON fa.id  = t.from_account_id
+  LEFT JOIN accounts ta   ON ta.id  = t.to_account_id
+  LEFT JOIN credit_cards cc ON cc.id = t.credit_card_id
+  LEFT JOIN categories c  ON c.id   = t.category_id
+  LEFT JOIN categories sc ON sc.id  = t.subcategory_id
+  LEFT JOIN transaction_tags tt ON tt.transaction_id = t.id
+  LEFT JOIN tags tg ON tg.id = tt.tag_id
+  WHERE ${whereClause}
+  GROUP BY t.id
+`
 
-const MATCH_REFS = `
-  OPTIONAL MATCH (t)-[:FROM]->(a:Account)
-  OPTIONAL MATCH (t)-[:TO]->(ta:Account)
-  OPTIONAL MATCH (t)-[:CHARGED_TO]->(cc:CreditCard)
-  OPTIONAL MATCH (t)-[:IN]->(c:Category)
-  OPTIONAL MATCH (t)-[:IN_SUB]->(sc:SubCategory)
-  OPTIONAL MATCH (t)-[:AT]->(m:Merchant)
-  OPTIONAL MATCH (t)-[:TAGGED_WITH]->(tag:Tag)`
+const fetchTx = async (db: Db, id: string): Promise<TransactionView | null> => {
+  const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`))
+  return row ? transactionAdapters.dbToModel(row) : null
+}
+
+const attachTags = async (db: Db, txId: string, tagNames: string[]): Promise<void> => {
+  if (tagNames.length === 0) return
+  for (const name of tagNames) {
+    const [tag] = await db.all<{ id: string }>(sql`SELECT id FROM tags WHERE name = ${name}`)
+    if (tag) {
+      await db.insert(transactionTags)
+        .values({ transactionId: txId, tagId: tag.id })
+        .onConflictDoNothing()
+    }
+  }
+}
+
+const replaceTags = async (db: Db, txId: string, tagNames: string[]): Promise<void> => {
+  await db.delete(transactionTags).where(eq(transactionTags.transactionId, txId))
+  await attachTags(db, txId, tagNames)
+}
 
 export type TransactionsRepo = {
   /** Receives domain entity; model→db flattening happens here (adapters/transactions.ts). */
@@ -53,179 +75,151 @@ export type TransactionsRepo = {
   summaryRows: (from: string, to: string) => Promise<SummaryRow[]>
 }
 
-const attachTags = async (driver: Driver, txId: string, tagNames: string[]): Promise<void> => {
-  await run(
-    driver,
-    `MATCH (t:Transaction {id: $id})
-     UNWIND $tagNames AS tagName
-     MATCH (tag:Tag {name: tagName})
-     MERGE (t)-[:TAGGED_WITH]->(tag)`,
-    { id: txId, tagNames },
-  )
-}
-
-const replaceTags = async (driver: Driver, txId: string, tagNames: string[]): Promise<void> => {
-  await run(driver, 'MATCH (:Transaction {id: $id})-[r:TAGGED_WITH]->(:Tag) DELETE r', { id: txId })
-  if (tagNames.length > 0) await attachTags(driver, txId, tagNames)
-}
-
-const fetchTx = async (driver: Driver, id: string): Promise<TransactionView | null> => {
-  const rows = await run(
-    driver,
-    `MATCH (t:Transaction {id: $id}) WITH t, true AS created ${MATCH_REFS} ${RETURN_TX}`,
-    { id },
-  )
-  return rows[0] ? transactionAdapters.dbToModel(rows[0]) : null
-}
-
-export const transactionsRepo = (driver: Driver): TransactionsRepo => ({
-  /** Idempotent create: MERGE on idempotencyKey; edges attached only on first write. */
+export const transactionsRepo = (db: Db): TransactionsRepo => ({
+  /** Idempotent create: INSERT OR IGNORE on idempotency_key. */
   create: async (entity, tagNames) => {
     const { props, refs } = transactionAdapters.modelToDb(entity)
-    const rows = await run(
-      driver,
-      `MERGE (t:Transaction {idempotencyKey: $idempotencyKey})
-       ON CREATE SET t += $props, t._new = true
-       WITH t, coalesce(t._new, false) AS created
-       REMOVE t._new
-       WITH t, created
-       OPTIONAL MATCH (acc:Account {id: $accountId})
-       FOREACH (_ IN CASE WHEN created AND acc IS NOT NULL THEN [1] ELSE [] END |
-         MERGE (t)-[:FROM]->(acc))
-       WITH t, created
-       OPTIONAL MATCH (toAcc:Account {id: $toAccountId})
-       FOREACH (_ IN CASE WHEN created AND toAcc IS NOT NULL THEN [1] ELSE [] END |
-         MERGE (t)-[:TO]->(toAcc))
-       WITH t, created
-       OPTIONAL MATCH (cat:Category {id: $categoryId})
-       FOREACH (_ IN CASE WHEN created AND cat IS NOT NULL THEN [1] ELSE [] END |
-         MERGE (t)-[:IN]->(cat))
-       WITH t, created
-       OPTIONAL MATCH (subCat:SubCategory {id: $subCategoryId})
-       FOREACH (_ IN CASE WHEN created AND subCat IS NOT NULL THEN [1] ELSE [] END |
-         MERGE (t)-[:IN_SUB]->(subCat))
-       WITH t, created
-       OPTIONAL MATCH (mer:Merchant {key: $merchantKey})
-       FOREACH (_ IN CASE WHEN created AND mer IS NOT NULL THEN [1] ELSE [] END |
-         MERGE (t)-[:AT]->(mer))
-       WITH t, created
-       OPTIONAL MATCH (card:CreditCard {id: $cardId})
-       FOREACH (_ IN CASE WHEN created AND card IS NOT NULL THEN [1] ELSE [] END |
-         MERGE (t)-[:CHARGED_TO]->(card))
-       WITH t, created
-       ${MATCH_REFS}
-       ${RETURN_TX}`,
-      {
-        idempotencyKey: props.idempotencyKey,
-        props,
-        accountId: refs.accountId,
-        toAccountId: refs.toAccountId,
-        cardId: refs.cardId,
-        categoryId: refs.categoryId,
-        subCategoryId: refs.subCategoryId,
-        merchantKey: refs.merchantKey,
-      },
-    )
-    const row = rows[0]!
-    const created = Boolean(row['created'])
-    if (created && tagNames.length > 0) {
-      await attachTags(driver, entity.id, tagNames)
-      return { transaction: (await fetchTx(driver, entity.id))!, created }
+
+    // Ensure merchant row exists before FK reference
+    if (refs.merchantKey) {
+      await db.insert(merchants).values({ key: refs.merchantKey }).onConflictDoNothing()
     }
-    return { transaction: transactionAdapters.dbToModel(row), created }
+
+    const result = await db.insert(transactions)
+      .values({
+        id:                   props.id,
+        description:          props.description,
+        amount:               props.amount,
+        type:                 props.type as 'income' | 'expense' | 'transfer',
+        date:                 props.date,
+        currency:             props.currency,
+        source:               props.source,
+        idempotencyKey:       props.idempotencyKey,
+        classificationMethod: props.classificationMethod,
+        confidence:           props.confidence,
+        rawInput:             props.rawInput ?? null,
+        fromAccountId:        refs.accountId,
+        toAccountId:          refs.toAccountId,
+        creditCardId:         refs.cardId,
+        categoryId:           refs.categoryId,
+        subcategoryId:        refs.subCategoryId,
+        merchantKey:          refs.merchantKey,
+      })
+      .onConflictDoNothing()
+
+    const created = (result.rowsAffected ?? 0) > 0
+
+    let transaction: TransactionView | null
+    if (created) {
+      if (tagNames.length > 0) await attachTags(db, entity.id, tagNames)
+      transaction = await fetchTx(db, entity.id)
+    } else {
+      // Duplicate: the new entity.id was never inserted; find the existing row by idempotency key.
+      const [existing] = await db.all<Record<string, unknown>>(
+        fullTxSelect(sql`t.idempotency_key = ${props.idempotencyKey}`)
+      )
+      transaction = existing ? transactionAdapters.dbToModel(existing) : null
+    }
+
+    return { transaction: transaction!, created }
   },
 
-  getById: async (id) => {
-    const rows = await run(
-      driver,
-      `MATCH (t:Transaction {id: $id})
-       WITH t, true AS created
-       ${MATCH_REFS}
-       ${RETURN_TX}`,
-      { id },
-    )
-    return rows[0] ? transactionAdapters.dbToModel(rows[0]) : null
-  },
+  getById: (id) => fetchTx(db, id),
 
-  /** Patch scalar props; re-link [:IN]/[:IN_SUB]/[:FROM] edges and replace tags when provided. */
   update: async (id, patch, refs) => {
     const props = transactionAdapters.patchToDb(patch)
-    const rows = await run(
-      driver,
-      `MATCH (t:Transaction {id: $id})
-       SET t += $props
-       WITH t
-       OPTIONAL MATCH (newCat:Category {id: $categoryId})
-       OPTIONAL MATCH (t)-[oldIn:IN]->(:Category)
-       FOREACH (_ IN CASE WHEN newCat IS NOT NULL AND oldIn IS NOT NULL THEN [1] ELSE [] END | DELETE oldIn)
-       FOREACH (_ IN CASE WHEN newCat IS NOT NULL THEN [1] ELSE [] END | MERGE (t)-[:IN]->(newCat))
-       WITH DISTINCT t
-       OPTIONAL MATCH (newSubCat:SubCategory {id: $subCategoryId})
-       OPTIONAL MATCH (t)-[oldInSub:IN_SUB]->(:SubCategory)
-       FOREACH (_ IN CASE WHEN newSubCat IS NOT NULL AND oldInSub IS NOT NULL THEN [1] ELSE [] END | DELETE oldInSub)
-       FOREACH (_ IN CASE WHEN newSubCat IS NOT NULL THEN [1] ELSE [] END | MERGE (t)-[:IN_SUB]->(newSubCat))
-       WITH DISTINCT t
-       OPTIONAL MATCH (newAcc:Account {id: $accountId})
-       OPTIONAL MATCH (t)-[oldFrom:FROM]->(:Account)
-       FOREACH (_ IN CASE WHEN newAcc IS NOT NULL AND oldFrom IS NOT NULL THEN [1] ELSE [] END | DELETE oldFrom)
-       FOREACH (_ IN CASE WHEN newAcc IS NOT NULL THEN [1] ELSE [] END | MERGE (t)-[:FROM]->(newAcc))
-       WITH DISTINCT t, true AS created
-       ${MATCH_REFS}
-       ${RETURN_TX}`,
-      { id, props, categoryId: refs.categoryId, subCategoryId: refs.subCategoryId, accountId: refs.accountId },
-    )
-    if (!rows[0]) return null
-    if (refs.tagNames !== null) {
-      await replaceTags(driver, id, refs.tagNames)
-      return fetchTx(driver, id)
+
+    const setData = {
+      ...(props.description          !== undefined && { description:          props.description }),
+      ...(props.amount               !== undefined && { amount:               props.amount }),
+      ...(props.type                 !== undefined && { type:                 props.type as 'income' | 'expense' | 'transfer' }),
+      ...(props.date                 !== undefined && { date:                 props.date }),
+      ...(props.currency             !== undefined && { currency:             props.currency }),
+      ...(props.classificationMethod !== undefined && { classificationMethod: props.classificationMethod }),
+      ...(props.confidence           !== undefined && { confidence:           props.confidence }),
+      ...(refs.accountId    !== null && { fromAccountId: refs.accountId }),
+      ...(refs.categoryId   !== null && { categoryId:    refs.categoryId }),
+      ...(refs.subCategoryId!== null && { subcategoryId: refs.subCategoryId }),
     }
-    return transactionAdapters.dbToModel(rows[0])
+    if (Object.keys(setData).length > 0) {
+      await db.update(transactions).set(setData).where(eq(transactions.id, id))
+    }
+
+    if (refs.tagNames !== null) {
+      await replaceTags(db, id, refs.tagNames)
+    }
+
+    return fetchTx(db, id)
   },
 
   delete: async (id) => {
-    const rows = await run(
-      driver,
-      `MATCH (t:Transaction {id: $id})
-       DETACH DELETE t
-       RETURN count(t) AS deleted`,
-      { id },
-    )
-    return Number(rows[0]?.['deleted'] ?? 0) > 0
+    const result = await db.delete(transactions).where(eq(transactions.id, id))
+    return (result.rowsAffected ?? 0) > 0
   },
 
   search: async (filters) => {
-    const rows = await run(
-      driver,
-      `MATCH (t:Transaction)
-       ${MATCH_REFS}
-       WITH t, a, ta, cc, c, sc, m, tag, true AS created
-       WHERE ($from IS NULL OR t.date >= $from)
-         AND ($to IS NULL OR t.date < $to)
-         AND ($type IS NULL OR t.type = $type)
-         AND ($text IS NULL OR toLower(t.description) CONTAINS toLower($text))
-         AND ($accountId IS NULL OR a.id = $accountId OR ta.id = $accountId)
-         AND ($categoryId IS NULL OR c.id = $categoryId)
-         AND ($subCategoryId IS NULL OR sc.id = $subCategoryId)
-         AND (size($tagNames) = 0 OR size([(t)-[:TAGGED_WITH]->(ft:Tag) WHERE ft.name IN $tagNames | 1]) > 0)
-       ${RETURN_TX}
-       ORDER BY t.date DESC, t.id
-       LIMIT $limit`,
-      { ...filters, limit: neo4j.int(filters.limit) },
-    )
+    const conditions: ReturnType<typeof sql>[] = []
+
+    if (filters.from)         conditions.push(sql`t.date >= ${filters.from}`)
+    if (filters.to)           conditions.push(sql`t.date < ${filters.to}`)
+    if (filters.type)         conditions.push(sql`t.type = ${filters.type}`)
+    if (filters.accountId)    conditions.push(sql`(t.from_account_id = ${filters.accountId} OR t.to_account_id = ${filters.accountId})`)
+    if (filters.categoryId)   conditions.push(sql`t.category_id = ${filters.categoryId}`)
+    if (filters.subCategoryId)conditions.push(sql`t.subcategory_id = ${filters.subCategoryId}`)
+    if (filters.tagNames.length > 0) {
+      const placeholders = sql.join(filters.tagNames.map((n) => sql`${n}`), sql`, `)
+      conditions.push(sql`EXISTS (
+        SELECT 1 FROM transaction_tags tt2
+        JOIN tags tg2 ON tg2.id = tt2.tag_id
+        WHERE tt2.transaction_id = t.id AND tg2.name IN (${placeholders})
+      )`)
+    }
+
+    let rows: Record<string, unknown>[]
+
+    if (filters.text) {
+      // FTS5 search: get matching rowids, then apply remaining filters
+      const ftsResults = await db.all<{ rowid: number }>(sql`
+        SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${filters.text}
+      `)
+      if (ftsResults.length === 0) return []
+
+      const rowids = ftsResults.map((r) => r.rowid)
+      const rowidList = sql.join(rowids.map((r) => sql`${r}`), sql`, `)
+      conditions.push(sql`t.rowid IN (${rowidList})`)
+
+      const where = conditions.length > 0
+        ? sql.join(conditions, sql` AND `)
+        : sql`1=1`
+      rows = await db.all<Record<string, unknown>>(sql`
+        ${fullTxSelect(where)}
+        ORDER BY t.date DESC, t.id
+        LIMIT ${filters.limit}
+      `)
+    } else {
+      const where = conditions.length > 0
+        ? sql.join(conditions, sql` AND `)
+        : sql`1=1`
+      rows = await db.all<Record<string, unknown>>(sql`
+        ${fullTxSelect(where)}
+        ORDER BY t.date DESC, t.id
+        LIMIT ${filters.limit}
+      `)
+    }
+
     return rows.map(transactionAdapters.dbToModel)
   },
 
   summaryRows: async (from, to) => {
-    const rows = await run(
-      driver,
-      `MATCH (t:Transaction)
-       WHERE t.date >= $from AND t.date < $to
-         AND t.type <> 'transfer' // transfers move value between accounts — never spending
-       OPTIONAL MATCH (t)-[:IN]->(c:Category)
-       RETURN t.currency AS currency, t.type AS type, c.name AS category,
-              sum(t.amount) AS total, count(t) AS count`,
-      { from, to },
-    )
+    const rows = await db.all<Record<string, unknown>>(sql`
+      SELECT t.currency, t.type, c.name AS category,
+             SUM(t.amount) AS total, COUNT(*) AS count
+      FROM transactions t
+      LEFT JOIN categories c ON c.id = t.category_id
+      WHERE t.date >= ${from} AND t.date < ${to}
+        AND t.type != 'transfer'
+      GROUP BY t.currency, t.type, c.id
+    `)
     return rows.map((r) => SummaryRowSchema.parse(r))
   },
 })

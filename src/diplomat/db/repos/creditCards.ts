@@ -1,14 +1,16 @@
-import type { Driver } from 'neo4j-driver'
+import { sql } from 'drizzle-orm'
 import { CreditCard } from '../../../models/creditCard.js'
-import { run } from '../driver.js'
-
-type NodeLike = { properties: Record<string, unknown> }
+import type { Db } from '../driver.js'
+import { creditCards } from '../schema.js'
 
 const toCard = (record: Record<string, unknown>): CreditCard =>
   CreditCard.parse({
-    ...(record['cc'] as NodeLike).properties,
-    currency: record['currency'],
-    limit: ((record['cc'] as NodeLike).properties['limit'] as number | null) ?? undefined,
+    id:         record['id'],
+    name:       record['name'],
+    currency:   record['currency'],
+    closingDay: record['closingDay'] ?? record['closing_day'],
+    dueDay:     record['dueDay'] ?? record['due_day'],
+    limit:      record['limitAmount'] ?? record['limit_amount'] ?? undefined,
   })
 
 export type CreditCardsRepo = {
@@ -17,36 +19,33 @@ export type CreditCardsRepo = {
   findByName: (name: string) => Promise<CreditCard | null>
 }
 
-export const creditCardsRepo = (driver: Driver): CreditCardsRepo => ({
+export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
   list: async () => {
-    const rows = await run(
-      driver,
-      `MATCH (cc:CreditCard)-[:DENOMINATED_IN]->(cur:Currency)
-       RETURN cc, cur.code AS currency ORDER BY cc.name`,
-    )
+    const rows = await db.select().from(creditCards).orderBy(creditCards.name)
     return rows.map(toCard)
   },
 
   create: async (card) => {
-    const rows = await run(
-      driver,
-      `MATCH (cur:Currency {code: $currency})
-       CREATE (cc:CreditCard {id: $id, name: $name, closingDay: $closingDay, dueDay: $dueDay, limit: $limit})
-       MERGE (cc)-[:DENOMINATED_IN]->(cur)
-       RETURN cc, cur.code AS currency`,
-      { ...card, limit: card.limit ?? null },
-    )
-    return toCard(rows[0]!)
+    const [row] = await db
+      .insert(creditCards)
+      .values({
+        id:          card.id,
+        name:        card.name,
+        currency:    card.currency,
+        closingDay:  card.closingDay,
+        dueDay:      card.dueDay,
+        limitAmount: card.limit ?? null,
+      })
+      .returning()
+    return toCard(row!)
   },
 
   findByName: async (name) => {
-    const rows = await run(
-      driver,
-      `MATCH (cc:CreditCard)-[:DENOMINATED_IN]->(cur:Currency)
-       WHERE toLower(cc.name) = toLower($name)
-       RETURN cc, cur.code AS currency LIMIT 1`,
-      { name },
-    )
+    const rows = await db
+      .select()
+      .from(creditCards)
+      .where(sql`lower(${creditCards.name}) = lower(${name})`)
+      .limit(1)
     return rows[0] ? toCard(rows[0]) : null
   },
 })

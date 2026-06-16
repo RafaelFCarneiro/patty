@@ -1,38 +1,35 @@
-import neo4j, { type Driver } from 'neo4j-driver'
+import { randomBytes } from 'node:crypto'
+import { Entry } from '@napi-rs/keyring'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { Config } from '../../config.js'
+import * as schema from './schema.js'
 
-export const createDriver = (config: Config): Driver =>
-  neo4j.driver(config.NEO4J_URI, neo4j.auth.basic(config.NEO4J_USER, config.NEO4J_PASSWORD), {
-    disableLosslessIntegers: true,
-  })
+export type Db = LibSQLDatabase<typeof schema>
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const KEYCHAIN_SERVICE = 'fintrack'
+const KEYCHAIN_ACCOUNT = 'db-encryption-key'
 
-/** Neo4j may still be booting when the backend starts — retry connectivity. */
-export const waitForNeo4j = async (driver: Driver, attempts = 20, delayMs = 2000): Promise<void> => {
-  for (let i = 1; i <= attempts; i++) {
-    try {
-      await driver.verifyConnectivity()
-      return
-    } catch (e) {
-      if (i === attempts) throw e
-      console.log(`neo4j not ready (attempt ${i}/${attempts}), retrying…`)
-      await sleep(delayMs)
-    }
-  }
+const resolveEncryptionKey = (config: Config): string => {
+  // Env-var override: CI, headless, or manual recovery (ADR-005).
+  // The value must never be logged — callers must not surface it.
+  if (config.FINTRACK_DB_KEY) return config.FINTRACK_DB_KEY
+
+  const entry = new Entry(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+
+  const existing = entry.getPassword()
+  if (existing) return existing
+
+  // First run: generate, persist, return.
+  const key = randomBytes(32).toString('hex')
+  entry.setPassword(key)
+  return key
 }
 
-/** Run a single query in an auto-commit session. */
-export const run = async (
-  driver: Driver,
-  cypher: string,
-  params: Record<string, unknown> = {},
-): Promise<Record<string, unknown>[]> => {
-  const session = driver.session()
-  try {
-    const result = await session.run(cypher, params)
-    return result.records.map((r) => r.toObject() as Record<string, unknown>)
-  } finally {
-    await session.close()
-  }
+/** Open the encrypted libSQL database and return a Drizzle client. Fails fast if no key. */
+export const openDatabase = (config: Config): Db => {
+  const encryptionKey = resolveEncryptionKey(config)
+  const client = createClient({ url: `file:${config.DB_PATH}`, encryptionKey })
+  return drizzle(client, { schema })
 }

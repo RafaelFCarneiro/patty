@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest'
 import * as wireInCategories from '../../../src/wire/in/categories.js'
 import * as categoryAdapters from '../../../src/adapters/categories.js'
 
-const node = (properties: Record<string, unknown>) => ({ properties })
-
 describe('dbToModel', () => {
-  it('decodes the category node', () => {
+  it('decodes flat SQL row for a category', () => {
     expect(
-      categoryAdapters.dbToModel({ c: node({ id: 'cat-1', name: 'Transporte', kind: 'expense' }) }),
+      categoryAdapters.dbToModel({ id: 'cat-1', name: 'Transporte', kind: 'expense' }),
     ).toEqual({ id: 'cat-1', name: 'Transporte', kind: 'expense' })
   })
 })

@@ -20,10 +20,6 @@
     "test:all": "npm test && npm run test:integration",
     "test:watch": "vitest --config vitest.unit.config.ts",
     "typecheck": "tsc --noEmit",
-    "infra:up": "docker compose up -d --build --wait",
-    "infra:up:db": "docker compose up -d --wait neo4j",
-    "infra:down": "docker compose down",
-    "infra:down:clean": "docker compose down --volumes",
     "mcp:inspect": "npx @modelcontextprotocol/inspector"
   },
   "ntl": {
@@ -32,35 +28,29 @@
       "build": "Compile TypeScript to dist/",
       "start": "Run compiled backend",
       "test": "Run only unit tests (Vitest project: unit)",
-      "test:integration": "Run MCP integration tests — spins up Neo4j via Testcontainers, boots the backend, tears down on exit",
+      "test:integration": "Run MCP integration tests — in-process libSQL DB, no Docker required",
       "test:coverage:integration": "Integration test coverage report (JSON → coverage/.tmp/integration)",
       "test:coverage:all": "Full coverage: unit + integration merged into coverage/index.html",
       "test:all": "Run unit + integration Vitest projects",
       "test:watch": "Run unit tests in watch mode (Vitest project: unit)",
       "typecheck": "Type-check everything, including tests",
-      "infra:up": "Build and start all containers (neo4j + backend)",
-      "infra:up:db": "Start only Neo4j (for local npm run dev)",
-      "infra:down": "Stop containers (keep data volume)",
-      "infra:down:clean": "Stop containers and WIPE the database volume",
       "mcp:inspect": "Open MCP Inspector — connect to http://127.0.0.1:3001/mcp (Streamable HTTP)"
     }
   },
   "dependencies": {
+    "@libsql/client": "^0.17.4",
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "@napi-rs/keyring": "^1.3.0",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.3.0",
-    "neo4j-driver": "^5.28.0",
     "neverthrow": "^8.2.0",
     "remeda": "^2.21.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@testcontainers/neo4j": "^12.0.2",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.3",
     "@vitest/coverage-v8": "^4.1.8",
     "drizzle-kit": "^0.31.10",
-    "testcontainers": "^12.0.2",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
     "vitest": "^4.1.8"
