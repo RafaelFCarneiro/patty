@@ -84,9 +84,8 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 
 - http/mcp handlers: zod-parse (`wire/in`) → adapt to model → call controller → adapt model to `wire/out`
   → translate Result. Nothing else.
-- db: parameterized Cypher ONLY — interpolating user input into a query string is a security bug.
-  Decode every record through `wire/db` + `adapters/` zod parsing. Aggregations that could multiply rows use
-  sequential `WITH` aggregation (see `balanceParts`).
+- db: parameterized SQL ONLY — use Drizzle's query builder or the `sql` template tag; never
+  string-interpolate user input (security bug). Decode every row through `wire/db` + `adapters/` zod parsing.
 - New MCP tools: rich `description` (the agent reads it!), `.describe()` on non-obvious fields,
   documented in `docs/mcp-tools.md` in the same change.
 

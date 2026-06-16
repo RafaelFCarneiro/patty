@@ -104,7 +104,7 @@ Repos live in `src/diplomat/db/repos/`; each accepts a `Db` (`LibSQLDatabase<typ
 
 ## Tool surface
 
-19 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
+24 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
 
 ## ADR index
 
