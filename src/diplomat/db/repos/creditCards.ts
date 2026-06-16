@@ -1,13 +1,13 @@
 import { sql } from 'drizzle-orm'
 import { expectPresent } from '../../../common/present.js'
 import { CreditCard } from '../../../models/creditCard.js'
-import { CreditCardRowSchema } from '../../../wire/db/creditCards.js'
+import type { CreditCardRow } from '../../../wire/db/creditCards.js'
 import type { Db } from '../driver.js'
 import { creditCards } from '../schema.js'
 
-const toCard = (record: Record<string, unknown>): CreditCard => {
-  const row = CreditCardRowSchema.parse(record)
-  return CreditCard.parse({
+// Input is the schema-derived Drizzle row; CreditCard.parse enforces domain constraints.
+const toCard = (row: CreditCardRow): CreditCard =>
+  CreditCard.parse({
     id:         row.id,
     name:       row.name,
     currency:   row.currency,
@@ -15,7 +15,6 @@ const toCard = (record: Record<string, unknown>): CreditCard => {
     dueDay:     row.dueDay,
     limit:      row.limitAmount ?? undefined,
   })
-}
 
 export type CreditCardsRepo = {
   list: () => Promise<CreditCard[]>

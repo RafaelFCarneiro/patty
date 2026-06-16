@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import * as wireInAccounts from '../../../src/wire/in/accounts.js'
 import * as accountAdapters from '../../../src/adapters/accounts.js'
+import type { AccountRow } from '../../../src/wire/db/accounts.js'
 
-// Row as returned by a Drizzle select on the accounts table (camelCase keys)
-const sqlRow = (overrides: Record<string, unknown> = {}) => ({
+// Row as returned by a Drizzle select on the accounts table (schema-derived shape)
+const sqlRow = (overrides: Partial<AccountRow> = {}): AccountRow => ({
   id: 'acc-1',
   name: 'Nubank',
   type: 'checking',

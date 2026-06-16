@@ -5,7 +5,7 @@ import * as categoryAdapters from '../../../src/adapters/categories.js'
 describe('dbToModel', () => {
   it('decodes flat SQL row for a category', () => {
     expect(
-      categoryAdapters.dbToModel({ id: 'cat-1', name: 'Transporte', kind: 'expense' }),
+      categoryAdapters.dbToModel({ id: 'cat-1', name: 'Transporte', kind: 'expense', parentId: null }),
     ).toEqual({ id: 'cat-1', name: 'Transporte', kind: 'expense' })
   })
 })

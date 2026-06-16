@@ -1,7 +1,4 @@
-import { z } from 'zod'
+import type { tags } from '../../diplomat/db/schema.js'
 
-// Tag row from a Drizzle select. Loose; Tag.parse enforces non-empty id/name downstream.
-export const TagRowSchema = z.object({
-  id:   z.string(),
-  name: z.string(),
-})
+// Tag row from a Drizzle select — derived from schema.ts (single source of truth).
+export type TagRow = typeof tags.$inferSelect
