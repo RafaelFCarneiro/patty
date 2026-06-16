@@ -110,6 +110,17 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 - New MCP tools must be documented in `docs/mcp-tools.md` with schema, error codes, and an example.
 - Commit messages follow Conventional Commits: `type(scope): description`. Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`. Use `!` or `BREAKING CHANGE:` footer for incompatible changes.
 
+## Git workflow (branch + PR only)
+
+`main` is **protected — never commit or push directly to it.** All changes land via pull request:
+
+1. Branch off the latest `main`: `git checkout main && git pull && git checkout -b type/short-description` (branch name uses the Conventional Commit type, e.g. `refactor/classification-history`, `docs/contributing-workflow`).
+2. Commit on the branch (Conventional Commits), `git push -u origin <branch>`.
+3. Open a PR targeting `main`: `gh pr create --base main --fill` (or with an explicit `--title`/`--body`). CI must pass and the PR must be reviewed before merge.
+4. After merge, the feature branch is deleted; pull `main` before starting the next branch.
+
+If work was accidentally committed to local `main`, move it before pushing: `git branch <feature>` then `git reset --hard origin/main`, and continue on `<feature>`.
+
 ## Pull request comments
 
 When working on a PR — addressing review feedback, pushing fixes, or responding to comments — always reply to every open review comment on that PR after the work is done. Use `gh api graphql` with `addPullRequestReviewThreadReply` to post replies (the REST replies endpoint is unreliable). Each reply should reference the commit SHA that resolves it so the thread is traceable.

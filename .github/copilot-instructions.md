@@ -4,8 +4,8 @@ Guidance for AI agents working in this repository.
 
 ## Project overview
 
-FinTrack v2 is an AI-first personal finance manager. Backend: TypeScript, Fastify, zod, Neo4j,
-diplomatic architecture, functional programming style.
+FinTrack v2 is an AI-first personal finance manager. Backend: TypeScript, Fastify, zod, libSQL
+(encrypted local SQLite) + Drizzle ORM, diplomatic architecture, functional programming style.
 
 The backend lives at the repo root (`src/`, `package.json`) — there is no `backend/` subfolder.
 
@@ -14,7 +14,7 @@ The backend lives at the repo root (`src/`, `package.json`) — there is no `bac
 Read these docs — they are the source of truth. Do not guess patterns from the code alone.
 
 - `docs/diplomatic-architecture.md` — the core architectural pattern. Non-negotiable.
-- `docs/architecture.md` — as-built graph model, layer rules, and invariants.
+- `docs/architecture.md` — as-built relational schema, layer rules, and invariants.
 - `docs/code-style.md` — do/don't examples for controllers, logic, adapters, zod, remeda.
 - `docs/code-quality.md` — quality principles: constants over literals, naming, single responsibility.
 
@@ -46,7 +46,7 @@ These are hard rules. Violations will be rejected in review.
 - `logic/` never imports `diplomat/`, `controllers/`, or anything that does I/O.
 - `diplomat/` contains no business logic — it parses, delegates, and translates.
 - Controllers return `ResultAsync<T, AppError>` (neverthrow) for expected failures; unexpected errors throw.
-- Every external input (HTTP body, MCP args, Cypher records) is zod-parsed before entering the domain.
+- Every external input (HTTP body, MCP args, SQL rows) is zod-parsed before entering the domain.
 - Boundary adaptation lives in `adapters/`: `wireInToModel` inbound, `modelToWireOut` outbound, `modelToDb`/`dbToModel` for persistence.
 
 ## FP conventions
@@ -61,3 +61,12 @@ These are hard rules. Violations will be rejected in review.
 - Commit messages follow Conventional Commits: `type(scope): description`.
 - Docs updated in the same change that alters behavior (`docs/architecture.md` for structural changes, `docs/mcp-tools.md` for MCP tool changes).
 - Deferred trade-offs go to GitHub Issues, not local markdown files.
+
+## Git workflow (branch + PR only)
+
+`main` is **protected — never commit or push directly to it.** Every change lands via pull request:
+
+1. Branch off latest `main`: `git checkout -b type/short-description` (name uses the Conventional Commit type).
+2. Commit on the branch, `git push -u origin <branch>`, then `gh pr create --base main --fill`.
+3. CI must pass and the PR must be reviewed before merge.
+4. If work was accidentally committed to local `main`, move it: `git branch <feature> && git reset --hard origin/main`, then continue on `<feature>`.
