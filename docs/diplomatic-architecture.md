@@ -5,6 +5,7 @@ description: Condensed guidance for applying Diplomat Architecture concepts in f
 credits:
   - "Inspired by patterns Nubank has publicly shared with the engineering community"
   - "Lucas Cavalcanti — Using Clojure, Microservices, Hexagonal Architecture at Nubank (InfoQ Podcast: https://www.infoq.com/podcasts/lucas-cavalcanti-nubank-fintech-clojure/)"
+  - "Nubank Building — Functional Programming with Clojure: https://building.nubank.com/functional-programming-with-clojure/"
 globs:
   - "**/*.js"
   - "**/*.ts"
@@ -13,7 +14,7 @@ alwaysApply: false
 
 # Diplomat Architecture
 
-> 💡 **Attribution:** This document maps the Diplomat Architecture pattern to a TypeScript ecosystem. The pattern is Nubank's functional-paradigm flavor of Alistair Cockburn's *Ports & Adapters (Hexagonal Architecture)*, shared publicly through talks and podcasts. For the engineering background, see [Lucas Cavalcanti's InfoQ podcast interview](https://www.infoq.com/podcasts/lucas-cavalcanti-nubank-fintech-clojure/).
+> 💡 **Attribution:** This document maps the Diplomat Architecture pattern to a TypeScript ecosystem. The pattern is Nubank's functional-paradigm flavor of Alistair Cockburn's *Ports & Adapters (Hexagonal Architecture)*, shared publicly through talks and podcasts. For the engineering background, see [Lucas Cavalcanti's InfoQ podcast interview](https://www.infoq.com/podcasts/lucas-cavalcanti-nubank-fintech-clojure/) and Nubank's own writeup, [Functional Programming with Clojure](https://building.nubank.com/functional-programming-with-clojure/).
 
 This file condenses the Diplomat Architecture concepts into an AI-loadable rule file shape aligned with the existing AI-rules conventions.
 
