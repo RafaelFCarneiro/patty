@@ -66,7 +66,13 @@ export type TransactionsRepo = {
   update: (
     id: string,
     patch: TransactionPatch,
-    refs: { accountId: string | null; categoryId: string | null; subCategoryId: string | null; tagNames: string[] | null },
+    refs: {
+      accountId: string | null
+      categoryId: string | null
+      /** undefined = leave untouched; null = explicitly clear (decided by the controller). */
+      subCategoryId: string | null | undefined
+      tagNames: string[] | null
+    },
   ) => Promise<TransactionView | null>
   delete: (id: string) => Promise<boolean>
   search: (filters: SearchFilters) => Promise<TransactionView[]>
@@ -135,11 +141,11 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       ...(props.currency             !== undefined && { currency:             props.currency }),
       ...(props.classificationMethod !== undefined && { classificationMethod: props.classificationMethod }),
       ...(props.confidence           !== undefined && { confidence:           props.confidence }),
-      ...(refs.accountId  !== null && { fromAccountId: refs.accountId }),
-      // subcategoryId is tied to categoryId changing (not to its own nullness): when the
-      // caller sets a new category without a sub-category, refs.subCategoryId is null and
-      // must still be written to clear any stale sub-category from before the change.
-      ...(refs.categoryId !== null && { categoryId: refs.categoryId, subcategoryId: refs.subCategoryId }),
+      ...(refs.accountId     !== null      && { fromAccountId: refs.accountId }),
+      ...(refs.categoryId    !== null      && { categoryId:    refs.categoryId }),
+      // undefined = caller left it untouched; null = caller explicitly clears it
+      // (e.g. controller clears a stale sub-category when only the category changes).
+      ...(refs.subCategoryId !== undefined && { subcategoryId: refs.subCategoryId }),
     }
     if (Object.keys(setData).length > 0) {
       await db.update(transactions).set(setData).where(eq(transactions.id, id))
