@@ -34,7 +34,7 @@ describe('encryption at rest', () => {
     const db = openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: CORRECT_KEY, PORT: 3001 })
     await bootstrap(db)
 
-    // Attempt to open the same file with a different key — must throw or return garbled/empty data
+    // Attempt to open the same file with a different key — must throw (wrong key is never silently accepted)
     const wrongDb = openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: WRONG_KEY, PORT: 3001 })
     await expect(wrongDb.query.currencies.findMany()).rejects.toThrow()
   })
