@@ -68,8 +68,11 @@ export const billsRepo = (db: Db): BillsRepo => ({
     `)
     const bill = toBill(expectPresent(rawBill, 'bills: row not found after upsert'))
 
-    // Link the transaction to the bill
-    await db.update(transactions).set({ billId: bill.id }).where(eq(transactions.id, transactionId))
+    // Link the transaction to the bill — verify the row actually existed.
+    const result = await db.update(transactions).set({ billId: bill.id }).where(eq(transactions.id, transactionId))
+    if ((result.rowsAffected ?? 0) === 0) {
+      throw new Error(`bills: transaction ${transactionId} not found, cannot attach to bill ${bill.id}`)
+    }
 
     return bill
   },
