@@ -8,6 +8,7 @@ import type { BillPeriod } from '../../../logic/bill.js'
 import { BillRowSchema } from '../../../wire/db/bills.js'
 import type { Db } from '../driver.js'
 import { bills, transactions } from '../schema.js'
+import { fullTxSelect } from '../transactionSelect.js'
 
 const toBill = (record: Record<string, unknown>): Bill => {
   const row = BillRowSchema.parse(record)
@@ -33,22 +34,6 @@ export type BillsRepo = {
   get: (cardId: string, month: number, year: number) => Promise<BillWithItems | null>
   setStatus: (billId: string, status: BillStatus) => Promise<Bill | null>
 }
-
-const FULL_TX = sql`
-  SELECT t.*,
-    fa.name AS from_account_name, ta.name AS to_account_name,
-    cc2.name AS credit_card_name,
-    c.name AS category_name, sc.name AS subcategory_name,
-    json_group_array(tg.name) FILTER (WHERE tg.name IS NOT NULL) AS tags
-  FROM transactions t
-  LEFT JOIN accounts fa   ON fa.id  = t.from_account_id
-  LEFT JOIN accounts ta   ON ta.id  = t.to_account_id
-  LEFT JOIN credit_cards cc2 ON cc2.id = t.credit_card_id
-  LEFT JOIN categories c  ON c.id   = t.category_id
-  LEFT JOIN categories sc ON sc.id  = t.subcategory_id
-  LEFT JOIN transaction_tags tt ON tt.transaction_id = t.id
-  LEFT JOIN tags tg ON tg.id = tt.tag_id
-`
 
 export const billsRepo = (db: Db): BillsRepo => ({
   ensureAndAttach: async (cardId, transactionId, period, newId) => {
@@ -87,9 +72,7 @@ export const billsRepo = (db: Db): BillsRepo => ({
     const bill = toBill(billRow)
 
     const txRows = await db.all<Record<string, unknown>>(sql`
-      ${FULL_TX}
-      WHERE t.bill_id = ${bill.id}
-      GROUP BY t.id
+      ${fullTxSelect(sql`t.bill_id = ${bill.id}`)}
       ORDER BY t.date
     `)
     return {

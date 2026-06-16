@@ -6,6 +6,7 @@ import { SummaryRowSchema, type SummaryRow } from '../../../wire/db/transactions
 import type { Db } from '../driver.js'
 import { toMatchQuery } from '../fts.js'
 import { merchants, tags, transactionTags, transactions } from '../schema.js'
+import { fullTxSelect } from '../transactionSelect.js'
 
 export type CreateTxResult = { transaction: TransactionView; created: boolean }
 
@@ -20,25 +21,6 @@ export type SearchFilters = {
   tagNames: string[]
   limit: number
 }
-
-// Full transaction SELECT with all LEFT JOINs for name resolution and tag aggregation.
-const fullTxSelect = (whereClause: ReturnType<typeof sql>) => sql`
-  SELECT t.*,
-    fa.name AS from_account_name, ta.name AS to_account_name,
-    cc.name AS credit_card_name,
-    c.name AS category_name, sc.name AS subcategory_name,
-    json_group_array(tg.name) FILTER (WHERE tg.name IS NOT NULL) AS tags
-  FROM transactions t
-  LEFT JOIN accounts fa   ON fa.id  = t.from_account_id
-  LEFT JOIN accounts ta   ON ta.id  = t.to_account_id
-  LEFT JOIN credit_cards cc ON cc.id = t.credit_card_id
-  LEFT JOIN categories c  ON c.id   = t.category_id
-  LEFT JOIN categories sc ON sc.id  = t.subcategory_id
-  LEFT JOIN transaction_tags tt ON tt.transaction_id = t.id
-  LEFT JOIN tags tg ON tg.id = tt.tag_id
-  WHERE ${whereClause}
-  GROUP BY t.id
-`
 
 const fetchTx = async (db: Db, id: string): Promise<TransactionView | null> => {
   const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`))

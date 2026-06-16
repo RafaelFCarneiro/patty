@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import { z } from 'zod'
 import type { MerchantMatch } from '../../../logic/classify.js'
+import { ClassificationMethod } from '../../../models/transaction.js'
 import type { Db } from '../driver.js'
 import { merchantCategory, merchants } from '../schema.js'
 
@@ -9,7 +10,7 @@ const MatchRow = z.object({
   categoryId:   z.string(),
   categoryName: z.string(),
   weight:       z.number(),
-  origin:       z.enum(['rule', 'graph']),
+  origin:       z.enum([ClassificationMethod.enum.rule, ClassificationMethod.enum.graph]),
 })
 
 export type MerchantsRepo = {
@@ -23,7 +24,7 @@ export const merchantsRepo = (db: Db): MerchantsRepo => ({
   matchCandidates: async (normalizedDescription) => {
     const rows = await db.all<Record<string, unknown>>(sql`
       SELECT mc.merchant_key AS "merchantKey", mc.category_id AS "categoryId",
-             c.name AS "categoryName", mc.weight, COALESCE(mc.origin, 'graph') AS origin
+             c.name AS "categoryName", mc.weight, COALESCE(mc.origin, ${ClassificationMethod.enum.graph}) AS origin
       FROM merchant_category mc
       JOIN categories c ON c.id = mc.category_id
       WHERE ${normalizedDescription} LIKE '%' || mc.merchant_key || '%'
@@ -45,7 +46,7 @@ export const merchantsRepo = (db: Db): MerchantsRepo => ({
     await db.insert(merchants).values({ key: merchantKey }).onConflictDoNothing()
     // Upsert the edge: insert weight=1 on first user correction, increment on repeat
     await db.insert(merchantCategory)
-      .values({ merchantKey, categoryId, weight: 1, origin: 'graph' })
+      .values({ merchantKey, categoryId, weight: 1, origin: ClassificationMethod.enum.graph })
       .onConflictDoUpdate({
         target: [merchantCategory.merchantKey, merchantCategory.categoryId],
         set: { weight: sql`${merchantCategory.weight} + 1` },

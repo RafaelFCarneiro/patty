@@ -1,5 +1,8 @@
 import { fileURLToPath } from 'node:url'
 import { migrate } from 'drizzle-orm/libsql/migrator'
+import { CurrencyCode } from '../../models/common.js'
+import { CategoryKind } from '../../models/category.js'
+import { ClassificationMethod } from '../../models/transaction.js'
 import type { Db } from './driver.js'
 import { categories, currencies, merchantCategory, merchants } from './schema.js'
 
@@ -12,26 +15,26 @@ const DEFAULT_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', impo
 // ---------------------------------------------------------------------------
 
 const CURRENCIES = [
-  { code: 'BRL', symbol: 'R$', name: 'Real Brasileiro' },
-  { code: 'USD', symbol: '$', name: 'US Dollar' },
+  { code: CurrencyCode.enum.BRL, symbol: 'R$', name: 'Real Brasileiro' },
+  { code: CurrencyCode.enum.USD, symbol: '$',  name: 'US Dollar' },
 ] as const satisfies Array<{ code: string; symbol: string; name: string }>
 
 const CATEGORIES = [
-  { id: 'cat-alimentacao',     name: 'Alimentação',       kind: 'expense' as const },
-  { id: 'cat-transporte',      name: 'Transporte',        kind: 'expense' as const },
-  { id: 'cat-moradia',         name: 'Moradia',           kind: 'expense' as const },
-  { id: 'cat-contas-servicos', name: 'Contas & Serviços', kind: 'expense' as const },
-  { id: 'cat-saude',           name: 'Saúde',             kind: 'expense' as const },
-  { id: 'cat-educacao',        name: 'Educação',          kind: 'expense' as const },
-  { id: 'cat-lazer',           name: 'Lazer',             kind: 'expense' as const },
-  { id: 'cat-compras',         name: 'Compras',           kind: 'expense' as const },
-  { id: 'cat-assinaturas',     name: 'Assinaturas',       kind: 'expense' as const },
-  { id: 'cat-viagem',          name: 'Viagem',            kind: 'expense' as const },
-  { id: 'cat-impostos',        name: 'Impostos & Taxas',  kind: 'expense' as const },
-  { id: 'cat-salario',         name: 'Salário',           kind: 'income'  as const },
-  { id: 'cat-renda-extra',     name: 'Renda Extra',       kind: 'income'  as const },
-  { id: 'cat-investimentos',   name: 'Investimentos',     kind: 'both'    as const },
-  { id: 'cat-outros',          name: 'Outros',            kind: 'both'    as const },
+  { id: 'cat-alimentacao',     name: 'Alimentação',       kind: CategoryKind.enum.expense },
+  { id: 'cat-transporte',      name: 'Transporte',        kind: CategoryKind.enum.expense },
+  { id: 'cat-moradia',         name: 'Moradia',           kind: CategoryKind.enum.expense },
+  { id: 'cat-contas-servicos', name: 'Contas & Serviços', kind: CategoryKind.enum.expense },
+  { id: 'cat-saude',           name: 'Saúde',             kind: CategoryKind.enum.expense },
+  { id: 'cat-educacao',        name: 'Educação',          kind: CategoryKind.enum.expense },
+  { id: 'cat-lazer',           name: 'Lazer',             kind: CategoryKind.enum.expense },
+  { id: 'cat-compras',         name: 'Compras',           kind: CategoryKind.enum.expense },
+  { id: 'cat-assinaturas',     name: 'Assinaturas',       kind: CategoryKind.enum.expense },
+  { id: 'cat-viagem',          name: 'Viagem',            kind: CategoryKind.enum.expense },
+  { id: 'cat-impostos',        name: 'Impostos & Taxas',  kind: CategoryKind.enum.expense },
+  { id: 'cat-salario',         name: 'Salário',           kind: CategoryKind.enum.income },
+  { id: 'cat-renda-extra',     name: 'Renda Extra',       kind: CategoryKind.enum.income },
+  { id: 'cat-investimentos',   name: 'Investimentos',     kind: CategoryKind.enum.both },
+  { id: 'cat-outros',          name: 'Outros',            kind: CategoryKind.enum.both },
 ]
 
 /** Weight 3 ≈ confidence 0.8 — matches the prior Neo4j graph seed. */
@@ -85,7 +88,7 @@ const seedMerchantRules = async (db: Db): Promise<void> => {
     .onConflictDoNothing()
   await db.insert(merchantCategory)
     .values(MERCHANT_RULES.map(({ key, categoryId }) => ({
-      merchantKey: key, categoryId, weight: 3, origin: 'rule' as const, lastSeen: currentYear,
+      merchantKey: key, categoryId, weight: 3, origin: ClassificationMethod.enum.rule, lastSeen: currentYear,
     })))
     .onConflictDoNothing()
 }
