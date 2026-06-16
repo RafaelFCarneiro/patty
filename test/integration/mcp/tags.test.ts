@@ -58,6 +58,31 @@ describe('MCP integration > tags', () => {
     }
   })
 
+  it('create_tag is race-safe: concurrent creates with the same name yield exactly one tag', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+      const name = `race-tag-${stamp}`
+
+      const results = await Promise.allSettled([
+        callTool(client, { name: 'create_tag', args: { name } }),
+        callTool(client, { name: 'create_tag', args: { name } }),
+      ])
+
+      const succeeded = results.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<unknown>[]
+      expect(succeeded.length).toBe(1)
+      const tag = succeeded[0].value as { id?: string }
+      ensure(tag.id, 'Tag id missing')
+      createdTagIds.push(tag.id)
+
+      const tags = (await callTool(client, { name: 'list_tags', args: {} })) as Array<{ name?: string }>
+      expect(tags.filter((t) => t.name === name).length).toBe(1)
+    } finally {
+      await transport.close()
+    }
+  })
+
   it('list_tags includes the created tag', async () => {
     const stamp = Date.now()
     const { client, transport } = makeClient()

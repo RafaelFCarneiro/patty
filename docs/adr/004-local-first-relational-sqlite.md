@@ -1,6 +1,6 @@
 # ADR-004: Local-first persistence — relational SQLite via libSQL (encrypted), dropping the graph DB
 
-**Status:** Accepted · **Date:** 2026-06-15 · Supersedes the Neo4j/graph decisions in `docs/PLAN.md` and the graph model in `docs/architecture.md`.
+**Status:** Accepted · **Date:** 2026-06-15 · Supersedes the Neo4j/graph decisions in `docs/PLAN.md` and the graph model in `docs/architecture.md`. · Companions: [ADR-005](005-keychain-key-storage.md) (keychain key storage), [ADR-006](006-drizzle-orm-schema-and-migrations.md) (Drizzle ORM for schema and migrations).
 
 ## Context
 
@@ -25,9 +25,28 @@ Constraints shaping the decision: ship soon; single-user, local-only for v1; **f
 ## Decision
 
 1. **Drop the graph database. Model the domain relationally in SQLite** for v1 (single file, no server, no auth) — the local-only experience we want.
-2. **Use libSQL via the synchronous `libsql` package** (better-sqlite3-compatible API). It bundles its own SQLite, so FTS5, encryption at rest, and vector search are available without depending on the host's Node build, and its embedded-replica sync is a first-class path to hosted multi-user in Phase 4 without changing engines.
+2. **Use libSQL via the synchronous `libsql` package** (better-sqlite3-compatible API). It bundles its own SQLite, so FTS5, encryption at rest, and vector search are available without depending on the host's Node build, and its embedded-replica sync is a first-class path to hosted multi-user in Phase 4 without changing engines. *(Superseded — see [Amendment 2026-06-15](#amendment--2026-06-15-driver-is-libsqlclient-async-not-the-sync-libsql-package): the runtime driver is the async `@libsql/client` via Drizzle's `drizzle-orm/libsql` adapter; the engine choice, encryption, FTS5, and hosting path are unchanged.)*
 3. **Encryption at rest is ON by default.** The database file is encrypted; the key is generated and stored in the **OS keychain** (macOS Keychain / Windows DPAPI / libsecret), keeping the local experience zero-prompt while making a copied file useless on its own.
 4. The graph→relational mapping is straightforward (see below); the classifier's `[:USUALLY]` edges become a `merchant_category` weight table — the learning loop is unchanged in spirit, just `UPDATE ... weight` instead of edge writes.
+
+## Amendment — 2026-06-15: driver is `@libsql/client` (async), not the sync `libsql` package
+
+Decision point 2 originally specified the **synchronous `libsql` package** (better-sqlite3-compatible API). During implementation (ADR-006, Drizzle ORM) the **documented, maintained** path for an encrypted local libSQL database under Drizzle turned out to be the **async `@libsql/client`** with Drizzle's `drizzle-orm/libsql` adapter:
+
+```ts
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
+const client = createClient({ url: `file:${path}`, encryptionKey }) // AES-256-CBC, no extra native libs
+const db = drizzle(client)
+```
+
+We therefore **supersede the synchronous sub-choice** and use `@libsql/client` (async). Rationale: the sync `libsql`-via-`drizzle-orm/better-sqlite3` combination is undocumented for encryption and risks an accidental fall-through to real `better-sqlite3` (which has no built-in encryption), silently regressing the security posture. The async cost is immaterial — controllers already return `ResultAsync` and diplomats `await`; the "synchronous driver" in the original decision was ergonomic, not a requirement.
+
+**Unchanged:** libSQL as the engine, the relational model, FTS5 for `search_transactions`, and encryption-at-rest ON by default with the key from the OS keychain ([ADR-005](005-keychain-key-storage.md)). The `encryptionKey` is passed to `createClient`.
+
+**Guardrail (new requirement):** the app must fail fast if the database is opened without an encryption key, and a test must prove the file is unreadable without the correct key — this is what prevents a silent regression to an unencrypted DB if the driver is ever swapped.
+
+**Known limitation:** `drizzle-kit` Studio/`push` cannot open an encrypted file (drizzle-team/drizzle-orm#3198). We use only `drizzle-kit generate` (offline schema diff) + runtime `migrate()` through the encrypted client, so migrations are unaffected — only Studio-based inspection of the live encrypted DB is unavailable.
 
 ## Options Considered
 
@@ -136,7 +155,7 @@ Dropping graph for relational is low-risk: the completed hexagonal refactor conf
 3. [ ] Update `CLAUDE.md` — data conventions and commands (remove Neo4j/Cypher guidance; add SQL/libSQL conventions, parameterized statements, FTS5 search, encryption/keychain, migration/seed approach).
 4. [ ] Define the SQL DDL: tables, `UNIQUE(idempotencyKey)`, FKs, indexes (date range, merchant lookup), the FTS5 virtual table, and the idempotent seed (currencies, BR categories, merchant rules).
 5. [ ] Implement encryption: enable libSQL encryption by default, key generation + OS-keychain storage (macOS/Windows/Linux), and document recovery/rotation.
-6. [ ] Rewrite `diplomat/db` repos against the `libsql` sync API; update `adapters` (`modelToDb`/`dbToModel`) and `wire/db` schemas.
+6. [ ] Rewrite `diplomat/db` repos against the async `@libsql/client` + `drizzle-orm/libsql` (repos return promises; controllers' `ResultAsync` unchanged); update `adapters` (`modelToDb`/`dbToModel`) and `wire/db` schemas.
 7. [ ] Replace the Neo4j integration-test setup with in-process libSQL (temp-file/`:memory:`): rewrite `test/integration/setup.ts` (drop `@testcontainers/neo4j` / `Neo4jContainer`) and `test/integration/server-setup.ts` (libSQL client factory instead of `createDriver`/`waitForNeo4j`/`bootstrap`); keep the classifier golden set.
 8. [ ] Update the CI pipeline (`.github/workflows/ci.yml`): integration tests no longer need Docker/Neo4j — they run in-process; drop the testcontainers dependency and simplify the integration job accordingly.
 9. [ ] Package for `npx` (bin entry, libSQL prebuilt binaries per platform, Node version baseline) for the first local release.

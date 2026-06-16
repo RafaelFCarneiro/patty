@@ -150,7 +150,8 @@ export const updateTransaction = (
     const effectiveType = resolveEffectiveType(existing, input)
 
     let categoryId: string | null = null
-    let subCategoryId: string | null = null
+    // undefined = leave the sub-category untouched; null = explicitly clear it.
+    let subCategoryId: string | null | undefined
 
     if (input.subCategory) {
       const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)
@@ -161,6 +162,9 @@ export const updateTransaction = (
       const cat = yield* resolveCategoryRef(deps, input.category)
       if (effectiveType) yield* guardCategoryKind(cat, effectiveType)
       categoryId = cat.id
+      // Business rule: assigning a plain category clears any prior sub-category —
+      // "sub-category always paired with its parent" would otherwise go stale.
+      subCategoryId = null
     }
 
     const isUserCorrection = !!(input.category || input.subCategory)

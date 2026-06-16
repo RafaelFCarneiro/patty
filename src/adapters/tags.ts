@@ -1,6 +1,6 @@
 import { Tag } from '../models/tag.js'
+import type { TagRow } from '../wire/db/tags.js'
 
-type NodeLike = { properties: Record<string, unknown> }
-
-export const dbToModel = (record: Record<string, unknown>): Tag =>
-  Tag.parse((record['t'] as NodeLike).properties)
+// Input is the schema-derived Drizzle row; Tag.parse enforces domain constraints.
+export const dbToModel = (row: TagRow): Tag =>
+  Tag.parse({ id: row.id, name: row.name })

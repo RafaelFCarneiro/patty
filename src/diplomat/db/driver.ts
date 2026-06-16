@@ -1,38 +1,52 @@
-import neo4j, { type Driver } from 'neo4j-driver'
+import { randomBytes } from 'node:crypto'
+import { Entry } from '@napi-rs/keyring'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { Config } from '../../config.js'
+import * as schema from './schema.js'
 
-export const createDriver = (config: Config): Driver =>
-  neo4j.driver(config.NEO4J_URI, neo4j.auth.basic(config.NEO4J_USER, config.NEO4J_PASSWORD), {
-    disableLosslessIntegers: true,
-  })
+export type Db = LibSQLDatabase<typeof schema>
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const KEYCHAIN_SERVICE = 'fintrack'
+const KEYCHAIN_ACCOUNT = 'db-encryption-key'
 
-/** Neo4j may still be booting when the backend starts — retry connectivity. */
-export const waitForNeo4j = async (driver: Driver, attempts = 20, delayMs = 2000): Promise<void> => {
-  for (let i = 1; i <= attempts; i++) {
-    try {
-      await driver.verifyConnectivity()
-      return
-    } catch (e) {
-      if (i === attempts) throw e
-      console.log(`neo4j not ready (attempt ${i}/${attempts}), retrying…`)
-      await sleep(delayMs)
-    }
+const resolveEncryptionKey = (config: Config): string => {
+  // Env-var override: CI, headless, or manual recovery (ADR-005). We log that we are in
+  // env-var mode (never the key value itself) so the weaker posture is visible.
+  if (config.FINTRACK_DB_KEY) {
+    console.warn('fintrack: using FINTRACK_DB_KEY from the environment; OS keychain bypassed.')
+    return config.FINTRACK_DB_KEY
+  }
+
+  // Otherwise the key lives in the OS keychain (generated on first run). If the keychain
+  // is unavailable (e.g. headless Linux without a Secret Service), fail fast with an
+  // actionable message instead of an opaque native error.
+  try {
+    const entry = new Entry(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+    const existing = entry.getPassword()
+    if (existing) return existing
+
+    const key = randomBytes(32).toString('hex')
+    entry.setPassword(key)
+    return key
+  } catch (cause) {
+    throw new Error(
+      'fintrack: cannot access the OS keychain for the database encryption key. ' +
+        'On headless or CI environments, provide a 64-character hex key via the ' +
+        'FINTRACK_DB_KEY environment variable.',
+      { cause },
+    )
   }
 }
 
-/** Run a single query in an auto-commit session. */
-export const run = async (
-  driver: Driver,
-  cypher: string,
-  params: Record<string, unknown> = {},
-): Promise<Record<string, unknown>[]> => {
-  const session = driver.session()
-  try {
-    const result = await session.run(cypher, params)
-    return result.records.map((r) => r.toObject() as Record<string, unknown>)
-  } finally {
-    await session.close()
-  }
+/**
+ * Open the encrypted libSQL database and return a Drizzle client.
+ * The encryption key comes from FINTRACK_DB_KEY or the OS keychain (generated on first
+ * run); throws if neither is available so the DB is never opened unencrypted.
+ */
+export const openDatabase = (config: Config): Db => {
+  const encryptionKey = resolveEncryptionKey(config)
+  const client = createClient({ url: `file:${config.DB_PATH}`, encryptionKey })
+  return drizzle(client, { schema })
 }

@@ -1,15 +1,15 @@
-import type { StartedNeo4jContainer } from '@testcontainers/neo4j'
-import { Neo4jContainer } from '@testcontainers/neo4j'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { TestProject } from 'vitest/node'
 
-let container: StartedNeo4jContainer
+let tmpDir: string
 
-export const setup = async (ctx: TestProject) => {
-  container = await new Neo4jContainer('neo4j:5-community').start()
-  ctx.provide('NEO4J_URI', container.getBoltUri())
-  ctx.provide('NEO4J_PASSWORD', container.getPassword())
+export const setup = (ctx: TestProject) => {
+  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-test-'))
+  ctx.provide('DB_PATH', join(tmpDir, 'test.db'))
 }
 
-export const teardown = async () => {
-  await container?.stop()
+export const teardown = () => {
+  if (tmpDir) rmSync(tmpDir, { recursive: true, force: true })
 }
