@@ -15,6 +15,13 @@
       "when": 1781553300000,
       "tag": "0001_fts5_search",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781553400000,
+      "tag": "0002_rename_graph_to_history",
+      "breakpoints": true
     }
   ]
 }

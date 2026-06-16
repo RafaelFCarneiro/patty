@@ -116,7 +116,7 @@ Principles: tools accept **natural inputs** (names, aliases, relative dates) and
 2. **Rules seed**: BR-common merchants pre-seeded as `merchant_category` rows with `origin: rule` (uber/99 → Transporte, ifood → Alimentação, …).
 3. **Fallback**: return `category: null, confidence: 0` — the Claude client suggests a category in chat; user confirmation upserts a new/strengthened `merchant_category` row (`origin: graph`).
 
-Every user correction increments the row's `weight` (`onConflictDoUpdate`). `classificationMethod` (`rule | graph | user | none`) + `confidence` stored on the transaction keep it auditable. No API keys, no per-transaction LLM cost.
+Every user correction increments the row's `weight` (`onConflictDoUpdate`). `classificationMethod` (`rule | history | user | none`) + `confidence` stored on the transaction keep it auditable. No API keys, no per-transaction LLM cost.
 
 ## Project structure
 

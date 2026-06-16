@@ -20,7 +20,7 @@ export const RecurringRule = z.object({
 })
 export type RecurringRule = z.infer<typeof RecurringRule>
 
-/** Read projection: RecurringRule with graph-traversal names resolved. */
+/** Read projection: RecurringRule with joined reference names (account, category) resolved. */
 export const RecurringRuleView = RecurringRule.extend({
   accountName: z.string().optional(),
   categoryName: z.string().optional(),
