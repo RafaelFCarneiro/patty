@@ -321,6 +321,103 @@ describe('MCP integration > sub-categories', () => {
     }
   })
 
+  it('update_transaction clears the stale sub-category when switching to a plain category', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const sc = (await callTool(client, {
+        name: 'create_sub_category',
+        args: { name: `ClearMe-${stamp}`, parentId: 'cat-alimentacao' },
+      })) as SubCategory
+      ensure(sc.id, 'subCategory id missing')
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: 'Lanche',
+          amount: 15,
+          type: 'expense',
+          subCategory: `ClearMe-${stamp}`,
+          idempotencyKey: `test-clear-subcat-${stamp}`,
+        },
+      })) as { transaction?: TransactionView }
+      const tx = created.transaction ?? (created as TransactionView)
+      ensure(tx.id, 'transaction id missing')
+      createdTxIds.push(tx.id)
+      expect(tx.subCategoryId).toBe(sc.id)
+
+      const updated = (await callTool(client, {
+        name: 'update_transaction',
+        args: { id: tx.id, category: 'Transporte' },
+      })) as TransactionView
+
+      expect(updated.categoryId).toBe('cat-transporte')
+      expect(updated.subCategoryId).toBeUndefined()
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('update_transaction preserves the existing sub-category when neither category nor subCategory is provided', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const sc = (await callTool(client, {
+        name: 'create_sub_category',
+        args: { name: `KeepMe-${stamp}`, parentId: 'cat-alimentacao' },
+      })) as SubCategory
+      ensure(sc.id, 'subCategory id missing')
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: 'Lanche',
+          amount: 15,
+          type: 'expense',
+          subCategory: `KeepMe-${stamp}`,
+          idempotencyKey: `test-keep-subcat-${stamp}`,
+        },
+      })) as { transaction?: TransactionView }
+      const tx = created.transaction ?? (created as TransactionView)
+      ensure(tx.id, 'transaction id missing')
+      createdTxIds.push(tx.id)
+      expect(tx.subCategoryId).toBe(sc.id)
+
+      const updated = (await callTool(client, {
+        name: 'update_transaction',
+        args: { id: tx.id, amount: 20 },
+      })) as TransactionView & { amount?: number }
+
+      expect(updated.amount).toBe(20)
+      expect(updated.subCategoryId).toBe(sc.id)
+      expect(updated.categoryId).toBe('cat-alimentacao')
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('list_categories excludes sub-categories (same table, parent_id set)', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+      const sc = (await callTool(client, {
+        name: 'create_sub_category',
+        args: { name: `LeakCheck-${stamp}`, parentId: 'cat-alimentacao' },
+      })) as SubCategory
+      ensure(sc.id, 'subCategory id missing')
+
+      const categories = (await callTool(client, { name: 'list_categories', args: {} })) as Array<{ id?: string }>
+      expect(categories.some((c) => c.id === sc.id)).toBe(false)
+    } finally {
+      await transport.close()
+    }
+  })
+
   it('create_sub_category rejects unknown parentId with structured error', async () => {
     const { client, transport } = makeClient()
     try {

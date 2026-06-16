@@ -1,7 +1,8 @@
-import { Neo4jError, type Driver } from 'neo4j-driver'
+import { eq } from 'drizzle-orm'
 import * as tagAdapters from '../../../adapters/tags.js'
 import type { Tag } from '../../../models/tag.js'
-import { run } from '../driver.js'
+import type { Db } from '../driver.js'
+import { tags } from '../schema.js'
 
 export type TagsRepo = {
   list: () => Promise<Tag[]>
@@ -11,44 +12,27 @@ export type TagsRepo = {
   delete: (id: string) => Promise<boolean>
 }
 
-const isConstraintError = (e: unknown): boolean =>
-  e instanceof Neo4jError && e.code === 'Neo.ClientError.Schema.ConstraintValidationFailed'
-
-export const tagsRepo = (driver: Driver): TagsRepo => ({
+export const tagsRepo = (db: Db): TagsRepo => ({
   list: async () => {
-    const rows = await run(driver, 'MATCH (t:Tag) RETURN t ORDER BY t.name')
+    const rows = await db.select().from(tags).orderBy(tags.name)
     return rows.map(tagAdapters.dbToModel)
   },
 
   findByName: async (name) => {
-    const rows = await run(
-      driver,
-      'MATCH (t:Tag {name: $name}) RETURN t LIMIT 1',
-      { name },
-    )
-    return rows[0] ? tagAdapters.dbToModel(rows[0]) : null
+    const [row] = await db.select().from(tags).where(eq(tags.name, name)).limit(1)
+    return row ? tagAdapters.dbToModel(row) : null
   },
 
   create: async (tag) => {
-    try {
-      const rows = await run(
-        driver,
-        'CREATE (t:Tag {id: $id, name: $name}) RETURN t',
-        { ...tag },
-      )
-      return tagAdapters.dbToModel(rows[0]!)
-    } catch (e: unknown) {
-      if (isConstraintError(e)) return null
-      throw e
-    }
+    const [row] = await db.insert(tags)
+      .values({ id: tag.id, name: tag.name })
+      .onConflictDoNothing({ target: tags.name })
+      .returning()
+    return row ? tagAdapters.dbToModel(row) : null
   },
 
   delete: async (id) => {
-    const rows = await run(
-      driver,
-      'MATCH (t:Tag {id: $id}) DETACH DELETE t RETURN count(t) AS deleted',
-      { id },
-    )
-    return Number(rows[0]?.['deleted'] ?? 0) > 0
+    const result = await db.delete(tags).where(eq(tags.id, id))
+    return (result.rowsAffected ?? 0) > 0
   },
 })

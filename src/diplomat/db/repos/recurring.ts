@@ -1,20 +1,33 @@
-import type { Driver } from 'neo4j-driver'
+import { eq, sql } from 'drizzle-orm'
+import { expectPresent } from '../../../common/present.js'
 import { RecurringRuleView } from '../../../models/recurring.js'
-import { run } from '../driver.js'
+import { RecurringRowSchema } from '../../../wire/db/recurring.js'
+import type { Db } from '../driver.js'
+import { recurringRules } from '../schema.js'
 
-type NodeLike = { properties: Record<string, unknown> }
-
-const toRule = (record: Record<string, unknown>): RecurringRuleView =>
-  RecurringRuleView.parse({
-    ...(record['r'] as NodeLike).properties,
-    accountId: record['accountId'] ?? undefined,
-    accountName: record['accountName'] ?? undefined,
-    categoryId: record['categoryId'] ?? undefined,
-    categoryName: record['categoryName'] ?? undefined,
+const toRule = (record: Record<string, unknown>): RecurringRuleView => {
+  const row = RecurringRowSchema.parse(record)
+  return RecurringRuleView.parse({
+    id:           row.id,
+    description:  row.description,
+    amount:       row.amount,
+    type:         row.type,
+    period:       row.period,
+    nextDue:      row.next_due,
+    currency:     row.currency,
+    accountId:    row.account_id    ?? undefined,
+    accountName:  row.account_name  ?? undefined,
+    categoryId:   row.category_id   ?? undefined,
+    categoryName: row.category_name ?? undefined,
   })
+}
 
-const RETURN_RULE = `
-  RETURN r, a.id AS accountId, a.name AS accountName, c.id AS categoryId, c.name AS categoryName`
+const RULE_SELECT = sql`
+  SELECT r.*, a.name AS account_name, c.name AS category_name
+  FROM recurring_rules r
+  LEFT JOIN accounts a ON a.id = r.account_id
+  LEFT JOIN categories c ON c.id = r.category_id
+`
 
 export type RecurringRepo = {
   create: (
@@ -26,56 +39,40 @@ export type RecurringRepo = {
   advance: (ruleId: string, newNextDue: string) => Promise<void>
 }
 
-export const recurringRepo = (driver: Driver): RecurringRepo => ({
+export const recurringRepo = (db: Db): RecurringRepo => ({
   create: async (rule, refs) => {
-    const rows = await run(
-      driver,
-      `CREATE (r:RecurringRule {id: $id, description: $description, amount: $amount,
-              type: $type, period: $period, nextDue: $nextDue, currency: $currency})
-       WITH r
-       OPTIONAL MATCH (acc:Account {id: $accountId})
-       FOREACH (_ IN CASE WHEN acc IS NOT NULL THEN [1] ELSE [] END | MERGE (r)-[:FROM]->(acc))
-       WITH r
-       OPTIONAL MATCH (cat:Category {id: $categoryId})
-       FOREACH (_ IN CASE WHEN cat IS NOT NULL THEN [1] ELSE [] END | MERGE (r)-[:IN]->(cat))
-       WITH r
-       OPTIONAL MATCH (r)-[:FROM]->(a:Account)
-       OPTIONAL MATCH (r)-[:IN]->(c:Category)
-       ${RETURN_RULE}`,
-      { ...rule, ...refs },
-    )
-    return toRule(rows[0]!)
+    await db.insert(recurringRules).values({
+      id:          rule.id,
+      description: rule.description,
+      amount:      rule.amount,
+      type:        rule.type as 'income' | 'expense',
+      period:      rule.period as 'monthly' | 'weekly',
+      nextDue:     rule.nextDue,
+      currency:    rule.currency,
+      accountId:   refs.accountId  ?? null,
+      categoryId:  refs.categoryId ?? null,
+    })
+    const [row] = await db.all<Record<string, unknown>>(sql`
+      ${RULE_SELECT} WHERE r.id = ${rule.id}
+    `)
+    return toRule(expectPresent(row, 'recurring_rules: row not found after insert'))
   },
 
   list: async () => {
-    const rows = await run(
-      driver,
-      `MATCH (r:RecurringRule)
-       OPTIONAL MATCH (r)-[:FROM]->(a:Account)
-       OPTIONAL MATCH (r)-[:IN]->(c:Category)
-       ${RETURN_RULE}
-       ORDER BY r.nextDue`,
-    )
+    const rows = await db.all<Record<string, unknown>>(sql`
+      ${RULE_SELECT} ORDER BY r.next_due
+    `)
     return rows.map(toRule)
   },
 
   due: async (onOrBefore) => {
-    const rows = await run(
-      driver,
-      `MATCH (r:RecurringRule) WHERE r.nextDue <= $onOrBefore
-       OPTIONAL MATCH (r)-[:FROM]->(a:Account)
-       OPTIONAL MATCH (r)-[:IN]->(c:Category)
-       ${RETURN_RULE}
-       ORDER BY r.nextDue`,
-      { onOrBefore },
-    )
+    const rows = await db.all<Record<string, unknown>>(sql`
+      ${RULE_SELECT} WHERE r.next_due <= ${onOrBefore} ORDER BY r.next_due
+    `)
     return rows.map(toRule)
   },
 
   advance: async (ruleId, newNextDue) => {
-    await run(driver, 'MATCH (r:RecurringRule {id: $ruleId}) SET r.nextDue = $newNextDue', {
-      ruleId,
-      newNextDue,
-    })
+    await db.update(recurringRules).set({ nextDue: newNextDue }).where(eq(recurringRules.id, ruleId))
   },
 })

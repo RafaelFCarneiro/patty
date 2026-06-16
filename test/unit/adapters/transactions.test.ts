@@ -83,9 +83,8 @@ describe('patchToDb', () => {
   })
 })
 
-const node = (properties: Record<string, unknown>) => ({ properties })
-
-const txNode = node({
+// Flat SQL row as returned by a full transaction SELECT (with JOINs)
+const sqlRow = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   id: 'tx-1',
   description: 'Uber',
   amount: 32.5,
@@ -93,9 +92,23 @@ const txNode = node({
   date: '2026-06-09',
   currency: CurrencyCode.enum.BRL,
   source: TransactionSource.enum.mcp,
-  idempotencyKey: 'k1',
-  classificationMethod: 'rule',
+  idempotency_key: 'k1',
+  classification_method: 'rule',
   confidence: 0.8,
+  raw_input: null,
+  from_account_id: 'acc-1',
+  from_account_name: 'Nubank',
+  to_account_id: null,
+  to_account_name: null,
+  credit_card_id: null,
+  credit_card_name: null,
+  category_id: null,
+  category_name: null,
+  subcategory_id: null,
+  subcategory_name: null,
+  merchant_key: null,
+  tags: null,
+  ...overrides,
 })
 
 describe('wireIn adapters', () => {
@@ -127,55 +140,55 @@ describe('wireIn adapters', () => {
 
 describe('dbToModel', () => {
   it('nests flat db classification back into the model', () => {
-    const tx = transactionAdapters.dbToModel({
-      t: txNode,
-      accountId: 'acc-1',
-      accountName: 'Nubank',
-      categoryId: 'cat-transporte',
-      categoryName: 'Transporte',
-      merchant: 'uber',
-    })
+    const tx = transactionAdapters.dbToModel(sqlRow({
+      category_id: 'cat-transporte',
+      category_name: 'Transporte',
+      merchant_key: 'uber',
+    }))
     expect(tx.classification).toEqual({ method: 'rule', confidence: 0.8 })
     expect(tx.accountName).toBe('Nubank')
     expect(tx.merchant).toBe('uber')
   })
 
   it('maps null relation columns to undefined optionals', () => {
-    const tx = transactionAdapters.dbToModel({ t: txNode, accountId: null, categoryName: null, merchant: null })
+    const tx = transactionAdapters.dbToModel(sqlRow({
+      from_account_id: null,
+      from_account_name: null,
+    }))
     expect(tx.accountId).toBeUndefined()
     expect(tx.toAccountId).toBeUndefined()
     expect(tx.rawInput).toBeUndefined()
   })
 
   it('round-trips a transfer with both account sides', () => {
-    const tx = transactionAdapters.dbToModel({
-      t: node({ ...txNode.properties, type: 'transfer', classificationMethod: 'none', confidence: 0 }),
-      accountId: 'acc-1',
-      accountName: 'Nubank',
-      toAccountId: 'acc-2',
-      toAccountName: 'Poupança',
-    })
+    const tx = transactionAdapters.dbToModel(sqlRow({
+      type: 'transfer',
+      classification_method: 'none',
+      confidence: 0,
+      to_account_id: 'acc-2',
+      to_account_name: 'Poupança',
+    }))
     expect(tx.type).toBe('transfer')
     expect(tx.toAccountName).toBe('Poupança')
   })
 
   it('maps tags from db record to TransactionView', () => {
-    const tx = transactionAdapters.dbToModel({ t: txNode, accountId: 'acc-1', tags: ['work', 'travel'] })
+    const tx = transactionAdapters.dbToModel(sqlRow({ tags: '["work","travel"]' }))
     expect(tx.tags).toEqual(['work', 'travel'])
   })
 
   it('defaults tags to empty array when absent in db record', () => {
-    const tx = transactionAdapters.dbToModel({ t: txNode, accountId: 'acc-1' })
+    const tx = transactionAdapters.dbToModel(sqlRow({ tags: null }))
     expect(tx.tags).toEqual([])
   })
 
   it('handles explicit empty tags array from db', () => {
-    const tx = transactionAdapters.dbToModel({ t: txNode, accountId: 'acc-1', tags: [] })
+    const tx = transactionAdapters.dbToModel(sqlRow({ tags: '[null]' }))
     expect(tx.tags).toEqual([])
   })
 
   // Issue: TransactionView.tags used z.string() allowing empty strings from db
   it('rejects empty string tags coming from db', () => {
-    expect(() => transactionAdapters.dbToModel({ t: txNode, accountId: 'acc-1', tags: [''] })).toThrow()
+    expect(() => transactionAdapters.dbToModel(sqlRow({ tags: '[""]' }))).toThrow()
   })
 })

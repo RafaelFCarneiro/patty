@@ -1,73 +1,90 @@
-import type { Driver } from 'neo4j-driver'
+import { eq, sql } from 'drizzle-orm'
+import { z } from 'zod'
 import * as transactionAdapters from '../../../adapters/transactions.js'
-import { Bill } from '../../../models/bill.js'
+import { expectPresent } from '../../../common/present.js'
+import { Bill, BillStatus } from '../../../models/bill.js'
 import type { TransactionView } from '../../../models/transaction.js'
 import type { BillPeriod } from '../../../logic/bill.js'
-import { run } from '../driver.js'
+import { BillRowSchema } from '../../../wire/db/bills.js'
+import type { Db } from '../driver.js'
+import { bills, transactions } from '../schema.js'
+import { fullTxSelect } from '../transactionSelect.js'
 
-type NodeLike = { properties: Record<string, unknown> }
+const toBill = (record: Record<string, unknown>): Bill => {
+  const row = BillRowSchema.parse(record)
+  return Bill.parse({
+    id:        row.id,
+    month:     row.month,
+    year:      row.year,
+    closeDate: row.close_date,
+    dueDate:   row.due_date,
+    status:    row.status,
+  })
+}
 
-const toBill = (record: Record<string, unknown>): Bill => Bill.parse((record['b'] as NodeLike).properties)
+// The bill-with-card SELECT also returns the joined card name.
+const cardNameOf = (record: Record<string, unknown>): string =>
+  z.object({ card_name: z.string() }).parse(record).card_name
 
 export type BillWithItems = { bill: Bill; cardName: string; transactions: TransactionView[] }
 
 export type BillsRepo = {
-  /** MERGE the cycle's bill for a card (created open) and attach the transaction. */
+  /** UPSERT the cycle's bill for a card (created open) and attach the transaction. */
   ensureAndAttach: (cardId: string, transactionId: string, period: BillPeriod, newId: string) => Promise<Bill>
   get: (cardId: string, month: number, year: number) => Promise<BillWithItems | null>
-  setStatus: (billId: string, status: 'open' | 'closed' | 'paid') => Promise<Bill | null>
+  setStatus: (billId: string, status: BillStatus) => Promise<Bill | null>
 }
 
-export const billsRepo = (driver: Driver): BillsRepo => ({
+export const billsRepo = (db: Db): BillsRepo => ({
   ensureAndAttach: async (cardId, transactionId, period, newId) => {
-    const rows = await run(
-      driver,
-      `MATCH (cc:CreditCard {id: $cardId})
-       MERGE (cc)<-[:OF]-(b:Bill {month: $month, year: $year})
-       ON CREATE SET b.id = $newId, b.closeDate = $closeDate, b.dueDate = $dueDate, b.status = 'open'
-       WITH b
-       MATCH (t:Transaction {id: $transactionId})
-       MERGE (b)-[:CONTAINS]->(t)
-       RETURN b`,
-      { cardId, transactionId, newId, ...period },
-    )
-    return toBill(rows[0]!)
+    await db.insert(bills).values({
+      id:           newId,
+      creditCardId: cardId,
+      month:        period.month,
+      year:         period.year,
+      closeDate:    period.closeDate,
+      dueDate:      period.dueDate,
+      status:       BillStatus.enum.open,
+    }).onConflictDoNothing({ target: [bills.creditCardId, bills.month, bills.year] })
+
+    // Resolve the bill id (may have been the pre-existing one)
+    const [rawBill] = await db.all<Record<string, unknown>>(sql`
+      SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${period.month} AND year = ${period.year}
+    `)
+    const bill = toBill(expectPresent(rawBill, 'bills: row not found after upsert'))
+
+    // Link the transaction to the bill — verify the row actually existed.
+    const result = await db.update(transactions).set({ billId: bill.id }).where(eq(transactions.id, transactionId))
+    if ((result.rowsAffected ?? 0) === 0) {
+      throw new Error(`bills: transaction ${transactionId} not found, cannot attach to bill ${bill.id}`)
+    }
+
+    return bill
   },
 
   get: async (cardId, month, year) => {
-    const rows = await run(
-      driver,
-      `MATCH (cc:CreditCard {id: $cardId})<-[:OF]-(b:Bill {month: $month, year: $year})
-       OPTIONAL MATCH (b)-[:CONTAINS]->(t:Transaction)
-       OPTIONAL MATCH (t)-[:IN]->(c:Category)
-       OPTIONAL MATCH (t)-[:AT]->(m:Merchant)
-       WITH cc, b, t, c, m, true AS created
-       ORDER BY t.date
-       RETURN b, cc.name AS cardName,
-              collect(CASE WHEN t IS NULL THEN NULL ELSE {
-                t: t, accountId: NULL, accountName: NULL,
-                categoryId: c.id, categoryName: c.name, merchant: m.key, created: created
-              } END) AS items`,
-      { cardId, month, year },
-    )
-    const row = rows[0]
-    if (!row) return null
-    const items = (row['items'] as Array<Record<string, unknown> | null>).filter(
-      (i): i is Record<string, unknown> => i !== null,
-    )
-    const transactions = items.map(transactionAdapters.dbToModel)
+    const [billRow] = await db.all<Record<string, unknown>>(sql`
+      SELECT b.*, cc.name AS card_name
+      FROM bills b JOIN credit_cards cc ON cc.id = b.credit_card_id
+      WHERE b.credit_card_id = ${cardId} AND b.month = ${month} AND b.year = ${year}
+    `)
+    if (!billRow) return null
+    const bill = toBill(billRow)
+
+    const txRows = await db.all<Record<string, unknown>>(sql`
+      ${fullTxSelect(sql`t.bill_id = ${bill.id}`)}
+      ORDER BY t.date
+    `)
     return {
-      bill: toBill(row),
-      cardName: String(row['cardName']),
-      transactions,
+      bill,
+      cardName:     cardNameOf(billRow),
+      transactions: txRows.map(transactionAdapters.dbToModel),
     }
   },
 
   setStatus: async (billId, status) => {
-    const rows = await run(driver, 'MATCH (b:Bill {id: $billId}) SET b.status = $status RETURN b', {
-      billId,
-      status,
-    })
-    return rows[0] ? toBill(rows[0]) : null
+    await db.update(bills).set({ status }).where(eq(bills.id, billId))
+    const [row] = await db.all<Record<string, unknown>>(sql`SELECT * FROM bills WHERE id = ${billId}`)
+    return row ? toBill(row) : null
   },
 })

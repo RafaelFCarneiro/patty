@@ -1,105 +1,106 @@
-import type { Driver } from 'neo4j-driver'
-import { run } from './driver.js'
+import { fileURLToPath } from 'node:url'
+import { migrate } from 'drizzle-orm/libsql/migrator'
+import { CurrencyCode } from '../../models/common.js'
+import { CategoryKind } from '../../models/category.js'
+import { ClassificationMethod } from '../../models/transaction.js'
+import type { Db } from './driver.js'
+import { categories, currencies, merchantCategory, merchants } from './schema.js'
 
-const CONSTRAINTS = [
-  'CREATE CONSTRAINT currency_code IF NOT EXISTS FOR (c:Currency) REQUIRE c.code IS UNIQUE',
-  'CREATE CONSTRAINT account_id IF NOT EXISTS FOR (a:Account) REQUIRE a.id IS UNIQUE',
-  'CREATE CONSTRAINT category_id IF NOT EXISTS FOR (c:Category) REQUIRE c.id IS UNIQUE',
-  'CREATE CONSTRAINT merchant_key IF NOT EXISTS FOR (m:Merchant) REQUIRE m.key IS UNIQUE',
-  'CREATE CONSTRAINT tx_id IF NOT EXISTS FOR (t:Transaction) REQUIRE t.id IS UNIQUE',
-  'CREATE CONSTRAINT tx_idempotency IF NOT EXISTS FOR (t:Transaction) REQUIRE t.idempotencyKey IS UNIQUE',
-  'CREATE CONSTRAINT creditcard_id IF NOT EXISTS FOR (cc:CreditCard) REQUIRE cc.id IS UNIQUE',
-  'CREATE CONSTRAINT bill_id IF NOT EXISTS FOR (b:Bill) REQUIRE b.id IS UNIQUE',
-  'CREATE CONSTRAINT recurring_id IF NOT EXISTS FOR (r:RecurringRule) REQUIRE r.id IS UNIQUE',
-  'CREATE CONSTRAINT tag_id IF NOT EXISTS FOR (t:Tag) REQUIRE t.id IS UNIQUE',
-  'CREATE CONSTRAINT tag_name IF NOT EXISTS FOR (t:Tag) REQUIRE t.name IS UNIQUE',
-  'CREATE CONSTRAINT subcategory_id IF NOT EXISTS FOR (sc:SubCategory) REQUIRE sc.id IS UNIQUE',
-  'CREATE INDEX tx_date IF NOT EXISTS FOR (t:Transaction) ON (t.date)',
-]
+// Resolve the migrations folder relative to this module (../../../drizzle), so it
+// works under both `tsx src/...` (dev) and `node dist/...` (prod/npx) regardless of cwd.
+const DEFAULT_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url))
+
+// ---------------------------------------------------------------------------
+// Seed data
+// ---------------------------------------------------------------------------
 
 const CURRENCIES = [
-  { code: 'BRL', symbol: 'R$', name: 'Real Brasileiro' },
-  { code: 'USD', symbol: '$', name: 'US Dollar' },
-]
+  { code: CurrencyCode.enum.BRL, symbol: 'R$', name: 'Real Brasileiro' },
+  { code: CurrencyCode.enum.USD, symbol: '$',  name: 'US Dollar' },
+] as const satisfies Array<{ code: string; symbol: string; name: string }>
 
 const CATEGORIES = [
-  { id: 'cat-alimentacao', name: 'Alimentação', kind: 'expense' },
-  { id: 'cat-transporte', name: 'Transporte', kind: 'expense' },
-  { id: 'cat-moradia', name: 'Moradia', kind: 'expense' },
-  { id: 'cat-contas-servicos', name: 'Contas & Serviços', kind: 'expense' },
-  { id: 'cat-saude', name: 'Saúde', kind: 'expense' },
-  { id: 'cat-educacao', name: 'Educação', kind: 'expense' },
-  { id: 'cat-lazer', name: 'Lazer', kind: 'expense' },
-  { id: 'cat-compras', name: 'Compras', kind: 'expense' },
-  { id: 'cat-assinaturas', name: 'Assinaturas', kind: 'expense' },
-  { id: 'cat-viagem', name: 'Viagem', kind: 'expense' },
-  { id: 'cat-impostos', name: 'Impostos & Taxas', kind: 'expense' },
-  { id: 'cat-salario', name: 'Salário', kind: 'income' },
-  { id: 'cat-renda-extra', name: 'Renda Extra', kind: 'income' },
-  { id: 'cat-investimentos', name: 'Investimentos', kind: 'both' },
-  { id: 'cat-outros', name: 'Outros', kind: 'both' },
+  { id: 'cat-alimentacao',     name: 'Alimentação',       kind: CategoryKind.enum.expense },
+  { id: 'cat-transporte',      name: 'Transporte',        kind: CategoryKind.enum.expense },
+  { id: 'cat-moradia',         name: 'Moradia',           kind: CategoryKind.enum.expense },
+  { id: 'cat-contas-servicos', name: 'Contas & Serviços', kind: CategoryKind.enum.expense },
+  { id: 'cat-saude',           name: 'Saúde',             kind: CategoryKind.enum.expense },
+  { id: 'cat-educacao',        name: 'Educação',          kind: CategoryKind.enum.expense },
+  { id: 'cat-lazer',           name: 'Lazer',             kind: CategoryKind.enum.expense },
+  { id: 'cat-compras',         name: 'Compras',           kind: CategoryKind.enum.expense },
+  { id: 'cat-assinaturas',     name: 'Assinaturas',       kind: CategoryKind.enum.expense },
+  { id: 'cat-viagem',          name: 'Viagem',            kind: CategoryKind.enum.expense },
+  { id: 'cat-impostos',        name: 'Impostos & Taxas',  kind: CategoryKind.enum.expense },
+  { id: 'cat-salario',         name: 'Salário',           kind: CategoryKind.enum.income },
+  { id: 'cat-renda-extra',     name: 'Renda Extra',       kind: CategoryKind.enum.income },
+  { id: 'cat-investimentos',   name: 'Investimentos',     kind: CategoryKind.enum.both },
+  { id: 'cat-outros',          name: 'Outros',            kind: CategoryKind.enum.both },
 ]
 
-/** Seeded BR merchant rules: key → category. Weight 3 ≈ confidence 0.8. */
+/** Weight 3 ≈ confidence 0.8 — matches the prior Neo4j graph seed. */
 const MERCHANT_RULES: Array<{ key: string; categoryId: string }> = [
-  { key: 'uber', categoryId: 'cat-transporte' },
-  { key: '99', categoryId: 'cat-transporte' },
-  { key: 'posto', categoryId: 'cat-transporte' },
+  { key: 'uber',           categoryId: 'cat-transporte' },
+  { key: '99',             categoryId: 'cat-transporte' },
+  { key: 'posto',          categoryId: 'cat-transporte' },
   { key: 'estacionamento', categoryId: 'cat-transporte' },
-  { key: 'ifood', categoryId: 'cat-alimentacao' },
-  { key: 'rappi', categoryId: 'cat-alimentacao' },
-  { key: 'supermercado', categoryId: 'cat-alimentacao' },
-  { key: 'mercado', categoryId: 'cat-alimentacao' },
-  { key: 'padaria', categoryId: 'cat-alimentacao' },
-  { key: 'restaurante', categoryId: 'cat-alimentacao' },
-  { key: 'netflix', categoryId: 'cat-assinaturas' },
-  { key: 'spotify', categoryId: 'cat-assinaturas' },
-  { key: 'amazon prime', categoryId: 'cat-assinaturas' },
-  { key: 'disney', categoryId: 'cat-assinaturas' },
-  { key: 'amazon', categoryId: 'cat-compras' },
-  { key: 'mercado livre', categoryId: 'cat-compras' },
-  { key: 'shopee', categoryId: 'cat-compras' },
-  { key: 'magalu', categoryId: 'cat-compras' },
-  { key: 'farmacia', categoryId: 'cat-saude' },
-  { key: 'drogaria', categoryId: 'cat-saude' },
-  { key: 'smart fit', categoryId: 'cat-saude' },
-  { key: 'vivo', categoryId: 'cat-contas-servicos' },
-  { key: 'claro', categoryId: 'cat-contas-servicos' },
-  { key: 'tim', categoryId: 'cat-contas-servicos' },
-  { key: 'enel', categoryId: 'cat-contas-servicos' },
-  { key: 'sabesp', categoryId: 'cat-contas-servicos' },
-  { key: 'aluguel', categoryId: 'cat-moradia' },
-  { key: 'condominio', categoryId: 'cat-moradia' },
+  { key: 'ifood',          categoryId: 'cat-alimentacao' },
+  { key: 'rappi',          categoryId: 'cat-alimentacao' },
+  { key: 'supermercado',   categoryId: 'cat-alimentacao' },
+  { key: 'mercado',        categoryId: 'cat-alimentacao' },
+  { key: 'padaria',        categoryId: 'cat-alimentacao' },
+  { key: 'restaurante',    categoryId: 'cat-alimentacao' },
+  { key: 'netflix',        categoryId: 'cat-assinaturas' },
+  { key: 'spotify',        categoryId: 'cat-assinaturas' },
+  { key: 'amazon prime',   categoryId: 'cat-assinaturas' },
+  { key: 'disney',         categoryId: 'cat-assinaturas' },
+  { key: 'amazon',         categoryId: 'cat-compras' },
+  { key: 'mercado livre',  categoryId: 'cat-compras' },
+  { key: 'shopee',         categoryId: 'cat-compras' },
+  { key: 'magalu',         categoryId: 'cat-compras' },
+  { key: 'farmacia',       categoryId: 'cat-saude' },
+  { key: 'drogaria',       categoryId: 'cat-saude' },
+  { key: 'smart fit',      categoryId: 'cat-saude' },
+  { key: 'vivo',           categoryId: 'cat-contas-servicos' },
+  { key: 'claro',          categoryId: 'cat-contas-servicos' },
+  { key: 'tim',            categoryId: 'cat-contas-servicos' },
+  { key: 'enel',           categoryId: 'cat-contas-servicos' },
+  { key: 'sabesp',         categoryId: 'cat-contas-servicos' },
+  { key: 'aluguel',        categoryId: 'cat-moradia' },
+  { key: 'condominio',     categoryId: 'cat-moradia' },
 ]
 
-/** Idempotent: safe to run on every boot. */
-export const bootstrap = async (driver: Driver): Promise<void> => {
-  for (const c of CONSTRAINTS) await run(driver, c)
+// ---------------------------------------------------------------------------
+// Seed helpers
+// ---------------------------------------------------------------------------
 
-  await run(
-    driver,
-    `UNWIND $currencies AS cur
-     MERGE (c:Currency {code: cur.code})
-     ON CREATE SET c.symbol = cur.symbol, c.name = cur.name`,
-    { currencies: CURRENCIES },
-  )
+const seedCurrencies = async (db: Db): Promise<void> => {
+  await db.insert(currencies).values([...CURRENCIES]).onConflictDoNothing()
+}
 
-  await run(
-    driver,
-    `UNWIND $categories AS cat
-     MERGE (c:Category {id: cat.id})
-     ON CREATE SET c.name = cat.name, c.kind = cat.kind`,
-    { categories: CATEGORIES },
-  )
+const seedCategories = async (db: Db): Promise<void> => {
+  await db.insert(categories).values(CATEGORIES).onConflictDoNothing()
+}
 
-  await run(
-    driver,
-    `UNWIND $rules AS rule
-     MERGE (m:Merchant {key: rule.key})
-     WITH m, rule
-     MATCH (c:Category {id: rule.categoryId})
-     MERGE (m)-[u:USUALLY]->(c)
-     ON CREATE SET u.weight = 3, u.origin = 'rule', u.lastSeen = date().year`,
-    { rules: MERCHANT_RULES },
-  )
+const seedMerchantRules = async (db: Db): Promise<void> => {
+  const currentYear = new Date().getFullYear()
+  await db.insert(merchants)
+    .values(MERCHANT_RULES.map(({ key }) => ({ key })))
+    .onConflictDoNothing()
+  await db.insert(merchantCategory)
+    .values(MERCHANT_RULES.map(({ key, categoryId }) => ({
+      merchantKey: key, categoryId, weight: 3, origin: ClassificationMethod.enum.rule, lastSeen: currentYear,
+    })))
+    .onConflictDoNothing()
+}
+
+// ---------------------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------------------
+
+/** Idempotent: applies pending migrations then upserts seed data. Safe on every boot. */
+export const bootstrap = async (db: Db, migrationsFolder = DEFAULT_MIGRATIONS_FOLDER): Promise<void> => {
+  await migrate(db, { migrationsFolder })
+  await seedCurrencies(db)
+  await seedCategories(db)
+  await seedMerchantRules(db)
 }

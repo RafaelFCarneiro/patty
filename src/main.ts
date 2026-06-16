@@ -3,7 +3,7 @@ import Fastify from 'fastify'
 import { loadConfig } from './config.js'
 import type { Deps } from './controllers/deps.js'
 import { bootstrap } from './diplomat/db/bootstrap.js'
-import { createDriver, waitForNeo4j } from './diplomat/db/driver.js'
+import { openDatabase } from './diplomat/db/driver.js'
 import { accountsRepo } from './diplomat/db/repos/accounts.js'
 import { billsRepo } from './diplomat/db/repos/bills.js'
 import { categoriesRepo } from './diplomat/db/repos/categories.js'
@@ -19,21 +19,19 @@ import { registerMcpRoute } from './diplomat/mcp/route.js'
 const main = async (): Promise<void> => {
   const config = loadConfig()
 
-  const driver = createDriver(config)
-  await waitForNeo4j(driver)
-  await bootstrap(driver)
-  console.log('neo4j ready: constraints + seed applied')
+  const db = openDatabase(config)
+  await bootstrap(db)
 
   const deps: Deps = {
-    accounts: accountsRepo(driver),
-    bills: billsRepo(driver),
-    categories: categoriesRepo(driver),
-    subCategories: subCategoriesRepo(driver),
-    creditCards: creditCardsRepo(driver),
-    merchants: merchantsRepo(driver),
-    recurring: recurringRepo(driver),
-    tags: tagsRepo(driver),
-    transactions: transactionsRepo(driver),
+    accounts: accountsRepo(db),
+    bills: billsRepo(db),
+    categories: categoriesRepo(db),
+    subCategories: subCategoriesRepo(db),
+    creditCards: creditCardsRepo(db),
+    merchants: merchantsRepo(db),
+    recurring: recurringRepo(db),
+    tags: tagsRepo(db),
+    transactions: transactionsRepo(db),
     clock: () => new Date(),
     newId: () => randomUUID(),
   }
@@ -42,13 +40,13 @@ const main = async (): Promise<void> => {
   registerRoutes(app, deps)
   registerMcpRoute(app, deps)
 
-  const close = async () => {
-    await app.close()
-    await driver.close()
-    process.exit(0)
+  const shutdown = (): void => {
+    app.close()
+      .catch((err: unknown) => app.log.error(err))
+      .finally(() => process.exit(0))
   }
-  process.on('SIGINT', close)
-  process.on('SIGTERM', close)
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
 
   // '::' binds dual-stack (IPv6 + IPv4) so both localhost (::1) and 127.0.0.1 work
   await app.listen({ port: config.PORT, host: '::' })
