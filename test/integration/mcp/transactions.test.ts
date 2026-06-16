@@ -112,6 +112,36 @@ describe('MCP integration > transactions', () => {
     }
   })
 
+  it('search_transactions treats whitespace-only text as no text filter, not as match-nothing', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Whitespace search ${stamp}`,
+          amount: 1,
+          type: 'expense',
+          category: 'Outros',
+          idempotencyKey: `test-ws-search-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } }
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      const results = (await callTool(client, {
+        name: 'search_transactions',
+        args: { text: '   ', limit: 200 },
+      })) as Array<{ id?: string }>
+
+      expect(results.some((tx) => tx.id === txId)).toBe(true)
+    } finally {
+      await transport.close()
+    }
+  })
+
   it('bulk import returns per-item status and treats re-imports as duplicates', async () => {
     const stamp = Date.now()
     const accountName = `Bulk Import ${stamp}`

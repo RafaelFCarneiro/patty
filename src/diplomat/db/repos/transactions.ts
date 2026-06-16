@@ -135,9 +135,11 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       ...(props.currency             !== undefined && { currency:             props.currency }),
       ...(props.classificationMethod !== undefined && { classificationMethod: props.classificationMethod }),
       ...(props.confidence           !== undefined && { confidence:           props.confidence }),
-      ...(refs.accountId    !== null && { fromAccountId: refs.accountId }),
-      ...(refs.categoryId   !== null && { categoryId:    refs.categoryId }),
-      ...(refs.subCategoryId!== null && { subcategoryId: refs.subCategoryId }),
+      ...(refs.accountId  !== null && { fromAccountId: refs.accountId }),
+      // subcategoryId is tied to categoryId changing (not to its own nullness): when the
+      // caller sets a new category without a sub-category, refs.subCategoryId is null and
+      // must still be written to clear any stale sub-category from before the change.
+      ...(refs.categoryId !== null && { categoryId: refs.categoryId, subcategoryId: refs.subCategoryId }),
     }
     if (Object.keys(setData).length > 0) {
       await db.update(transactions).set(setData).where(eq(transactions.id, id))
@@ -174,10 +176,13 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     }
 
     // Free-text search stays inside the main query as a correlated FTS5 subquery.
+    // A whitespace-only text has no searchable token — toMatchQuery returns null and
+    // the filter is skipped entirely (no text filter), not treated as "match nothing".
     if (filters.text) {
       const matchQuery = toMatchQuery(filters.text)
-      if (matchQuery === null) return [] // text given but no searchable token → no matches
-      conditions.push(sql`t.rowid IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${matchQuery})`)
+      if (matchQuery !== null) {
+        conditions.push(sql`t.rowid IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${matchQuery})`)
+      }
     }
 
     const where = conditions.length > 0 ? sql.join(conditions, sql` AND `) : sql`1=1`
