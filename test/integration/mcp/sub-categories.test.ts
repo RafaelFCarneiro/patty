@@ -321,6 +321,24 @@ describe('MCP integration > sub-categories', () => {
     }
   })
 
+  it('list_categories excludes sub-categories (same table, parent_id set)', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+      const sc = (await callTool(client, {
+        name: 'create_sub_category',
+        args: { name: `LeakCheck-${stamp}`, parentId: 'cat-alimentacao' },
+      })) as SubCategory
+      ensure(sc.id, 'subCategory id missing')
+
+      const categories = (await callTool(client, { name: 'list_categories', args: {} })) as Array<{ id?: string }>
+      expect(categories.some((c) => c.id === sc.id)).toBe(false)
+    } finally {
+      await transport.close()
+    }
+  })
+
   it('create_sub_category rejects unknown parentId with structured error', async () => {
     const { client, transport } = makeClient()
     try {
