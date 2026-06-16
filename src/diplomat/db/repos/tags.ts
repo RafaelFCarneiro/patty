@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import * as tagAdapters from '../../../adapters/tags.js'
+import { expectPresent } from '../../../common/present.js'
 import type { Tag } from '../../../models/tag.js'
 import type { Db } from '../driver.js'
 import { tags } from '../schema.js'
@@ -27,7 +28,7 @@ export const tagsRepo = (db: Db): TagsRepo => ({
     const existing = await db.select().from(tags).where(eq(tags.name, tag.name)).limit(1)
     if (existing.length > 0) return null
     const [row] = await db.insert(tags).values({ id: tag.id, name: tag.name }).returning()
-    return tagAdapters.dbToModel(row!)
+    return tagAdapters.dbToModel(expectPresent(row, 'tags: row not found after insert'))
   },
 
   delete: async (id) => {

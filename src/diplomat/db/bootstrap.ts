@@ -1,6 +1,11 @@
+import { fileURLToPath } from 'node:url'
 import { migrate } from 'drizzle-orm/libsql/migrator'
 import type { Db } from './driver.js'
 import { categories, currencies, merchantCategory, merchants } from './schema.js'
+
+// Resolve the migrations folder relative to this module (../../../drizzle), so it
+// works under both `tsx src/...` (dev) and `node dist/...` (prod/npx) regardless of cwd.
+const DEFAULT_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url))
 
 // ---------------------------------------------------------------------------
 // Seed data
@@ -75,12 +80,14 @@ const seedCategories = async (db: Db): Promise<void> => {
 
 const seedMerchantRules = async (db: Db): Promise<void> => {
   const currentYear = new Date().getFullYear()
-  for (const { key, categoryId } of MERCHANT_RULES) {
-    await db.insert(merchants).values({ key }).onConflictDoNothing()
-    await db.insert(merchantCategory)
-      .values({ merchantKey: key, categoryId, weight: 3, origin: 'rule', lastSeen: currentYear })
-      .onConflictDoNothing()
-  }
+  await db.insert(merchants)
+    .values(MERCHANT_RULES.map(({ key }) => ({ key })))
+    .onConflictDoNothing()
+  await db.insert(merchantCategory)
+    .values(MERCHANT_RULES.map(({ key, categoryId }) => ({
+      merchantKey: key, categoryId, weight: 3, origin: 'rule' as const, lastSeen: currentYear,
+    })))
+    .onConflictDoNothing()
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +95,7 @@ const seedMerchantRules = async (db: Db): Promise<void> => {
 // ---------------------------------------------------------------------------
 
 /** Idempotent: applies pending migrations then upserts seed data. Safe on every boot. */
-export const bootstrap = async (db: Db, migrationsFolder = './drizzle'): Promise<void> => {
+export const bootstrap = async (db: Db, migrationsFolder = DEFAULT_MIGRATIONS_FOLDER): Promise<void> => {
   await migrate(db, { migrationsFolder })
   await seedCurrencies(db)
   await seedCategories(db)

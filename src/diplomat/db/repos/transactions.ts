@@ -1,10 +1,11 @@
 import { eq, sql } from 'drizzle-orm'
 import * as transactionAdapters from '../../../adapters/transactions.js'
-import type { SummaryRow } from '../../../logic/summary.js'
-import type { Transaction, TransactionView, TransactionPatch } from '../../../models/transaction.js'
-import { SummaryRowSchema } from '../../../wire/db/transactions.js'
+import { expectPresent } from '../../../common/present.js'
+import { TransactionType, type Transaction, type TransactionView, type TransactionPatch } from '../../../models/transaction.js'
+import { SummaryRowSchema, type SummaryRow } from '../../../wire/db/transactions.js'
 import type { Db } from '../driver.js'
-import { merchantCategory, merchants, transactionTags, transactions } from '../schema.js'
+import { toMatchQuery } from '../fts.js'
+import { merchants, transactionTags, transactions } from '../schema.js'
 
 export type CreateTxResult = { transaction: TransactionView; created: boolean }
 
@@ -90,7 +91,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
         id:                   props.id,
         description:          props.description,
         amount:               props.amount,
-        type:                 props.type as 'income' | 'expense' | 'transfer',
+        type:                 props.type,
         date:                 props.date,
         currency:             props.currency,
         source:               props.source,
@@ -121,7 +122,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       transaction = existing ? transactionAdapters.dbToModel(existing) : null
     }
 
-    return { transaction: transaction!, created }
+    return { transaction: expectPresent(transaction, 'transactions: row not found after write'), created }
   },
 
   getById: (id) => fetchTx(db, id),
@@ -132,7 +133,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     const setData = {
       ...(props.description          !== undefined && { description:          props.description }),
       ...(props.amount               !== undefined && { amount:               props.amount }),
-      ...(props.type                 !== undefined && { type:                 props.type as 'income' | 'expense' | 'transfer' }),
+      ...(props.type                 !== undefined && { type:                 props.type }),
       ...(props.date                 !== undefined && { date:                 props.date }),
       ...(props.currency             !== undefined && { currency:             props.currency }),
       ...(props.classificationMethod !== undefined && { classificationMethod: props.classificationMethod }),
@@ -175,37 +176,24 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       )`)
     }
 
-    let rows: Record<string, unknown>[]
-
+    // Free-text search resolves to a set of FTS5 rowids, intersected with the other filters.
     if (filters.text) {
-      // FTS5 search: get matching rowids, then apply remaining filters
+      const matchQuery = toMatchQuery(filters.text)
+      if (matchQuery === null) return [] // text given but no searchable token → no matches
       const ftsResults = await db.all<{ rowid: number }>(sql`
-        SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${filters.text}
+        SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${matchQuery}
       `)
       if (ftsResults.length === 0) return []
-
-      const rowids = ftsResults.map((r) => r.rowid)
-      const rowidList = sql.join(rowids.map((r) => sql`${r}`), sql`, `)
+      const rowidList = sql.join(ftsResults.map((r) => sql`${r.rowid}`), sql`, `)
       conditions.push(sql`t.rowid IN (${rowidList})`)
-
-      const where = conditions.length > 0
-        ? sql.join(conditions, sql` AND `)
-        : sql`1=1`
-      rows = await db.all<Record<string, unknown>>(sql`
-        ${fullTxSelect(where)}
-        ORDER BY t.date DESC, t.id
-        LIMIT ${filters.limit}
-      `)
-    } else {
-      const where = conditions.length > 0
-        ? sql.join(conditions, sql` AND `)
-        : sql`1=1`
-      rows = await db.all<Record<string, unknown>>(sql`
-        ${fullTxSelect(where)}
-        ORDER BY t.date DESC, t.id
-        LIMIT ${filters.limit}
-      `)
     }
+
+    const where = conditions.length > 0 ? sql.join(conditions, sql` AND `) : sql`1=1`
+    const rows = await db.all<Record<string, unknown>>(sql`
+      ${fullTxSelect(where)}
+      ORDER BY t.date DESC, t.id
+      LIMIT ${filters.limit}
+    `)
 
     return rows.map(transactionAdapters.dbToModel)
   },
@@ -217,7 +205,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       FROM transactions t
       LEFT JOIN categories c ON c.id = t.category_id
       WHERE t.date >= ${from} AND t.date < ${to}
-        AND t.type != 'transfer'
+        AND t.type != ${TransactionType.enum.transfer}
       GROUP BY t.currency, t.type, c.id
     `)
     return rows.map((r) => SummaryRowSchema.parse(r))

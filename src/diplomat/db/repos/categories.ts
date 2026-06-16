@@ -1,4 +1,5 @@
 import * as categoryAdapters from '../../../adapters/categories.js'
+import { expectPresent } from '../../../common/present.js'
 import type { Category } from '../../../models/category.js'
 import type { Db } from '../driver.js'
 import { categories } from '../schema.js'
@@ -19,6 +20,6 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
       .insert(categories)
       .values({ id: category.id, name: category.name, kind: category.kind })
       .returning()
-    return categoryAdapters.dbToModel(row!)
+    return categoryAdapters.dbToModel(expectPresent(row, 'categories: row not found after insert'))
   },
 })

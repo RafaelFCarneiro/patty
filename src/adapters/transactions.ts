@@ -9,7 +9,7 @@ import type {
   UpdateTransactionInput,
 } from '../models/transaction.js'
 import type { BulkItemResult } from '../logic/transaction.js'
-import type { TransactionDbProps, TransactionDbRefs } from '../wire/db/transactions.js'
+import { TransactionRowSchema, type TransactionDbProps, type TransactionDbRefs } from '../wire/db/transactions.js'
 import type * as wireIn from '../wire/in/transactions.js'
 import type { BulkItemOut } from '../wire/out/transactions.js'
 import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wire/out/transactions.js'
@@ -18,37 +18,37 @@ import type { BulkResult } from '../logic/transaction.js'
 
 /** db→model: decode a flat SQL row (from a full transaction SELECT) into a TransactionView. */
 export const dbToModel = (record: Record<string, unknown>): TransactionView => {
-  const rawTags = record['tags']
-  const tags: string[] =
-    typeof rawTags === 'string' && rawTags.length > 0 && rawTags !== '[null]'
-      ? (JSON.parse(rawTags) as string[]).filter(Boolean)
-      : []
+  // Decode the raw row at the boundary; downstream mapping then trusts the typed shape.
+  const row = TransactionRowSchema.parse(record)
+
+  const parsedTags = row.tags ? (JSON.parse(row.tags) as unknown[]) : []
+  const tags = parsedTags.filter((tag): tag is string => typeof tag === 'string')
 
   return TransactionView.parse({
-    id:              record['id'],
-    description:     record['description'],
-    amount:          record['amount'],
-    type:            record['type'],
-    date:            record['date'],
-    currency:        record['currency'],
-    source:          record['source'],
-    idempotencyKey:  record['idempotency_key'],
+    id:              row.id,
+    description:     row.description,
+    amount:          row.amount,
+    type:            row.type,
+    date:            row.date,
+    currency:        row.currency,
+    source:          row.source,
+    idempotencyKey:  row.idempotency_key,
     classification: {
-      method:     record['classification_method'] ?? 'none',
-      confidence: record['confidence'] ?? 0,
+      method:     row.classification_method,
+      confidence: row.confidence,
     },
-    rawInput:        record['raw_input'] ?? undefined,
-    accountId:       record['from_account_id'] ?? undefined,
-    accountName:     record['from_account_name'] ?? undefined,
-    toAccountId:     record['to_account_id'] ?? undefined,
-    toAccountName:   record['to_account_name'] ?? undefined,
-    cardId:          record['credit_card_id'] ?? undefined,
-    cardName:        record['credit_card_name'] ?? undefined,
-    categoryId:      record['category_id'] ?? undefined,
-    categoryName:    record['category_name'] ?? undefined,
-    subCategoryId:   record['subcategory_id'] ?? undefined,
-    subCategoryName: record['subcategory_name'] ?? undefined,
-    merchant:        record['merchant_key'] ?? undefined,
+    rawInput:        row.raw_input ?? undefined,
+    accountId:       row.from_account_id ?? undefined,
+    accountName:     row.from_account_name ?? undefined,
+    toAccountId:     row.to_account_id ?? undefined,
+    toAccountName:   row.to_account_name ?? undefined,
+    cardId:          row.credit_card_id ?? undefined,
+    cardName:        row.credit_card_name ?? undefined,
+    categoryId:      row.category_id ?? undefined,
+    categoryName:    row.category_name ?? undefined,
+    subCategoryId:   row.subcategory_id ?? undefined,
+    subCategoryName: row.subcategory_name ?? undefined,
+    merchant:        row.merchant_key ?? undefined,
     tags,
   })
 }

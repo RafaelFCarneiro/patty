@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import * as categoryAdapters from '../../../adapters/categories.js'
-import type { SubCategory, CreateSubCategory } from '../../../models/category.js'
+import { expectPresent } from '../../../common/present.js'
+import { CategoryKind, type SubCategory, type CreateSubCategory } from '../../../models/category.js'
 import type { Db } from '../driver.js'
 import { categories } from '../schema.js'
 
@@ -48,16 +49,17 @@ export const subCategoriesRepo = (db: Db): SubCategoriesRepo => ({
   },
 
   create: async ({ id, name, parentId }) => {
-    await db.insert(categories).values({ id, name, parentId, kind: 'expense' /* overridden below */ })
-    // kind is inherited from the parent; update after insert
+    // kind is inherited from the parent; this placeholder is overwritten by the update below.
+    await db.insert(categories).values({ id, name, parentId, kind: CategoryKind.enum.expense })
     const [parent] = await db.select().from(categories).where(eq(categories.id, parentId))
-    await db.update(categories).set({ kind: parent!.kind }).where(eq(categories.id, id))
+    const parentKind = expectPresent(parent, 'categories: parent not found for sub-category').kind
+    await db.update(categories).set({ kind: parentKind }).where(eq(categories.id, id))
 
     const [row] = await db.all<Record<string, unknown>>(sql`
       SELECT sc.id, sc.name, sc.parent_id, p.name AS parent_name, p.kind
       FROM categories sc JOIN categories p ON p.id = sc.parent_id
       WHERE sc.id = ${id}
     `)
-    return categoryAdapters.dbToSubCategory(row!)
+    return categoryAdapters.dbToSubCategory(expectPresent(row, 'categories: sub-category not found after insert'))
   },
 })

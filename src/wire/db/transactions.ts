@@ -4,8 +4,9 @@ import type { transactions } from '../../diplomat/db/schema.js'
 // Inferred Drizzle select type — the canonical shape of a transactions row.
 export type TransactionRow = typeof transactions.$inferSelect
 
-// Flat SQL row returned by the full SELECT (with LEFT JOINed columns for related names/tags).
-// Repos decode every row through this schema before passing data to adapters.
+// The columns dbToModel consumes from the full transaction SELECT (node columns +
+// LEFT JOINed related names/tags). Decoded at the boundary before mapping to the model;
+// unrelated columns the SELECT may also return (e.g. bill_id) are ignored by z.object.
 export const TransactionRowSchema = z.object({
   id:                    z.string(),
   description:           z.string(),
@@ -29,21 +30,21 @@ export const TransactionRowSchema = z.object({
   subcategory_id:        z.string().nullable(),
   subcategory_name:      z.string().nullable(),
   merchant_key:          z.string().nullable(),
-  bill_id:               z.string().nullable(),
   tags:                  z.string().nullable(), // JSON array from json_group_array
 })
 
-// Legacy flat props/refs — used by adapters/transactions.ts until it is rewritten in PR 5.
+// Flat node properties handed to the INSERT. `type` is derived from the Drizzle schema
+// so the repo never casts the string into the column's enum union.
 export type TransactionDbProps = {
   id: string
   description: string
   amount: number
-  type: string
+  type: TransactionRow['type']
   date: string
   currency: string
-  source: string
+  source: TransactionRow['source']
   idempotencyKey: string
-  classificationMethod: string
+  classificationMethod: TransactionRow['classificationMethod']
   confidence: number
   rawInput: string | null
 }
@@ -64,3 +65,5 @@ export const SummaryRowSchema = z.object({
   total:    z.number(),
   count:    z.number(),
 })
+// Decoded summary row shape — kept in wire/db so the repo doesn't import a logic type.
+export type SummaryRow = z.infer<typeof SummaryRowSchema>

@@ -1,6 +1,8 @@
 import { sql } from 'drizzle-orm'
 import * as accountAdapters from '../../../adapters/accounts.js'
+import { expectPresent } from '../../../common/present.js'
 import type { Account } from '../../../models/account.js'
+import { TransactionType } from '../../../models/transaction.js'
 import { BalancePartsRow } from '../../../wire/db/accounts.js'
 import type { Db } from '../driver.js'
 import { accounts } from '../schema.js'
@@ -30,7 +32,7 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
         currency:       account.currency,
       })
       .returning()
-    return accountAdapters.dbToModel(row!)
+    return accountAdapters.dbToModel(expectPresent(row, 'accounts: row not found after insert'))
   },
 
   findByName: async (name) => {
@@ -47,12 +49,12 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
       income: number; expenses: number; transfers_out: number; transfers_in: number
     }>(sql`
       SELECT
-        COALESCE(SUM(CASE WHEN t.type = 'income'   THEN t.amount ELSE 0 END), 0) AS income,
-        COALESCE(SUM(CASE WHEN t.type = 'expense'  THEN t.amount ELSE 0 END), 0) AS expenses,
-        COALESCE(SUM(CASE WHEN t.type = 'transfer' THEN t.amount ELSE 0 END), 0) AS transfers_out,
+        COALESCE(SUM(CASE WHEN t.type = ${TransactionType.enum.income}   THEN t.amount ELSE 0 END), 0) AS income,
+        COALESCE(SUM(CASE WHEN t.type = ${TransactionType.enum.expense}  THEN t.amount ELSE 0 END), 0) AS expenses,
+        COALESCE(SUM(CASE WHEN t.type = ${TransactionType.enum.transfer} THEN t.amount ELSE 0 END), 0) AS transfers_out,
         COALESCE((
           SELECT SUM(t2.amount) FROM transactions t2
-          WHERE t2.to_account_id = ${accountId} AND t2.type = 'transfer'
+          WHERE t2.to_account_id = ${accountId} AND t2.type = ${TransactionType.enum.transfer}
         ), 0) AS transfers_in
       FROM transactions t
       WHERE t.from_account_id = ${accountId}

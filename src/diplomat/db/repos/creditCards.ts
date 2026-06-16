@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm'
+import { expectPresent } from '../../../common/present.js'
 import { CreditCard } from '../../../models/creditCard.js'
 import type { Db } from '../driver.js'
 import { creditCards } from '../schema.js'
@@ -37,7 +38,7 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
         limitAmount: card.limit ?? null,
       })
       .returning()
-    return toCard(row!)
+    return toCard(expectPresent(row, 'credit_cards: row not found after insert'))
   },
 
   findByName: async (name) => {

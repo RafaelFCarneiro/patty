@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import * as transactionAdapters from '../../../adapters/transactions.js'
-import { Bill } from '../../../models/bill.js'
+import { expectPresent } from '../../../common/present.js'
+import { Bill, BillStatus } from '../../../models/bill.js'
 import type { TransactionView } from '../../../models/transaction.js'
 import type { BillPeriod } from '../../../logic/bill.js'
 import type { Db } from '../driver.js'
@@ -22,7 +23,7 @@ export type BillsRepo = {
   /** UPSERT the cycle's bill for a card (created open) and attach the transaction. */
   ensureAndAttach: (cardId: string, transactionId: string, period: BillPeriod, newId: string) => Promise<Bill>
   get: (cardId: string, month: number, year: number) => Promise<BillWithItems | null>
-  setStatus: (billId: string, status: 'open' | 'closed' | 'paid') => Promise<Bill | null>
+  setStatus: (billId: string, status: BillStatus) => Promise<Bill | null>
 }
 
 const FULL_TX = sql`
@@ -50,19 +51,20 @@ export const billsRepo = (db: Db): BillsRepo => ({
       year:         period.year,
       closeDate:    period.closeDate,
       dueDate:      period.dueDate,
-      status:       'open',
+      status:       BillStatus.enum.open,
     }).onConflictDoNothing()
 
     // Resolve the bill id (may have been the pre-existing one)
     const [bill] = await db.all<Record<string, unknown>>(sql`
       SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${period.month} AND year = ${period.year}
     `)
-    const billId = bill!['id'] as string
+    const billRow = expectPresent(bill, 'bills: row not found after upsert')
+    const billId = billRow['id'] as string
 
     // Link the transaction to the bill
     await db.update(transactions).set({ billId }).where(eq(transactions.id, transactionId))
 
-    return toBill(bill!)
+    return toBill(billRow)
   },
 
   get: async (cardId, month, year) => {
