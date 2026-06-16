@@ -186,4 +186,9 @@ describe('dbToModel', () => {
     const tx = transactionAdapters.dbToModel(sqlRow({ tags: '[null]' }))
     expect(tx.tags).toEqual([])
   })
+
+  // Issue: TransactionView.tags used z.string() allowing empty strings from db
+  it('rejects empty string tags coming from db', () => {
+    expect(() => transactionAdapters.dbToModel(sqlRow({ tags: '[""]' }))).toThrow()
+  })
 })

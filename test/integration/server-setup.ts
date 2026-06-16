@@ -31,7 +31,7 @@ beforeAll(async () => {
     PORT: TEST_PORT,
   })
 
-  await bootstrap(db, new URL('../../drizzle', import.meta.url).pathname)
+  await bootstrap(db)
 
   const deps = {
     accounts: accountsRepo(db),

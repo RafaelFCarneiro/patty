@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import * as categoryAdapters from '../../../adapters/categories.js'
 import { expectPresent } from '../../../common/present.js'
-import { CategoryKind, type SubCategory, type CreateSubCategory } from '../../../models/category.js'
+import type { SubCategory, CreateSubCategory } from '../../../models/category.js'
 import type { Db } from '../driver.js'
 import { categories } from '../schema.js'
 
@@ -49,11 +49,11 @@ export const subCategoriesRepo = (db: Db): SubCategoriesRepo => ({
   },
 
   create: async ({ id, name, parentId }) => {
-    // kind is inherited from the parent; this placeholder is overwritten by the update below.
-    await db.insert(categories).values({ id, name, parentId, kind: CategoryKind.enum.expense })
+    // kind is inherited from the parent — resolved before the insert so the row is
+    // correct from the first write (no placeholder + update, no transient bad state).
     const [parent] = await db.select().from(categories).where(eq(categories.id, parentId))
     const parentKind = expectPresent(parent, 'categories: parent not found for sub-category').kind
-    await db.update(categories).set({ kind: parentKind }).where(eq(categories.id, id))
+    await db.insert(categories).values({ id, name, parentId, kind: parentKind })
 
     const [row] = await db.all<Record<string, unknown>>(sql`
       SELECT sc.id, sc.name, sc.parent_id, p.name AS parent_name, p.kind

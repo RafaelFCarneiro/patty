@@ -40,8 +40,13 @@ const main = async (): Promise<void> => {
   registerRoutes(app, deps)
   registerMcpRoute(app, deps)
 
-  process.on('SIGINT', () => app.close().then(() => process.exit(0)))
-  process.on('SIGTERM', () => app.close().then(() => process.exit(0)))
+  const shutdown = (): void => {
+    app.close()
+      .catch((err: unknown) => app.log.error(err))
+      .finally(() => process.exit(0))
+  }
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
 
   // '::' binds dual-stack (IPv6 + IPv4) so both localhost (::1) and 127.0.0.1 work
   await app.listen({ port: config.PORT, host: '::' })
