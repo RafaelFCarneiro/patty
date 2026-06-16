@@ -1,18 +1,21 @@
 import { sql } from 'drizzle-orm'
 import { expectPresent } from '../../../common/present.js'
 import { CreditCard } from '../../../models/creditCard.js'
+import { CreditCardRowSchema } from '../../../wire/db/creditCards.js'
 import type { Db } from '../driver.js'
 import { creditCards } from '../schema.js'
 
-const toCard = (record: Record<string, unknown>): CreditCard =>
-  CreditCard.parse({
-    id:         record['id'],
-    name:       record['name'],
-    currency:   record['currency'],
-    closingDay: record['closingDay'] ?? record['closing_day'],
-    dueDay:     record['dueDay'] ?? record['due_day'],
-    limit:      record['limitAmount'] ?? record['limit_amount'] ?? undefined,
+const toCard = (record: Record<string, unknown>): CreditCard => {
+  const row = CreditCardRowSchema.parse(record)
+  return CreditCard.parse({
+    id:         row.id,
+    name:       row.name,
+    currency:   row.currency,
+    closingDay: row.closingDay,
+    dueDay:     row.dueDay,
+    limit:      row.limitAmount ?? undefined,
   })
+}
 
 export type CreditCardsRepo = {
   list: () => Promise<CreditCard[]>

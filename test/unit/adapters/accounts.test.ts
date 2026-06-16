@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import * as wireInAccounts from '../../../src/wire/in/accounts.js'
 import * as accountAdapters from '../../../src/adapters/accounts.js'
 
-// Flat SQL row as returned by a SELECT on the accounts table
+// Row as returned by a Drizzle select on the accounts table (camelCase keys)
 const sqlRow = (overrides: Record<string, unknown> = {}) => ({
   id: 'acc-1',
   name: 'Nubank',
   type: 'checking',
-  initial_balance: 0,
+  initialBalance: 0,
   currency: 'BRL',
   ...overrides,
 })
@@ -19,7 +19,7 @@ describe('dbToModel', () => {
   })
 
   it('decodes non-zero initialBalance', () => {
-    const account = accountAdapters.dbToModel(sqlRow({ initial_balance: 1500 }))
+    const account = accountAdapters.dbToModel(sqlRow({ initialBalance: 1500 }))
     expect(account.initialBalance).toBe(1500)
   })
 

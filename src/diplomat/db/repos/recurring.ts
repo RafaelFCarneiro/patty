@@ -1,23 +1,26 @@
 import { eq, sql } from 'drizzle-orm'
 import { expectPresent } from '../../../common/present.js'
 import { RecurringRuleView } from '../../../models/recurring.js'
+import { RecurringRowSchema } from '../../../wire/db/recurring.js'
 import type { Db } from '../driver.js'
 import { recurringRules } from '../schema.js'
 
-const toRule = (record: Record<string, unknown>): RecurringRuleView =>
-  RecurringRuleView.parse({
-    id:           record['id'],
-    description:  record['description'],
-    amount:       record['amount'],
-    type:         record['type'],
-    period:       record['period'],
-    nextDue:      record['next_due'],
-    currency:     record['currency'],
-    accountId:    record['account_id']    ?? undefined,
-    accountName:  record['account_name']  ?? undefined,
-    categoryId:   record['category_id']   ?? undefined,
-    categoryName: record['category_name'] ?? undefined,
+const toRule = (record: Record<string, unknown>): RecurringRuleView => {
+  const row = RecurringRowSchema.parse(record)
+  return RecurringRuleView.parse({
+    id:           row.id,
+    description:  row.description,
+    amount:       row.amount,
+    type:         row.type,
+    period:       row.period,
+    nextDue:      row.next_due,
+    currency:     row.currency,
+    accountId:    row.account_id    ?? undefined,
+    accountName:  row.account_name  ?? undefined,
+    categoryId:   row.category_id   ?? undefined,
+    categoryName: row.category_name ?? undefined,
   })
+}
 
 const RULE_SELECT = sql`
   SELECT r.*, a.name AS account_name, c.name AS category_name

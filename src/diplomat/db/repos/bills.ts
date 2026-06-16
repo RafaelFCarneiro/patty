@@ -1,21 +1,29 @@
 import { eq, sql } from 'drizzle-orm'
+import { z } from 'zod'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { expectPresent } from '../../../common/present.js'
 import { Bill, BillStatus } from '../../../models/bill.js'
 import type { TransactionView } from '../../../models/transaction.js'
 import type { BillPeriod } from '../../../logic/bill.js'
+import { BillRowSchema } from '../../../wire/db/bills.js'
 import type { Db } from '../driver.js'
 import { bills, transactions } from '../schema.js'
 
-const toBill = (record: Record<string, unknown>): Bill =>
-  Bill.parse({
-    id:        record['id'],
-    month:     record['month'],
-    year:      record['year'],
-    closeDate: record['close_date'],
-    dueDate:   record['due_date'],
-    status:    record['status'],
+const toBill = (record: Record<string, unknown>): Bill => {
+  const row = BillRowSchema.parse(record)
+  return Bill.parse({
+    id:        row.id,
+    month:     row.month,
+    year:      row.year,
+    closeDate: row.close_date,
+    dueDate:   row.due_date,
+    status:    row.status,
   })
+}
+
+// The bill-with-card SELECT also returns the joined card name.
+const cardNameOf = (record: Record<string, unknown>): string =>
+  z.object({ card_name: z.string() }).parse(record).card_name
 
 export type BillWithItems = { bill: Bill; cardName: string; transactions: TransactionView[] }
 
@@ -55,16 +63,15 @@ export const billsRepo = (db: Db): BillsRepo => ({
     }).onConflictDoNothing()
 
     // Resolve the bill id (may have been the pre-existing one)
-    const [bill] = await db.all<Record<string, unknown>>(sql`
+    const [rawBill] = await db.all<Record<string, unknown>>(sql`
       SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${period.month} AND year = ${period.year}
     `)
-    const billRow = expectPresent(bill, 'bills: row not found after upsert')
-    const billId = billRow['id'] as string
+    const bill = toBill(expectPresent(rawBill, 'bills: row not found after upsert'))
 
     // Link the transaction to the bill
-    await db.update(transactions).set({ billId }).where(eq(transactions.id, transactionId))
+    await db.update(transactions).set({ billId: bill.id }).where(eq(transactions.id, transactionId))
 
-    return toBill(billRow)
+    return bill
   },
 
   get: async (cardId, month, year) => {
@@ -74,16 +81,17 @@ export const billsRepo = (db: Db): BillsRepo => ({
       WHERE b.credit_card_id = ${cardId} AND b.month = ${month} AND b.year = ${year}
     `)
     if (!billRow) return null
+    const bill = toBill(billRow)
 
     const txRows = await db.all<Record<string, unknown>>(sql`
       ${FULL_TX}
-      WHERE t.bill_id = ${billRow['id']}
+      WHERE t.bill_id = ${bill.id}
       GROUP BY t.id
       ORDER BY t.date
     `)
     return {
-      bill:         toBill(billRow),
-      cardName:     billRow['card_name'] as string,
+      bill,
+      cardName:     cardNameOf(billRow),
       transactions: txRows.map(transactionAdapters.dbToModel),
     }
   },
