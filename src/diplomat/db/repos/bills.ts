@@ -60,7 +60,7 @@ export const billsRepo = (db: Db): BillsRepo => ({
       closeDate:    period.closeDate,
       dueDate:      period.dueDate,
       status:       BillStatus.enum.open,
-    }).onConflictDoNothing()
+    }).onConflictDoNothing({ target: [bills.creditCardId, bills.month, bills.year] })
 
     // Resolve the bill id (may have been the pre-existing one)
     const [rawBill] = await db.all<Record<string, unknown>>(sql`

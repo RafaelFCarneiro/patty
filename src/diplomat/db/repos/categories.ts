@@ -1,3 +1,4 @@
+import { isNull } from 'drizzle-orm'
 import * as categoryAdapters from '../../../adapters/categories.js'
 import { expectPresent } from '../../../common/present.js'
 import type { Category } from '../../../models/category.js'
@@ -10,8 +11,9 @@ export type CategoriesRepo = {
 }
 
 export const categoriesRepo = (db: Db): CategoriesRepo => ({
+  /** Top-level categories only — sub-categories (parent_id set) belong to subCategoriesRepo. */
   list: async () => {
-    const rows = await db.select().from(categories).orderBy(categories.name)
+    const rows = await db.select().from(categories).where(isNull(categories.parentId)).orderBy(categories.name)
     return rows.map(categoryAdapters.dbToModel)
   },
 

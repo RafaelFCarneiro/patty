@@ -1,11 +1,11 @@
-import { eq, sql } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { expectPresent } from '../../../common/present.js'
 import { TransactionType, type Transaction, type TransactionView, type TransactionPatch } from '../../../models/transaction.js'
 import { SummaryRowSchema, type SummaryRow } from '../../../wire/db/transactions.js'
 import type { Db } from '../driver.js'
 import { toMatchQuery } from '../fts.js'
-import { merchants, transactionTags, transactions } from '../schema.js'
+import { merchants, tags, transactionTags, transactions } from '../schema.js'
 
 export type CreateTxResult = { transaction: TransactionView; created: boolean }
 
@@ -47,14 +47,11 @@ const fetchTx = async (db: Db, id: string): Promise<TransactionView | null> => {
 
 const attachTags = async (db: Db, txId: string, tagNames: string[]): Promise<void> => {
   if (tagNames.length === 0) return
-  for (const name of tagNames) {
-    const [tag] = await db.all<{ id: string }>(sql`SELECT id FROM tags WHERE name = ${name}`)
-    if (tag) {
-      await db.insert(transactionTags)
-        .values({ transactionId: txId, tagId: tag.id })
-        .onConflictDoNothing()
-    }
-  }
+  const matches = await db.select({ id: tags.id }).from(tags).where(inArray(tags.name, tagNames))
+  if (matches.length === 0) return
+  await db.insert(transactionTags)
+    .values(matches.map((tag) => ({ transactionId: txId, tagId: tag.id })))
+    .onConflictDoNothing({ target: [transactionTags.transactionId, transactionTags.tagId] })
 }
 
 const replaceTags = async (db: Db, txId: string, tagNames: string[]): Promise<void> => {
@@ -106,7 +103,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
         subcategoryId:        refs.subCategoryId,
         merchantKey:          refs.merchantKey,
       })
-      .onConflictDoNothing()
+      .onConflictDoNothing({ target: transactions.idempotencyKey })
 
     const created = (result.rowsAffected ?? 0) > 0
 
@@ -176,16 +173,11 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       )`)
     }
 
-    // Free-text search resolves to a set of FTS5 rowids, intersected with the other filters.
+    // Free-text search stays inside the main query as a correlated FTS5 subquery.
     if (filters.text) {
       const matchQuery = toMatchQuery(filters.text)
       if (matchQuery === null) return [] // text given but no searchable token → no matches
-      const ftsResults = await db.all<{ rowid: number }>(sql`
-        SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${matchQuery}
-      `)
-      if (ftsResults.length === 0) return []
-      const rowidList = sql.join(ftsResults.map((r) => sql`${r.rowid}`), sql`, `)
-      conditions.push(sql`t.rowid IN (${rowidList})`)
+      conditions.push(sql`t.rowid IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${matchQuery})`)
     }
 
     const where = conditions.length > 0 ? sql.join(conditions, sql` AND `) : sql`1=1`
