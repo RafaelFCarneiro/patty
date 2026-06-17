@@ -44,7 +44,7 @@ Because the package is private on GitHub Packages, npm needs a token to download
    npm install -g @rafaelfcarneiro/fintrack && fintrack
    ```
 
-By default this starts a **stdio MCP server** — the client spawns it directly (no port, no URL). See `docs/mcp-clients.md` for client config. To start in HTTP mode instead (REST + streamable HTTP MCP on port 3001): `MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack`. The package only replaces the clone + `npm run dev` step with a single command; the encrypted `fintrack.db` (key in the OS keychain; set `FINTRACK_DB_KEY` for headless) is otherwise identical.
+By default this starts a **stdio MCP server** — the client spawns it directly (no port, no URL). See `docs/mcp-clients.md` for client config. To start in HTTP mode instead (REST + streamable HTTP MCP on port 3001): `MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack`. The package only replaces the clone + `npm run dev` step with a single command; the encrypted database at `~/.fintrack/fintrack.db` (key in the OS keychain; set `FINTRACK_DB_KEY` for headless) is otherwise identical.
 
 ## Updating to a new version
 
@@ -63,7 +63,7 @@ npm ls -g @rafaelfcarneiro/fintrack   # confirm installed version
 ```
 
 Upgrades are safe to run anytime: the database migrates itself forward on the next start
-(`bootstrap()` applies any pending Drizzle migrations idempotently), and your `fintrack.db` is untouched
+(`bootstrap()` applies any pending Drizzle migrations idempotently), and your `~/.fintrack/fintrack.db` is untouched
 otherwise. You'll see new releases on the repo's **Releases** page with auto-generated notes.
 
 ## Transport modes (`MCP_TRANSPORT`)
