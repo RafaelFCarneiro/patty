@@ -44,10 +44,7 @@ Because the package is private on GitHub Packages, npm needs a token to download
    npm install -g @rafaelfcarneiro/fintrack && fintrack
    ```
 
-This starts REST + MCP on `http://localhost:3001` exactly like `npm run dev`, using a local encrypted
-`fintrack.db` (key in the OS keychain; set `FINTRACK_DB_KEY` for headless). Connect Claude/VS Code to
-`http://127.0.0.1:3001/mcp` as in `docs/mcp-clients.md` — the package only replaces the clone + `npm run dev`
-step with a single command.
+By default this starts a **stdio MCP server** — the client spawns it directly (no port, no URL). See `docs/mcp-clients.md` for client config. To start in HTTP mode instead (REST + streamable HTTP MCP on port 3001): `MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack`. The package only replaces the clone + `npm run dev` step with a single command; the encrypted `fintrack.db` (key in the OS keychain; set `FINTRACK_DB_KEY` for headless) is otherwise identical.
 
 ## Updating to a new version
 
@@ -69,29 +66,34 @@ Upgrades are safe to run anytime: the database migrates itself forward on the ne
 (`bootstrap()` applies any pending Drizzle migrations idempotently), and your `fintrack.db` is untouched
 otherwise. You'll see new releases on the repo's **Releases** page with auto-generated notes.
 
-## Port configuration & running multiple MCP servers
+## Transport modes (`MCP_TRANSPORT`)
 
-The server binds **one fixed port** (default `3001`), set via the `PORT` env var. It does **not** auto-pick
-a free port — that's deliberate, because your MCP client config points at a fixed URL, so the port must be
-stable and known.
+FinTrack supports two MCP transports, selected by the `MCP_TRANSPORT` env var (default `stdio`):
 
-If you run several HTTP-based MCP servers, give each its own port:
+| Value | What starts | Port needed? | REST available? |
+|-------|-------------|--------------|-----------------|
+| `stdio` (default) | Client spawns the process; JSON-RPC over stdin/stdout | **No** | No |
+| `http` | Fastify on `PORT` (default 3001); streamable HTTP MCP + REST | Yes | Yes |
+
+The default `stdio` mode has **no port concerns** — it can't conflict. Use it for all local MCP client configs (see `docs/mcp-clients.md`).
+
+## Port configuration (HTTP mode only)
+
+`PORT` is only read when `MCP_TRANSPORT=http`. The server binds **one fixed port** (default `3001`) — it does not auto-pick a free port, because the client config must match.
+
+If you run several servers in HTTP mode, give each its own port:
 
 ```bash
-PORT=3007 npx @rafaelfcarneiro/fintrack
+MCP_TRANSPORT=http PORT=3007 npx @rafaelfcarneiro/fintrack
 # then point the client at http://127.0.0.1:3007/mcp
 ```
 
-If the chosen port is already taken, startup fails fast with an actionable message (the port number and the
-exact `PORT=… fintrack` command to retry) rather than a raw `EADDRINUSE` stack trace.
+If the chosen port is already taken, startup fails fast with an actionable message (the port number and the exact `PORT=… fintrack` command to retry) rather than a raw `EADDRINUSE` stack trace.
 
-How this lands in each client (the client connects to a running server; it doesn't launch it):
+How this lands in each HTTP-mode client:
 
 - **VS Code** `.vscode/mcp.json`: set the `url` to your chosen port, e.g. `http://127.0.0.1:3007/mcp`.
 - **Claude Desktop**: the `mcp-remote` bridge arg is the URL — point it at the same port.
-
-Start the server with the matching `PORT`, and the two agree. (A future stdio transport would remove ports
-from the equation entirely — stdio MCP servers can't conflict — but the HTTP server uses a port today.)
 
 ## Cutting a first release
 
