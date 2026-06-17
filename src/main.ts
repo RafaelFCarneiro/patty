@@ -65,7 +65,7 @@ main().catch((e: unknown) => {
     const port = e.port
     console.error(
       `fintrack: port ${port} is already in use (another service or MCP server is on it).\n` +
-        `Set a different port and retry, e.g.  PORT=${port + 1} fintrack\n` +
+        `Set a different port and retry, e.g. PORT=${port + 1} fintrack\n` +
         `Then point your MCP client at http://127.0.0.1:${port + 1}/mcp`,
     )
     process.exit(1)
