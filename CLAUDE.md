@@ -119,7 +119,7 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 3. Open a PR targeting `main`: `gh pr create --base main --fill` (or with an explicit `--title`/`--body`). CI must pass and the PR must be reviewed before merge.
 4. After merge, the feature branch is deleted; pull `main` before starting the next branch.
 
-If work was accidentally committed to local `main`, move it before pushing: `git branch <feature>` then `git reset --hard origin/main`, and continue on `<feature>`.
+If work was accidentally committed to local `main`, move it before pushing: `git branch <feature>` then `git fetch origin && git reset --hard origin/main && git checkout <feature>`, and continue on `<feature>`.
 
 ## Pull request comments
 

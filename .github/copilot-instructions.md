@@ -66,7 +66,7 @@ These are hard rules. Violations will be rejected in review.
 
 `main` is **protected — never commit or push directly to it.** Every change lands via pull request:
 
-1. Branch off latest `main`: `git checkout -b type/short-description` (name uses the Conventional Commit type).
+1. Branch off latest `main`: `git checkout main && git pull && git checkout -b type/short-description` (name uses the Conventional Commit type).
 2. Commit on the branch, `git push -u origin <branch>`, then `gh pr create --base main --fill`.
 3. CI must pass and the PR must be reviewed before merge.
-4. If work was accidentally committed to local `main`, move it: `git branch <feature> && git reset --hard origin/main`, then continue on `<feature>`.
+4. If work was accidentally committed to local `main`, move it: `git branch <feature> && git fetch origin && git reset --hard origin/main && git checkout <feature>`, then continue on `<feature>`.
