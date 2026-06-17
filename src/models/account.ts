@@ -9,7 +9,7 @@ export const Account = z.object({
   name: z.string().min(1),
   type: AccountType,
   currency: CurrencyCode,
-  /** Balance at account creation; current balance is always derived from the graph. */
+  /** Balance at account creation; current balance is always derived (initial + income − expenses ± transfers). */
   initialBalance: z.number().default(0),
 })
 export type Account = z.infer<typeof Account>

@@ -37,7 +37,7 @@ const CATEGORIES = [
   { id: 'cat-outros',          name: 'Outros',            kind: CategoryKind.enum.both },
 ]
 
-/** Weight 3 ≈ confidence 0.8 — matches the prior Neo4j graph seed. */
+/** Weight 3 ≈ confidence 0.8 for seeded merchant rules. */
 const MERCHANT_RULES: Array<{ key: string; categoryId: string }> = [
   { key: 'uber',           categoryId: 'cat-transporte' },
   { key: '99',             categoryId: 'cat-transporte' },

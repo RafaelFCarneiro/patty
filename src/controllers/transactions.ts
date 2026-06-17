@@ -185,7 +185,7 @@ export const updateTransaction = (
       { code: 'unknown_transaction', id: input.id },
     )
 
-    // Learning loop: correcting the category teaches the merchant graph
+    // Learning loop: correcting the category strengthens the merchant→category association
     if (categoryId && categoryId !== existing.categoryId)
       await deps.merchants.strengthenFromTransaction(input.id, categoryId)
 

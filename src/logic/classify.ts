@@ -1,14 +1,15 @@
 import * as R from 'remeda'
-import type { Classification, ClassifyOutcome } from '../models/transaction.js'
+import { ClassificationMethod } from '../models/transaction.js'
+import type { ClassifyOutcome } from '../models/transaction.js'
 
-/** A merchant→category edge candidate returned by the graph. */
+/** A merchant→category candidate from the merchant_category lookup. */
 export type MerchantMatch = {
   merchantKey: string
   categoryId: string
   categoryName: string
   weight: number
-  /** seeded rules vs learned-from-history edges */
-  origin: 'rule' | 'graph'
+  /** seeded rules vs learned-from-user-history associations */
+  origin: typeof ClassificationMethod.enum.rule | typeof ClassificationMethod.enum.history
 }
 
 /**
