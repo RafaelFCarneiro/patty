@@ -114,7 +114,7 @@ Principles: tools accept **natural inputs** (names, aliases, relative dates) and
 
 1. **Merchant match**: normalize description → match `merchants.key` → strongest `merchant_category` row (highest `weight`).
 2. **Rules seed**: BR-common merchants pre-seeded as `merchant_category` rows with `origin: rule` (uber/99 → Transporte, ifood → Alimentação, …).
-3. **Fallback**: return `category: null, confidence: 0` — the Claude client suggests a category in chat; user confirmation upserts a new/strengthened `merchant_category` row (`origin: graph`).
+3. **Fallback**: return `category: null, confidence: 0` — the Claude client suggests a category in chat; user confirmation upserts a new/strengthened `merchant_category` row (`origin: history`).
 
 Every user correction increments the row's `weight` (`onConflictDoUpdate`). `classificationMethod` (`rule | history | user | none`) + `confidence` stored on the transaction keep it auditable. No API keys, no per-transaction LLM cost.
 
