@@ -9,7 +9,7 @@ Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All too
 
 ## create_transaction
 
-Create an expense/income. Omitting `category`/`subCategory` triggers auto-classification via the merchant graph; the result reports `classification.method` (`rule|graph|user|none`) and `confidence` (confirm with the user below 0.6). Idempotent: same `idempotencyKey` returns the existing transaction with `created: false`.
+Create an expense/income. Omitting `category`/`subCategory` triggers auto-classification via the `merchant_category` table (learned merchant→category weights); the result reports `classification.method` (`rule|history|user|none`) and `confidence` (confirm with the user below 0.6). Idempotent: same `idempotencyKey` returns the existing transaction with `created: false`.
 
 Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `category` OR `subCategory` (not both — `subCategory` implies its parent category), `currency`, `rawInput` (original user phrasing), `tags`.
 
@@ -43,7 +43,7 @@ Input: `card`, `month`, `year`. Marks the bill `paid`. Deliberately does **not**
 
 ## update_transaction
 
-Patch fields by `id`. Only provided fields change. Setting `category` is a **user correction**: confidence becomes 1 and the merchant→category `[:USUALLY]` edge is strengthened (the system learns). Changing `account` also updates `currency` to match.
+Patch fields by `id`. Only provided fields change. Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened (the system learns). Changing `account` also updates `currency` to match.
 
 Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `category`, `subCategory`, `tags`.
 
@@ -73,7 +73,7 @@ Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `bala
 
 ## get_account_balances
 
-Current balance per account, **derived** from the graph (never stored): `initialBalance + income − expenses + transfers in − transfers out`. Returns the parts alongside the balance. Optional filters: `account` (name), `type`. Note: `create_account` accepts `initialBalance` (default 0).
+Current balance per account, **derived** (never stored): `initialBalance + income − expenses + transfers in − transfers out`. Returns the parts alongside the balance. Optional filters: `account` (name), `type`. Note: `create_account` accepts `initialBalance` (default 0).
 
 ## create_transfer
 
@@ -92,3 +92,13 @@ Move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, opt
 **Name resolution**: `subCategory` is resolved by name across all parents. If two sub-categories under different parents share the same name (e.g., "Outros" under Alimentação and Transporte), resolution returns `ambiguous_sub_category` — retry with a more specific name or use `list_sub_categories` to disambiguate.
 
 TransactionView includes `subCategoryId` and `subCategoryName` when a sub-category is linked.
+
+## create_tag / list_tags / delete_tag
+
+Free-form labels attached to transactions (e.g. "work", "travel", "reembolsável"), orthogonal to categories.
+
+- `create_tag`: `name` (required, unique). Error: `duplicate_name`.
+- `list_tags`: no input — returns all tags `{ id, name }`.
+- `delete_tag`: `id` (required). Removes the tag and all its transaction associations.
+
+Attach tags at write time via the `tags` array on `create_transaction` / `create_transactions_bulk`.

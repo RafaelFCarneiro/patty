@@ -80,14 +80,14 @@ One concern per library — don't cross them:
 This is a quick operational summary for agents. Canonical wording lives in `docs/architecture.md`.
 
 - IDs: `crypto.randomUUID()`; seeded nodes use stable slugs (`cat-transporte`).
-- Currency: BRL and USD seeded. Accounts/cards are `[:DENOMINATED_IN]` one `:Currency`; transactions carry a denormalized `currency` property. Summaries always group per currency — never convert implicitly.
+- Currency: BRL and USD seeded. Accounts/cards reference one currency (`currency` FK → `currencies`); transactions carry a denormalized `currency` column. Summaries always group per currency — never convert implicitly.
 - Amounts: full units (reais/dollars), positive numbers; `type` (`expense`/`income`) carries the sign.
 - Dates: `YYYY-MM-DD` strings; month/year filters become date range conditions in SQL (`date >= from AND date < to`).
 - Idempotency: every transaction write uses `UNIQUE(idempotency_key)` + `onConflictDoNothing()`; `rowsAffected === 0` means duplicate — return existing row with `created: false`.
-- Classification: `classificationMethod` (`rule|graph|user|none`) + `confidence` stored on every transaction; merchant knowledge lives in the `merchant_category` table (`merchant_key`, `category_id`, `weight`, `origin`).
+- Classification: `classificationMethod` (`rule|history|user|none`) + `confidence` stored on every transaction; merchant knowledge lives in the `merchant_category` table (`merchant_key`, `category_id`, `weight`, `origin: rule|history`).
 - MCP-created transactions store `rawInput` (original natural-language text).
-- Credit cards: transactions are `[:CHARGED_TO]` a card and `[:CONTAINS]`-ed by the cycle's `:Bill` (fatura), auto-created `open` based on the card's `closingDay`. `pay_bill` only flips status — never creates a payment transaction (would double-count).
-- Recurring: `:RecurringRule` with `nextDue`; materialized by `apply_due_recurring` with stable keys `rec-<ruleId>-<date>`.
+- Credit cards: transactions reference a card (`credit_card_id`) and the cycle's bill (`bill_id`); the `bills` row (fatura) is auto-created `open` based on the card's `closingDay`. `pay_bill` only flips status — never creates a payment transaction (would double-count).
+- Recurring: `recurring_rules` rows with `next_due`; materialized by `apply_due_recurring` with stable keys `rec-<ruleId>-<date>`.
 - Bulk import: idempotency keys derived from `date+description+amount`; items with confidence < 0.6 are flagged `needs_review`, not blocked.
 - Transfers: transactions with `type: 'transfer'` and BOTH `from_account_id` AND `to_account_id` set (ADR-002) — one row for the whole movement. Summary/classification queries MUST exclude `t.type = 'transfer'`. Same-currency only until FX lands.
 - Balances: derived, never stored — `initialBalance + income − expenses + transfers in − transfers out`. Transactions AND transfers both move balances.

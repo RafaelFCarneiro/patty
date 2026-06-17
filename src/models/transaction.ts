@@ -9,7 +9,7 @@ export type TransactionType = z.infer<typeof TransactionType>
 export const MovementType = z.enum(['expense', 'income'])
 export type MovementType = z.infer<typeof MovementType>
 
-export const ClassificationMethod = z.enum(['rule', 'graph', 'user', 'none'])
+export const ClassificationMethod = z.enum(['rule', 'history', 'user', 'none'])
 export type ClassificationMethod = z.infer<typeof ClassificationMethod>
 
 export const Classification = z.object({
@@ -44,7 +44,7 @@ export const Transaction = z.object({
 })
 export type Transaction = z.infer<typeof Transaction>
 
-/** Read projection: Transaction node properties with graph-traversal names resolved. */
+/** Read projection: Transaction with joined reference names (account, category, merchant, …). */
 export const TransactionView = z.object({
   id: Id,
   description: z.string().min(1),
