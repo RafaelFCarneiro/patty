@@ -1,0 +1,60 @@
+name: Release
+
+# Publish a new version to GitHub Packages on every push to main that contains
+# releasable commits (feat → minor, fix → patch, BREAKING CHANGE → major).
+# semantic-release derives the version from Conventional Commits; docs/chore/etc.
+# merges produce no release. Gated behind typecheck + tests.
+on:
+  push:
+    branches: [main]
+
+# Avoid overlapping releases if two merges land close together.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, test & publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release + git tag
+      packages: write # publish to GitHub Packages
+      issues: write # semantic-release may comment
+      pull-requests: write # semantic-release may comment
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # semantic-release needs full history + tags
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+          cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@rafaelfcarneiro'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # --- quality gate (publish only if green) ---
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Integration tests
+        run: npm run test:integration
+
+      - name: Build
+        run: npm run build
+
+      # --- release ---
+      - name: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # create release + tag, comment
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # .npmrc auth written by setup-node
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }} # @semantic-release/npm publish auth
+        run: npx semantic-release

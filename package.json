@@ -1,9 +1,27 @@
 {
-  "name": "fintrack",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@rafaelfcarneiro/fintrack",
+  "version": "0.0.0-development",
+  "description": "AI-first personal finance manager — MCP server (local-first, encrypted libSQL).",
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "fintrack": "dist/main.js"
+  },
+  "main": "dist/main.js",
+  "files": [
+    "dist",
+    "drizzle",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RafaelFCarneiro/fintrack.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
   "engines": {
     "node": ">=25 <26",
     "npm": ">=11"
@@ -51,6 +69,7 @@
     "@types/node": "^25.9.3",
     "@vitest/coverage-v8": "^4.1.8",
     "drizzle-kit": "^0.31.10",
+    "semantic-release": "^24.2.0",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
     "vitest": "^4.1.8"
