@@ -26,7 +26,7 @@ describe('deriveIdempotencyKey', () => {
 describe('needsReview', () => {
   it('flags unclassified and low-confidence', () => {
     expect(needsReview({ method: 'none', confidence: 0 })).toBe(true)
-    expect(needsReview({ method: 'graph', confidence: 0.55 })).toBe(true)
+    expect(needsReview({ method: 'history', confidence: 0.55 })).toBe(true)
     expect(needsReview({ method: 'rule', confidence: 0.8 })).toBe(false)
     expect(needsReview({ method: 'user', confidence: 1 })).toBe(false)
   })
