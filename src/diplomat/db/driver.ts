@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto'
+import { mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { Entry } from '@napi-rs/keyring'
 import { createClient } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
@@ -46,6 +48,7 @@ const resolveEncryptionKey = (config: Config): string => {
  * run); throws if neither is available so the DB is never opened unencrypted.
  */
 export const openDatabase = (config: Config): Db => {
+  mkdirSync(dirname(config.DB_PATH), { recursive: true })
   const encryptionKey = resolveEncryptionKey(config)
   const client = createClient({ url: `file:${config.DB_PATH}`, encryptionKey })
   return drizzle(client, { schema })
