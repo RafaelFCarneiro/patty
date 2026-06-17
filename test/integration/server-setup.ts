@@ -29,6 +29,7 @@ beforeAll(async () => {
     DB_PATH: inject('DB_PATH') as string,
     FINTRACK_DB_KEY: TEST_ENCRYPTION_KEY,
     PORT: TEST_PORT,
+    MCP_TRANSPORT: 'http',
   })
 
   await bootstrap(db)
