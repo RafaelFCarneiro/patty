@@ -109,7 +109,7 @@ Ollama serves models; it has no MCP client. Use a bridge such as `ollmcp` (`uvx 
 ## Debugging
 
 ```bash
-# stdio mode — start the MCP Inspector in HTTP proxy mode pointing at the running server
+# MCP Inspector requires HTTP mode (it connects over HTTP, not stdio)
 MCP_TRANSPORT=http npm run dev   # start in HTTP mode
 npm run mcp:inspect              # MCP Inspector UI → http://127.0.0.1:3001/mcp
 

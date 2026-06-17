@@ -40,12 +40,11 @@ const main = async (): Promise<void> => {
     const shutdown = (): void => {
       server.close().catch((err: unknown) => console.error(err)).finally(() => process.exit(0))
     }
-    process.on('SIGINT', shutdown)
-    process.on('SIGTERM', shutdown)
-    // stdin end/close = client disconnected; exit cleanly (Node may emit either)
-    const onDisconnect = (): void => process.exit(0)
-    process.stdin.on('end', onDisconnect)
-    process.stdin.on('close', onDisconnect)
+    process.once('SIGINT', shutdown)
+    process.once('SIGTERM', shutdown)
+    // stdin end/close = client disconnected; route through shutdown to drain in-flight work
+    process.stdin.once('end', shutdown)
+    process.stdin.once('close', shutdown)
     return
   }
 
