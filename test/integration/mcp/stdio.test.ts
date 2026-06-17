@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js'
+import { McpTransport } from '../../../src/config.js'
 import { callTool } from './helpers.js'
 
 // Fixed 64-char hex key — never touches the OS keychain
@@ -25,7 +26,7 @@ beforeAll(async () => {
     args: [ENTRY],
     env: {
       ...process.env,
-      MCP_TRANSPORT: 'stdio',
+      MCP_TRANSPORT: McpTransport.enum.stdio,
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: TEST_KEY,
     },

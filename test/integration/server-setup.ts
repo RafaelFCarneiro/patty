@@ -12,6 +12,7 @@ import { merchantsRepo } from '../../src/diplomat/db/repos/merchants.js'
 import { recurringRepo } from '../../src/diplomat/db/repos/recurring.js'
 import { tagsRepo } from '../../src/diplomat/db/repos/tags.js'
 import { transactionsRepo } from '../../src/diplomat/db/repos/transactions.js'
+import { McpTransport } from '../../src/config.js'
 import { registerRoutes } from '../../src/diplomat/http/routes.js'
 import { registerMcpRoute } from '../../src/diplomat/mcp/route.js'
 
@@ -29,7 +30,7 @@ beforeAll(async () => {
     DB_PATH: inject('DB_PATH') as string,
     FINTRACK_DB_KEY: TEST_ENCRYPTION_KEY,
     PORT: TEST_PORT,
-    MCP_TRANSPORT: 'http',
+    MCP_TRANSPORT: McpTransport.enum.http,
   })
 
   await bootstrap(db)
