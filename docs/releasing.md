@@ -62,7 +62,7 @@ If you installed globally instead:
 ```bash
 npm view @rafaelfcarneiro/fintrack version          # what's the latest published?
 npm update -g @rafaelfcarneiro/fintrack             # update to it
-fintrack --version  ||  npm ls -g @rafaelfcarneiro/fintrack   # confirm installed version
+npm ls -g @rafaelfcarneiro/fintrack   # confirm installed version
 ```
 
 Upgrades are safe to run anytime: the database migrates itself forward on the next start
