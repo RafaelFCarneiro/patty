@@ -27,7 +27,7 @@ Then run it — by default it starts as a **stdio MCP server** (no port, no setu
 npx @rafaelfcarneiro/fintrack@latest
 ```
 
-On first run it creates `~/.fintrack/fintrack.db` and generates the encryption key in your keychain.
+On first run it creates `<home directory>/.fintrack/fintrack.db` (e.g. `~/.fintrack/fintrack.db` on macOS/Linux) and generates the encryption key in your keychain.
 
 ### From source (development)
 
@@ -117,7 +117,7 @@ npm run test:integration  # MCP integration tests — in-process libSQL DB, no D
 npm run test:all          # both
 ```
 
-Integration tests run against an ephemeral in-process libSQL database, exercise the full MCP tool suite, and never touch your real `~/.fintrack/fintrack.db`.
+Integration tests run against an ephemeral in-process libSQL database, exercise the full MCP tool suite, and never touch your real `<home directory>/.fintrack/fintrack.db`.
 
 ---
 

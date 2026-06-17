@@ -49,9 +49,10 @@ const resolveEncryptionKey = (config: Config): string => {
  * run); throws if neither is available so the DB is never opened unencrypted.
  */
 export const openDatabase = (config: Config): Db => {
-  // mode 0o700: only the owner can read/list the directory — other local users must not access the DB
-  mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 })
   const encryptionKey = resolveEncryptionKey(config)
+  // mode 0o700: only the owner can read/list the directory — other local users must not access the DB
+  // mkdir after key resolution so a missing keychain fails fast without creating filesystem side-effects
+  mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 })
   const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey })
   return drizzle(client, { schema })
 }
