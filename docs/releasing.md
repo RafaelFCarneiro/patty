@@ -49,6 +49,50 @@ This starts REST + MCP on `http://localhost:3001` exactly like `npm run dev`, us
 `http://127.0.0.1:3001/mcp` as in `docs/mcp-clients.md` — the package only replaces the clone + `npm run dev`
 step with a single command.
 
+## Updating to a new version
+
+`npx` resolves to the latest published version, but it caches. To always run the newest:
+
+```bash
+npx @rafaelfcarneiro/fintrack@latest     # bypasses the npx cache, fetches newest
+```
+
+If you installed globally instead:
+
+```bash
+npm view @rafaelfcarneiro/fintrack version          # what's the latest published?
+npm update -g @rafaelfcarneiro/fintrack             # update to it
+fintrack --version  ||  npm ls -g @rafaelfcarneiro/fintrack   # confirm installed version
+```
+
+Upgrades are safe to run anytime: the database migrates itself forward on the next start
+(`bootstrap()` applies any pending Drizzle migrations idempotently), and your `fintrack.db` is untouched
+otherwise. You'll see new releases on the repo's **Releases** page with auto-generated notes.
+
+## Port configuration & running multiple MCP servers
+
+The server binds **one fixed port** (default `3001`), set via the `PORT` env var. It does **not** auto-pick
+a free port — that's deliberate, because your MCP client config points at a fixed URL, so the port must be
+stable and known.
+
+If you run several HTTP-based MCP servers, give each its own port:
+
+```bash
+PORT=3007 npx @rafaelfcarneiro/fintrack
+# then point the client at http://127.0.0.1:3007/mcp
+```
+
+If the chosen port is already taken, startup fails fast with an actionable message (the port number and the
+exact `PORT=… fintrack` command to retry) rather than a raw `EADDRINUSE` stack trace.
+
+How this lands in each client (the client connects to a running server; it doesn't launch it):
+
+- **VS Code** `.vscode/mcp.json`: set the `url` to your chosen port, e.g. `http://127.0.0.1:3007/mcp`.
+- **Claude Desktop**: the `mcp-remote` bridge arg is the URL — point it at the same port.
+
+Start the server with the matching `PORT`, and the two agree. (A future stdio transport would remove ports
+from the equation entirely — stdio MCP servers can't conflict — but the HTTP server uses a port today.)
+
 ## Cutting a first release
 
 Versioning starts from `v1.0.0` on the first `feat:`-or-higher commit merged to `main` (semantic-release's
