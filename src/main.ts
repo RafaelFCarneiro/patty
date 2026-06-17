@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto'
-import Fastify from 'fastify'
-import { loadConfig } from './config.js'
+import { loadConfig, McpTransport } from './config.js'
 import type { Deps } from './controllers/deps.js'
 import { bootstrap } from './diplomat/db/bootstrap.js'
 import { openDatabase } from './diplomat/db/driver.js'
@@ -14,8 +13,7 @@ import { merchantsRepo } from './diplomat/db/repos/merchants.js'
 import { recurringRepo } from './diplomat/db/repos/recurring.js'
 import { tagsRepo } from './diplomat/db/repos/tags.js'
 import { transactionsRepo } from './diplomat/db/repos/transactions.js'
-import { registerRoutes } from './diplomat/http/routes.js'
-import { registerMcpRoute } from './diplomat/mcp/route.js'
+import { connectStdio } from './diplomat/mcp/stdio.js'
 
 const main = async (): Promise<void> => {
   const config = loadConfig()
@@ -36,6 +34,23 @@ const main = async (): Promise<void> => {
     clock: () => new Date(),
     newId: () => randomUUID(),
   }
+
+  if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
+    const server = await connectStdio(deps)
+    const shutdown = (): void => {
+      server.close().catch((err: unknown) => console.error(err)).finally(() => process.exit(0))
+    }
+    process.on('SIGINT', shutdown)
+    process.on('SIGTERM', shutdown)
+    // stdin close = client disconnected; exit cleanly
+    process.stdin.on('close', () => process.exit(0))
+    return
+  }
+
+  // MCP_TRANSPORT === 'http': start Fastify with REST + streamable HTTP MCP
+  const { default: Fastify } = await import('fastify')
+  const { registerRoutes } = await import('./diplomat/http/routes.js')
+  const { registerMcpRoute } = await import('./diplomat/mcp/route.js')
 
   const app = Fastify({ logger: true })
   registerRoutes(app, deps)
