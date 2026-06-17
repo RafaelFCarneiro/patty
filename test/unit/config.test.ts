@@ -55,4 +55,14 @@ describe('loadConfig', () => {
     const config = loadConfig()
     expect(config.DB_PATH).toBe('/custom/path/my.db')
   })
+
+  it('rejects a relative DB_PATH override', () => {
+    process.env['DB_PATH'] = 'relative/path/my.db'
+    expect(() => loadConfig()).toThrow()
+  })
+
+  it('rejects a tilde-prefixed DB_PATH override', () => {
+    process.env['DB_PATH'] = '~/.fintrack/fintrack.db'
+    expect(() => loadConfig()).toThrow()
+  })
 })

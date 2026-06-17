@@ -25,7 +25,7 @@ describe('openDatabase directory creation', () => {
   it('creates nested parent directories that do not yet exist', async () => {
     const nestedPath = join(tmpDir, 'a', 'b', 'c', 'nested.db')
     const db = openDatabase({ DB_PATH: nestedPath, FINTRACK_DB_KEY: CORRECT_KEY, PORT: 3001, MCP_TRANSPORT: McpTransport.enum.http })
-    await expect(bootstrap(db)).resolves.not.toThrow()
+    await bootstrap(db)
   })
 })
 

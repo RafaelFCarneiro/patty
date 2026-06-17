@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { Entry } from '@napi-rs/keyring'
 import { createClient } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
@@ -51,6 +52,6 @@ export const openDatabase = (config: Config): Db => {
   // mode 0o700: only the owner can read/list the directory — other local users must not access the DB
   mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 })
   const encryptionKey = resolveEncryptionKey(config)
-  const client = createClient({ url: `file:${config.DB_PATH}`, encryptionKey })
+  const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey })
   return drizzle(client, { schema })
 }
