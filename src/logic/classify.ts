@@ -1,5 +1,6 @@
 import * as R from 'remeda'
-import type { Classification, ClassifyOutcome } from '../models/transaction.js'
+import { ClassificationMethod } from '../models/transaction.js'
+import type { ClassifyOutcome } from '../models/transaction.js'
 
 /** A merchant→category candidate from the merchant_category lookup. */
 export type MerchantMatch = {
@@ -8,7 +9,7 @@ export type MerchantMatch = {
   categoryName: string
   weight: number
   /** seeded rules vs learned-from-user-history associations */
-  origin: 'rule' | 'history'
+  origin: typeof ClassificationMethod.enum.rule | typeof ClassificationMethod.enum.history
 }
 
 /**
