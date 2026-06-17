@@ -54,12 +54,15 @@ const main = async (): Promise<void> => {
   console.log(`fintrack: REST http://localhost:${config.PORT}/api · MCP http://localhost:${config.PORT}/mcp`)
 }
 
-const isPortInUse = (e: unknown): e is { code: string; port?: number } =>
-  typeof e === 'object' && e !== null && (e as { code?: string }).code === 'EADDRINUSE'
+const isPortInUse = (e: unknown): e is { code: string; port: number } =>
+  typeof e === 'object' &&
+  e !== null &&
+  (e as { code?: string }).code === 'EADDRINUSE' &&
+  typeof (e as { port?: unknown }).port === 'number'
 
 main().catch((e: unknown) => {
   if (isPortInUse(e)) {
-    const port = e.port ?? loadConfig().PORT
+    const port = e.port
     console.error(
       `fintrack: port ${port} is already in use (another service or MCP server is on it).\n` +
         `Set a different port and retry, e.g.  PORT=${port + 1} fintrack\n` +
