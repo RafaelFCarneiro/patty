@@ -1,5 +1,6 @@
 import { check, foreignKey, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
+import { ClassificationMethod } from '../../models/transaction.js'
 
 export const currencies = sqliteTable('currencies', {
   code:   text('code').primaryKey(),
@@ -41,7 +42,7 @@ export const merchantCategory = sqliteTable('merchant_category', {
   merchantKey: text('merchant_key').notNull().references(() => merchants.key),
   categoryId:  text('category_id').notNull().references(() => categories.id),
   weight:      real('weight').notNull().default(1),
-  origin:      text('origin', { enum: ['rule', 'graph'] }).notNull(),
+  origin:      text('origin', { enum: [ClassificationMethod.enum.rule, ClassificationMethod.enum.history] }).notNull(),
   lastSeen:    integer('last_seen'),
 }, (t) => [
   primaryKey({ columns: [t.merchantKey, t.categoryId] }),
@@ -73,7 +74,7 @@ export const transactions = sqliteTable('transactions', {
   currency:             text('currency').notNull().references(() => currencies.code),
   source:               text('source', { enum: ['mcp', 'rest', 'import'] }).notNull(),
   idempotencyKey:       text('idempotency_key').notNull().unique(),
-  classificationMethod: text('classification_method', { enum: ['rule', 'graph', 'user', 'none'] }).notNull(),
+  classificationMethod: text('classification_method', { enum: ClassificationMethod.options }).notNull(),
   confidence:           real('confidence').notNull(),
   rawInput:             text('raw_input'),
   fromAccountId:        text('from_account_id').references(() => accounts.id),

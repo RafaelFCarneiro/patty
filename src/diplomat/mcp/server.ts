@@ -51,7 +51,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       title: 'Create transaction',
       description:
         'Create an expense or income from natural input. Resolves account/category by name; ' +
-        'when category is omitted, classifies via the merchant graph and returns method + confidence ' +
+        'when category is omitted, classifies via learned merchant→category associations and returns method + confidence ' +
         '(confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — generate a ' +
         'stable key like "<date>-<description>-<amount>". Currency comes from the account, or the ' +
         'currency field (default BRL).',
@@ -206,7 +206,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       title: 'Update transaction',
       description:
         'Update fields of an existing transaction by id (from search_transactions). Only provided fields ' +
-        'change. Setting category counts as a user correction (confidence 1) and teaches the merchant graph. ' +
+        'change. Setting category counts as a user correction (confidence 1) and strengthens the merchant→category association. ' +
         'Changing the account also updates the currency to match it.',
       inputSchema: {
         id: z.string().min(1).describe('Transaction id'),
@@ -297,7 +297,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     {
       title: 'Get account balances',
       description:
-        'Current balance per account, derived from the graph: initialBalance + income − expenses ' +
+        'Current balance per account, derived: initialBalance + income − expenses ' +
         '+ transfers in − transfers out. Optionally filter by account name or type.',
       inputSchema: {
         account: z.string().optional().describe('Single account by name'),

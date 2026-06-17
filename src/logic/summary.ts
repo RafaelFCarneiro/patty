@@ -2,7 +2,7 @@ import * as R from 'remeda'
 import type { CurrencyCode } from '../models/common.js'
 import type { TransactionType } from '../models/transaction.js'
 
-/** Raw aggregation row from the graph (transfers already excluded in Cypher). */
+/** Raw aggregation row from the database (transfers already excluded in SQL). */
 export type SummaryRow = {
   currency: CurrencyCode
   type: TransactionType

@@ -68,7 +68,7 @@ accounts            (id PK, name, type, initial_balance, currency FK→currencie
 credit_cards        (id PK, name, currency FK, closing_day, due_day, limit_amount?)
 categories          (id PK, name, kind: expense|income|both, parent_id FK→self)
 merchants           (key PK)
-merchant_category   (merchant_key FK, category_id FK — composite PK; weight, origin: rule|graph)
+merchant_category   (merchant_key FK, category_id FK — composite PK; weight, origin: rule|history)
 tags                (id PK, name UNIQUE)
 bills               (id PK, credit_card_id FK, month, year, close_date, due_date,
                      status: open|closed|paid — UNIQUE(credit_card_id, month, year))
@@ -104,7 +104,7 @@ Repos live in `src/diplomat/db/repos/`; each accepts a `Db` (`LibSQLDatabase<typ
 
 ## Tool surface
 
-19 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
+24 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
 
 ## ADR index
 
