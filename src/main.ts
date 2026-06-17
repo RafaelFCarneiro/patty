@@ -42,8 +42,10 @@ const main = async (): Promise<void> => {
     }
     process.on('SIGINT', shutdown)
     process.on('SIGTERM', shutdown)
-    // stdin close = client disconnected; exit cleanly
-    process.stdin.on('close', () => process.exit(0))
+    // stdin end/close = client disconnected; exit cleanly (Node may emit either)
+    const onDisconnect = (): void => process.exit(0)
+    process.stdin.on('end', onDisconnect)
+    process.stdin.on('close', onDisconnect)
     return
   }
 

@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -10,8 +10,8 @@ import { callTool } from './helpers.js'
 
 // Fixed 64-char hex key — never touches the OS keychain
 const TEST_KEY = 'd'.repeat(64)
-const TSX = resolve('node_modules/.bin/tsx')
-const ENTRY = resolve('src/main.ts')
+// tsx is on PATH via npm scripts; use by name for portability
+const ENTRY = 'src/main.ts'
 
 let tmpDir: string
 let client: Client
@@ -22,7 +22,7 @@ beforeAll(async () => {
   const dbPath = join(tmpDir, 'stdio.db')
 
   transport = new StdioClientTransport({
-    command: TSX,
+    command: 'tsx',
     args: [ENTRY],
     env: {
       ...process.env,
