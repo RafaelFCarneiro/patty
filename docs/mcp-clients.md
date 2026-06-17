@@ -1,6 +1,6 @@
 # Connecting FinTrack's MCP to AI clients
 
-The backend exposes MCP over streamable HTTP at `http://127.0.0.1:3001/mcp` (stateless). Backend must be running: `npm run infra:up:db && npm run dev`. Tool contract: `docs/mcp-tools.md`.
+This guide covers **HTTP-based** client connections. The default and simplest setup is **stdio** (the client launches FinTrack directly — no port, no bridge); see the README's "Connecting to AI clients". For HTTP, start the backend in HTTP mode — `MCP_TRANSPORT=http npm run dev` (from source) or `MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack` — which serves streamable HTTP MCP at `http://127.0.0.1:3001/mcp` (stateless). Tool contract: `docs/mcp-tools.md`.
 
 ## Claude Desktop ✅ working
 
