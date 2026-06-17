@@ -50,8 +50,8 @@ const resolveEncryptionKey = (config: Config): string => {
  */
 export const openDatabase = (config: Config): Db => {
   const encryptionKey = resolveEncryptionKey(config)
-  // mode 0o700: only the owner can read/list the directory — other local users must not access the DB
-  // mkdir after key resolution so a missing keychain fails fast without creating filesystem side-effects
+  // mode 0o700 applies only when the directory is first created; pre-existing directories
+  // keep their current permissions (Node does not retroactively tighten them).
   mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 })
   const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey })
   return drizzle(client, { schema })
