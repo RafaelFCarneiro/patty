@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { isAbsolute } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { loadConfig } from '../../src/config.js'
 
@@ -39,5 +41,28 @@ describe('loadConfig', () => {
 
   it('allows FINTRACK_DB_KEY to be omitted (falls back to keychain)', () => {
     expect(() => loadConfig()).not.toThrow()
+  })
+
+  it('default DB_PATH is an absolute path inside the home directory', () => {
+    delete process.env['DB_PATH']
+    const config = loadConfig()
+    expect(isAbsolute(config.DB_PATH)).toBe(true)
+    expect(config.DB_PATH.startsWith(homedir())).toBe(true)
+  })
+
+  it('DB_PATH env override is respected', () => {
+    process.env['DB_PATH'] = '/custom/path/my.db'
+    const config = loadConfig()
+    expect(config.DB_PATH).toBe('/custom/path/my.db')
+  })
+
+  it('rejects a relative DB_PATH override', () => {
+    process.env['DB_PATH'] = 'relative/path/my.db'
+    expect(() => loadConfig()).toThrow()
+  })
+
+  it('rejects a tilde-prefixed DB_PATH override', () => {
+    process.env['DB_PATH'] = '~/.fintrack/fintrack.db'
+    expect(() => loadConfig()).toThrow()
   })
 })
