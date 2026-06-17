@@ -1,4 +1,7 @@
 import { randomBytes } from 'node:crypto'
+import { mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { Entry } from '@napi-rs/keyring'
 import { createClient } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
@@ -47,6 +50,9 @@ const resolveEncryptionKey = (config: Config): string => {
  */
 export const openDatabase = (config: Config): Db => {
   const encryptionKey = resolveEncryptionKey(config)
-  const client = createClient({ url: `file:${config.DB_PATH}`, encryptionKey })
+  // mode 0o700 applies only when the directory is first created; pre-existing directories
+  // keep their current permissions (Node does not retroactively tighten them).
+  mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 })
+  const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey })
   return drizzle(client, { schema })
 }

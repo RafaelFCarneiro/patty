@@ -21,6 +21,14 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
+describe('openDatabase directory creation', () => {
+  it('creates nested parent directories that do not yet exist', async () => {
+    const nestedPath = join(tmpDir, 'a', 'b', 'c', 'nested.db')
+    const db = openDatabase({ DB_PATH: nestedPath, FINTRACK_DB_KEY: CORRECT_KEY, PORT: 3001, MCP_TRANSPORT: McpTransport.enum.http })
+    await bootstrap(db)
+  })
+})
+
 describe('encryption at rest', () => {
   it('opens and seeds the DB with the correct key', async () => {
     const db = openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: CORRECT_KEY, PORT: 3001, MCP_TRANSPORT: McpTransport.enum.http })
