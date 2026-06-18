@@ -66,9 +66,10 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         category: z.string().optional().describe('Category name; omit when using subCategory or to auto-classify. expense transactions need an expense/both category; income needs income/both'),
         subCategory: z.string().optional().describe('Sub-category name (implies its parent category — do not set both category and subCategory)'),
         currency: CurrencyCode.optional(),
-        status: TransactionStatus.optional().default(TransactionStatus.enum.effective).describe(
-          '"effective" (default) = already happened; "pending" = expected but not yet cleared. ' +
-          'Pending transactions are excluded from balances and summaries until confirmed.',
+        status: TransactionStatus.optional().describe(
+          'Omit to use the date-aware default (future date → pending, today/past → effective). ' +
+          '"effective" = already happened, counts toward balances and summaries. ' +
+          '"pending" = expected but not yet cleared, excluded until confirmed.',
         ),
         idempotencyKey: z.string().min(1),
         rawInput: z.string().optional().describe('Original user phrasing, for audit'),

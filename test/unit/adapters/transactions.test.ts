@@ -90,7 +90,7 @@ const sqlRow = (overrides: Record<string, unknown> = {}): Record<string, unknown
   description: 'Uber',
   amount: 32.5,
   type: 'expense',
-  status: 'effective',
+  status: TransactionStatus.enum.effective,
   date: '2026-06-09',
   currency: CurrencyCode.enum.BRL,
   source: TransactionSource.enum.mcp,

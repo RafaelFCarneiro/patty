@@ -1,4 +1,4 @@
-import { TransactionStatus, TransactionView, type Transaction, type TransactionPatch } from '../models/transaction.js'
+import { TransactionView, type Transaction, type TransactionPatch } from '../models/transaction.js'
 import type {
   CreateTransactionInput,
   CreateTransactionResult,

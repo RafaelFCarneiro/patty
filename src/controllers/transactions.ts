@@ -69,8 +69,9 @@ export const createTransaction = (
       )
     }
 
-    const date = input.date ?? toIsoDate(deps.clock())
-    const status = input.status ?? defaultStatusFor(date, toIsoDate(deps.clock()))
+    const today = toIsoDate(deps.clock())
+    const date = input.date ?? today
+    const status = input.status ?? defaultStatusFor(date, today)
 
     const { transaction, created } = await deps.transactions.create(
       {
