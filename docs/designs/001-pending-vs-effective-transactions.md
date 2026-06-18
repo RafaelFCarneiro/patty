@@ -31,9 +31,10 @@ transaction: has it cleared yet, or is it still expected?
 
 Add a **`status`** field to transactions: **`pending | effective`**, default **`effective`**.
 
-1. **Default `effective`.** Logging a transaction means it happened; the common path is unchanged. A caller
-   opts into a forecast by passing `status: 'pending'` (e.g. "I'll get my salary on the 5th"). Status is
-   **explicit**, not derived from the date — predictable over clever.
+1. **Date-aware default.** When `status` is omitted, it is derived from the transaction date: future-dated
+   transactions default to `pending`; past/present ones default to `effective`. An explicit `status` always
+   wins. This makes common paths natural — logging yesterday's expense is effective automatically; scheduling
+   next month's salary is pending automatically.
 2. **Effective-only by default everywhere that means "now".** `get_account_balances` and
    `get_spending_summary` count **only `effective`** transactions. The real balance and "what I spent" are
    never polluted by expectations. This is a hard invariant (see below).
@@ -111,8 +112,9 @@ literals via zod `.enum.*`, zod at boundaries, remeda for ≥2-stage transforms)
 2. **Schema + migration** (`schema.ts` + `drizzle/`): add `status text not null default 'effective'` to
    `transactions`; `npx drizzle-kit generate`. Existing rows become `effective` (correct). Add an index on
    `(status, date)` for the scheduling query.
-3. **Create paths** (`create_transaction`, `create_transactions_bulk`): optional `status`, default `effective`.
-   Status is explicit — do **not** derive it from the date. Transfers and card transactions may be pending too.
+3. **Create paths** (`create_transaction`, `create_transactions_bulk`): optional `status`; when omitted,
+   default = `pending` if `date > today`, `effective` otherwise. An explicit `status` always wins. Transfers
+   and card transactions may be pending too.
 4. **`confirm_transaction`** (new tool + controller): flips `pending → effective` by id; mirror `pay_bill`.
    Errors: `unknown_transaction`; if already effective, return a clear `validation`/no-op (decide + document).
    Pure `safeTry` controller.
@@ -131,7 +133,7 @@ literals via zod `.enum.*`, zod at boundaries, remeda for ≥2-stage transforms)
 - **Gate:** `npm run typecheck && npm test && npm run test:integration && npm run build` (all green).
 
 ### Invariants — do not break
-- **Default `effective`** — existing create path and tests behave unchanged.
+- **Date-aware default** — omitting `status` defaults to `pending` for future dates, `effective` for past/present. An explicit `status` always overrides. Existing past-dated creates are unchanged.
 - **Balances/summaries are effective-only**; projection is always opt-in via an explicit param. Pending never
   leaks into "now".
 - **Classification ignores status.** Constants over literals (`TransactionStatus.enum.*`).

@@ -69,13 +69,18 @@ export const createTransaction = (
     }
 
     const date = input.date ?? toIsoDate(deps.clock())
+    const today = toIsoDate(deps.clock())
+    const status =
+      input.status ??
+      (date > today ? TransactionStatus.enum.pending : TransactionStatus.enum.effective)
+
     const { transaction, created } = await deps.transactions.create(
       {
         id: deps.newId(),
         description: input.description,
         amount: input.amount,
         type: input.type,
-        status: input.status ?? TransactionStatus.enum.effective,
+        status,
         date,
         currency: resolveCurrency(account, card, input),
         source,

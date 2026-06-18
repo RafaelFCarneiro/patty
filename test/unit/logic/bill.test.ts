@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { CurrencyCode } from '../../../src/models/common.js'
-import { ClassificationMethod, TransactionSource, TransactionType, TransactionView } from '../../../src/models/transaction.js'
+import { ClassificationMethod, TransactionSource, TransactionStatus, TransactionType, TransactionView } from '../../../src/models/transaction.js'
 import { billPeriodFor, computeBillTotal } from '../../../src/logic/bill.js'
 
 const tx = (type: TransactionType, amount: number): TransactionView =>
   TransactionView.parse({
     id: crypto.randomUUID(), description: 'test', amount, type,
-    status: 'effective',
+    status: TransactionStatus.enum.effective,
     date: '2026-06-01', currency: CurrencyCode.enum.BRL,
     source: TransactionSource.enum.mcp, idempotencyKey: `k-${amount}-${type}`,
     classification: { method: ClassificationMethod.enum.none, confidence: 0 },

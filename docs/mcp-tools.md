@@ -13,7 +13,7 @@ Create an expense/income. Omitting `category`/`subCategory` triggers auto-classi
 
 Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `category` OR `subCategory` (not both — `subCategory` implies its parent category), `currency`, `rawInput` (original user phrasing), `tags`, `status` (`effective|pending`, default `effective`).
 
-**`status` field**: `effective` (default) means the transaction has cleared and counts toward balances, summaries, and the current balance. `pending` means it is expected but not yet cleared — it is excluded from balances and summaries until `confirm_transaction` is called. Status is explicit; it is never auto-flipped by the passage of the transaction's date.
+**`status` field**: `effective` means the transaction has cleared; it counts toward balances and summaries. `pending` means it is expected but not yet cleared — excluded from balances and summaries until `confirm_transaction` is called. **Default is date-aware**: when omitted, future-dated transactions default to `pending` and past/present transactions default to `effective`. An explicit `status` always overrides the default. Status is never auto-flipped by the passage of the date — call `confirm_transaction` explicitly.
 
 **Kind validation**: `expense` transactions must use a category/sub-category with `kind: expense` or `both`; `income` transactions must use `kind: income` or `both`. Violation returns `category_kind_mismatch`.
 

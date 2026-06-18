@@ -90,7 +90,7 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 - Recurring: `recurring_rules` rows with `next_due`; materialized by `apply_due_recurring` with stable keys `rec-<ruleId>-<date>`.
 - Bulk import: idempotency keys derived from `date+description+amount`; items with confidence < 0.6 are flagged `needs_review`, not blocked.
 - Transfers: transactions with `type: 'transfer'` and BOTH `from_account_id` AND `to_account_id` set (ADR-002) — one row for the whole movement. Summary/classification queries MUST exclude `t.type = 'transfer'`. Same-currency only until FX lands.
-- Transaction status: `pending | effective` (default `effective`). `effective` = cleared, counts toward balances/summaries. `pending` = expected but not yet real; excluded from balances and summaries; confirmed via `confirm_transaction`. Status is **explicit** — never derived from the date. Classification ignores status.
+- Transaction status: `pending | effective`. `effective` = cleared, counts toward balances/summaries. `pending` = expected but not yet real; excluded from balances and summaries; confirmed via `confirm_transaction`. **Default is date-aware**: when `status` is omitted, future-dated transactions default to `pending`, past/present to `effective`; an explicit `status` always wins. Classification ignores status.
 - Balances: derived, never stored — `initialBalance + income − expenses + transfers in − transfers out`. **Only `effective` transactions count.** Projection (effective + pending-through-date) is opt-in via `projectedAsOf` on `get_account_balances`.
 - SQL queries: always use Drizzle's parameterized API or the `sql` template tag — never interpolate user input into query strings.
 
