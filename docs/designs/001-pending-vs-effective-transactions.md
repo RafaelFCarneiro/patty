@@ -1,8 +1,13 @@
 # Feature Design 001: Pending vs. effective transactions
 
-**Type:** Feature design (not an ADR — a feature + technical assessment) · **Status:** Accepted ·
+**Type:** Feature design (not an ADR — a feature + technical assessment) · **Design status:** Accepted ·
+**Implementation status:** Not started · **Branch:** `feat/pending-transactions` ·
 **Date:** 2026-06-17 · Extends the transaction model in `docs/architecture.md`. The durable invariant this
 produces (balances/summaries are effective-only) lands in `docs/architecture.md` when implemented.
+
+> **Implementation status** tracks delivery, distinct from the design's acceptance. Values:
+> `Not started` · `In progress` · `Done` · `Blocked`. The implementing PR updates this line (→ `In progress`
+> when work starts, → `Done` on merge); use `Blocked` with a one-line reason if stuck.
 
 ## Context
 
@@ -134,7 +139,9 @@ literals via zod `.enum.*`, zod at boundaries, remeda for ≥2-stage transforms)
   `logic/`; no domain leak into transports.
 - **Docs in the same change**: `docs/mcp-tools.md` (status on create, `confirm_transaction`, `projectedAsOf`,
   search `status`), `docs/architecture.md` (the effective-only invariant + the `status` column), `CLAUDE.md`
-  data conventions. Leave this design doc as-is.
+  data conventions. Leave the rest of this design doc as-is — **except** update the **Implementation status**
+  header line (→ `In progress` when you start, → `Done` in the commit that the PR merges; `Blocked` + reason
+  if stuck).
 - **Out of scope**: recurring rules materializing pending occurrences; Cowork notification wiring; auto-confirm
   on date pass — note as follow-ups, don't build.
 
