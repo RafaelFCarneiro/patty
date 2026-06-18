@@ -1,8 +1,13 @@
 # Feature Design 002: Localized default categories (i18n)
 
-**Type:** Feature design (not an ADR — a feature + technical assessment) · **Status:** Accepted ·
+**Type:** Feature design (not an ADR — a feature + technical assessment) · **Design status:** Accepted ·
+**Implementation status:** Not started · **Branch:** `feat/category-i18n` ·
 **Date:** 2026-06-17 · Refines the category model in `docs/architecture.md`. The durable invariants this
 produces (category identity = slug; display name resolved per locale) land in `docs/architecture.md` when implemented.
+
+> **Implementation status** tracks delivery, distinct from the design's acceptance. Values:
+> `Not started` · `In progress` · `Done` · `Blocked`. The implementing PR updates this line (→ `In progress`
+> when work starts, → `Done` on merge); use `Blocked` with a one-line reason if stuck.
 
 ## Context
 
@@ -171,7 +176,9 @@ set. The pure-data map (Option A) is lighter and version-controlled. Rejected fo
   adapter/controller boundary; constants over literals (locale zod enum `.enum.*`).
 - **Docs in the same change**: `docs/mcp-tools.md` (`set_locale`/`get_preferences`; `list_categories` is
   locale-resolved), `docs/architecture.md` (English seed, `settings`, `i18n_key`, identity-vs-name invariant),
-  `CLAUDE.md` data conventions. Leave this design doc as-is.
+  `CLAUDE.md` data conventions. Leave the rest of this design doc as-is — **except** update the
+  **Implementation status** header line (→ `In progress` when you start, → `Done` in the commit that the PR
+  merges; `Blocked` + reason if stuck).
 
 ### Finish
 Conventional Commits (`feat(categories): English-canonical seed + i18n + AI-driven locale` + `test:`/`docs:`),

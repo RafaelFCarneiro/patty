@@ -17,3 +17,8 @@ single source of truth for the system as built; the design doc is the reasoning 
 **Each design doc is self-contained.** It ends with an **`## Implementation prompt`** section — the execution
 guide a coding agent follows to build the feature. To kick off implementation, point the agent at the doc:
 *"Implement the feature in `docs/designs/NNN-…md` — follow its Implementation prompt."*
+
+**Each doc carries an Implementation status** in its header — delivery state, distinct from the design's
+acceptance: `Not started` · `In progress` · `Done` · `Blocked`. The implementing PR updates it (→ `In progress`
+when work starts, → `Done` on merge; `Blocked` + a one-line reason if stuck). At a glance, the header tells you
+whether a feature is built.
