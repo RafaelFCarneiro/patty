@@ -30,11 +30,15 @@ or resolved per-locale at read time, and — since the default language is now E
    translations. *(Region-specific merchant packs — e.g. seeding BR merchants when locale is `pt` — are a
    noted future extension, see out of scope.)*
 2. **Locale is AI-determined, stored, env-overridable, with an `en` cold-start.** A single-row **`settings`**
-   table holds `locale` (`pt | es | en`). The **AI agent is the primary setter**: it infers the user's
-   language from the conversation and calls **`set_locale`** to match. `FINTRACK_LOCALE` overrides at startup
-   (testing/CI). Resolution: `FINTRACK_LOCALE ?? settings.locale ?? 'en'`. The `set_locale` tool's description
-   instructs the agent: *if the user communicates in a language other than the current locale, switch to it.*
-   `get_preferences` exposes the current locale so the agent can see and reason about it.
+   table holds `locale` (`pt | es | en`) plus a `locale_source` (`default | inferred | explicit`). The **AI
+   agent is the primary setter**: it infers the user's language from the conversation and calls **`set_locale`**
+   to match. `FINTRACK_LOCALE` overrides at startup (testing/CI). Resolution:
+   `FINTRACK_LOCALE ?? settings.locale ?? 'en'`. Two guardrails (in the `set_locale` tool description):
+   - **Anti-churn:** switch only on a *clear, sustained* language change — not on isolated words, merchant
+     names, or other proper nouns. Don't oscillate.
+   - **Respect explicit choice:** if the user set the locale explicitly (`locale_source = explicit`), the agent
+     does not silently auto-switch away from it. `get_preferences` exposes the current locale and source so
+     the agent can reason about both.
 3. **Default categories carry an i18n key; names resolve at read time.** Add a nullable **`i18n_key`** column
    to `categories`. Default (seeded) categories set it (the English slug doubles as the key, e.g. `cat-food`);
    user-created categories leave it `null` and keep their literal `name`. On read, the display name is:
@@ -52,9 +56,10 @@ or resolved per-locale at read time, and — since the default language is now E
 ## Scope / out of scope
 
 - **In:** English-canonical seed (English slug IDs, English fallback names, international merchant rules);
-  the old-slug → new-slug remap migration for existing databases; `settings` table + AI-driven locale
-  (`set_locale`, env-overridable, default en); `i18n_key` on categories; read-time name resolution; pt/es/en
-  translations for the default categories; locale-aware `resolveByName`; `set_locale`/`get_preferences` tools.
+  a manual `scripts/reset-local-db.sh` to wipe the dev DB (clean slate — **no** remap migration); `settings`
+  table + AI-driven locale (`set_locale` with anti-churn + explicit-override guardrails, env-overridable,
+  default en); `i18n_key` on categories; read-time name resolution; pt/es/en translations for the default
+  categories; locale-aware `resolveByName`; `set_locale`/`get_preferences` tools.
 - **Out:** **region-specific merchant packs** (e.g. seeding BR merchants — ifood, 99, rappi — when locale is
   `pt`); localizing **sub-categories**, **tags**, or user-created categories (user literals); localizing tool
   descriptions / error messages / currency names; RTL or pluralization machinery. Adding locales beyond
@@ -82,11 +87,13 @@ set. The pure-data map (Option A) is lighter and version-controlled. Rejected fo
 - **English-canonical seed:** `bootstrap.ts` is rewritten so default categories use English slug IDs + English
   fallback names, and merchant rules are international and reference the new IDs. The Portuguese strings live
   only in the `pt` translations map.
-- **Remap migration (existing databases):** a migration renames the old Portuguese slugs to the new English
-  slugs **and updates every reference** — `transactions.category_id`, `merchant_category.category_id`,
-  `recurring_rules.category_id`, and any sub-category `parent_id`. Done as an explicit mapping
-  (`cat-alimentacao → cat-food`, …). Without it, existing rows would point at vanished IDs. Fresh installs
-  simply seed the English IDs.
+- **Clean-slate, no remap migration.** There is no production data — the only existing database is a single
+  local **dev/test** DB. So we do **not** rewrite foreign keys: the schema simply seeds the English IDs on a
+  fresh DB. The existing dev DB is reset **out of band** via a manual `scripts/reset-local-db.sh` that deletes
+  the local `fintrack.db` (and its `-wal`/`-shm` sidecars). **Dropping the DB is an explicit, manual dev
+  convenience — never a default pattern, never wired into `dev`/`test`/CI, and never an automated migration.**
+  This is acceptable precisely because the slug-ID change predates any real user data; it would NOT be an
+  acceptable approach once production data exists (that would require the remap migration this ADR avoids).
 - **Schema/migration:** add `categories.i18n_key text` (nullable; = the English slug for defaults); add a
   `settings` table (single row: `locale`, default `en`). Seed translations live in code, not the DB.
 - **AI-driven locale:** the `set_locale` tool description tells the agent to detect the user's language and
