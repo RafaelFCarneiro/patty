@@ -14,7 +14,7 @@ export type SearchFilters = {
   from: string | null
   to: string | null
   type: string | null
-  status: string | null
+  status: TransactionStatus | null
   text: string | null
   accountId: string | null
   categoryId: string | null
