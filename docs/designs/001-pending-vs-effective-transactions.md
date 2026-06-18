@@ -83,3 +83,62 @@ and rules don't carry a per-occurrence cleared/uncleared state. Rejected — the
   pure projection math (effective + pending-through-date); no architectural change.
 - **Vocabulary:** `pending` and `effective` are the canonical terms (a zod enum exposing `.enum.*`), used
   consistently across model, tools, and docs.
+
+---
+
+## Implementation prompt
+
+> Hand this section to a coding agent to build the feature. The design above is the source of truth; this
+> is the execution guide. Work on branch **`feat/pending-transactions`** — do **not** create a new branch;
+> `git fetch && git rebase origin/main` first.
+
+**Before coding**, also read: `CLAUDE.md`, `docs/architecture.md`, `docs/diplomatic-architecture.md`,
+`docs/code-style.md`, `docs/code-quality.md` (diplomatic layering, `safeTry` controllers, constants over
+literals via zod `.enum.*`, zod at boundaries, remeda for ≥2-stage transforms). Skim the current shape of
+`src/models/transaction.ts`, `src/diplomat/db/schema.ts`, `src/diplomat/db/repos/transactions.ts`,
+`src/controllers/transactions.ts`, `src/controllers/accounts.ts` (balances), `src/controllers/summary.ts`,
+`src/diplomat/mcp/server.ts`; mirror how **bills** model their `status` and how `pay_bill` flips it.
+
+### Steps
+
+1. **Model** (`models/transaction.ts`): add `TransactionStatus = z.enum(['pending','effective'])` and a field
+   on `Transaction`/`TransactionView`/the create draft. Use the enum members everywhere — never bare strings.
+2. **Schema + migration** (`schema.ts` + `drizzle/`): add `status text not null default 'effective'` to
+   `transactions`; `npx drizzle-kit generate`. Existing rows become `effective` (correct). Add an index on
+   `(status, date)` for the scheduling query.
+3. **Create paths** (`create_transaction`, `create_transactions_bulk`): optional `status`, default `effective`.
+   Status is explicit — do **not** derive it from the date. Transfers and card transactions may be pending too.
+4. **`confirm_transaction`** (new tool + controller): flips `pending → effective` by id; mirror `pay_bill`.
+   Errors: `unknown_transaction`; if already effective, return a clear `validation`/no-op (decide + document).
+   Pure `safeTry` controller.
+5. **Effective-only balances/summaries** (hard invariant): `get_account_balances` and `get_spending_summary`
+   queries MUST filter `status = 'effective'`. Audit every balance/summary SQL.
+6. **Projection** (`get_account_balances` gains optional `projectedAsOf: YYYY-MM-DD`): when present, also
+   return projected = effective + pending dated `<= projectedAsOf`. Pure arithmetic in `logic/`, not the repo.
+   Return effective and projected side by side; never replace the effective default.
+7. **Search** (`search_transactions`): add a `status` filter so "what's scheduled" = pending by date.
+
+### Tests
+- **Unit** (`logic/`): projection math — effective + pending-through-date; boundary dates; empty cases.
+- **Integration** (in-process libSQL): create an effective + a pending income; assert balances exclude
+  pending, `projectedAsOf` includes it, summary excludes pending, `confirm_transaction` flips it (then it
+  counts), and `search_transactions status:'pending'` lists it.
+- **Gate:** `npm run typecheck && npm test && npm run test:integration && npm run build` (all green).
+
+### Invariants — do not break
+- **Default `effective`** — existing create path and tests behave unchanged.
+- **Balances/summaries are effective-only**; projection is always opt-in via an explicit param. Pending never
+  leaks into "now".
+- **Classification ignores status.** Constants over literals (`TransactionStatus.enum.*`).
+- **Diplomatic layering**: SQL in `diplomat/db`; orchestration in controllers (`safeTry`); projection math in
+  `logic/`; no domain leak into transports.
+- **Docs in the same change**: `docs/mcp-tools.md` (status on create, `confirm_transaction`, `projectedAsOf`,
+  search `status`), `docs/architecture.md` (the effective-only invariant + the `status` column), `CLAUDE.md`
+  data conventions. Leave this design doc as-is.
+- **Out of scope**: recurring rules materializing pending occurrences; Cowork notification wiring; auto-confirm
+  on date pass — note as follow-ups, don't build.
+
+### Finish
+Conventional Commits (`feat(transactions): pending vs effective status` + `test:`/`docs:`),
+`git push -u origin feat/pending-transactions`, open a PR targeting `main`. Do not merge; after CI, reply to
+review threads with the resolving SHA.
