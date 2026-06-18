@@ -146,7 +146,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     return send(reply, await createRecurring(deps, recurringAdapters.wireInToModel(wireIn)), 201)
   })
   app.post('/api/recurring/apply-due', async (req, reply) => {
-    const q = z.object({ through: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).safeParse(req.body)
+    const q = z.object({ through: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).safeParse(req.body ?? {})
     if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid through date'] } })
     return reply.send(await applyDueRecurring(deps, q.data))
   })
