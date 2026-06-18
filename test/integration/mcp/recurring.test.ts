@@ -96,9 +96,7 @@ describe('MCP integration > recurring', () => {
       })) as { applied?: Array<{ date?: string; transaction?: { id?: string; status?: string } }> }
 
       const ours = (result.applied ?? []).filter(
-        (a) => (a.transaction as Record<string, unknown>)?.description === ruleDescription ||
-          // description may be on the rule name field
-          true,
+        (a) => (a as Record<string, unknown>).rule === ruleDescription,
       )
       // Collect ids for cleanup
       for (const a of ours) {

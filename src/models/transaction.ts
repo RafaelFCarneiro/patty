@@ -106,9 +106,8 @@ export type CreateTransactionInput = {
   tags?: string[]
 }
 
-export type BulkTransactionItem = Omit<CreateTransactionInput, 'idempotencyKey' | 'rawInput' | 'status'> & {
+export type BulkTransactionItem = Omit<CreateTransactionInput, 'idempotencyKey' | 'rawInput'> & {
   idempotencyKey?: string
-  status?: TransactionStatus
 }
 
 export type CreateTransactionsBulkInput = {

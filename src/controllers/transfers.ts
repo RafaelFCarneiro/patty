@@ -40,13 +40,14 @@ export const createTransfer = (
 
     yield* validateTransferAccounts(from, to)
 
-    const date = input.date ?? toIsoDate(deps.clock())
+    const today = toIsoDate(deps.clock())
+    const date = input.date ?? today
     const { transaction, created } = await deps.transactions.create({
       id: deps.newId(),
       description: input.description ?? `Transferência: ${from.name} → ${to.name}`,
       amount: input.amount,
       type: TransactionType.enum.transfer,
-      status: defaultStatusFor(date, toIsoDate(deps.clock())),
+      status: defaultStatusFor(date, today),
       date,
       currency: from.currency,
       source,
