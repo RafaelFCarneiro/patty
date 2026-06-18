@@ -2,6 +2,7 @@ import type { AppError } from '../common/errors.js'
 import type { Account } from '../models/account.js'
 import type { CreditCard } from '../models/creditCard.js'
 import { CurrencyCode } from '../models/common.js'
+import type { IsoDate } from '../models/common.js'
 import type {
   Classification,
   ClassifyOutcome,
@@ -22,7 +23,7 @@ import { normalizeMerchant } from './merchant.js'
  * Future-dated → pending (not yet happened); today/past → effective (already happened).
  * An explicit caller-supplied status always wins — this is only the fallback.
  */
-export const defaultStatusFor = (date: string, today: string): TransactionStatus =>
+export const defaultStatusFor = (date: IsoDate, today: IsoDate): TransactionStatus =>
   date > today ? TransactionStatus.enum.pending : TransactionStatus.enum.effective
 
 // ─── Currency ────────────────────────────────────────────────────────────────

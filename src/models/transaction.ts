@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { CurrencyCode, Id, IsoDate, Money } from './common.js'
 
-/** Whether the transaction has cleared (happened) or is still expected. Default: effective. */
+/** Whether the transaction has cleared or is still expected. Default is date-aware when omitted. */
 export const TransactionStatus = z.enum(['pending', 'effective'])
 export type TransactionStatus = z.infer<typeof TransactionStatus>
 
