@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { toIsoDate } from '../../../src/logic/period.js'
 import { callTool, deleteTransactions, makeClient } from './helpers.js'
 
 describe('MCP integration > recurring', () => {
@@ -15,7 +16,7 @@ describe('MCP integration > recurring', () => {
     const ruleDescription = `Monthly sub ${stamp}`
     const pastDate = new Date()
     pastDate.setDate(pastDate.getDate() - 7)
-    const startDate = pastDate.toISOString().slice(0, 10)
+    const startDate = toIsoDate(pastDate)
 
     const { client, transport } = makeClient()
 
@@ -66,7 +67,7 @@ describe('MCP integration > recurring', () => {
     const pastStart = '2026-05-01'
     // A through date in the future to pre-create upcoming occurrences
     const futureThrough = '2026-08-01'
-    const today = new Date().toISOString().slice(0, 10)
+    const today = toIsoDate(new Date())
 
     const { client, transport } = makeClient()
 
