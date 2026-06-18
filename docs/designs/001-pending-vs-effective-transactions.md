@@ -1,7 +1,7 @@
 # Feature Design 001: Pending vs. effective transactions
 
 **Type:** Feature design (not an ADR — a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** Done · **Branch:** `feat/pending-transactions` ·
+**Implementation status:** In progress (first cut built; correcting date-aware default + recurring provisioning) · **Branch:** `feat/pending-transactions` ·
 **Date:** 2026-06-17 · Extends the transaction model in `docs/architecture.md`. The durable invariant this
 produces (balances/summaries are effective-only) lands in `docs/architecture.md` when implemented.
 
@@ -29,12 +29,15 @@ transaction: has it cleared yet, or is it still expected?
 
 ## Decision
 
-Add a **`status`** field to transactions: **`pending | effective`**, default **`effective`**.
+Add a **`status`** field to transactions: **`pending | effective`**. The application-level default is
+**date-aware** (see (1)); the DB column default is `effective` (a storage fallback for legacy/un-specified rows).
 
-1. **Date-aware default.** When `status` is omitted, it is derived from the transaction date: future-dated
-   transactions default to `pending`; past/present ones default to `effective`. An explicit `status` always
-   wins. This makes common paths natural — logging yesterday's expense is effective automatically; scheduling
-   next month's salary is pending automatically.
+1. **Date-aware default (global, all creation paths).** When `status` is omitted, it is derived from the
+   transaction date relative to today: **future-dated → `pending`, today/past → `effective`**. An explicit
+   `status` always wins. This applies uniformly to `create_transaction`, `create_transactions_bulk`,
+   `create_transfer`, and recurring materialization — one pure helper (`defaultStatusFor(date, clock)`),
+   no path hardcodes a status. Common paths become natural: logging yesterday's expense is effective
+   automatically; scheduling next month's salary is pending automatically.
 2. **Effective-only by default everywhere that means "now".** `get_account_balances` and
    `get_spending_summary` count **only `effective`** transactions. The real balance and "what I spent" are
    never polluted by expectations. This is a hard invariant (see below).
@@ -46,16 +49,26 @@ Add a **`status`** field to transactions: **`pending | effective`**, default **`
    the passage of its date — scheduled is not the same as happened.
 5. **Scheduling query.** Pending transactions are queryable by date/status (`search_transactions` gains a
    `status` filter), which is what a "what's due today" notification task calls.
+6. **Recurring provisions forward (the quality-of-life payoff).** `apply_due_recurring` gains an optional
+   **`through`** date (default = today). It materializes every occurrence with `date <= through`, and each
+   occurrence's status comes from the date-aware default — so past/present months land `effective` and future
+   months land `pending`. Passing a future `through` pre-creates the salary/rent/subscription you already
+   know is coming, as pending, feeding the projection and saving monthly re-entry. Idempotent per
+   `rec-<ruleId>-<date>`, so re-running is safe; `nextDue` advances past the last materialized occurrence.
+   Default behaviour (`through = today`) is unchanged catch-up — but now correctly stamps each occurrence via
+   the date-aware rule rather than forcing `effective`.
 
 Same-row, same idempotency, same edges (account/category/card/tags) — `status` is one more column.
 
 ## Scope / out of scope
 
-- **In:** the `status` column, effective-only balances/summaries, `projectedAsOf` provisioning, the
-  `confirm_transaction` tool, the `status` search filter, transfers and card transactions may be pending too.
-- **Out (future synergy, not this change):** having `apply_due_recurring` materialize the next *N*
-  occurrences **as pending** for richer provisioning; auto-suggesting confirmation when a pending date passes;
-  Cowork notification wiring (the data model enables it, the task itself is separate).
+- **In:** the `status` column; the **date-aware default helper** applied across all creation paths
+  (incl. transfers — no more hardcoded `effective`); effective-only balances/summaries; `projectedAsOf`
+  provisioning; the `confirm_transaction` tool; the `status` search filter; **`apply_due_recurring(through?)`
+  forward provisioning** (future occurrences as pending).
+- **Out (future, not this change):** auto-suggesting confirmation when a pending date passes; a rolling
+  auto-horizon for recurring (we use an explicit `through`); Cowork notification wiring (the data model
+  enables it, the task itself is separate).
 
 ## Options Considered
 
@@ -77,16 +90,25 @@ and rules don't carry a per-occurrence cleared/uncleared state. Rejected — the
 
 ## Consequences
 
-- **Schema/migration:** add `status text not null default 'effective'` to `transactions`; existing rows
-  become `effective` (correct — they already happened). A partial index on `(status, date)` supports the
-  scheduling query.
+- **Schema/migration:** add `status text not null default 'effective'` to `transactions` (the DB default is a
+  storage fallback; the application computes the status date-aware before insert). A partial index on
+  `(status, date)` supports the scheduling query.
+- **Date-aware default helper:** a pure `logic/` helper `defaultStatusFor(date, clock)` (future → `pending`,
+  today/past → `effective`) is the single source of the rule, called by every create path; **no controller
+  hardcodes a status** (transfers and recurring included).
 - **Invariant (new, enforced in review + tests):** balance and spending-summary queries MUST filter
   `status = 'effective'`. Projection queries explicitly include `pending`. Classification ignores status.
-- **MCP surface:** `create_transaction`/`create_transactions_bulk` gain optional `status` (default
-  `effective`); new `confirm_transaction`; `search_transactions` gains a `status` filter; `get_account_balances`
-  gains optional `projectedAsOf`. Documented in `docs/mcp-tools.md`.
-- **Diplomatic blast radius:** a model field + controller/query changes + one new tool. `logic/` gains the
-  pure projection math (effective + pending-through-date); no architectural change.
+- **Recurring is forward-looking:** `apply_due_recurring(through?)` materializes through a horizon date
+  (default today), each occurrence stamped via the date-aware helper — past/present `effective`, future
+  `pending`. Existing catch-up behaviour is preserved; the only change to old behaviour is that occurrences
+  are no longer force-stamped `effective`.
+- **MCP surface:** `create_transaction`/`create_transactions_bulk`/`create_transfer` gain optional `status`
+  (omitted → date-aware default); new `confirm_transaction`; `search_transactions` gains a `status` filter;
+  `get_account_balances` gains optional `projectedAsOf`; `apply_due_recurring` gains optional `through`.
+  Documented in `docs/mcp-tools.md`.
+- **Diplomatic blast radius:** a model field + the `defaultStatusFor` logic helper + controller/query changes +
+  one new tool + the recurring horizon change. `logic/` also gains the pure projection math (effective +
+  pending-through-date); no architectural change.
 - **Vocabulary:** `pending` and `effective` are the canonical terms (a zod enum exposing `.enum.*`), used
   consistently across model, tools, and docs.
 
@@ -98,54 +120,74 @@ and rules don't carry a per-occurrence cleared/uncleared state. Rejected — the
 > is the execution guide. Work on branch **`feat/pending-transactions`** — do **not** create a new branch;
 > `git fetch && git rebase origin/main` first.
 
+> **Correction note:** an earlier version of this prompt said "do not derive status from the date" and the
+> first implementation hardcoded `status: effective` in `create_transaction`, `create_transfer`, and recurring.
+> That was wrong. The steps below replace it: a **date-aware default applied everywhere**, and **recurring that
+> provisions forward**. Apply this on top of the current branch state.
+
 **Before coding**, also read: `CLAUDE.md`, `docs/architecture.md`, `docs/diplomatic-architecture.md`,
-`docs/code-style.md`, `docs/code-quality.md` (diplomatic layering, `safeTry` controllers, constants over
-literals via zod `.enum.*`, zod at boundaries, remeda for ≥2-stage transforms). Skim the current shape of
-`src/models/transaction.ts`, `src/diplomat/db/schema.ts`, `src/diplomat/db/repos/transactions.ts`,
-`src/controllers/transactions.ts`, `src/controllers/accounts.ts` (balances), `src/controllers/summary.ts`,
-`src/diplomat/mcp/server.ts`; mirror how **bills** model their `status` and how `pay_bill` flips it.
+`docs/code-style.md`, `docs/code-quality.md`. Skim the current shape of `src/models/transaction.ts`,
+`src/diplomat/db/schema.ts`, `src/diplomat/db/repos/transactions.ts`, `src/controllers/transactions.ts`,
+`src/controllers/transfers.ts`, `src/controllers/recurring.ts`, `src/controllers/accounts.ts` (balances),
+`src/controllers/summary.ts`, `src/logic/recurring.ts`, `src/diplomat/mcp/server.ts`; mirror how **bills**
+model their `status` and how `pay_bill` flips it.
 
 ### Steps
 
-1. **Model** (`models/transaction.ts`): add `TransactionStatus = z.enum(['pending','effective'])` and a field
-   on `Transaction`/`TransactionView`/the create draft. Use the enum members everywhere — never bare strings.
+1. **Model** (`models/transaction.ts`): `TransactionStatus = z.enum(['pending','effective'])` on
+   `Transaction`/`TransactionView`/the create draft. Enum members everywhere — never bare strings.
 2. **Schema + migration** (`schema.ts` + `drizzle/`): add `status text not null default 'effective'` to
-   `transactions`; `npx drizzle-kit generate`. Existing rows become `effective` (correct). Add an index on
-   `(status, date)` for the scheduling query.
-3. **Create paths** (`create_transaction`, `create_transactions_bulk`): optional `status`; when omitted,
-   default = `pending` if `date > today`, `effective` otherwise. An explicit `status` always wins. Transfers
-   and card transactions may be pending too.
-4. **`confirm_transaction`** (new tool + controller): flips `pending → effective` by id; mirror `pay_bill`.
-   Errors: `unknown_transaction`; if already effective, return a clear `validation`/no-op (decide + document).
-   Pure `safeTry` controller.
-5. **Effective-only balances/summaries** (hard invariant): `get_account_balances` and `get_spending_summary`
-   queries MUST filter `status = 'effective'`. Audit every balance/summary SQL.
-6. **Projection** (`get_account_balances` gains optional `projectedAsOf: YYYY-MM-DD`): when present, also
-   return projected = effective + pending dated `<= projectedAsOf`. Pure arithmetic in `logic/`, not the repo.
-   Return effective and projected side by side; never replace the effective default.
-7. **Search** (`search_transactions`): add a `status` filter so "what's scheduled" = pending by date.
+   `transactions`; `npx drizzle-kit generate`. Index `(status, date)`.
+3. **Date-aware default helper** (`logic/`): add a pure `defaultStatusFor(date, today)` →
+   `date > today ? 'pending' : 'effective'`. Unit-test it (past, today, future, boundary). This is the single
+   source of the rule.
+4. **Apply the helper to ALL create paths — remove every hardcoded status:**
+   - `create_transaction` / `create_transactions_bulk`: optional `status`; when omitted, `defaultStatusFor`.
+   - `create_transfer`: **remove the hardcoded `TransactionStatus.enum.effective`** — use `defaultStatusFor`
+     (a future-dated scheduled transfer is pending). Explicit `status` still wins.
+   - An explicit `status` argument always overrides the default.
+5. **`confirm_transaction`** (new tool + controller): flips `pending → effective` by id; mirror `pay_bill`.
+   Errors: `unknown_transaction`; if already effective, a clear `validation`/no-op (decide + document).
+6. **Recurring provisions forward** (`controllers/recurring.ts`): `applyDueRecurring` takes an optional
+   `through` (YYYY-MM-DD), default = today. Materialize every occurrence with `date <= through` (keep the
+   bounded loop), and **stamp each via `defaultStatusFor(due, today)`** instead of forcing `effective` — so
+   past/present land effective and future land pending. Advance `nextDue` past the last materialized
+   occurrence. Idempotency key `rec-<ruleId>-<date>` unchanged (re-runs safe). Expose `through` on the
+   `apply_due_recurring` MCP tool; describe it ("materialize through this date; future occurrences are created
+   as pending").
+7. **Effective-only balances/summaries** (hard invariant): `get_account_balances` and `get_spending_summary`
+   MUST filter `status = 'effective'`. Audit every balance/summary SQL.
+8. **Projection** (`get_account_balances` optional `projectedAsOf`): also return projected = effective +
+   pending dated `<= projectedAsOf`. Pure arithmetic in `logic/`. Effective and projected side by side.
+9. **Search** (`search_transactions`): `status` filter so "what's scheduled" = pending by date.
 
 ### Tests
-- **Unit** (`logic/`): projection math — effective + pending-through-date; boundary dates; empty cases.
-- **Integration** (in-process libSQL): create an effective + a pending income; assert balances exclude
-  pending, `projectedAsOf` includes it, summary excludes pending, `confirm_transaction` flips it (then it
-  counts), and `search_transactions status:'pending'` lists it.
-- **Gate:** `npm run typecheck && npm test && npm run test:integration && npm run build` (all green).
+- **Unit** (`logic/`): `defaultStatusFor` (past/today/future/boundary); projection math.
+- **Integration** (in-process libSQL):
+  - create with a future date and no `status` → `pending`; past date → `effective`; explicit `status` wins.
+  - balances exclude pending; `projectedAsOf` includes it; summary excludes pending; `confirm_transaction`
+    flips it; `search_transactions status:'pending'` lists it.
+  - **recurring**: a monthly rule with a past `startDate` and `apply_due_recurring(through = a future month)`
+    creates past/present occurrences `effective` and future occurrences `pending`; re-running is idempotent;
+    default (`through` omitted) only catches up to today.
+- **Gate:** `npm run typecheck && npm test && npm run test:integration && npm run build`.
 
 ### Invariants — do not break
-- **Date-aware default** — omitting `status` defaults to `pending` for future dates, `effective` for past/present. An explicit `status` always overrides. Existing past-dated creates are unchanged.
-- **Balances/summaries are effective-only**; projection is always opt-in via an explicit param. Pending never
-  leaks into "now".
+- **Date-aware default, applied everywhere, no hardcoded status.** Omitting `status` → `pending` for future
+  dates, `effective` for today/past, via the one `defaultStatusFor` helper. Explicit `status` always wins.
+- **Balances/summaries are effective-only**; projection is opt-in. Pending never leaks into "now".
+- **Recurring default behaviour preserved** (catch-up to today) except occurrences are now stamped date-aware,
+  not force-`effective`.
 - **Classification ignores status.** Constants over literals (`TransactionStatus.enum.*`).
-- **Diplomatic layering**: SQL in `diplomat/db`; orchestration in controllers (`safeTry`); projection math in
-  `logic/`; no domain leak into transports.
+- **Diplomatic layering**: the status rule + projection math live in `logic/`; SQL in `diplomat/db`;
+  orchestration in controllers (`safeTry`); no domain leak into transports.
 - **Docs in the same change**: `docs/mcp-tools.md` (status on create, `confirm_transaction`, `projectedAsOf`,
-  search `status`), `docs/architecture.md` (the effective-only invariant + the `status` column), `CLAUDE.md`
-  data conventions. Leave the rest of this design doc as-is — **except** update the **Implementation status**
-  header line (→ `In progress` when you start, → `Done` in the commit that the PR merges; `Blocked` + reason
-  if stuck).
-- **Out of scope**: recurring rules materializing pending occurrences; Cowork notification wiring; auto-confirm
-  on date pass — note as follow-ups, don't build.
+  search `status`, `apply_due_recurring` `through`), `docs/architecture.md` (effective-only invariant + the
+  `status` column + date-aware default + recurring provisioning), `CLAUDE.md` data conventions. Leave the rest
+  of this design doc as-is — **except** update the **Implementation status** header line (→ `In progress` when
+  you start, → `Done` in the commit that the PR merges; `Blocked` + reason if stuck).
+- **Out of scope**: Cowork notification wiring; auto-confirm when a pending date passes; a rolling auto-horizon
+  for recurring (we use an explicit `through`) — note as follow-ups, don't build.
 
 ### Finish
 Conventional Commits (`feat(transactions): pending vs effective status` + `test:`/`docs:`),
