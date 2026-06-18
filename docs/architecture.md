@@ -78,8 +78,8 @@ transactions        (id PK, description, amount, type: expense|income|transfer,
                      classification_method, confidence, raw_input?,
                      from_account_id FK, to_account_id FK,   ← transfer uses both (ADR-002)
                      credit_card_id FK, bill_id FK, category_id FK, subcategory_id FK,
-                     merchant_key FK)
-                     INDEX: (status, date) — supports scheduling queries
+                     merchant_key FK,
+                     INDEX: (status, date) — supports scheduling queries)
 transaction_tags    (transaction_id FK, tag_id FK — composite PK)
 recurring_rules     (id PK, description, amount, type, period, next_due, currency,
                      account_id FK, category_id FK)
