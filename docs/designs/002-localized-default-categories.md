@@ -1,6 +1,8 @@
-# ADR-009: Localized default categories (i18n)
+# Feature Design 002: Localized default categories (i18n)
 
-**Status:** Accepted · **Date:** 2026-06-17 · Refines the category model in `docs/architecture.md`.
+**Type:** Feature design (not an ADR — a feature + technical assessment) · **Status:** Accepted ·
+**Date:** 2026-06-17 · Refines the category model in `docs/architecture.md`. The durable invariants this
+produces (category identity = slug; display name resolved per locale) land in `docs/architecture.md` when implemented.
 
 ## Context
 
@@ -93,7 +95,7 @@ set. The pure-data map (Option A) is lighter and version-controlled. Rejected fo
   the local `fintrack.db` (and its `-wal`/`-shm` sidecars). **Dropping the DB is an explicit, manual dev
   convenience — never a default pattern, never wired into `dev`/`test`/CI, and never an automated migration.**
   This is acceptable precisely because the slug-ID change predates any real user data; it would NOT be an
-  acceptable approach once production data exists (that would require the remap migration this ADR avoids).
+  acceptable approach once production data exists (that would require the remap migration this design avoids).
 - **Schema/migration:** add `categories.i18n_key text` (nullable; = the English slug for defaults); add a
   `settings` table (single row: `locale`, default `en`). Seed translations live in code, not the DB.
 - **AI-driven locale:** the `set_locale` tool description tells the agent to detect the user's language and
