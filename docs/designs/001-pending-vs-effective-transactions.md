@@ -1,6 +1,8 @@
-# ADR-008: Pending vs. effective transactions
+# Feature Design 001: Pending vs. effective transactions
 
-**Status:** Accepted · **Date:** 2026-06-17 · Extends the transaction model in `docs/architecture.md`.
+**Type:** Feature design (not an ADR — a feature + technical assessment) · **Status:** Accepted ·
+**Date:** 2026-06-17 · Extends the transaction model in `docs/architecture.md`. The durable invariant this
+produces (balances/summaries are effective-only) lands in `docs/architecture.md` when implemented.
 
 ## Context
 
