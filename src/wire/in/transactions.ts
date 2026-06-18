@@ -1,12 +1,13 @@
 import { z } from 'zod'
 import { CurrencyCode, IsoDate, Money } from '../../models/common.js'
-import { MovementType, TransactionType } from '../../models/transaction.js'
+import { MovementType, TransactionStatus, TransactionType } from '../../models/transaction.js'
 import type { SearchTransactionsInput as DomainSearchTransactionsInput } from '../../models/transaction.js'
 
 export const CreateTransactionInput = z.object({
   description: z.string().min(1),
   amount: Money,
   type: MovementType,
+  status: TransactionStatus.optional(),
   date: IsoDate.optional(),
   account: z.string().optional(),
   card: z.string().optional(),
@@ -67,6 +68,7 @@ export const SearchTransactionsInput = z
     from: IsoDate.optional(),
     to: IsoDate.optional(),
     type: TransactionType.optional(),
+    status: TransactionStatus.optional(),
     category: z.string().optional(),
     subCategory: z.string().optional(),
     account: z.string().optional(),
