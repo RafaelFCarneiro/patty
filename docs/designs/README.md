@@ -13,3 +13,7 @@ They are a technical assessment, not architectural law.
 A feature design may *produce* a durable invariant (e.g. "balances are effective-only"). When that happens,
 the invariant is recorded in `docs/architecture.md` at implementation time — `architecture.md` remains the
 single source of truth for the system as built; the design doc is the reasoning behind it.
+
+**Each design doc is self-contained.** It ends with an **`## Implementation prompt`** section — the execution
+guide a coding agent follows to build the feature. To kick off implementation, point the agent at the doc:
+*"Implement the feature in `docs/designs/NNN-…md` — follow its Implementation prompt."*
