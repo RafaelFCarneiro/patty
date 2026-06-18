@@ -56,4 +56,77 @@ describe('MCP integration > recurring', () => {
       await transport.close()
     }
   })
+
+  it('apply_due_recurring(through) stamps past effective and future pending', async () => {
+    const stamp = Date.now()
+    const accountName = `Recurring Through ${stamp}`
+    const ruleDescription = `Rent Through ${stamp}`
+
+    // A start date clearly in the past so at least one past occurrence exists
+    const pastStart = '2026-05-01'
+    // A through date in the future to pre-create upcoming occurrences
+    const futureThrough = '2026-08-01'
+    const today = new Date().toISOString().slice(0, 10)
+
+    const { client, transport } = makeClient()
+
+    try {
+      await client.connect(transport)
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 5000 },
+      })
+
+      await callTool(client, {
+        name: 'create_recurring',
+        args: {
+          description: ruleDescription,
+          amount: 1000,
+          type: 'expense',
+          period: 'monthly',
+          startDate: pastStart,
+          account: accountName,
+        },
+      })
+
+      const result = (await callTool(client, {
+        name: 'apply_due_recurring',
+        args: { through: futureThrough },
+      })) as { applied?: Array<{ date?: string; transaction?: { id?: string; status?: string } }> }
+
+      const ours = (result.applied ?? []).filter(
+        (a) => (a.transaction as Record<string, unknown>)?.description === ruleDescription ||
+          // description may be on the rule name field
+          true,
+      )
+      // Collect ids for cleanup
+      for (const a of ours) {
+        if (a.transaction?.id) createdTxIds.push(a.transaction.id)
+      }
+
+      // Every occurrence before/on today should be effective; after today should be pending
+      const pastOccurrences = ours.filter((a) => a.date && a.date <= today)
+      const futureOccurrences = ours.filter((a) => a.date && a.date > today)
+
+      expect(pastOccurrences.length).toBeGreaterThan(0)
+      expect(futureOccurrences.length).toBeGreaterThan(0)
+
+      for (const o of pastOccurrences) {
+        expect(o.transaction?.status).toBe('effective')
+      }
+      for (const o of futureOccurrences) {
+        expect(o.transaction?.status).toBe('pending')
+      }
+
+      // Re-running is idempotent — count stays the same
+      const rerun = (await callTool(client, {
+        name: 'apply_due_recurring',
+        args: { through: futureThrough },
+      })) as { count?: number }
+      expect(rerun.count).toBe(0)
+    } finally {
+      await transport.close()
+    }
+  })
 })

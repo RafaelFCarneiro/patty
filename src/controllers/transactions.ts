@@ -8,6 +8,7 @@ import { normalizeMerchant } from '../logic/merchant.js'
 import { periodRange, toIsoDate } from '../logic/period.js'
 import type { BulkItemResult, BulkResult } from '../logic/transaction.js'
 import {
+  defaultStatusFor,
   deriveIdempotencyKey,
   guardTransferMutability,
   resolveCurrency,
@@ -69,10 +70,7 @@ export const createTransaction = (
     }
 
     const date = input.date ?? toIsoDate(deps.clock())
-    const today = toIsoDate(deps.clock())
-    const status =
-      input.status ??
-      (date > today ? TransactionStatus.enum.pending : TransactionStatus.enum.effective)
+    const status = input.status ?? defaultStatusFor(date, toIsoDate(deps.clock()))
 
     const { transaction, created } = await deps.transactions.create(
       {

@@ -3,7 +3,8 @@ import type { AppError } from '../common/errors.js'
 import { nextDue, recurringIdempotencyKey } from '../logic/recurring.js'
 import { toIsoDate } from '../logic/period.js'
 import type { CreateRecurringInput, RecurringRuleView } from '../models/recurring.js'
-import { TransactionSource, TransactionStatus, type TransactionView } from '../models/transaction.js'
+import { defaultStatusFor } from '../logic/transaction.js'
+import { TransactionSource, type TransactionView } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
 
@@ -37,21 +38,30 @@ export type ApplyDueResult = {
   count: number
 }
 
-/** Materialize every rule due on/before today. Idempotent: stable key per rule+date. */
-export const applyDueRecurring = async (deps: Deps): Promise<ApplyDueResult> => {
+/**
+ * Materialize every rule due on/before `through` (default: today).
+ * Past/present occurrences land effective; future ones land pending — via defaultStatusFor.
+ * Passing a future `through` pre-creates upcoming salary/rent/subscriptions as pending,
+ * feeding projections without any extra monthly effort. Idempotent: safe to re-run.
+ */
+export const applyDueRecurring = async (
+  deps: Deps,
+  options?: { through?: string },
+): Promise<ApplyDueResult> => {
   const today = toIsoDate(deps.clock())
+  const through = options?.through ?? today
   const applied: ApplyDueResult['applied'] = []
 
-  for (const rule of await deps.recurring.due(today)) {
+  for (const rule of await deps.recurring.due(through)) {
     let due = rule.nextDue
-    // catch up missed periods, bounded to avoid runaway loops on ancient rules
-    for (let i = 0; i < 36 && due <= today; i++) {
+    // bounded loop to prevent runaway on ancient rules
+    for (let i = 0; i < 36 && due <= through; i++) {
       const { transaction } = await deps.transactions.create({
         id: deps.newId(),
         description: rule.description,
         amount: rule.amount,
         type: rule.type,
-        status: TransactionStatus.enum.effective,
+        status: defaultStatusFor(due, today),
         date: due,
         currency: rule.currency,
         source: TransactionSource.enum.mcp,

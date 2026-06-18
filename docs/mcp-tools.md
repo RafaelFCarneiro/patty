@@ -41,7 +41,7 @@ Input: `card`, `month`, `year`. Marks the bill `paid`. Deliberately does **not**
 
 `create_recurring`: `description`, `amount`, `type`, `period` (`weekly|monthly|yearly`), `startDate` (first due), optional `account`, `category`, `currency`. Recurring transactions are classified as `user` with confidence 1.
 
-`apply_due_recurring` (no input): materializes a transaction for every rule due on/before today, catching up missed periods (bounded at 36). Idempotent via key `rec-<ruleId>-<dueDate>` — safe to call any time, e.g. at the start of a monthly review.
+`apply_due_recurring` (optional `through: YYYY-MM-DD`, default today): materializes a transaction for every rule due on/before `through`, bounded at 36 occurrences per rule. Each occurrence is stamped with the date-aware default — past/present land `effective`, future land `pending`. Passing a future `through` pre-creates upcoming salary, rent, and subscriptions as pending, feeding projections without extra monthly effort. Default behaviour (`through` omitted) is unchanged catch-up. Idempotent via `rec-<ruleId>-<dueDate>` — safe to re-run anytime.
 
 ## confirm_transaction
 

@@ -199,11 +199,17 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     {
       title: 'Apply due recurring rules',
       description:
-        'Materialize transactions for every rule due on/before today (catches up missed periods). ' +
-        'Idempotent — safe to call any time.',
-      inputSchema: {},
+        'Materialize transactions for every rule due on/before `through` (default: today). ' +
+        'Past/present occurrences are created as effective; future occurrences are created as pending — ' +
+        'so passing a future date pre-creates upcoming salary, rent, and subscriptions as pending, ' +
+        'feeding projections without extra monthly effort. Idempotent — safe to call any time.',
+      inputSchema: {
+        through: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe(
+          'YYYY-MM-DD horizon (default: today). Pass a future date to pre-create upcoming occurrences as pending.',
+        ),
+      },
     },
-    async () => json(await applyDueRecurring(deps)),
+    async (args) => json(await applyDueRecurring(deps, args)),
   )
 
   server.registerTool(

@@ -2,9 +2,10 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
 import { toIsoDate } from '../logic/period.js'
+import { defaultStatusFor } from '../logic/transaction.js'
 import type { Account } from '../models/account.js'
 import type { CreateTransferInput, TransactionView, TransactionSource } from '../models/transaction.js'
-import { TransactionStatus, TransactionType } from '../models/transaction.js'
+import { TransactionType } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef } from './resolve.js'
 
@@ -39,13 +40,14 @@ export const createTransfer = (
 
     yield* validateTransferAccounts(from, to)
 
+    const date = input.date ?? toIsoDate(deps.clock())
     const { transaction, created } = await deps.transactions.create({
       id: deps.newId(),
       description: input.description ?? `Transferência: ${from.name} → ${to.name}`,
       amount: input.amount,
       type: TransactionType.enum.transfer,
-      status: TransactionStatus.enum.effective,
-      date: input.date ?? toIsoDate(deps.clock()),
+      status: defaultStatusFor(date, toIsoDate(deps.clock())),
+      date,
       currency: from.currency,
       source,
       idempotencyKey: input.idempotencyKey,

@@ -10,10 +10,20 @@ import type {
   TransactionView,
   UpdateTransactionInput,
 } from '../models/transaction.js'
-import { TransactionType } from '../models/transaction.js'
+import { TransactionStatus, TransactionType } from '../models/transaction.js'
 import { err, ok, type Result } from 'neverthrow'
 import * as R from 'remeda'
 import { normalizeMerchant } from './merchant.js'
+
+// ─── Status default ──────────────────────────────────────────────────────────
+
+/**
+ * Single source of the date-aware default rule.
+ * Future-dated → pending (not yet happened); today/past → effective (already happened).
+ * An explicit caller-supplied status always wins — this is only the fallback.
+ */
+export const defaultStatusFor = (date: string, today: string): TransactionStatus =>
+  date > today ? TransactionStatus.enum.pending : TransactionStatus.enum.effective
 
 // ─── Currency ────────────────────────────────────────────────────────────────
 
