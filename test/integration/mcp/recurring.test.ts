@@ -63,10 +63,10 @@ describe('MCP integration > recurring', () => {
     const accountName = `Recurring Through ${stamp}`
     const ruleDescription = `Rent Through ${stamp}`
 
-    const today = toIsoDate(new Date())
-    // Derive dates relative to today so the test never goes stale
-    const pastStart = (() => { const d = new Date(); d.setMonth(d.getMonth() - 2); return toIsoDate(d) })()
-    const futureThrough = (() => { const d = new Date(); d.setMonth(d.getMonth() + 3); return toIsoDate(d) })()
+    const now = new Date()
+    const today = toIsoDate(now)
+    const pastStart = toIsoDate(new Date(now.getFullYear(), now.getMonth() - 2, 1))
+    const futureThrough = toIsoDate(new Date(now.getFullYear(), now.getMonth() + 3, 1))
 
     const { client, transport } = makeClient()
 
