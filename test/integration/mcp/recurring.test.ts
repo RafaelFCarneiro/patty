@@ -93,10 +93,10 @@ describe('MCP integration > recurring', () => {
       const result = (await callTool(client, {
         name: 'apply_due_recurring',
         args: { through: futureThrough },
-      })) as { applied?: Array<{ date?: string; transaction?: { id?: string; status?: string } }> }
+      })) as { applied?: Array<{ rule?: string; date?: string; transaction?: { id?: string; status?: string } }> }
 
       const ours = (result.applied ?? []).filter(
-        (a) => (a as Record<string, unknown>).rule === ruleDescription,
+        (a) => a.rule === ruleDescription,
       )
       // Collect ids for cleanup
       for (const a of ours) {

@@ -152,7 +152,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
   confirm: async (id) => {
     await db.update(transactions)
       .set({ status: TransactionStatus.enum.effective })
-      .where(eq(transactions.id, id))
+      .where(sql`${transactions.id} = ${id} AND ${transactions.status} = ${TransactionStatus.enum.pending}`)
     return fetchTx(db, id)
   },
 
