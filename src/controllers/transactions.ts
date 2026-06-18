@@ -15,6 +15,9 @@ import {
   summarizeBulkItems,
   toBulkItemResult,
 } from '../logic/transaction.js'
+import {
+  TransactionStatus,
+} from '../models/transaction.js'
 import type {
   CreateTransactionInput,
   CreateTransactionResult,
@@ -72,6 +75,7 @@ export const createTransaction = (
         description: input.description,
         amount: input.amount,
         type: input.type,
+        status: input.status ?? TransactionStatus.enum.effective,
         date,
         currency: resolveCurrency(account, card, input),
         source,
@@ -192,6 +196,27 @@ export const updateTransaction = (
     return ok(updated)
   })
 
+/** Flip a pending transaction to effective. No-op (returns existing) if already effective. */
+export const confirmTransaction = (
+  deps: Deps,
+  input: { id: string },
+): ResultAsync<TransactionView, AppError> =>
+  safeTry(async function* () {
+    const existing = yield* okOr(await deps.transactions.getById(input.id), {
+      code: 'unknown_transaction',
+      id: input.id,
+    })
+
+    if (existing.status === TransactionStatus.enum.effective) return ok(existing)
+
+    return ok(
+      yield* okOr(await deps.transactions.confirm(input.id), {
+        code: 'unknown_transaction',
+        id: input.id,
+      }),
+    )
+  })
+
 export const deleteTransaction = (
   deps: Deps,
   input: { id: string; confirm: boolean },
@@ -229,6 +254,7 @@ export const searchTransactions = (
         from: range?.from ?? input.from ?? null,
         to: range?.to ?? input.to ?? null,
         type: input.type ?? null,
+        status: input.status ?? null,
         text: input.text ?? null,
         accountId: account?.id ?? null,
         categoryId: category?.id ?? null,

@@ -4,7 +4,7 @@ import { guard } from '../common/result.js'
 import { toIsoDate } from '../logic/period.js'
 import type { Account } from '../models/account.js'
 import type { CreateTransferInput, TransactionView, TransactionSource } from '../models/transaction.js'
-import { TransactionType } from '../models/transaction.js'
+import { TransactionStatus, TransactionType } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef } from './resolve.js'
 
@@ -44,6 +44,7 @@ export const createTransfer = (
       description: input.description ?? `Transferência: ${from.name} → ${to.name}`,
       amount: input.amount,
       type: TransactionType.enum.transfer,
+      status: TransactionStatus.enum.effective,
       date: input.date ?? toIsoDate(deps.clock()),
       currency: from.currency,
       source,

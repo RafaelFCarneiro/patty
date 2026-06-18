@@ -72,12 +72,14 @@ merchant_category   (merchant_key FK, category_id FK — composite PK; weight, o
 tags                (id PK, name UNIQUE)
 bills               (id PK, credit_card_id FK, month, year, close_date, due_date,
                      status: open|closed|paid — UNIQUE(credit_card_id, month, year))
-transactions        (id PK, description, amount, type: expense|income|transfer, date, currency,
-                     source: mcp|rest|import, idempotency_key UNIQUE, classification_method,
-                     confidence, raw_input?,
+transactions        (id PK, description, amount, type: expense|income|transfer,
+                     status: pending|effective DEFAULT effective,
+                     date, currency, source: mcp|rest|import, idempotency_key UNIQUE,
+                     classification_method, confidence, raw_input?,
                      from_account_id FK, to_account_id FK,   ← transfer uses both (ADR-002)
                      credit_card_id FK, bill_id FK, category_id FK, subcategory_id FK,
                      merchant_key FK)
+                     INDEX: (status, date) — supports scheduling queries
 transaction_tags    (transaction_id FK, tag_id FK — composite PK)
 recurring_rules     (id PK, description, amount, type, period, next_due, currency,
                      account_id FK, category_id FK)
@@ -93,7 +95,8 @@ Repos live in `src/diplomat/db/repos/`; each accepts a `Db` (`LibSQLDatabase<typ
 1. **Idempotency**: every Transaction write uses `UNIQUE(idempotency_key)` + `onConflictDoNothing()`; `rowsAffected === 0` means duplicate — return the existing row, `created: false`.
 2. **Transfers** are `type: 'transfer'` with both `from_account_id` AND `to_account_id` set (ADR-002); summary/classification queries MUST exclude them (`t.type != 'transfer'`).
 3. **Currency**: transactions denormalize the account/card currency at write time; aggregations group per currency, never convert.
-4. **Balances are derived**, never stored: `initialBalance + income − expenses + transfers in − transfers out`.
+4. **Balances are derived**, never stored: `initialBalance + income − expenses + transfers in − transfers out`. **Only `effective` transactions count** — pending transactions never affect the current balance. Projection (balance + pending-through-date) is opt-in via `projectedAsOf` on `get_account_balances`.
+4a. **Effective-only invariant (Feature Design 001)**: `get_account_balances` and `get_spending_summary` MUST filter `status = 'effective'`. Projection queries explicitly include `pending`. Classification ignores status. This is enforced in `diplomat/db/repos/` — violations are bugs.
 5. **Classification via merchant_category**: normalized description → `merchants.key` → strongest `merchant_category` edge; user corrections increment `weight` (`onConflictDoUpdate`).
 6. **Category kind must match transaction type**: `expense` transactions may only link to `expense` or `both` categories; `income` to `income` or `both`. Enforced in `controllers/resolve.ts#guardCategoryKind`.
 7. **Sub-category always paired with parent**: `subcategory_id` set → `category_id` must also be set to the sub-category's parent. Enforced by a `CHECK` constraint and in `controllers/resolve.ts`.

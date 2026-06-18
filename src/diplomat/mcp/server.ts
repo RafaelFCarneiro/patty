@@ -11,6 +11,7 @@ import { applyDueRecurring, createRecurring, listRecurring } from '../../control
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js'
 import { getSpendingSummary } from '../../controllers/summary.js'
 import {
+  confirmTransaction,
   createTransaction,
   createTransactionsBulk,
   deleteTransaction,
@@ -18,7 +19,7 @@ import {
   updateTransaction,
 } from '../../controllers/transactions.js'
 import { createTransfer } from '../../controllers/transfers.js'
-import { TransactionSource, TransactionType, MovementType } from '../../models/transaction.js'
+import { TransactionSource, TransactionStatus, TransactionType, MovementType } from '../../models/transaction.js'
 import { CurrencyCode } from '../../models/common.js'
 import { CategoryKind } from '../../models/category.js'
 import { AccountType } from '../../models/account.js'
@@ -65,6 +66,10 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         category: z.string().optional().describe('Category name; omit when using subCategory or to auto-classify. expense transactions need an expense/both category; income needs income/both'),
         subCategory: z.string().optional().describe('Sub-category name (implies its parent category — do not set both category and subCategory)'),
         currency: CurrencyCode.optional(),
+        status: TransactionStatus.optional().default(TransactionStatus.enum.effective).describe(
+          '"effective" (default) = already happened; "pending" = expected but not yet cleared. ' +
+          'Pending transactions are excluded from balances and summaries until confirmed.',
+        ),
         idempotencyKey: z.string().min(1),
         rawInput: z.string().optional().describe('Original user phrasing, for audit'),
         tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
@@ -94,6 +99,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
               card: z.string().optional(),
               category: z.string().optional(),
               currency: CurrencyCode.optional(),
+              status: TransactionStatus.optional(),
               idempotencyKey: z.string().optional(),
             }),
           )
@@ -201,6 +207,21 @@ export const buildMcpServer = (deps: Deps): McpServer => {
   )
 
   server.registerTool(
+    'confirm_transaction',
+    {
+      title: 'Confirm (clear) a pending transaction',
+      description:
+        'Mark a pending transaction as effective (cleared). ' +
+        'Pending transactions are excluded from balances and spending summaries; confirming one makes it count. ' +
+        'If the transaction is already effective, this is a no-op.',
+      inputSchema: {
+        id: z.string().min(1).describe('Transaction id (from search_transactions with status: "pending")'),
+      },
+    },
+    async (args) => fromResult(await confirmTransaction(deps, args)),
+  )
+
+  server.registerTool(
     'update_transaction',
     {
       title: 'Update transaction',
@@ -252,6 +273,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         type: TransactionType.optional(),
+        status: TransactionStatus.optional().describe('"pending" to list scheduled transactions; omit for all'),
         category: z.string().optional(),
         subCategory: z.string().optional().describe('Filter to transactions with this sub-category'),
         account: z.string().optional(),
@@ -302,6 +324,10 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       inputSchema: {
         account: z.string().optional().describe('Single account by name'),
         type: AccountType.optional(),
+        projectedAsOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe(
+          'YYYY-MM-DD. When provided, also returns projectedBalance = effective balance + pending ' +
+          'transactions dated on/before this date. The effective balance is always included.',
+        ),
       },
     },
     async (args) => fromResult(await getAccountBalances(deps, args)),

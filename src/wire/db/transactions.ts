@@ -12,6 +12,7 @@ export const TransactionRowSchema = z.object({
   description:           z.string(),
   amount:                z.number(),
   type:                  z.string(),
+  status:                z.string(),
   date:                  z.string(),
   currency:              z.string(),
   source:                z.string(),
@@ -40,6 +41,7 @@ export type TransactionDbProps = {
   description: string
   amount: number
   type: TransactionRow['type']
+  status: TransactionRow['status']
   date: string
   currency: string
   source: TransactionRow['source']

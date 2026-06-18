@@ -1,7 +1,7 @@
 # Feature Design 001: Pending vs. effective transactions
 
 **Type:** Feature design (not an ADR — a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** Not started · **Branch:** `feat/pending-transactions` ·
+**Implementation status:** Done · **Branch:** `feat/pending-transactions` ·
 **Date:** 2026-06-17 · Extends the transaction model in `docs/architecture.md`. The durable invariant this
 produces (balances/summaries are effective-only) lands in `docs/architecture.md` when implemented.
 

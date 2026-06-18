@@ -1,6 +1,6 @@
 import { check, foreignKey, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
-import { ClassificationMethod } from '../../models/transaction.js'
+import { ClassificationMethod, TransactionStatus } from '../../models/transaction.js'
 
 export const currencies = sqliteTable('currencies', {
   code:   text('code').primaryKey(),
@@ -70,6 +70,7 @@ export const transactions = sqliteTable('transactions', {
   description:          text('description').notNull(),
   amount:               real('amount').notNull(),
   type:                 text('type', { enum: ['income', 'expense', 'transfer'] }).notNull(),
+  status:               text('status', { enum: TransactionStatus.options }).notNull().default(TransactionStatus.enum.effective),
   date:                 text('date').notNull(),
   currency:             text('currency').notNull().references(() => currencies.code),
   source:               text('source', { enum: ['mcp', 'rest', 'import'] }).notNull(),
@@ -89,6 +90,7 @@ export const transactions = sqliteTable('transactions', {
   index('idx_transactions_from_account').on(t.fromAccountId),
   index('idx_transactions_to_account').on(t.toAccountId),
   index('idx_transactions_category').on(t.categoryId),
+  index('idx_transactions_status_date').on(t.status, t.date),
   // sub-category requires a parent category
   check('subcategory_requires_category', sql`${t.subcategoryId} IS NULL OR ${t.categoryId} IS NOT NULL`),
 ])

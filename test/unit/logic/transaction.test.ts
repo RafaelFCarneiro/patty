@@ -99,6 +99,7 @@ describe('resolveEffectiveType', () => {
 describe('summarizeBulkItems', () => {
   const tx = TransactionView.parse({
     id: 'tx-1', description: 'Test', amount: 1, type: 'expense',
+    status: 'effective',
     date: '2026-01-01', currency: CurrencyCode.enum.BRL,
     source: TransactionSource.enum.mcp, idempotencyKey: 'k1',
     classification: { method: 'none', confidence: 0 },
