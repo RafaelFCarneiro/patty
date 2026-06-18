@@ -47,7 +47,7 @@ export const createTransfer = (
       description: input.description ?? `Transferência: ${from.name} → ${to.name}`,
       amount: input.amount,
       type: TransactionType.enum.transfer,
-      status: defaultStatusFor(date, today),
+      status: input.status ?? defaultStatusFor(date, today),
       date,
       currency: from.currency,
       source,

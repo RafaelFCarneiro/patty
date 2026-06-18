@@ -365,6 +365,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         from: z.string().min(1).describe('Source account name'),
         to: z.string().min(1).describe('Destination account name'),
         amount: z.number().positive(),
+        status: TransactionStatus.optional().describe('pending | effective; omit for date-aware default'),
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD; defaults to today'),
         description: z.string().optional().describe('e.g. "aporte mensal"'),
         idempotencyKey: z.string().min(1),

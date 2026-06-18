@@ -121,6 +121,7 @@ export type CreateTransferInput = {
   from: string
   to: string
   amount: number
+  status?: TransactionStatus
   date?: string
   description?: string
   idempotencyKey: string

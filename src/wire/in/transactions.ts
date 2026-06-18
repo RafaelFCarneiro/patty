@@ -42,6 +42,7 @@ export const CreateTransferInput = z.object({
   from: z.string().min(1),
   to: z.string().min(1),
   amount: Money,
+  status: TransactionStatus.optional(),
   date: IsoDate.optional(),
   description: z.string().optional(),
   idempotencyKey: z.string().min(1),
