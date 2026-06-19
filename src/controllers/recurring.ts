@@ -56,7 +56,7 @@ export const applyDueRecurring = async (
     let due = rule.nextDue
     // bounded loop to prevent runaway on ancient rules
     for (let i = 0; i < 36 && due <= through; i++) {
-      const { transaction } = await deps.transactions.create({
+      const { transaction, created } = await deps.transactions.create({
         id: deps.newId(),
         description: rule.description,
         amount: rule.amount,
@@ -69,7 +69,8 @@ export const applyDueRecurring = async (
         classification: { method: 'user', confidence: 1 },
         refs: { accountId: rule.accountId, categoryId: rule.categoryId },
       }, [])
-      applied.push({ rule: rule.description, date: due, transaction })
+      // `count` reflects genuinely-new occurrences — idempotent duplicates are skipped.
+      if (created) applied.push({ rule: rule.description, date: due, transaction })
       due = nextDue(due, rule.period)
     }
     await deps.recurring.advance(rule.id, due)
