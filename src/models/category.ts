@@ -4,7 +4,7 @@ import { Id } from './common.js'
 export const CategoryKind = z.enum(['expense', 'income', 'both'])
 export type CategoryKind = z.infer<typeof CategoryKind>
 
-export const LocalizedNames = z.record(z.string(), z.string()).nullable().optional()
+export const LocalizedNames = z.record(z.string(), z.string()).nullable()
 export type LocalizedNames = z.infer<typeof LocalizedNames>
 
 export const Category = z.object({

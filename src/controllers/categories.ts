@@ -15,15 +15,23 @@ export const listCategories = async (deps: Deps): Promise<Category[]> => {
   return all.map((c) => resolveDisplayName(c, locale))
 }
 
+const collectAllNames = (cat: Category): string[] => {
+  const all = [cat.name]
+  if (cat.names) all.push(...Object.values(cat.names))
+  return all
+}
+
 export const createCategory = (deps: Deps, input: CreateCategory): ResultAsync<Category, AppError> =>
   safeTry(async function* () {
-    const all = await listCategories(deps)
-    yield* guard(!all.some((c) => c.name.toLowerCase() === input.name.toLowerCase()), {
+    const raw = await deps.categories.list()
+    const lower = input.name.toLowerCase()
+    const collides = raw.some((c) => collectAllNames(c).some((n) => n.toLowerCase() === lower))
+    yield* guard(!collides, {
       code: 'duplicate_name',
       entity: 'category',
       name: input.name,
     })
-    return ok(await deps.categories.create({ id: deps.newId(), ...input }))
+    return ok(await deps.categories.create({ id: deps.newId(), ...input, names: null }))
   })
 
 export const listSubCategories = (deps: Deps, parentId?: string): Promise<SubCategory[]> =>
