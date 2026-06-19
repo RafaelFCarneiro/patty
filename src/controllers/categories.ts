@@ -8,7 +8,9 @@ import type { Deps } from './deps.js'
 export const listCategories = async (deps: Deps): Promise<Category[]> => {
   const locale = await deps.locale()
   const all = await deps.categories.list()
-  return all.map((c) => resolveDisplayName(c, locale))
+  const resolved = all.map((c) => resolveDisplayName(c, locale))
+  const collator = new Intl.Collator(locale, { sensitivity: 'base' })
+  return resolved.sort((a, b) => collator.compare(a.name, b.name))
 }
 
 export const createCategory = (deps: Deps, input: CreateCategory): ResultAsync<Category, AppError> =>

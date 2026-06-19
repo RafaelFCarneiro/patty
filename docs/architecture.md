@@ -43,7 +43,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | `models/` | zod/schema helpers only |
 | `adapters/` | `models/`, `wire/*` |
 | `diplomat/*` | `controllers/`, `adapters/`, `models/`, wire schemas, runtime clients |
-| `diplomat/db/seed/` | `models/` (types only) — nothing outside `diplomat/db` imports `seed/` |
+| `diplomat/db/seed/` | `models/` (types and runtime enums) — nothing outside `diplomat/db` imports `seed/` |
 
 ### Boundary schemas and adapter naming
 
