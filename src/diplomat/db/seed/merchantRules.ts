@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { DefaultCategoryId } from './category.js'
+import { DefaultCategoryId } from './categories.js'
 
 /**
  * A seed merchant rule maps a normalized merchant **key** (matched as a substring of the

@@ -4,4 +4,4 @@ CREATE TABLE `settings` (
 	`locale_source` text DEFAULT 'default' NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE `categories` ADD `i18n_key` text;
+ALTER TABLE `categories` ADD `names` text;

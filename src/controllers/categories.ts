@@ -1,13 +1,12 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
-import { translateWithFallback } from '../logic/i18n.js'
 import type { Category, CreateCategory, SubCategory } from '../models/category.js'
 import type { Deps } from './deps.js'
 
 const resolveDisplayName = (cat: Category, locale: string): Category => ({
   ...cat,
-  name: cat.i18nKey ? translateWithFallback(cat.i18nKey, locale as 'en' | 'es' | 'pt', cat.name) : cat.name,
+  name: cat.names?.[locale] ?? cat.name,
 })
 
 export const listCategories = async (deps: Deps): Promise<Category[]> => {

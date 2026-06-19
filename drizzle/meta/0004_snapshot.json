@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3291b11b-c0ac-4230-8c48-4c4954da30a7",
+  "id": "8edfffba-9b66-43a3-bd8e-f42c97ecfc99",
   "prevId": "d4aa051c-f7f2-47e8-80ee-611d99676825",
   "tables": {
     "accounts": {
@@ -178,8 +178,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "i18n_key": {
-          "name": "i18n_key",
+        "names": {
+          "name": "names",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

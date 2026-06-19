@@ -31,7 +31,7 @@ export const categories = sqliteTable('categories', {
   name:     text('name').notNull(),
   kind:     text('kind', { enum: ['expense', 'income', 'both'] }).notNull(),
   parentId: text('parent_id'),
-  i18nKey:  text('i18n_key'),
+  names:    text('names'),
 }, (t) => [
   foreignKey({ columns: [t.parentId], foreignColumns: [t.id] }),
 ])
