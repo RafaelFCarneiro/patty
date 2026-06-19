@@ -3,7 +3,7 @@ import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { callTool, callToolError, makeClient } from './helpers.js'
 
-type Category = { id: string; name: string; kind: string; i18nKey: string | null }
+type Category = { id: string; name: string; kind: string; names: Record<string, string> | null }
 type Preferences = { locale: string; localeSource: string }
 
 describe('MCP integration > i18n', () => {
@@ -21,12 +21,13 @@ describe('MCP integration > i18n', () => {
     await transport.close()
   })
 
-  it('fresh DB has English default IDs with i18nKey set', async () => {
+  it('fresh DB has English default IDs with names set', async () => {
     const categories = await callTool(client, { name: 'list_categories' }) as Category[]
     const food = categories.find((c) => c.id === 'cat-food')
     expect(food).toBeDefined()
     expect(food!.name).toBe('Food')
-    expect(food!.i18nKey).toBe('cat-food')
+    expect(food!.names).toBeDefined()
+    expect(food!.names!.pt).toBe('Alimentação')
   })
 
   it('default locale is en', async () => {
@@ -56,7 +57,7 @@ describe('MCP integration > i18n', () => {
     const categories = await callTool(client, { name: 'list_categories' }) as Category[]
     const custom = categories.find((c) => c.name === 'My Custom')
     expect(custom).toBeDefined()
-    expect(custom!.i18nKey).toBeNull()
+    expect(custom!.names).toBeNull()
   })
 
   it('resolveByName resolves by active-locale name', async () => {
@@ -104,6 +105,37 @@ describe('MCP integration > i18n', () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'es', source: 'explicit' } })
     const prefs = await callTool(client, { name: 'get_preferences' }) as Preferences
     expect(prefs.locale).toBe('es')
+  })
+
+  it('pt description classifies via multilingual merchant rules', async () => {
+    await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } })
+    const tx = await callTool(client, {
+      name: 'create_transaction',
+      args: {
+        description: 'FARMÁCIA SÃO JOÃO',
+        amount: 35,
+        type: 'expense',
+        account: 'Test i18n',
+        idempotencyKey: 'i18n-classify-pt-1',
+      },
+    }) as { transaction: { categoryId: string }; classification: { method: string } }
+    expect(tx.transaction.categoryId).toBe('cat-health')
+    expect(tx.classification.method).toBe('rule')
+  })
+
+  it('es description classifies via multilingual merchant rules', async () => {
+    const tx = await callTool(client, {
+      name: 'create_transaction',
+      args: {
+        description: 'GASOLINERA REPSOL',
+        amount: 50,
+        type: 'expense',
+        account: 'Test i18n',
+        idempotencyKey: 'i18n-classify-es-1',
+      },
+    }) as { transaction: { categoryId: string }; classification: { method: string } }
+    expect(tx.transaction.categoryId).toBe('cat-transport')
+    expect(tx.classification.method).toBe('rule')
   })
 
   it('reset locale to en for other test suites', async () => {
