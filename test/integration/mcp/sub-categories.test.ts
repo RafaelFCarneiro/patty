@@ -21,13 +21,13 @@ describe('MCP integration > sub-categories', () => {
       await client.connect(transport)
       const sc = (await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `Restaurante-${stamp}`, parentId: 'cat-alimentacao' },
+        args: { name: `Restaurante-${stamp}`, parentId: 'cat-food' },
       })) as SubCategory
 
       ensure(sc.id, 'subCategory id missing')
       expect(sc.name).toBe(`Restaurante-${stamp}`)
-      expect(sc.parentId).toBe('cat-alimentacao')
-      expect(sc.parentName).toBe('Alimentação')
+      expect(sc.parentId).toBe('cat-food')
+      expect(sc.parentName).toBe('Food')
       expect(sc.kind).toBe('expense')
     } finally {
       await transport.close()
@@ -41,12 +41,12 @@ describe('MCP integration > sub-categories', () => {
       await client.connect(transport)
       await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `Mercado-${stamp}`, parentId: 'cat-alimentacao' },
+        args: { name: `Mercado-${stamp}`, parentId: 'cat-food' },
       })
       await expect(
         callTool(client, {
           name: 'create_sub_category',
-          args: { name: `Mercado-${stamp}`, parentId: 'cat-alimentacao' },
+          args: { name: `Mercado-${stamp}`, parentId: 'cat-food' },
         }),
       ).rejects.toThrow()
     } finally {
@@ -61,7 +61,7 @@ describe('MCP integration > sub-categories', () => {
       await client.connect(transport)
       const sc = (await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `Padaria-${stamp}`, parentId: 'cat-alimentacao' },
+        args: { name: `Padaria-${stamp}`, parentId: 'cat-food' },
       })) as SubCategory
       ensure(sc.id, 'subCategory id missing')
 
@@ -80,19 +80,19 @@ describe('MCP integration > sub-categories', () => {
       await client.connect(transport)
       await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `Uber-${stamp}`, parentId: 'cat-transporte' },
+        args: { name: `Uber-${stamp}`, parentId: 'cat-transport' },
       })
       await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `Ifood-${stamp}`, parentId: 'cat-alimentacao' },
+        args: { name: `Ifood-${stamp}`, parentId: 'cat-food' },
       })
 
       const food = (await callTool(client, {
         name: 'list_sub_categories',
-        args: { parentId: 'cat-alimentacao' },
+        args: { parentId: 'cat-food' },
       })) as SubCategory[]
 
-      expect(food.every((s) => s.parentId === 'cat-alimentacao')).toBe(true)
+      expect(food.every((s) => s.parentId === 'cat-food')).toBe(true)
       expect(food.some((s) => s.name === `Ifood-${stamp}`)).toBe(true)
       expect(food.some((s) => s.name === `Uber-${stamp}`)).toBe(false)
     } finally {
@@ -108,7 +108,7 @@ describe('MCP integration > sub-categories', () => {
 
       const sc = (await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `Almoço-${stamp}`, parentId: 'cat-alimentacao' },
+        args: { name: `Almoço-${stamp}`, parentId: 'cat-food' },
       })) as SubCategory
       ensure(sc.id, 'subCategory id missing')
 
@@ -129,8 +129,8 @@ describe('MCP integration > sub-categories', () => {
 
       expect(tx.subCategoryId).toBe(sc.id)
       expect(tx.subCategoryName).toBe(`Almoço-${stamp}`)
-      expect(tx.categoryId).toBe('cat-alimentacao')
-      expect(tx.categoryName).toBe('Alimentação')
+      expect(tx.categoryId).toBe('cat-food')
+      expect(tx.categoryName).toBe('Food')
     } finally {
       await transport.close()
     }
@@ -148,7 +148,7 @@ describe('MCP integration > sub-categories', () => {
             description: 'Pagamento errado',
             amount: 100,
             type: 'expense',
-            category: 'Salário',
+            category: 'Salary',
             idempotencyKey: `test-kind-mismatch-${stamp}`,
           },
         }),
@@ -170,7 +170,7 @@ describe('MCP integration > sub-categories', () => {
             description: 'Salário errado',
             amount: 5000,
             type: 'income',
-            category: 'Alimentação',
+            category: 'Food',
             idempotencyKey: `test-income-mismatch-${stamp}`,
           },
         }),
@@ -192,7 +192,7 @@ describe('MCP integration > sub-categories', () => {
             description: 'Ambiguous',
             amount: 10,
             type: 'expense',
-            category: 'Alimentação',
+            category: 'Food',
             subCategory: 'something',
             idempotencyKey: `test-both-${stamp}`,
           },
@@ -211,11 +211,11 @@ describe('MCP integration > sub-categories', () => {
 
       const sc1 = (await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `SubA-${stamp}`, parentId: 'cat-alimentacao' },
+        args: { name: `SubA-${stamp}`, parentId: 'cat-food' },
       })) as SubCategory
       const sc2 = (await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `SubB-${stamp}`, parentId: 'cat-alimentacao' },
+        args: { name: `SubB-${stamp}`, parentId: 'cat-food' },
       })) as SubCategory
       ensure(sc1.id, 'sc1 id missing')
       ensure(sc2.id, 'sc2 id missing')
@@ -241,7 +241,7 @@ describe('MCP integration > sub-categories', () => {
 
       expect(updated.subCategoryId).toBe(sc2.id)
       expect(updated.subCategoryName).toBe(`SubB-${stamp}`)
-      expect(updated.categoryId).toBe('cat-alimentacao')
+      expect(updated.categoryId).toBe('cat-food')
     } finally {
       await transport.close()
     }
@@ -255,7 +255,7 @@ describe('MCP integration > sub-categories', () => {
 
       const sc = (await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `Filter-${stamp}`, parentId: 'cat-alimentacao' },
+        args: { name: `Filter-${stamp}`, parentId: 'cat-food' },
       })) as SubCategory
       ensure(sc.id, 'subCategory id missing')
 
@@ -275,7 +275,7 @@ describe('MCP integration > sub-categories', () => {
           description: 'Sem subcategoria',
           amount: 20,
           type: 'expense',
-          category: 'Alimentação',
+          category: 'Food',
           idempotencyKey: `test-search-sub-no-match-${stamp}`,
         },
       })) as { transaction?: TransactionView }
@@ -309,7 +309,7 @@ describe('MCP integration > sub-categories', () => {
           description: 'Teste hint',
           amount: 100,
           type: 'expense',
-          category: 'Salário',
+          category: 'Salary',
           idempotencyKey: `test-hint-${stamp}`,
         },
       })) as { error?: { code?: string; hint?: string } }
@@ -329,7 +329,7 @@ describe('MCP integration > sub-categories', () => {
 
       const sc = (await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `ClearMe-${stamp}`, parentId: 'cat-alimentacao' },
+        args: { name: `ClearMe-${stamp}`, parentId: 'cat-food' },
       })) as SubCategory
       ensure(sc.id, 'subCategory id missing')
 
@@ -350,10 +350,10 @@ describe('MCP integration > sub-categories', () => {
 
       const updated = (await callTool(client, {
         name: 'update_transaction',
-        args: { id: tx.id, category: 'Transporte' },
+        args: { id: tx.id, category: 'Transport' },
       })) as TransactionView
 
-      expect(updated.categoryId).toBe('cat-transporte')
+      expect(updated.categoryId).toBe('cat-transport')
       expect(updated.subCategoryId).toBeUndefined()
     } finally {
       await transport.close()
@@ -368,7 +368,7 @@ describe('MCP integration > sub-categories', () => {
 
       const sc = (await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `KeepMe-${stamp}`, parentId: 'cat-alimentacao' },
+        args: { name: `KeepMe-${stamp}`, parentId: 'cat-food' },
       })) as SubCategory
       ensure(sc.id, 'subCategory id missing')
 
@@ -394,7 +394,7 @@ describe('MCP integration > sub-categories', () => {
 
       expect(updated.amount).toBe(20)
       expect(updated.subCategoryId).toBe(sc.id)
-      expect(updated.categoryId).toBe('cat-alimentacao')
+      expect(updated.categoryId).toBe('cat-food')
     } finally {
       await transport.close()
     }
@@ -407,7 +407,7 @@ describe('MCP integration > sub-categories', () => {
       await client.connect(transport)
       const sc = (await callTool(client, {
         name: 'create_sub_category',
-        args: { name: `LeakCheck-${stamp}`, parentId: 'cat-alimentacao' },
+        args: { name: `LeakCheck-${stamp}`, parentId: 'cat-food' },
       })) as SubCategory
       ensure(sc.id, 'subCategory id missing')
 
@@ -457,7 +457,7 @@ describe('MCP integration > sub-categories', () => {
 
       const result = (await callToolError(client, {
         name: 'update_transaction',
-        args: { id: tx.id, category: 'Alimentação' },
+        args: { id: tx.id, category: 'Food' },
       })) as { error?: { code?: string } }
 
       expect(result.error?.code).toBe('validation')
@@ -487,7 +487,7 @@ describe('MCP integration > sub-categories', () => {
 
       const result = (await callToolError(client, {
         name: 'update_transaction',
-        args: { id: tx.id, category: 'Salário' },
+        args: { id: tx.id, category: 'Salary' },
       })) as { error?: { code?: string } }
 
       expect(result.error?.code).toBe('category_kind_mismatch')
@@ -538,7 +538,7 @@ describe('MCP integration > sub-categories', () => {
           description: 'Despesa qualquer',
           amount: 20,
           type: 'expense',
-          category: 'Alimentação',
+          category: 'Food',
           idempotencyKey: `test-type-transfer-${stamp}`,
         },
       })) as { transaction?: TransactionView }
