@@ -1,10 +1,12 @@
 import { err, ok, type Result, ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
-import { resolveByName, type Named, type Resolution } from '../logic/resolve.js'
+import { allNamesForKey } from '../logic/i18n.js'
+import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js'
 import type { Account } from '../models/account.js'
 import type { Category, SubCategory } from '../models/category.js'
 import type { CreditCard } from '../models/creditCard.js'
 import type { MovementType } from '../models/transaction.js'
+import { listCategories } from './categories.js'
 import type { Deps } from './deps.js'
 
 /** Resolution → Result with the right structured error for the entity kind. */
@@ -23,9 +25,11 @@ export const resolveAccountRef = (deps: Deps, name: string): ResultAsync<Account
   )
 
 export const resolveCategoryRef = (deps: Deps, name: string): ResultAsync<Category, AppError> =>
-  ResultAsync.fromSafePromise(deps.categories.list()).andThen((categories) =>
-    resolutionToResult(resolveByName(categories, name), 'category'),
-  )
+  ResultAsync.fromSafePromise(listCategories(deps)).andThen((categories) => {
+    const synonyms = (cat: Category): string[] =>
+      cat.i18nKey ? allNamesForKey(cat.i18nKey) : []
+    return resolutionToResult(resolveByNames(categories, name, synonyms), 'category')
+  })
 
 export const resolveSubCategoryRef = (deps: Deps, name: string): ResultAsync<SubCategory, AppError> =>
   ResultAsync.fromSafePromise(deps.subCategories.list()).andThen((subCategories) =>

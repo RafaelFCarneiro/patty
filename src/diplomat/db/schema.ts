@@ -1,5 +1,6 @@
 import { check, foreignKey, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
+import { Locale, LocaleSource } from '../../models/locale.js'
 import { ClassificationMethod, TransactionStatus } from '../../models/transaction.js'
 
 export const currencies = sqliteTable('currencies', {
@@ -30,6 +31,7 @@ export const categories = sqliteTable('categories', {
   name:     text('name').notNull(),
   kind:     text('kind', { enum: ['expense', 'income', 'both'] }).notNull(),
   parentId: text('parent_id'),
+  i18nKey:  text('i18n_key'),
 }, (t) => [
   foreignKey({ columns: [t.parentId], foreignColumns: [t.id] }),
 ])
@@ -112,4 +114,10 @@ export const recurringRules = sqliteTable('recurring_rules', {
   currency:    text('currency').notNull().references(() => currencies.code),
   accountId:   text('account_id').references(() => accounts.id),
   categoryId:  text('category_id').references(() => categories.id),
+})
+
+export const settings = sqliteTable('settings', {
+  id:           text('id').primaryKey().default('singleton'),
+  locale:       text('locale', { enum: Locale.options }).notNull().default(Locale.enum.en),
+  localeSource: text('locale_source', { enum: LocaleSource.options }).notNull().default(LocaleSource.enum.default),
 })

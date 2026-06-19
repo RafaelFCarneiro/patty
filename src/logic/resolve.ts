@@ -26,3 +26,28 @@ export const resolveByName = <T extends Named>(entities: readonly T[], query: st
 
   return { kind: 'none', query, candidates: entities.map((e) => e.name) }
 }
+
+/** Like resolveByName, but also checks synonym names for each entity. */
+export const resolveByNames = <T extends Named>(
+  entities: readonly T[],
+  query: string,
+  synonyms: (entity: T) => string[],
+): Resolution<T> => {
+  const primary = resolveByName(entities, query)
+  if (primary.kind === 'found') return primary
+
+  const q = fold(query)
+  const matches = entities.filter((e) =>
+    synonyms(e).some((s) => fold(s) === q),
+  )
+  if (matches.length === 1) return { kind: 'found', entity: matches[0]! }
+  if (matches.length > 1) return { kind: 'ambiguous', query, candidates: matches.map((e) => e.name) }
+
+  const partialMatches = entities.filter((e) =>
+    synonyms(e).some((s) => fold(s).includes(q) || q.includes(fold(s))),
+  )
+  if (partialMatches.length === 1) return { kind: 'found', entity: partialMatches[0]! }
+  if (partialMatches.length > 1) return { kind: 'ambiguous', query, candidates: partialMatches.map((e) => e.name) }
+
+  return primary
+}

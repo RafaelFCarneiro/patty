@@ -1,14 +1,24 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
+import { translateWithFallback } from '../logic/i18n.js'
 import type { Category, CreateCategory, SubCategory } from '../models/category.js'
 import type { Deps } from './deps.js'
 
-export const listCategories = (deps: Deps): Promise<Category[]> => deps.categories.list()
+const resolveDisplayName = (cat: Category, locale: string): Category => ({
+  ...cat,
+  name: cat.i18nKey ? translateWithFallback(cat.i18nKey, locale as 'en' | 'es' | 'pt', cat.name) : cat.name,
+})
+
+export const listCategories = async (deps: Deps): Promise<Category[]> => {
+  const locale = await deps.locale()
+  const all = await deps.categories.list()
+  return all.map((c) => resolveDisplayName(c, locale))
+}
 
 export const createCategory = (deps: Deps, input: CreateCategory): ResultAsync<Category, AppError> =>
   safeTry(async function* () {
-    const all = await deps.categories.list()
+    const all = await listCategories(deps)
     yield* guard(!all.some((c) => c.name.toLowerCase() === input.name.toLowerCase()), {
       code: 'duplicate_name',
       entity: 'category',

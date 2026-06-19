@@ -5,6 +5,7 @@ import type { AppError } from '../../common/errors.js'
 import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, createSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
+import { getPreferences, setLocale } from '../../controllers/settings.js'
 import { createCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
@@ -22,6 +23,7 @@ import { createTransfer } from '../../controllers/transfers.js'
 import { TransactionSource, TransactionStatus, TransactionType, MovementType } from '../../models/transaction.js'
 import { CurrencyCode } from '../../models/common.js'
 import { CategoryKind } from '../../models/category.js'
+import { Locale, LocaleSource } from '../../models/locale.js'
 import { AccountType } from '../../models/account.js'
 import { RecurringPeriod } from '../../models/recurring.js'
 import {
@@ -390,7 +392,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
 
   server.registerTool(
     'list_categories',
-    { title: 'List categories', description: 'List all categories.', inputSchema: {} },
+    { title: 'List categories', description: 'List all categories. Names are resolved to the active locale for default categories.', inputSchema: {} },
     async () => json(await listCategories(deps)),
   )
 
@@ -445,6 +447,38 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       inputSchema: { id: z.string().min(1) },
     },
     async (args) => fromResult(await deleteTag(deps, args.id)),
+  )
+
+  server.registerTool(
+    'set_locale',
+    {
+      title: 'Set locale',
+      description:
+        'Set the display language for default categories (en/es/pt). The AI agent should call this ' +
+        'when it detects the user\'s language from conversation — use source "inferred". ' +
+        'When the user explicitly requests a locale change, use source "explicit". ' +
+        'GUARDRAILS: (1) Anti-churn — only switch on a clear, sustained language change, not on ' +
+        'isolated foreign words, merchant names, or proper nouns. (2) Respect explicit — if the ' +
+        'current locale_source is "explicit", do not auto-switch with source "inferred"; the user ' +
+        'must explicitly request the change. Use get_preferences to check the current locale and source.',
+      inputSchema: {
+        locale: Locale,
+        source: LocaleSource.exclude([LocaleSource.enum.default]),
+      },
+    },
+    async (args) => fromResult(await setLocale(deps, args)),
+  )
+
+  server.registerTool(
+    'get_preferences',
+    {
+      title: 'Get user preferences',
+      description:
+        'Returns the current locale and locale_source. Use this to check whether the user set the ' +
+        'locale explicitly before attempting an inferred switch.',
+      inputSchema: {},
+    },
+    async () => json(await getPreferences(deps)),
   )
 
   return server

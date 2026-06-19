@@ -8,6 +8,7 @@ export const Category = z.object({
   id: Id,
   name: z.string().min(1),
   kind: CategoryKind,
+  i18nKey: z.string().nullish(),
 })
 export type Category = z.infer<typeof Category>
 

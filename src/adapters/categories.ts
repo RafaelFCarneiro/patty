@@ -5,7 +5,7 @@ import type * as wireIn from '../wire/in/categories.js'
 
 // Input is the schema-derived Drizzle row; Category.parse enforces domain constraints.
 export const dbToModel = (row: CategoryRow): Category =>
-  Category.parse({ id: row.id, name: row.name, kind: row.kind })
+  Category.parse({ id: row.id, name: row.name, kind: row.kind, i18nKey: row.i18nKey })
 
 export const dbToSubCategory = (record: Record<string, unknown>): SubCategory => {
   const row = SubCategoryRowSchema.parse(record)
