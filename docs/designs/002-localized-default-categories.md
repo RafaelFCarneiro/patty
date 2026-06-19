@@ -1,9 +1,11 @@
 # Feature Design 002: Localized default categories (i18n)
 
 **Type:** Feature design (not an ADR — a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress · **Branch:** `feat/category-i18n` ·
-**Date:** 2026-06-17 · Refines the category model in `docs/architecture.md`. The durable invariants this
-produces (category identity = slug; display name resolved per locale) land in `docs/architecture.md` when implemented.
+**Implementation status:** In progress (revised per ADR-008 + ADR-009 — the first cut built the now-superseded
+`i18n_key` + `logic/i18n` catalog model and placed seed types in `models/`; reworking to seed isolation +
+names-on-the-entity) · **Branch:** `feat/category-i18n` ·
+**Date:** 2026-06-17 (revised 2026-06-19) · Governed by **ADR-008** (seed isolation) and **ADR-009** (localized
+content on the entity). The durable invariants land in `docs/architecture.md` when implemented.
 
 > **Implementation status** tracks delivery, distinct from the design's acceptance. Values:
 > `Not started` · `In progress` · `Done` · `Blocked`. The implementing PR updates this line (→ `In progress`
@@ -11,208 +13,200 @@ produces (category identity = slug; display name resolved per locale) land in `d
 
 ## Context
 
-The 15 seeded default categories are written in **Portuguese** (`Alimentação`, `Transporte`, `Salário`, …).
-FinTrack's users may speak Spanish or English, so the default taxonomy should appear in the user's language
-while preserving today's behaviour: a ready-made set of categories and merchant auto-classification.
+The 15 seeded default categories started out in **Portuguese** (`Alimentação`, `Transporte`, `Salário`, …).
+Users may speak Spanish or English, so the default taxonomy should appear in the user's language while
+preserving today's behaviour: a ready-made set of categories and merchant auto-classification.
 
-Two facts about the current model make this tractable:
+Three facts make this tractable:
 
-1. **Identity is a stable slug, not the name.** Default categories have slug IDs.
+1. **Identity is a stable slug, not the name.** Default categories have slug IDs (`cat-food`, …).
 2. **Classification is ID-based.** `merchant_category` maps a merchant key to a `category_id` (the slug),
-   never to a display name. So localizing the **display name** cannot break classification.
+   never to a display name. Localizing the **display name** cannot break classification.
+3. **Seed is optional (ADR-008).** Default categories, currencies, and merchant rules are quality-of-life
+   pre-setup; the domain must run on an empty DB. So the categories — and therefore *their translations* —
+   are dynamic, optional content, not fixed UI chrome.
 
-Localization is therefore purely a **display + name-resolution** concern, not a data-model upheaval. The open
-questions are: where the locale preference lives, who sets it, whether names are localized once at seed time
-or resolved per-locale at read time, and — since the default language is now English — what language the
-**canonical seed** itself (slug IDs, fallback names, merchant rules) should be written in.
+Fact 3 reshaped the design after a first implementation. Category names are **dynamic content with a
+lifecycle** (created, renamed, deleted, possibly user-made), not static labels. Localizing them through a
+translation **catalog** (a slug-keyed map in `logic/`) was the wrong tool: it created a two-class
+`i18n_key`-set-vs-literal system and coupled the domain's name resolution to seed slugs. ADR-009 corrects this —
+**localized names travel with the entity, as data.**
 
 ## Decision
 
-1. **The canonical seed is English** (default locale = `en`). Default category **slug IDs are English**
-   (`cat-food`, `cat-transport`, `cat-housing`, `cat-utilities`, `cat-health`, `cat-education`, `cat-leisure`,
-   `cat-shopping`, `cat-subscriptions`, `cat-travel`, `cat-taxes`, `cat-salary`, `cat-extra-income`,
-   `cat-investments`, `cat-other`) and their stored fallback `name` is English. The current Portuguese strings
-   move into the `pt` translations.
-1a. **Merchant rules are multilingual and additive — seeded for all languages, always** (revision; the first
-   draft seeded English-only keys). Classification matches a normalized merchant **key** as a substring of the
-   transaction description (`description LIKE '%key%'`), so an English-only seed gives pt/es users *zero* hits
-   out of the box (`FARMÁCIA`, `IFOOD`, `ALUGUEL` match nothing). Identity is still the English slug; only the
-   **keys** are language-specific data. So the seed is the **union** of a language-agnostic brand pack plus
-   `en`/`pt`/`es` keyword packs, all referencing the English category IDs, loaded for every user regardless of
-   locale — locale drives *display names*, never *which rules apply*. The `MerchantRule` schema and the
-   canonical `DEFAULT_MERCHANT_RULES` (brand + en/pt/es sections) live in `src/models/merchantRule.ts`,
-   referencing the canonical `DefaultCategoryId` enum (`src/models/category.ts`); keys are re-normalized
-   through `logic/merchant.ts#normalizeMerchant` and deduped by `(key, category)` at seed time. Authoring
-   discipline: prefer distinctive 4+ char keys and avoid short tokens that embed in unrelated words (`gas` ⊂
-   `gasolina`, `tax` ⊂ `taxi`, `bar` ⊂ `embarque`); when a specific key must beat a generic one, add both —
-   the matcher's longer-key tiebreak resolves it (`uber eats`→food over `uber`→transport).
-2. **Locale is AI-determined, stored, env-overridable, with an `en` cold-start.** A single-row **`settings`**
-   table holds `locale` (`pt | es | en`) plus a `locale_source` (`default | inferred | explicit`). The **AI
-   agent is the primary setter**: it infers the user's language from the conversation and calls **`set_locale`**
-   to match. `FINTRACK_LOCALE` overrides at startup (testing/CI). Resolution:
-   `FINTRACK_LOCALE ?? settings.locale ?? 'en'`. Two guardrails (in the `set_locale` tool description):
-   - **Anti-churn:** switch only on a *clear, sustained* language change — not on isolated words, merchant
-     names, or other proper nouns. Don't oscillate.
-   - **Respect explicit choice:** if the user set the locale explicitly (`locale_source = explicit`), the agent
-     does not silently auto-switch away from it. `get_preferences` exposes the current locale and source so
-     the agent can reason about both.
-3. **Default categories carry an i18n key; names resolve at read time.** Add a nullable **`i18n_key`** column
-   to `categories`. Default (seeded) categories set it (the English slug doubles as the key, e.g. `cat-food`);
-   user-created categories leave it `null` and keep their literal `name`. On read, the display name is:
-   `i18n_key ? translate(i18n_key, locale) : name` — so **switching locale instantly reflows** all default
-   category names, with no data migration. The seeded English `name` stays as the fallback when a translation
-   is missing.
-4. **Translations are pure data in `logic/`.** A `logic/i18n` map provides `pt | es | en` strings for the ~15
-   default category keys (and is the home for any future localized strings). Pure, unit-testable, no I/O.
-5. **Name resolution honours the active locale, tolerantly.** `resolveByName` for categories matches the
-   active-locale display names first; for robustness it also accepts the English fallback and other-locale
-   synonyms of the same key (so a pt-locale user saying "food" still resolves). Ambiguity rules are unchanged.
-6. **Classification logic is untouched.** Merchant rules still reference category **slugs**, and the matching
-   algorithm is unchanged. What changes is the seed *data*: rule keys now span en/pt/es (Decision 1a). Display
-   localization never touches rules; rule keys never reference a localized name.
+1. **Seed is isolated under the db diplomat (ADR-008).** Currencies, default categories, and default merchant
+   rules live in `src/diplomat/db/seed/` (`currencies.ts`, `categories.ts`, `merchantRules.ts`), consumed only
+   by `bootstrap.ts`. The domain never imports seed. Seed-only types — `DefaultCategoryId` and the
+   `MerchantRule` shape — live in `seed/`, **not** `models/`. `models/Category` keeps a generic `Id`.
+2. **The canonical seed is English** (default locale = `en`). Default category slug IDs are English
+   (`cat-food`, `cat-transport`, …, `cat-other`); each row's required canonical `name` is English. The
+   Portuguese/Spanish names become per-row seed data (Decision 3).
+3. **Localized names live on the category row (ADR-009).** A category carries a required canonical **`name`**
+   (always-present fallback) plus an optional **`names`** JSON column — `{"pt":"Alimentação","es":"Comida"}`,
+   nullable. Read-time resolution is one uniform rule: **`displayName = names?.[locale] ?? name`**. A user
+   category has `name` only (`names` null); a seeded category ships `name` = English + `names` = `{ pt, es }`.
+   The `i18n_key` column and the `logic/i18n` catalog are **removed**; seeded translations are authored as the
+   `names` values in `diplomat/db/seed/categories.ts`. Switching locale reflows names with no migration.
+4. **Locale preference is AI-determined, stored, env-overridable, `en` cold-start.** A single-row **`settings`**
+   table holds `locale` (`pt | es | en`) + `locale_source` (`default | inferred | explicit`) — this is *user
+   state*, not seed. The **AI agent is the primary setter**: it infers the user's language and calls
+   **`set_locale`**. `FINTRACK_LOCALE` overrides at startup. Resolution: `FINTRACK_LOCALE ?? settings.locale ??
+   'en'`. Two guardrails (in the `set_locale` tool description):
+   - **Anti-churn:** switch only on a *clear, sustained* language change — not isolated words, merchant names,
+     or proper nouns. Don't oscillate.
+   - **Respect explicit choice:** if `locale_source = explicit`, the agent does not silently auto-switch away.
+     `get_preferences` exposes locale + source.
+5. **Name resolution honours the active locale, tolerantly.** `resolveByName` for categories matches the active
+   locale's name first, then the canonical `name` and any other-locale names present on the row (so a pt-locale
+   user saying "food" still resolves). Ambiguity rules unchanged.
+6. **Merchant rules are multilingual, additive, and seed (ADR-008).** Classification matches a normalized
+   merchant **key** as a substring of the description (`description LIKE '%key%'`), so an English-only seed
+   gives pt/es users *zero* hits (`FARMÁCIA`, `IFOOD`, `ALUGUEL` match nothing). The seed is the **union** of a
+   language-agnostic brand pack plus `en`/`pt`/`es` keyword packs, all targeting English category slugs and
+   loaded for every user (locale drives display, never which rules apply). The `MerchantRule` shape +
+   `DEFAULT_MERCHANT_RULES` live in `diplomat/db/seed/merchantRules.ts`; keys are re-normalized via
+   `logic/merchant.ts#normalizeMerchant` and deduped by `(key, category)` at seed time. Authoring discipline:
+   distinctive 4+ char keys; avoid short tokens that embed in unrelated words (`gas` ⊂ `gasolina`, `tax` ⊂
+   `taxi`, `bar` ⊂ `embarque`); when a specific key must beat a generic one, add both — the matcher's
+   longer-key tiebreak resolves it (`uber eats`→food over `uber`→transport).
+7. **Classification logic is untouched.** Rules reference slugs and the matching algorithm is unchanged; only
+   the seed *data* spans en/pt/es. Display localization never touches rules.
 
 ## Scope / out of scope
 
-- **In:** English-canonical seed (English slug IDs + English fallback names); **multilingual additive merchant
-  rules** (brand + en/pt/es sections in `src/models/merchantRule.ts`, unioned and loaded for all users,
-  normalized + deduped at seed time); a manual `scripts/reset-local-db.sh` to wipe the dev DB (clean slate —
-  **no** remap migration); `settings` table + AI-driven locale (`set_locale` with anti-churn + explicit-override
-  guardrails, env-overridable, default en); `i18n_key` on categories; read-time name resolution; pt/es/en
-  translations for the default categories; locale-aware `resolveByName`; `set_locale`/`get_preferences` tools.
-- **Out:** **locale-gated merchant packs** (loading a language's rules *only* when that locale is active — we
-  load all packs always instead, since statements are mixed and brands are universal); localizing
-  **sub-categories**, **tags**, or user-created categories (user literals); localizing tool descriptions /
-  error messages / currency names; RTL or pluralization machinery. Adding locales beyond pt/es/en is a
-  data-only follow-up (drop in a new `<locale>.ts` pack + translations).
+- **In:** seed isolation under `diplomat/db/seed/` (ADR-008); English-canonical seed (English slug IDs + English
+  canonical `name`); localized names on the category row via a JSON `names` column + `names?.[locale] ?? name`
+  resolution (ADR-009); multilingual additive merchant rules (brand + en/pt/es) in `seed/merchantRules.ts`;
+  `settings` table + AI-driven locale (`set_locale` with anti-churn + explicit-override guardrails,
+  env-overridable, default en); locale-aware `resolveByName`; `set_locale`/`get_preferences` tools; a manual
+  `scripts/reset-local-db.sh` (clean slate — **no** remap migration).
+- **Out:** a translation **catalog** for category names (superseded — that's for chrome, not content);
+  **locale-gated** merchant packs (we always load all); localizing **sub-categories**, **tags**, or
+  user-created categories; localizing tool descriptions / error messages / currency names; RTL or pluralization
+  machinery. Adding a locale is data-only (author `names` on seed rows + a `<locale>` merchant pack).
 
 ## Options Considered
 
-### Option A — read-time resolution by key + locale — **chosen**
-**Pros:** locale switch reflows default names live with zero migration; one source of truth (the translations
-map); default vs. user category is a clean `i18n_key is null` distinction.
-**Cons:** every category read resolves a name (cheap: an in-memory map lookup at the adapter boundary).
+### Option A — Localized names on the entity (JSON `names` column) — **chosen** (ADR-009)
+**Pros:** one uniform resolution rule across seeded and user categories; no catalog and no domain↔seed coupling;
+seeded translations are just seed data; additive (a new locale is data only); no join.
+**Cons:** search-by-localized-name uses `json_extract`; a name absent for the active locale falls back to the
+canonical `name` (acceptable).
 
-### Option B — seed-time localization (names baked at first run)
-**Pros:** simplest; no key column, no resolution step.
-**Cons:** changing locale later does not rename existing default categories; re-seeding would clash with
-user edits. Rejected — fails the "according to user preference" goal once the DB exists.
+### Option B — Translation catalog keyed by slug (`i18n_key` + `logic/i18n` map) — *superseded*
+**Pros:** translations in one version-controlled map; no per-row storage.
+**Cons:** wrong pattern for dynamic content; two-class `i18n_key`-set-vs-literal system; couples domain
+resolution to seed slugs (violates ADR-008). This was the first implementation; ADR-009 replaces it.
 
-### Option C — fully separate localized name table (category_translations rows)
-**Pros:** translations live in the DB; non-developers could edit them.
-**Cons:** heavier (join on every read, migration to seed translations) for a fixed, ~15-row, developer-owned
-set. The pure-data map (Option A) is lighter and version-controlled. Rejected for now.
+### Option C — Separate `category_translations` table
+**Pros:** normalized; clean cross-locale name search; unlimited locales.
+**Cons:** a join on every category read + a migration to seed translations, for a small read-by-id set. Heavier
+than the JSON column with no current need; revisit only if cross-locale name search becomes a hard requirement.
 
 ## Consequences
 
-- **English-canonical seed:** `bootstrap.ts` is rewritten so default categories use English slug IDs + English
-  fallback names. The Portuguese strings live only in the `pt` translations map.
-- **Multilingual merchant rules:** seed keys move out of `bootstrap.ts` into the `merchantRule` model
-  (`src/models/merchantRule.ts`: `MerchantRule` schema + `DEFAULT_MERCHANT_RULES`, brand + `en`/`pt`/`es`
-  sections), targeting the canonical `DefaultCategoryId` enum. `seedMerchantRules` normalizes every key via
-  `normalizeMerchant` (single source of truth) and dedupes by `(key, category)` before insert, so packs can
-  overlap. All packs load for every user; the category target is always an English slug.
-- **Canonical category identity:** the 15 default slugs are a `DefaultCategoryId` zod enum in
-  `src/models/category.ts`; the seed `CATEGORIES`, the `i18n` key set, and the merchant rules all key off it
-  (the seed is `satisfies`-locked to it), so the slug lives in one place.
-- **Clean-slate, no remap migration.** There is no production data — the only existing database is a single
-  local **dev/test** DB. So we do **not** rewrite foreign keys: the schema simply seeds the English IDs on a
-  fresh DB. The existing dev DB is reset **out of band** via a manual `scripts/reset-local-db.sh` that deletes
-  the local `fintrack.db` (and its `-wal`/`-shm` sidecars). **Dropping the DB is an explicit, manual dev
-  convenience — never a default pattern, never wired into `dev`/`test`/CI, and never an automated migration.**
-  This is acceptable precisely because the slug-ID change predates any real user data; it would NOT be an
-  acceptable approach once production data exists (that would require the remap migration this design avoids).
-- **Schema/migration:** add `categories.i18n_key text` (nullable; = the English slug for defaults); add a
-  `settings` table (single row: `locale`, default `en`). Seed translations live in code, not the DB.
-- **AI-driven locale:** the `set_locale` tool description tells the agent to detect the user's language and
-  switch; `get_preferences` lets it read the current value. Cold-start is `en`; the agent flips to pt/es on
-  the first message in that language, and `list_categories` immediately reflows.
-- **MCP surface:** `set_locale` / `get_preferences`; `list_categories` returns names already resolved to the
-  active locale; `create_category` for user categories is unchanged (literal name, no key). Documented in
+- **Seed relocates (ADR-008):** `bootstrap.ts` becomes pure "migrate + seed"; currencies, categories, and
+  merchant rules move to `diplomat/db/seed/`. `DefaultCategoryId` and `MerchantRule` move out of `models/` into
+  `seed/`. New invariant: every feature works on an unseeded DB (with a test).
+- **Catalog deleted (ADR-009):** `logic/i18n.ts` (category translations) is removed; its strings become the
+  `names` values on the seeded category rows in `diplomat/db/seed/categories.ts`.
+- **Schema/migration:** drop `categories.i18n_key`; add `categories.names` (JSON, nullable); keep `name` as the
+  required canonical fallback. Add the single-row `settings` table (`locale`, `locale_source`).
+- **Resolution simplifies:** the category adapter/controller resolves `names?.[locale] ?? name` over the row's
+  own data — pure, no catalog import, no seed dependency. The `i18n_key`-null-vs-set distinction disappears;
+  user and default categories differ only in whether `names` is populated.
+- **AI-driven locale:** `set_locale` detects the language and switches; `get_preferences` reads it. Cold-start
+  `en`; on the first pt/es message the agent flips and `list_categories` reflows.
+- **MCP surface:** `set_locale` / `get_preferences`; `list_categories` returns locale-resolved names;
+  `create_category` for user categories is unchanged (literal `name`, `names` null). Documented in
   `docs/mcp-tools.md`.
-- **Invariant:** a category's **identity** is its id/slug; its **display name** is derived (for defaults) or
-  literal (for user categories). Code and merchant rules key on the id, never the localized name.
-- **Diplomatic blast radius:** a `settings` repo + `logic/i18n` map + read-time resolution in the category
-  adapter/controller + two small tools + the English seed rewrite (clean slate, no remap). No change to
-  classification logic, transactions, or the domain core.
+- **Clean-slate, no remap migration.** No production data exists. We do **not** rewrite FKs; the English seed
+  applies to a fresh DB. The existing dev DB is reset out of band via the manual `scripts/reset-local-db.sh`
+  (deletes `fintrack.db` + `-wal`/`-shm`). **Dropping the DB is an explicit manual dev convenience — never a
+  default pattern, never wired into `dev`/`test`/CI, never an automated migration.**
+- **Invariant:** identity is the slug/id; display name is `names?.[locale] ?? name`; code and merchant rules key
+  on the id, never a localized name.
+- **Diplomatic blast radius:** `diplomat/db/seed/` (data + seed-only types) + a `settings` repo + read-time
+  resolution at the category adapter/controller + two small tools. No change to classification logic,
+  transactions, or the domain core.
 
 ---
 
 ## Implementation prompt
 
-> Hand this section to a coding agent to build the feature. The design above is the source of truth; this is
-> the execution guide. Work on branch **`feat/category-i18n`** — do **not** create a new branch;
-> `git fetch && git rebase origin/main` first.
+> Hand this section to a coding agent to build the feature. The design above is the source of truth; **read
+> ADR-008 and ADR-009 first** (`docs/adr/008-*`, `docs/adr/009-*`). Work on branch **`feat/category-i18n`** —
+> do **not** create a new branch; `git fetch && git rebase origin/main` first. NOTE: a prior cut built the
+> superseded `i18n_key` + `logic/i18n` catalog with seed types in `models/`; this revision **replaces** that —
+> expect to delete and move code, not just add.
 
 **Before coding**, also read: `CLAUDE.md`, `docs/architecture.md`, `docs/diplomatic-architecture.md`,
-`docs/code-style.md`, `docs/code-quality.md`. Skim the current shape of `src/diplomat/db/schema.ts`,
-`src/diplomat/db/bootstrap.ts` (seeded categories + merchant rules), `src/models/category.ts`,
-`src/diplomat/db/repos/categories.ts`, `src/controllers/categories.ts`, `src/controllers/resolve.ts`,
-`src/config.ts`, `src/diplomat/mcp/server.ts`.
+`docs/code-style.md`, `docs/code-quality.md`. Skim `src/diplomat/db/schema.ts`, `src/diplomat/db/bootstrap.ts`,
+`src/models/category.ts`, `src/diplomat/db/repos/categories.ts`, `src/controllers/categories.ts`,
+`src/controllers/resolve.ts`, `src/config.ts`, `src/diplomat/mcp/server.ts`.
 
 ### Steps
 
-1. **English-canonical seed** (`bootstrap.ts`): default categories use English slug IDs (`cat-food`,
-   `cat-transport`, `cat-housing`, `cat-utilities`, `cat-health`, `cat-education`, `cat-leisure`,
-   `cat-shopping`, `cat-subscriptions`, `cat-travel`, `cat-taxes`, `cat-salary`, `cat-extra-income`,
-   `cat-investments`, `cat-other`), English fallback names, each with its `i18n_key` (= the English slug).
-   Move the current Portuguese strings into the `pt` translations map.
-1a. **Multilingual additive merchant rules** (Decision 1a): the canonical category identity is a
-   `DefaultCategoryId` zod enum in `src/models/category.ts` (the 15 slugs; the seed `CATEGORIES` is
-   `satisfies`-locked to it). Seed rule keys move out of `bootstrap.ts` into the `merchantRule` model
-   (`src/models/merchantRule.ts`): the `MerchantRule` schema (`{ key, category: DefaultCategoryId }`) plus
-   `DEFAULT_MERCHANT_RULES` — brand + `en`/`pt`/`es` sections unioned. `seedMerchantRules` normalizes every key
-   via `normalizeMerchant` and dedupes by `(key, category)` before insert; all packs load for every user (not
-   locale-gated). Authoring discipline: distinctive 4+ char keys; avoid short tokens that embed in unrelated
-   words (`gas` ⊂ `gasolina`, `tax` ⊂ `taxi`); when a specific key must beat a generic one, add both and rely
-   on the matcher's longer-key tiebreak.
-2. **Clean slate — NO remap migration.** No production data exists. Do **not** rename slug IDs or rewrite FKs;
-   the English seed applies to a fresh DB. The manual `scripts/reset-local-db.sh` already exists — do not
-   recreate it, and never wire any drop/reset into `dev`/`test`/CI.
-3. **`i18n_key` column** (`schema.ts` + migration): nullable; defaults set it, user categories leave it `null`.
-4. **Locale** (`config.ts` + `settings` table): single-row `settings` holding `locale` (`pt|es|en`) and
-   `locale_source` (`default|inferred|explicit`); small repo. `FINTRACK_LOCALE` env overrides; effective locale
-   = `env ?? settings.locale ?? 'en'`. **`set_locale`** tool (writes locale + source) whose description carries
-   two guardrails — (a) anti-churn: switch only on a clear, sustained language change, not isolated words /
-   merchant names / proper nouns; (b) respect explicit: if `locale_source` is `explicit`, don't auto-switch
-   away. Agent calls mark `inferred`; a direct user request marks `explicit`. **`get_preferences`** exposes
-   locale + source.
-5. **Translations** (`logic/i18n`): pure `key → { pt, es, en }` map for the ~15 default keys. Unit-tested, no I/O.
-6. **Read-time resolution** (category adapter/controller): display name = `i18n_key ? translate(i18n_key, locale) : name`.
-   `list_categories` returns active-locale names; user categories show literal `name`; switching locale reflows.
-7. **Locale-aware `resolveByName`** (categories): match active-locale names first; also accept the English
-   fallback and other-locale synonyms of the same key. Keep existing ambiguity semantics.
-8. **Classification logic untouched:** the matching algorithm is unchanged and rules reference slugs only;
-   only the seed *data* gains pt/es keys (step 1a).
+1. **Seed isolation (ADR-008).** Create `src/diplomat/db/seed/{currencies,categories,merchantRules}.ts` and move
+   `CURRENCIES`, `CATEGORIES`, and `DEFAULT_MERCHANT_RULES` out of `bootstrap.ts` into them. Move
+   `DefaultCategoryId` and the `MerchantRule` shape out of `models/` into `seed/`. `bootstrap.ts` becomes
+   migrate + invoke seed modules. Nothing outside `diplomat/db` imports `seed/`.
+2. **English-canonical seed.** Seeded categories use English slug IDs and an English canonical `name`; their
+   pt/es names are authored as each row's `names` map (step 3) in `seed/categories.ts`.
+3. **Localized names on the entity (ADR-009).** Schema: **drop** `categories.i18n_key`; **add**
+   `categories.names` (JSON, nullable); keep `name` required. Generate the migration. **Delete** `logic/i18n.ts`
+   (category catalog). Read-time resolution at the category adapter/controller: `displayName = names?.[locale]
+   ?? name`. `list_categories` returns active-locale names; user categories show literal `name`; switching
+   locale reflows with no migration.
+4. **Multilingual additive merchant rules (ADR-008).** In `seed/merchantRules.ts`: `MerchantRule` shape +
+   `DEFAULT_MERCHANT_RULES` (brand + `en`/`pt`/`es` sections), targeting `DefaultCategoryId`. `seedMerchantRules`
+   normalizes every key via `normalizeMerchant` and dedupes by `(key, category)` before insert; all packs load
+   for every user (not locale-gated). Authoring discipline: distinctive 4+ char keys; avoid short tokens that
+   embed in unrelated words; add both keys when a specific must beat a generic and rely on the longer-key
+   tiebreak.
+5. **Locale** (`config.ts` + `settings` table): single-row `settings` holding `locale` (`pt|es|en`) and
+   `locale_source` (`default|inferred|explicit`); small repo. `FINTRACK_LOCALE` overrides; effective locale =
+   `env ?? settings.locale ?? 'en'`. **`set_locale`** (writes locale + source) with the two guardrails in its
+   description — (a) anti-churn; (b) respect `explicit`. Agent calls mark `inferred`; a direct user request
+   marks `explicit`. **`get_preferences`** exposes locale + source.
+6. **Locale-aware `resolveByName`** (categories): match the active-locale name first, then the canonical `name`
+   and other-locale names on the row. Keep existing ambiguity semantics.
+7. **Classification logic untouched:** the matching algorithm is unchanged and rules reference slugs only; only
+   the seed *data* spans pt/es (step 4).
 
 ### Tests
-- **Unit** (`logic/i18n`): every default key has pt/es/en; `translate` + fallback.
-- **Integration** (in-process libSQL): fresh DB has English default IDs (`cat-food`, …) with `i18n_key` set;
-  `en` → `list_categories` English; `set_locale('es')` → Spanish names, ids unchanged; `resolveByName` resolves
-  by active-locale name + a cross-locale synonym; user category shows literal name; an `explicit` locale is not
+- **Unit:** `names?.[locale] ?? name` resolution — locale hit, fallback to canonical, user category (no `names`).
+- **Integration** (in-process libSQL): fresh DB has English default IDs (`cat-food`, …) with `names` set; `en` →
+  `list_categories` English; `set_locale('es')` → Spanish names, ids unchanged; `resolveByName` resolves by
+  active-locale name + a cross-locale name; user category shows literal `name`; an `explicit` locale is not
   auto-overwritten by a later inferred set.
 - **Multilingual classification** (in-process libSQL): a pt description (e.g. `FARMÁCIA SÃO JOÃO`) classifies to
-  `cat-health` and an es description (e.g. `GASOLINERA REPSOL`) to `cat-transport` — proving non-English keys
-  hit. Optionally assert the seed has no `(key)`→multiple-category conflict.
+  `cat-health` and an es one (e.g. `GASOLINERA REPSOL`) to `cat-transport`. Optionally assert the seed has no
+  `(key)`→multiple-category conflict.
+- **Empty-DB (ADR-008):** a representative tool works against an unseeded DB.
 - **Gate:** `npm run typecheck && npm test && npm run test:integration && npm run build`.
 
 ### Invariants — do not break
+- **Seed isolation (ADR-008):** seed lives only in `diplomat/db/seed/`; the domain (`models/`/`logic/`/
+  `controllers/`) never imports it; the app boots and works on an empty DB.
 - **Identity is the slug/id**, never the localized name; merchant rules and code key on the id.
+- **Localized content on the entity (ADR-009):** category names resolve via `names?.[locale] ?? name`; no
+  translation catalog for content. (A catalog is only for chrome — out of scope here.)
 - **Classification is unaffected** (slug-based; display-only localization).
-- **English is canonical/default**; pt/es live in the translations map; cold-start locale `en`.
-- **User categories/sub-categories/tags stay literal** (out of scope: localizing them, tool/error strings,
-  currencies). Merchant rule packs ARE in scope and additive — load all of brands+en+pt+es for every user;
-  do NOT locale-gate them.
+- **English is canonical/default**; pt/es are per-row `names` data; cold-start locale `en`.
+- **User categories/sub-categories/tags stay literal**; merchant packs are additive — load all of
+  brands+en+pt+es for every user; do NOT locale-gate them.
 - **No destructive DB ops in code** — no drop/reset/rename-FK migration; the reset is the manual script only.
 - **AI-locale guardrails are part of the contract** (via `locale_source` + the `set_locale` description).
-- **Diplomatic layering**: translations pure in `logic/`; `settings` repo in `diplomat/db`; resolution at the
+- **Diplomatic layering**: seed in `diplomat/db/seed/`; `settings` repo in `diplomat/db`; resolution at the
   adapter/controller boundary; constants over literals (locale zod enum `.enum.*`).
 - **Docs in the same change**: `docs/mcp-tools.md` (`set_locale`/`get_preferences`; `list_categories` is
-  locale-resolved), `docs/architecture.md` (English seed, `settings`, `i18n_key`, identity-vs-name invariant),
-  `CLAUDE.md` data conventions. Leave the rest of this design doc as-is — **except** update the
-  **Implementation status** header line (→ `In progress` when you start, → `Done` in the commit that the PR
-  merges; `Blocked` + reason if stuck).
+  locale-resolved), `docs/architecture.md` (seed `seed/` location + dependency row + empty-DB invariant;
+  `categories.names`; `settings`; identity-vs-name invariant), `CLAUDE.md` data conventions. Leave the rest of
+  this design doc as-is — **except** update the **Implementation status** header line (→ `Done` in the commit
+  the PR merges; `Blocked` + reason if stuck).
 
 ### Finish
-Conventional Commits (`feat(categories): English-canonical seed + i18n + AI-driven locale` + `test:`/`docs:`),
+Conventional Commits (`feat(categories): seed isolation + localized names on the entity` + `test:`/`docs:`),
 `git push -u origin feat/category-i18n`, open a PR targeting `main`. Do not merge; after CI, reply to review
 threads with the resolving SHA.

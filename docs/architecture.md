@@ -124,3 +124,6 @@ Repos live in `src/diplomat/db/repos/`; each accepts a `Db` (`LibSQLDatabase<typ
 - ADR-004: local-first relational SQLite via libSQL (replaces Neo4j)
 - ADR-005: OS keychain (`@napi-rs/keyring`) for encryption key storage
 - ADR-006: Drizzle ORM for schema definition and migrations
+- ADR-007: stdio as the default MCP transport, HTTP opt-in
+- ADR-008: seed data lives in `diplomat/db/seed`; the domain never depends on it
+- ADR-009: localized content lives on the entity (JSON `names`); i18n catalogs are for chrome only
