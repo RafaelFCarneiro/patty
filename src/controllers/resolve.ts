@@ -1,5 +1,6 @@
 import { err, ok, type Result, ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
+import { buildSynonyms, resolveDisplayName } from '../logic/category.js'
 import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js'
 import type { Account } from '../models/account.js'
 import type { Category, SubCategory } from '../models/category.js'
@@ -23,21 +24,12 @@ export const resolveAccountRef = (deps: Deps, name: string): ResultAsync<Account
   )
 
 export const resolveCategoryRef = (deps: Deps, name: string): ResultAsync<Category, AppError> =>
-  ResultAsync.fromSafePromise(deps.categories.list()).andThen((rawCategories) => {
-    const locale = ResultAsync.fromSafePromise(deps.locale())
-    return locale.andThen((loc) => {
-      const resolved = rawCategories.map((c) => ({ ...c, name: c.names?.[loc] ?? c.name }))
-      const canonicalById = new Map(rawCategories.map((c) => [c.id, c.name]))
-      const synonyms = (cat: Category): string[] => {
-        const all: string[] = []
-        const canonical = canonicalById.get(cat.id)
-        if (canonical) all.push(canonical)
-        if (cat.names) all.push(...Object.values(cat.names))
-        return all
-      }
-      return resolutionToResult(resolveByNames(resolved, name, synonyms), 'category')
-    })
-  })
+  ResultAsync.fromSafePromise(deps.categories.list()).andThen((rawCategories) =>
+    ResultAsync.fromSafePromise(deps.locale()).andThen((locale) => {
+      const resolved = rawCategories.map((c) => resolveDisplayName(c, locale))
+      return resolutionToResult(resolveByNames(resolved, name, buildSynonyms(rawCategories)), 'category')
+    }),
+  )
 
 export const resolveSubCategoryRef = (deps: Deps, name: string): ResultAsync<SubCategory, AppError> =>
   ResultAsync.fromSafePromise(deps.subCategories.list()).andThen((subCategories) =>

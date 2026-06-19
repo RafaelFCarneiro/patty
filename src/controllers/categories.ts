@@ -1,14 +1,9 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
-import { fold } from '../logic/resolve.js'
+import { hasNameCollision, resolveDisplayName } from '../logic/category.js'
 import type { Category, CreateCategory, SubCategory } from '../models/category.js'
 import type { Deps } from './deps.js'
-
-const resolveDisplayName = (cat: Category, locale: string): Category => ({
-  ...cat,
-  name: cat.names?.[locale] ?? cat.name,
-})
 
 export const listCategories = async (deps: Deps): Promise<Category[]> => {
   const locale = await deps.locale()
@@ -16,18 +11,10 @@ export const listCategories = async (deps: Deps): Promise<Category[]> => {
   return all.map((c) => resolveDisplayName(c, locale))
 }
 
-const collectAllNames = (cat: Category): string[] => {
-  const all = [cat.name]
-  if (cat.names) all.push(...Object.values(cat.names))
-  return all
-}
-
 export const createCategory = (deps: Deps, input: CreateCategory): ResultAsync<Category, AppError> =>
   safeTry(async function* () {
     const raw = await deps.categories.list()
-    const folded = fold(input.name)
-    const collides = raw.some((c) => collectAllNames(c).some((n) => fold(n) === folded))
-    yield* guard(!collides, {
+    yield* guard(!hasNameCollision(raw, input.name), {
       code: 'duplicate_name',
       entity: 'category',
       name: input.name,

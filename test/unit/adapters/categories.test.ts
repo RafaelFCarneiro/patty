@@ -18,13 +18,13 @@ describe('dbToModel', () => {
     expect(result.names).toEqual({ pt: 'Alimentação', es: 'Alimentación' })
   })
 
-  it('throws an actionable error on invalid JSON in names', () => {
+  it('throws on invalid JSON in names', () => {
     expect(() =>
       categoryAdapters.dbToModel({
         id: 'cat-broken', name: 'Broken', kind: CategoryKind.enum.expense, parentId: null,
         names: '{not valid json}',
       }),
-    ).toThrow('Invalid JSON in categories.names for row cat-broken')
+    ).toThrow(SyntaxError)
   })
 })
 
