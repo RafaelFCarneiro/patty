@@ -31,11 +31,20 @@ or resolved per-locale at read time, and — since the default language is now E
 1. **The canonical seed is English** (default locale = `en`). Default category **slug IDs are English**
    (`cat-food`, `cat-transport`, `cat-housing`, `cat-utilities`, `cat-health`, `cat-education`, `cat-leisure`,
    `cat-shopping`, `cat-subscriptions`, `cat-travel`, `cat-taxes`, `cat-salary`, `cat-extra-income`,
-   `cat-investments`, `cat-other`); their stored fallback `name` is English; and the seeded **merchant rules
-   are international/English** (e.g. `uber`, `amazon`, `netflix`, `spotify`, `walmart`, `pharmacy`,
-   `supermarket`, …) referencing those English IDs. The current Portuguese strings move into the `pt`
-   translations. *(Region-specific merchant packs — e.g. seeding BR merchants when locale is `pt` — are a
-   noted future extension, see out of scope.)*
+   `cat-investments`, `cat-other`) and their stored fallback `name` is English. The current Portuguese strings
+   move into the `pt` translations.
+1a. **Merchant rules are multilingual and additive — seeded for all languages, always** (revision; the first
+   draft seeded English-only keys). Classification matches a normalized merchant **key** as a substring of the
+   transaction description (`description LIKE '%key%'`), so an English-only seed gives pt/es users *zero* hits
+   out of the box (`FARMÁCIA`, `IFOOD`, `ALUGUEL` match nothing). Identity is still the English slug; only the
+   **keys** are language-specific data. So the seed is the **union** of a language-agnostic brand pack plus
+   `en`/`pt`/`es` keyword packs, all referencing the English category IDs, loaded for every user regardless of
+   locale — locale drives *display names*, never *which rules apply*. The packs live as typed data modules under
+   `src/resources/merchant-rules/` (`brands.ts`, `en.ts`, `pt.ts`, `es.ts`, `index.ts`); keys are re-normalized
+   through `logic/merchant.ts#normalizeMerchant` and deduped by `(key, category)` at seed time. Authoring
+   discipline: prefer distinctive 4+ char keys and avoid short tokens that embed in unrelated words (`gas` ⊂
+   `gasolina`, `tax` ⊂ `taxi`, `bar` ⊂ `embarque`); when a specific key must beat a generic one, add both —
+   the matcher's longer-key tiebreak resolves it (`uber eats`→food over `uber`→transport).
 2. **Locale is AI-determined, stored, env-overridable, with an `en` cold-start.** A single-row **`settings`**
    table holds `locale` (`pt | es | en`) plus a `locale_source` (`default | inferred | explicit`). The **AI
    agent is the primary setter**: it infers the user's language from the conversation and calls **`set_locale`**
@@ -57,20 +66,23 @@ or resolved per-locale at read time, and — since the default language is now E
 5. **Name resolution honours the active locale, tolerantly.** `resolveByName` for categories matches the
    active-locale display names first; for robustness it also accepts the English fallback and other-locale
    synonyms of the same key (so a pt-locale user saying "food" still resolves). Ambiguity rules are unchanged.
-6. **Classification is untouched.** Merchant rules continue to reference category **slugs**; localization
-   never touches them.
+6. **Classification logic is untouched.** Merchant rules still reference category **slugs**, and the matching
+   algorithm is unchanged. What changes is the seed *data*: rule keys now span en/pt/es (Decision 1a). Display
+   localization never touches rules; rule keys never reference a localized name.
 
 ## Scope / out of scope
 
-- **In:** English-canonical seed (English slug IDs, English fallback names, international merchant rules);
-  a manual `scripts/reset-local-db.sh` to wipe the dev DB (clean slate — **no** remap migration); `settings`
-  table + AI-driven locale (`set_locale` with anti-churn + explicit-override guardrails, env-overridable,
-  default en); `i18n_key` on categories; read-time name resolution; pt/es/en translations for the default
-  categories; locale-aware `resolveByName`; `set_locale`/`get_preferences` tools.
-- **Out:** **region-specific merchant packs** (e.g. seeding BR merchants — ifood, 99, rappi — when locale is
-  `pt`); localizing **sub-categories**, **tags**, or user-created categories (user literals); localizing tool
-  descriptions / error messages / currency names; RTL or pluralization machinery. Adding locales beyond
-  pt/es/en is a data-only follow-up.
+- **In:** English-canonical seed (English slug IDs + English fallback names); **multilingual additive merchant
+  rules** (brand + en/pt/es packs in `src/resources/merchant-rules/`, unioned and loaded for all users,
+  normalized + deduped at seed time); a manual `scripts/reset-local-db.sh` to wipe the dev DB (clean slate —
+  **no** remap migration); `settings` table + AI-driven locale (`set_locale` with anti-churn + explicit-override
+  guardrails, env-overridable, default en); `i18n_key` on categories; read-time name resolution; pt/es/en
+  translations for the default categories; locale-aware `resolveByName`; `set_locale`/`get_preferences` tools.
+- **Out:** **locale-gated merchant packs** (loading a language's rules *only* when that locale is active — we
+  load all packs always instead, since statements are mixed and brands are universal); localizing
+  **sub-categories**, **tags**, or user-created categories (user literals); localizing tool descriptions /
+  error messages / currency names; RTL or pluralization machinery. Adding locales beyond pt/es/en is a
+  data-only follow-up (drop in a new `<locale>.ts` pack + translations).
 
 ## Options Considered
 
@@ -92,8 +104,11 @@ set. The pure-data map (Option A) is lighter and version-controlled. Rejected fo
 ## Consequences
 
 - **English-canonical seed:** `bootstrap.ts` is rewritten so default categories use English slug IDs + English
-  fallback names, and merchant rules are international and reference the new IDs. The Portuguese strings live
-  only in the `pt` translations map.
+  fallback names. The Portuguese strings live only in the `pt` translations map.
+- **Multilingual merchant rules:** seed keys move out of `bootstrap.ts` into typed packs under
+  `src/resources/merchant-rules/` (`brands` + `en`/`pt`/`es`, unioned in `index.ts`). `seedMerchantRules`
+  normalizes every key via `normalizeMerchant` (single source of truth) and dedupes by `(key, category)` before
+  insert, so packs can overlap. All packs load for every user; the category target is always an English slug.
 - **Clean-slate, no remap migration.** There is no production data — the only existing database is a single
   local **dev/test** DB. So we do **not** rewrite foreign keys: the schema simply seeds the English IDs on a
   fresh DB. The existing dev DB is reset **out of band** via a manual `scripts/reset-local-db.sh` that deletes
@@ -134,10 +149,16 @@ set. The pure-data map (Option A) is lighter and version-controlled. Rejected fo
 1. **English-canonical seed** (`bootstrap.ts`): default categories use English slug IDs (`cat-food`,
    `cat-transport`, `cat-housing`, `cat-utilities`, `cat-health`, `cat-education`, `cat-leisure`,
    `cat-shopping`, `cat-subscriptions`, `cat-travel`, `cat-taxes`, `cat-salary`, `cat-extra-income`,
-   `cat-investments`, `cat-other`), English fallback names, each with its `i18n_key` (= the English slug);
-   merchant rules become international/English (`uber`, `amazon`, `netflix`, `spotify`, `walmart`, `pharmacy`,
-   `supermarket`, `restaurant`, `gas`, `parking`, `rent`, …) referencing the new IDs. Move the current
-   Portuguese strings into the `pt` translations map.
+   `cat-investments`, `cat-other`), English fallback names, each with its `i18n_key` (= the English slug).
+   Move the current Portuguese strings into the `pt` translations map.
+1a. **Multilingual additive merchant rules** (Decision 1a): move seed rule keys out of `bootstrap.ts` into
+   typed data modules under `src/resources/merchant-rules/` — `types.ts` (`CategoryId` union + `MerchantRule`),
+   `brands.ts` (language-agnostic brands), `en.ts`/`pt.ts`/`es.ts` (keyword packs), `index.ts` (the union
+   `MERCHANT_RULES`). All target English category slugs. `seedMerchantRules` normalizes every key via
+   `normalizeMerchant` and dedupes by `(key, category)` before insert; all packs load for every user (not
+   locale-gated). Authoring discipline: distinctive 4+ char keys; avoid short tokens that embed in unrelated
+   words (`gas` ⊂ `gasolina`, `tax` ⊂ `taxi`); when a specific key must beat a generic one, add both and rely
+   on the matcher's longer-key tiebreak.
 2. **Clean slate — NO remap migration.** No production data exists. Do **not** rename slug IDs or rewrite FKs;
    the English seed applies to a fresh DB. The manual `scripts/reset-local-db.sh` already exists — do not
    recreate it, and never wire any drop/reset into `dev`/`test`/CI.
@@ -154,7 +175,8 @@ set. The pure-data map (Option A) is lighter and version-controlled. Rejected fo
    `list_categories` returns active-locale names; user categories show literal `name`; switching locale reflows.
 7. **Locale-aware `resolveByName`** (categories): match active-locale names first; also accept the English
    fallback and other-locale synonyms of the same key. Keep existing ambiguity semantics.
-8. **Classification untouched:** merchant rules reference slugs only.
+8. **Classification logic untouched:** the matching algorithm is unchanged and rules reference slugs only;
+   only the seed *data* gains pt/es keys (step 1a).
 
 ### Tests
 - **Unit** (`logic/i18n`): every default key has pt/es/en; `translate` + fallback.
@@ -162,6 +184,9 @@ set. The pure-data map (Option A) is lighter and version-controlled. Rejected fo
   `en` → `list_categories` English; `set_locale('es')` → Spanish names, ids unchanged; `resolveByName` resolves
   by active-locale name + a cross-locale synonym; user category shows literal name; an `explicit` locale is not
   auto-overwritten by a later inferred set.
+- **Multilingual classification** (in-process libSQL): a pt description (e.g. `FARMÁCIA SÃO JOÃO`) classifies to
+  `cat-health` and an es description (e.g. `GASOLINERA REPSOL`) to `cat-transport` — proving non-English keys
+  hit. Optionally assert the seed has no `(key)`→multiple-category conflict.
 - **Gate:** `npm run typecheck && npm test && npm run test:integration && npm run build`.
 
 ### Invariants — do not break
@@ -169,7 +194,8 @@ set. The pure-data map (Option A) is lighter and version-controlled. Rejected fo
 - **Classification is unaffected** (slug-based; display-only localization).
 - **English is canonical/default**; pt/es live in the translations map; cold-start locale `en`.
 - **User categories/sub-categories/tags stay literal** (out of scope: localizing them, tool/error strings,
-  currencies; region merchant packs are a future extension — do NOT add BR/ES packs here).
+  currencies). Merchant rule packs ARE in scope and additive — load all of brands+en+pt+es for every user;
+  do NOT locale-gate them.
 - **No destructive DB ops in code** — no drop/reset/rename-FK migration; the reset is the manual script only.
 - **AI-locale guardrails are part of the contract** (via `locale_source` + the `set_locale` description).
 - **Diplomatic layering**: translations pure in `logic/`; `settings` repo in `diplomat/db`; resolution at the
