@@ -7,7 +7,7 @@ export type Resolution<T extends Named> =
   | { kind: 'none'; query: string; candidates: string[] }
   | { kind: 'ambiguous'; query: string; candidates: string[] }
 
-const fold = (s: string): string =>
+export const fold = (s: string): string =>
   s
     .toLowerCase()
     .normalize('NFD')
@@ -44,7 +44,7 @@ export const resolveByNames = <T extends Named>(
   if (matches.length > 1) return { kind: 'ambiguous', query, candidates: matches.map((e) => e.name) }
 
   const partialMatches = entities.filter((e) =>
-    synonyms(e).some((s) => fold(s).includes(q) || q.includes(fold(s))),
+    synonyms(e).some((s) => { const fs = fold(s); return fs.includes(q) || q.includes(fs) }),
   )
   if (partialMatches.length === 1) return { kind: 'found', entity: partialMatches[0]! }
   if (partialMatches.length > 1) return { kind: 'ambiguous', query, candidates: partialMatches.map((e) => e.name) }

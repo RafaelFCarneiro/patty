@@ -1,6 +1,7 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
+import { fold } from '../logic/resolve.js'
 import type { Category, CreateCategory, SubCategory } from '../models/category.js'
 import type { Deps } from './deps.js'
 
@@ -24,8 +25,8 @@ const collectAllNames = (cat: Category): string[] => {
 export const createCategory = (deps: Deps, input: CreateCategory): ResultAsync<Category, AppError> =>
   safeTry(async function* () {
     const raw = await deps.categories.list()
-    const lower = input.name.toLowerCase()
-    const collides = raw.some((c) => collectAllNames(c).some((n) => n.toLowerCase() === lower))
+    const folded = fold(input.name)
+    const collides = raw.some((c) => collectAllNames(c).some((n) => fold(n) === folded))
     yield* guard(!collides, {
       code: 'duplicate_name',
       entity: 'category',
