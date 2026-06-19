@@ -2,6 +2,7 @@ import type { AppError } from '../common/errors.js'
 import type { Account } from '../models/account.js'
 import type { CreditCard } from '../models/creditCard.js'
 import { CurrencyCode } from '../models/common.js'
+import type { IsoDate } from '../models/common.js'
 import type {
   Classification,
   ClassifyOutcome,
@@ -10,10 +11,20 @@ import type {
   TransactionView,
   UpdateTransactionInput,
 } from '../models/transaction.js'
-import { TransactionType } from '../models/transaction.js'
+import { TransactionStatus, TransactionType } from '../models/transaction.js'
 import { err, ok, type Result } from 'neverthrow'
 import * as R from 'remeda'
 import { normalizeMerchant } from './merchant.js'
+
+// ─── Status default ──────────────────────────────────────────────────────────
+
+/**
+ * Single source of the date-aware default rule.
+ * Future-dated → pending (not yet happened); today/past → effective (already happened).
+ * An explicit caller-supplied status always wins — this is only the fallback.
+ */
+export const defaultStatusFor = (date: IsoDate, today: IsoDate): TransactionStatus =>
+  date > today ? TransactionStatus.enum.pending : TransactionStatus.enum.effective
 
 // ─── Currency ────────────────────────────────────────────────────────────────
 

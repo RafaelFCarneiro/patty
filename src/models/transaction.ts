@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { CurrencyCode, Id, IsoDate, Money } from './common.js'
 
+/** Whether the transaction has cleared or is still expected. Default is date-aware when omitted. */
+export const TransactionStatus = z.enum(['pending', 'effective'])
+export type TransactionStatus = z.infer<typeof TransactionStatus>
+
 /** 'transfer' moves value between accounts: FROM + TO edges, excluded from summaries. */
 export const TransactionType = z.enum(['expense', 'income', 'transfer'])
 export type TransactionType = z.infer<typeof TransactionType>
@@ -27,6 +31,7 @@ export const Transaction = z.object({
   description: z.string().min(1),
   amount: Money,
   type: TransactionType,
+  status: TransactionStatus,
   date: IsoDate,
   currency: CurrencyCode,
   source: TransactionSource,
@@ -50,6 +55,7 @@ export const TransactionView = z.object({
   description: z.string().min(1),
   amount: Money,
   type: TransactionType,
+  status: TransactionStatus,
   date: IsoDate,
   currency: CurrencyCode,
   source: TransactionSource,
@@ -77,6 +83,7 @@ export type TransactionPatch = {
   description?: string
   amount?: number
   type?: MovementType
+  status?: TransactionStatus
   date?: string
   currency?: CurrencyCode
   classification?: Classification
@@ -87,6 +94,7 @@ export type CreateTransactionInput = {
   description: string
   amount: number
   type: MovementType
+  status?: TransactionStatus
   date?: string
   account?: string
   card?: string
@@ -113,6 +121,7 @@ export type CreateTransferInput = {
   from: string
   to: string
   amount: number
+  status?: TransactionStatus
   date?: string
   description?: string
   idempotencyKey: string
@@ -137,6 +146,7 @@ export type SearchTransactionsInput = {
   from?: string
   to?: string
   type?: TransactionType
+  status?: TransactionStatus
   category?: string
   subCategory?: string
   account?: string

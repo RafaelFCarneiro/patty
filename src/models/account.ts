@@ -21,6 +21,8 @@ export const AccountBalance = Account.extend({
   expenses: z.number(),
   transfersIn: z.number(),
   transfersOut: z.number(),
+  /** Present only when projectedAsOf was supplied; effective balance + pending through that date. */
+  projectedBalance: z.number().optional(),
 })
 export type AccountBalance = z.infer<typeof AccountBalance>
 

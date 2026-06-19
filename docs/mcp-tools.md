@@ -11,7 +11,9 @@ Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All too
 
 Create an expense/income. Omitting `category`/`subCategory` triggers auto-classification via the `merchant_category` table (learned merchant→category weights); the result reports `classification.method` (`rule|history|user|none`) and `confidence` (confirm with the user below 0.6). Idempotent: same `idempotencyKey` returns the existing transaction with `created: false`.
 
-Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `category` OR `subCategory` (not both — `subCategory` implies its parent category), `currency`, `rawInput` (original user phrasing), `tags`.
+Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `category` OR `subCategory` (not both — `subCategory` implies its parent category), `currency`, `rawInput` (original user phrasing), `tags`, `status` (`effective|pending`; omit for date-aware default — see below).
+
+**`status` field**: `effective` means the transaction has cleared; it counts toward balances and summaries. `pending` means it is expected but not yet cleared — excluded from balances and summaries until `confirm_transaction` is called. **Default is date-aware**: when omitted, future-dated transactions default to `pending` and past/present transactions default to `effective`. An explicit `status` always overrides the default. Status is never auto-flipped by the passage of the date — call `confirm_transaction` explicitly.
 
 **Kind validation**: `expense` transactions must use a category/sub-category with `kind: expense` or `both`; `income` transactions must use `kind: income` or `both`. Violation returns `category_kind_mismatch`.
 
@@ -19,7 +21,7 @@ Example: `{"description": "Almoço restaurante", "amount": 45.0, "type": "expens
 
 ## create_transactions_bulk
 
-Statement paste / import (1–200 items). Each item is classified and idempotent — `idempotencyKey` is derived from `date+description+amount` when absent, so re-importing the same statement is a no-op. Top-level `account`/`card` act as defaults for items without their own.
+Statement paste / import (1–200 items). Each item is classified and idempotent — `idempotencyKey` is derived from `date+description+amount` when absent, so re-importing the same statement is a no-op. Top-level `account`/`card` act as defaults for items without their own. Each item may set an optional `status` (`effective|pending`; omit for date-aware default).
 
 Returns `summary` counts plus per-item `status`: `created`, `needs_review` (no category or confidence < 0.6 — confirm with the user), `duplicate`, or `error` (with the structured AppError).
 
@@ -39,7 +41,17 @@ Input: `card`, `month`, `year`. Marks the bill `paid`. Deliberately does **not**
 
 `create_recurring`: `description`, `amount`, `type`, `period` (`weekly|monthly|yearly`), `startDate` (first due), optional `account`, `category`, `currency`. Recurring transactions are classified as `user` with confidence 1.
 
-`apply_due_recurring` (no input): materializes a transaction for every rule due on/before today, catching up missed periods (bounded at 36). Idempotent via key `rec-<ruleId>-<dueDate>` — safe to call any time, e.g. at the start of a monthly review.
+`apply_due_recurring` (optional `through: YYYY-MM-DD`, default today): materializes a transaction for every rule due on/before `through`, bounded at 36 occurrences per rule. Each occurrence is stamped with the date-aware default — past/present land `effective`, future land `pending`. Passing a future `through` pre-creates upcoming salary, rent, and subscriptions as pending, feeding projections without extra monthly effort. Default behaviour (`through` omitted) is unchanged catch-up. Idempotent via `rec-<ruleId>-<dueDate>` — safe to re-run anytime.
+
+## confirm_transaction
+
+Flip a `pending` transaction to `effective`. Once effective, the transaction counts toward balances and spending summaries. If the transaction is already `effective`, this is a no-op (returns the existing transaction unchanged).
+
+Input: `id` (required — use `search_transactions` with `status: "pending"` to find pending transactions).
+
+REST mirror: `POST /api/transactions/:id/confirm`.
+
+Errors: `unknown_transaction`.
 
 ## update_transaction
 
@@ -59,7 +71,9 @@ Input: `id` (required), `confirm` (default false).
 
 ## search_transactions
 
-Filter by `month`+`year` (or `from`/`to`), `type` (`expense|income|transfer`), `category`/`subCategory`/`account` (names), free-text `text` (description substring), `tags`, `limit` (default 50, max 200). Returns newest first. With an `account` filter this is the full extrato: the account matches as source OR destination, so transfers in both directions are included. Results include `subCategoryId`/`subCategoryName` when set.
+Filter by `month`+`year` (or `from`/`to`), `type` (`expense|income|transfer`), `status` (`pending|effective`), `category`/`subCategory`/`account` (names), free-text `text` (description substring), `tags`, `limit` (default 50, max 200). Returns newest first. With an `account` filter this is the full extrato: the account matches as source OR destination, so transfers in both directions are included. Results include `subCategoryId`/`subCategoryName` when set.
+
+Use `status: "pending"` to list scheduled/expected transactions (e.g. "what is due today" or "what income is expected this month").
 
 ## get_spending_summary
 
@@ -73,7 +87,11 @@ Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `bala
 
 ## get_account_balances
 
-Current balance per account, **derived** (never stored): `initialBalance + income − expenses + transfers in − transfers out`. Returns the parts alongside the balance. Optional filters: `account` (name), `type`. Note: `create_account` accepts `initialBalance` (default 0).
+Current balance per account, **derived** (never stored): `initialBalance + income − expenses + transfers in − transfers out`. **Only `effective` transactions count** — pending transactions are never included in the balance. Returns the parts alongside the balance. Optional filters: `account` (name), `type`.
+
+Optional `projectedAsOf` (`YYYY-MM-DD`): when provided, also returns `projectedBalance` = effective balance + all pending transactions dated on/before that date. This is a provisioning view (what you will stand at that date assuming all pending clear). The effective `balance` is always present; `projectedBalance` is only present when `projectedAsOf` is supplied.
+
+Note: `create_account` accepts `initialBalance` (default 0).
 
 ## create_transfer
 

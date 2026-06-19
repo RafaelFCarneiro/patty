@@ -29,6 +29,7 @@ export const dbToModel = (record: Record<string, unknown>): TransactionView => {
     description:     row.description,
     amount:          row.amount,
     type:            row.type,
+    status:          row.status,
     date:            row.date,
     currency:        row.currency,
     source:          row.source,
@@ -62,6 +63,7 @@ export const modelToDb = (
     description:          entity.description,
     amount:               entity.amount,
     type:                 entity.type,
+    status:               entity.status,
     date:                 entity.date,
     currency:             entity.currency,
     source:               entity.source,
@@ -85,6 +87,7 @@ export const patchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> 
   ...(patch.description !== undefined && { description: patch.description }),
   ...(patch.amount      !== undefined && { amount: patch.amount }),
   ...(patch.type        !== undefined && { type: patch.type }),
+  ...(patch.status      !== undefined && { status: patch.status }),
   ...(patch.date        !== undefined && { date: patch.date }),
   ...(patch.currency    !== undefined && { currency: patch.currency }),
   ...(patch.classification !== undefined && {

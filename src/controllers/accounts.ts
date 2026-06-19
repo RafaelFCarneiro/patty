@@ -1,7 +1,7 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
-import { computeBalance } from '../logic/balance.js'
+import { computeBalance, computeProjectedBalance } from '../logic/balance.js'
 import { resolveByName } from '../logic/resolve.js'
 import type { Account, AccountBalance, AccountType, CreateAccount } from '../models/account.js'
 import type { Deps } from './deps.js'
@@ -25,7 +25,7 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
 /** Balances are derived: initialBalance + income − expenses + transfers in − transfers out. */
 export const getAccountBalances = (
   deps: Deps,
-  filter?: { account?: string; type?: AccountType },
+  filter?: { account?: string; type?: AccountType; projectedAsOf?: string },
 ): ResultAsync<AccountBalance[], AppError> =>
   safeTry(async function* () {
     const candidates = await listAccounts(deps, filter?.type)
@@ -36,11 +36,16 @@ export const getAccountBalances = (
     const balances: AccountBalance[] = []
     for (const account of accounts) {
       const parts = await deps.accounts.balanceParts(account.id)
-      balances.push({
-        ...account,
-        ...parts,
-        balance: computeBalance({ initialBalance: account.initialBalance, ...parts }),
-      })
+      const balance = computeBalance({ initialBalance: account.initialBalance, ...parts })
+
+      const projectedBalance = filter?.projectedAsOf
+        ? computeProjectedBalance(
+            balance,
+            await deps.transactions.pendingBalanceParts(account.id, filter.projectedAsOf),
+          )
+        : undefined
+
+      balances.push({ ...account, ...parts, balance, projectedBalance })
     }
     return ok(balances)
   })

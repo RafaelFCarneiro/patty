@@ -1,7 +1,7 @@
 import { eq, inArray, sql } from 'drizzle-orm'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { expectPresent } from '../../../common/present.js'
-import { TransactionType, type Transaction, type TransactionView, type TransactionPatch } from '../../../models/transaction.js'
+import { TransactionStatus, TransactionType, type Transaction, type TransactionView, type TransactionPatch } from '../../../models/transaction.js'
 import { SummaryRowSchema, type SummaryRow } from '../../../wire/db/transactions.js'
 import type { Db } from '../driver.js'
 import { toMatchQuery } from '../fts.js'
@@ -14,6 +14,7 @@ export type SearchFilters = {
   from: string | null
   to: string | null
   type: string | null
+  status: TransactionStatus | null
   text: string | null
   accountId: string | null
   categoryId: string | null
@@ -56,9 +57,15 @@ export type TransactionsRepo = {
       tagNames: string[] | null
     },
   ) => Promise<TransactionView | null>
+  /** Flip status pending → effective. Returns null if the id does not exist. */
+  confirm: (id: string) => Promise<TransactionView | null>
   delete: (id: string) => Promise<boolean>
   search: (filters: SearchFilters) => Promise<TransactionView[]>
   summaryRows: (from: string, to: string) => Promise<SummaryRow[]>
+  /** Aggregated pending amounts for an account dated on/before asOf. */
+  pendingBalanceParts: (accountId: string, asOf: string) => Promise<{
+    income: number; expenses: number; transfersIn: number; transfersOut: number
+  }>
 }
 
 export const transactionsRepo = (db: Db): TransactionsRepo => ({
@@ -77,6 +84,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
         description:          props.description,
         amount:               props.amount,
         type:                 props.type,
+        status:               props.status,
         date:                 props.date,
         currency:             props.currency,
         source:               props.source,
@@ -119,6 +127,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       ...(props.description          !== undefined && { description:          props.description }),
       ...(props.amount               !== undefined && { amount:               props.amount }),
       ...(props.type                 !== undefined && { type:                 props.type }),
+      ...(props.status               !== undefined && { status:               props.status }),
       ...(props.date                 !== undefined && { date:                 props.date }),
       ...(props.currency             !== undefined && { currency:             props.currency }),
       ...(props.classificationMethod !== undefined && { classificationMethod: props.classificationMethod }),
@@ -140,6 +149,13 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     return fetchTx(db, id)
   },
 
+  confirm: async (id) => {
+    await db.update(transactions)
+      .set({ status: TransactionStatus.enum.effective })
+      .where(sql`${transactions.id} = ${id} AND ${transactions.status} = ${TransactionStatus.enum.pending}`)
+    return fetchTx(db, id)
+  },
+
   delete: async (id) => {
     const result = await db.delete(transactions).where(eq(transactions.id, id))
     return (result.rowsAffected ?? 0) > 0
@@ -151,6 +167,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     if (filters.from)         conditions.push(sql`t.date >= ${filters.from}`)
     if (filters.to)           conditions.push(sql`t.date < ${filters.to}`)
     if (filters.type)         conditions.push(sql`t.type = ${filters.type}`)
+    if (filters.status)       conditions.push(sql`t.status = ${filters.status}`)
     if (filters.accountId)    conditions.push(sql`(t.from_account_id = ${filters.accountId} OR t.to_account_id = ${filters.accountId})`)
     if (filters.categoryId)   conditions.push(sql`t.category_id = ${filters.categoryId}`)
     if (filters.subCategoryId)conditions.push(sql`t.subcategory_id = ${filters.subCategoryId}`)
@@ -191,8 +208,37 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       LEFT JOIN categories c ON c.id = t.category_id
       WHERE t.date >= ${from} AND t.date < ${to}
         AND t.type != ${TransactionType.enum.transfer}
+        AND t.status = ${TransactionStatus.enum.effective}
       GROUP BY t.currency, t.type, c.id
     `)
     return rows.map((r) => SummaryRowSchema.parse(r))
+  },
+
+  pendingBalanceParts: async (accountId, asOf) => {
+    const [row] = await db.all<{
+      income: number; expenses: number; transfers_out: number; transfers_in: number
+    }>(sql`
+      SELECT
+        COALESCE(SUM(CASE WHEN t.type = ${TransactionType.enum.income}   THEN t.amount ELSE 0 END), 0) AS income,
+        COALESCE(SUM(CASE WHEN t.type = ${TransactionType.enum.expense}  THEN t.amount ELSE 0 END), 0) AS expenses,
+        COALESCE(SUM(CASE WHEN t.type = ${TransactionType.enum.transfer} THEN t.amount ELSE 0 END), 0) AS transfers_out,
+        COALESCE((
+          SELECT SUM(t2.amount) FROM transactions t2
+          WHERE t2.to_account_id = ${accountId}
+            AND t2.type = ${TransactionType.enum.transfer}
+            AND t2.status = ${TransactionStatus.enum.pending}
+            AND t2.date <= ${asOf}
+        ), 0) AS transfers_in
+      FROM transactions t
+      WHERE t.from_account_id = ${accountId}
+        AND t.status = ${TransactionStatus.enum.pending}
+        AND t.date <= ${asOf}
+    `)
+    return {
+      income:       row?.income        ?? 0,
+      expenses:     row?.expenses      ?? 0,
+      transfersIn:  row?.transfers_in  ?? 0,
+      transfersOut: row?.transfers_out ?? 0,
+    }
   },
 })
