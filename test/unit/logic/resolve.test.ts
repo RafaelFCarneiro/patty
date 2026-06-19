@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveByName } from '../../../src/logic/resolve.js'
+import { fold, resolveByName, resolveByNames } from '../../../src/logic/resolve.js'
 
 const accounts = [
   { id: '1', name: 'Nubank' },
@@ -29,5 +29,42 @@ describe('resolveByName', () => {
     const r = resolveByName(accounts, 'bradesco')
     expect(r.kind).toBe('none')
     if (r.kind === 'none') expect(r.candidates).toHaveLength(4)
+  })
+})
+
+describe('fold', () => {
+  it('strips diacritics and lowercases', () => {
+    expect(fold('Saúde')).toBe('saude')
+    expect(fold('Alimentação')).toBe('alimentacao')
+    expect(fold('  Café  ')).toBe('cafe')
+  })
+})
+
+describe('resolveByNames (synonym resolution)', () => {
+  const categories = [
+    { id: 'cat-food', name: 'Alimentação' },
+    { id: 'cat-health', name: 'Saúde' },
+  ]
+  const synonyms = (cat: { id: string }) => {
+    const map: Record<string, string[]> = {
+      'cat-food': ['Food', 'Alimentación'],
+      'cat-health': ['Health', 'Salud'],
+    }
+    return map[cat.id] ?? []
+  }
+
+  it('resolves via synonym when primary name does not match', () => {
+    const r = resolveByNames(categories, 'Food', synonyms)
+    expect(r).toMatchObject({ kind: 'found', entity: { id: 'cat-food' } })
+  })
+
+  it('resolves accent-insensitive synonym match', () => {
+    const r = resolveByNames(categories, 'Alimentacion', synonyms)
+    expect(r).toMatchObject({ kind: 'found', entity: { id: 'cat-food' } })
+  })
+
+  it('resolves primary name with diacritics stripped', () => {
+    const r = resolveByNames(categories, 'saude', synonyms)
+    expect(r).toMatchObject({ kind: 'found', entity: { id: 'cat-health' } })
   })
 })

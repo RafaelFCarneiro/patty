@@ -9,6 +9,23 @@ describe('dbToModel', () => {
       categoryAdapters.dbToModel({ id: 'cat-1', name: 'Transport', kind: CategoryKind.enum.expense, parentId: null, names: null }),
     ).toEqual({ id: 'cat-1', name: 'Transport', kind: CategoryKind.enum.expense, names: null })
   })
+
+  it('parses valid JSON names from DB row', () => {
+    const result = categoryAdapters.dbToModel({
+      id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense, parentId: null,
+      names: '{"pt":"Alimentação","es":"Alimentación"}',
+    })
+    expect(result.names).toEqual({ pt: 'Alimentação', es: 'Alimentación' })
+  })
+
+  it('throws an actionable error on invalid JSON in names', () => {
+    expect(() =>
+      categoryAdapters.dbToModel({
+        id: 'cat-broken', name: 'Broken', kind: CategoryKind.enum.expense, parentId: null,
+        names: '{not valid json}',
+      }),
+    ).toThrow('Invalid JSON in categories.names for row cat-broken')
+  })
 })
 
 describe('wireInToModel', () => {
