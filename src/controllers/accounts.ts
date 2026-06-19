@@ -38,11 +38,12 @@ export const getAccountBalances = (
       const parts = await deps.accounts.balanceParts(account.id)
       const balance = computeBalance({ initialBalance: account.initialBalance, ...parts })
 
-      let projectedBalance: number | undefined
-      if (filter?.projectedAsOf) {
-        const pending = await deps.transactions.pendingBalanceParts(account.id, filter.projectedAsOf)
-        projectedBalance = computeProjectedBalance(balance, pending)
-      }
+      const projectedBalance = filter?.projectedAsOf
+        ? computeProjectedBalance(
+            balance,
+            await deps.transactions.pendingBalanceParts(account.id, filter.projectedAsOf),
+          )
+        : undefined
 
       balances.push({ ...account, ...parts, balance, projectedBalance })
     }

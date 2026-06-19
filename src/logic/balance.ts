@@ -11,12 +11,8 @@ export type BalanceParts = {
 export const computeBalance = (p: BalanceParts): number =>
   p.initialBalance + p.income - p.expenses + p.transfersIn - p.transfersOut
 
-export type PendingParts = {
-  income: number
-  expenses: number
-  transfersIn: number
-  transfersOut: number
-}
+/** Pending movement only — the same parts as a balance minus the account's starting point. */
+export type PendingParts = Omit<BalanceParts, 'initialBalance'>
 
 /** Projected balance = effective balance + pending transactions dated ≤ asOf. Pure arithmetic. */
 export const computeProjectedBalance = (effective: number, pending: PendingParts): number =>
