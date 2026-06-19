@@ -49,6 +49,8 @@ Flip a `pending` transaction to `effective`. Once effective, the transaction cou
 
 Input: `id` (required — use `search_transactions` with `status: "pending"` to find pending transactions).
 
+REST mirror: `POST /api/transactions/:id/confirm`.
+
 Errors: `unknown_transaction`.
 
 ## update_transaction

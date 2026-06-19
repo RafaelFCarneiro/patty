@@ -16,6 +16,7 @@ import { applyDueRecurring, createRecurring, listRecurring } from '../../control
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js'
 import { getSpendingSummary } from '../../controllers/summary.js'
 import {
+  confirmTransaction,
   createTransaction,
   createTransactionsBulk,
   deleteTransaction,
@@ -156,6 +157,11 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     const wireIn = parse(wireInTransactions.UpdateTransactionInput, { ...(req.body as object), id }, reply)
     if (!wireIn) return reply
     return send(reply, await updateTransaction(deps, transactionAdapters.updateWireInToModel(wireIn)))
+  })
+
+  app.post('/api/transactions/:id/confirm', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    return send(reply, await confirmTransaction(deps, { id }))
   })
 
   app.delete('/api/transactions/:id', async (req, reply) => {
