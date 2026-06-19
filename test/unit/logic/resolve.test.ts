@@ -67,4 +67,20 @@ describe('resolveByNames (synonym resolution)', () => {
     const r = resolveByNames(categories, 'saude', synonyms)
     expect(r).toMatchObject({ kind: 'found', entity: { id: 'cat-health' } })
   })
+
+  it('returns ambiguous primary without falling through to synonyms', () => {
+    const entities = [
+      { id: 'a', name: 'Itaú Corrente' },
+      { id: 'b', name: 'Itaú Poupança' },
+    ]
+    const onlyMatchA = (e: { id: string }) => (e.id === 'a' ? ['Itaú'] : [])
+    const r = resolveByNames(entities, 'itau', onlyMatchA)
+    expect(r.kind).toBe('ambiguous')
+    if (r.kind === 'ambiguous') expect(r.candidates).toEqual(['Itaú Corrente', 'Itaú Poupança'])
+  })
+
+  it('falls through to synonyms only when primary is none', () => {
+    const r = resolveByNames(categories, 'Health', synonyms)
+    expect(r).toMatchObject({ kind: 'found', entity: { id: 'cat-health' } })
+  })
 })
