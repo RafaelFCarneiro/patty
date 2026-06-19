@@ -101,7 +101,7 @@ Move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, opt
 
 `create_category`: `name` (required), `kind` (`expense|income|both`, default expense). Prefer existing categories (`list_categories`) before creating. Error: `duplicate_name`.
 
-`list_categories`: returns all top-level categories. **Names are resolved to the active locale** for default (seeded) categories; user-created categories always show their literal name. Each category includes `i18nKey` (set for defaults, `null` for user-created).
+`list_categories`: returns all top-level categories. **Names are resolved to the active locale** for default (seeded) categories via `names?.[locale] ?? name`; user-created categories always show their literal `name`. Each category includes a `names` map (set for defaults with `{pt, es}`, `null` for user-created).
 
 ## create_sub_category / list_sub_categories
 
