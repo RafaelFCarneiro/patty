@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js'
+import { toIsoDate } from '../../../src/logic/period.js'
 import { callTool, deleteTransactions, ensure, makeClient, preferredAccount } from './helpers.js'
 
 describe('MCP integration > transactions', () => {
@@ -33,7 +34,7 @@ describe('MCP integration > transactions', () => {
     const txDescription = `INTEGRATION MCP ${stamp}`
     const txDescriptionUpdated = `${txDescription} UPDATED`
     const txKey = `integration-mcp-${stamp}-0.01`
-    const today = new Date().toISOString().slice(0, 10)
+    const today = toIsoDate(new Date())
 
     const { client, transport } = makeClient()
 
@@ -145,7 +146,7 @@ describe('MCP integration > transactions', () => {
   it('bulk import returns per-item status and treats re-imports as duplicates', async () => {
     const stamp = Date.now()
     const accountName = `Bulk Import ${stamp}`
-    const today = new Date().toISOString().slice(0, 10)
+    const today = toIsoDate(new Date())
 
     const { client, transport } = makeClient()
 
@@ -332,7 +333,7 @@ describe('MCP integration > transactions', () => {
       ensure(tag.id, 'Tag id missing')
       createdTagIds.push(tag.id)
 
-      const today = new Date().toISOString().slice(0, 10)
+      const today = toIsoDate(new Date())
 
       const taggedTx = (await callTool(client, {
         name: 'create_transaction',

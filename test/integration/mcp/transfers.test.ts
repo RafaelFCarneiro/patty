@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { toIsoDate } from '../../../src/logic/period.js'
 import { callTool, deleteTransactions, ensure, makeClient } from './helpers.js'
 
 describe('MCP integration > transfers', () => {
@@ -13,7 +14,7 @@ describe('MCP integration > transfers', () => {
     const stamp = Date.now()
     const sourceName = `Transfer Source ${stamp}`
     const destName = `Transfer Dest ${stamp}`
-    const today = new Date().toISOString().slice(0, 10)
+    const today = toIsoDate(new Date())
 
     const { client, transport } = makeClient()
 

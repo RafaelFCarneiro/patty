@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CurrencyCode } from '../../../src/models/common.js'
-import { TransactionSource, type Transaction } from '../../../src/models/transaction.js'
+import { TransactionSource, TransactionStatus, type Transaction } from '../../../src/models/transaction.js'
 import * as wireInTransactions from '../../../src/wire/in/transactions.js'
 import * as transactionAdapters from '../../../src/adapters/transactions.js'
 
@@ -9,6 +9,7 @@ const draft: Transaction = {
   description: 'Uber para o aeroporto',
   amount: 32.5,
   type: 'expense',
+  status: TransactionStatus.enum.effective,
   date: '2026-06-09',
   currency: CurrencyCode.enum.BRL,
   source: TransactionSource.enum.mcp,
@@ -89,6 +90,7 @@ const sqlRow = (overrides: Record<string, unknown> = {}): Record<string, unknown
   description: 'Uber',
   amount: 32.5,
   type: 'expense',
+  status: TransactionStatus.enum.effective,
   date: '2026-06-09',
   currency: CurrencyCode.enum.BRL,
   source: TransactionSource.enum.mcp,

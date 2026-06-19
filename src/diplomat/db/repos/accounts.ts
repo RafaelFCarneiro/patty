@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm'
 import * as accountAdapters from '../../../adapters/accounts.js'
 import { expectPresent } from '../../../common/present.js'
 import type { Account } from '../../../models/account.js'
-import { TransactionType } from '../../../models/transaction.js'
+import { TransactionStatus, TransactionType } from '../../../models/transaction.js'
 import { BalancePartsRow } from '../../../wire/db/accounts.js'
 import type { Db } from '../driver.js'
 import { accounts } from '../schema.js'
@@ -54,10 +54,13 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
         COALESCE(SUM(CASE WHEN t.type = ${TransactionType.enum.transfer} THEN t.amount ELSE 0 END), 0) AS transfers_out,
         COALESCE((
           SELECT SUM(t2.amount) FROM transactions t2
-          WHERE t2.to_account_id = ${accountId} AND t2.type = ${TransactionType.enum.transfer}
+          WHERE t2.to_account_id = ${accountId}
+            AND t2.type = ${TransactionType.enum.transfer}
+            AND t2.status = ${TransactionStatus.enum.effective}
         ), 0) AS transfers_in
       FROM transactions t
       WHERE t.from_account_id = ${accountId}
+        AND t.status = ${TransactionStatus.enum.effective}
     `)
     return BalancePartsRow.parse({
       income:       row?.income        ?? 0,

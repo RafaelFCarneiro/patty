@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { TransactionStatus } from '../../models/transaction.js'
 import type { transactions } from '../../diplomat/db/schema.js'
 
 // Inferred Drizzle select type — the canonical shape of a transactions row.
@@ -12,6 +13,7 @@ export const TransactionRowSchema = z.object({
   description:           z.string(),
   amount:                z.number(),
   type:                  z.string(),
+  status:                TransactionStatus,
   date:                  z.string(),
   currency:              z.string(),
   source:                z.string(),
@@ -40,6 +42,7 @@ export type TransactionDbProps = {
   description: string
   amount: number
   type: TransactionRow['type']
+  status: TransactionRow['status']
   date: string
   currency: string
   source: TransactionRow['source']

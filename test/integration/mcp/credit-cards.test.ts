@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { toIsoDate } from '../../../src/logic/period.js'
 import { callTool, deleteTransactions, makeClient } from './helpers.js'
 
 describe('MCP integration > credit cards', () => {
@@ -12,7 +13,7 @@ describe('MCP integration > credit cards', () => {
   it('groups purchases into a bill and allows marking it paid', async () => {
     const stamp = Date.now()
     const cardName = `Test Card ${stamp}`
-    const today = new Date().toISOString().slice(0, 10)
+    const today = toIsoDate(new Date())
     const now = new Date()
     const month = now.getMonth() + 1
     const year = now.getFullYear()
