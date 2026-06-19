@@ -34,7 +34,7 @@ export const resolveByNames = <T extends Named>(
   synonyms: (entity: T) => string[],
 ): Resolution<T> => {
   const primary = resolveByName(entities, query)
-  if (primary.kind === 'found') return primary
+  if (primary.kind !== 'none') return primary
 
   const q = fold(query)
   const matches = entities.filter((e) =>

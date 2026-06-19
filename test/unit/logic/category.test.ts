@@ -62,7 +62,7 @@ describe('buildSynonyms', () => {
     expect(synonyms(resolved)).toEqual(['Food', 'Alimentação', 'Alimentación'])
   })
 
-  it('returns empty for user category with no names', () => {
+  it('returns only canonical name for user category with no locale names', () => {
     const synonyms = buildSynonyms([userCreated])
     expect(synonyms(userCreated)).toEqual(['My Custom'])
   })
