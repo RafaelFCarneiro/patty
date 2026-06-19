@@ -16,6 +16,12 @@ export const hasNameCollision = (categories: readonly Category[], name: string):
   return categories.some((c) => allNames(c).some((n) => fold(n) === folded))
 }
 
+export const resolveAndSort = (categories: readonly Category[], locale: string): Category[] => {
+  const resolved = categories.map((c) => resolveDisplayName(c, locale))
+  const collator = new Intl.Collator(locale, { sensitivity: 'base' })
+  return resolved.sort((a, b) => collator.compare(a.name, b.name))
+}
+
 export const buildSynonyms = (
   rawCategories: readonly Category[],
 ): (cat: Category) => string[] => {

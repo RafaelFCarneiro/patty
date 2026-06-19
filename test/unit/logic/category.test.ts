@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CategoryKind, type Category } from '../../../src/models/category.js'
-import { allNames, buildSynonyms, hasNameCollision, resolveDisplayName } from '../../../src/logic/category.js'
+import { allNames, buildSynonyms, hasNameCollision, resolveAndSort, resolveDisplayName } from '../../../src/logic/category.js'
 
 const seeded: Category = {
   id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense,
@@ -52,6 +52,33 @@ describe('hasNameCollision', () => {
 
   it('returns false for non-colliding name', () => {
     expect(hasNameCollision(categories, 'Travel')).toBe(false)
+  })
+})
+
+describe('resolveAndSort', () => {
+  const transport: Category = {
+    id: 'cat-transport', name: 'Transport', kind: CategoryKind.enum.expense,
+    names: { pt: 'Transporte', es: 'Transporte' },
+  }
+  const health: Category = {
+    id: 'cat-health', name: 'Health', kind: CategoryKind.enum.expense,
+    names: { pt: 'Saúde', es: 'Salud' },
+  }
+  const categories = [transport, seeded, health]
+
+  it('sorts by locale-resolved name in en', () => {
+    const result = resolveAndSort(categories, 'en')
+    expect(result.map((c) => c.name)).toEqual(['Food', 'Health', 'Transport'])
+  })
+
+  it('sorts by locale-resolved name in pt', () => {
+    const result = resolveAndSort(categories, 'pt')
+    expect(result.map((c) => c.name)).toEqual(['Alimentação', 'Saúde', 'Transporte'])
+  })
+
+  it('sorts by locale-resolved name in es', () => {
+    const result = resolveAndSort(categories, 'es')
+    expect(result.map((c) => c.name)).toEqual(['Alimentación', 'Salud', 'Transporte'])
   })
 })
 
