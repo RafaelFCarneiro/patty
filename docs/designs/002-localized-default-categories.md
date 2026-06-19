@@ -39,8 +39,9 @@ or resolved per-locale at read time, and — since the default language is now E
    out of the box (`FARMÁCIA`, `IFOOD`, `ALUGUEL` match nothing). Identity is still the English slug; only the
    **keys** are language-specific data. So the seed is the **union** of a language-agnostic brand pack plus
    `en`/`pt`/`es` keyword packs, all referencing the English category IDs, loaded for every user regardless of
-   locale — locale drives *display names*, never *which rules apply*. The packs live as typed data modules under
-   `src/resources/merchant-rules/` (`brands.ts`, `en.ts`, `pt.ts`, `es.ts`, `index.ts`); keys are re-normalized
+   locale — locale drives *display names*, never *which rules apply*. The `MerchantRule` schema and the
+   canonical `DEFAULT_MERCHANT_RULES` (brand + en/pt/es sections) live in `src/models/merchantRule.ts`,
+   referencing the canonical `DefaultCategoryId` enum (`src/models/category.ts`); keys are re-normalized
    through `logic/merchant.ts#normalizeMerchant` and deduped by `(key, category)` at seed time. Authoring
    discipline: prefer distinctive 4+ char keys and avoid short tokens that embed in unrelated words (`gas` ⊂
    `gasolina`, `tax` ⊂ `taxi`, `bar` ⊂ `embarque`); when a specific key must beat a generic one, add both —
@@ -73,7 +74,7 @@ or resolved per-locale at read time, and — since the default language is now E
 ## Scope / out of scope
 
 - **In:** English-canonical seed (English slug IDs + English fallback names); **multilingual additive merchant
-  rules** (brand + en/pt/es packs in `src/resources/merchant-rules/`, unioned and loaded for all users,
+  rules** (brand + en/pt/es sections in `src/models/merchantRule.ts`, unioned and loaded for all users,
   normalized + deduped at seed time); a manual `scripts/reset-local-db.sh` to wipe the dev DB (clean slate —
   **no** remap migration); `settings` table + AI-driven locale (`set_locale` with anti-churn + explicit-override
   guardrails, env-overridable, default en); `i18n_key` on categories; read-time name resolution; pt/es/en
@@ -105,10 +106,14 @@ set. The pure-data map (Option A) is lighter and version-controlled. Rejected fo
 
 - **English-canonical seed:** `bootstrap.ts` is rewritten so default categories use English slug IDs + English
   fallback names. The Portuguese strings live only in the `pt` translations map.
-- **Multilingual merchant rules:** seed keys move out of `bootstrap.ts` into typed packs under
-  `src/resources/merchant-rules/` (`brands` + `en`/`pt`/`es`, unioned in `index.ts`). `seedMerchantRules`
-  normalizes every key via `normalizeMerchant` (single source of truth) and dedupes by `(key, category)` before
-  insert, so packs can overlap. All packs load for every user; the category target is always an English slug.
+- **Multilingual merchant rules:** seed keys move out of `bootstrap.ts` into the `merchantRule` model
+  (`src/models/merchantRule.ts`: `MerchantRule` schema + `DEFAULT_MERCHANT_RULES`, brand + `en`/`pt`/`es`
+  sections), targeting the canonical `DefaultCategoryId` enum. `seedMerchantRules` normalizes every key via
+  `normalizeMerchant` (single source of truth) and dedupes by `(key, category)` before insert, so packs can
+  overlap. All packs load for every user; the category target is always an English slug.
+- **Canonical category identity:** the 15 default slugs are a `DefaultCategoryId` zod enum in
+  `src/models/category.ts`; the seed `CATEGORIES`, the `i18n` key set, and the merchant rules all key off it
+  (the seed is `satisfies`-locked to it), so the slug lives in one place.
 - **Clean-slate, no remap migration.** There is no production data — the only existing database is a single
   local **dev/test** DB. So we do **not** rewrite foreign keys: the schema simply seeds the English IDs on a
   fresh DB. The existing dev DB is reset **out of band** via a manual `scripts/reset-local-db.sh` that deletes
@@ -151,11 +156,12 @@ set. The pure-data map (Option A) is lighter and version-controlled. Rejected fo
    `cat-shopping`, `cat-subscriptions`, `cat-travel`, `cat-taxes`, `cat-salary`, `cat-extra-income`,
    `cat-investments`, `cat-other`), English fallback names, each with its `i18n_key` (= the English slug).
    Move the current Portuguese strings into the `pt` translations map.
-1a. **Multilingual additive merchant rules** (Decision 1a): move seed rule keys out of `bootstrap.ts` into
-   typed data modules under `src/resources/merchant-rules/` — `types.ts` (`CategoryId` union + `MerchantRule`),
-   `brands.ts` (language-agnostic brands), `en.ts`/`pt.ts`/`es.ts` (keyword packs), `index.ts` (the union
-   `MERCHANT_RULES`). All target English category slugs. `seedMerchantRules` normalizes every key via
-   `normalizeMerchant` and dedupes by `(key, category)` before insert; all packs load for every user (not
+1a. **Multilingual additive merchant rules** (Decision 1a): the canonical category identity is a
+   `DefaultCategoryId` zod enum in `src/models/category.ts` (the 15 slugs; the seed `CATEGORIES` is
+   `satisfies`-locked to it). Seed rule keys move out of `bootstrap.ts` into the `merchantRule` model
+   (`src/models/merchantRule.ts`): the `MerchantRule` schema (`{ key, category: DefaultCategoryId }`) plus
+   `DEFAULT_MERCHANT_RULES` — brand + `en`/`pt`/`es` sections unioned. `seedMerchantRules` normalizes every key
+   via `normalizeMerchant` and dedupes by `(key, category)` before insert; all packs load for every user (not
    locale-gated). Authoring discipline: distinctive 4+ char keys; avoid short tokens that embed in unrelated
    words (`gas` ⊂ `gasolina`, `tax` ⊂ `taxi`); when a specific key must beat a generic one, add both and rely
    on the matcher's longer-key tiebreak.
