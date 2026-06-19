@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import type { Locale, LocaleSource } from '../../../models/locale.js'
+import { Locale, LocaleSource } from '../../../models/locale.js'
 import type { Db } from '../driver.js'
 import { settings } from '../schema.js'
 
@@ -14,7 +14,7 @@ export const settingsRepo = (db: Db): SettingsRepo => ({
   getLocale: async () => {
     const [row] = await db.select().from(settings).where(eq(settings.id, SINGLETON_ID))
     if (!row) return undefined
-    return { locale: row.locale as Locale, localeSource: row.localeSource as LocaleSource }
+    return { locale: Locale.parse(row.locale), localeSource: LocaleSource.parse(row.localeSource) }
   },
 
   setLocale: async (locale, localeSource) => {
