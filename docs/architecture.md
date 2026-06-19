@@ -66,7 +66,7 @@ Database: encrypted libSQL file (`fintrack.db`) opened via `@libsql/client` (asy
 currencies          (code PK, symbol, name)
 accounts            (id PK, name, type, initial_balance, currency FK→currencies)
 credit_cards        (id PK, name, currency FK, closing_day, due_day, limit_amount?)
-categories          (id PK, name, kind: expense|income|both, parent_id FK→self)
+categories          (id PK, name, kind: expense|income|both, parent_id FK→self, i18n_key?)
 merchants           (key PK)
 merchant_category   (merchant_key FK, category_id FK — composite PK; weight, origin: rule|history)
 tags                (id PK, name UNIQUE)
@@ -83,6 +83,9 @@ transactions        (id PK, description, amount, type: expense|income|transfer,
 transaction_tags    (transaction_id FK, tag_id FK — composite PK)
 recurring_rules     (id PK, description, amount, type, period, next_due, currency,
                      account_id FK, category_id FK)
+
+settings            (id PK DEFAULT 'singleton', locale: en|es|pt DEFAULT en,
+                     locale_source: default|inferred|explicit DEFAULT default)
 
 transactions_fts    VIRTUAL TABLE fts5(description, content='transactions')
                     — kept in sync via INSERT/UPDATE/DELETE triggers
@@ -104,10 +107,12 @@ Repos live in `src/diplomat/db/repos/`; each accepts a `Db` (`LibSQLDatabase<typ
 9. **Encryption on by default**: the database is always opened with an encryption key (from keychain or `FINTRACK_DB_KEY`). Opening without a key is a startup error. The key is never logged or committed (ADR-005).
 10. Decode at the boundary: every external input and SQL row is zod-parsed before entering the domain.
 11. Behavior changes require tests: domain and boundary behavior updates must include unit tests in the same change (success and expected-failure paths).
+12. **Category identity is the slug/id, not the localized name** (Feature Design 002). Default categories carry an `i18n_key`; their display name is resolved at read time per the active locale. Merchant rules and classification key on the slug, never the display name. User-created categories have `i18n_key = null` and keep their literal name.
+13. **Locale is AI-determined, stored, env-overridable** (Feature Design 002). `settings.locale` (`en|es|pt`), default `en`. Resolution: `FINTRACK_LOCALE` env → `settings.locale` → `'en'`. `set_locale` with `source: inferred` is rejected when `locale_source` is `explicit`.
 
 ## Tool surface
 
-25 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
+27 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
 
 **Transport:** controlled by `MCP_TRANSPORT` (zod enum, `config.ts`). Default is **`stdio`** — the client spawns the process; no port, no Fastify. Set `MCP_TRANSPORT=http` to start the Fastify server (REST + streamable HTTP MCP on `PORT`). Both transports connect the same `buildMcpServer(deps)` core; no domain code moves. (ADR-007)
 

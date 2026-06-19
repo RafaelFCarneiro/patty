@@ -79,7 +79,8 @@ One concern per library — don't cross them:
 
 This is a quick operational summary for agents. Canonical wording lives in `docs/architecture.md`.
 
-- IDs: `crypto.randomUUID()`; seeded nodes use stable slugs (`cat-transporte`).
+- IDs: `crypto.randomUUID()`; seeded nodes use stable English slugs (`cat-food`, `cat-transport`, …).
+- Locale: `settings` table holds `locale` (`en|es|pt`) + `locale_source` (`default|inferred|explicit`). Resolution: `FINTRACK_LOCALE` env → `settings.locale` → `'en'`. Default categories carry `i18n_key`; display names are resolved at read time per locale. User categories keep literal names (`i18n_key = null`). Translations live in `logic/i18n.ts` (pure data map).
 - Currency: BRL and USD seeded. Accounts/cards reference one currency (`currency` FK → `currencies`); transactions carry a denormalized `currency` column. Summaries always group per currency — never convert implicitly.
 - Amounts: full units (reais/dollars), positive numbers; `type` (`expense`/`income`) carries the sign.
 - Dates: `YYYY-MM-DD` strings; month/year filters become date range conditions in SQL (`date >= from AND date < to`).

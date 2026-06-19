@@ -101,6 +101,8 @@ Move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, opt
 
 `create_category`: `name` (required), `kind` (`expense|income|both`, default expense). Prefer existing categories (`list_categories`) before creating. Error: `duplicate_name`.
 
+`list_categories`: returns all top-level categories. **Names are resolved to the active locale** for default (seeded) categories; user-created categories always show their literal name. Each category includes `i18nKey` (set for defaults, `null` for user-created).
+
 ## create_sub_category / list_sub_categories
 
 `create_sub_category`: `name` (required), `parentId` (required — use `list_categories` to find it). Sub-categories inherit their parent's `kind`; the same kind validation applies to transactions. Names must be unique within the same parent. Error: `duplicate_name`, `unknown_category`.
@@ -120,3 +122,11 @@ Free-form labels attached to transactions (e.g. "work", "travel", "reembolsável
 - `delete_tag`: `id` (required). Removes the tag and all its transaction associations.
 
 Attach tags at write time via the `tags` array on `create_transaction` / `create_transactions_bulk`.
+
+## set_locale / get_preferences
+
+`set_locale`: `locale` (`en|es|pt`), `source` (`inferred|explicit`). Sets the display language for default category names. The AI agent calls this with `source: "inferred"` when it detects the user's language from conversation, or `source: "explicit"` when the user directly requests a locale change. **Guardrails**: (1) Anti-churn — only switch on a clear, sustained language change, not isolated foreign words, merchant names, or proper nouns. (2) Respect explicit — if the current `locale_source` is `"explicit"`, an `inferred` switch is rejected with a `validation` error; the user must explicitly request the change. Error: `validation`.
+
+`get_preferences`: no input. Returns `{ locale, localeSource }`. Use to check the current locale and source before attempting an inferred switch.
+
+**Resolution order**: `FINTRACK_LOCALE` env var → `settings.locale` → `'en'` (cold-start default).

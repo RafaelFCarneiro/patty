@@ -1,7 +1,7 @@
 # Feature Design 002: Localized default categories (i18n)
 
 **Type:** Feature design (not an ADR — a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** Not started · **Branch:** `feat/category-i18n` ·
+**Implementation status:** In progress · **Branch:** `feat/category-i18n` ·
 **Date:** 2026-06-17 · Refines the category model in `docs/architecture.md`. The durable invariants this
 produces (category identity = slug; display name resolved per locale) land in `docs/architecture.md` when implemented.
 
