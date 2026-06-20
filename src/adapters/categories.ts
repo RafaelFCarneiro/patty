@@ -9,7 +9,7 @@ export const dbToModel = (row: CategoryRow): Category =>
     id: row.id,
     name: row.name,
     kind: row.kind,
-    names: row.names ? LocalizedNames.parse(JSON.parse(row.names)) : null,
+    names: row.names !== null ? LocalizedNames.parse(JSON.parse(row.names)) : null,
   })
 
 export const dbToSubCategory = (record: Record<string, unknown>): SubCategory => {

@@ -27,9 +27,11 @@ export type SetLocaleInput = {
 export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<Preferences, AppError> =>
   safeTry(async function* () {
     const current = await deps.settings.getLocale()
+    const wouldChange = current?.locale !== input.locale
     yield* guard(
       !(input.source === LocaleSource.enum.inferred &&
-        current?.localeSource === LocaleSource.enum.explicit),
+        current?.localeSource === LocaleSource.enum.explicit &&
+        wouldChange),
       { code: 'validation', issues: ['Cannot auto-switch locale: user set it explicitly. Use source "explicit" to override.'] },
     )
     await deps.settings.setLocale(input.locale, input.source)
