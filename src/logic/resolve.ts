@@ -37,17 +37,17 @@ export const resolveByNames = <T extends Named>(
   if (primary.kind !== 'none') return primary
 
   const q = fold(query)
-  const matches = entities.filter((e) =>
-    synonyms(e).some((s) => fold(s) === q),
-  )
-  if (matches.length === 1) return { kind: 'found', entity: matches[0]! }
-  if (matches.length > 1) return { kind: 'ambiguous', query, candidates: matches.map((e) => e.name) }
+  const withFolded = entities.map((e) => ({ entity: e, folded: synonyms(e).map(fold) }))
 
-  const partialMatches = entities.filter((e) =>
-    synonyms(e).some((s) => { const fs = fold(s); return fs.includes(q) || q.includes(fs) }),
+  const matches = withFolded.filter(({ folded }) => folded.some((fs) => fs === q))
+  if (matches.length === 1) return { kind: 'found', entity: matches[0]!.entity }
+  if (matches.length > 1) return { kind: 'ambiguous', query, candidates: matches.map(({ entity }) => entity.name) }
+
+  const partialMatches = withFolded.filter(({ folded }) =>
+    folded.some((fs) => fs.includes(q) || q.includes(fs)),
   )
-  if (partialMatches.length === 1) return { kind: 'found', entity: partialMatches[0]! }
-  if (partialMatches.length > 1) return { kind: 'ambiguous', query, candidates: partialMatches.map((e) => e.name) }
+  if (partialMatches.length === 1) return { kind: 'found', entity: partialMatches[0]!.entity }
+  if (partialMatches.length > 1) return { kind: 'ambiguous', query, candidates: partialMatches.map(({ entity }) => entity.name) }
 
   return primary
 }
