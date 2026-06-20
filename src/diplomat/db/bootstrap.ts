@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { migrate } from 'drizzle-orm/libsql/migrator'
+import * as R from 'remeda'
 import { ClassificationMethod } from '../../models/transaction.js'
 import { normalizeMerchant } from '../../logic/merchant.js'
 import type { Db } from './driver.js'
@@ -19,20 +20,13 @@ const DEFAULT_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', impo
 /** Seeded-rule weight (≈ 0.8 confidence). Named so the value isn't a bare literal. */
 const SEED_RULE_WEIGHT = 3
 
-/**
- * Normalize every seed key through the single source of truth (`normalizeMerchant`) and
- * dedupe by (key, category), so the additive en/pt/es packs can overlap freely without
- * producing duplicate rows. Empty keys (after normalization) are dropped.
- */
-const seedRules = (): ReadonlyArray<{ key: string; categoryId: string }> => {
-  const byKeyCategory = new Map<string, { key: string; categoryId: string }>()
-  for (const { key, category } of DEFAULT_MERCHANT_RULES) {
-    const normalized = normalizeMerchant(key)
-    if (normalized.length === 0) continue
-    byKeyCategory.set(`${normalized} ${category}`, { key: normalized, categoryId: category })
-  }
-  return [...byKeyCategory.values()]
-}
+const seedRules = (): ReadonlyArray<{ key: string; categoryId: string }> =>
+  R.pipe(
+    DEFAULT_MERCHANT_RULES,
+    R.map(({ key, category }) => ({ key: normalizeMerchant(key), categoryId: category })),
+    R.filter(({ key }) => key.length > 0),
+    R.uniqueBy(({ key, categoryId }) => `${key} ${categoryId}`),
+  )
 
 const seedCurrencies = async (db: Db): Promise<void> => {
   await db.insert(currencies).values([...CURRENCIES]).onConflictDoNothing()
