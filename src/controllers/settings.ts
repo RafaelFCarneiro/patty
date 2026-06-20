@@ -17,9 +17,11 @@ export const getPreferences = async (deps: Deps): Promise<Preferences> => {
   }
 }
 
+export type SetLocaleSource = typeof LocaleSource.enum.inferred | typeof LocaleSource.enum.explicit
+
 export type SetLocaleInput = {
   locale: Locale
-  source: LocaleSource
+  source: SetLocaleSource
 }
 
 export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<Preferences, AppError> =>

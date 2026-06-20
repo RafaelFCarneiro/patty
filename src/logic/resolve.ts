@@ -13,7 +13,7 @@ export const fold = (s: string): string =>
   s
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .trim()
 
 const toResolution = <T extends Named>(
