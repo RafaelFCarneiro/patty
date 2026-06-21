@@ -1,9 +1,7 @@
 # Feature Design 002: Localized default categories (i18n)
 
 **Type:** Feature design (not an ADR — a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress (revised per ADR-008 + ADR-009 — the first cut built the now-superseded
-`i18n_key` + `logic/i18n` catalog model and placed seed types in `models/`; reworking to seed isolation +
-names-on-the-entity) · **Branch:** `feat/category-i18n` ·
+**Implementation status:** Done · **PR:** [#24](https://github.com/RafaelFCarneiro/fintrack/pull/24) · **Branch:** `feat/category-i18n` ·
 **Date:** 2026-06-17 (revised 2026-06-19) · Governed by **ADR-008** (seed isolation) and **ADR-009** (localized
 content on the entity). The durable invariants land in `docs/architecture.md` when implemented.
 

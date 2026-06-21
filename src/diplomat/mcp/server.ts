@@ -474,8 +474,9 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     {
       title: 'Get user preferences',
       description:
-        'Returns the current locale and locale_source. Use this to check whether the user set the ' +
-        'locale explicitly before attempting an inferred switch.',
+        'Returns the stored locale preference and locale_source. Use this to check whether the user set the ' +
+        'locale explicitly before attempting an inferred switch. Note: the FINTRACK_LOCALE env var can ' +
+        'override the effective display locale used by list_categories; this tool reports the stored preference, not the effective override.',
       inputSchema: {},
     },
     async () => json(await getPreferences(deps)),
