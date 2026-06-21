@@ -3,7 +3,8 @@ import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
 import { computeBalance, computeProjectedBalance } from '../logic/balance.js'
 import { resolveByName } from '../logic/resolve.js'
-import type { Account, AccountBalance, AccountType, CreateAccount } from '../models/account.js'
+import { AccountType } from '../models/account.js'
+import type { Account, AccountBalance, CreateAccount } from '../models/account.js'
 import type { Deps } from './deps.js'
 import { resolutionToResult } from './resolve.js'
 
@@ -14,6 +15,10 @@ export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Acco
 
 export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Account, AppError> =>
   safeTry(async function* () {
+    yield* guard(input.type !== AccountType.enum.credit, {
+      code: 'validation',
+      issues: ['credit accounts are created automatically with a credit card — use create_credit_card instead'],
+    })
     yield* guard(!(await deps.accounts.findByName(input.name)), {
       code: 'duplicate_name',
       entity: 'account',

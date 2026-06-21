@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { CurrencyCode, Id } from './common.js'
 
-export const AccountType = z.enum(['checking', 'savings', 'wallet', 'investment'])
+export const AccountType = z.enum(['checking', 'savings', 'wallet', 'investment', 'credit'])
 export type AccountType = z.infer<typeof AccountType>
 
 export const Account = z.object({

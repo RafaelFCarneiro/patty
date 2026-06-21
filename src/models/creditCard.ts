@@ -10,6 +10,10 @@ export const CreditCard = z.object({
   /** Day the bill is due. */
   dueDay: z.number().int().min(1).max(28),
   limit: z.number().positive().optional(),
+  /** The card's internal liability account (ADR-010). */
+  accountId: Id,
+  /** Default paying account for bill payment. */
+  paymentAccountId: Id.optional(),
 })
 export type CreditCard = z.infer<typeof CreditCard>
 
@@ -19,4 +23,5 @@ export type CreateCreditCard = {
   closingDay: number
   dueDay: number
   limit?: number
+  paymentAccount?: string
 }

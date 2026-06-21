@@ -3,6 +3,7 @@ import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
 import { toIsoDate } from '../logic/period.js'
 import { defaultStatusFor } from '../logic/transaction.js'
+import { AccountType } from '../models/account.js'
 import type { Account } from '../models/account.js'
 import type { CreateTransferInput, TransactionView, TransactionSource } from '../models/transaction.js'
 import { TransactionType } from '../models/transaction.js'
@@ -11,11 +12,18 @@ import { resolveAccountRef } from './resolve.js'
 
 const validateTransferAccounts = (from: Account, to: Account) =>
   safeTry(function* () {
+    yield* guard(from.type !== AccountType.enum.credit, {
+      code: 'validation',
+      issues: [`cannot transfer from a credit account (${from.name}) — use pay_bill instead`],
+    })
+    yield* guard(to.type !== AccountType.enum.credit, {
+      code: 'validation',
+      issues: [`cannot transfer to a credit account (${to.name}) — use pay_bill instead`],
+    })
     yield* guard(from.id !== to.id, {
       code: 'validation',
       issues: ['from and to must be different accounts'],
     })
-    // Cross-currency transfers need an FX rate — not supported yet (see PLAN open questions)
     yield* guard(from.currency === to.currency, {
       code: 'validation',
       issues: [
