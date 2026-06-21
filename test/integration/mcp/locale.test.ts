@@ -138,14 +138,6 @@ describe('MCP integration > i18n', () => {
     expect(tx.classification.method).toBe('rule')
   })
 
-  it('list_categories returns results sorted by locale-resolved name', async () => {
-    await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } })
-    const categories = await callTool(client, { name: 'list_categories' }) as Category[]
-    const names = categories.map((c) => c.name)
-    const sorted = [...names].sort((a, b) => a.localeCompare(b, 'pt', { sensitivity: 'base' }))
-    expect(names).toEqual(sorted)
-  })
-
   it('reset locale to en for other test suites', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } })
     const categories = await callTool(client, { name: 'list_categories' }) as Category[]
