@@ -17,8 +17,9 @@ import { settingsRepo } from '../../../src/diplomat/db/repos/settings.js'
 import { tagsRepo } from '../../../src/diplomat/db/repos/tags.js'
 import { transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js'
 import { McpTransport } from '../../../src/config.js'
-import { Locale } from '../../../src/models/locale.js'
+import { Locale, LocaleSource } from '../../../src/models/locale.js'
 import { listCategories } from '../../../src/controllers/categories.js'
+import { getPreferences, setLocale } from '../../../src/controllers/settings.js'
 import type { Deps } from '../../../src/controllers/deps.js'
 
 const TEST_KEY = 'b'.repeat(64)
@@ -66,5 +67,17 @@ describe('empty DB (ADR-008)', () => {
   it('list_categories returns empty array on unseeded DB', async () => {
     const categories = await listCategories(deps)
     expect(categories).toEqual([])
+  })
+
+  it('get_preferences returns default locale on fresh DB', async () => {
+    const prefs = await getPreferences(deps)
+    expect(prefs).toEqual({ locale: Locale.enum.en, localeSource: LocaleSource.enum.default })
+  })
+
+  it('inferred set_locale switches locale and stores inferred source', async () => {
+    const result = await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred })
+    expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred })
+    const prefs = await getPreferences(deps)
+    expect(prefs).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred })
   })
 })

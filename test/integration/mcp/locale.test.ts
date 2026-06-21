@@ -36,6 +36,13 @@ describe('MCP integration > i18n', () => {
     expect(['default', 'inferred', 'explicit']).toContain(prefs.localeSource)
   })
 
+  it('inferred no-op on same locale preserves existing source', async () => {
+    await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } })
+    await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'inferred' } })
+    const prefs = await callTool(client, { name: 'get_preferences' }) as Preferences
+    expect(prefs).toEqual({ locale: 'en', localeSource: 'explicit' })
+  })
+
   it('set_locale to es switches category names to Spanish', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'es', source: 'explicit' } })
     const categories = await callTool(client, { name: 'list_categories' }) as Category[]
