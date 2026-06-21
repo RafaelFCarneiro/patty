@@ -34,6 +34,9 @@ export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<Prefer
         wouldChange),
       { code: 'validation', issues: ['Cannot auto-switch locale: user set it explicitly. Use source "explicit" to override.'] },
     )
+    if (!wouldChange && current) {
+      return ok({ locale: current.locale, localeSource: current.localeSource })
+    }
     await deps.settings.setLocale(input.locale, input.source)
     return ok({ locale: input.locale, localeSource: input.source })
   })

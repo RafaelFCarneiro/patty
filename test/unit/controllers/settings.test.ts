@@ -67,4 +67,10 @@ describe('setLocale', () => {
     const result = await setLocale(deps, { locale: Locale.enum.en, source: LocaleSource.enum.explicit })
     expect(result.isOk()).toBe(true)
   })
+
+  it('inferred no-op preserves explicit source', async () => {
+    const deps = makeDeps({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit })
+    const result = await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred })
+    expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit })
+  })
 })
