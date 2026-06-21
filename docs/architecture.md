@@ -43,6 +43,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | `models/` | zod/schema helpers only |
 | `adapters/` | `models/`, `wire/*` |
 | `diplomat/*` | `controllers/`, `adapters/`, `models/`, wire schemas, runtime clients |
+| `diplomat/db/seed/` | `models/` (types and runtime enums) — nothing outside `diplomat/db` imports `seed/` |
 
 ### Boundary schemas and adapter naming
 
@@ -66,7 +67,7 @@ Database: encrypted libSQL file (`fintrack.db`) opened via `@libsql/client` (asy
 currencies          (code PK, symbol, name)
 accounts            (id PK, name, type, initial_balance, currency FK→currencies)
 credit_cards        (id PK, name, currency FK, closing_day, due_day, limit_amount?)
-categories          (id PK, name, kind: expense|income|both, parent_id FK→self)
+categories          (id PK, name, kind: expense|income|both, parent_id FK→self, names JSON?)
 merchants           (key PK)
 merchant_category   (merchant_key FK, category_id FK — composite PK; weight, origin: rule|history)
 tags                (id PK, name UNIQUE)
@@ -84,11 +85,16 @@ transaction_tags    (transaction_id FK, tag_id FK — composite PK)
 recurring_rules     (id PK, description, amount, type, period, next_due, currency,
                      account_id FK, category_id FK)
 
+settings            (id PK DEFAULT 'singleton', locale: en|es|pt DEFAULT en,
+                     locale_source: default|inferred|explicit DEFAULT default)
+
 transactions_fts    VIRTUAL TABLE fts5(description, content='transactions')
                     — kept in sync via INSERT/UPDATE/DELETE triggers
 ```
 
 Repos live in `src/diplomat/db/repos/`; each accepts a `Db` (`LibSQLDatabase<typeof schema>`) injected from `main.ts`. Drizzle query builder is used for simple CRUD; `db.all(sql\`...\`)` for joins and FTS5 searches. All queries parameterized — never string-interpolate user input.
+
+Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/seed/` (ADR-008). Seed-only types (`DefaultCategoryId`, `MerchantRule`) live there too — the domain never imports seed.
 
 ## Invariants (violations are bugs)
 
@@ -104,10 +110,13 @@ Repos live in `src/diplomat/db/repos/`; each accepts a `Db` (`LibSQLDatabase<typ
 9. **Encryption on by default**: the database is always opened with an encryption key (from keychain or `FINTRACK_DB_KEY`). Opening without a key is a startup error. The key is never logged or committed (ADR-005).
 10. Decode at the boundary: every external input and SQL row is zod-parsed before entering the domain.
 11. Behavior changes require tests: domain and boundary behavior updates must include unit tests in the same change (success and expected-failure paths).
+12. **Category identity is the slug/id, not the localized name** (Feature Design 002, ADR-009). Default categories carry a JSON `names` column (`{"pt":"…","es":"…"}`); display name is resolved at read time as `names?.[locale] ?? name`. Merchant rules and classification key on the slug, never the display name. User-created categories have `names = null` and keep their literal `name`.
+13. **Locale is AI-determined, stored, env-overridable** (Feature Design 002). `settings.locale` (`en|es|pt`), default `en`. Resolution: `FINTRACK_LOCALE` env → `settings.locale` → `'en'`. `set_locale` with `source: inferred` is rejected when `locale_source` is `explicit`.
+14. **Seed is isolated (ADR-008).** Seed data lives in `diplomat/db/seed/`; the domain (`models/`, `logic/`, `controllers/`) never imports it. The app boots and works on an empty (unseeded) DB.
 
 ## Tool surface
 
-25 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
+27 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
 
 **Transport:** controlled by `MCP_TRANSPORT` (zod enum, `config.ts`). Default is **`stdio`** — the client spawns the process; no port, no Fastify. Set `MCP_TRANSPORT=http` to start the Fastify server (REST + streamable HTTP MCP on `PORT`). Both transports connect the same `buildMcpServer(deps)` core; no domain code moves. (ADR-007)
 
@@ -119,3 +128,6 @@ Repos live in `src/diplomat/db/repos/`; each accepts a `Db` (`LibSQLDatabase<typ
 - ADR-004: local-first relational SQLite via libSQL (replaces Neo4j)
 - ADR-005: OS keychain (`@napi-rs/keyring`) for encryption key storage
 - ADR-006: Drizzle ORM for schema definition and migrations
+- ADR-007: stdio as the default MCP transport, HTTP opt-in
+- ADR-008: seed data lives in `diplomat/db/seed`; the domain never depends on it
+- ADR-009: localized content lives on the entity (JSON `names`); i18n catalogs are for chrome only

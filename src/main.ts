@@ -11,15 +11,25 @@ import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js'
 import { creditCardsRepo } from './diplomat/db/repos/creditCards.js'
 import { merchantsRepo } from './diplomat/db/repos/merchants.js'
 import { recurringRepo } from './diplomat/db/repos/recurring.js'
+import { settingsRepo } from './diplomat/db/repos/settings.js'
 import { tagsRepo } from './diplomat/db/repos/tags.js'
 import { transactionsRepo } from './diplomat/db/repos/transactions.js'
 import { connectStdio } from './diplomat/mcp/stdio.js'
+import { Locale } from './models/locale.js'
 
 const main = async (): Promise<void> => {
   const config = loadConfig()
 
   const db = openDatabase(config)
   await bootstrap(db)
+
+  const settingsR = settingsRepo(db)
+
+  const resolveLocale = async (): Promise<Locale> => {
+    if (config.FINTRACK_LOCALE) return config.FINTRACK_LOCALE
+    const row = await settingsR.getLocale()
+    return row?.locale ?? Locale.enum.en
+  }
 
   const deps: Deps = {
     accounts: accountsRepo(db),
@@ -29,10 +39,12 @@ const main = async (): Promise<void> => {
     creditCards: creditCardsRepo(db),
     merchants: merchantsRepo(db),
     recurring: recurringRepo(db),
+    settings: settingsR,
     tags: tagsRepo(db),
     transactions: transactionsRepo(db),
     clock: () => new Date(),
     newId: () => randomUUID(),
+    locale: resolveLocale,
   }
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
@@ -67,6 +79,7 @@ const main = async (): Promise<void> => {
 
   // '::' binds dual-stack (IPv6 + IPv4) so both localhost (::1) and 127.0.0.1 work
   await app.listen({ port: config.PORT, host: '::' })
+  // eslint-disable-next-line no-console -- http-mode startup banner; stdout carries no MCP protocol in http mode (ADR-007)
   console.log(`fintrack: REST http://localhost:${config.PORT}/api · MCP http://localhost:${config.PORT}/mcp`)
 }
 

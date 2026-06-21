@@ -10,9 +10,11 @@ import { subCategoriesRepo } from '../../src/diplomat/db/repos/subCategories.js'
 import { creditCardsRepo } from '../../src/diplomat/db/repos/creditCards.js'
 import { merchantsRepo } from '../../src/diplomat/db/repos/merchants.js'
 import { recurringRepo } from '../../src/diplomat/db/repos/recurring.js'
+import { settingsRepo } from '../../src/diplomat/db/repos/settings.js'
 import { tagsRepo } from '../../src/diplomat/db/repos/tags.js'
 import { transactionsRepo } from '../../src/diplomat/db/repos/transactions.js'
 import { McpTransport } from '../../src/config.js'
+import { Locale } from '../../src/models/locale.js'
 import { registerRoutes } from '../../src/diplomat/http/routes.js'
 import { registerMcpRoute } from '../../src/diplomat/mcp/route.js'
 
@@ -35,6 +37,8 @@ beforeAll(async () => {
 
   await bootstrap(db)
 
+  const settingsR = settingsRepo(db)
+
   const deps = {
     accounts: accountsRepo(db),
     bills: billsRepo(db),
@@ -43,10 +47,15 @@ beforeAll(async () => {
     creditCards: creditCardsRepo(db),
     merchants: merchantsRepo(db),
     recurring: recurringRepo(db),
+    settings: settingsR,
     tags: tagsRepo(db),
     transactions: transactionsRepo(db),
     clock: () => new Date(),
     newId: () => randomUUID(),
+    locale: async () => {
+      const row = await settingsR.getLocale()
+      return row?.locale ?? Locale.enum.en
+    },
   }
 
   app = Fastify()

@@ -33,7 +33,7 @@ describe('MCP integration > accounts', () => {
           type: 'income',
           date: today,
           account: accountName,
-          category: 'Outros',
+          category: 'Other',
           idempotencyKey: `integration-balance-income-${stamp}`,
         },
       })) as { transaction?: { id?: string } }
@@ -47,7 +47,7 @@ describe('MCP integration > accounts', () => {
           type: 'expense',
           date: today,
           account: accountName,
-          category: 'Outros',
+          category: 'Other',
           idempotencyKey: `integration-balance-expense-${stamp}`,
         },
       })) as { transaction?: { id?: string } }

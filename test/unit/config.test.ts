@@ -7,6 +7,7 @@ const ORIGINAL_ENV = { ...process.env }
 
 beforeEach(() => {
   delete process.env['FINTRACK_DB_KEY']
+  delete process.env['FINTRACK_LOCALE']
 })
 
 afterEach(() => {
@@ -64,5 +65,22 @@ describe('loadConfig', () => {
   it('rejects a tilde-prefixed DB_PATH override', () => {
     process.env['DB_PATH'] = '~/.fintrack/fintrack.db'
     expect(() => loadConfig()).toThrow()
+  })
+
+  it('accepts valid FINTRACK_LOCALE values (en, es, pt)', () => {
+    for (const locale of ['en', 'es', 'pt']) {
+      process.env['FINTRACK_LOCALE'] = locale
+      expect(loadConfig().FINTRACK_LOCALE).toBe(locale)
+    }
+  })
+
+  it('rejects invalid FINTRACK_LOCALE values', () => {
+    process.env['FINTRACK_LOCALE'] = 'fr'
+    expect(() => loadConfig()).toThrow()
+  })
+
+  it('allows FINTRACK_LOCALE to be omitted', () => {
+    const config = loadConfig()
+    expect(config.FINTRACK_LOCALE).toBeUndefined()
   })
 })
