@@ -1,9 +1,10 @@
 import { sql } from 'drizzle-orm'
 import { expectPresent } from '../../../common/present.js'
+import type { Account } from '../../../models/account.js'
 import { CreditCard } from '../../../models/creditCard.js'
 import type { CreditCardRow } from '../../../wire/db/creditCards.js'
 import type { Db } from '../driver.js'
-import { creditCards } from '../schema.js'
+import { accounts, creditCards } from '../schema.js'
 
 const toCard = (row: CreditCardRow): CreditCard =>
   CreditCard.parse({
@@ -19,7 +20,7 @@ const toCard = (row: CreditCardRow): CreditCard =>
 
 export type CreditCardsRepo = {
   list: () => Promise<CreditCard[]>
-  create: (card: CreditCard) => Promise<CreditCard>
+  createWithAccount: (card: CreditCard, account: Account) => Promise<CreditCard>
   findByName: (name: string) => Promise<CreditCard | null>
 }
 
@@ -29,20 +30,29 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
     return rows.map(toCard)
   },
 
-  create: async (card) => {
-    const [row] = await db
-      .insert(creditCards)
-      .values({
-        id:               card.id,
-        name:             card.name,
-        currency:         card.currency,
-        closingDay:       card.closingDay,
-        dueDay:           card.dueDay,
-        limitAmount:      card.limit ?? null,
-        accountId:        card.accountId,
-        paymentAccountId: card.paymentAccountId ?? null,
+  createWithAccount: async (card, account) => {
+    const [row] = await db.transaction(async (tx) => {
+      await tx.insert(accounts).values({
+        id:             account.id,
+        name:           account.name,
+        type:           account.type,
+        initialBalance: account.initialBalance,
+        currency:       account.currency,
       })
-      .returning()
+      return tx
+        .insert(creditCards)
+        .values({
+          id:               card.id,
+          name:             card.name,
+          currency:         card.currency,
+          closingDay:       card.closingDay,
+          dueDay:           card.dueDay,
+          limitAmount:      card.limit ?? null,
+          accountId:        card.accountId,
+          paymentAccountId: card.paymentAccountId ?? null,
+        })
+        .returning()
+    })
     return toCard(expectPresent(row, 'credit_cards: row not found after insert'))
   },
 

@@ -33,22 +33,26 @@ export const createCreditCard = (
       paymentAccountId = paymentAccount.id
     }
 
-    const internalAccount = await deps.accounts.create({
-      id: deps.newId(),
+    const accountId = deps.newId()
+    const internalAccount = {
+      id: accountId,
       name: `Card: ${input.name}`,
       type: AccountType.enum.credit,
       currency: input.currency,
       initialBalance: 0,
-    })
+    }
 
-    return ok(await deps.creditCards.create({
-      id: deps.newId(),
-      name: input.name,
-      currency: input.currency,
-      closingDay: input.closingDay,
-      dueDay: input.dueDay,
-      limit: input.limit,
-      accountId: internalAccount.id,
-      paymentAccountId,
-    }))
+    return ok(await deps.creditCards.createWithAccount(
+      {
+        id: deps.newId(),
+        name: input.name,
+        currency: input.currency,
+        closingDay: input.closingDay,
+        dueDay: input.dueDay,
+        limit: input.limit,
+        accountId,
+        paymentAccountId,
+      },
+      internalAccount,
+    ))
   })
