@@ -49,17 +49,17 @@ export const resolveByNames = <T extends Named>(
   const q = fold(query)
   const withFolded = R.map(entities, (e) => ({ entity: e, folded: R.map(synonyms(e), fold) }))
 
-  const exactMatches = withFolded.filter(({ folded }) => folded.some((fs) => fs === q))
-  const exactFirst = R.first(exactMatches)
-  if (exactFirst && exactMatches.length === 1) return { kind: 'found', entity: exactFirst.entity }
-  if (exactMatches.length > 1) return { kind: 'ambiguous', query, candidates: R.map(exactMatches, ({ entity }) => entity.name) }
+  const exactMatches = withFolded
+    .filter(({ folded }) => folded.some((fs) => fs === q))
+    .map(({ entity }) => entity)
+  const exactResult = toResolution(exactMatches, query, entities)
+  if (exactResult.kind !== 'none') return exactResult
 
-  const partialMatches = withFolded.filter(({ folded }) =>
-    folded.some((fs) => fs.includes(q) || q.includes(fs)),
-  )
-  const partialFirst = R.first(partialMatches)
-  if (partialFirst && partialMatches.length === 1) return { kind: 'found', entity: partialFirst.entity }
-  if (partialMatches.length > 1) return { kind: 'ambiguous', query, candidates: R.map(partialMatches, ({ entity }) => entity.name) }
+  const partialMatches = withFolded
+    .filter(({ folded }) => folded.some((fs) => fs.includes(q) || q.includes(fs)))
+    .map(({ entity }) => entity)
+  const partialResult = toResolution(partialMatches, query, entities)
+  if (partialResult.kind !== 'none') return partialResult
 
   return primary
 }
