@@ -6,3 +6,8 @@ export const BillQuery = z.object({
   year: z.coerce.number().int().min(2000).max(2100),
 })
 export type BillQuery = z.infer<typeof BillQuery>
+
+export const PayBillInput = BillQuery.extend({
+  account: z.string().optional(),
+})
+export type PayBillInput = z.infer<typeof PayBillInput>

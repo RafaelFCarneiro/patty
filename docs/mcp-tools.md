@@ -35,7 +35,11 @@ Input: `card` (name), `month`, `year`. Returns the fatura: `bill` (`status: open
 
 ## pay_bill
 
-Input: `card`, `month`, `year`. Marks the bill `paid`. Deliberately does **not** create a payment transaction — card expenses already count; a payment expense would double-count. Account-balance transfers come in a later phase.
+Input: `card`, `month`, `year`, optional `account` (paying account name override). Creates a **canonical transfer** (paying account → card internal account) for the full bill total, then marks the bill `paid` (ADR-010). The paying account is resolved as: explicit `account` → card's default `paymentAccount` → `validation` error. Same-currency only. Idempotent: re-calling on a paid bill is a no-op. If total ≤ 0, marks paid with no transfer. Errors: `unknown_bill`, `unknown_card`, `unknown_account`, `validation` (no payer, currency mismatch, credit payer).
+
+## delete_credit_card
+
+Input: `card` (name), `confirm` (default false). Hard delete: removes the card, its internal credit account, all correlated transactions (purchases + bill payments), and all bills. Without `confirm: true`, returns a dry run: `{ deleted: false, dryRun: true, wouldDelete: { card, account, transactions, bills } }`. With `confirm: true`, deletes atomically. Errors: `unknown_card`.
 
 ## create_recurring / list_recurring / apply_due_recurring
 

@@ -1,18 +1,12 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { toIsoDate } from '../../../src/logic/period.js'
-import { callTool, deleteTransactions, makeClient } from './helpers.js'
+import { callTool, makeClient } from './helpers.js'
 
 describe('MCP integration > credit cards', () => {
-  let createdTxIds: string[] = []
-
-  afterEach(async () => {
-    await deleteTransactions(createdTxIds)
-    createdTxIds = []
-  })
-
   it('groups purchases into a bill and allows marking it paid', async () => {
     const stamp = Date.now()
     const cardName = `Test Card ${stamp}`
+    const bankName = `Card Bank ${stamp}`
     const today = toIsoDate(new Date())
     const now = new Date()
     const month = now.getMonth() + 1
@@ -24,8 +18,13 @@ describe('MCP integration > credit cards', () => {
       await client.connect(transport)
 
       await callTool(client, {
+        name: 'create_account',
+        args: { name: bankName, type: 'checking', currency: 'BRL', initialBalance: 5000 },
+      })
+
+      await callTool(client, {
         name: 'create_credit_card',
-        args: { name: cardName, closingDay: 28, dueDay: 28, currency: 'BRL' },
+        args: { name: cardName, closingDay: 28, dueDay: 28, currency: 'BRL', paymentAccount: bankName },
       })
 
       const tx = (await callTool(client, {
@@ -40,7 +39,6 @@ describe('MCP integration > credit cards', () => {
           idempotencyKey: `integration-card-${stamp}`,
         },
       })) as { transaction?: { id?: string } }
-      if (tx.transaction?.id) createdTxIds.push(tx.transaction.id)
 
       const bill = (await callTool(client, {
         name: 'get_bill',

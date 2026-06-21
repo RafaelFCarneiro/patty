@@ -10,7 +10,7 @@ import * as transactionAdapters from '../../adapters/transactions.js'
 import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, createSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
-import { createCreditCard, listCreditCards } from '../../controllers/creditCards.js'
+import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js'
@@ -27,7 +27,7 @@ import { createTransfer } from '../../controllers/transfers.js'
 import { AccountType } from '../../models/account.js'
 import { TransactionSource } from '../../models/transaction.js'
 import { Period } from '../../models/common.js'
-import { BillQuery, type BillQuery as BillQueryInput } from '../../wire/in/bills.js'
+import { BillQuery, PayBillInput, type BillQuery as BillQueryInput, type PayBillInput as PayBillInputType } from '../../wire/in/bills.js'
 import * as wireInAccounts from '../../wire/in/accounts.js'
 import * as wireInCategories from '../../wire/in/categories.js'
 import * as wireInCreditCards from '../../wire/in/creditCards.js'
@@ -118,6 +118,12 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     if (!wireIn) return reply
     return send(reply, await createCreditCard(deps, creditCardAdapters.wireInToModel(wireIn)), 201)
   })
+  app.delete('/api/credit-cards/:name', async (req, reply) => {
+    const { name } = req.params as { name: string }
+    const q = z.object({ confirm: z.coerce.boolean().default(false) }).safeParse(req.query)
+    if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid query'] } })
+    return send(reply, await deleteCreditCard(deps, { card: name, confirm: q.data.confirm }))
+  })
 
   app.get('/api/bills', async (req, reply) => {
     const input = parse(BillQuery, req.query, reply) as BillQueryInput
@@ -125,7 +131,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     return send(reply, await getBill(deps, input))
   })
   app.post('/api/bills/pay', async (req, reply) => {
-    const input = parse(BillQuery, req.body, reply) as BillQueryInput
+    const input = parse(PayBillInput, req.body, reply) as PayBillInputType
     if (!input) return reply
     return send(reply, await payBill(deps, input))
   })
