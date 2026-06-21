@@ -65,29 +65,38 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
   })
 
   it('create_transfer rejects credit accounts on either leg', async () => {
+    const localCard = `Transfer Reject Card ${stamp}`
+    const localBank = `Transfer Reject Bank ${stamp}`
     const { client, transport } = makeClient()
 
     try {
       await client.connect(transport)
 
-      // Try to transfer FROM the credit account
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: localBank, type: 'checking', currency: 'BRL', initialBalance: 1000 },
+      })
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: localCard, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      })
+
       const errFrom = (await callToolError(client, {
         name: 'create_transfer',
         args: {
-          from: `Card: ${cardName}`,
-          to: bankName,
+          from: `Card: ${localCard}`,
+          to: localBank,
           amount: 100,
           idempotencyKey: `transfer-from-credit-${stamp}`,
         },
       })) as { error?: { code?: string } }
       expect(errFrom.error?.code).toBe('validation')
 
-      // Try to transfer TO the credit account
       const errTo = (await callToolError(client, {
         name: 'create_transfer',
         args: {
-          from: bankName,
-          to: `Card: ${cardName}`,
+          from: localBank,
+          to: `Card: ${localCard}`,
           amount: 100,
           idempotencyKey: `transfer-to-credit-${stamp}`,
         },
@@ -115,10 +124,28 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
   })
 
   it('spending summary is unchanged — card purchase counts as expense, no double-count', async () => {
+    const localCard = `Summary Card ${stamp}`
     const { client, transport } = makeClient()
 
     try {
       await client.connect(transport)
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: localCard, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      })
+
+      await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Summary purchase ${stamp}`,
+          amount: 150,
+          type: 'expense',
+          date: today,
+          card: localCard,
+          idempotencyKey: `summary-purchase-${stamp}`,
+        },
+      })
 
       const summary = (await callTool(client, {
         name: 'get_spending_summary',
@@ -126,7 +153,7 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
       })) as { currencies?: Array<{ currency?: string; expenses?: number }> }
 
       const brl = summary.currencies?.find((s) => s.currency === 'BRL')
-      expect(brl?.expenses).toBeGreaterThanOrEqual(250)
+      expect(brl?.expenses).toBeGreaterThanOrEqual(150)
     } finally {
       await transport.close()
     }

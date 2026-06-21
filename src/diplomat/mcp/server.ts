@@ -130,7 +130,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         dueDay: z.number().int().min(1).max(28),
         currency: z.enum(['BRL', 'USD']).default('BRL'),
         limit: z.number().positive().optional(),
-        paymentAccount: z.string().optional().describe('Default paying account name for bill payment'),
+        paymentAccount: z.string().min(1).optional().describe('Default paying account name for bill payment'),
       },
     },
     async (args) => fromResult(await createCreditCard(deps, args)),

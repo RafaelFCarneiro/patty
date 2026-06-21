@@ -33,10 +33,17 @@ export const createCreditCard = (
       paymentAccountId = paymentAccount.id
     }
 
+    const internalAccountName = `Card: ${input.name}`
+    yield* guard(!(await deps.accounts.findByName(internalAccountName)), {
+      code: 'duplicate_name',
+      entity: 'account',
+      name: internalAccountName,
+    })
+
     const accountId = deps.newId()
     const internalAccount = {
       id: accountId,
-      name: `Card: ${input.name}`,
+      name: internalAccountName,
       type: AccountType.enum.credit,
       currency: input.currency,
       initialBalance: 0,

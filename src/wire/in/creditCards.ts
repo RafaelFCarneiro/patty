@@ -9,7 +9,7 @@ export const CreateCreditCard = z
     closingDay: z.number().int().min(1).max(28),
     dueDay: z.number().int().min(1).max(28),
     limit: z.number().positive().optional(),
-    paymentAccount: z.string().optional(),
+    paymentAccount: z.string().min(1).optional(),
   })
   .transform((input): Domain => ({
     name: input.name,
