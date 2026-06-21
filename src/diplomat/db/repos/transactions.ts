@@ -95,6 +95,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
         fromAccountId:        refs.accountId,
         toAccountId:          refs.toAccountId,
         creditCardId:         refs.cardId,
+        billId:               refs.billId,
         categoryId:           refs.categoryId,
         subcategoryId:        refs.subCategoryId,
         merchantKey:          refs.merchantKey,
