@@ -5,15 +5,22 @@ import type { Category } from '../../../models/category.js'
 import type { Db } from '../driver.js'
 import { categories } from '../schema.js'
 
+export type ListCategoriesOptions = {
+  orderBy?: 'name'
+}
+
 export type CategoriesRepo = {
-  list: () => Promise<Category[]>
+  list: (options?: ListCategoriesOptions) => Promise<Category[]>
   create: (category: Category) => Promise<Category>
 }
 
 export const categoriesRepo = (db: Db): CategoriesRepo => ({
   /** Top-level categories only — sub-categories (parent_id set) belong to subCategoriesRepo. */
-  list: async () => {
-    const rows = await db.select().from(categories).where(isNull(categories.parentId)).orderBy(categories.name)
+  list: async (options) => {
+    const query = db.select().from(categories).where(isNull(categories.parentId))
+    const rows = options?.orderBy === 'name'
+      ? await query.orderBy(categories.name)
+      : await query
     return rows.map(categoryAdapters.dbToModel)
   },
 
