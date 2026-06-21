@@ -1,6 +1,6 @@
 import { err, ok, type Result, ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
-import { buildSynonyms, resolveDisplayName } from '../logic/category.js'
+import { buildSynonyms, resolveAndSort } from '../logic/category.js'
 import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js'
 import type { Account } from '../models/account.js'
 import type { Category, SubCategory } from '../models/category.js'
@@ -27,7 +27,7 @@ export const resolveCategoryRef = (deps: Deps, name: string): ResultAsync<Catego
   ResultAsync.fromSafePromise(
     Promise.all([deps.categories.list(), deps.locale()] as const),
   ).andThen(([rawCategories, locale]) => {
-    const resolved = rawCategories.map((c) => resolveDisplayName(c, locale))
+    const resolved = resolveAndSort(rawCategories, locale)
     return resolutionToResult(resolveByNames(resolved, name, buildSynonyms(rawCategories)), 'category')
   })
 
