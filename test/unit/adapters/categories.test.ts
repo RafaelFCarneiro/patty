@@ -18,6 +18,24 @@ describe('dbToModel', () => {
     expect(result.names).toEqual({ pt: 'Alimentação', es: 'Alimentación' })
   })
 
+  it('rejects empty locale key in names', () => {
+    expect(() =>
+      categoryAdapters.dbToModel({
+        id: 'cat-bad', name: 'Bad', kind: CategoryKind.enum.expense, parentId: null,
+        names: '{"":"Alimentação"}',
+      }),
+    ).toThrow()
+  })
+
+  it('rejects empty locale value in names', () => {
+    expect(() =>
+      categoryAdapters.dbToModel({
+        id: 'cat-bad', name: 'Bad', kind: CategoryKind.enum.expense, parentId: null,
+        names: '{"pt":""}',
+      }),
+    ).toThrow()
+  })
+
   it('throws on invalid JSON in names', () => {
     expect(() =>
       categoryAdapters.dbToModel({
