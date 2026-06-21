@@ -118,10 +118,16 @@ describe('MCP integration > bill payment (Design 003)', () => {
 
   it('pay_bill with currency mismatch returns validation error', async () => {
     const usdCard = `USD Card ${stamp}`
+    const brlBank = `Mismatch Bank ${stamp}`
     const { client, transport } = makeClient()
 
     try {
       await client.connect(transport)
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: brlBank, type: 'checking', currency: 'BRL', initialBalance: 1000 },
+      })
 
       await callTool(client, {
         name: 'create_credit_card',
@@ -143,7 +149,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
       // Try to pay with a BRL account
       const err = (await callToolError(client, {
         name: 'pay_bill',
-        args: { card: usdCard, month, year, account: bankName },
+        args: { card: usdCard, month, year, account: brlBank },
       })) as { error?: { code?: string } }
       expect(err.error?.code).toBe('validation')
     } finally {

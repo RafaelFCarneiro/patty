@@ -120,9 +120,8 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   })
   app.delete('/api/credit-cards/:name', async (req, reply) => {
     const { name } = req.params as { name: string }
-    const q = z.object({ confirm: z.coerce.boolean().default(false) }).safeParse(req.query)
-    if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid query'] } })
-    return send(reply, await deleteCreditCard(deps, { card: name, confirm: q.data.confirm }))
+    const confirm = (req.query as { confirm?: string }).confirm === 'true'
+    return send(reply, await deleteCreditCard(deps, { card: name, confirm }))
   })
 
   app.get('/api/bills', async (req, reply) => {
