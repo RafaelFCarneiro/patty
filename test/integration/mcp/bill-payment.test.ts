@@ -3,13 +3,15 @@ import { toIsoDate } from '../../../src/logic/period.js'
 import { callTool, callToolError, makeClient } from './helpers.js'
 
 describe('MCP integration > bill payment (Design 003)', () => {
-  const stamp = Date.now()
+  const now = new Date()
+  const stamp = now.getTime()
   const cardName = `BillPay Card ${stamp}`
   const bankName = `BillPay Bank ${stamp}`
-  const today = toIsoDate(new Date())
-  const now = new Date()
-  const month = now.getMonth() + 1
-  const year = now.getFullYear()
+  // Pin to day 15 so the purchase always falls within the closingDay=28 cycle
+  const pinned = new Date(now.getFullYear(), now.getMonth(), 15)
+  const today = toIsoDate(pinned)
+  const month = pinned.getMonth() + 1
+  const year = pinned.getFullYear()
 
   it('pay_bill creates a transfer, debits payer, credits card account, marks bill paid', async () => {
     const { client, transport } = makeClient()
@@ -68,22 +70,13 @@ describe('MCP integration > bill payment (Design 003)', () => {
       const brl = summary.currencies?.find((s) => s.currency === 'BRL')
       // Should include the 300 expense, not double-count
       expect(brl?.expenses).toBeGreaterThanOrEqual(300)
-    } finally {
-      await transport.close()
-    }
-  })
 
-  it('pay_bill is idempotent — re-calling on a paid bill is a no-op', async () => {
-    const { client, transport } = makeClient()
-
-    try {
-      await client.connect(transport)
-
-      const result = (await callTool(client, {
+      // Idempotency: re-calling pay_bill on a paid bill is a no-op
+      const idempotent = (await callTool(client, {
         name: 'pay_bill',
         args: { card: cardName, month, year },
       })) as { status?: string }
-      expect(result.status).toBe('paid')
+      expect(idempotent.status).toBe('paid')
     } finally {
       await transport.close()
     }

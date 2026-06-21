@@ -1,10 +1,10 @@
-import { eq, inArray, sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { expectPresent } from '../../../common/present.js'
 import type { Account } from '../../../models/account.js'
 import { CreditCard } from '../../../models/creditCard.js'
 import type { CreditCardRow } from '../../../wire/db/creditCards.js'
 import type { Db } from '../driver.js'
-import { accounts, bills, creditCards, transactionTags, transactions } from '../schema.js'
+import { accounts, bills, creditCards } from '../schema.js'
 
 const toCard = (row: CreditCardRow): CreditCard =>
   CreditCard.parse({
@@ -85,17 +85,20 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
   deleteCard: async (cardId, accountId) => {
     await db.transaction(async (tx) => {
       // FK-safe order: tags → transactions → bills → card → account
-      const txIds = await tx.all<{ id: string }>(sql`
-        SELECT id FROM transactions
+      await tx.run(sql`
+        DELETE FROM transaction_tags WHERE transaction_id IN (
+          SELECT id FROM transactions
+          WHERE credit_card_id = ${cardId}
+            OR from_account_id = ${accountId}
+            OR to_account_id = ${accountId}
+        )
+      `)
+      await tx.run(sql`
+        DELETE FROM transactions
         WHERE credit_card_id = ${cardId}
           OR from_account_id = ${accountId}
           OR to_account_id = ${accountId}
       `)
-      if (txIds.length > 0) {
-        const ids = txIds.map((r) => r.id)
-        await tx.delete(transactionTags).where(inArray(transactionTags.transactionId, ids))
-        await tx.delete(transactions).where(inArray(transactions.id, ids))
-      }
       await tx.delete(bills).where(eq(bills.creditCardId, cardId))
       await tx.delete(creditCards).where(eq(creditCards.id, cardId))
       await tx.delete(accounts).where(eq(accounts.id, accountId))
