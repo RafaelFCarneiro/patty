@@ -3,10 +3,11 @@ import type { AppError } from '../common/errors.js'
 import { guard, okOr } from '../common/result.js'
 import { BillStatus, type Bill } from '../models/bill.js'
 import { AccountType } from '../models/account.js'
-import { ClassificationMethod, TransactionSource, TransactionStatus, TransactionType } from '../models/transaction.js'
+import { ClassificationMethod, TransactionSource, TransactionType } from '../models/transaction.js'
 import type { BillWithItems } from '../diplomat/db/repos/bills.js'
 import { computeBillTotal } from '../logic/bill.js'
 import { toIsoDate } from '../logic/period.js'
+import { defaultStatusFor } from '../logic/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCardRef } from './resolve.js'
 
@@ -61,15 +62,10 @@ export const payBill = (
       ? (yield* resolveAccountRef(deps, input.account)).id
       : card.paymentAccountId
 
-    yield* guard(!!payerAccountId, {
-      code: 'validation',
-      issues: ['no paying account: pass `account` or set the card\'s payment account'],
-    })
-
-    const payer = yield* okOr(await deps.accounts.findById(payerAccountId!), {
-      code: 'validation',
-      issues: ['payment account not found'],
-    })
+    const payer = yield* okOr(
+      payerAccountId ? await deps.accounts.findById(payerAccountId) : null,
+      { code: 'validation', issues: ['no paying account: pass `account` or set the card\'s payment account'] },
+    )
 
     yield* guard(payer.type !== AccountType.enum.credit, {
       code: 'validation',
@@ -87,13 +83,13 @@ export const payBill = (
       description: `Bill payment: ${card.name} ${String(input.month).padStart(2, '0')}/${input.year}`,
       amount: total,
       type: TransactionType.enum.transfer,
-      status: TransactionStatus.enum.effective,
+      status: defaultStatusFor(today, today),
       date: today,
       currency: card.currency,
       source: TransactionSource.enum.mcp,
       idempotencyKey: `billpay-${existing.bill.id}`,
       classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-      refs: { accountId: payer.id, toAccountId: card.accountId },
+      refs: { accountId: payer.id, toAccountId: card.accountId, billId: existing.bill.id },
     }, [])
 
     const paid = yield* okOr(await deps.bills.setStatus(existing.bill.id, BillStatus.enum.paid), {
