@@ -56,6 +56,10 @@ npm run lint && npm run typecheck && npm run test:all && npm run build
 5. **Tests are mandatory.** Any behavior change (`logic/`, `controllers/`, `adapters/`, `diplomat/db/repos/`, MCP tools) ships added/updated tests in the SAME change — success *and* expected-failure paths. A behavior diff with no test diff is incomplete. In the PR, list each behavior change → the test that covers it. (CI enforces this; don't rely on it — author the tests yourself.)
 6. **Docs in the same change**: `docs/architecture.md` (structural changes), `docs/mcp-tools.md` (tool changes), this file (data conventions), and the relevant `docs/designs/NNN` status line.
 
+**Independent subagent verification (required for feature-sized changes).** The author is the worst reviewer of their own diff — it's easy to rationalize what you just wrote. For any feature-sized change, after your own self-review and a green gate, dispatch a fresh verification subagent (the `Task` tool) to re-audit the change independently, then fix what it finds before pushing. A change is "feature-sized" if ANY of these hold: it adds or changes an MCP tool; it touches the schema or a migration; it adds or revises an ADR or design doc; or its diff spans multiple layers or roughly five or more files. Small, single-file fixes need only the inline self-review above.
+
+Give the subagent the diff and a verifier brief, not a vague ask. It should: read `git diff origin/main...HEAD`; check every hunk against the six self-review items and the dependency table in `docs/architecture.md`; confirm each behavior change has a matching test (success + expected-failure); confirm `docs/*` were updated in the same change; and return a concrete list of violations with file:line, not a "looks good". Treat its findings as a blocking checklist. Because it didn't write the code, it catches the constant-over-literal, remeda, and missing-test misses the author's eye skips.
+
 Healthy design iteration (rethinking an approach mid-flight) is welcome and is NOT what this gate targets — it targets avoidable rework: style/remeda/constant misses and missing tests.
 
 ## Architecture guidance
