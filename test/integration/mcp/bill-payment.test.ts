@@ -42,6 +42,13 @@ describe('MCP integration > bill payment (Design 003)', () => {
         },
       })
 
+      // Capture expenses before payment to prove the transfer doesn't inflate them
+      const preSummary = (await callTool(client, {
+        name: 'get_spending_summary',
+        args: { month, year },
+      })) as { currencies?: Array<{ currency?: string; expenses?: number }> }
+      const preExpenses = preSummary.currencies?.find((s) => s.currency === 'BRL')?.expenses ?? 0
+
       // Pay the bill
       const paidBill = (await callTool(client, {
         name: 'pay_bill',
@@ -62,14 +69,13 @@ describe('MCP integration > bill payment (Design 003)', () => {
       const cardAccount = balances.find((b) => b.name === `Card: ${cardName}`)
       expect(cardAccount?.balance).toBe(0) // -300 + 300 transfer in
 
-      // Spending summary unchanged (transfer doesn't count as expense)
-      const summary = (await callTool(client, {
+      // Expenses unchanged after pay_bill — transfer is not counted as expense
+      const postSummary = (await callTool(client, {
         name: 'get_spending_summary',
         args: { month, year },
       })) as { currencies?: Array<{ currency?: string; expenses?: number }> }
-      const brl = summary.currencies?.find((s) => s.currency === 'BRL')
-      // Should include the 300 expense, not double-count
-      expect(brl?.expenses).toBeGreaterThanOrEqual(300)
+      const postExpenses = postSummary.currencies?.find((s) => s.currency === 'BRL')?.expenses ?? 0
+      expect(postExpenses).toBe(preExpenses)
 
       // Idempotency: re-calling pay_bill on a paid bill is a no-op
       const idempotent = (await callTool(client, {
