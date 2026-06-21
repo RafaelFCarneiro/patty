@@ -42,6 +42,7 @@ export const Transaction = z.object({
     accountId: Id.optional(),
     toAccountId: Id.optional(),
     cardId: Id.optional(),
+    billId: Id.optional(),
     categoryId: Id.optional(),
     subCategoryId: Id.optional(),
     merchantKey: z.string().optional(),

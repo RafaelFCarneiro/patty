@@ -76,6 +76,7 @@ export const modelToDb = (
     accountId:    entity.refs.accountId    ?? null,
     toAccountId:  entity.refs.toAccountId  ?? null,
     cardId:       entity.refs.cardId       ?? null,
+    billId:       entity.refs.billId       ?? null,
     categoryId:   entity.refs.categoryId   ?? null,
     subCategoryId:entity.refs.subCategoryId?? null,
     merchantKey:  entity.refs.merchantKey  ?? null,

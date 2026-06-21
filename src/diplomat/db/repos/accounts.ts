@@ -10,6 +10,7 @@ import { accounts } from '../schema.js'
 export type AccountsRepo = {
   list: () => Promise<Account[]>
   create: (account: Account) => Promise<Account>
+  findById: (id: string) => Promise<Account | null>
   findByName: (name: string) => Promise<Account | null>
   /** Aggregated movement per account: transactions + transfers, both directions. */
   balanceParts: (accountId: string) => Promise<BalancePartsRow>
@@ -33,6 +34,15 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
       })
       .returning()
     return accountAdapters.dbToModel(expectPresent(row, 'accounts: row not found after insert'))
+  },
+
+  findById: async (id) => {
+    const rows = await db
+      .select()
+      .from(accounts)
+      .where(sql`${accounts.id} = ${id}`)
+      .limit(1)
+    return rows[0] ? accountAdapters.dbToModel(rows[0]) : null
   },
 
   findByName: async (name) => {

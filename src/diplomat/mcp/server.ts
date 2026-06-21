@@ -6,7 +6,7 @@ import { createAccount, getAccountBalances, listAccounts } from '../../controlle
 import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, createSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
 import { getPreferences, setLocale } from '../../controllers/settings.js'
-import { createCreditCard, listCreditCards } from '../../controllers/creditCards.js'
+import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js'
@@ -143,6 +143,22 @@ export const buildMcpServer = (deps: Deps): McpServer => {
   )
 
   server.registerTool(
+    'delete_credit_card',
+    {
+      title: 'Delete credit card',
+      description:
+        'Hard delete a credit card and everything associated: internal credit account, all purchases, ' +
+        'bill payments, and bills. Without confirm:true it is a DRY RUN returning what would be deleted — ' +
+        'show it to the user and call again with confirm: true. Irreversible.',
+      inputSchema: {
+        card: z.string().min(1).describe('Card name'),
+        confirm: z.boolean().default(false).describe('Must be true to actually delete'),
+      },
+    },
+    async (args) => fromResult(await deleteCreditCard(deps, args)),
+  )
+
+  server.registerTool(
     'get_bill',
     {
       title: 'Get credit card bill (fatura)',
@@ -162,15 +178,17 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     {
       title: 'Pay credit card bill',
       description:
-        'Mark a bill as paid. Does NOT create a payment transaction (card expenses are already counted; ' +
-        'a payment expense would double-count).',
+        'Pay a credit card bill. Creates a canonical transfer (payer account → card internal account) ' +
+        'for the full bill total, then marks the bill paid. Idempotent — re-calling on a paid bill is a no-op. ' +
+        'Paying account resolution: explicit `account` → card default `paymentAccount` → error.',
       inputSchema: {
         card: z.string().min(1),
         month: z.number().int().min(1).max(12),
         year: z.number().int().min(2000).max(2100),
+        account: z.string().min(1).optional().describe('Paying account name (overrides card default)'),
       },
     },
-    async (args) => fromResult(await payBill(deps, args)),
+    async (args) => fromResult(await payBill(deps, { ...args, source: TransactionSource.enum.mcp })),
   )
 
   server.registerTool(

@@ -1,7 +1,7 @@
 # Feature Design 003: Credit-card bill payment (cash leaves an account)
 
 **Type:** Feature design (a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress · **Branch:** `feat/bill-payment` (suggested) ·
+**Implementation status:** Done · **Branch:** `feat/bill-payment` (suggested) ·
 **Date:** 2026-06-21 (revised) · Governed by **ADR-010** (credit cards are liability accounts); preserves
 **ADR-002** (transfers); revises invariant #8 in `docs/architecture.md`.
 
