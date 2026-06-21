@@ -12,18 +12,20 @@ export const currencies = sqliteTable('currencies', {
 export const accounts = sqliteTable('accounts', {
   id:             text('id').primaryKey(),
   name:           text('name').notNull(),
-  type:           text('type', { enum: ['checking', 'savings', 'wallet', 'investment'] }).notNull(),
+  type:           text('type', { enum: ['checking', 'savings', 'wallet', 'investment', 'credit'] }).notNull(),
   initialBalance: real('initial_balance').notNull().default(0),
   currency:       text('currency').notNull().references(() => currencies.code),
 })
 
 export const creditCards = sqliteTable('credit_cards', {
-  id:          text('id').primaryKey(),
-  name:        text('name').notNull(),
-  closingDay:  integer('closing_day').notNull(),
-  dueDay:      integer('due_day').notNull(),
-  limitAmount: real('limit_amount'),
-  currency:    text('currency').notNull().references(() => currencies.code),
+  id:               text('id').primaryKey(),
+  name:             text('name').notNull(),
+  closingDay:       integer('closing_day').notNull(),
+  dueDay:           integer('due_day').notNull(),
+  limitAmount:      real('limit_amount'),
+  currency:         text('currency').notNull().references(() => currencies.code),
+  accountId:        text('account_id').notNull().references(() => accounts.id),
+  paymentAccountId: text('payment_account_id').references(() => accounts.id),
 })
 
 export const categories = sqliteTable('categories', {

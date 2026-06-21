@@ -27,7 +27,7 @@ Returns `summary` counts plus per-item `status`: `created`, `needs_review` (no c
 
 ## create_credit_card / list_credit_cards
 
-`create_credit_card`: `name`, `closingDay` (1–28; transactions after it belong to next month's bill), `dueDay` (1–28), `currency` (default BRL), optional `limit`. Error: `duplicate_name`.
+`create_credit_card`: `name`, `closingDay` (1–28; transactions after it belong to next month's bill), `dueDay` (1–28), `currency` (default BRL), optional `limit`, optional `paymentAccount` (name of the default paying account for bill payment). Auto-creates an internal `credit` account (`Card: <name>`) that tracks outstanding card debt (ADR-010). Card purchases post to this account, driving its balance negative. Error: `duplicate_name`, `validation` (currency mismatch with payment account).
 
 ## get_bill
 
@@ -81,7 +81,7 @@ Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `bala
 
 ## create_account / list_accounts
 
-`create_account`: `name` (required), `type` (`checking|savings|wallet|investment`, default checking — checking = conta corrente), `currency` (default BRL). Error: `duplicate_name`.
+`create_account`: `name` (required), `type` (`checking|savings|wallet|investment`, default checking — checking = conta corrente), `currency` (default BRL). Error: `duplicate_name`, `validation` (type `credit` is rejected — credit accounts are created automatically via `create_credit_card`).
 
 `list_accounts`: optional `type` filter (e.g. all investment accounts).
 
@@ -95,7 +95,7 @@ Note: `create_account` accepts `initialBalance` (default 0).
 
 ## create_transfer
 
-Move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, optional `date`, `description`). Creates a **transaction with `type: 'transfer'`** carrying both FROM and TO accounts (ADR-002): debits one balance, credits the other, excluded from spending summaries, and appears in both accounts' statements via `search_transactions` (which is also how you list transfers — `type: 'transfer'`). Both accounts must share a currency; cross-currency returns a `validation` error (FX pending). Idempotent.
+Move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, optional `date`, `description`). Creates a **transaction with `type: 'transfer'`** carrying both FROM and TO accounts (ADR-002): debits one balance, credits the other, excluded from spending summaries, and appears in both accounts' statements via `search_transactions` (which is also how you list transfers — `type: 'transfer'`). Both accounts must share a currency; cross-currency returns a `validation` error (FX pending). **Credit accounts are rejected on either leg** — use `pay_bill` to settle card debt (ADR-010). Idempotent.
 
 ## create_category / list_categories
 
