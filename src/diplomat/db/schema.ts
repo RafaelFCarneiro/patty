@@ -24,7 +24,7 @@ export const creditCards = sqliteTable('credit_cards', {
   dueDay:           integer('due_day').notNull(),
   limitAmount:      real('limit_amount'),
   currency:         text('currency').notNull().references(() => currencies.code),
-  accountId:        text('account_id').references(() => accounts.id),
+  accountId:        text('account_id').notNull().references(() => accounts.id),
   paymentAccountId: text('payment_account_id').references(() => accounts.id),
 })
 
