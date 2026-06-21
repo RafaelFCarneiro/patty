@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { DefaultCategoryId } from './categories.js'
 
+const D = DefaultCategoryId.enum
+
 /**
  * A seed merchant rule maps a normalized merchant **key** (matched as a substring of the
  * normalized transaction description) to a canonical category **slug**. Identity is the slug —
@@ -27,193 +29,193 @@ export type MerchantRule = z.infer<typeof MerchantRule>
 // and iFood) classifies out of the box. Longer-first where a brand must beat a generic key.
 const brandRules: MerchantRule[] = [
   // Ride-hailing & mobility
-  { key: 'uber eats', category: 'cat-food' }, // longer than 'uber' → wins the tiebreak
-  { key: 'uber', category: 'cat-transport' },
-  { key: 'lyft', category: 'cat-transport' },
-  { key: 'cabify', category: 'cat-transport' },
-  { key: 'didi', category: 'cat-transport' },
+  { key: 'uber eats', category: D['cat-food'] }, // longer than 'uber' → wins the tiebreak
+  { key: 'uber', category: D['cat-transport'] },
+  { key: 'lyft', category: D['cat-transport'] },
+  { key: 'cabify', category: D['cat-transport'] },
+  { key: 'didi', category: D['cat-transport'] },
 
   // Food delivery
-  { key: 'ifood', category: 'cat-food' },
-  { key: 'rappi', category: 'cat-food' },
-  { key: 'doordash', category: 'cat-food' },
-  { key: 'deliveroo', category: 'cat-food' },
-  { key: 'glovo', category: 'cat-food' },
+  { key: 'ifood', category: D['cat-food'] },
+  { key: 'rappi', category: D['cat-food'] },
+  { key: 'doordash', category: D['cat-food'] },
+  { key: 'deliveroo', category: D['cat-food'] },
+  { key: 'glovo', category: D['cat-food'] },
 
   // Streaming & subscriptions
-  { key: 'netflix', category: 'cat-subscriptions' },
-  { key: 'spotify', category: 'cat-subscriptions' },
-  { key: 'disney', category: 'cat-subscriptions' },
-  { key: 'youtube premium', category: 'cat-subscriptions' },
-  { key: 'hbo', category: 'cat-subscriptions' },
-  { key: 'paramount', category: 'cat-subscriptions' },
+  { key: 'netflix', category: D['cat-subscriptions'] },
+  { key: 'spotify', category: D['cat-subscriptions'] },
+  { key: 'disney', category: D['cat-subscriptions'] },
+  { key: 'youtube premium', category: D['cat-subscriptions'] },
+  { key: 'hbo', category: D['cat-subscriptions'] },
+  { key: 'paramount', category: D['cat-subscriptions'] },
 
   // Marketplaces & retail
-  { key: 'amazon prime', category: 'cat-subscriptions' }, // longer than 'amazon' → wins
-  { key: 'amazon', category: 'cat-shopping' },
-  { key: 'mercado livre', category: 'cat-shopping' }, // longer than 'mercado' (food) → wins
-  { key: 'mercado libre', category: 'cat-shopping' },
-  { key: 'aliexpress', category: 'cat-shopping' },
-  { key: 'shopee', category: 'cat-shopping' },
-  { key: 'walmart', category: 'cat-shopping' },
+  { key: 'amazon prime', category: D['cat-subscriptions'] }, // longer than 'amazon' → wins
+  { key: 'amazon', category: D['cat-shopping'] },
+  { key: 'mercado livre', category: D['cat-shopping'] }, // longer than 'mercado' (food) → wins
+  { key: 'mercado libre', category: D['cat-shopping'] },
+  { key: 'aliexpress', category: D['cat-shopping'] },
+  { key: 'shopee', category: D['cat-shopping'] },
+  { key: 'walmart', category: D['cat-shopping'] },
 
   // Travel
-  { key: 'airbnb', category: 'cat-travel' },
-  { key: 'booking com', category: 'cat-travel' },
-  { key: 'latam', category: 'cat-travel' },
+  { key: 'airbnb', category: D['cat-travel'] },
+  { key: 'booking com', category: D['cat-travel'] },
+  { key: 'latam', category: D['cat-travel'] },
 ]
 
 // ─── English keyword pack ───────────────────────────────────────────────────────
 const enRules: MerchantRule[] = [
-  { key: 'restaurant', category: 'cat-food' },
-  { key: 'grocery', category: 'cat-food' },
-  { key: 'supermarket', category: 'cat-food' },
-  { key: 'bakery', category: 'cat-food' },
-  { key: 'coffee', category: 'cat-food' },
+  { key: 'restaurant', category: D['cat-food'] },
+  { key: 'grocery', category: D['cat-food'] },
+  { key: 'supermarket', category: D['cat-food'] },
+  { key: 'bakery', category: D['cat-food'] },
+  { key: 'coffee', category: D['cat-food'] },
 
   // Transport (avoid bare 'gas' — it embeds in 'gasoline'; use specific keys)
-  { key: 'gas station', category: 'cat-transport' },
-  { key: 'gasoline', category: 'cat-transport' },
-  { key: 'fuel', category: 'cat-transport' },
-  { key: 'parking', category: 'cat-transport' },
-  { key: 'taxi', category: 'cat-transport' },
+  { key: 'gas station', category: D['cat-transport'] },
+  { key: 'gasoline', category: D['cat-transport'] },
+  { key: 'fuel', category: D['cat-transport'] },
+  { key: 'parking', category: D['cat-transport'] },
+  { key: 'taxi', category: D['cat-transport'] },
 
-  { key: 'rent', category: 'cat-housing' },
-  { key: 'mortgage', category: 'cat-housing' },
+  { key: 'rent', category: D['cat-housing'] },
+  { key: 'mortgage', category: D['cat-housing'] },
 
-  { key: 'electric', category: 'cat-utilities' },
-  { key: 'water bill', category: 'cat-utilities' },
-  { key: 'internet', category: 'cat-utilities' },
-  { key: 'mobile', category: 'cat-utilities' },
+  { key: 'electric', category: D['cat-utilities'] },
+  { key: 'water bill', category: D['cat-utilities'] },
+  { key: 'internet', category: D['cat-utilities'] },
+  { key: 'mobile', category: D['cat-utilities'] },
 
-  { key: 'pharmacy', category: 'cat-health' },
-  { key: 'doctor', category: 'cat-health' },
-  { key: 'dentist', category: 'cat-health' },
-  { key: 'hospital', category: 'cat-health' },
+  { key: 'pharmacy', category: D['cat-health'] },
+  { key: 'doctor', category: D['cat-health'] },
+  { key: 'dentist', category: D['cat-health'] },
+  { key: 'hospital', category: D['cat-health'] },
 
-  { key: 'school', category: 'cat-education' },
-  { key: 'university', category: 'cat-education' },
-  { key: 'tuition', category: 'cat-education' },
+  { key: 'school', category: D['cat-education'] },
+  { key: 'university', category: D['cat-education'] },
+  { key: 'tuition', category: D['cat-education'] },
 
-  { key: 'cinema', category: 'cat-leisure' },
-  { key: 'theater', category: 'cat-leisure' },
+  { key: 'cinema', category: D['cat-leisure'] },
+  { key: 'theater', category: D['cat-leisure'] },
 
-  { key: 'hotel', category: 'cat-travel' },
-  { key: 'airline', category: 'cat-travel' },
-  { key: 'flight', category: 'cat-travel' },
+  { key: 'hotel', category: D['cat-travel'] },
+  { key: 'airline', category: D['cat-travel'] },
+  { key: 'flight', category: D['cat-travel'] },
 
-  { key: 'salary', category: 'cat-salary' },
-  { key: 'payroll', category: 'cat-salary' },
+  { key: 'salary', category: D['cat-salary'] },
+  { key: 'payroll', category: D['cat-salary'] },
 
   // Taxes (avoid bare 'tax' — it embeds in 'taxi')
-  { key: 'income tax', category: 'cat-taxes' },
+  { key: 'income tax', category: D['cat-taxes'] },
 ]
 
 // ─── Portuguese (BR/PT) keyword pack ────────────────────────────────────────────
 const ptRules: MerchantRule[] = [
-  { key: 'restaurante', category: 'cat-food' },
-  { key: 'lanchonete', category: 'cat-food' },
-  { key: 'padaria', category: 'cat-food' },
-  { key: 'mercado', category: 'cat-food' },
-  { key: 'supermercado', category: 'cat-food' },
-  { key: 'acougue', category: 'cat-food' },
-  { key: 'hortifruti', category: 'cat-food' },
+  { key: 'restaurante', category: D['cat-food'] },
+  { key: 'lanchonete', category: D['cat-food'] },
+  { key: 'padaria', category: D['cat-food'] },
+  { key: 'mercado', category: D['cat-food'] },
+  { key: 'supermercado', category: D['cat-food'] },
+  { key: 'acougue', category: D['cat-food'] },
+  { key: 'hortifruti', category: D['cat-food'] },
 
   // Transporte (sem 'gas' isolado — colide com 'gasolina')
-  { key: 'posto', category: 'cat-transport' },
-  { key: 'gasolina', category: 'cat-transport' },
-  { key: 'combustivel', category: 'cat-transport' },
-  { key: 'estacionamento', category: 'cat-transport' },
-  { key: 'pedagio', category: 'cat-transport' },
-  { key: 'metro', category: 'cat-transport' },
+  { key: 'posto', category: D['cat-transport'] },
+  { key: 'gasolina', category: D['cat-transport'] },
+  { key: 'combustivel', category: D['cat-transport'] },
+  { key: 'estacionamento', category: D['cat-transport'] },
+  { key: 'pedagio', category: D['cat-transport'] },
+  { key: 'metro', category: D['cat-transport'] },
 
-  { key: 'aluguel', category: 'cat-housing' },
-  { key: 'condominio', category: 'cat-housing' },
+  { key: 'aluguel', category: D['cat-housing'] },
+  { key: 'condominio', category: D['cat-housing'] },
 
-  { key: 'conta de luz', category: 'cat-utilities' },
-  { key: 'energia', category: 'cat-utilities' },
-  { key: 'conta de agua', category: 'cat-utilities' },
-  { key: 'internet', category: 'cat-utilities' },
-  { key: 'telefone', category: 'cat-utilities' },
+  { key: 'conta de luz', category: D['cat-utilities'] },
+  { key: 'energia', category: D['cat-utilities'] },
+  { key: 'conta de agua', category: D['cat-utilities'] },
+  { key: 'internet', category: D['cat-utilities'] },
+  { key: 'telefone', category: D['cat-utilities'] },
 
-  { key: 'farmacia', category: 'cat-health' },
-  { key: 'drogaria', category: 'cat-health' },
-  { key: 'medico', category: 'cat-health' },
-  { key: 'dentista', category: 'cat-health' },
-  { key: 'hospital', category: 'cat-health' },
-  { key: 'academia', category: 'cat-health' },
+  { key: 'farmacia', category: D['cat-health'] },
+  { key: 'drogaria', category: D['cat-health'] },
+  { key: 'medico', category: D['cat-health'] },
+  { key: 'dentista', category: D['cat-health'] },
+  { key: 'hospital', category: D['cat-health'] },
+  { key: 'academia', category: D['cat-health'] },
 
-  { key: 'escola', category: 'cat-education' },
-  { key: 'faculdade', category: 'cat-education' },
-  { key: 'mensalidade', category: 'cat-education' },
-  { key: 'curso', category: 'cat-education' },
+  { key: 'escola', category: D['cat-education'] },
+  { key: 'faculdade', category: D['cat-education'] },
+  { key: 'mensalidade', category: D['cat-education'] },
+  { key: 'curso', category: D['cat-education'] },
 
-  { key: 'cinema', category: 'cat-leisure' },
-  { key: 'teatro', category: 'cat-leisure' },
+  { key: 'cinema', category: D['cat-leisure'] },
+  { key: 'teatro', category: D['cat-leisure'] },
 
-  { key: 'hotel', category: 'cat-travel' },
-  { key: 'pousada', category: 'cat-travel' },
-  { key: 'passagem', category: 'cat-travel' },
+  { key: 'hotel', category: D['cat-travel'] },
+  { key: 'pousada', category: D['cat-travel'] },
+  { key: 'passagem', category: D['cat-travel'] },
 
-  { key: 'salario', category: 'cat-salary' },
+  { key: 'salario', category: D['cat-salary'] },
 
-  { key: 'imposto', category: 'cat-taxes' },
-  { key: 'iptu', category: 'cat-taxes' },
-  { key: 'ipva', category: 'cat-taxes' },
-  { key: 'darf', category: 'cat-taxes' },
+  { key: 'imposto', category: D['cat-taxes'] },
+  { key: 'iptu', category: D['cat-taxes'] },
+  { key: 'ipva', category: D['cat-taxes'] },
+  { key: 'darf', category: D['cat-taxes'] },
 ]
 
 // ─── Spanish keyword pack ───────────────────────────────────────────────────────
 const esRules: MerchantRule[] = [
-  { key: 'restaurante', category: 'cat-food' },
-  { key: 'cafeteria', category: 'cat-food' },
-  { key: 'panaderia', category: 'cat-food' },
-  { key: 'supermercado', category: 'cat-food' },
-  { key: 'mercado', category: 'cat-food' },
-  { key: 'carniceria', category: 'cat-food' },
+  { key: 'restaurante', category: D['cat-food'] },
+  { key: 'cafeteria', category: D['cat-food'] },
+  { key: 'panaderia', category: D['cat-food'] },
+  { key: 'supermercado', category: D['cat-food'] },
+  { key: 'mercado', category: D['cat-food'] },
+  { key: 'carniceria', category: D['cat-food'] },
 
   // Transporte (sin 'gas' suelto — colisiona con 'gasolina')
-  { key: 'gasolinera', category: 'cat-transport' },
-  { key: 'gasolina', category: 'cat-transport' },
-  { key: 'combustible', category: 'cat-transport' },
-  { key: 'estacionamiento', category: 'cat-transport' },
-  { key: 'peaje', category: 'cat-transport' },
-  { key: 'metro', category: 'cat-transport' },
+  { key: 'gasolinera', category: D['cat-transport'] },
+  { key: 'gasolina', category: D['cat-transport'] },
+  { key: 'combustible', category: D['cat-transport'] },
+  { key: 'estacionamiento', category: D['cat-transport'] },
+  { key: 'peaje', category: D['cat-transport'] },
+  { key: 'metro', category: D['cat-transport'] },
 
-  { key: 'alquiler', category: 'cat-housing' },
-  { key: 'hipoteca', category: 'cat-housing' },
-  { key: 'comunidad', category: 'cat-housing' },
+  { key: 'alquiler', category: D['cat-housing'] },
+  { key: 'hipoteca', category: D['cat-housing'] },
+  { key: 'comunidad', category: D['cat-housing'] },
 
-  { key: 'electricidad', category: 'cat-utilities' },
-  { key: 'recibo de luz', category: 'cat-utilities' },
-  { key: 'agua', category: 'cat-utilities' },
-  { key: 'internet', category: 'cat-utilities' },
-  { key: 'telefono', category: 'cat-utilities' },
+  { key: 'electricidad', category: D['cat-utilities'] },
+  { key: 'recibo de luz', category: D['cat-utilities'] },
+  { key: 'agua', category: D['cat-utilities'] },
+  { key: 'internet', category: D['cat-utilities'] },
+  { key: 'telefono', category: D['cat-utilities'] },
 
-  { key: 'farmacia', category: 'cat-health' },
-  { key: 'medico', category: 'cat-health' },
-  { key: 'dentista', category: 'cat-health' },
-  { key: 'hospital', category: 'cat-health' },
-  { key: 'gimnasio', category: 'cat-health' },
+  { key: 'farmacia', category: D['cat-health'] },
+  { key: 'medico', category: D['cat-health'] },
+  { key: 'dentista', category: D['cat-health'] },
+  { key: 'hospital', category: D['cat-health'] },
+  { key: 'gimnasio', category: D['cat-health'] },
 
-  { key: 'colegio', category: 'cat-education' },
-  { key: 'universidad', category: 'cat-education' },
-  { key: 'matricula', category: 'cat-education' },
-  { key: 'curso', category: 'cat-education' },
+  { key: 'colegio', category: D['cat-education'] },
+  { key: 'universidad', category: D['cat-education'] },
+  { key: 'matricula', category: D['cat-education'] },
+  { key: 'curso', category: D['cat-education'] },
 
-  { key: 'cine', category: 'cat-leisure' },
-  { key: 'teatro', category: 'cat-leisure' },
+  { key: 'cine', category: D['cat-leisure'] },
+  { key: 'teatro', category: D['cat-leisure'] },
 
-  { key: 'hotel', category: 'cat-travel' },
-  { key: 'vuelo', category: 'cat-travel' },
-  { key: 'pasaje', category: 'cat-travel' },
+  { key: 'hotel', category: D['cat-travel'] },
+  { key: 'vuelo', category: D['cat-travel'] },
+  { key: 'pasaje', category: D['cat-travel'] },
 
-  { key: 'nomina', category: 'cat-salary' },
-  { key: 'salario', category: 'cat-salary' },
-  { key: 'sueldo', category: 'cat-salary' },
+  { key: 'nomina', category: D['cat-salary'] },
+  { key: 'salario', category: D['cat-salary'] },
+  { key: 'sueldo', category: D['cat-salary'] },
 
-  { key: 'impuesto', category: 'cat-taxes' },
-  { key: 'hacienda', category: 'cat-taxes' },
+  { key: 'impuesto', category: D['cat-taxes'] },
+  { key: 'hacienda', category: D['cat-taxes'] },
 ]
 
 /**
