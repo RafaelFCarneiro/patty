@@ -5,15 +5,16 @@ import type { CreditCardRow } from '../../../wire/db/creditCards.js'
 import type { Db } from '../driver.js'
 import { creditCards } from '../schema.js'
 
-// Input is the schema-derived Drizzle row; CreditCard.parse enforces domain constraints.
 const toCard = (row: CreditCardRow): CreditCard =>
   CreditCard.parse({
-    id:         row.id,
-    name:       row.name,
-    currency:   row.currency,
-    closingDay: row.closingDay,
-    dueDay:     row.dueDay,
-    limit:      row.limitAmount ?? undefined,
+    id:               row.id,
+    name:             row.name,
+    currency:         row.currency,
+    closingDay:       row.closingDay,
+    dueDay:           row.dueDay,
+    limit:            row.limitAmount ?? undefined,
+    accountId:        row.accountId,
+    paymentAccountId: row.paymentAccountId ?? undefined,
   })
 
 export type CreditCardsRepo = {
@@ -32,12 +33,14 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
     const [row] = await db
       .insert(creditCards)
       .values({
-        id:          card.id,
-        name:        card.name,
-        currency:    card.currency,
-        closingDay:  card.closingDay,
-        dueDay:      card.dueDay,
-        limitAmount: card.limit ?? null,
+        id:               card.id,
+        name:             card.name,
+        currency:         card.currency,
+        closingDay:       card.closingDay,
+        dueDay:           card.dueDay,
+        limitAmount:      card.limit ?? null,
+        accountId:        card.accountId,
+        paymentAccountId: card.paymentAccountId ?? null,
       })
       .returning()
     return toCard(expectPresent(row, 'credit_cards: row not found after insert'))

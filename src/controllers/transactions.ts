@@ -87,7 +87,7 @@ export const createTransaction = (
         classification,
         rawInput: input.rawInput,
         refs: {
-          accountId: account?.id,
+          accountId: account?.id ?? card?.accountId,
           cardId: card?.id,
           categoryId: classification.categoryId,
           subCategoryId,

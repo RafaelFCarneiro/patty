@@ -65,8 +65,10 @@ Database: encrypted libSQL file (`fintrack.db`) opened via `@libsql/client` (asy
 
 ```
 currencies          (code PK, symbol, name)
-accounts            (id PK, name, type, initial_balance, currency FK→currencies)
-credit_cards        (id PK, name, currency FK, closing_day, due_day, limit_amount?)
+accounts            (id PK, name, type: checking|savings|wallet|investment|credit,
+                     initial_balance, currency FK→currencies)
+credit_cards        (id PK, name, currency FK, closing_day, due_day, limit_amount?,
+                     account_id FK→accounts, payment_account_id FK→accounts)
 categories          (id PK, name, kind: expense|income|both, parent_id FK→self, names JSON?)
 merchants           (key PK)
 merchant_category   (merchant_key FK, category_id FK — composite PK; weight, origin: rule|history)
@@ -106,7 +108,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 5. **Classification via merchant_category**: normalized description → `merchants.key` → strongest `merchant_category` edge; user corrections increment `weight` (`onConflictDoUpdate`).
 6. **Category kind must match transaction type**: `expense` transactions may only link to `expense` or `both` categories; `income` to `income` or `both`. Enforced in `controllers/resolve.ts#guardCategoryKind`.
 7. **Sub-category always paired with parent**: `subcategory_id` set → `category_id` must also be set to the sub-category's parent. Enforced by a `CHECK` constraint and in `controllers/resolve.ts`.
-8. **pay_bill flips status only** — a payment transaction would double-count card expenses.
+8. **Card purchases are funded by the card's internal liability account (debt).** Bill payment is a canonical transfer (ADR-002) from a bank account to the card account, excluded from spending summaries — never an expense (double-count). `pay_bill` creates it and marks the bill paid. Value enters a `credit` account only via `pay_bill`.
 9. **Encryption on by default**: the database is always opened with an encryption key (from keychain or `FINTRACK_DB_KEY`). Opening without a key is a startup error. The key is never logged or committed (ADR-005).
 10. Decode at the boundary: every external input and SQL row is zod-parsed before entering the domain.
 11. Behavior changes require tests: domain and boundary behavior updates must include unit tests in the same change (success and expected-failure paths).
@@ -131,3 +133,4 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 - ADR-007: stdio as the default MCP transport, HTTP opt-in
 - ADR-008: seed data lives in `diplomat/db/seed`; the domain never depends on it
 - ADR-009: localized content lives on the entity (JSON `names`); i18n catalogs are for chrome only
+- ADR-010: credit cards are liability accounts (1:1 internal `credit` account per card)

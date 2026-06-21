@@ -121,14 +121,16 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     {
       title: 'Create credit card',
       description:
-        'Create a credit card. closingDay: day the fatura closes (transactions after it go to next ' +
-        "month's bill). dueDay: payment due day. Currency defaults to BRL.",
+        'Create a credit card with its internal liability account (ADR-010). closingDay: day the fatura ' +
+        "closes (transactions after it go to next month's bill). dueDay: payment due day. Currency " +
+        'defaults to BRL. The card auto-creates an internal credit account that tracks outstanding debt.',
       inputSchema: {
         name: z.string().min(1),
         closingDay: z.number().int().min(1).max(28),
         dueDay: z.number().int().min(1).max(28),
         currency: z.enum(['BRL', 'USD']).default('BRL'),
         limit: z.number().positive().optional(),
+        paymentAccount: z.string().optional().describe('Default paying account name for bill payment'),
       },
     },
     async (args) => fromResult(await createCreditCard(deps, args)),
@@ -312,7 +314,9 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     'create_account',
     {
       title: 'Create account',
-      description: 'Create a bank account / wallet. Currency defaults to BRL.',
+      description:
+        'Create a bank account / wallet. Currency defaults to BRL. ' +
+        'Note: credit accounts are created automatically with a credit card (create_credit_card).',
       inputSchema: {
         name: z.string().min(1),
         type: AccountType.default(AccountType.enum.checking),
