@@ -133,7 +133,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   app.post('/api/bills/pay', async (req, reply) => {
     const input = parse(PayBillInput, req.body, reply) as PayBillInputType
     if (!input) return reply
-    return send(reply, await payBill(deps, input))
+    return send(reply, await payBill(deps, { ...input, source: TransactionSource.enum.rest }))
   })
 
   app.post('/api/transfers', async (req, reply) => {

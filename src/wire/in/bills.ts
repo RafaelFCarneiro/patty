@@ -8,6 +8,6 @@ export const BillQuery = z.object({
 export type BillQuery = z.infer<typeof BillQuery>
 
 export const PayBillInput = BillQuery.extend({
-  account: z.string().optional(),
+  account: z.string().min(1).optional(),
 })
 export type PayBillInput = z.infer<typeof PayBillInput>

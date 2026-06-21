@@ -185,10 +185,10 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         card: z.string().min(1),
         month: z.number().int().min(1).max(12),
         year: z.number().int().min(2000).max(2100),
-        account: z.string().optional().describe('Paying account name (overrides card default)'),
+        account: z.string().min(1).optional().describe('Paying account name (overrides card default)'),
       },
     },
-    async (args) => fromResult(await payBill(deps, args)),
+    async (args) => fromResult(await payBill(deps, { ...args, source: TransactionSource.enum.mcp })),
   )
 
   server.registerTool(

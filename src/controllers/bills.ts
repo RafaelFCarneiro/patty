@@ -3,7 +3,7 @@ import type { AppError } from '../common/errors.js'
 import { guard, okOr } from '../common/result.js'
 import { BillStatus, type Bill } from '../models/bill.js'
 import { AccountType } from '../models/account.js'
-import { ClassificationMethod, TransactionSource, TransactionType } from '../models/transaction.js'
+import { ClassificationMethod, TransactionSource, type TransactionSource as TransactionSourceType, TransactionType } from '../models/transaction.js'
 import type { BillWithItems } from '../diplomat/db/repos/bills.js'
 import { computeBillTotal } from '../logic/bill.js'
 import { toIsoDate } from '../logic/period.js'
@@ -28,7 +28,7 @@ export const getBill = (
     return ok({ ...bill, total: computeBillTotal(bill.transactions) })
   })
 
-export type PayBillInput = { card: string; month: number; year: number; account?: string }
+export type PayBillInput = { card: string; month: number; year: number; account?: string; source: TransactionSourceType }
 
 export const payBill = (
   deps: Deps,
@@ -58,14 +58,12 @@ export const payBill = (
     }
 
     // Resolve the paying account: explicit > card default > error
-    const payerAccountId = input.account
-      ? (yield* resolveAccountRef(deps, input.account)).id
-      : card.paymentAccountId
-
-    const payer = yield* okOr(
-      payerAccountId ? await deps.accounts.findById(payerAccountId) : null,
-      { code: 'validation', issues: ['no paying account: pass `account` or set the card\'s payment account'] },
-    )
+    const payer = input.account
+      ? yield* resolveAccountRef(deps, input.account)
+      : yield* okOr(
+          card.paymentAccountId ? await deps.accounts.findById(card.paymentAccountId) : null,
+          { code: 'validation', issues: ['no paying account: pass `account` or set the card\'s payment account'] },
+        )
 
     yield* guard(payer.type !== AccountType.enum.credit, {
       code: 'validation',
@@ -86,7 +84,7 @@ export const payBill = (
       status: defaultStatusFor(today, today),
       date: today,
       currency: card.currency,
-      source: TransactionSource.enum.mcp,
+      source: input.source,
       idempotencyKey: `billpay-${existing.bill.id}`,
       classification: { method: ClassificationMethod.enum.none, confidence: 0 },
       refs: { accountId: payer.id, toAccountId: card.accountId, billId: existing.bill.id },
