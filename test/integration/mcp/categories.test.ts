@@ -17,6 +17,7 @@ describe('MCP integration > categories', () => {
   })
 
   afterAll(async () => {
+    await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } })
     await transport.close()
   })
 
@@ -26,9 +27,5 @@ describe('MCP integration > categories', () => {
     const names = categories.map((c) => c.name)
     const sorted = [...names].sort((a, b) => a.localeCompare(b, 'pt', { sensitivity: 'base' }))
     expect(names).toEqual(sorted)
-  })
-
-  afterAll(async () => {
-    await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } })
   })
 })
