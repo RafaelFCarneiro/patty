@@ -24,12 +24,12 @@ export const resolveAccountRef = (deps: Deps, name: string): ResultAsync<Account
   )
 
 export const resolveCategoryRef = (deps: Deps, name: string): ResultAsync<Category, AppError> =>
-  ResultAsync.fromSafePromise(deps.categories.list()).andThen((rawCategories) =>
-    ResultAsync.fromSafePromise(deps.locale()).andThen((locale) => {
-      const resolved = rawCategories.map((c) => resolveDisplayName(c, locale))
-      return resolutionToResult(resolveByNames(resolved, name, buildSynonyms(rawCategories)), 'category')
-    }),
-  )
+  ResultAsync.fromSafePromise(
+    Promise.all([deps.categories.list(), deps.locale()] as const),
+  ).andThen(([rawCategories, locale]) => {
+    const resolved = rawCategories.map((c) => resolveDisplayName(c, locale))
+    return resolutionToResult(resolveByNames(resolved, name, buildSynonyms(rawCategories)), 'category')
+  })
 
 export const resolveSubCategoryRef = (deps: Deps, name: string): ResultAsync<SubCategory, AppError> =>
   ResultAsync.fromSafePromise(deps.subCategories.list()).andThen((subCategories) =>

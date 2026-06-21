@@ -6,8 +6,7 @@ import type { Category, CreateCategory, SubCategory } from '../models/category.j
 import type { Deps } from './deps.js'
 
 export const listCategories = async (deps: Deps): Promise<Category[]> => {
-  const locale = await deps.locale()
-  const all = await deps.categories.list()
+  const [locale, all] = await Promise.all([deps.locale(), deps.categories.list()])
   return resolveAndSort(all, locale)
 }
 
