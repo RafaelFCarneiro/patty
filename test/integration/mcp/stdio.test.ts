@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -10,8 +11,9 @@ import { callTool } from './helpers.js'
 
 // Fixed 64-char hex key — never touches the OS keychain
 const TEST_KEY = 'd'.repeat(64)
-// tsx is on PATH via npm scripts; use by name for portability
+const require = createRequire(import.meta.url)
 const ENTRY = 'src/main.ts'
+const TSX_CLI = require.resolve('tsx/cli')
 
 let tmpDir: string
 let client: Client
@@ -22,8 +24,9 @@ beforeAll(async () => {
   const dbPath = join(tmpDir, 'stdio.db')
 
   transport = new StdioClientTransport({
-    command: 'tsx',
-    args: [ENTRY],
+    // Use the local tsx CLI directly so the test does not depend on PATH injection.
+    command: process.execPath,
+    args: [TSX_CLI, ENTRY],
     env: {
       ...process.env,
       MCP_TRANSPORT: McpTransport.enum.stdio,
