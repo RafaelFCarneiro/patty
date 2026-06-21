@@ -3,11 +3,11 @@ import { toIsoDate } from '../../../src/logic/period.js'
 import { callTool, callToolError, makeClient } from './helpers.js'
 
 describe('MCP integration > credit cards as liability accounts (ADR-010)', () => {
-  const stamp = Date.now()
+  const now = new Date()
+  const stamp = now.getTime()
   const cardName = `Liability Card ${stamp}`
   const bankName = `Bank ${stamp}`
-  const today = toIsoDate(new Date())
-  const now = new Date()
+  const today = toIsoDate(now)
   const month = now.getMonth() + 1
   const year = now.getFullYear()
 
@@ -116,6 +116,35 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
       const err = (await callToolError(client, {
         name: 'create_account',
         args: { name: `Manual credit ${stamp}`, type: 'credit', currency: 'BRL' },
+      })) as { error?: { code?: string } }
+      expect(err.error?.code).toBe('validation')
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('create_transaction rejects direct posting to a credit account via account param', async () => {
+    const localCard = `Direct Post Card ${stamp}`
+    const { client, transport } = makeClient()
+
+    try {
+      await client.connect(transport)
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: localCard, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      })
+
+      const err = (await callToolError(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Direct credit post ${stamp}`,
+          amount: 50,
+          type: 'expense',
+          date: today,
+          account: `Card: ${localCard}`,
+          idempotencyKey: `direct-credit-post-${stamp}`,
+        },
       })) as { error?: { code?: string } }
       expect(err.error?.code).toBe('validation')
     } finally {

@@ -1,6 +1,7 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard, okOr } from '../common/result.js'
+import { AccountType } from '../models/account.js'
 import { billPeriodFor } from '../logic/bill.js'
 import { pickClassification, userClassification } from '../logic/classify.js'
 import type { ClassifyOutcome } from '../models/transaction.js'
@@ -49,6 +50,12 @@ export const createTransaction = (
     })
 
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
+    if (account) {
+      yield* guard(account.type !== AccountType.enum.credit, {
+        code: 'validation',
+        issues: ['cannot post directly to a credit account — use the card parameter instead'],
+      })
+    }
     const card = input.card ? yield* resolveCardRef(deps, input.card) : null
 
     let classification: ClassifyOutcome
