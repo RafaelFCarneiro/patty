@@ -25,15 +25,42 @@ The database is a local encrypted libSQL file (`fintrack.db`). On first run the 
 npm run dev             # tsx watch
 npm run build           # tsc (tsconfig.build.json)
 npm start               # node dist/main.js
-npm test                # vitest run (unit tests, colocated *.test.ts)
+npm run lint            # eslint (style/quality smell rules — part of the gate)
+npm test                # vitest run (unit tests under test/unit)
 npm run typecheck       # tsc --noEmit (includes tests)
 npm run test:integration # in-process libSQL DB, no Docker required
+npm run test:all        # unit + integration
 npm run mcp:inspect     # MCP Inspector — connect to http://127.0.0.1:3001/mcp
 ```
 
-Run a single test file: `npx vitest run src/logic/classify.test.ts`
+Run a single test file: `npx vitest run --config vitest.unit.config.ts test/unit/logic/classify.test.ts`
 
-The backend lives at the repo root (`src/`, `package.json`) — there is no `backend/` subfolder.
+Tests live under `test/unit/` and `test/integration/` (not colocated). The backend lives at the repo root (`src/`, `package.json`) — there is no `backend/` subfolder.
+
+## Definition of Done (mandatory — verify before EVERY push, initial delivery and each PR-fix push alike)
+
+Quality is delivered, not reviewed in. Before pushing any branch — first cut or a fix addressing review — you MUST run the self-review pass below, fix what it surfaces, and only then push. State the result of each item in the PR description (or the review reply for a fix). "I'll fix it if review catches it" is not acceptable; review is the backstop, not the gate.
+
+**The gate (must be green on every push):**
+
+```bash
+npm run lint && npm run typecheck && npm run test:all && npm run build
+```
+
+**Self-review pass (do this every time, before the gate):** produce the diff (`git diff origin/main...HEAD`), read every changed hunk, and check it against:
+
+1. **Layering** (`docs/architecture.md` dependency table): `logic/` is pure (no I/O, no `diplomat`/`controllers` imports); the domain never imports seed (`diplomat/db/seed`); boundaries are zod-decoded; controllers return `ResultAsync` via `safeTry`; diplomats stay thin.
+2. **Constants over literals** (`docs/code-quality.md`): no bare string/number where a zod `.enum.*` or named constant exists.
+3. **Declarative over imperative** (`docs/code-quality.md` remeda table): no `xs.filter(...)[0]` → use `R.firstBy`/`R.find`; no manual accumulation loop → `R.groupBy`/`countBy`/`sumBy`/`mapValues`; no chained `.filter().map().sort()` → `R.pipe`. Native `map`/`filter` only for single-stage transforms.
+4. **Naming & single responsibility** (`docs/code-quality.md`): names don't restate their module; verb+noun; one job per function.
+5. **Tests are mandatory.** Any behavior change (`logic/`, `controllers/`, `adapters/`, `diplomat/db/repos/`, MCP tools) ships added/updated tests in the SAME change — success *and* expected-failure paths. A behavior diff with no test diff is incomplete. In the PR, list each behavior change → the test that covers it. (CI enforces this; don't rely on it — author the tests yourself.)
+6. **Docs in the same change**: `docs/architecture.md` (structural changes), `docs/mcp-tools.md` (tool changes), this file (data conventions), and the relevant `docs/designs/NNN` status line. When this file's non-negotiables or this Definition of Done change, mirror them into `.github/copilot-instructions.md` in the same change (CLAUDE.md is the source of truth; the two must not drift).
+
+**Independent subagent verification (required for feature-sized changes).** The author is the worst reviewer of their own diff — it's easy to rationalize what you just wrote. For any feature-sized change, after your own self-review and a green gate, dispatch a fresh verification subagent (the `Task` tool) to re-audit the change independently, then fix what it finds before pushing. A change is "feature-sized" if ANY of these hold: it adds or changes an MCP tool; it touches the schema or a migration; it adds or revises an ADR or design doc; or its diff spans multiple layers or roughly five or more files. Small, single-file fixes need only the inline self-review above.
+
+Give the subagent the diff and a verifier brief, not a vague ask. It should: read `git diff origin/main...HEAD`; check every hunk against the six self-review items and the dependency table in `docs/architecture.md`; confirm each behavior change has a matching test (success + expected-failure); confirm `docs/*` were updated in the same change; and return a concrete list of violations with file:line, not a "looks good". Treat its findings as a blocking checklist. Because it didn't write the code, it catches the constant-over-literal, remeda, and missing-test misses the author's eye skips.
+
+Healthy design iteration (rethinking an approach mid-flight) is welcome and is NOT what this gate targets — it targets avoidable rework: style/remeda/constant misses and missing tests.
 
 ## Architecture guidance
 
@@ -79,7 +106,8 @@ One concern per library — don't cross them:
 
 This is a quick operational summary for agents. Canonical wording lives in `docs/architecture.md`.
 
-- IDs: `crypto.randomUUID()`; seeded nodes use stable slugs (`cat-transporte`).
+- IDs: `crypto.randomUUID()`; seeded nodes use stable English slugs (`cat-food`, `cat-transport`, …).
+- Locale: `settings` table holds `locale` (`en|es|pt`) + `locale_source` (`default|inferred|explicit`). Resolution: `FINTRACK_LOCALE` env → `settings.locale` → `'en'`. Default categories carry a JSON `names` column (`{"pt":"…","es":"…"}`); display names are resolved at read time as `names?.[locale] ?? name` (ADR-009). User categories keep literal names (`names = null`). Seeded translations are authored in `diplomat/db/seed/categories.ts`.
 - Currency: BRL and USD seeded. Accounts/cards reference one currency (`currency` FK → `currencies`); transactions carry a denormalized `currency` column. Summaries always group per currency — never convert implicitly.
 - Amounts: full units (reais/dollars), positive numbers; `type` (`expense`/`income`) carries the sign.
 - Dates: `YYYY-MM-DD` strings; month/year filters become date range conditions in SQL (`date >= from AND date < to`).

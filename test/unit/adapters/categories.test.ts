@@ -6,8 +6,43 @@ import * as categoryAdapters from '../../../src/adapters/categories.js'
 describe('dbToModel', () => {
   it('decodes flat SQL row for a category', () => {
     expect(
-      categoryAdapters.dbToModel({ id: 'cat-1', name: 'Transporte', kind: CategoryKind.enum.expense, parentId: null }),
-    ).toEqual({ id: 'cat-1', name: 'Transporte', kind: CategoryKind.enum.expense })
+      categoryAdapters.dbToModel({ id: 'cat-1', name: 'Transport', kind: CategoryKind.enum.expense, parentId: null, names: null }),
+    ).toEqual({ id: 'cat-1', name: 'Transport', kind: CategoryKind.enum.expense, names: null })
+  })
+
+  it('parses valid JSON names from DB row', () => {
+    const result = categoryAdapters.dbToModel({
+      id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense, parentId: null,
+      names: '{"pt":"Alimentação","es":"Alimentación"}',
+    })
+    expect(result.names).toEqual({ pt: 'Alimentação', es: 'Alimentación' })
+  })
+
+  it('rejects empty locale key in names', () => {
+    expect(() =>
+      categoryAdapters.dbToModel({
+        id: 'cat-bad', name: 'Bad', kind: CategoryKind.enum.expense, parentId: null,
+        names: '{"":"Alimentação"}',
+      }),
+    ).toThrow()
+  })
+
+  it('rejects empty locale value in names', () => {
+    expect(() =>
+      categoryAdapters.dbToModel({
+        id: 'cat-bad', name: 'Bad', kind: CategoryKind.enum.expense, parentId: null,
+        names: '{"pt":""}',
+      }),
+    ).toThrow()
+  })
+
+  it('throws on invalid JSON in names', () => {
+    expect(() =>
+      categoryAdapters.dbToModel({
+        id: 'cat-broken', name: 'Broken', kind: CategoryKind.enum.expense, parentId: null,
+        names: '{not valid json}',
+      }),
+    ).toThrow(SyntaxError)
   })
 })
 

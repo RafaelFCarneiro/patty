@@ -1,20 +1,24 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
+import { hasNameCollision, resolveAndSort } from '../logic/category.js'
 import type { Category, CreateCategory, SubCategory } from '../models/category.js'
 import type { Deps } from './deps.js'
 
-export const listCategories = (deps: Deps): Promise<Category[]> => deps.categories.list()
+export const listCategories = async (deps: Deps): Promise<Category[]> => {
+  const [locale, all] = await Promise.all([deps.locale(), deps.categories.list()])
+  return resolveAndSort(all, locale)
+}
 
 export const createCategory = (deps: Deps, input: CreateCategory): ResultAsync<Category, AppError> =>
   safeTry(async function* () {
-    const all = await deps.categories.list()
-    yield* guard(!all.some((c) => c.name.toLowerCase() === input.name.toLowerCase()), {
+    const raw = await deps.categories.list()
+    yield* guard(!hasNameCollision(raw, input.name), {
       code: 'duplicate_name',
       entity: 'category',
       name: input.name,
     })
-    return ok(await deps.categories.create({ id: deps.newId(), ...input }))
+    return ok(await deps.categories.create({ id: deps.newId(), ...input, names: null }))
   })
 
 export const listSubCategories = (deps: Deps, parentId?: string): Promise<SubCategory[]> =>

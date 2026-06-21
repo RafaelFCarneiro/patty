@@ -12,6 +12,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so the behavior-change/tests check can find the merge-base
 
       - uses: actions/setup-node@v4
         with:
@@ -20,6 +22,15 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Behavior changes ship tests
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/check-tests-changed.mjs
 
       - name: Type check
         run: npm run typecheck
