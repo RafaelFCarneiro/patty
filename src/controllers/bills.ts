@@ -62,7 +62,7 @@ export const payBill = (
       ? yield* resolveAccountRef(deps, input.account)
       : yield* okOr(
           card.paymentAccountId ? await deps.accounts.findById(card.paymentAccountId) : null,
-          { code: 'validation', issues: ['no paying account: pass `account` or set the card\'s payment account'] },
+          { code: 'validation', issues: ['no paying account: pass `account` or set `paymentAccount` on the card'] },
         )
 
     yield* guard(payer.type !== AccountType.enum.credit, {
