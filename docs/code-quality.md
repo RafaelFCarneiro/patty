@@ -151,6 +151,33 @@ The rule of thumb from `docs/code-style.md` still applies: native `map`/`filter`
 single-stage transforms. Reach for remeda when there are ≥2 stages, grouping, counting, or
 predicate composition.
 
+### Named logic functions over inline lambdas in pipes
+
+Extract inline predicates and mappers into named functions in the `logic/` layer. A pipe should
+read as a sequence of *what* happens — named functions provide that; inline `(a) => ...` lambdas
+bury the intent.
+
+```ts
+// ✅ DO — named functions in logic/, pipe reads declaratively
+// logic/account.ts
+export const filterByType = (type?: AccountType) => (a: Account): boolean =>
+  !type || a.type === type
+
+// controller
+return R.pipe(
+  all,
+  R.filter(filterByType(type)),
+  R.map(withTypeLabel(locale)),
+)
+
+// ❌ DON'T — inline lambdas obscure intent
+return R.pipe(
+  all,
+  R.filter((a) => !type || a.type === type),
+  R.map((a) => withTypeLabel(a, locale)),
+)
+```
+
 ### Custom helpers with `purry` (dual data-first / data-last)
 
 When a custom helper is used both imperatively and in pipes/map, wrap it with `purry` to
