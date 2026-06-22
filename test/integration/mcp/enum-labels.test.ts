@@ -118,10 +118,9 @@ describe('MCP integration > localized enum labels', () => {
   it('get_bill returns statusLabel on bill and labels on transactions', async () => {
     const cardName = `LabelCard ${stamp}`
     const bankName = `LabelBank ${stamp}`
-    const now = new Date()
-    const month = now.getMonth() + 1
-    const year = now.getFullYear()
-    const today = now.toISOString().slice(0, 10)
+    const today = '2026-06-15'
+    const month = 6
+    const year = 2026
 
     await callTool(client, {
       name: 'create_account',

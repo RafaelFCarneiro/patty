@@ -4,7 +4,7 @@ import { BillStatus } from '../../../src/models/bill.js'
 import { CategoryKind } from '../../../src/models/category.js'
 import { Locale } from '../../../src/models/locale.js'
 import { RecurringPeriod } from '../../../src/models/recurring.js'
-import { TransactionStatus, TransactionType } from '../../../src/models/transaction.js'
+import { TransactionSource, TransactionStatus, TransactionType } from '../../../src/models/transaction.js'
 import {
   localizeAccountType,
   localizeBillStatus,
@@ -79,7 +79,7 @@ describe('withTransactionLabels', () => {
     status: TransactionStatus.enum.effective,
     date: '2026-01-01',
     currency: 'BRL',
-    source: 'mcp',
+    source: TransactionSource.enum.mcp,
     idempotencyKey: 'test-1',
     classification: { method: 'none', confidence: 0 },
     tags: [],
