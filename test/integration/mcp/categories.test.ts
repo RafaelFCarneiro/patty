@@ -100,19 +100,24 @@ describe('MCP integration > categories', () => {
       args: { name: `merchant-cat-${stamp}`, kind: 'expense' },
     })) as Category
 
-    // Create a transaction with this category to generate a merchant_category row via classification history
+    // Create a transaction WITHOUT a category so auto-classification sets a merchantKey
     const txResult = (await callTool(client, {
       name: 'create_transaction',
       args: {
-        description: `MerchantLearn-${stamp}`,
+        description: 'Netflix subscription',
         amount: 25,
         type: 'expense',
         date: '2026-01-20',
         account: accountName,
-        category: cat.name,
         idempotencyKey: `merchant-learn-${stamp}`,
       },
     })) as { transaction: { id: string } }
+
+    // Correct the category → strengthenFromTransaction writes a merchant_category row
+    await callTool(client, {
+      name: 'update_transaction',
+      args: { id: txResult.transaction.id, category: cat.name },
+    })
 
     // Delete the transaction so only the learned merchant rule remains
     await callTool(client, { name: 'delete_transaction', args: { id: txResult.transaction.id, confirm: true } })
