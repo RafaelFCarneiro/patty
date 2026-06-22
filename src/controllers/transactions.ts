@@ -35,7 +35,7 @@ import type {
 import type { Deps } from './deps.js'
 import { guardCategoryKind, resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
 
-const withTransactionLabels = (tx: TransactionView, locale: Locale): TransactionView => ({
+export const withTransactionLabels = (tx: TransactionView, locale: Locale): TransactionView => ({
   ...tx,
   typeLabel: localizeTransactionType(tx.type, locale),
   statusLabel: localizeTransactionStatus(tx.status, locale),

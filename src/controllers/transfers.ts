@@ -1,7 +1,6 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
-import { localizeTransactionStatus, localizeTransactionType } from '../logic/labels.js'
 import { toIsoDate } from '../logic/period.js'
 import { defaultStatusFor } from '../logic/transaction.js'
 import { AccountType } from '../models/account.js'
@@ -10,6 +9,7 @@ import type { CreateTransferInput, TransactionView, TransactionSource } from '..
 import { TransactionType } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef } from './resolve.js'
+import { withTransactionLabels } from './transactions.js'
 
 const validateTransferAccounts = (from: Account, to: Account) =>
   safeTry(function* () {
@@ -65,12 +65,5 @@ export const createTransfer = (
       refs: { accountId: from.id, toAccountId: to.id },
     }, [])
     const locale = await deps.locale()
-    return ok({
-      transaction: {
-        ...transaction,
-        typeLabel: localizeTransactionType(transaction.type, locale),
-        statusLabel: localizeTransactionStatus(transaction.status, locale),
-      },
-      created,
-    })
+    return ok({ transaction: withTransactionLabels(transaction, locale), created })
   })
