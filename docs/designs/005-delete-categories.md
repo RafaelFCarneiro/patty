@@ -1,7 +1,7 @@
 # Feature Design 005: Delete category / sub-category (block-if-in-use)
 
 **Type:** Feature design (a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress · **Branch:** `feat/delete-categories` (suggested) ·
+**Implementation status:** Done · **Branch:** `feat/delete-categories` (suggested) ·
 **Date:** 2026-06-21 · Touches the category surface in `docs/architecture.md` / `docs/mcp-tools.md`.
 
 > **Implementation status** tracks delivery, distinct from the design's acceptance. Values:
