@@ -20,7 +20,7 @@ const makeDeps = (stored?: { locale: Locale; localeSource: LocaleSource }, envLo
   transactions: {} as Deps['transactions'],
   clock: () => new Date(),
   newId: () => 'test-id',
-  invalidateLocale: () => {},
+  resetLocale: () => {},
 })
 
 describe('getPreferences', () => {

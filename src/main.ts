@@ -35,7 +35,7 @@ const main = async (): Promise<void> => {
     return cachedLocale
   }
 
-  const invalidateLocale = (): void => { cachedLocale = null }
+  const resetLocale = (): void => { cachedLocale = null }
 
   const deps: Deps = {
     accounts: accountsRepo(db),
@@ -51,7 +51,7 @@ const main = async (): Promise<void> => {
     clock: () => new Date(),
     newId: () => randomUUID(),
     locale: resolveLocale,
-    invalidateLocale,
+    resetLocale,
   }
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {

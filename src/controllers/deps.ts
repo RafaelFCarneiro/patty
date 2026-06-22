@@ -25,5 +25,5 @@ export type Deps = {
   clock: () => Date
   newId: () => string
   locale: () => Promise<Locale>
-  invalidateLocale: () => void
+  resetLocale: () => void
 }
