@@ -1,15 +1,18 @@
-import { eq, sql } from 'drizzle-orm'
+import { eq, or, sql } from 'drizzle-orm'
 import * as categoryAdapters from '../../../adapters/categories.js'
 import { expectPresent } from '../../../common/present.js'
 import type { SubCategory, CreateSubCategory } from '../../../models/category.js'
+import type { BlockingReferences } from './categories.js'
 import type { Db } from '../driver.js'
-import { categories } from '../schema.js'
+import { categories, merchantCategory, recurringRules, transactions } from '../schema.js'
 
 export type SubCategoriesRepo = {
   list: () => Promise<SubCategory[]>
   listByParent: (parentId: string) => Promise<SubCategory[]>
   findByName: (name: string) => Promise<SubCategory | null>
   create: (input: CreateSubCategory) => Promise<SubCategory>
+  countReferences: (subCategoryId: string) => Promise<BlockingReferences>
+  delete: (subCategoryId: string) => Promise<void>
 }
 
 // Sub-categories are categories with a non-null parent_id.
@@ -61,5 +64,32 @@ export const subCategoriesRepo = (db: Db): SubCategoriesRepo => ({
       WHERE sc.id = ${id}
     `)
     return categoryAdapters.dbToSubCategory(expectPresent(row, 'categories: sub-category not found after insert'))
+  },
+
+  countReferences: async (subCategoryId) => {
+    const [txRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(transactions)
+      .where(or(eq(transactions.categoryId, subCategoryId), eq(transactions.subcategoryId, subCategoryId)))
+    const [recRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(recurringRules)
+      .where(eq(recurringRules.categoryId, subCategoryId))
+    const [subRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(categories)
+      .where(eq(categories.parentId, subCategoryId))
+    return {
+      transactions: txRow?.count ?? 0,
+      recurring: recRow?.count ?? 0,
+      subCategories: subRow?.count ?? 0,
+    }
+  },
+
+  delete: async (subCategoryId) => {
+    await db.transaction(async (tx) => {
+      await tx.delete(merchantCategory).where(eq(merchantCategory.categoryId, subCategoryId))
+      await tx.delete(categories).where(eq(categories.id, subCategoryId))
+    })
   },
 })

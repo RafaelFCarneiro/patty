@@ -4,6 +4,7 @@ import { guard } from '../common/result.js'
 import { hasNameCollision, resolveAndSort } from '../logic/category.js'
 import type { Category, CreateCategory, SubCategory } from '../models/category.js'
 import type { Deps } from './deps.js'
+import { resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
 
 export const listCategories = async (deps: Deps): Promise<Category[]> => {
   const [locale, all] = await Promise.all([deps.locale(), deps.categories.list()])
@@ -19,6 +20,34 @@ export const createCategory = (deps: Deps, input: CreateCategory): ResultAsync<C
       name: input.name,
     })
     return ok(await deps.categories.create({ id: deps.newId(), ...input, names: null }))
+  })
+
+export const deleteCategory = (deps: Deps, name: string): ResultAsync<{ deleted: boolean }, AppError> =>
+  safeTry(async function* () {
+    const category = yield* resolveCategoryRef(deps, name)
+    const refs = await deps.categories.countReferences(category.id)
+    yield* guard(refs.transactions === 0 && refs.recurring === 0 && refs.subCategories === 0, {
+      code: 'in_use',
+      entity: 'category',
+      name: category.name,
+      references: refs,
+    })
+    await deps.categories.delete(category.id)
+    return ok({ deleted: true })
+  })
+
+export const deleteSubCategory = (deps: Deps, name: string): ResultAsync<{ deleted: boolean }, AppError> =>
+  safeTry(async function* () {
+    const subCategory = yield* resolveSubCategoryRef(deps, name)
+    const refs = await deps.subCategories.countReferences(subCategory.id)
+    yield* guard(refs.transactions === 0 && refs.recurring === 0 && refs.subCategories === 0, {
+      code: 'in_use',
+      entity: 'sub_category',
+      name: subCategory.name,
+      references: refs,
+    })
+    await deps.subCategories.delete(subCategory.id)
+    return ok({ deleted: true })
   })
 
 export const listSubCategories = (deps: Deps, parentId?: string): Promise<SubCategory[]> =>

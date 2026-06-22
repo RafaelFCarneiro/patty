@@ -9,7 +9,7 @@ import * as recurringAdapters from '../../adapters/recurring.js'
 import * as transactionAdapters from '../../adapters/transactions.js'
 import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
-import { createCategory, createSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
+import { createCategory, createSubCategory, deleteCategory, deleteSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
 import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
@@ -91,6 +91,14 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     const wireIn = parse(wireInCategories.CreateSubCategory, req.body, reply)
     if (!wireIn) return reply
     return send(reply, await createSubCategory(deps, wireIn), 201)
+  })
+  app.delete('/api/categories/:name', async (req, reply) => {
+    const { name } = req.params as { name: string }
+    return send(reply, await deleteCategory(deps, name))
+  })
+  app.delete('/api/sub-categories/:name', async (req, reply) => {
+    const { name } = req.params as { name: string }
+    return send(reply, await deleteSubCategory(deps, name))
   })
 
   app.post('/api/transactions', async (req, reply) => {
