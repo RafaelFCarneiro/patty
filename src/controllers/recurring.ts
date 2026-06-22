@@ -5,7 +5,7 @@ import { nextDue, recurringIdempotencyKey } from '../logic/recurring.js'
 import { toIsoDate } from '../logic/period.js'
 import type { CreateRecurringInput, RecurringRuleView } from '../models/recurring.js'
 import { defaultStatusFor } from '../logic/transaction.js'
-import { TransactionSource, type TransactionView } from '../models/transaction.js'
+import { ClassificationMethod, TransactionSource, type TransactionView } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
 
@@ -70,7 +70,7 @@ export const applyDueRecurring = async (
         currency: rule.currency,
         source: TransactionSource.enum.mcp,
         idempotencyKey: recurringIdempotencyKey(rule.id, due),
-        classification: { method: 'user', confidence: 1 },
+        classification: { method: ClassificationMethod.enum.user, confidence: 1 },
         refs: { accountId: rule.accountId, categoryId: rule.categoryId },
       }, [])
       if (created) applied.push({ rule: rule.description, date: due, transaction })
