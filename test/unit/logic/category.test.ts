@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CategoryKind, type Category } from '../../../src/models/category.js'
-import { allNames, buildSynonyms, hasNameCollision, resolveAndSort, resolveDisplayName } from '../../../src/logic/category.js'
+import { Locale } from '../../../src/models/locale.js'
+import { allNames, buildSynonyms, hasNameCollision, resolveAndSort, resolveDisplayName, withKindLabel } from '../../../src/logic/category.js'
 
 const seeded: Category = {
   id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense,
@@ -92,5 +93,27 @@ describe('buildSynonyms', () => {
   it('returns only canonical name for user category with no locale names', () => {
     const synonyms = buildSynonyms([userCreated])
     expect(synonyms(userCreated)).toEqual(['My Custom'])
+  })
+})
+
+describe('withKindLabel', () => {
+  it('adds kindLabel for the given locale (data-first)', () => {
+    const labeled = withKindLabel(seeded, Locale.enum.pt)
+    expect(labeled.kindLabel).toBe('Despesa')
+  })
+
+  it('works as data-last for pipes', () => {
+    const labeled = withKindLabel(Locale.enum.es)(seeded)
+    expect(labeled.kindLabel).toBe('Gasto')
+  })
+
+  it('preserves original kind value', () => {
+    const labeled = withKindLabel(seeded, Locale.enum.pt)
+    expect(labeled.kind).toBe(CategoryKind.enum.expense)
+  })
+
+  it('labels income kind', () => {
+    const income: Category = { id: 'cat-inc', name: 'Salary', kind: CategoryKind.enum.income, names: null }
+    expect(withKindLabel(income, Locale.enum.en).kindLabel).toBe('Income')
   })
 })

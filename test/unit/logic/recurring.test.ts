@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { nextDue, recurringIdempotencyKey } from '../../../src/logic/recurring.js'
+import { CurrencyCode } from '../../../src/models/common.js'
+import { Locale } from '../../../src/models/locale.js'
+import { RecurringPeriod, type RecurringRuleView } from '../../../src/models/recurring.js'
+import { MovementType } from '../../../src/models/transaction.js'
+import { nextDue, recurringIdempotencyKey, withPeriodLabel } from '../../../src/logic/recurring.js'
 
 describe('nextDue', () => {
   it('advances monthly, clamping short months', () => {
@@ -21,5 +25,34 @@ describe('nextDue', () => {
 describe('recurringIdempotencyKey', () => {
   it('is stable per rule + due date', () => {
     expect(recurringIdempotencyKey('r1', '2026-06-01')).toBe('rec-r1-2026-06-01')
+  })
+})
+
+const rule: RecurringRuleView = {
+  id: 'rec-1',
+  description: 'Rent',
+  amount: 2000,
+  type: MovementType.enum.expense,
+  period: RecurringPeriod.enum.monthly,
+  nextDue: '2026-07-01',
+  currency: CurrencyCode.enum.BRL,
+}
+
+describe('withPeriodLabel', () => {
+  it('adds periodLabel for the given locale (data-first)', () => {
+    expect(withPeriodLabel(rule, Locale.enum.pt).periodLabel).toBe('Mensal')
+  })
+
+  it('works as data-last for pipes', () => {
+    expect(withPeriodLabel(Locale.enum.es)(rule).periodLabel).toBe('Mensual')
+  })
+
+  it('preserves original period value', () => {
+    expect(withPeriodLabel(rule, Locale.enum.pt).period).toBe(RecurringPeriod.enum.monthly)
+  })
+
+  it('labels weekly period', () => {
+    const weekly: RecurringRuleView = { ...rule, period: RecurringPeriod.enum.weekly }
+    expect(withPeriodLabel(weekly, Locale.enum.en).periodLabel).toBe('Weekly')
   })
 })

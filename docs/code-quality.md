@@ -151,6 +151,64 @@ The rule of thumb from `docs/code-style.md` still applies: native `map`/`filter`
 single-stage transforms. Reach for remeda when there are ≥2 stages, grouping, counting, or
 predicate composition.
 
+### Named logic functions over inline lambdas in pipes
+
+Extract inline predicates and mappers into named functions in the `logic/` layer. A pipe should
+read as a sequence of *what* happens — named functions provide that; inline `(a) => ...` lambdas
+bury the intent.
+
+```ts
+// ✅ DO — named functions in logic/, pipe reads declaratively
+// logic/account.ts
+export const filterByType = (type?: AccountType) => (a: Account): boolean =>
+  !type || a.type === type
+
+// controller
+return R.pipe(
+  all,
+  R.filter(filterByType(type)),
+  R.map(withTypeLabel(locale)),
+)
+
+// ❌ DON'T — inline lambdas obscure intent
+return R.pipe(
+  all,
+  R.filter((a) => !type || a.type === type),
+  R.map((a) => withTypeLabel(a, locale)),
+)
+```
+
+### Custom helpers with `purry` (dual data-first / data-last)
+
+When a custom helper is used both imperatively and in pipes/map, wrap it with `purry` to
+support both calling conventions — the same pattern every Remeda function uses.
+
+```ts
+// ✅ DO — purry enables both styles with one function
+import { purry } from 'remeda'
+
+const _withTypeLabel = <T extends Account>(account: T, locale: Locale): T => ({
+  ...account,
+  typeLabel: localizeAccountType(account.type, locale),
+})
+
+export function withTypeLabel<T extends Account>(account: T, locale: Locale): T
+export function withTypeLabel(locale: Locale): <T extends Account>(account: T) => T
+export function withTypeLabel(...args: readonly unknown[]) {
+  return purry(_withTypeLabel, args)
+}
+
+// data-first (imperative)
+withTypeLabel(account, locale)
+
+// data-last (pipes / map)
+R.pipe(accounts, R.filter(filterByType(type)), R.map(withTypeLabel(locale)))
+
+// ❌ DON'T — manual curry forces awkward double-call at imperative sites
+const withTypeLabel = (locale: Locale) => (account: Account) => ({ ... })
+withTypeLabel(locale)(account)  // reads poorly outside pipes
+```
+
 ## Avoid unnecessary complexity
 
 Write the simplest code that correctly solves the problem. Do not:

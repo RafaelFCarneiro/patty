@@ -57,6 +57,7 @@ describe('empty DB (ADR-008)', () => {
         const row = await settingsR.getLocale()
         return row?.locale ?? Locale.enum.en
       },
+      resetLocale: () => {},
     }
   })
 

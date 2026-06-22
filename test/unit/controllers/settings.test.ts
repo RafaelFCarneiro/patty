@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Locale, LocaleSource } from '../../../src/models/locale.js'
 import { getPreferences, setLocale } from '../../../src/controllers/settings.js'
 import type { Deps } from '../../../src/controllers/deps.js'
@@ -20,6 +20,7 @@ const makeDeps = (stored?: { locale: Locale; localeSource: LocaleSource }, envLo
   transactions: {} as Deps['transactions'],
   clock: () => new Date(),
   newId: () => 'test-id',
+  resetLocale: vi.fn(),
 })
 
 describe('getPreferences', () => {
@@ -72,5 +73,23 @@ describe('setLocale', () => {
     const deps = makeDeps({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit })
     const result = await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred })
     expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit })
+  })
+
+  it('calls resetLocale after a successful locale change', async () => {
+    const deps = makeDeps(undefined, Locale.enum.en)
+    await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.explicit })
+    expect(deps.resetLocale).toHaveBeenCalledOnce()
+  })
+
+  it('does not call resetLocale when locale is unchanged (no-op)', async () => {
+    const deps = makeDeps({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred })
+    await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred })
+    expect(deps.resetLocale).not.toHaveBeenCalled()
+  })
+
+  it('does not call resetLocale when inferred switch is rejected', async () => {
+    const deps = makeDeps({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit })
+    await setLocale(deps, { locale: Locale.enum.en, source: LocaleSource.enum.inferred })
+    expect(deps.resetLocale).not.toHaveBeenCalled()
   })
 })

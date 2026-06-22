@@ -1,4 +1,18 @@
-import type { RecurringPeriod } from '../models/recurring.js'
+import { purry } from 'remeda'
+import { localizeRecurringPeriod } from './labels.js'
+import type { Locale } from '../models/locale.js'
+import type { RecurringPeriod, RecurringRuleView } from '../models/recurring.js'
+
+const _withPeriodLabel = (rule: RecurringRuleView, locale: Locale): RecurringRuleView => ({
+  ...rule,
+  periodLabel: localizeRecurringPeriod(rule.period, locale),
+})
+
+export function withPeriodLabel(rule: RecurringRuleView, locale: Locale): RecurringRuleView
+export function withPeriodLabel(locale: Locale): (rule: RecurringRuleView) => RecurringRuleView
+export function withPeriodLabel(...args: readonly unknown[]) {
+  return purry(_withPeriodLabel, args)
+}
 
 /** Pure date math on YYYY-MM-DD strings — no Date timezone traps for month/year. */
 

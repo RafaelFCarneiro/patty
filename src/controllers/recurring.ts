@@ -1,14 +1,19 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
-import { nextDue, recurringIdempotencyKey } from '../logic/recurring.js'
+import { withTransactionLabels } from '../logic/labels.js'
+import { nextDue, recurringIdempotencyKey, withPeriodLabel } from '../logic/recurring.js'
 import { toIsoDate } from '../logic/period.js'
+import { CurrencyCode } from '../models/common.js'
 import type { CreateRecurringInput, RecurringRuleView } from '../models/recurring.js'
 import { defaultStatusFor } from '../logic/transaction.js'
-import { TransactionSource, type TransactionView } from '../models/transaction.js'
+import { ClassificationMethod, TransactionSource, type TransactionView } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
 
-export const listRecurring = (deps: Deps): Promise<RecurringRuleView[]> => deps.recurring.list()
+export const listRecurring = async (deps: Deps): Promise<RecurringRuleView[]> => {
+  const [locale, rules] = await Promise.all([deps.locale(), deps.recurring.list()])
+  return rules.map(withPeriodLabel(locale))
+}
 
 export const createRecurring = (
   deps: Deps,
@@ -26,7 +31,7 @@ export const createRecurring = (
         type: input.type,
         period: input.period,
         nextDue: input.startDate,
-        currency: account?.currency ?? input.currency ?? 'BRL',
+        currency: account?.currency ?? input.currency ?? CurrencyCode.enum.BRL,
       },
       { accountId: account?.id ?? null, categoryId: category?.id ?? null },
     )
@@ -66,15 +71,19 @@ export const applyDueRecurring = async (
         currency: rule.currency,
         source: TransactionSource.enum.mcp,
         idempotencyKey: recurringIdempotencyKey(rule.id, due),
-        classification: { method: 'user', confidence: 1 },
+        classification: { method: ClassificationMethod.enum.user, confidence: 1 },
         refs: { accountId: rule.accountId, categoryId: rule.categoryId },
       }, [])
-      // `count` reflects genuinely-new occurrences — idempotent duplicates are skipped.
       if (created) applied.push({ rule: rule.description, date: due, transaction })
       due = nextDue(due, rule.period)
     }
     await deps.recurring.advance(rule.id, due)
   }
 
-  return { applied, count: applied.length }
+  const locale = await deps.locale()
+  const labeled = applied.map((a) => ({
+    ...a,
+    transaction: withTransactionLabels(a.transaction, locale),
+  }))
+  return { applied: labeled, count: labeled.length }
 }
