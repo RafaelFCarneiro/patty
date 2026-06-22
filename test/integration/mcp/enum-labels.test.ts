@@ -9,7 +9,7 @@ type Category = { id: string; name: string; kind: string; kindLabel?: string }
 type SubCategory = { id: string; name: string; kind: string; kindLabel?: string }
 type RecurringRule = { id: string; period: string; periodLabel?: string }
 type Bill = { id: string; status: string; statusLabel?: string }
-type BillView = { bill: Bill; total: number }
+type BillView = { bill: Bill; total: number; transactions: TransactionView[] }
 type TransactionView = { id: string; type: string; typeLabel?: string; status: string; statusLabel?: string }
 
 describe('MCP integration > localized enum labels', () => {
@@ -43,7 +43,7 @@ describe('MCP integration > localized enum labels', () => {
     expect(balances.length).toBeGreaterThan(0)
     for (const b of balances) {
       expect(b.typeLabel).toBeTypeOf('string')
-      expect(b.typeLabel!.length).toBeGreaterThan(0)
+      expect(b.typeLabel).not.toBe('')
     }
   })
 
@@ -51,7 +51,8 @@ describe('MCP integration > localized enum labels', () => {
     const categories = await callTool(client, { name: 'list_categories' }) as Category[]
     expect(categories.length).toBeGreaterThan(0)
     const expense = categories.find((c) => c.kind === 'expense')
-    expect(expense!.kindLabel).toBe('Expense')
+    expect(expense).toBeDefined()
+    expect(expense?.kindLabel).toBe('Expense')
   })
 
   it('list_sub_categories returns kindLabel', async () => {
@@ -76,18 +77,36 @@ describe('MCP integration > localized enum labels', () => {
     }
   })
 
+  it('get_bill returns statusLabel on bill and labels on transactions', async () => {
+    const cards = await callTool(client, { name: 'list_credit_cards' }) as Array<{ name: string }>
+    if (cards.length === 0) return
+    const now = new Date()
+    const bill = await callTool(client, {
+      name: 'get_bill',
+      args: { card: cards[0].name, month: now.getMonth() + 1, year: now.getFullYear() },
+    }).catch(() => null) as BillView | null
+    if (!bill) return
+    expect(bill.bill.statusLabel).toBeTypeOf('string')
+    for (const tx of bill.transactions) {
+      expect(tx.typeLabel).toBeTypeOf('string')
+      expect(tx.statusLabel).toBeTypeOf('string')
+    }
+  })
+
   it('set_locale to pt switches all labels to Portuguese', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } })
 
     const accounts = await callTool(client, { name: 'list_accounts' }) as Account[]
     const checking = accounts.find((a) => a.type === 'checking')
-    if (checking) expect(checking.typeLabel).toBe('Conta corrente')
-    expect(checking!.type).toBe('checking')
+    expect(checking).toBeDefined()
+    expect(checking?.typeLabel).toBe('Conta corrente')
+    expect(checking?.type).toBe('checking')
 
     const categories = await callTool(client, { name: 'list_categories' }) as Category[]
     const expense = categories.find((c) => c.kind === 'expense')
-    expect(expense!.kindLabel).toBe('Despesa')
-    expect(expense!.kind).toBe('expense')
+    expect(expense).toBeDefined()
+    expect(expense?.kindLabel).toBe('Despesa')
+    expect(expense?.kind).toBe('expense')
 
     const txs = await callTool(client, { name: 'search_transactions', args: { limit: 1 } }) as TransactionView[]
     for (const tx of txs) {
@@ -105,7 +124,8 @@ describe('MCP integration > localized enum labels', () => {
 
     const categories = await callTool(client, { name: 'list_categories' }) as Category[]
     const income = categories.find((c) => c.kind === 'income')
-    expect(income!.kindLabel).toBe('Ingreso')
+    expect(income).toBeDefined()
+    expect(income?.kindLabel).toBe('Ingreso')
   })
 
   it('enum values remain unchanged across locale switches', async () => {

@@ -34,7 +34,7 @@ Returns `summary` counts plus per-item `status`: `created`, `needs_review` (no c
 
 ## get_bill
 
-Input: `card` (name), `month`, `year`. Returns the fatura: `bill` (`status: open|closed|paid`, `statusLabel`, `closeDate`, `dueDate`), `cardName`, `total`, and `transactions`. Bills are created automatically (status `open`) when the first card transaction of a cycle arrives. Error: `unknown_bill`.
+Input: `card` (name), `month`, `year`. Returns the fatura: `bill` (`status: open|closed|paid`, `statusLabel`, `closeDate`, `dueDate`), `cardName`, `total`, and `transactions` (each with `typeLabel`/`statusLabel`). Bills are created automatically (status `open`) when the first card transaction of a cycle arrives. Error: `unknown_bill`.
 
 ## pay_bill
 

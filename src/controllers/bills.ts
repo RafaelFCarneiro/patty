@@ -11,6 +11,7 @@ import { toIsoDate } from '../logic/period.js'
 import { defaultStatusFor } from '../logic/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCardRef } from './resolve.js'
+import { withTransactionLabels } from './transactions.js'
 
 export type BillView = BillWithItems & { total: number }
 
@@ -30,6 +31,7 @@ export const getBill = (
     return ok({
       ...bill,
       bill: { ...bill.bill, statusLabel: localizeBillStatus(bill.bill.status, locale) },
+      transactions: bill.transactions.map((tx) => withTransactionLabels(tx, locale)),
       total: computeBillTotal(bill.transactions),
     })
   })
