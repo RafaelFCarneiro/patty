@@ -87,13 +87,13 @@ describe('withTransactionLabels', () => {
   }
 
   it('adds typeLabel and statusLabel for the given locale', () => {
-    const labeled = withTransactionLabels(Locale.enum.pt)(baseTx)
+    const labeled = withTransactionLabels(baseTx, Locale.enum.pt)
     expect(labeled.typeLabel).toBe('Despesa')
     expect(labeled.statusLabel).toBe('Efetivada')
   })
 
   it('preserves original enum values', () => {
-    const labeled = withTransactionLabels(Locale.enum.es)(baseTx)
+    const labeled = withTransactionLabels(baseTx, Locale.enum.es)
     expect(labeled.type).toBe(TransactionType.enum.expense)
     expect(labeled.status).toBe(TransactionStatus.enum.effective)
   })

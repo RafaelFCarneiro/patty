@@ -65,5 +65,5 @@ export const createTransfer = (
       refs: { accountId: from.id, toAccountId: to.id },
     }, [])
     const locale = await deps.locale()
-    return ok({ transaction: withTransactionLabels(locale)(transaction), created })
+    return ok({ transaction: withTransactionLabels(transaction, locale), created })
   })
