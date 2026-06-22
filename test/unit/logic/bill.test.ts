@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { BillStatus, type Bill } from '../../../src/models/bill.js'
 import { CurrencyCode } from '../../../src/models/common.js'
+import { Locale } from '../../../src/models/locale.js'
 import { ClassificationMethod, TransactionSource, TransactionStatus, TransactionType, TransactionView } from '../../../src/models/transaction.js'
-import { billPeriodFor, computeBillTotal } from '../../../src/logic/bill.js'
+import { billPeriodFor, computeBillTotal, withStatusLabel } from '../../../src/logic/bill.js'
 
 const tx = (type: TransactionType, amount: number): TransactionView =>
   TransactionView.parse({
@@ -65,5 +67,33 @@ describe('billPeriodFor', () => {
       closeDate: '2026-06-05',
       dueDate: '2026-06-15',
     })
+  })
+})
+
+const bill: Bill = {
+  id: 'bill-1',
+  month: 6,
+  year: 2026,
+  closeDate: '2026-06-28',
+  dueDate: '2026-07-05',
+  status: BillStatus.enum.open,
+}
+
+describe('withStatusLabel', () => {
+  it('adds statusLabel for the given locale (data-first)', () => {
+    expect(withStatusLabel(bill, Locale.enum.pt).statusLabel).toBe('Aberta')
+  })
+
+  it('works as data-last for pipes', () => {
+    expect(withStatusLabel(Locale.enum.es)(bill).statusLabel).toBe('Abierta')
+  })
+
+  it('preserves original status value', () => {
+    expect(withStatusLabel(bill, Locale.enum.pt).status).toBe(BillStatus.enum.open)
+  })
+
+  it('labels paid status', () => {
+    const paid: Bill = { ...bill, status: BillStatus.enum.paid }
+    expect(withStatusLabel(paid, Locale.enum.en).statusLabel).toBe('Paid')
   })
 })
