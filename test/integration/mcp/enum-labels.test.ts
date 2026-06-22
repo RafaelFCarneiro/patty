@@ -78,15 +78,41 @@ describe('MCP integration > localized enum labels', () => {
   })
 
   it('get_bill returns statusLabel on bill and labels on transactions', async () => {
-    const cards = await callTool(client, { name: 'list_credit_cards' }) as Array<{ name: string }>
-    if (cards.length === 0) return
+    const stamp = Date.now()
+    const cardName = `LabelCard ${stamp}`
+    const bankName = `LabelBank ${stamp}`
     const now = new Date()
+    const month = now.getMonth() + 1
+    const year = now.getFullYear()
+    const today = now.toISOString().slice(0, 10)
+
+    await callTool(client, {
+      name: 'create_account',
+      args: { name: bankName, type: 'checking', currency: 'BRL', initialBalance: 1000 },
+    })
+    await callTool(client, {
+      name: 'create_credit_card',
+      args: { name: cardName, closingDay: 28, dueDay: 28, currency: 'BRL', paymentAccount: bankName },
+    })
+    await callTool(client, {
+      name: 'create_transaction',
+      args: {
+        description: `Label test ${stamp}`,
+        amount: 50,
+        type: 'expense',
+        date: today,
+        card: cardName,
+        idempotencyKey: `label-bill-${stamp}`,
+      },
+    })
+
     const bill = await callTool(client, {
       name: 'get_bill',
-      args: { card: cards[0].name, month: now.getMonth() + 1, year: now.getFullYear() },
-    }).catch(() => null) as BillView | null
-    if (!bill) return
-    expect(bill.bill.statusLabel).toBeTypeOf('string')
+      args: { card: cardName, month, year },
+    }) as BillView
+
+    expect(bill.bill.statusLabel).toBe('Open')
+    expect(bill.transactions.length).toBeGreaterThan(0)
     for (const tx of bill.transactions) {
       expect(tx.typeLabel).toBeTypeOf('string')
       expect(tx.statusLabel).toBeTypeOf('string')
