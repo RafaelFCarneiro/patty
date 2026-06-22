@@ -21,7 +21,7 @@ export const localizeBillStatus        = (v: BillStatus,        l: Locale): stri
 export const localizeTransactionType   = (v: TransactionType,   l: Locale): string => localize(transactionTypeLabels, v, l)
 export const localizeTransactionStatus = (v: TransactionStatus, l: Locale): string => localize(transactionStatusLabels, v, l)
 
-export const withTransactionLabels = (tx: TransactionView, locale: Locale): TransactionView => ({
+export const withTransactionLabels = (locale: Locale) => (tx: TransactionView): TransactionView => ({
   ...tx,
   typeLabel: localizeTransactionType(tx.type, locale),
   statusLabel: localizeTransactionStatus(tx.status, locale),

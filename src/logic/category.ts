@@ -1,5 +1,12 @@
+import { localizeCategoryKind } from './labels.js'
 import { fold } from './resolve.js'
 import type { Category } from '../models/category.js'
+import type { Locale } from '../models/locale.js'
+
+export const withKindLabel = (locale: Locale) => <T extends { kind: Category['kind'] }>(item: T): T => ({
+  ...item,
+  kindLabel: localizeCategoryKind(item.kind, locale),
+})
 
 export const resolveDisplayName = (cat: Category, locale: string): Category => ({
   ...cat,

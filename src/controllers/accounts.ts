@@ -2,26 +2,20 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import * as R from 'remeda'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
+import { filterByType, withTypeLabel } from '../logic/account.js'
 import { computeBalance, computeProjectedBalance } from '../logic/balance.js'
-import { localizeAccountType } from '../logic/labels.js'
 import { resolveByName } from '../logic/resolve.js'
 import { AccountType } from '../models/account.js'
 import type { Account, AccountBalance, CreateAccount } from '../models/account.js'
-import type { Locale } from '../models/locale.js'
 import type { Deps } from './deps.js'
 import { resolutionToResult } from './resolve.js'
-
-const withTypeLabel = <T extends Account>(account: T, locale: Locale): T => ({
-  ...account,
-  typeLabel: localizeAccountType(account.type, locale),
-})
 
 export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Account[]> => {
   const [locale, all] = await Promise.all([deps.locale(), deps.accounts.list()])
   return R.pipe(
     all,
-    R.filter((a) => !type || a.type === type),
-    R.map((a) => withTypeLabel(a, locale)),
+    R.filter(filterByType(type)),
+    R.map(withTypeLabel(locale)),
   )
 }
 

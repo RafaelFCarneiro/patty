@@ -30,7 +30,7 @@ export const getBill = (
     return ok({
       ...bill,
       bill: { ...bill.bill, statusLabel: localizeBillStatus(bill.bill.status, locale) },
-      transactions: bill.transactions.map((tx) => withTransactionLabels(tx, locale)),
+      transactions: bill.transactions.map(withTransactionLabels(locale)),
       total: computeBillTotal(bill.transactions),
     })
   })

@@ -82,7 +82,7 @@ export const applyDueRecurring = async (
   const locale = await deps.locale()
   const labeled = applied.map((a) => ({
     ...a,
-    transaction: withTransactionLabels(a.transaction, locale),
+    transaction: withTransactionLabels(locale)(a.transaction),
   }))
   return { applied: labeled, count: labeled.length }
 }

@@ -115,7 +115,7 @@ export const createTransaction = (
       )
 
     const locale = await deps.locale()
-    return ok({ transaction: withTransactionLabels(transaction, locale), created, classification })
+    return ok({ transaction: withTransactionLabels(locale)(transaction), created, classification })
   })
 
 /** Statement paste/import: each line idempotent, classified, flagged for review when uncertain. */
@@ -209,7 +209,7 @@ export const updateTransaction = (
       await deps.merchants.strengthenFromTransaction(input.id, categoryId)
 
     const locale = await deps.locale()
-    return ok(withTransactionLabels(updated, locale))
+    return ok(withTransactionLabels(locale)(updated))
   })
 
 /** Flip a pending transaction to effective. No-op (returns existing) if already effective. */
@@ -226,13 +226,13 @@ export const confirmTransaction = (
     const locale = await deps.locale()
 
     if (existing.status === TransactionStatus.enum.effective)
-      return ok(withTransactionLabels(existing, locale))
+      return ok(withTransactionLabels(locale)(existing))
 
     const confirmed = yield* okOr(await deps.transactions.confirm(input.id), {
       code: 'unknown_transaction',
       id: input.id,
     })
-    return ok(withTransactionLabels(confirmed, locale))
+    return ok(withTransactionLabels(locale)(confirmed))
   })
 
 export const deleteTransaction = (
@@ -246,7 +246,7 @@ export const deleteTransaction = (
     })
 
     const locale = await deps.locale()
-    const labeled = withTransactionLabels(existing, locale)
+    const labeled = withTransactionLabels(locale)(existing)
 
     if (!input.confirm)
       return ok({
@@ -285,5 +285,5 @@ export const searchTransactions = (
         limit: input.limit,
       }),
     ])
-    return ok(rows.map((tx) => withTransactionLabels(tx, locale)))
+    return ok(rows.map(withTransactionLabels(locale)))
   })
