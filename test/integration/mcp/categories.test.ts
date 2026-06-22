@@ -112,6 +112,7 @@ describe('MCP integration > categories', () => {
         idempotencyKey: `merchant-learn-${stamp}`,
       },
     })) as { transaction: { id: string } }
+    createdTxIds.push(txResult.transaction.id)
 
     // Correct the category → strengthenFromTransaction writes a merchant_category row
     await callTool(client, {
@@ -121,6 +122,7 @@ describe('MCP integration > categories', () => {
 
     // Delete the transaction so only the learned merchant rule remains
     await callTool(client, { name: 'delete_transaction', args: { id: txResult.transaction.id, confirm: true } })
+    createdTxIds.splice(createdTxIds.indexOf(txResult.transaction.id), 1)
 
     // Category should still delete — merchant rules are not a blocker
     const result = (await callTool(client, { name: 'delete_category', args: { name: cat.name } })) as { deleted: boolean }

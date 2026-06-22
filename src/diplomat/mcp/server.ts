@@ -463,7 +463,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
     {
       title: 'Delete sub-category',
       description:
-        'Delete a sub-category by name. Blocked if any transactions or recurring rules reference it — ' +
+        'Delete a sub-category by name. Blocked if any transactions, recurring rules, or child sub-categories reference it — ' +
         'returns an in_use error with reference counts. ' +
         'On success, also removes learned merchant classification rules for this sub-category.',
       inputSchema: { name: z.string().min(1).describe('Sub-category name') },
