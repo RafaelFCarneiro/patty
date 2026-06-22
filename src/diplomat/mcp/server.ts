@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { AppError } from '../../common/errors.js'
 import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
-import { createCategory, createSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
+import { createCategory, createSubCategory, deleteCategory, deleteSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
 import { getPreferences, setLocale } from '../../controllers/settings.js'
 import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
@@ -443,6 +443,32 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       },
     },
     async (args) => json(await listSubCategories(deps, args.parentId)),
+  )
+
+  server.registerTool(
+    'delete_category',
+    {
+      title: 'Delete category',
+      description:
+        'Delete a category by name. Blocked if any transactions, recurring rules, or sub-categories reference it — ' +
+        'returns an in_use error with reference counts so you can guide the user to clear them first. ' +
+        'On success, also removes the category\'s learned merchant classification rules (re-learnable).',
+      inputSchema: { name: z.string().min(1).describe('Category name') },
+    },
+    async (args) => fromResult(await deleteCategory(deps, args.name)),
+  )
+
+  server.registerTool(
+    'delete_sub_category',
+    {
+      title: 'Delete sub-category',
+      description:
+        'Delete a sub-category by name. Blocked if any transactions, recurring rules, or child sub-categories reference it — ' +
+        'returns an in_use error with reference counts. ' +
+        'On success, also removes learned merchant classification rules for this sub-category.',
+      inputSchema: { name: z.string().min(1).describe('Sub-category name') },
+    },
+    async (args) => fromResult(await deleteSubCategory(deps, args.name)),
   )
 
   server.registerTool(
