@@ -56,6 +56,7 @@ beforeAll(async () => {
       const row = await settingsR.getLocale()
       return row?.locale ?? Locale.enum.en
     },
+    resetLocale: () => {},
   }
 
   app = Fastify()

@@ -4,6 +4,8 @@ import { guard, okOr } from '../common/result.js'
 import { AccountType } from '../models/account.js'
 import { billPeriodFor } from '../logic/bill.js'
 import { pickClassification, userClassification } from '../logic/classify.js'
+import { withTransactionLabels } from '../logic/labels.js'
+import { ClassificationMethod } from '../models/transaction.js'
 import type { ClassifyOutcome } from '../models/transaction.js'
 import { normalizeMerchant } from '../logic/merchant.js'
 import { periodRange, toIsoDate } from '../logic/period.js'
@@ -113,7 +115,8 @@ export const createTransaction = (
         deps.newId(),
       )
 
-    return ok({ transaction, created, classification })
+    const locale = await deps.locale()
+    return ok({ transaction: withTransactionLabels(transaction, locale), created, classification })
   })
 
 /** Statement paste/import: each line idempotent, classified, flagged for review when uncertain. */
@@ -123,11 +126,13 @@ export const createTransactionsBulk = (
   source: TransactionSource,
 ): ResultAsync<BulkResult, AppError> =>
   safeTry(async function* () {
+    const locale = await deps.locale()
+    const cachedDeps: Deps = { ...deps, locale: () => Promise.resolve(locale) }
     const items: BulkItemResult[] = []
     for (const item of input.items) {
       const date = item.date ?? toIsoDate(deps.clock())
       const result = await createTransaction(
-        deps,
+        cachedDeps,
         {
           ...item,
           date,
@@ -193,7 +198,7 @@ export const updateTransaction = (
           type: input.type,
           date: input.date,
           currency: account?.currency,
-          classification: isUserCorrection ? { method: 'user', confidence: 1 } : undefined,
+          classification: isUserCorrection ? { method: ClassificationMethod.enum.user, confidence: 1 } : undefined,
         },
         { accountId: account?.id ?? null, categoryId, subCategoryId, tagNames: input.tags ?? null },
       ),
@@ -204,7 +209,8 @@ export const updateTransaction = (
     if (categoryId && categoryId !== existing.categoryId)
       await deps.merchants.strengthenFromTransaction(input.id, categoryId)
 
-    return ok(updated)
+    const locale = await deps.locale()
+    return ok(withTransactionLabels(updated, locale))
   })
 
 /** Flip a pending transaction to effective. No-op (returns existing) if already effective. */
@@ -218,14 +224,16 @@ export const confirmTransaction = (
       id: input.id,
     })
 
-    if (existing.status === TransactionStatus.enum.effective) return ok(existing)
+    const locale = await deps.locale()
 
-    return ok(
-      yield* okOr(await deps.transactions.confirm(input.id), {
-        code: 'unknown_transaction',
-        id: input.id,
-      }),
-    )
+    if (existing.status === TransactionStatus.enum.effective)
+      return ok(withTransactionLabels(existing, locale))
+
+    const confirmed = yield* okOr(await deps.transactions.confirm(input.id), {
+      code: 'unknown_transaction',
+      id: input.id,
+    })
+    return ok(withTransactionLabels(confirmed, locale))
   })
 
 export const deleteTransaction = (
@@ -238,16 +246,19 @@ export const deleteTransaction = (
       id: input.id,
     })
 
+    const locale = await deps.locale()
+    const labeled = withTransactionLabels(existing, locale)
+
     if (!input.confirm)
       return ok({
         deleted: false as const,
         dryRun: true as const,
-        wouldDelete: existing,
+        wouldDelete: labeled,
         hint: 'Destructive action: show the transaction to the user and call again with confirm: true.',
       })
 
     await deps.transactions.delete(input.id)
-    return ok({ deleted: true as const, transaction: existing })
+    return ok({ deleted: true as const, transaction: labeled })
   })
 
 export const searchTransactions = (
@@ -260,8 +271,9 @@ export const searchTransactions = (
     const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null
     const subCategory = input.subCategory ? yield* resolveSubCategoryRef(deps, input.subCategory) : null
 
-    return ok(
-      await deps.transactions.search({
+    const [locale, rows] = await Promise.all([
+      deps.locale(),
+      deps.transactions.search({
         from: range?.from ?? input.from ?? null,
         to: range?.to ?? input.to ?? null,
         type: input.type ?? null,
@@ -273,5 +285,6 @@ export const searchTransactions = (
         tagNames: input.tags ?? [],
         limit: input.limit,
       }),
-    )
+    ])
+    return ok(rows.map(withTransactionLabels(locale)))
   })

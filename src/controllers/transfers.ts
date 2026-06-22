@@ -5,9 +5,10 @@ import { toIsoDate } from '../logic/period.js'
 import { defaultStatusFor } from '../logic/transaction.js'
 import { AccountType } from '../models/account.js'
 import type { Account } from '../models/account.js'
+import { ClassificationMethod, TransactionType } from '../models/transaction.js'
 import type { CreateTransferInput, TransactionView, TransactionSource } from '../models/transaction.js'
-import { TransactionType } from '../models/transaction.js'
 import type { Deps } from './deps.js'
+import { withTransactionLabels } from '../logic/labels.js'
 import { resolveAccountRef } from './resolve.js'
 
 const validateTransferAccounts = (from: Account, to: Account) =>
@@ -60,8 +61,9 @@ export const createTransfer = (
       currency: from.currency,
       source,
       idempotencyKey: input.idempotencyKey,
-      classification: { method: 'none', confidence: 0 },
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
       refs: { accountId: from.id, toAccountId: to.id },
     }, [])
-    return ok({ transaction, created })
+    const locale = await deps.locale()
+    return ok({ transaction: withTransactionLabels(transaction, locale), created })
   })
