@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CurrencyCode } from '../../../src/models/common.js'
 import { Locale } from '../../../src/models/locale.js'
 import { RecurringPeriod, type RecurringRuleView } from '../../../src/models/recurring.js'
+import { MovementType } from '../../../src/models/transaction.js'
 import { nextDue, recurringIdempotencyKey, withPeriodLabel } from '../../../src/logic/recurring.js'
 
 describe('nextDue', () => {
@@ -31,7 +32,7 @@ const rule: RecurringRuleView = {
   id: 'rec-1',
   description: 'Rent',
   amount: 2000,
-  type: 'expense',
+  type: MovementType.enum.expense,
   period: RecurringPeriod.enum.monthly,
   nextDue: '2026-07-01',
   currency: CurrencyCode.enum.BRL,
