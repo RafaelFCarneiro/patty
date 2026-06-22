@@ -71,17 +71,35 @@ describe('MCP integration > localized enum labels', () => {
   })
 
   it('list_sub_categories returns kindLabel', async () => {
+    const categories = await callTool(client, { name: 'list_categories' }) as Array<{ id: string; kind: string }>
+    const parent = categories.find((c) => c.kind === 'expense')
+    expect(parent).toBeDefined()
+    await callTool(client, {
+      name: 'create_sub_category',
+      args: { name: `LabelSub ${stamp}`, parentId: parent!.id },
+    })
     const subs = await callTool(client, { name: 'list_sub_categories' }) as SubCategory[]
-    if (subs.length > 0) {
-      expect(subs[0].kindLabel).toBeTypeOf('string')
-    }
+    const created = subs.find((s) => s.name === `LabelSub ${stamp}`)
+    expect(created).toBeDefined()
+    expect(created?.kindLabel).toBe('Expense')
   })
 
   it('list_recurring returns periodLabel', async () => {
+    await callTool(client, {
+      name: 'create_recurring',
+      args: {
+        description: `LabelRec ${stamp}`,
+        amount: 100,
+        type: 'expense',
+        period: 'monthly',
+        startDate: '2027-01-01',
+        account: accountName,
+      },
+    })
     const rules = await callTool(client, { name: 'list_recurring' }) as RecurringRule[]
-    for (const r of rules) {
-      expect(r.periodLabel).toBeTypeOf('string')
-    }
+    const created = rules.find((r) => r.periodLabel !== undefined)
+    expect(created).toBeDefined()
+    expect(created?.periodLabel).toBe('Monthly')
   })
 
   it('search_transactions returns typeLabel and statusLabel', async () => {
