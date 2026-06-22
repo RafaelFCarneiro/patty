@@ -3,7 +3,7 @@
 Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All tools share these conventions:
 
 - **Natural inputs**: `account`, `card`, `category`, and `subCategory` take names (case/accent-insensitive, partial match allowed). Resolution failures return structured errors the agent can self-correct from.
-- **Errors**: `{ "error": { "code": "...", ... } }` with `isError: true`. Codes: `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `unknown_sub_category`, `ambiguous_sub_category`, `unknown_card`, `ambiguous_card`, `unknown_transaction`, `unknown_bill`, `duplicate_name`, `category_kind_mismatch`, `validation`. Ambiguous/unknown errors include `candidates` (names) to retry with.
+- **Errors**: `{ "error": { "code": "...", ... } }` with `isError: true`. Codes: `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `unknown_sub_category`, `ambiguous_sub_category`, `unknown_card`, `ambiguous_card`, `unknown_transaction`, `unknown_bill`, `duplicate_name`, `in_use`, `category_kind_mismatch`, `validation`. Ambiguous/unknown errors include `candidates` (names) to retry with.
 - **Currency**: BRL or USD; from the account/card when one is linked, else the `currency` field, else BRL. Summaries group per currency, never converting.
 - **Dates**: `YYYY-MM-DD`.
 
@@ -116,6 +116,14 @@ Move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, opt
 **Name resolution**: `subCategory` is resolved by name across all parents. If two sub-categories under different parents share the same name (e.g., "Outros" under Alimentação and Transporte), resolution returns `ambiguous_sub_category` — retry with a more specific name or use `list_sub_categories` to disambiguate.
 
 TransactionView includes `subCategoryId` and `subCategoryName` when a sub-category is linked.
+
+## delete_category / delete_sub_category
+
+`delete_category`: `name` (required). Deletes a category by name. **Block-if-in-use**: if any transactions, recurring rules, or sub-categories reference it, returns `in_use` error with reference counts — nothing is deleted. On success, also removes the category's learned `merchant_category` rules (re-learnable; not a blocker). Seeded categories follow the same rules — no special protection.
+
+`delete_sub_category`: `name` (required). Same block-if-in-use semantics for sub-categories.
+
+**`in_use` error shape**: `{ code: "in_use", entity: "category" | "sub_category", name, references: { transactions, recurring, subCategories } }`. HTTP status: 409 Conflict. Only blocking (user-record) references are listed; merchant rules are not.
 
 ## create_tag / list_tags / delete_tag
 

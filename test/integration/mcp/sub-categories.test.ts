@@ -12,6 +12,8 @@ afterEach(async () => {
 
 type SubCategory = { id?: string; name?: string; parentId?: string; parentName?: string; kind?: string }
 type TransactionView = { id?: string; subCategoryId?: string; subCategoryName?: string; categoryId?: string; categoryName?: string }
+type ErrorPayload<T = unknown> = { error: T }
+type InUseError = { code: string; entity: string; name: string; references: { transactions: number; recurring: number; subCategories: number } }
 
 describe('MCP integration > sub-categories', () => {
   it('create_sub_category returns sub-category with parent info inherited kind', async () => {
@@ -521,6 +523,68 @@ describe('MCP integration > sub-categories', () => {
       })) as { error?: { code?: string } }
 
       expect(result.error?.code).toBe('validation')
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('delete_sub_category blocked while referenced by a transaction, succeeds once cleared', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const accountName = `sub-del-acct-${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      const cat = (await callTool(client, {
+        name: 'create_category',
+        args: { name: `sub-parent-${stamp}`, kind: 'expense' },
+      })) as { id: string; name: string }
+
+      const sub = (await callTool(client, {
+        name: 'create_sub_category',
+        args: { name: `del-sub-${stamp}`, parentId: cat.id },
+      })) as SubCategory
+
+      const txResult = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `test-del-sub-${stamp}`,
+          amount: 5,
+          type: 'expense',
+          date: '2026-01-16',
+          account: accountName,
+          subCategory: sub.name!,
+          idempotencyKey: `del-sub-tx-${stamp}`,
+        },
+      })) as { transaction: { id: string } }
+      createdTxIds.push(txResult.transaction.id)
+
+      const { error } = (await callToolError(client, { name: 'delete_sub_category', args: { name: sub.name! } })) as ErrorPayload<InUseError>
+      expect(error.code).toBe('in_use')
+      expect(error.entity).toBe('sub_category')
+      expect(error.references.transactions).toBeGreaterThanOrEqual(1)
+
+      await callTool(client, { name: 'delete_transaction', args: { id: txResult.transaction.id, confirm: true } })
+      createdTxIds.splice(createdTxIds.indexOf(txResult.transaction.id), 1)
+
+      const result = (await callTool(client, { name: 'delete_sub_category', args: { name: sub.name! } })) as { deleted: boolean }
+      expect(result.deleted).toBe(true)
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('delete_sub_category returns unknown_sub_category for non-existent name', async () => {
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+      const { error } = (await callToolError(client, {
+        name: 'delete_sub_category',
+        args: { name: 'nonexistent-sub-xyz-999' },
+      })) as ErrorPayload<{ code: string }>
+      expect(error.code).toBe('unknown_sub_category')
     } finally {
       await transport.close()
     }
