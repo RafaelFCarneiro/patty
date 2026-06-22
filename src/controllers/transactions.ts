@@ -5,6 +5,7 @@ import { AccountType } from '../models/account.js'
 import { billPeriodFor } from '../logic/bill.js'
 import { pickClassification, userClassification } from '../logic/classify.js'
 import { withTransactionLabels } from '../logic/labels.js'
+import { ClassificationMethod } from '../models/transaction.js'
 import type { ClassifyOutcome } from '../models/transaction.js'
 import { normalizeMerchant } from '../logic/merchant.js'
 import { periodRange, toIsoDate } from '../logic/period.js'
@@ -197,7 +198,7 @@ export const updateTransaction = (
           type: input.type,
           date: input.date,
           currency: account?.currency,
-          classification: isUserCorrection ? { method: 'user', confidence: 1 } : undefined,
+          classification: isUserCorrection ? { method: ClassificationMethod.enum.user, confidence: 1 } : undefined,
         },
         { accountId: account?.id ?? null, categoryId, subCategoryId, tagNames: input.tags ?? null },
       ),
