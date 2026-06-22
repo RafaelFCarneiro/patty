@@ -111,7 +111,7 @@ export const recurringRules = sqliteTable('recurring_rules', {
   description: text('description').notNull(),
   amount:      real('amount').notNull(),
   type:        text('type', { enum: ['income', 'expense'] }).notNull(),
-  period:      text('period', { enum: ['monthly', 'weekly'] }).notNull(),
+  period:      text('period', { enum: ['weekly', 'monthly', 'yearly'] }).notNull(),
   nextDue:     text('next_due').notNull(),
   currency:    text('currency').notNull().references(() => currencies.code),
   accountId:   text('account_id').references(() => accounts.id),
