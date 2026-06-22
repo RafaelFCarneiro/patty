@@ -9,8 +9,7 @@ import { billStatusLabels, type BillStatus } from '../models/bill.js'
 import { categoryKindLabels, type CategoryKind } from '../models/category.js'
 import type { LabelMap, Locale } from '../models/locale.js'
 import { recurringPeriodLabels, type RecurringPeriod } from '../models/recurring.js'
-import { transactionStatusLabels, transactionTypeLabels, type TransactionStatus, type TransactionType } from '../models/transaction.js'
-import type { TransactionView } from '../models/transaction.js'
+import { transactionStatusLabels, transactionTypeLabels, type TransactionStatus, type TransactionType, type TransactionView } from '../models/transaction.js'
 
 const localize = <E extends string>(map: LabelMap<E>, value: E, locale: Locale): string =>
   map[value][locale] ?? map[value].en

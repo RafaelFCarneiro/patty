@@ -1,13 +1,12 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
-import { localizeRecurringPeriod } from '../logic/labels.js'
+import { localizeRecurringPeriod, withTransactionLabels } from '../logic/labels.js'
 import { nextDue, recurringIdempotencyKey } from '../logic/recurring.js'
 import { toIsoDate } from '../logic/period.js'
 import type { CreateRecurringInput, RecurringRuleView } from '../models/recurring.js'
 import { defaultStatusFor } from '../logic/transaction.js'
 import { TransactionSource, type TransactionView } from '../models/transaction.js'
 import type { Deps } from './deps.js'
-import { withTransactionLabels } from '../logic/labels.js'
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
 
 export const listRecurring = async (deps: Deps): Promise<RecurringRuleView[]> => {
