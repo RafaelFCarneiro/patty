@@ -1,4 +1,4 @@
-import { eq, isNull, or, sql } from 'drizzle-orm'
+import { eq, isNull, sql } from 'drizzle-orm'
 import * as categoryAdapters from '../../../adapters/categories.js'
 import { expectPresent } from '../../../common/present.js'
 import type { Category } from '../../../models/category.js'
@@ -37,10 +37,14 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
   },
 
   countReferences: async (categoryId) => {
-    const [txRow] = await db
+    const [byCat] = await db
       .select({ count: sql<number>`count(*)` })
       .from(transactions)
-      .where(or(eq(transactions.categoryId, categoryId), eq(transactions.subcategoryId, categoryId)))
+      .where(eq(transactions.categoryId, categoryId))
+    const [bySub] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(transactions)
+      .where(eq(transactions.subcategoryId, categoryId))
     const [recRow] = await db
       .select({ count: sql<number>`count(*)` })
       .from(recurringRules)
@@ -50,7 +54,7 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
       .from(categories)
       .where(eq(categories.parentId, categoryId))
     return {
-      transactions: txRow?.count ?? 0,
+      transactions: (byCat?.count ?? 0) + (bySub?.count ?? 0),
       recurring: recRow?.count ?? 0,
       subCategories: subRow?.count ?? 0,
     }
