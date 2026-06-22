@@ -25,11 +25,17 @@ const main = async (): Promise<void> => {
 
   const settingsR = settingsRepo(db)
 
+  let cachedLocale: Locale | null = null
+
   const resolveLocale = async (): Promise<Locale> => {
     if (config.FINTRACK_LOCALE) return config.FINTRACK_LOCALE
+    if (cachedLocale) return cachedLocale
     const row = await settingsR.getLocale()
-    return row?.locale ?? Locale.enum.en
+    cachedLocale = row?.locale ?? Locale.enum.en
+    return cachedLocale
   }
+
+  const invalidateLocale = (): void => { cachedLocale = null }
 
   const deps: Deps = {
     accounts: accountsRepo(db),
@@ -45,6 +51,7 @@ const main = async (): Promise<void> => {
     clock: () => new Date(),
     newId: () => randomUUID(),
     locale: resolveLocale,
+    invalidateLocale,
   }
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {

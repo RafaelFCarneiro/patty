@@ -38,5 +38,6 @@ export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<Prefer
       return ok({ locale: current.locale, localeSource: current.localeSource })
     }
     await deps.settings.setLocale(input.locale, input.source)
+    deps.invalidateLocale()
     return ok({ locale: input.locale, localeSource: input.source })
   })
