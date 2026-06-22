@@ -1,8 +1,15 @@
 import { z } from 'zod'
 import { Id, IsoDate } from './common.js'
+import type { LabelMap } from './locale.js'
 
 export const BillStatus = z.enum(['open', 'closed', 'paid'])
 export type BillStatus = z.infer<typeof BillStatus>
+
+export const billStatusLabels: LabelMap<BillStatus> = {
+  open:   { en: 'Open',   pt: 'Aberta',  es: 'Abierta' },
+  closed: { en: 'Closed', pt: 'Fechada', es: 'Cerrada' },
+  paid:   { en: 'Paid',   pt: 'Paga',    es: 'Pagada' },
+}
 
 /** A credit card fatura: groups the card's transactions for one cycle. */
 export const Bill = z.object({

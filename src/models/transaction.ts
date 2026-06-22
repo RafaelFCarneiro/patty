@@ -1,13 +1,25 @@
 import { z } from 'zod'
 import { CurrencyCode, Id, IsoDate, Money } from './common.js'
+import type { LabelMap } from './locale.js'
 
 /** Whether the transaction has cleared or is still expected. Default is date-aware when omitted. */
 export const TransactionStatus = z.enum(['pending', 'effective'])
 export type TransactionStatus = z.infer<typeof TransactionStatus>
 
+export const transactionStatusLabels: LabelMap<TransactionStatus> = {
+  pending:   { en: 'Pending',   pt: 'Pendente',   es: 'Pendiente' },
+  effective: { en: 'Effective', pt: 'Efetivada',  es: 'Efectiva' },
+}
+
 /** 'transfer' moves value between accounts: FROM + TO edges, excluded from summaries. */
 export const TransactionType = z.enum(['expense', 'income', 'transfer'])
 export type TransactionType = z.infer<typeof TransactionType>
+
+export const transactionTypeLabels: LabelMap<TransactionType> = {
+  expense:  { en: 'Expense',  pt: 'Despesa',       es: 'Gasto' },
+  income:   { en: 'Income',   pt: 'Receita',       es: 'Ingreso' },
+  transfer: { en: 'Transfer', pt: 'Transferência', es: 'Transferencia' },
+}
 
 /** Types accepted by create_transaction / bulk — transfers go through create_transfer. */
 export const MovementType = z.enum(['expense', 'income'])

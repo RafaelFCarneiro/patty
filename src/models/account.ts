@@ -1,8 +1,17 @@
 import { z } from 'zod'
 import { CurrencyCode, Id } from './common.js'
+import type { LabelMap } from './locale.js'
 
 export const AccountType = z.enum(['checking', 'savings', 'wallet', 'investment', 'credit'])
 export type AccountType = z.infer<typeof AccountType>
+
+export const accountTypeLabels: LabelMap<AccountType> = {
+  checking:   { en: 'Checking',    pt: 'Conta corrente',    es: 'Cuenta corriente' },
+  savings:    { en: 'Savings',     pt: 'Poupança',          es: 'Ahorros' },
+  wallet:     { en: 'Wallet',      pt: 'Carteira',          es: 'Billetera' },
+  investment: { en: 'Investment',  pt: 'Investimentos',     es: 'Inversiones' },
+  credit:     { en: 'Credit card', pt: 'Cartão de crédito', es: 'Tarjeta de crédito' },
+}
 
 export const Account = z.object({
   id: Id,

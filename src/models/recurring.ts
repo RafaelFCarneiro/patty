@@ -1,9 +1,16 @@
 import { z } from 'zod'
 import { CurrencyCode, Id, IsoDate, Money } from './common.js'
+import type { LabelMap } from './locale.js'
 import { MovementType } from './transaction.js'
 
 export const RecurringPeriod = z.enum(['weekly', 'monthly', 'yearly'])
 export type RecurringPeriod = z.infer<typeof RecurringPeriod>
+
+export const recurringPeriodLabels: LabelMap<RecurringPeriod> = {
+  weekly:  { en: 'Weekly',  pt: 'Semanal', es: 'Semanal' },
+  monthly: { en: 'Monthly', pt: 'Mensal',  es: 'Mensual' },
+  yearly:  { en: 'Yearly',  pt: 'Anual',   es: 'Anual' },
+}
 
 /** Domain entity: node properties and resolved edge target ids. */
 export const RecurringRule = z.object({

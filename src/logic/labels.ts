@@ -1,52 +1,15 @@
 // Chrome / fixed-enum labels only — never dynamic content.
 // Category names live on the entity (ADR-009); this catalog is for
 // closed, code-defined enum values whose display labels need localization.
+// Label maps live alongside their enum definitions in models/*.ts;
+// this module provides the pure resolvers.
 
-import type { AccountType } from '../models/account.js'
-import type { BillStatus } from '../models/bill.js'
-import type { CategoryKind } from '../models/category.js'
-import type { Locale } from '../models/locale.js'
-import type { RecurringPeriod } from '../models/recurring.js'
-import type { TransactionStatus, TransactionType } from '../models/transaction.js'
-
-type LabelMap<E extends string> = Record<E, Record<Locale, string>>
-
-const accountTypeLabels: LabelMap<AccountType> = {
-  checking:   { en: 'Checking',    pt: 'Conta corrente',    es: 'Cuenta corriente' },
-  savings:    { en: 'Savings',     pt: 'Poupança',          es: 'Ahorros' },
-  wallet:     { en: 'Wallet',      pt: 'Carteira',          es: 'Billetera' },
-  investment: { en: 'Investment',  pt: 'Investimentos',     es: 'Inversiones' },
-  credit:     { en: 'Credit card', pt: 'Cartão de crédito', es: 'Tarjeta de crédito' },
-}
-
-const categoryKindLabels: LabelMap<CategoryKind> = {
-  expense: { en: 'Expense', pt: 'Despesa', es: 'Gasto' },
-  income:  { en: 'Income',  pt: 'Receita', es: 'Ingreso' },
-  both:    { en: 'Both',    pt: 'Ambos',   es: 'Ambos' },
-}
-
-const recurringPeriodLabels: LabelMap<RecurringPeriod> = {
-  weekly:  { en: 'Weekly',  pt: 'Semanal', es: 'Semanal' },
-  monthly: { en: 'Monthly', pt: 'Mensal',  es: 'Mensual' },
-  yearly:  { en: 'Yearly',  pt: 'Anual',   es: 'Anual' },
-}
-
-const billStatusLabels: LabelMap<BillStatus> = {
-  open:   { en: 'Open',   pt: 'Aberta',  es: 'Abierta' },
-  closed: { en: 'Closed', pt: 'Fechada', es: 'Cerrada' },
-  paid:   { en: 'Paid',   pt: 'Paga',    es: 'Pagada' },
-}
-
-const transactionTypeLabels: LabelMap<TransactionType> = {
-  expense:  { en: 'Expense',  pt: 'Despesa',       es: 'Gasto' },
-  income:   { en: 'Income',   pt: 'Receita',       es: 'Ingreso' },
-  transfer: { en: 'Transfer', pt: 'Transferência', es: 'Transferencia' },
-}
-
-const transactionStatusLabels: LabelMap<TransactionStatus> = {
-  pending:   { en: 'Pending',   pt: 'Pendente',   es: 'Pendiente' },
-  effective: { en: 'Effective', pt: 'Efetivada',  es: 'Efectiva' },
-}
+import { accountTypeLabels, type AccountType } from '../models/account.js'
+import { billStatusLabels, type BillStatus } from '../models/bill.js'
+import { categoryKindLabels, type CategoryKind } from '../models/category.js'
+import type { LabelMap, Locale } from '../models/locale.js'
+import { recurringPeriodLabels, type RecurringPeriod } from '../models/recurring.js'
+import { transactionStatusLabels, transactionTypeLabels, type TransactionStatus, type TransactionType } from '../models/transaction.js'
 
 const localize = <E extends string>(map: LabelMap<E>, value: E, locale: Locale): string =>
   map[value][locale] ?? map[value].en
