@@ -1,4 +1,5 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
+import * as R from 'remeda'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
 import { computeBalance, computeProjectedBalance } from '../logic/balance.js'
@@ -17,8 +18,11 @@ const withTypeLabel = <T extends Account>(account: T, locale: Locale): T => ({
 
 export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Account[]> => {
   const [locale, all] = await Promise.all([deps.locale(), deps.accounts.list()])
-  const filtered = type ? all.filter((a) => a.type === type) : all
-  return filtered.map((a) => withTypeLabel(a, locale))
+  return R.pipe(
+    all,
+    R.filter((a) => !type || a.type === type),
+    R.map((a) => withTypeLabel(a, locale)),
+  )
 }
 
 export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Account, AppError> =>

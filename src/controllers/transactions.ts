@@ -125,11 +125,13 @@ export const createTransactionsBulk = (
   source: TransactionSource,
 ): ResultAsync<BulkResult, AppError> =>
   safeTry(async function* () {
+    const locale = await deps.locale()
+    const cachedDeps: Deps = { ...deps, locale: () => Promise.resolve(locale) }
     const items: BulkItemResult[] = []
     for (const item of input.items) {
       const date = item.date ?? toIsoDate(deps.clock())
       const result = await createTransaction(
-        deps,
+        cachedDeps,
         {
           ...item,
           date,
