@@ -96,9 +96,10 @@ describe('MCP integration > localized enum labels', () => {
         account: accountName,
       },
     })
-    const rules = await callTool(client, { name: 'list_recurring' }) as RecurringRule[]
-    const created = rules.find((r) => r.periodLabel !== undefined)
+    const rules = await callTool(client, { name: 'list_recurring' }) as Array<RecurringRule & { description: string }>
+    const created = rules.find((r) => r.description === `LabelRec ${stamp}`)
     expect(created).toBeDefined()
+    expect(created?.period).toBe('monthly')
     expect(created?.periodLabel).toBe('Monthly')
   })
 

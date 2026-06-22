@@ -71,7 +71,7 @@ describe('specific translations', () => {
 })
 
 describe('withTransactionLabels', () => {
-  const baseTx = {
+  const baseTx: TransactionView = {
     id: 'tx-1',
     description: 'Test',
     amount: 100,
@@ -83,7 +83,7 @@ describe('withTransactionLabels', () => {
     idempotencyKey: 'test-1',
     classification: { method: 'none', confidence: 0 },
     tags: [],
-  } as TransactionView
+  }
 
   it('adds typeLabel and statusLabel for the given locale', () => {
     const labeled = withTransactionLabels(baseTx, Locale.enum.pt)
