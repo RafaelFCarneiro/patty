@@ -1,6 +1,21 @@
 /** Pure fatura-cycle math: which bill a card transaction belongs to. */
 
+import { purry } from 'remeda'
+import { localizeBillStatus } from './labels.js'
+import type { Bill } from '../models/bill.js'
+import type { Locale } from '../models/locale.js'
 import { TransactionType, type TransactionView } from '../models/transaction.js'
+
+const _withStatusLabel = (bill: Bill, locale: Locale): Bill => ({
+  ...bill,
+  statusLabel: localizeBillStatus(bill.status, locale),
+})
+
+export function withStatusLabel(bill: Bill, locale: Locale): Bill
+export function withStatusLabel(locale: Locale): (bill: Bill) => Bill
+export function withStatusLabel(...args: readonly unknown[]) {
+  return purry(_withStatusLabel, args)
+}
 
 export type BillPeriod = { month: number; year: number; closeDate: string; dueDate: string }
 
