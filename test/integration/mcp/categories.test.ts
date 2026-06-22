@@ -94,16 +94,60 @@ describe('MCP integration > categories', () => {
     expect(error.references.subCategories).toBeGreaterThanOrEqual(1)
   })
 
-  it('delete_category succeeds for a seeded category whose only references are merchant rules', async () => {
-    const allBefore = (await callTool(client, { name: 'list_categories' })) as Category[]
-    const target = allBefore.find((c) => c.name === 'Subscriptions')
-    if (!target) return
+  it('delete_category succeeds when only merchant rules reference it (not a blocker)', async () => {
+    const cat = (await callTool(client, {
+      name: 'create_category',
+      args: { name: `merchant-cat-${stamp}`, kind: 'expense' },
+    })) as Category
 
-    const result = (await callTool(client, { name: 'delete_category', args: { name: target.name } })) as { deleted: boolean }
+    // Create a transaction with this category to generate a merchant_category row via classification history
+    const txResult = (await callTool(client, {
+      name: 'create_transaction',
+      args: {
+        description: `MerchantLearn-${stamp}`,
+        amount: 25,
+        type: 'expense',
+        date: '2026-01-20',
+        account: accountName,
+        category: cat.name,
+        idempotencyKey: `merchant-learn-${stamp}`,
+      },
+    })) as { transaction: { id: string } }
+
+    // Delete the transaction so only the learned merchant rule remains
+    await callTool(client, { name: 'delete_transaction', args: { id: txResult.transaction.id, confirm: true } })
+
+    // Category should still delete — merchant rules are not a blocker
+    const result = (await callTool(client, { name: 'delete_category', args: { name: cat.name } })) as { deleted: boolean }
     expect(result.deleted).toBe(true)
 
     const allAfter = (await callTool(client, { name: 'list_categories' })) as Category[]
-    expect(allAfter.some((c) => c.id === target.id)).toBe(false)
+    expect(allAfter.some((c) => c.id === cat.id)).toBe(false)
+  })
+
+  it('delete_category blocked when a recurring rule references it', async () => {
+    const cat = (await callTool(client, {
+      name: 'create_category',
+      args: { name: `rec-cat-${stamp}`, kind: 'expense' },
+    })) as Category
+
+    await callTool(client, {
+      name: 'create_recurring',
+      args: {
+        description: `Recurring-${stamp}`,
+        amount: 50,
+        type: 'expense',
+        period: 'monthly',
+        startDate: '2026-02-01',
+        account: accountName,
+        category: cat.name,
+      },
+    })
+
+    const { error } = (await callToolError(client, { name: 'delete_category', args: { name: cat.name } })) as ErrorPayload<InUseError>
+    expect(error.code).toBe('in_use')
+    expect(error.entity).toBe('category')
+    expect(error.references.recurring).toBeGreaterThanOrEqual(1)
   })
 
   it('delete_category returns unknown_category for non-existent name', async () => {
