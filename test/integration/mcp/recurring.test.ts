@@ -58,6 +58,62 @@ describe('MCP integration > recurring', () => {
     }
   })
 
+  it('yearly recurring rule round-trips through create → list → apply', async () => {
+    const stamp = Date.now()
+    const accountName = `Yearly Test ${stamp}`
+    const ruleDescription = `Annual sub ${stamp}`
+    const pastDate = new Date()
+    pastDate.setFullYear(pastDate.getFullYear() - 1)
+    pastDate.setDate(pastDate.getDate() - 1)
+    const startDate = toIsoDate(pastDate)
+
+    const { client, transport } = makeClient()
+
+    try {
+      await client.connect(transport)
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 0 },
+      })
+
+      await callTool(client, {
+        name: 'create_recurring',
+        args: {
+          description: ruleDescription,
+          amount: 199.9,
+          type: 'expense',
+          period: 'yearly',
+          startDate,
+          account: accountName,
+        },
+      })
+
+      const listed = (await callTool(client, {
+        name: 'list_recurring',
+        args: {},
+      })) as Array<{ description?: string; period?: string }>
+
+      const ours = listed.find((r) => r.description === ruleDescription)
+      expect(ours).toBeDefined()
+      expect(ours!.period).toBe('yearly')
+
+      const result = (await callTool(client, {
+        name: 'apply_due_recurring',
+        args: {},
+      })) as { applied?: Array<{ rule?: string; transaction?: { id?: string } }>; count?: number }
+
+      const applied = result.applied?.filter((a) => a.rule === ruleDescription) ?? []
+      for (const a of applied) {
+        if (a.transaction?.id) createdTxIds.push(a.transaction.id)
+      }
+
+      expect(applied.length).toBeGreaterThan(0)
+    } finally {
+      await transport.close()
+    }
+  })
+
   it('apply_due_recurring(through) stamps past effective and future pending', async () => {
     const stamp = Date.now()
     const accountName = `Recurring Through ${stamp}`
