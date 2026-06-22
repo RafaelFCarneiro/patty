@@ -1,6 +1,7 @@
 import { check, foreignKey, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
 import { Locale, LocaleSource } from '../../models/locale.js'
+import { RecurringPeriod } from '../../models/recurring.js'
 import { ClassificationMethod, TransactionStatus } from '../../models/transaction.js'
 
 export const currencies = sqliteTable('currencies', {
@@ -111,7 +112,7 @@ export const recurringRules = sqliteTable('recurring_rules', {
   description: text('description').notNull(),
   amount:      real('amount').notNull(),
   type:        text('type', { enum: ['income', 'expense'] }).notNull(),
-  period:      text('period', { enum: ['weekly', 'monthly', 'yearly'] }).notNull(),
+  period:      text('period', { enum: RecurringPeriod.options }).notNull(),
   nextDue:     text('next_due').notNull(),
   currency:    text('currency').notNull().references(() => currencies.code),
   accountId:   text('account_id').references(() => accounts.id),
