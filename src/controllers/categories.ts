@@ -2,13 +2,20 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
 import { hasNameCollision, resolveAndSort } from '../logic/category.js'
+import { localizeCategoryKind } from '../logic/labels.js'
 import type { Category, CreateCategory, SubCategory } from '../models/category.js'
+import type { Locale } from '../models/locale.js'
 import type { Deps } from './deps.js'
 import { resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
 
+const withKindLabel = <T extends { kind: Category['kind'] }>(item: T, locale: Locale): T => ({
+  ...item,
+  kindLabel: localizeCategoryKind(item.kind, locale),
+})
+
 export const listCategories = async (deps: Deps): Promise<Category[]> => {
   const [locale, all] = await Promise.all([deps.locale(), deps.categories.list()])
-  return resolveAndSort(all, locale)
+  return resolveAndSort(all, locale).map((c) => withKindLabel(c, locale))
 }
 
 export const createCategory = (deps: Deps, input: CreateCategory): ResultAsync<Category, AppError> =>
@@ -50,8 +57,13 @@ export const deleteSubCategory = (deps: Deps, name: string): ResultAsync<{ delet
     return ok({ deleted: true })
   })
 
-export const listSubCategories = (deps: Deps, parentId?: string): Promise<SubCategory[]> =>
-  parentId ? deps.subCategories.listByParent(parentId) : deps.subCategories.list()
+export const listSubCategories = async (deps: Deps, parentId?: string): Promise<SubCategory[]> => {
+  const [locale, subs] = await Promise.all([
+    deps.locale(),
+    parentId ? deps.subCategories.listByParent(parentId) : deps.subCategories.list(),
+  ])
+  return subs.map((s) => withKindLabel(s, locale))
+}
 
 export const createSubCategory = (
   deps: Deps,

@@ -12,5 +12,6 @@ export const Bill = z.object({
   closeDate: IsoDate,
   dueDate: IsoDate,
   status: BillStatus,
+  statusLabel: z.string().optional(),
 })
 export type Bill = z.infer<typeof Bill>

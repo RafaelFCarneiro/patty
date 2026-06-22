@@ -8,6 +8,7 @@ export const Account = z.object({
   id: Id,
   name: z.string().min(1),
   type: AccountType,
+  typeLabel: z.string().optional(),
   currency: CurrencyCode,
   /** Balance at account creation; current balance is always derived (initial + income − expenses ± transfers). */
   initialBalance: z.number().default(0),

@@ -6,6 +6,7 @@ import { AccountType } from '../models/account.js'
 import { ClassificationMethod, type TransactionSource as TransactionSourceType, TransactionType } from '../models/transaction.js'
 import type { BillWithItems } from '../diplomat/db/repos/bills.js'
 import { computeBillTotal } from '../logic/bill.js'
+import { localizeBillStatus } from '../logic/labels.js'
 import { toIsoDate } from '../logic/period.js'
 import { defaultStatusFor } from '../logic/transaction.js'
 import type { Deps } from './deps.js'
@@ -25,7 +26,12 @@ export const getBill = (
       month: input.month,
       year: input.year,
     })
-    return ok({ ...bill, total: computeBillTotal(bill.transactions) })
+    const locale = await deps.locale()
+    return ok({
+      ...bill,
+      bill: { ...bill.bill, statusLabel: localizeBillStatus(bill.bill.status, locale) },
+      total: computeBillTotal(bill.transactions),
+    })
   })
 
 export type PayBillInput = { card: string; month: number; year: number; account?: string; source: TransactionSourceType }

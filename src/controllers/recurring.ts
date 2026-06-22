@@ -1,5 +1,6 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
+import { localizeRecurringPeriod, localizeTransactionStatus, localizeTransactionType } from '../logic/labels.js'
 import { nextDue, recurringIdempotencyKey } from '../logic/recurring.js'
 import { toIsoDate } from '../logic/period.js'
 import type { CreateRecurringInput, RecurringRuleView } from '../models/recurring.js'
@@ -8,7 +9,10 @@ import { TransactionSource, type TransactionView } from '../models/transaction.j
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
 
-export const listRecurring = (deps: Deps): Promise<RecurringRuleView[]> => deps.recurring.list()
+export const listRecurring = async (deps: Deps): Promise<RecurringRuleView[]> => {
+  const [locale, rules] = await Promise.all([deps.locale(), deps.recurring.list()])
+  return rules.map((r) => ({ ...r, periodLabel: localizeRecurringPeriod(r.period, locale) }))
+}
 
 export const createRecurring = (
   deps: Deps,
@@ -69,12 +73,20 @@ export const applyDueRecurring = async (
         classification: { method: 'user', confidence: 1 },
         refs: { accountId: rule.accountId, categoryId: rule.categoryId },
       }, [])
-      // `count` reflects genuinely-new occurrences — idempotent duplicates are skipped.
       if (created) applied.push({ rule: rule.description, date: due, transaction })
       due = nextDue(due, rule.period)
     }
     await deps.recurring.advance(rule.id, due)
   }
 
-  return { applied, count: applied.length }
+  const locale = await deps.locale()
+  const labeled = applied.map((a) => ({
+    ...a,
+    transaction: {
+      ...a.transaction,
+      typeLabel: localizeTransactionType(a.transaction.type, locale),
+      statusLabel: localizeTransactionStatus(a.transaction.status, locale),
+    },
+  }))
+  return { applied: labeled, count: labeled.length }
 }

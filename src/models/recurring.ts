@@ -22,6 +22,7 @@ export type RecurringRule = z.infer<typeof RecurringRule>
 
 /** Read projection: RecurringRule with joined reference names (account, category) resolved. */
 export const RecurringRuleView = RecurringRule.extend({
+  periodLabel: z.string().optional(),
   accountName: z.string().optional(),
   categoryName: z.string().optional(),
 })

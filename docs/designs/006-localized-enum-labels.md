@@ -1,7 +1,7 @@
 # Feature Design 006: Localized fixed-enum labels (chrome i18n catalog)
 
 **Type:** Feature design (a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** Not started · **Branch:** `feat/account-type-labels` ·
+**Implementation status:** In progress · **Branch:** `feat/account-type-labels` ·
 **Date:** 2026-06-21 · Realizes the **chrome exception** reserved by **ADR-009** (i18n catalogs are for chrome).
 
 > **Implementation status** tracks delivery, distinct from the design's acceptance. Values:

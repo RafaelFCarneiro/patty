@@ -11,6 +11,7 @@ export const Category = z.object({
   id: Id,
   name: z.string().min(1),
   kind: CategoryKind,
+  kindLabel: z.string().optional(),
   names: LocalizedNames,
 })
 export type Category = z.infer<typeof Category>
@@ -27,6 +28,7 @@ export const SubCategory = z.object({
   parentId: Id,
   parentName: z.string().min(1),
   kind: CategoryKind,
+  kindLabel: z.string().optional(),
 })
 export type SubCategory = z.infer<typeof SubCategory>
 
