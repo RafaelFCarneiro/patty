@@ -26,7 +26,7 @@ Example: `{"description": "Almoço restaurante", "amount": 45.0, "type": "expens
 
 Statement paste / import (1–200 items). Each item is classified and idempotent — `idempotencyKey` is derived from `date+description+amount` when absent, so re-importing the same statement is a no-op. Top-level `account`/`card` act as defaults for items without their own. Each item may set an optional `status` (`effective|pending`; omit for date-aware default).
 
-Returns `summary` counts plus per-item `status`: `created`, `needs_review` (no category or confidence < 0.6 — confirm with the user), `duplicate`, or `error` (with the structured AppError).
+Returns `summary` counts plus per-item `status`: `created`, `needs_review` (no category or confidence < 0.6 — confirm with the user), `duplicate`, or `error` (with the structured AppError). Each transaction includes `typeLabel` and `statusLabel`.
 
 ## create_credit_card / list_credit_cards
 
@@ -54,7 +54,7 @@ Input: `card` (name), `confirm` (default false). Hard delete: removes the card, 
 
 ## confirm_transaction
 
-Flip a `pending` transaction to `effective`. Once effective, the transaction counts toward balances and spending summaries. If the transaction is already `effective`, this is a no-op (returns the existing transaction unchanged).
+Flip a `pending` transaction to `effective`. Once effective, the transaction counts toward balances and spending summaries. If the transaction is already `effective`, this is a no-op (returns the existing transaction unchanged). Returns the transaction with `typeLabel` and `statusLabel`.
 
 Input: `id` (required — use `search_transactions` with `status: "pending"` to find pending transactions).
 
@@ -64,7 +64,7 @@ Errors: `unknown_transaction`.
 
 ## update_transaction
 
-Patch fields by `id`. Only provided fields change. Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened (the system learns). Changing `account` also updates `currency` to match.
+Patch fields by `id`. Only provided fields change. Returns the updated transaction with `typeLabel` and `statusLabel`. Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened (the system learns). Changing `account` also updates `currency` to match.
 
 Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `category`, `subCategory`, `tags`.
 
@@ -74,7 +74,7 @@ Errors: `unknown_transaction`, resolution errors, `category_kind_mismatch`, `val
 
 ## delete_transaction
 
-Two-step destructive action. Without `confirm: true` it is a **dry run**: returns `{ deleted: false, dryRun: true, wouldDelete: {...} }` — show it to the user and ask before calling again with `confirm: true`.
+Two-step destructive action. Without `confirm: true` it is a **dry run**: returns `{ deleted: false, dryRun: true, wouldDelete: {...} }` — show it to the user and ask before calling again with `confirm: true`. The transaction includes `typeLabel` and `statusLabel`.
 
 Input: `id` (required), `confirm` (default false).
 
@@ -104,7 +104,7 @@ Note: `create_account` accepts `initialBalance` (default 0).
 
 ## create_transfer
 
-Move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, optional `date`, `description`). Creates a **transaction with `type: 'transfer'`** carrying both FROM and TO accounts (ADR-002): debits one balance, credits the other, excluded from spending summaries, and appears in both accounts' statements via `search_transactions` (which is also how you list transfers — `type: 'transfer'`). Both accounts must share a currency; cross-currency returns a `validation` error (FX pending). **Credit accounts are rejected on either leg** — use `pay_bill` to settle card debt (ADR-010). Idempotent.
+Move value between accounts (`from`, `to` names, `amount`, `idempotencyKey`, optional `date`, `description`). Creates a **transaction with `type: 'transfer'`** carrying both FROM and TO accounts (ADR-002): debits one balance, credits the other, excluded from spending summaries, and appears in both accounts' statements via `search_transactions` (which is also how you list transfers — `type: 'transfer'`). The returned transaction includes `typeLabel` and `statusLabel`. Both accounts must share a currency; cross-currency returns a `validation` error (FX pending). **Credit accounts are rejected on either leg** — use `pay_bill` to settle card debt (ADR-010). Idempotent.
 
 ## create_category / list_categories
 
