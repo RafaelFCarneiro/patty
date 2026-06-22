@@ -7,8 +7,8 @@ import type { CreateRecurringInput, RecurringRuleView } from '../models/recurrin
 import { defaultStatusFor } from '../logic/transaction.js'
 import { TransactionSource, type TransactionView } from '../models/transaction.js'
 import type { Deps } from './deps.js'
+import { withTransactionLabels } from '../logic/labels.js'
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
-import { withTransactionLabels } from './transactions.js'
 
 export const listRecurring = async (deps: Deps): Promise<RecurringRuleView[]> => {
   const [locale, rules] = await Promise.all([deps.locale(), deps.recurring.list()])

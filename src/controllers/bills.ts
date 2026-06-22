@@ -10,8 +10,8 @@ import { localizeBillStatus } from '../logic/labels.js'
 import { toIsoDate } from '../logic/period.js'
 import { defaultStatusFor } from '../logic/transaction.js'
 import type { Deps } from './deps.js'
+import { withTransactionLabels } from '../logic/labels.js'
 import { resolveAccountRef, resolveCardRef } from './resolve.js'
-import { withTransactionLabels } from './transactions.js'
 
 export type BillView = BillWithItems & { total: number }
 

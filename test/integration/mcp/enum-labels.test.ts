@@ -15,6 +15,8 @@ type TransactionView = { id: string; type: string; typeLabel?: string; status: s
 describe('MCP integration > localized enum labels', () => {
   let client: Client
   let transport: StreamableHTTPClientTransport
+  const stamp = Date.now()
+  const accountName = `LabelAcct ${stamp}`
 
   beforeAll(async () => {
     const c = makeClient()
@@ -22,6 +24,20 @@ describe('MCP integration > localized enum labels', () => {
     transport = c.transport
     await client.connect(transport)
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } })
+    await callTool(client, {
+      name: 'create_account',
+      args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 1000 },
+    })
+    await callTool(client, {
+      name: 'create_transaction',
+      args: {
+        description: `Label seed ${stamp}`,
+        amount: 10,
+        type: 'expense',
+        account: accountName,
+        idempotencyKey: `label-seed-${stamp}`,
+      },
+    })
   })
 
   afterAll(async () => {
@@ -31,20 +47,19 @@ describe('MCP integration > localized enum labels', () => {
 
   it('list_accounts returns English typeLabel', async () => {
     const accounts = await callTool(client, { name: 'list_accounts' }) as Account[]
-    expect(accounts.length).toBeGreaterThan(0)
-    const checking = accounts.find((a) => a.type === 'checking')
-    if (checking) expect(checking.typeLabel).toBe('Checking')
-    const credit = accounts.find((a) => a.type === 'credit')
-    if (credit) expect(credit.typeLabel).toBe('Credit card')
+    const checking = accounts.find((a) => a.name === accountName)
+    expect(checking).toBeDefined()
+    expect(checking?.type).toBe('checking')
+    expect(checking?.typeLabel).toBe('Checking')
   })
 
   it('get_account_balances returns typeLabel', async () => {
-    const balances = await callTool(client, { name: 'get_account_balances' }) as AccountBalance[]
-    expect(balances.length).toBeGreaterThan(0)
-    for (const b of balances) {
-      expect(b.typeLabel).toBeTypeOf('string')
-      expect(b.typeLabel).not.toBe('')
-    }
+    const balances = await callTool(client, {
+      name: 'get_account_balances',
+      args: { account: accountName },
+    }) as AccountBalance[]
+    expect(balances).toHaveLength(1)
+    expect(balances[0].typeLabel).toBe('Checking')
   })
 
   it('list_categories returns English kindLabel', async () => {
@@ -70,7 +85,11 @@ describe('MCP integration > localized enum labels', () => {
   })
 
   it('search_transactions returns typeLabel and statusLabel', async () => {
-    const txs = await callTool(client, { name: 'search_transactions', args: { limit: 5 } }) as TransactionView[]
+    const txs = await callTool(client, {
+      name: 'search_transactions',
+      args: { account: accountName, limit: 5 },
+    }) as TransactionView[]
+    expect(txs.length).toBeGreaterThan(0)
     for (const tx of txs) {
       expect(tx.typeLabel).toBeTypeOf('string')
       expect(tx.statusLabel).toBeTypeOf('string')
@@ -78,7 +97,6 @@ describe('MCP integration > localized enum labels', () => {
   })
 
   it('get_bill returns statusLabel on bill and labels on transactions', async () => {
-    const stamp = Date.now()
     const cardName = `LabelCard ${stamp}`
     const bankName = `LabelBank ${stamp}`
     const now = new Date()
@@ -123,7 +141,7 @@ describe('MCP integration > localized enum labels', () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } })
 
     const accounts = await callTool(client, { name: 'list_accounts' }) as Account[]
-    const checking = accounts.find((a) => a.type === 'checking')
+    const checking = accounts.find((a) => a.name === accountName)
     expect(checking).toBeDefined()
     expect(checking?.typeLabel).toBe('Conta corrente')
     expect(checking?.type).toBe('checking')
@@ -134,19 +152,22 @@ describe('MCP integration > localized enum labels', () => {
     expect(expense?.kindLabel).toBe('Despesa')
     expect(expense?.kind).toBe('expense')
 
-    const txs = await callTool(client, { name: 'search_transactions', args: { limit: 1 } }) as TransactionView[]
-    for (const tx of txs) {
-      expect(tx.typeLabel).toBeTypeOf('string')
-      expect(tx.statusLabel).toBeTypeOf('string')
-    }
+    const txs = await callTool(client, {
+      name: 'search_transactions',
+      args: { account: accountName, limit: 1 },
+    }) as TransactionView[]
+    expect(txs.length).toBeGreaterThan(0)
+    expect(txs[0].typeLabel).toBe('Despesa')
+    expect(txs[0].statusLabel).toBe('Efetivada')
   })
 
   it('set_locale to es switches labels to Spanish', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'es', source: 'explicit' } })
 
     const accounts = await callTool(client, { name: 'list_accounts' }) as Account[]
-    const checking = accounts.find((a) => a.type === 'checking')
-    if (checking) expect(checking.typeLabel).toBe('Cuenta corriente')
+    const checking = accounts.find((a) => a.name === accountName)
+    expect(checking).toBeDefined()
+    expect(checking?.typeLabel).toBe('Cuenta corriente')
 
     const categories = await callTool(client, { name: 'list_categories' }) as Category[]
     const income = categories.find((c) => c.kind === 'income')

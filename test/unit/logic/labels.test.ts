@@ -12,7 +12,9 @@ import {
   localizeRecurringPeriod,
   localizeTransactionStatus,
   localizeTransactionType,
+  withTransactionLabels,
 } from '../../../src/logic/labels.js'
+import type { TransactionView } from '../../../src/models/transaction.js'
 
 const locales = Locale.options
 
@@ -32,10 +34,13 @@ const exhaustive = <E extends string>(
       }
     }
 
-    it('falls back to English for every member', () => {
-      for (const value of enumSchema.options) {
-        expect(resolver(value, Locale.enum.en)).toBeTypeOf('string')
-      }
+    it('non-English locales differ from English for at least one member', () => {
+      const hasNonEnglish = enumSchema.options.some((value) =>
+        locales
+          .filter((l) => l !== Locale.enum.en)
+          .some((l) => resolver(value, l) !== resolver(value, Locale.enum.en)),
+      )
+      expect(hasNonEnglish).toBe(true)
     })
   })
 }
@@ -62,5 +67,33 @@ describe('specific translations', () => {
 
   it('RecurringPeriod monthly → en', () => {
     expect(localizeRecurringPeriod(RecurringPeriod.enum.monthly, Locale.enum.en)).toBe('Monthly')
+  })
+})
+
+describe('withTransactionLabels', () => {
+  const baseTx = {
+    id: 'tx-1',
+    description: 'Test',
+    amount: 100,
+    type: TransactionType.enum.expense,
+    status: TransactionStatus.enum.effective,
+    date: '2026-01-01',
+    currency: 'BRL',
+    source: 'mcp',
+    idempotencyKey: 'test-1',
+    classification: { method: 'none', confidence: 0 },
+    tags: [],
+  } as TransactionView
+
+  it('adds typeLabel and statusLabel for the given locale', () => {
+    const labeled = withTransactionLabels(baseTx, Locale.enum.pt)
+    expect(labeled.typeLabel).toBe('Despesa')
+    expect(labeled.statusLabel).toBe('Efetivada')
+  })
+
+  it('preserves original enum values', () => {
+    const labeled = withTransactionLabels(baseTx, Locale.enum.es)
+    expect(labeled.type).toBe(TransactionType.enum.expense)
+    expect(labeled.status).toBe(TransactionStatus.enum.effective)
   })
 })

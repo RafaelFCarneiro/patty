@@ -10,6 +10,7 @@ import { categoryKindLabels, type CategoryKind } from '../models/category.js'
 import type { LabelMap, Locale } from '../models/locale.js'
 import { recurringPeriodLabels, type RecurringPeriod } from '../models/recurring.js'
 import { transactionStatusLabels, transactionTypeLabels, type TransactionStatus, type TransactionType } from '../models/transaction.js'
+import type { TransactionView } from '../models/transaction.js'
 
 const localize = <E extends string>(map: LabelMap<E>, value: E, locale: Locale): string =>
   map[value][locale] ?? map[value].en
@@ -20,3 +21,9 @@ export const localizeRecurringPeriod   = (v: RecurringPeriod,   l: Locale): stri
 export const localizeBillStatus        = (v: BillStatus,        l: Locale): string => localize(billStatusLabels, v, l)
 export const localizeTransactionType   = (v: TransactionType,   l: Locale): string => localize(transactionTypeLabels, v, l)
 export const localizeTransactionStatus = (v: TransactionStatus, l: Locale): string => localize(transactionStatusLabels, v, l)
+
+export const withTransactionLabels = (tx: TransactionView, locale: Locale): TransactionView => ({
+  ...tx,
+  typeLabel: localizeTransactionType(tx.type, locale),
+  statusLabel: localizeTransactionStatus(tx.status, locale),
+})

@@ -4,7 +4,7 @@ import { guard, okOr } from '../common/result.js'
 import { AccountType } from '../models/account.js'
 import { billPeriodFor } from '../logic/bill.js'
 import { pickClassification, userClassification } from '../logic/classify.js'
-import { localizeTransactionStatus, localizeTransactionType } from '../logic/labels.js'
+import { withTransactionLabels } from '../logic/labels.js'
 import type { ClassifyOutcome } from '../models/transaction.js'
 import { normalizeMerchant } from '../logic/merchant.js'
 import { periodRange, toIsoDate } from '../logic/period.js'
@@ -18,7 +18,6 @@ import {
   summarizeBulkItems,
   toBulkItemResult,
 } from '../logic/transaction.js'
-import type { Locale } from '../models/locale.js'
 import {
   TransactionStatus,
 } from '../models/transaction.js'
@@ -34,12 +33,6 @@ import type {
 } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { guardCategoryKind, resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
-
-export const withTransactionLabels = (tx: TransactionView, locale: Locale): TransactionView => ({
-  ...tx,
-  typeLabel: localizeTransactionType(tx.type, locale),
-  statusLabel: localizeTransactionStatus(tx.status, locale),
-})
 
 
 export const createTransaction = (

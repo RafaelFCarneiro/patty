@@ -8,8 +8,8 @@ import type { Account } from '../models/account.js'
 import type { CreateTransferInput, TransactionView, TransactionSource } from '../models/transaction.js'
 import { TransactionType } from '../models/transaction.js'
 import type { Deps } from './deps.js'
+import { withTransactionLabels } from '../logic/labels.js'
 import { resolveAccountRef } from './resolve.js'
-import { withTransactionLabels } from './transactions.js'
 
 const validateTransferAccounts = (from: Account, to: Account) =>
   safeTry(function* () {
