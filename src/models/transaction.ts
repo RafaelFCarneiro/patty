@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LocalizedNames } from './category.js'
 import { CurrencyCode, Id, IsoDate, Money } from './common.js'
 import type { LabelMap } from './locale.js'
 
@@ -92,6 +93,14 @@ export const TransactionView = z.object({
   tags: z.array(z.string().min(1)).default([]),
 })
 export type TransactionView = z.infer<typeof TransactionView>
+
+/** Internal projection carrying the raw localized-names maps from the DB.
+ *  Used only in the adapter→controller pipeline; stripped before serialization. */
+export const RawTransactionView = TransactionView.extend({
+  categoryNames: LocalizedNames.optional(),
+  subCategoryNames: LocalizedNames.optional(),
+})
+export type RawTransactionView = z.infer<typeof RawTransactionView>
 
 /** Domain patch for updates — only provided fields change; classification set on user correction. */
 export type TransactionPatch = {

@@ -1,4 +1,5 @@
-import { TransactionView, type Transaction, type TransactionPatch } from '../models/transaction.js'
+import { RawTransactionView, type Transaction, type TransactionPatch } from '../models/transaction.js'
+import { LocalizedNames } from '../models/category.js'
 import type {
   CreateTransactionInput,
   CreateTransactionResult,
@@ -16,15 +17,17 @@ import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wi
 import { formatAppError } from '../common/errors.js'
 import type { BulkResult } from '../logic/transaction.js'
 
-/** db→model: decode a flat SQL row (from a full transaction SELECT) into a TransactionView. */
-export const dbToModel = (record: Record<string, unknown>): TransactionView => {
+/** db→model: decode a flat SQL row (from a full transaction SELECT) into a RawTransactionView. */
+export const dbToModel = (record: Record<string, unknown>): RawTransactionView => {
   // Decode the raw row at the boundary; downstream mapping then trusts the typed shape.
   const row = TransactionRowSchema.parse(record)
 
   const parsedTags = row.tags ? (JSON.parse(row.tags) as unknown[]) : []
   const tags = parsedTags.filter((tag): tag is string => typeof tag === 'string')
+  const categoryNames = row.category_names !== null ? LocalizedNames.parse(JSON.parse(row.category_names)) : null
+  const subCategoryNames = row.subcategory_names !== null ? LocalizedNames.parse(JSON.parse(row.subcategory_names)) : null
 
-  return TransactionView.parse({
+  return RawTransactionView.parse({
     id:              row.id,
     description:     row.description,
     amount:          row.amount,
@@ -47,8 +50,10 @@ export const dbToModel = (record: Record<string, unknown>): TransactionView => {
     cardName:        row.credit_card_name ?? undefined,
     categoryId:      row.category_id ?? undefined,
     categoryName:    row.category_name ?? undefined,
+    categoryNames,
     subCategoryId:   row.subcategory_id ?? undefined,
     subCategoryName: row.subcategory_name ?? undefined,
+    subCategoryNames,
     merchant:        row.merchant_key ?? undefined,
     tags,
   })

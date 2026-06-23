@@ -194,4 +194,40 @@ describe('dbToModel', () => {
   it('rejects empty string tags coming from db', () => {
     expect(() => transactionAdapters.dbToModel(sqlRow({ tags: '[""]' }))).toThrow()
   })
+
+  it('parses category_names JSON into categoryNames map', () => {
+    const tx = transactionAdapters.dbToModel(sqlRow({
+      category_id: 'cat-food',
+      category_name: 'Food',
+      category_names: '{"pt":"Alimentação","es":"Alimentación"}',
+    }))
+    expect(tx.categoryNames).toEqual({ pt: 'Alimentação', es: 'Alimentación' })
+    expect(tx.categoryName).toBe('Food')
+  })
+
+  it('parses subcategory_names JSON into subCategoryNames map', () => {
+    const tx = transactionAdapters.dbToModel(sqlRow({
+      subcategory_id: 'sub-1',
+      subcategory_name: 'Groceries',
+      subcategory_names: '{"pt":"Supermercado"}',
+    }))
+    expect(tx.subCategoryNames).toEqual({ pt: 'Supermercado' })
+    expect(tx.subCategoryName).toBe('Groceries')
+  })
+
+  it('defaults categoryNames and subCategoryNames to null when absent', () => {
+    const tx = transactionAdapters.dbToModel(sqlRow())
+    expect(tx.categoryNames).toBeNull()
+    expect(tx.subCategoryNames).toBeNull()
+  })
+
+  it('handles null category_names (user-created categories)', () => {
+    const tx = transactionAdapters.dbToModel(sqlRow({
+      category_id: 'custom-1',
+      category_name: 'My Custom',
+      category_names: null,
+    }))
+    expect(tx.categoryNames).toBeNull()
+    expect(tx.categoryName).toBe('My Custom')
+  })
 })

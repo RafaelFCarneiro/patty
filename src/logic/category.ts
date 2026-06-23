@@ -1,5 +1,5 @@
 import { purry } from 'remeda'
-import { localizeCategoryKind } from './labels.js'
+import { localizeCategoryKind } from './localize.js'
 import { fold } from './resolve.js'
 import type { Category } from '../models/category.js'
 import type { Locale } from '../models/locale.js'
@@ -21,6 +21,13 @@ export const resolveDisplayName = (cat: Category, locale: string): Category => (
   ...cat,
   name: cat.names?.[locale] ?? cat.name,
 })
+
+export const localizeCategoryName = (
+  name: string | undefined,
+  names: Record<string, string> | null | undefined,
+  locale: string,
+): string | undefined =>
+  name !== undefined ? (names?.[locale] ?? name) : undefined
 
 export const allNames = (cat: Category): readonly string[] => [
   cat.name,

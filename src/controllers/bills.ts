@@ -6,9 +6,8 @@ import { AccountType } from '../models/account.js'
 import { ClassificationMethod, type TransactionSource as TransactionSourceType, TransactionType } from '../models/transaction.js'
 import type { BillWithItems } from '../diplomat/db/repos/bills.js'
 import { computeBillTotal, withStatusLabel } from '../logic/bill.js'
-import { withTransactionLabels } from '../logic/labels.js'
 import { toIsoDate } from '../logic/period.js'
-import { defaultStatusFor } from '../logic/transaction.js'
+import { addLocalizedLabels, defaultStatusFor } from '../logic/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCardRef } from './resolve.js'
 
@@ -30,7 +29,7 @@ export const getBill = (
     return ok({
       ...bill,
       bill: withStatusLabel(bill.bill, locale),
-      transactions: bill.transactions.map(withTransactionLabels(locale)),
+      transactions: bill.transactions.map(addLocalizedLabels(locale)),
       total: computeBillTotal(bill.transactions),
     })
   })

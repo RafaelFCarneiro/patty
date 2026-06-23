@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CategoryKind, type Category } from '../../../src/models/category.js'
 import { Locale } from '../../../src/models/locale.js'
-import { allNames, buildSynonyms, hasNameCollision, resolveAndSort, resolveDisplayName, withKindLabel } from '../../../src/logic/category.js'
+import { allNames, buildSynonyms, hasNameCollision, localizeCategoryName, resolveAndSort, resolveDisplayName, withKindLabel } from '../../../src/logic/category.js'
 
 const seeded: Category = {
   id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense,
@@ -93,6 +93,24 @@ describe('buildSynonyms', () => {
   it('returns only canonical name for user category with no locale names', () => {
     const synonyms = buildSynonyms([userCreated])
     expect(synonyms(userCreated)).toEqual(['My Custom'])
+  })
+})
+
+describe('localizeCategoryName', () => {
+  it('resolves to locale-specific name', () => {
+    expect(localizeCategoryName('Food', { pt: 'Alimentação', es: 'Alimentación' }, 'pt')).toBe('Alimentação')
+  })
+
+  it('falls back to canonical name for missing locale', () => {
+    expect(localizeCategoryName('Food', { pt: 'Alimentação' }, 'es')).toBe('Food')
+  })
+
+  it('returns canonical name when names is null', () => {
+    expect(localizeCategoryName('My Custom', null, 'pt')).toBe('My Custom')
+  })
+
+  it('returns undefined when name is undefined', () => {
+    expect(localizeCategoryName(undefined, { pt: 'Alimentação' }, 'pt')).toBeUndefined()
   })
 })
 

@@ -4,13 +4,13 @@ import { guard, okOr } from '../common/result.js'
 import { AccountType } from '../models/account.js'
 import { billPeriodFor } from '../logic/bill.js'
 import { pickClassification, userClassification } from '../logic/classify.js'
-import { withTransactionLabels } from '../logic/labels.js'
 import { ClassificationMethod } from '../models/transaction.js'
 import type { ClassifyOutcome } from '../models/transaction.js'
 import { normalizeMerchant } from '../logic/merchant.js'
 import { periodRange, toIsoDate } from '../logic/period.js'
 import type { BulkItemResult, BulkResult } from '../logic/transaction.js'
 import {
+  addLocalizedLabels,
   defaultStatusFor,
   deriveIdempotencyKey,
   guardTransferMutability,
@@ -116,7 +116,7 @@ export const createTransaction = (
       )
 
     const locale = await deps.locale()
-    return ok({ transaction: withTransactionLabels(transaction, locale), created, classification })
+    return ok({ transaction: addLocalizedLabels(transaction, locale), created, classification })
   })
 
 /** Statement paste/import: each line idempotent, classified, flagged for review when uncertain. */
@@ -210,7 +210,7 @@ export const updateTransaction = (
       await deps.merchants.strengthenFromTransaction(input.id, categoryId)
 
     const locale = await deps.locale()
-    return ok(withTransactionLabels(updated, locale))
+    return ok(addLocalizedLabels(updated, locale))
   })
 
 /** Flip a pending transaction to effective. No-op (returns existing) if already effective. */
@@ -227,13 +227,13 @@ export const confirmTransaction = (
     const locale = await deps.locale()
 
     if (existing.status === TransactionStatus.enum.effective)
-      return ok(withTransactionLabels(existing, locale))
+      return ok(addLocalizedLabels(existing, locale))
 
     const confirmed = yield* okOr(await deps.transactions.confirm(input.id), {
       code: 'unknown_transaction',
       id: input.id,
     })
-    return ok(withTransactionLabels(confirmed, locale))
+    return ok(addLocalizedLabels(confirmed, locale))
   })
 
 export const deleteTransaction = (
@@ -247,7 +247,7 @@ export const deleteTransaction = (
     })
 
     const locale = await deps.locale()
-    const labeled = withTransactionLabels(existing, locale)
+    const labeled = addLocalizedLabels(existing, locale)
 
     if (!input.confirm)
       return ok({
@@ -286,5 +286,5 @@ export const searchTransactions = (
         limit: input.limit,
       }),
     ])
-    return ok(rows.map(withTransactionLabels(locale)))
+    return ok(rows.map(addLocalizedLabels(locale)))
   })

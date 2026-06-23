@@ -9,7 +9,8 @@ export const fullTxSelect = (whereClause: ReturnType<typeof sql>) => sql`
   SELECT t.*,
     fa.name AS from_account_name, ta.name AS to_account_name,
     cc.name AS credit_card_name,
-    c.name AS category_name, sc.name AS subcategory_name,
+    c.name AS category_name, c.names AS category_names,
+    sc.name AS subcategory_name, sc.names AS subcategory_names,
     json_group_array(tg.name) FILTER (WHERE tg.name IS NOT NULL) AS tags
   FROM transactions t
   LEFT JOIN accounts fa   ON fa.id  = t.from_account_id
