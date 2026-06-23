@@ -29,8 +29,10 @@ export const TransactionRowSchema = z.object({
   credit_card_name:      z.string().nullable(),
   category_id:           z.string().nullable(),
   category_name:         z.string().nullable(),
+  category_names:        z.string().nullable().default(null),
   subcategory_id:        z.string().nullable(),
   subcategory_name:      z.string().nullable(),
+  subcategory_names:     z.string().nullable().default(null),
   merchant_key:          z.string().nullable(),
   tags:                  z.string().nullable(), // JSON array from json_group_array
 })

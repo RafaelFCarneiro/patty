@@ -1,11 +1,10 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
-import { withTransactionLabels } from '../logic/labels.js'
 import { nextDue, recurringIdempotencyKey, withPeriodLabel } from '../logic/recurring.js'
 import { toIsoDate } from '../logic/period.js'
 import { CurrencyCode } from '../models/common.js'
 import type { CreateRecurringInput, RecurringRuleView } from '../models/recurring.js'
-import { defaultStatusFor } from '../logic/transaction.js'
+import { addLocalizedLabels, defaultStatusFor } from '../logic/transaction.js'
 import { ClassificationMethod, TransactionSource, type TransactionView } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
@@ -83,7 +82,7 @@ export const applyDueRecurring = async (
   const locale = await deps.locale()
   const labeled = applied.map((a) => ({
     ...a,
-    transaction: withTransactionLabels(a.transaction, locale),
+    transaction: addLocalizedLabels(a.transaction, locale),
   }))
   return { applied: labeled, count: labeled.length }
 }

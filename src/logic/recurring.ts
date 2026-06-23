@@ -1,5 +1,5 @@
 import { purry } from 'remeda'
-import { localizeRecurringPeriod } from './labels.js'
+import { localizeRecurringPeriod } from './localize.js'
 import type { Locale } from '../models/locale.js'
 import type { RecurringPeriod, RecurringRuleView } from '../models/recurring.js'
 

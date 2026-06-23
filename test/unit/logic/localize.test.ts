@@ -4,8 +4,7 @@ import { BillStatus } from '../../../src/models/bill.js'
 import { CategoryKind } from '../../../src/models/category.js'
 import { Locale } from '../../../src/models/locale.js'
 import { RecurringPeriod } from '../../../src/models/recurring.js'
-import { ClassificationMethod, TransactionSource, TransactionStatus, TransactionType } from '../../../src/models/transaction.js'
-import { CurrencyCode } from '../../../src/models/common.js'
+import { TransactionStatus, TransactionType } from '../../../src/models/transaction.js'
 import {
   localizeAccountType,
   localizeBillStatus,
@@ -13,9 +12,7 @@ import {
   localizeRecurringPeriod,
   localizeTransactionStatus,
   localizeTransactionType,
-  withTransactionLabels,
-} from '../../../src/logic/labels.js'
-import type { TransactionView } from '../../../src/models/transaction.js'
+} from '../../../src/logic/localize.js'
 
 const locales = Locale.options
 
@@ -68,33 +65,5 @@ describe('specific translations', () => {
 
   it('RecurringPeriod monthly → en', () => {
     expect(localizeRecurringPeriod(RecurringPeriod.enum.monthly, Locale.enum.en)).toBe('Monthly')
-  })
-})
-
-describe('withTransactionLabels', () => {
-  const baseTx: TransactionView = {
-    id: 'tx-1',
-    description: 'Test',
-    amount: 100,
-    type: TransactionType.enum.expense,
-    status: TransactionStatus.enum.effective,
-    date: '2026-01-01',
-    currency: CurrencyCode.enum.BRL,
-    source: TransactionSource.enum.mcp,
-    idempotencyKey: 'test-1',
-    classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-    tags: [],
-  }
-
-  it('adds typeLabel and statusLabel for the given locale', () => {
-    const labeled = withTransactionLabels(baseTx, Locale.enum.pt)
-    expect(labeled.typeLabel).toBe('Despesa')
-    expect(labeled.statusLabel).toBe('Efetivada')
-  })
-
-  it('preserves original enum values', () => {
-    const labeled = withTransactionLabels(baseTx, Locale.enum.es)
-    expect(labeled.type).toBe(TransactionType.enum.expense)
-    expect(labeled.status).toBe(TransactionStatus.enum.effective)
   })
 })

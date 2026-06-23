@@ -1,7 +1,7 @@
 /** Pure fatura-cycle math: which bill a card transaction belongs to. */
 
 import { purry } from 'remeda'
-import { localizeBillStatus } from './labels.js'
+import { localizeBillStatus } from './localize.js'
 import type { Bill } from '../models/bill.js'
 import type { Locale } from '../models/locale.js'
 import { TransactionType, type TransactionView } from '../models/transaction.js'

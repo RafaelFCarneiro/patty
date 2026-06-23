@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { CurrencyCode } from '../../../src/models/common.js'
-import { TransactionSource, TransactionStatus, TransactionView } from '../../../src/models/transaction.js'
+import { Locale } from '../../../src/models/locale.js'
+import { ClassificationMethod, TransactionSource, TransactionStatus, TransactionType, TransactionView } from '../../../src/models/transaction.js'
+import type { RawTransactionView } from '../../../src/models/transaction.js'
 import {
+  addLocalizedLabels,
   deriveIdempotencyKey,
   guardTransferMutability,
   needsReview,
@@ -118,5 +121,114 @@ describe('summarizeBulkItems', () => {
 
   it('returns all zeros for empty input', () => {
     expect(summarizeBulkItems([])).toEqual({ created: 0, needsReview: 0, duplicates: 0, errors: 0 })
+  })
+})
+
+describe('addLocalizedLabels', () => {
+  const baseTx: RawTransactionView = {
+    id: 'tx-1',
+    description: 'Test',
+    amount: 100,
+    type: TransactionType.enum.expense,
+    status: TransactionStatus.enum.effective,
+    date: '2026-01-01',
+    currency: CurrencyCode.enum.BRL,
+    source: TransactionSource.enum.mcp,
+    idempotencyKey: 'test-1',
+    classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+    tags: [],
+  }
+
+  it('adds typeLabel and statusLabel for the given locale', () => {
+    const labeled = addLocalizedLabels(baseTx, Locale.enum.pt)
+    expect(labeled.typeLabel).toBe('Despesa')
+    expect(labeled.statusLabel).toBe('Efetivada')
+  })
+
+  it('preserves original enum values', () => {
+    const labeled = addLocalizedLabels(baseTx, Locale.enum.es)
+    expect(labeled.type).toBe(TransactionType.enum.expense)
+    expect(labeled.status).toBe(TransactionStatus.enum.effective)
+  })
+
+  it('resolves categoryName from categoryNames map for active locale', () => {
+    const tx: RawTransactionView = {
+      ...baseTx,
+      categoryName: 'Food',
+      categoryNames: { pt: 'Alimentação', es: 'Alimentación' },
+    }
+    const labeled = addLocalizedLabels(tx, Locale.enum.pt)
+    expect(labeled.categoryName).toBe('Alimentação')
+  })
+
+  it('resolves subCategoryName from subCategoryNames map', () => {
+    const tx: RawTransactionView = {
+      ...baseTx,
+      subCategoryName: 'Groceries',
+      subCategoryNames: { pt: 'Supermercado', es: 'Supermercado' },
+    }
+    const labeled = addLocalizedLabels(tx, Locale.enum.pt)
+    expect(labeled.subCategoryName).toBe('Supermercado')
+  })
+
+  it('falls back to canonical name when locale has no translation', () => {
+    const tx: RawTransactionView = {
+      ...baseTx,
+      categoryName: 'Food',
+      categoryNames: { pt: 'Alimentação' },
+    }
+    const labeled = addLocalizedLabels(tx, Locale.enum.es)
+    expect(labeled.categoryName).toBe('Food')
+  })
+
+  it('keeps literal name for user-created categories (names null)', () => {
+    const tx: RawTransactionView = {
+      ...baseTx,
+      categoryName: 'My Custom',
+      categoryNames: null,
+    }
+    const labeled = addLocalizedLabels(tx, Locale.enum.pt)
+    expect(labeled.categoryName).toBe('My Custom')
+  })
+
+  it('strips categoryNames and subCategoryNames from output', () => {
+    const tx: RawTransactionView = {
+      ...baseTx,
+      categoryName: 'Food',
+      categoryNames: { pt: 'Alimentação' },
+      subCategoryName: 'Groceries',
+      subCategoryNames: { pt: 'Supermercado' },
+    }
+    const labeled = addLocalizedLabels(tx, Locale.enum.pt)
+    expect(labeled.categoryNames).toBeUndefined()
+    expect(labeled.subCategoryNames).toBeUndefined()
+  })
+
+  it('leaves categoryName undefined when no category assigned', () => {
+    const labeled = addLocalizedLabels(baseTx, Locale.enum.pt)
+    expect(labeled.categoryName).toBeUndefined()
+  })
+
+  it('categoryId is unchanged by locale resolution', () => {
+    const tx: RawTransactionView = {
+      ...baseTx,
+      categoryId: 'cat-food',
+      categoryName: 'Food',
+      categoryNames: { pt: 'Alimentação' },
+    }
+    const labeled = addLocalizedLabels(tx, Locale.enum.pt)
+    expect(labeled.categoryId).toBe('cat-food')
+  })
+
+  it('works as a curried mapper (purry data-last)', () => {
+    const tx: RawTransactionView = {
+      ...baseTx,
+      categoryName: 'Food',
+      categoryNames: { pt: 'Alimentação' },
+    }
+    const mapper = addLocalizedLabels(Locale.enum.pt)
+    const labeled = mapper(tx)
+    expect(labeled.categoryName).toBe('Alimentação')
+    expect(labeled.categoryNames).toBeUndefined()
   })
 })

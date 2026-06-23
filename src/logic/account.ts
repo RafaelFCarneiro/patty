@@ -1,5 +1,5 @@
 import { purry } from 'remeda'
-import { localizeAccountType } from './labels.js'
+import { localizeAccountType } from './localize.js'
 import type { Account, AccountType } from '../models/account.js'
 import type { Locale } from '../models/locale.js'
 
