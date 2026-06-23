@@ -17,3 +17,11 @@ export const CreateAccount = z
     initialBalance: input.initialBalance ?? 0,
   }))
 export type CreateAccount = z.infer<typeof CreateAccount>
+
+export const UpdateAccount = z.object({
+  newName: z.string().min(1).optional(),
+  initialBalance: z.number().optional(),
+  type: AccountType.optional(),
+  currency: CurrencyCode.optional(),
+})
+export type UpdateAccount = z.infer<typeof UpdateAccount>

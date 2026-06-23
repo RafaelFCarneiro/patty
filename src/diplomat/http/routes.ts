@@ -77,8 +77,9 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   })
   app.patch('/api/accounts/:name', async (req, reply) => {
     const { name } = req.params as { name: string }
-    const body = req.body as Record<string, unknown>
-    return send(reply, await updateAccount(deps, { name, ...body }))
+    const wireIn = parse(wireInAccounts.UpdateAccount, req.body, reply)
+    if (!wireIn) return reply
+    return send(reply, await updateAccount(deps, { name, ...wireIn }))
   })
   app.delete('/api/accounts/:name', async (req, reply) => {
     const { name } = req.params as { name: string }
