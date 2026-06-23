@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Result } from 'neverthrow'
 import { z } from 'zod'
 import type { AppError } from '../../common/errors.js'
-import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
+import { createAccount, deleteAccount, getAccountBalances, listAccounts, updateAccount } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, createSubCategory, deleteCategory, deleteSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
 import { getPreferences, setLocale } from '../../controllers/settings.js'
@@ -374,6 +374,41 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       },
     },
     async (args) => json(await listAccounts(deps, args.type)),
+  )
+
+  server.registerTool(
+    'update_account',
+    {
+      title: 'Update account',
+      description:
+        'Update a bank account. name and initialBalance are always editable. ' +
+        'type is only editable when the account has no transactions/transfers (and cannot be set to credit). ' +
+        'currency is only editable when the account has no transactions/transfers and is not a credit card payment account. ' +
+        'Credit accounts (card-managed) are rejected — use the card flow.',
+      inputSchema: {
+        name: z.string().min(1).describe('Current account name'),
+        newName: z.string().min(1).optional().describe('New account name'),
+        initialBalance: z.number().optional(),
+        type: AccountType.optional().describe('checking|savings|wallet|investment — only if no transactions'),
+        currency: CurrencyCode.optional().describe('Only if no transactions and not a card payer'),
+      },
+    },
+    async (args) => fromResult(await updateAccount(deps, args)),
+  )
+
+  server.registerTool(
+    'delete_account',
+    {
+      title: 'Delete account',
+      description:
+        'Delete a bank account by name. Blocked if any transactions, transfers, recurring rules, or credit cards ' +
+        'reference it — returns an in_use error with reference counts so you can guide the user to clear them first. ' +
+        'Credit accounts (card-managed) are rejected — use delete_credit_card instead.',
+      inputSchema: {
+        name: z.string().min(1).describe('Account name'),
+      },
+    },
+    async (args) => fromResult(await deleteAccount(deps, args.name)),
   )
 
   server.registerTool(

@@ -88,6 +88,32 @@ Use `status: "pending"` to list scheduled/expected transactions (e.g. "what is d
 
 Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `balance`, `byCategory` (sorted by total desc). Currencies are never mixed or converted.
 
+## update_account
+
+Update a bank account by name. `name` (via `newName`) and `initialBalance` are always editable. `type` is only editable when the account has no transactions/transfers (and cannot be set to `credit`). `currency` is only editable when the account has no transactions/transfers and the account is not a credit card payment account.
+
+Input: `name` (required — current account name), optional `newName`, `initialBalance`, `type` (`checking|savings|wallet|investment`), `currency`.
+
+**Credit accounts are rejected** — they are managed by their credit card (ADR-010).
+
+Errors: `unknown_account`, `ambiguous_account`, `duplicate_name` (rename collision), `validation` (credit account, type→credit, field blocked by associations).
+
+REST mirror: `PATCH /api/accounts/:name`.
+
+## delete_account
+
+Delete a bank account by name. **Block-if-in-use**: if any transactions, transfers, recurring rules, or credit cards (as payment account) reference it, returns `in_use` error with reference counts — nothing is deleted. No dry-run/confirm (non-destructive: only removes unreferenced accounts).
+
+Input: `name` (required).
+
+**Credit accounts are rejected** — use `delete_credit_card` instead (ADR-010).
+
+**`in_use` error shape**: `{ code: "in_use", entity: "account", name, references: { transactions, recurring, cards } }`. HTTP status: 409 Conflict.
+
+Errors: `unknown_account`, `ambiguous_account`, `validation` (credit account), `in_use`.
+
+REST mirror: `DELETE /api/accounts/:name`.
+
 ## create_account / list_accounts
 
 `create_account`: `name` (required), `type` (`checking|savings|wallet|investment`, default checking — checking = conta corrente), `currency` (default BRL). Error: `duplicate_name`, `validation` (type `credit` is rejected — credit accounts are created automatically via `create_credit_card`).

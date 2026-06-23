@@ -13,6 +13,7 @@ export type AppError =
   | { code: 'unknown_bill'; card: string; month: number; year: number }
   | { code: 'category_kind_mismatch'; transactionType: string; categoryName: string; categoryKind: string; hint: string }
   | { code: 'in_use'; entity: 'category' | 'sub_category'; name: string; references: { transactions: number; recurring: number; subCategories: number } }
+  | { code: 'in_use'; entity: 'account'; name: string; references: { transactions: number; recurring: number; cards: number } }
   | { code: 'validation'; issues: string[] }
 
 export const formatAppError = (e: AppError): string => {
@@ -33,7 +34,9 @@ export const formatAppError = (e: AppError): string => {
     case 'duplicate_name':
       return `${e.code}: ${e.entity} "${e.name}"`
     case 'in_use':
-      return `${e.code}: ${e.entity} "${e.name}" (transactions: ${e.references.transactions}, recurring: ${e.references.recurring}, subCategories: ${e.references.subCategories})`
+      return e.entity === 'account'
+        ? `${e.code}: ${e.entity} "${e.name}" (transactions: ${e.references.transactions}, recurring: ${e.references.recurring}, cards: ${e.references.cards})`
+        : `${e.code}: ${e.entity} "${e.name}" (transactions: ${e.references.transactions}, recurring: ${e.references.recurring}, subCategories: ${e.references.subCategories})`
     case 'unknown_transaction':
       return `${e.code}: ${e.id}`
     case 'unknown_bill':
