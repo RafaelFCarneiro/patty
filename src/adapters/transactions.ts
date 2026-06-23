@@ -102,7 +102,7 @@ export const patchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> 
     classificationMethod: patch.classification.method,
     confidence:           patch.classification.confidence,
   }),
-  ...(patch.note !== undefined && { note: patch.note || null }),
+  ...(patch.note !== undefined && { note: patch.note === '' ? null : patch.note }),
 })
 
 // ─── wire/in→model ───────────────────────────────────────────────────────────

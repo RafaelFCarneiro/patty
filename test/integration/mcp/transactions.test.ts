@@ -197,6 +197,45 @@ describe('MCP integration > transactions', () => {
     }
   })
 
+  it('bulk import persists and returns note per item', async () => {
+    const stamp = Date.now()
+    const accountName = `Bulk Note ${stamp}`
+    const today = toIsoDate(new Date())
+
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 0 },
+      })
+
+      const result = (await callTool(client, {
+        name: 'create_transactions_bulk',
+        args: {
+          account: accountName,
+          items: [
+            { description: 'With note', amount: 10, type: 'expense', date: today, idempotencyKey: `bulk-note-${stamp}-1`, note: 'reembolsável' },
+            { description: 'Without note', amount: 20, type: 'expense', date: today, idempotencyKey: `bulk-note-${stamp}-2` },
+          ],
+        },
+      })) as { items?: Array<{ transaction?: { id?: string; note?: string } }> }
+
+      for (const item of result.items ?? []) {
+        if (item.transaction?.id) createdTxIds.push(item.transaction.id)
+      }
+
+      const withNote = result.items?.find((i) => i.transaction?.note === 'reembolsável')
+      expect(withNote).toBeDefined()
+
+      const withoutNote = result.items?.find((i) => i.transaction?.note === undefined)
+      expect(withoutNote).toBeDefined()
+    } finally {
+      await transport.close()
+    }
+  })
+
   it('creates transaction with tags and returns them in the view', async () => {
     const stamp = Date.now()
     const { client, transport } = makeClient()
