@@ -75,6 +75,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         ),
         idempotencyKey: z.string().min(1),
         rawInput: z.string().optional().describe('Original user phrasing, for audit'),
+        note: z.string().max(1000).optional().describe('Free-form memo (observação) — distinct from description/rawInput/tags'),
         tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
       },
     },
@@ -104,6 +105,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
               currency: CurrencyCode.optional(),
               status: TransactionStatus.optional(),
               idempotencyKey: z.string().optional(),
+              note: z.string().max(1000).optional(),
             }),
           )
           .min(1)
@@ -267,6 +269,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         account: z.string().optional().describe('New account name'),
         category: z.string().optional().describe('New category name (user correction). Do not set together with subCategory'),
         subCategory: z.string().optional().describe('New sub-category name (implies parent category; do not set together with category)'),
+        note: z.string().max(1000).optional().describe('Free-form memo (observação). Empty string clears; omit to leave unchanged'),
         tags: z.array(z.string().min(1)).optional().describe('Replaces the full tag set when provided; pass [] to remove all tags'),
       },
     },

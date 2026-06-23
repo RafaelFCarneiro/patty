@@ -516,6 +516,100 @@ describe('MCP integration > transactions', () => {
     }
   })
 
+  it('note round-trips via create and search_transactions', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `Note RT ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Note roundtrip ${stamp}`,
+          amount: 10,
+          type: 'expense',
+          account,
+          category: 'Other',
+          idempotencyKey: `note-rt-${stamp}`,
+          note: 'split com João',
+        },
+      })) as { transaction?: { id?: string; note?: string } }
+
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      expect(created.transaction?.note).toBe('split com João')
+
+      const results = (await callTool(client, {
+        name: 'search_transactions',
+        args: { text: `Note roundtrip ${stamp}`, limit: 10 },
+      })) as Array<{ id?: string; note?: string }>
+
+      const match = results.find((tx) => tx.id === txId)
+      expect(match).toBeDefined()
+      expect(match?.note).toBe('split com João')
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('update_transaction sets, clears, and leaves note untouched', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `Note Update ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Note update ${stamp}`,
+          amount: 20,
+          type: 'expense',
+          account,
+          category: 'Other',
+          idempotencyKey: `note-update-${stamp}`,
+        },
+      })) as { transaction?: { id?: string; note?: string } }
+
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      // Initially no note
+      expect(created.transaction?.note).toBeUndefined()
+
+      // Set a note
+      const withNote = (await callTool(client, {
+        name: 'update_transaction',
+        args: { id: txId, note: 'reembolsável' },
+      })) as { note?: string }
+      expect(withNote.note).toBe('reembolsável')
+
+      // Omit note — should remain unchanged
+      const unchanged = (await callTool(client, {
+        name: 'update_transaction',
+        args: { id: txId, description: `Note update ${stamp} v2` },
+      })) as { note?: string }
+      expect(unchanged.note).toBe('reembolsável')
+
+      // Clear note with empty string
+      const cleared = (await callTool(client, {
+        name: 'update_transaction',
+        args: { id: txId, note: '' },
+      })) as { note?: string }
+      expect(cleared.note).toBeUndefined()
+    } finally {
+      await transport.close()
+    }
+  })
+
   // Tags are case-sensitive: "Work" and "work" are distinct tags.
   // Attaching with a different casing silently drops the tag (no match), and
   // search by a different casing returns no results.

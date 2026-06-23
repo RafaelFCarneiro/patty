@@ -89,6 +89,7 @@ export const transactions = sqliteTable('transactions', {
   categoryId:           text('category_id').references(() => categories.id),
   subcategoryId:        text('subcategory_id').references(() => categories.id),
   merchantKey:          text('merchant_key').references(() => merchants.key),
+  note:                 text('note'),
   billId:               text('bill_id').references(() => bills.id),
 }, (t) => [
   index('idx_transactions_date').on(t.date),

@@ -42,6 +42,7 @@ export const dbToModel = (record: Record<string, unknown>): RawTransactionView =
       confidence: row.confidence,
     },
     rawInput:        row.raw_input ?? undefined,
+    note:            row.note ?? undefined,
     accountId:       row.from_account_id ?? undefined,
     accountName:     row.from_account_name ?? undefined,
     toAccountId:     row.to_account_id ?? undefined,
@@ -76,6 +77,7 @@ export const modelToDb = (
     classificationMethod: entity.classification.method,
     confidence:           entity.classification.confidence,
     rawInput:             entity.rawInput ?? null,
+    note:                 entity.note ?? null,
   },
   refs: {
     accountId:    entity.refs.accountId    ?? null,
@@ -100,6 +102,7 @@ export const patchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> 
     classificationMethod: patch.classification.method,
     confidence:           patch.classification.confidence,
   }),
+  ...(patch.note !== undefined && { note: patch.note || null }),
 })
 
 // ─── wire/in→model ───────────────────────────────────────────────────────────

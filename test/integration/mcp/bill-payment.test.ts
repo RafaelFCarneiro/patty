@@ -163,6 +163,48 @@ describe('MCP integration > bill payment (Design 003)', () => {
     }
   })
 
+  it('note is returned on get_bill transaction rows', async () => {
+    const noteCardName = `Note Bill Card ${stamp}`
+    const noteBankName = `Note Bill Bank ${stamp}`
+    const { client, transport } = makeClient()
+
+    try {
+      await client.connect(transport)
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: noteBankName, type: 'checking', currency: 'BRL', initialBalance: 1000 },
+      })
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: noteCardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      })
+
+      await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Note bill tx ${stamp}`,
+          amount: 42,
+          type: 'expense',
+          date: today,
+          card: noteCardName,
+          idempotencyKey: `note-bill-${stamp}`,
+          note: 'warranty until 2027',
+        },
+      })
+
+      const bill = (await callTool(client, {
+        name: 'get_bill',
+        args: { card: noteCardName, month, year },
+      })) as { transactions?: Array<{ note?: string }> }
+
+      expect(bill.transactions?.length).toBeGreaterThanOrEqual(1)
+      expect(bill.transactions?.some((tx) => tx.note === 'warranty until 2027')).toBe(true)
+    } finally {
+      await transport.close()
+    }
+  })
+
   it('delete_credit_card dry run returns counts, confirm deletes everything', async () => {
     const delCard = `Del Card ${stamp}`
     const delBank = `Del Bank ${stamp}`

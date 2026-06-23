@@ -51,6 +51,7 @@ export const Transaction = z.object({
   idempotencyKey: z.string().min(1),
   classification: Classification,
   rawInput: z.string().optional(),
+  note: z.string().max(1000).optional(),
   refs: z.object({
     accountId: Id.optional(),
     toAccountId: Id.optional(),
@@ -78,6 +79,7 @@ export const TransactionView = z.object({
   idempotencyKey: z.string().min(1),
   classification: Classification,
   rawInput: z.string().optional(),
+  note: z.string().max(1000).optional(),
   accountId: Id.optional(),
   accountName: z.string().optional(),
   /** Destination account — present only on type 'transfer'. */
@@ -111,6 +113,7 @@ export type TransactionPatch = {
   date?: string
   currency?: CurrencyCode
   classification?: Classification
+  note?: string
 }
 
 /** Natural input accepted by controllers: names instead of ids, optional date/currency. */
@@ -127,6 +130,7 @@ export type CreateTransactionInput = {
   currency?: CurrencyCode
   idempotencyKey: string
   rawInput?: string
+  note?: string
   tags?: string[]
 }
 
@@ -160,6 +164,8 @@ export type UpdateTransactionInput = {
   account?: string
   category?: string
   subCategory?: string
+  /** When provided, sets the note; empty string clears it. Omit to leave untouched. */
+  note?: string
   /** When provided (including empty array), replaces the full tag set. Omit to leave tags unchanged. */
   tags?: string[]
 }

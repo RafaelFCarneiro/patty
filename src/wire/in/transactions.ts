@@ -16,6 +16,7 @@ export const CreateTransactionInput = z.object({
   currency: CurrencyCode.optional(),
   idempotencyKey: z.string().min(1),
   rawInput: z.string().optional(),
+  note: z.string().max(1000).optional(),
   tags: z.array(z.string().min(1)).optional(),
 })
 export type CreateTransactionInput = z.infer<typeof CreateTransactionInput>
@@ -58,6 +59,7 @@ export const UpdateTransactionInput = z.object({
   account: z.string().optional(),
   category: z.string().optional(),
   subCategory: z.string().optional(),
+  note: z.string().max(1000).optional().describe('Free-form memo (observação). Empty string clears; omit to leave unchanged'),
   tags: z.array(z.string().min(1)).optional(),
 })
 export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInput>

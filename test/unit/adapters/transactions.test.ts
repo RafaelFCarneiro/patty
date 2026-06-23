@@ -32,6 +32,14 @@ describe('modelToDb', () => {
     expect(props).not.toHaveProperty('refs')
   })
 
+  it('maps note to db (present → value, absent → null)', () => {
+    const { props: withNote } = transactionAdapters.modelToDb({ ...draft, note: 'split com João' })
+    expect(withNote.note).toBe('split com João')
+
+    const { props: withoutNote } = transactionAdapters.modelToDb({ ...draft, note: undefined })
+    expect(withoutNote.note).toBeNull()
+  })
+
   it('converts missing optionals to explicit nulls for Cypher params', () => {
     const { props, refs } = transactionAdapters.modelToDb({
       ...draft,
@@ -82,6 +90,12 @@ describe('patchToDb', () => {
       description: 'x',
       date: '2026-01-01',
     })
+  })
+
+  it('maps note: value → set, empty string → null (clear), omitted → absent', () => {
+    expect(transactionAdapters.patchToDb({ note: 'memo' })).toEqual({ note: 'memo' })
+    expect(transactionAdapters.patchToDb({ note: '' })).toEqual({ note: null })
+    expect(transactionAdapters.patchToDb({})).not.toHaveProperty('note')
   })
 })
 
@@ -221,6 +235,14 @@ describe('dbToModel', () => {
     expect(tx.subCategoryNames).toBeNull()
   })
 
+  it('maps note from db (present → string, null → undefined)', () => {
+    const withNote = transactionAdapters.dbToModel(sqlRow({ note: 'reembolsável' }))
+    expect(withNote.note).toBe('reembolsável')
+
+    const withoutNote = transactionAdapters.dbToModel(sqlRow({ note: null }))
+    expect(withoutNote.note).toBeUndefined()
+  })
+
   it('handles null category_names (user-created categories)', () => {
     const tx = transactionAdapters.dbToModel(sqlRow({
       category_id: 'custom-1',
@@ -229,5 +251,40 @@ describe('dbToModel', () => {
     }))
     expect(tx.categoryNames).toBeNull()
     expect(tx.categoryName).toBe('My Custom')
+  })
+})
+
+describe('note zod validation', () => {
+  it('rejects a note longer than 1000 characters on create', () => {
+    const overlong = 'x'.repeat(1001)
+    const result = wireInTransactions.CreateTransactionInput.safeParse({
+      description: 'Test',
+      amount: 10,
+      type: 'expense',
+      idempotencyKey: 'k1',
+      note: overlong,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects a note longer than 1000 characters on update', () => {
+    const overlong = 'x'.repeat(1001)
+    const result = wireInTransactions.UpdateTransactionInput.safeParse({
+      id: 'tx-1',
+      note: overlong,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts a note at exactly 1000 characters', () => {
+    const atLimit = 'x'.repeat(1000)
+    const result = wireInTransactions.CreateTransactionInput.safeParse({
+      description: 'Test',
+      amount: 10,
+      type: 'expense',
+      idempotencyKey: 'k1',
+      note: atLimit,
+    })
+    expect(result.success).toBe(true)
   })
 })
