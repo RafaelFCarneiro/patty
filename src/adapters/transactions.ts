@@ -1,4 +1,4 @@
-import { RawTransactionView, type Transaction, type TransactionPatch, type TransactionView } from '../models/transaction.js'
+import { RawTransactionView, type Transaction, type TransactionPatch } from '../models/transaction.js'
 import { LocalizedNames } from '../models/category.js'
 import type {
   CreateTransactionInput,
