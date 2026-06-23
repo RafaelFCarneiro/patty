@@ -234,6 +234,17 @@ describe('MCP integration > account update + delete', () => {
     expect(error.code).toBe('duplicate_name')
   })
 
+  it('update_account with no fields returns the account unchanged', async () => {
+    const name = `upd-noop-${stamp}`
+    await callTool(client, { name: 'create_account', args: { name, type: 'checking', currency: 'BRL', initialBalance: 42 } })
+
+    const result = (await callTool(client, { name: 'update_account', args: { name } })) as Account
+    expect(result.name).toBe(name)
+    expect(result.type).toBe('checking')
+    expect(result.currency).toBe('BRL')
+    expect(result.initialBalance).toBe(42)
+  })
+
   it('update_account returns unknown_account for non-existent name', async () => {
     const { error } = (await callToolError(client, {
       name: 'update_account',
