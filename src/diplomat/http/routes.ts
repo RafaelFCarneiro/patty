@@ -7,7 +7,7 @@ import * as categoryAdapters from '../../adapters/categories.js'
 import * as creditCardAdapters from '../../adapters/creditCards.js'
 import * as recurringAdapters from '../../adapters/recurring.js'
 import * as transactionAdapters from '../../adapters/transactions.js'
-import { createAccount, getAccountBalances, listAccounts } from '../../controllers/accounts.js'
+import { createAccount, deleteAccount, getAccountBalances, listAccounts, updateAccount } from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, createSubCategory, deleteCategory, deleteSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
 import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js'
@@ -74,6 +74,16 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
     const wireIn = parse(wireInAccounts.CreateAccount, req.body, reply)
     if (!wireIn) return reply
     return send(reply, await createAccount(deps, accountAdapters.wireInToModel(wireIn)), 201)
+  })
+  app.patch('/api/accounts/:name', async (req, reply) => {
+    const { name } = req.params as { name: string }
+    const wireIn = parse(wireInAccounts.UpdateAccount, req.body ?? {}, reply)
+    if (!wireIn) return reply
+    return send(reply, await updateAccount(deps, { name, ...wireIn }))
+  })
+  app.delete('/api/accounts/:name', async (req, reply) => {
+    const { name } = req.params as { name: string }
+    return send(reply, await deleteAccount(deps, name))
   })
 
   app.get('/api/categories', async () => listCategories(deps))
