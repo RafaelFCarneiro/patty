@@ -98,10 +98,7 @@ describe('MCP integration > account update + delete', () => {
   })
 
   it('delete_account rejects a credit account', async () => {
-    const cards = (await callTool(client, { name: 'list_credit_cards' })) as Array<{ name: string; accountName: string }>
-    if (!cards.length) return
-
-    const creditAccountName = cards[0]!.accountName
+    const creditAccountName = `Card: card-payer-${stamp}`
     const { error } = (await callToolError(client, { name: 'delete_account', args: { name: creditAccountName } })) as ErrorPayload<ValidationError>
     expect(error.code).toBe('validation')
   })
@@ -206,10 +203,7 @@ describe('MCP integration > account update + delete', () => {
   })
 
   it('update_account rejects a credit account', async () => {
-    const cards = (await callTool(client, { name: 'list_credit_cards' })) as Array<{ name: string; accountName: string }>
-    if (!cards.length) return
-
-    const creditAccountName = cards[0]!.accountName
+    const creditAccountName = `Card: card-payer-${stamp}`
     const { error } = (await callToolError(client, {
       name: 'update_account',
       args: { name: creditAccountName, initialBalance: 999 },
