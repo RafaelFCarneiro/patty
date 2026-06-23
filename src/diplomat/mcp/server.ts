@@ -383,14 +383,14 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       description:
         'Update a bank account. name and initialBalance are always editable. ' +
         'type is only editable when the account has no transactions/transfers (and cannot be set to credit). ' +
-        'currency is only editable when the account has no transactions/transfers and is not a credit card payment account. ' +
+        'currency is only editable when the account has no transactions/transfers, no recurring rules, and is not a credit card payment account. ' +
         'Credit accounts (card-managed) are rejected — use the card flow.',
       inputSchema: {
         name: z.string().min(1).describe('Current account name'),
         newName: z.string().min(1).optional().describe('New account name'),
         initialBalance: z.number().optional(),
         type: AccountType.optional().describe('checking|savings|wallet|investment — only if no transactions'),
-        currency: CurrencyCode.optional().describe('Only if no transactions and not a card payer'),
+        currency: CurrencyCode.optional().describe('Only if no transactions, no recurring rules, and not a card payer'),
       },
     },
     async (args) => fromResult(await updateAccount(deps, args)),

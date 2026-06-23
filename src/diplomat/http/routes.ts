@@ -77,7 +77,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
   })
   app.patch('/api/accounts/:name', async (req, reply) => {
     const { name } = req.params as { name: string }
-    const wireIn = parse(wireInAccounts.UpdateAccount, req.body, reply)
+    const wireIn = parse(wireInAccounts.UpdateAccount, req.body ?? {}, reply)
     if (!wireIn) return reply
     return send(reply, await updateAccount(deps, { name, ...wireIn }))
   })
