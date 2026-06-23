@@ -84,12 +84,12 @@ describe('MCP integration > transaction category locale', () => {
     expect(result.transaction.categoryName).toBe('Custom Cat')
   })
 
-  it('locale with no translation falls back to canonical name', async () => {
-    await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } })
+  it('search_transactions returns es categoryName when locale is es', async () => {
+    await callTool(client, { name: 'set_locale', args: { locale: 'es', source: 'explicit' } })
     const result = await callTool(client, { name: 'search_transactions' }) as SearchResult
     const tx = result.find((t) => t.categoryId === 'cat-food')
     expect(tx).toBeDefined()
-    expect(tx!.categoryName).toBe('Food')
+    expect(tx!.categoryName).toBe('Alimentación')
   })
 
   it('categoryId is stable across locale changes', async () => {
@@ -103,7 +103,7 @@ describe('MCP integration > transaction category locale', () => {
     expect(ptTx!.categoryId).toBe(enTx!.categoryId)
   })
 
-  it('subcategory name is also localized', async () => {
+  it('user-created subcategory shows literal name across locales', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } })
     const sub = await callTool(client, {
       name: 'create_sub_category',
@@ -119,9 +119,10 @@ describe('MCP integration > transaction category locale', () => {
       idempotencyKey: 'tx-subcat-locale-1',
     } })
 
-    const enResult = await callTool(client, { name: 'search_transactions', args: { text: 'Sub locale test' } }) as SearchResult
-    expect(enResult[0].subCategoryId).toBe(sub.id)
-    expect(enResult[0].subCategoryName).toBe('Groceries')
+    await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } })
+    const ptResult = await callTool(client, { name: 'search_transactions', args: { text: 'Sub locale test' } }) as SearchResult
+    expect(ptResult[0].subCategoryId).toBe(sub.id)
+    expect(ptResult[0].subCategoryName).toBe('Groceries')
   })
 
   it('categoryNames map is not leaked to the client', async () => {
