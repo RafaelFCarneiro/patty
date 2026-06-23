@@ -3,7 +3,7 @@ import { z } from 'zod'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { expectPresent } from '../../../common/present.js'
 import { Bill, BillStatus } from '../../../models/bill.js'
-import type { TransactionView } from '../../../models/transaction.js'
+import type { RawTransactionView } from '../../../models/transaction.js'
 import type { BillPeriod } from '../../../logic/bill.js'
 import { BillRowSchema } from '../../../wire/db/bills.js'
 import type { Db } from '../driver.js'
@@ -26,7 +26,7 @@ const toBill = (record: Record<string, unknown>): Bill => {
 const cardNameOf = (record: Record<string, unknown>): string =>
   z.object({ card_name: z.string() }).parse(record).card_name
 
-export type BillWithItems = { bill: Bill; cardName: string; transactions: TransactionView[] }
+export type BillWithItems = { bill: Bill; cardName: string; transactions: RawTransactionView[] }
 
 export type BillsRepo = {
   /** UPSERT the cycle's bill for a card (created open) and attach the transaction. */

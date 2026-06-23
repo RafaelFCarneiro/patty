@@ -1,14 +1,14 @@
 import { eq, inArray, sql } from 'drizzle-orm'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { expectPresent } from '../../../common/present.js'
-import { TransactionStatus, TransactionType, type Transaction, type TransactionView, type TransactionPatch } from '../../../models/transaction.js'
+import { TransactionStatus, TransactionType, type Transaction, type RawTransactionView, type TransactionPatch } from '../../../models/transaction.js'
 import { SummaryRowSchema, type SummaryRow } from '../../../wire/db/transactions.js'
 import type { Db } from '../driver.js'
 import { toMatchQuery } from '../fts.js'
 import { merchants, tags, transactionTags, transactions } from '../schema.js'
 import { fullTxSelect } from '../transactionSelect.js'
 
-export type CreateTxResult = { transaction: TransactionView; created: boolean }
+export type CreateTxResult = { transaction: RawTransactionView; created: boolean }
 
 export type SearchFilters = {
   from: string | null
@@ -23,7 +23,7 @@ export type SearchFilters = {
   limit: number
 }
 
-const fetchTx = async (db: Db, id: string): Promise<TransactionView | null> => {
+const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
   const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`))
   return row ? transactionAdapters.dbToModel(row) : null
 }
@@ -45,7 +45,7 @@ const replaceTags = async (db: Db, txId: string, tagNames: string[]): Promise<vo
 export type TransactionsRepo = {
   /** Receives domain entity; model→db flattening happens here (adapters/transactions.ts). */
   create: (entity: Transaction, tagNames: string[]) => Promise<CreateTxResult>
-  getById: (id: string) => Promise<TransactionView | null>
+  getById: (id: string) => Promise<RawTransactionView | null>
   update: (
     id: string,
     patch: TransactionPatch,
@@ -56,11 +56,11 @@ export type TransactionsRepo = {
       subCategoryId: string | null | undefined
       tagNames: string[] | null
     },
-  ) => Promise<TransactionView | null>
+  ) => Promise<RawTransactionView | null>
   /** Flip status pending → effective. Returns null if the id does not exist. */
-  confirm: (id: string) => Promise<TransactionView | null>
+  confirm: (id: string) => Promise<RawTransactionView | null>
   delete: (id: string) => Promise<boolean>
-  search: (filters: SearchFilters) => Promise<TransactionView[]>
+  search: (filters: SearchFilters) => Promise<RawTransactionView[]>
   summaryRows: (from: string, to: string) => Promise<SummaryRow[]>
   /** Aggregated pending amounts for an account dated on/before asOf. */
   pendingBalanceParts: (accountId: string, asOf: string) => Promise<{
@@ -104,7 +104,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
 
     const created = (result.rowsAffected ?? 0) > 0
 
-    let transaction: TransactionView | null
+    let transaction: RawTransactionView | null
     if (created) {
       if (tagNames.length > 0) await attachTags(db, entity.id, tagNames)
       transaction = await fetchTx(db, entity.id)

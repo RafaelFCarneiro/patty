@@ -1,8 +1,10 @@
+import { purry } from 'remeda'
 import type { AppError } from '../common/errors.js'
 import type { Account } from '../models/account.js'
 import type { CreditCard } from '../models/creditCard.js'
 import { CurrencyCode } from '../models/common.js'
 import type { IsoDate } from '../models/common.js'
+import type { Locale } from '../models/locale.js'
 import type {
   Classification,
   ClassifyOutcome,
@@ -11,9 +13,12 @@ import type {
   TransactionView,
   UpdateTransactionInput,
 } from '../models/transaction.js'
+import type { RawTransactionView } from '../models/transaction.js'
 import { TransactionStatus, TransactionType } from '../models/transaction.js'
 import { err, ok, type Result } from 'neverthrow'
 import * as R from 'remeda'
+import { localizeCategoryName } from './category.js'
+import { localizeTransactionStatus, localizeTransactionType } from './localize.js'
 import { normalizeMerchant } from './merchant.js'
 
 // ─── Status default ──────────────────────────────────────────────────────────
@@ -120,4 +125,23 @@ export const summarizeBulkItems = (
     duplicates: counts['duplicate'] ?? 0,
     errors: counts['error'] ?? 0,
   }
+}
+
+// ─── Localized labels ───────────────────────────────────────────────────────
+
+const _addLocalizedLabels = (tx: RawTransactionView, locale: Locale): TransactionView => {
+  const { categoryNames, subCategoryNames, ...base } = tx
+  return {
+    ...base,
+    typeLabel: localizeTransactionType(tx.type, locale),
+    statusLabel: localizeTransactionStatus(tx.status, locale),
+    categoryName: localizeCategoryName(tx.categoryName, categoryNames, locale),
+    subCategoryName: localizeCategoryName(tx.subCategoryName, subCategoryNames, locale),
+  }
+}
+
+export function addLocalizedLabels(tx: RawTransactionView, locale: Locale): TransactionView
+export function addLocalizedLabels(locale: Locale): (tx: RawTransactionView) => TransactionView
+export function addLocalizedLabels(...args: readonly unknown[]) {
+  return purry(_addLocalizedLabels, args)
 }

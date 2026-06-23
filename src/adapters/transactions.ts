@@ -1,4 +1,4 @@
-import { TransactionView, type Transaction, type TransactionPatch } from '../models/transaction.js'
+import { RawTransactionView, type Transaction, type TransactionPatch, type TransactionView } from '../models/transaction.js'
 import { LocalizedNames } from '../models/category.js'
 import type {
   CreateTransactionInput,
@@ -17,8 +17,8 @@ import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wi
 import { formatAppError } from '../common/errors.js'
 import type { BulkResult } from '../logic/transaction.js'
 
-/** db→model: decode a flat SQL row (from a full transaction SELECT) into a TransactionView. */
-export const dbToModel = (record: Record<string, unknown>): TransactionView => {
+/** db→model: decode a flat SQL row (from a full transaction SELECT) into a RawTransactionView. */
+export const dbToModel = (record: Record<string, unknown>): RawTransactionView => {
   // Decode the raw row at the boundary; downstream mapping then trusts the typed shape.
   const row = TransactionRowSchema.parse(record)
 
@@ -27,7 +27,7 @@ export const dbToModel = (record: Record<string, unknown>): TransactionView => {
   const categoryNames = row.category_names !== null ? LocalizedNames.parse(JSON.parse(row.category_names)) : null
   const subCategoryNames = row.subcategory_names !== null ? LocalizedNames.parse(JSON.parse(row.subcategory_names)) : null
 
-  return TransactionView.parse({
+  return RawTransactionView.parse({
     id:              row.id,
     description:     row.description,
     amount:          row.amount,

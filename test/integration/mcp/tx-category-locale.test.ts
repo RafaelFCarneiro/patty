@@ -105,25 +105,23 @@ describe('MCP integration > transaction category locale', () => {
 
   it('subcategory name is also localized', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } })
-    const subs = await callTool(client, { name: 'list_sub_categories', args: { categoryId: 'cat-food' } }) as Array<{ id: string; name: string }>
-    const sub = subs.find((s) => s.name === 'Groceries')
-    if (!sub) return // skip if no subcategory seeded
+    const sub = await callTool(client, {
+      name: 'create_sub_category',
+      args: { name: 'Groceries', parentId: 'cat-food' },
+    }) as { id: string; name: string }
 
-    const result = await callTool(client, { name: 'create_transaction', args: {
+    await callTool(client, { name: 'create_transaction', args: {
       description: 'Sub locale test',
       amount: 15,
       type: 'expense',
       account: 'Locale TX Test',
-      category: 'Food',
       subCategory: 'Groceries',
       idempotencyKey: 'tx-subcat-locale-1',
-    } }) as CreateResult
+    } })
 
-    await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } })
-    const searchResult = await callTool(client, { name: 'search_transactions', args: { text: 'Sub locale test' } }) as SearchResult
-    const tx = searchResult[0]
-    expect(tx.subCategoryId).toBe(sub.id)
-    expect(tx.subCategoryName).not.toBe('Groceries')
+    const enResult = await callTool(client, { name: 'search_transactions', args: { text: 'Sub locale test' } }) as SearchResult
+    expect(enResult[0].subCategoryId).toBe(sub.id)
+    expect(enResult[0].subCategoryName).toBe('Groceries')
   })
 
   it('categoryNames map is not leaked to the client', async () => {

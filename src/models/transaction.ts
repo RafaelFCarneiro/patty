@@ -86,14 +86,20 @@ export const TransactionView = z.object({
   cardName: z.string().optional(),
   categoryId: Id.optional(),
   categoryName: z.string().optional(),
-  categoryNames: z.record(z.string(), z.string()).nullable().optional(),
   subCategoryId: Id.optional(),
   subCategoryName: z.string().optional(),
-  subCategoryNames: z.record(z.string(), z.string()).nullable().optional(),
   merchant: z.string().optional(),
   tags: z.array(z.string().min(1)).default([]),
 })
 export type TransactionView = z.infer<typeof TransactionView>
+
+/** Internal projection carrying the raw localized-names maps from the DB.
+ *  Used only in the adapter→controller pipeline; stripped before serialization. */
+export const RawTransactionView = TransactionView.extend({
+  categoryNames: z.record(z.string(), z.string()).nullable().optional(),
+  subCategoryNames: z.record(z.string(), z.string()).nullable().optional(),
+})
+export type RawTransactionView = z.infer<typeof RawTransactionView>
 
 /** Domain patch for updates — only provided fields change; classification set on user correction. */
 export type TransactionPatch = {
