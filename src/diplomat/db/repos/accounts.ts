@@ -123,6 +123,10 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
     if (patch.initialBalance !== undefined) values.initialBalance = patch.initialBalance
     if (patch.type !== undefined) values.type = patch.type
     if (patch.currency !== undefined) values.currency = patch.currency
+    if (Object.keys(values).length === 0) {
+      const existing = await db.select().from(accounts).where(eq(accounts.id, accountId)).limit(1)
+      return accountAdapters.dbToModel(expectPresent(existing[0], 'accounts: row not found'))
+    }
     const [row] = await db
       .update(accounts)
       .set(values)

@@ -65,7 +65,7 @@ export const getAccountBalances = (
 
 const CREDIT_ACCOUNT_REJECTION = {
   code: 'validation' as const,
-  issues: ['credit accounts are managed by their credit card — use delete_credit_card / the card flow instead'],
+  issues: ['credit accounts are managed by their credit card — use the card flow instead (create_credit_card / delete_credit_card)'],
 }
 
 export const deleteAccount = (deps: Deps, name: string): ResultAsync<{ deleted: boolean }, AppError> =>

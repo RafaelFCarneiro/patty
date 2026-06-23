@@ -98,7 +98,12 @@ describe('MCP integration > account update + delete', () => {
   })
 
   it('delete_account rejects a credit account', async () => {
-    const creditAccountName = `Card: card-payer-${stamp}`
+    const cardName = `credit-del-${stamp}`
+    const payerName = `payer-del-${stamp}`
+    await callTool(client, { name: 'create_account', args: { name: payerName, type: 'checking', currency: 'BRL' } })
+    await callTool(client, { name: 'create_credit_card', args: { name: cardName, closingDay: 10, dueDay: 20, currency: 'BRL', paymentAccount: payerName } })
+
+    const creditAccountName = `Card: ${cardName}`
     const { error } = (await callToolError(client, { name: 'delete_account', args: { name: creditAccountName } })) as ErrorPayload<ValidationError>
     expect(error.code).toBe('validation')
   })
@@ -203,7 +208,12 @@ describe('MCP integration > account update + delete', () => {
   })
 
   it('update_account rejects a credit account', async () => {
-    const creditAccountName = `Card: card-payer-${stamp}`
+    const cardName = `credit-upd-${stamp}`
+    const payerName = `payer-upd-${stamp}`
+    await callTool(client, { name: 'create_account', args: { name: payerName, type: 'checking', currency: 'BRL' } })
+    await callTool(client, { name: 'create_credit_card', args: { name: cardName, closingDay: 10, dueDay: 20, currency: 'BRL', paymentAccount: payerName } })
+
+    const creditAccountName = `Card: ${cardName}`
     const { error } = (await callToolError(client, {
       name: 'update_account',
       args: { name: creditAccountName, initialBalance: 999 },
