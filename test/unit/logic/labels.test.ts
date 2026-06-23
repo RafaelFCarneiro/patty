@@ -97,4 +97,85 @@ describe('withTransactionLabels', () => {
     expect(labeled.type).toBe(TransactionType.enum.expense)
     expect(labeled.status).toBe(TransactionStatus.enum.effective)
   })
+
+  it('resolves categoryName from categoryNames map for active locale', () => {
+    const tx: TransactionView = {
+      ...baseTx,
+      categoryName: 'Food',
+      categoryNames: { pt: 'Alimentação', es: 'Alimentación' },
+    }
+    const labeled = withTransactionLabels(tx, Locale.enum.pt)
+    expect(labeled.categoryName).toBe('Alimentação')
+  })
+
+  it('resolves subCategoryName from subCategoryNames map', () => {
+    const tx: TransactionView = {
+      ...baseTx,
+      subCategoryName: 'Groceries',
+      subCategoryNames: { pt: 'Supermercado', es: 'Supermercado' },
+    }
+    const labeled = withTransactionLabels(tx, Locale.enum.pt)
+    expect(labeled.subCategoryName).toBe('Supermercado')
+  })
+
+  it('falls back to canonical name when locale has no translation', () => {
+    const tx: TransactionView = {
+      ...baseTx,
+      categoryName: 'Food',
+      categoryNames: { pt: 'Alimentação' },
+    }
+    const labeled = withTransactionLabels(tx, Locale.enum.es)
+    expect(labeled.categoryName).toBe('Food')
+  })
+
+  it('keeps literal name for user-created categories (names null)', () => {
+    const tx: TransactionView = {
+      ...baseTx,
+      categoryName: 'My Custom',
+      categoryNames: null,
+    }
+    const labeled = withTransactionLabels(tx, Locale.enum.pt)
+    expect(labeled.categoryName).toBe('My Custom')
+  })
+
+  it('strips categoryNames and subCategoryNames from output', () => {
+    const tx: TransactionView = {
+      ...baseTx,
+      categoryName: 'Food',
+      categoryNames: { pt: 'Alimentação' },
+      subCategoryName: 'Groceries',
+      subCategoryNames: { pt: 'Supermercado' },
+    }
+    const labeled = withTransactionLabels(tx, Locale.enum.pt)
+    expect(labeled.categoryNames).toBeUndefined()
+    expect(labeled.subCategoryNames).toBeUndefined()
+  })
+
+  it('leaves categoryName undefined when no category assigned', () => {
+    const labeled = withTransactionLabels(baseTx, Locale.enum.pt)
+    expect(labeled.categoryName).toBeUndefined()
+  })
+
+  it('categoryId is unchanged by locale resolution', () => {
+    const tx: TransactionView = {
+      ...baseTx,
+      categoryId: 'cat-food',
+      categoryName: 'Food',
+      categoryNames: { pt: 'Alimentação' },
+    }
+    const labeled = withTransactionLabels(tx, Locale.enum.pt)
+    expect(labeled.categoryId).toBe('cat-food')
+  })
+
+  it('works as a curried mapper (purry data-last)', () => {
+    const tx: TransactionView = {
+      ...baseTx,
+      categoryName: 'Food',
+      categoryNames: { pt: 'Alimentação' },
+    }
+    const mapper = withTransactionLabels(Locale.enum.pt)
+    const labeled = mapper(tx)
+    expect(labeled.categoryName).toBe('Alimentação')
+    expect(labeled.categoryNames).toBeUndefined()
+  })
 })

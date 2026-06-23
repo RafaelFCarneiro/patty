@@ -86,8 +86,10 @@ export const TransactionView = z.object({
   cardName: z.string().optional(),
   categoryId: Id.optional(),
   categoryName: z.string().optional(),
+  categoryNames: z.record(z.string(), z.string()).nullable().optional(),
   subCategoryId: Id.optional(),
   subCategoryName: z.string().optional(),
+  subCategoryNames: z.record(z.string(), z.string()).nullable().optional(),
   merchant: z.string().optional(),
   tags: z.array(z.string().min(1)).default([]),
 })

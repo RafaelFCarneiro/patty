@@ -22,10 +22,21 @@ export const localizeBillStatus        = (v: BillStatus,        l: Locale): stri
 export const localizeTransactionType   = (v: TransactionType,   l: Locale): string => localize(transactionTypeLabels, v, l)
 export const localizeTransactionStatus = (v: TransactionStatus, l: Locale): string => localize(transactionStatusLabels, v, l)
 
+const resolveCategoryName = (
+  name: string | undefined,
+  names: Record<string, string> | null | undefined,
+  locale: Locale,
+): string | undefined =>
+  name !== undefined ? (names?.[locale] ?? name) : undefined
+
 const _withTransactionLabels = (tx: TransactionView, locale: Locale): TransactionView => ({
   ...tx,
   typeLabel: localizeTransactionType(tx.type, locale),
   statusLabel: localizeTransactionStatus(tx.status, locale),
+  categoryName: resolveCategoryName(tx.categoryName, tx.categoryNames, locale),
+  categoryNames: undefined,
+  subCategoryName: resolveCategoryName(tx.subCategoryName, tx.subCategoryNames, locale),
+  subCategoryNames: undefined,
 })
 
 export function withTransactionLabels(tx: TransactionView, locale: Locale): TransactionView
