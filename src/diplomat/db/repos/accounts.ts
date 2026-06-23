@@ -1,11 +1,21 @@
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import * as accountAdapters from '../../../adapters/accounts.js'
 import { expectPresent } from '../../../common/present.js'
-import type { Account } from '../../../models/account.js'
+import type { Account, AccountType } from '../../../models/account.js'
+import type { CurrencyCode } from '../../../models/common.js'
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js'
 import { BalancePartsRow } from '../../../wire/db/accounts.js'
 import type { Db } from '../driver.js'
-import { accounts } from '../schema.js'
+import { accounts, creditCards, recurringRules, transactions } from '../schema.js'
+
+export type AccountReferences = { transactions: number; recurring: number; cards: number }
+
+export type AccountPatch = {
+  name?: string
+  initialBalance?: number
+  type?: AccountType
+  currency?: CurrencyCode
+}
 
 export type AccountsRepo = {
   list: () => Promise<Account[]>
@@ -14,6 +24,9 @@ export type AccountsRepo = {
   findByName: (name: string) => Promise<Account | null>
   /** Aggregated movement per account: transactions + transfers, both directions. */
   balanceParts: (accountId: string) => Promise<BalancePartsRow>
+  countReferences: (accountId: string) => Promise<AccountReferences>
+  delete: (accountId: string) => Promise<void>
+  update: (accountId: string, patch: AccountPatch) => Promise<Account>
 }
 
 export const accountsRepo = (db: Db): AccountsRepo => ({
@@ -78,5 +91,47 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
       transfersIn:  row?.transfers_in  ?? 0,
       transfersOut: row?.transfers_out ?? 0,
     })
+  },
+
+  countReferences: async (accountId) => {
+    const [txRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(transactions)
+      .where(sql`${transactions.fromAccountId} = ${accountId} OR ${transactions.toAccountId} = ${accountId}`)
+    const [recRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(recurringRules)
+      .where(eq(recurringRules.accountId, accountId))
+    const [cardRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(creditCards)
+      .where(eq(creditCards.paymentAccountId, accountId))
+    return {
+      transactions: txRow?.count ?? 0,
+      recurring: recRow?.count ?? 0,
+      cards: cardRow?.count ?? 0,
+    }
+  },
+
+  delete: async (accountId) => {
+    await db.delete(accounts).where(eq(accounts.id, accountId))
+  },
+
+  update: async (accountId, patch) => {
+    const values: Record<string, unknown> = {}
+    if (patch.name !== undefined) values.name = patch.name
+    if (patch.initialBalance !== undefined) values.initialBalance = patch.initialBalance
+    if (patch.type !== undefined) values.type = patch.type
+    if (patch.currency !== undefined) values.currency = patch.currency
+    if (Object.keys(values).length === 0) {
+      const existing = await db.select().from(accounts).where(eq(accounts.id, accountId)).limit(1)
+      return accountAdapters.dbToModel(expectPresent(existing[0], 'accounts: row not found'))
+    }
+    const [row] = await db
+      .update(accounts)
+      .set(values)
+      .where(eq(accounts.id, accountId))
+      .returning()
+    return accountAdapters.dbToModel(expectPresent(row, 'accounts: row not found after update'))
   },
 })
