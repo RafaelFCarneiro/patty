@@ -90,7 +90,7 @@ Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `bala
 
 ## update_account
 
-Update a bank account by name. `name` (via `newName`) and `initialBalance` are always editable. `type` is only editable when the account has no transactions/transfers (and cannot be set to `credit`). `currency` is only editable when the account has no transactions/transfers and the account is not a credit card payment account.
+Update a bank account by name. `name` (via `newName`) and `initialBalance` are always editable. `type` is only editable when the account has no transactions/transfers (and cannot be set to `credit`). `currency` is only editable when the account has no transactions/transfers, no recurring rules, and is not a credit card payment account.
 
 Input: `name` (required — current account name), optional `newName`, `initialBalance`, `type` (`checking|savings|wallet|investment`), `currency`.
 

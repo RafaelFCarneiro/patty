@@ -195,6 +195,30 @@ describe('MCP integration > account update + delete', () => {
     expect(error.issues[0]).toContain('credit card payment account')
   })
 
+  it('update_account currency blocked when account has recurring rules', async () => {
+    const name = `upd-cur-rec-${stamp}`
+    await callTool(client, { name: 'create_account', args: { name, type: 'checking', currency: 'BRL' } })
+
+    await callTool(client, {
+      name: 'create_recurring',
+      args: {
+        description: `Recurring-cur-${stamp}`,
+        amount: 100,
+        type: 'expense',
+        period: 'monthly',
+        startDate: '2026-03-01',
+        account: name,
+      },
+    })
+
+    const { error } = (await callToolError(client, {
+      name: 'update_account',
+      args: { name, currency: 'USD' },
+    })) as ErrorPayload<ValidationError>
+    expect(error.code).toBe('validation')
+    expect(error.issues[0]).toContain('recurring rules')
+  })
+
   it('update_account rejects setting type to credit', async () => {
     const name = `upd-no-credit-${stamp}`
     await callTool(client, { name: 'create_account', args: { name, type: 'checking', currency: 'BRL' } })

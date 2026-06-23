@@ -121,6 +121,10 @@ export const updateAccount = (deps: Deps, input: UpdateAccountInput): ResultAsyn
           code: 'validation',
           issues: [`currency cannot be changed — account has ${refs.transactions} transaction(s)`],
         })
+        yield* guard(refs.recurring === 0, {
+          code: 'validation',
+          issues: ['currency cannot be changed — account has recurring rules that persist the original currency'],
+        })
         yield* guard(refs.cards === 0, {
           code: 'validation',
           issues: ['currency cannot be changed — account is a credit card payment account'],
