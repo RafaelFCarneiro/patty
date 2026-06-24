@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { LocalizedNames } from '../../models/category.js'
-import { TransactionStatus } from '../../models/transaction.js'
+import { CurrencyCode } from '../../models/common.js'
+import { MovementType, TransactionStatus } from '../../models/transaction.js'
 import type { transactions } from '../../diplomat/db/schema.js'
 
 // Inferred Drizzle select type — the canonical shape of a transactions row.
@@ -71,8 +72,8 @@ const parseCategoryNames = (raw: string | null): Record<string, string> | null =
   raw ? LocalizedNames.parse(JSON.parse(raw)) : null
 
 export const SummaryRowSchema = z.object({
-  currency:       z.enum(['BRL', 'USD']),
-  type:           z.enum(['expense', 'income']),
+  currency:       CurrencyCode,
+  type:           MovementType,
   category:       z.string().nullable(),
   category_names: z.string().nullable().default(null),
   total:          z.number(),
