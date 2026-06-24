@@ -222,15 +222,20 @@ describe('MCP integration > transactions', () => {
         },
       })) as { items?: Array<{ status?: string; transaction?: { id?: string; note?: string } }> }
 
-      expect(result.items?.length).toBe(2)
-      for (const item of result.items ?? []) {
+      const items = result.items ?? []
+      expect(items.length).toBe(2)
+      for (const item of items) {
         expect(['created', 'needs_review']).toContain(item.status)
         ensure(item.transaction?.id, 'Bulk item missing transaction id')
         createdTxIds.push(item.transaction.id)
       }
 
-      expect(result.items![0].transaction!.note).toBe('reembolsável')
-      expect(result.items![1].transaction!.note).toBeUndefined()
+      const first = items[0]?.transaction
+      const second = items[1]?.transaction
+      ensure(first, 'First bulk item missing transaction')
+      ensure(second, 'Second bulk item missing transaction')
+      expect(first.note).toBe('reembolsável')
+      expect(second.note).toBeUndefined()
     } finally {
       await transport.close()
     }
