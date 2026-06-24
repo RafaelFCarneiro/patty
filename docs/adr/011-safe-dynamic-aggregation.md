@@ -93,6 +93,13 @@ and the enum-keyed map means adding a dimension stays a one-line, reviewed chang
   Factor them into one `diplomat/db` helper used by both; only the projection-vs-grouping tail differs. Sharing
   the filter layer is the right de-duplication — not merging the list and aggregate tools (different return
   types; see Feature Design 004).
+- **Shared localized category-name resolution (one source of truth).** Every query that surfaces a category name
+  — `fullTxSelect` (TransactionView), `summaryRows` (spending summary), and now `aggregate_spending` — must
+  resolve the display name via the **same** `names?.[locale] ?? name` rule, threading the active locale. This
+  has already leaked one query at a time (TransactionView, then the summary), each a separate bug fix. Going
+  forward: any analysis query that groups by or returns a category resolves the name through the single shared
+  helper/SQL fragment (locale bound as a parameter), never raw `c.name`. New aggregation tools reuse it by
+  default — do not re-derive per query.
 - **Invariant (added to `docs/architecture.md`):** *dynamic query structure is composed only from whitelisted
   enum-keyed SQL fragments; caller-supplied values are always parameter-bound; caller text is never concatenated
   into SQL.*

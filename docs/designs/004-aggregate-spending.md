@@ -37,9 +37,12 @@ text never reaches the SQL string. This design implements that for spending aggr
 4. **Safe composition (ADR-011).** `diplomat/db` owns whitelist maps `AggregateGroupBy → { expr, join, label }`
    and `AggregateMetric → aggregate`. Only those fragments are composed; every filter value is parameter-bound.
    An unmapped enum is an `assertNever`/compile error.
-5. **Locale-resolved labels.** For `groupBy: category`, the row label resolves to the active locale
-   (`COALESCE(json_extract(c.names, '$.' || <locale>), c.name)`, ADR-009), with the **server-derived** locale
-   bound as a parameter. Other group-bys label by their natural name/key; `month` labels `YYYY-MM`.
+5. **Locale-resolved labels — via the one shared resolver.** For `groupBy: category`, the row label resolves to
+   the active locale by the **same `names?.[locale] ?? name` rule used by every other category-name query**
+   (`fullTxSelect`/TransactionView and `summaryRows`/spending summary) — reuse the shared helper / SQL fragment
+   (`COALESCE(json_extract(c.names, '$.' || <locale>), c.name)`, locale bound as a parameter; ADR-009/ADR-011),
+   **never raw `c.name`**. This rule has leaked one query at a time as separate bug fixes; `aggregate_spending`
+   must not repeat it. Other group-bys label by their natural name/key; `month` labels `YYYY-MM`.
 6. **Layering (mirrors `get_spending_summary`).** Controller resolves filter *names → ids* (via `resolve.ts`),
    reads the effective locale, and calls the repo; the repo builds the parameterized aggregation and zod-decodes
    rows (`wire/db`); a pure `logic/` function shapes rows into per-currency blocks (sort, total, percent-of-total).
@@ -138,7 +141,9 @@ block makes the invariant structural.
    parameterized query: select `expr AS key`, `label`, `currency`, `metric AS value`, `COUNT(*) AS count`; apply
    the group-by's join; `WHERE` the bound period + filters + `status = 'effective'` + `type != 'transfer'`; `GROUP
    BY currency, key`; order by value per `sort`; `LIMIT` per `limit`. **Every value is parameter-bound;** the
-   category `label` localizes via the **bound active locale**. Decode rows through `wire/db` zod.
+   category `label` localizes via the **shared category-name resolver** (the same one `fullTxSelect` and
+   `summaryRows` use) with the bound active locale — never raw `c.name`; if a shared SQL fragment/helper doesn't
+   yet exist, extract one so all three call sites share it. Decode rows through `wire/db` zod.
 2a. **Shared filter builder** (Decision 7): extract the `WHERE` composition (period range, account, type, tags,
    `effective`, non-transfer) into one helper in `diplomat/db` and call it from **both** the existing `search`
    method and the new `aggregate` method — the two diverge only after the `WHERE`. Refactor `search` to use the
@@ -160,14 +165,17 @@ block makes the invariant structural.
   results; (c) **transfers excluded** and **pending excluded**; (d) `groupBy: tag` multi-counts a 2-tag
   transaction in both groups; (e) `groupBy: month` over a from/to range returns a time series; (f) `limit`
   returns top-N by value; (g) an invalid `groupBy` is rejected at the boundary (zod) — proving no caller text
-  reaches SQL.
+  reaches SQL; (h) **locale**: after `set_locale('pt')`, `groupBy: category` labels are the pt category names
+  (en → English; missing translation → canonical fallback) — same resolution as `search_transactions` /
+  `get_spending_summary`.
 - **Gate:** `npm run lint && npm run typecheck && npm run test:all && npm run build`.
 
 ### Invariants — do not break
 - **ADR-011:** dynamic structure only from whitelisted enum-keyed fragments; all values parameter-bound; caller
   text never concatenated into SQL. Exhaustive maps (`assertNever`).
 - **Per-currency, effective, non-transfer** aggregation by default (matches `get_spending_summary` + balances).
-- **Locale-resolved category labels** via the server-derived locale (ADR-009).
+- **Locale-resolved category labels** via the **shared** category-name resolver (same as `fullTxSelect` /
+  `summaryRows`), server-derived locale (ADR-009) — never raw `c.name`.
 - **Diplomatic layering:** enums/IO in `models/`; whitelist + SQL in `diplomat/db`; pure shaping in `logic/`;
   orchestration + name→id resolution in the controller; thin diplomats; constants over literals.
 - **Docs in the same change:** `docs/architecture.md` (the ADR-011 dynamic-composition invariant + ADR-011 in
