@@ -1,16 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { toIsoDate } from '../../../src/logic/period.js'
 import { callTool, makeClient } from './helpers.js'
 
 type CategoryTotal = { category: string; type: string; total: number; count: number }
 type CurrencySummary = { currency: string; income: number; expenses: number; balance: number; byCategory: CategoryTotal[] }
 type SpendingSummary = { period: { month: number; year: number }; currencies: CurrencySummary[] }
 
-const today = new Date()
-const month = today.getMonth() + 1
-const year = today.getFullYear()
-const date = today.toISOString().slice(0, 10)
+const now = new Date()
+const month = now.getMonth() + 1
+const year = now.getFullYear()
+const date = toIsoDate(now)
 
 describe('MCP integration > spending summary locale', () => {
   let client: Client
