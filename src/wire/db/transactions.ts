@@ -66,6 +66,9 @@ export type TransactionDbRefs = {
   merchantKey: string | null
 }
 
+const parseCategoryNames = (raw: string | null) =>
+  raw ? JSON.parse(raw) as Record<string, string> : null
+
 export const SummaryRowSchema = z.object({
   currency:       z.enum(['BRL', 'USD']),
   type:           z.enum(['expense', 'income']),
@@ -73,6 +76,9 @@ export const SummaryRowSchema = z.object({
   category_names: z.string().nullable().default(null),
   total:          z.number(),
   count:          z.number(),
-})
+}).transform(({ category_names, ...rest }) => ({
+  ...rest,
+  categoryNames: parseCategoryNames(category_names),
+}))
 // Decoded summary row shape — kept in wire/db so the repo doesn't import a logic type.
 export type SummaryRow = z.infer<typeof SummaryRowSchema>

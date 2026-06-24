@@ -2,14 +2,14 @@ import * as R from 'remeda'
 import { localizeCategoryName } from './category.js'
 import type { CurrencyCode } from '../models/common.js'
 import type { Locale } from '../models/locale.js'
-import type { TransactionType } from '../models/transaction.js'
+import { TransactionType } from '../models/transaction.js'
 
 /** Raw aggregation row from the database (transfers already excluded in SQL). */
 export type SummaryRow = {
   currency: CurrencyCode
   type: TransactionType
   category: string | null
-  category_names: string | null
+  categoryNames: Record<string, string> | null
   total: number
   count: number
 }
@@ -41,12 +41,9 @@ const sumOf = (rows: readonly SummaryRow[], type: TransactionType): number =>
     ),
   )
 
-const parseNames = (raw: string | null): Record<string, string> | null =>
-  raw ? JSON.parse(raw) as Record<string, string> : null
-
 const toCurrencySummary = ([currency, rows]: [string, SummaryRow[]], locale: Locale): CurrencySummary => {
-  const income = sumOf(rows, 'income')
-  const expenses = sumOf(rows, 'expense')
+  const income = sumOf(rows, TransactionType.enum.income)
+  const expenses = sumOf(rows, TransactionType.enum.expense)
   return {
     currency: currency as CurrencyCode,
     income,
@@ -55,7 +52,7 @@ const toCurrencySummary = ([currency, rows]: [string, SummaryRow[]], locale: Loc
     byCategory: R.pipe(
       rows,
       R.map((r) => ({
-        category: localizeCategoryName(r.category ?? undefined, parseNames(r.category_names), locale) ?? uncategorizedLabels[locale],
+        category: localizeCategoryName(r.category ?? undefined, r.categoryNames, locale) ?? uncategorizedLabels[locale],
         type: r.type,
         total: roundMoney(r.total),
         count: r.count,

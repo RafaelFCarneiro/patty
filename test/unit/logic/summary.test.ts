@@ -5,7 +5,7 @@ const row = (overrides: Partial<Parameters<typeof summarize>[0][number]>) => ({
   currency: 'BRL' as const,
   type: 'expense' as const,
   category: null,
-  category_names: null,
+  categoryNames: null,
   total: 0,
   count: 1,
   ...overrides,
@@ -45,14 +45,14 @@ describe('summarize', () => {
 
   it('localizes category name from names JSON', () => {
     const out = summarize([
-      row({ category: 'Food', category_names: '{"pt":"Alimentação","es":"Alimentación"}', total: 50 }),
+      row({ category: 'Food', categoryNames: { pt: 'Alimentação', es: 'Alimentación' }, total: 50 }),
     ], 'pt')
     expect(out[0]!.byCategory[0]!.category).toBe('Alimentação')
   })
 
   it('falls back to canonical name when translation is missing', () => {
     const out = summarize([
-      row({ category: 'Food', category_names: '{"pt":"Alimentação"}', total: 50 }),
+      row({ category: 'Food', categoryNames: { pt: 'Alimentação' }, total: 50 }),
     ], 'es')
     expect(out[0]!.byCategory[0]!.category).toBe('Food')
   })
@@ -79,7 +79,7 @@ describe('summarize', () => {
 
   it('per-currency totals are unchanged by locale', () => {
     const rows = [
-      row({ currency: 'BRL', type: 'expense', category: 'Food', category_names: '{"pt":"Alimentação"}', total: 100, count: 3 }),
+      row({ currency: 'BRL', type: 'expense', category: 'Food', categoryNames: { pt: 'Alimentação' }, total: 100, count: 3 }),
       row({ currency: 'BRL', type: 'income', category: 'Salary', category_names: '{"pt":"Salário"}', total: 5000, count: 1 }),
     ]
     const en = summarize(rows, 'en')
