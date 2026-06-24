@@ -220,17 +220,17 @@ describe('MCP integration > transactions', () => {
             { description: 'Without note', amount: 20, type: 'expense', date: today, idempotencyKey: `bulk-note-${stamp}-2` },
           ],
         },
-      })) as { items?: Array<{ transaction?: { id?: string; note?: string } }> }
+      })) as { items?: Array<{ status?: string; transaction?: { id?: string; note?: string } }> }
 
+      expect(result.items?.length).toBe(2)
       for (const item of result.items ?? []) {
-        if (item.transaction?.id) createdTxIds.push(item.transaction.id)
+        expect(['created', 'needs_review']).toContain(item.status)
+        ensure(item.transaction?.id, 'Bulk item missing transaction id')
+        createdTxIds.push(item.transaction.id)
       }
 
-      const withNote = result.items?.find((i) => i.transaction?.note === 'reembolsável')
-      expect(withNote).toBeDefined()
-
-      const withoutNote = result.items?.find((i) => i.transaction?.note === undefined)
-      expect(withoutNote).toBeDefined()
+      expect(result.items![0].transaction!.note).toBe('reembolsável')
+      expect(result.items![1].transaction!.note).toBeUndefined()
     } finally {
       await transport.close()
     }
