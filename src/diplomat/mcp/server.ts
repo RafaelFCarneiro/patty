@@ -20,7 +20,7 @@ import {
   updateTransaction,
 } from '../../controllers/transactions.js'
 import { createTransfer } from '../../controllers/transfers.js'
-import { TransactionSource, TransactionStatus, TransactionType, MovementType } from '../../models/transaction.js'
+import { TransactionSource, TransactionStatus, TransactionType, MovementType, NOTE_MAX_LENGTH } from '../../models/transaction.js'
 import { CurrencyCode } from '../../models/common.js'
 import { CategoryKind } from '../../models/category.js'
 import { Locale, LocaleSource } from '../../models/locale.js'
@@ -75,7 +75,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         ),
         idempotencyKey: z.string().min(1),
         rawInput: z.string().optional().describe('Original user phrasing, for audit'),
-        note: z.string().max(1000).optional().describe('Free-form memo (observação) — distinct from description/rawInput/tags'),
+        note: z.string().max(NOTE_MAX_LENGTH).optional().describe('Free-form memo (observação) — distinct from description/rawInput/tags'),
         tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
       },
     },
@@ -105,7 +105,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
               currency: CurrencyCode.optional(),
               status: TransactionStatus.optional(),
               idempotencyKey: z.string().optional(),
-              note: z.string().max(1000).optional(),
+              note: z.string().max(NOTE_MAX_LENGTH).optional(),
             }),
           )
           .min(1)
@@ -269,7 +269,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         account: z.string().optional().describe('New account name'),
         category: z.string().optional().describe('New category name (user correction). Do not set together with subCategory'),
         subCategory: z.string().optional().describe('New sub-category name (implies parent category; do not set together with category)'),
-        note: z.string().max(1000).optional().describe('Free-form memo (observação). Empty string clears; omit to leave unchanged'),
+        note: z.string().max(NOTE_MAX_LENGTH).optional().describe('Free-form memo (observação). Empty string clears; omit to leave unchanged'),
         tags: z.array(z.string().min(1)).optional().describe('Replaces the full tag set when provided; pass [] to remove all tags'),
       },
     },

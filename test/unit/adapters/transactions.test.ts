@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CurrencyCode } from '../../../src/models/common.js'
-import { TransactionSource, TransactionStatus, type Transaction } from '../../../src/models/transaction.js'
+import { NOTE_MAX_LENGTH, TransactionSource, TransactionStatus, type Transaction } from '../../../src/models/transaction.js'
 import * as wireInTransactions from '../../../src/wire/in/transactions.js'
 import * as transactionAdapters from '../../../src/adapters/transactions.js'
 
@@ -255,35 +255,32 @@ describe('dbToModel', () => {
 })
 
 describe('note zod validation', () => {
-  it('rejects a note longer than 1000 characters on create', () => {
-    const overlong = 'x'.repeat(1001)
+  it('rejects a note longer than NOTE_MAX_LENGTH on create', () => {
     const result = wireInTransactions.CreateTransactionInput.safeParse({
       description: 'Test',
       amount: 10,
       type: 'expense',
       idempotencyKey: 'k1',
-      note: overlong,
+      note: 'x'.repeat(NOTE_MAX_LENGTH + 1),
     })
     expect(result.success).toBe(false)
   })
 
-  it('rejects a note longer than 1000 characters on update', () => {
-    const overlong = 'x'.repeat(1001)
+  it('rejects a note longer than NOTE_MAX_LENGTH on update', () => {
     const result = wireInTransactions.UpdateTransactionInput.safeParse({
       id: 'tx-1',
-      note: overlong,
+      note: 'x'.repeat(NOTE_MAX_LENGTH + 1),
     })
     expect(result.success).toBe(false)
   })
 
-  it('accepts a note at exactly 1000 characters', () => {
-    const atLimit = 'x'.repeat(1000)
+  it('accepts a note at exactly NOTE_MAX_LENGTH', () => {
     const result = wireInTransactions.CreateTransactionInput.safeParse({
       description: 'Test',
       amount: 10,
       type: 'expense',
       idempotencyKey: 'k1',
-      note: atLimit,
+      note: 'x'.repeat(NOTE_MAX_LENGTH),
     })
     expect(result.success).toBe(true)
   })

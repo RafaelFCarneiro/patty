@@ -38,6 +38,8 @@ export type Classification = z.infer<typeof Classification>
 export const TransactionSource = z.enum(['mcp', 'rest', 'import'])
 export type TransactionSource = z.infer<typeof TransactionSource>
 
+export const NOTE_MAX_LENGTH = 1000
+
 /** Domain entity: core node properties + edge refs handed to the persistence diplomat. */
 export const Transaction = z.object({
   id: Id,
@@ -51,7 +53,7 @@ export const Transaction = z.object({
   idempotencyKey: z.string().min(1),
   classification: Classification,
   rawInput: z.string().optional(),
-  note: z.string().max(1000).optional(),
+  note: z.string().max(NOTE_MAX_LENGTH).optional(),
   refs: z.object({
     accountId: Id.optional(),
     toAccountId: Id.optional(),
@@ -79,7 +81,7 @@ export const TransactionView = z.object({
   idempotencyKey: z.string().min(1),
   classification: Classification,
   rawInput: z.string().optional(),
-  note: z.string().max(1000).optional(),
+  note: z.string().max(NOTE_MAX_LENGTH).optional(),
   accountId: Id.optional(),
   accountName: z.string().optional(),
   /** Destination account — present only on type 'transfer'. */
