@@ -78,7 +78,7 @@ bills               (id PK, credit_card_id FK, month, year, close_date, due_date
 transactions        (id PK, description, amount, type: expense|income|transfer,
                      status: pending|effective DEFAULT effective,
                      date, currency, source: mcp|rest|import, idempotency_key UNIQUE,
-                     classification_method, confidence, raw_input?,
+                     classification_method, confidence, raw_input?, note?,
                      from_account_id FK, to_account_id FK,   ← transfer uses both (ADR-002)
                      credit_card_id FK, bill_id FK, category_id FK, subcategory_id FK,
                      merchant_key FK,
