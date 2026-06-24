@@ -95,6 +95,7 @@ export const createTransaction = (
         idempotencyKey: input.idempotencyKey,
         classification,
         rawInput: input.rawInput,
+        note: input.note,
         refs: {
           accountId: account?.id ?? card?.accountId,
           cardId: card?.id,
@@ -199,6 +200,7 @@ export const updateTransaction = (
           date: input.date,
           currency: account?.currency,
           classification: isUserCorrection ? { method: ClassificationMethod.enum.user, confidence: 1 } : undefined,
+          note: input.note,
         },
         { accountId: account?.id ?? null, categoryId, subCategoryId, tagNames: input.tags ?? null },
       ),

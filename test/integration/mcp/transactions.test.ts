@@ -197,6 +197,50 @@ describe('MCP integration > transactions', () => {
     }
   })
 
+  it('bulk import persists and returns note per item', async () => {
+    const stamp = Date.now()
+    const accountName = `Bulk Note ${stamp}`
+    const today = toIsoDate(new Date())
+
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 0 },
+      })
+
+      const result = (await callTool(client, {
+        name: 'create_transactions_bulk',
+        args: {
+          account: accountName,
+          items: [
+            { description: 'With note', amount: 10, type: 'expense', date: today, idempotencyKey: `bulk-note-${stamp}-1`, note: 'reembolsável' },
+            { description: 'Without note', amount: 20, type: 'expense', date: today, idempotencyKey: `bulk-note-${stamp}-2` },
+          ],
+        },
+      })) as { items?: Array<{ status?: string; transaction?: { id?: string; note?: string } }> }
+
+      const items = result.items ?? []
+      expect(items.length).toBe(2)
+      for (const item of items) {
+        expect(['created', 'needs_review']).toContain(item.status)
+        ensure(item.transaction?.id, 'Bulk item missing transaction id')
+        createdTxIds.push(item.transaction.id)
+      }
+
+      const first = items[0]?.transaction
+      const second = items[1]?.transaction
+      ensure(first, 'First bulk item missing transaction')
+      ensure(second, 'Second bulk item missing transaction')
+      expect(first.note).toBe('reembolsável')
+      expect(second.note).toBeUndefined()
+    } finally {
+      await transport.close()
+    }
+  })
+
   it('creates transaction with tags and returns them in the view', async () => {
     const stamp = Date.now()
     const { client, transport } = makeClient()
@@ -511,6 +555,100 @@ describe('MCP integration > transactions', () => {
       expect(match).toBeDefined()
       expect(Array.isArray(match?.tags)).toBe(true)
       expect(match?.tags).toEqual([])
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('note round-trips via create and search_transactions', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `Note RT ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Note roundtrip ${stamp}`,
+          amount: 10,
+          type: 'expense',
+          account,
+          category: 'Other',
+          idempotencyKey: `note-rt-${stamp}`,
+          note: 'split com João',
+        },
+      })) as { transaction?: { id?: string; note?: string } }
+
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      expect(created.transaction?.note).toBe('split com João')
+
+      const results = (await callTool(client, {
+        name: 'search_transactions',
+        args: { text: `Note roundtrip ${stamp}`, limit: 10 },
+      })) as Array<{ id?: string; note?: string }>
+
+      const match = results.find((tx) => tx.id === txId)
+      expect(match).toBeDefined()
+      expect(match?.note).toBe('split com João')
+    } finally {
+      await transport.close()
+    }
+  })
+
+  it('update_transaction sets, clears, and leaves note untouched', async () => {
+    const stamp = Date.now()
+    const { client, transport } = makeClient()
+    try {
+      await client.connect(transport)
+
+      const account = `Note Update ${stamp}`
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Note update ${stamp}`,
+          amount: 20,
+          type: 'expense',
+          account,
+          category: 'Other',
+          idempotencyKey: `note-update-${stamp}`,
+        },
+      })) as { transaction?: { id?: string; note?: string } }
+
+      const txId = created.transaction?.id
+      ensure(txId, 'Transaction id missing')
+      createdTxIds.push(txId)
+
+      // Initially no note
+      expect(created.transaction?.note).toBeUndefined()
+
+      // Set a note
+      const withNote = (await callTool(client, {
+        name: 'update_transaction',
+        args: { id: txId, note: 'reembolsável' },
+      })) as { note?: string }
+      expect(withNote.note).toBe('reembolsável')
+
+      // Omit note — should remain unchanged
+      const unchanged = (await callTool(client, {
+        name: 'update_transaction',
+        args: { id: txId, description: `Note update ${stamp} v2` },
+      })) as { note?: string }
+      expect(unchanged.note).toBe('reembolsável')
+
+      // Clear note with empty string
+      const cleared = (await callTool(client, {
+        name: 'update_transaction',
+        args: { id: txId, note: '' },
+      })) as { note?: string }
+      expect(cleared.note).toBeUndefined()
     } finally {
       await transport.close()
     }

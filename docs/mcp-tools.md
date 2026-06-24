@@ -12,7 +12,7 @@ Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All too
 
 Create an expense/income. Omitting `category`/`subCategory` triggers auto-classification via the `merchant_category` table (learned merchant→category weights); the result reports `classification.method` (`rule|history|user|none`) and `confidence` (confirm with the user below 0.6). Idempotent: same `idempotencyKey` returns the existing transaction with `created: false`.
 
-Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `category` OR `subCategory` (not both — `subCategory` implies its parent category), `currency`, `rawInput` (original user phrasing), `tags`, `status` (`effective|pending`; omit for date-aware default — see below).
+Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `category` OR `subCategory` (not both — `subCategory` implies its parent category), `currency`, `rawInput` (original user phrasing), `note` (free-form memo/observação, max 1000 chars — distinct from description/rawInput/tags), `tags`, `status` (`effective|pending`; omit for date-aware default — see below).
 
 Returns `TransactionView` with `typeLabel` and `statusLabel` — localized display labels for the transaction's type and status.
 
@@ -24,7 +24,7 @@ Example: `{"description": "Almoço restaurante", "amount": 45.0, "type": "expens
 
 ## create_transactions_bulk
 
-Statement paste / import (1–200 items). Each item is classified and idempotent — `idempotencyKey` is derived from `date+description+amount` when absent, so re-importing the same statement is a no-op. Top-level `account`/`card` act as defaults for items without their own. Each item may set an optional `status` (`effective|pending`; omit for date-aware default).
+Statement paste / import (1–200 items). Each item is classified and idempotent — `idempotencyKey` is derived from `date+description+amount` when absent, so re-importing the same statement is a no-op. Top-level `account`/`card` act as defaults for items without their own. Each item may set an optional `status` (`effective|pending`; omit for date-aware default) and an optional `note` (free-form memo, max 1000 chars).
 
 Returns `summary` counts plus per-item `status`: `created`, `needs_review` (no category or confidence < 0.6 — confirm with the user), `duplicate`, or `error` (with the structured AppError). Each transaction includes `typeLabel` and `statusLabel`.
 
@@ -66,7 +66,7 @@ Errors: `unknown_transaction`.
 
 Patch fields by `id`. Only provided fields change. Returns the updated transaction with `typeLabel` and `statusLabel`. Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened (the system learns). Changing `account` also updates `currency` to match.
 
-Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `category`, `subCategory`, `tags`.
+Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `category`, `subCategory`, `note` (free-form memo — empty string clears; omit to leave unchanged), `tags`.
 
 **Kind validation on update**: if `category`/`subCategory` is provided without `type`, the existing transaction type is used for kind validation. On mismatch, the error includes a `hint` field with the exact `type` value to pass to resolve it (e.g. `"Category \"Salário\" is income-only; to use it, set type: \"income\""`). Transfer transactions (`type: transfer`) cannot have a `category`/`subCategory` and cannot have their `type` changed — both are rejected with a `validation` error. Note: `type` on this endpoint accepts `expense|income` only; use `create_transfer` to create transfers.
 
@@ -80,7 +80,7 @@ Input: `id` (required), `confirm` (default false).
 
 ## search_transactions
 
-Filter by `month`+`year` (or `from`/`to`), `type` (`expense|income|transfer`), `status` (`pending|effective`), `category`/`subCategory`/`account` (names), free-text `text` (description substring), `tags`, `limit` (default 50, max 200). Returns newest first. Each `TransactionView` includes `typeLabel` and `statusLabel`. With an `account` filter this is the full extrato: the account matches as source OR destination, so transfers in both directions are included. Results include `subCategoryId`/`subCategoryName` when set.
+Filter by `month`+`year` (or `from`/`to`), `type` (`expense|income|transfer`), `status` (`pending|effective`), `category`/`subCategory`/`account` (names), free-text `text` (description substring), `tags`, `limit` (default 50, max 200). Returns newest first. Each `TransactionView` includes `typeLabel`, `statusLabel`, and `note` (when set). With an `account` filter this is the full extrato: the account matches as source OR destination, so transfers in both directions are included. Results include `subCategoryId`/`subCategoryName` when set.
 
 Use `status: "pending"` to list scheduled/expected transactions (e.g. "what is due today" or "what income is expected this month").
 

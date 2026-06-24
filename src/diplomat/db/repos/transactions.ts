@@ -92,6 +92,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
         classificationMethod: props.classificationMethod,
         confidence:           props.confidence,
         rawInput:             props.rawInput ?? null,
+        note:                 props.note ?? null,
         fromAccountId:        refs.accountId,
         toAccountId:          refs.toAccountId,
         creditCardId:         refs.cardId,
@@ -133,6 +134,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       ...(props.currency             !== undefined && { currency:             props.currency }),
       ...(props.classificationMethod !== undefined && { classificationMethod: props.classificationMethod }),
       ...(props.confidence           !== undefined && { confidence:           props.confidence }),
+      ...(props.note                 !== undefined && { note:                 props.note }),
       ...(refs.accountId     !== null      && { fromAccountId: refs.accountId }),
       ...(refs.categoryId    !== null      && { categoryId:    refs.categoryId }),
       // undefined = caller left it untouched; null = caller explicitly clears it
