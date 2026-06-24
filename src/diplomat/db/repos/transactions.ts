@@ -205,7 +205,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
 
   summaryRows: async (from, to) => {
     const rows = await db.all<Record<string, unknown>>(sql`
-      SELECT t.currency, t.type, c.name AS category,
+      SELECT t.currency, t.type, c.name AS category, c.names AS category_names,
              SUM(t.amount) AS total, COUNT(*) AS count
       FROM transactions t
       LEFT JOIN categories c ON c.id = t.category_id

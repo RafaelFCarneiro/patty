@@ -1,5 +1,7 @@
 import { z } from 'zod'
-import { TransactionStatus } from '../../models/transaction.js'
+import { LocalizedNames } from '../../models/category.js'
+import { CurrencyCode } from '../../models/common.js'
+import { MovementType, TransactionStatus } from '../../models/transaction.js'
 import type { transactions } from '../../diplomat/db/schema.js'
 
 // Inferred Drizzle select type — the canonical shape of a transactions row.
@@ -66,12 +68,19 @@ export type TransactionDbRefs = {
   merchantKey: string | null
 }
 
+const parseCategoryNames = (raw: string | null): Record<string, string> | null =>
+  raw ? LocalizedNames.parse(JSON.parse(raw)) : null
+
 export const SummaryRowSchema = z.object({
-  currency: z.enum(['BRL', 'USD']),
-  type:     z.enum(['expense', 'income']),
-  category: z.string().nullable(),
-  total:    z.number(),
-  count:    z.number(),
-})
+  currency:       CurrencyCode,
+  type:           MovementType,
+  category:       z.string().nullable(),
+  category_names: z.string().nullable().default(null),
+  total:          z.number(),
+  count:          z.number(),
+}).transform(({ category_names, ...rest }) => ({
+  ...rest,
+  categoryNames: parseCategoryNames(category_names),
+}))
 // Decoded summary row shape — kept in wire/db so the repo doesn't import a logic type.
 export type SummaryRow = z.infer<typeof SummaryRowSchema>
