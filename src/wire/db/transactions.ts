@@ -67,11 +67,12 @@ export type TransactionDbRefs = {
 }
 
 export const SummaryRowSchema = z.object({
-  currency: z.enum(['BRL', 'USD']),
-  type:     z.enum(['expense', 'income']),
-  category: z.string().nullable(),
-  total:    z.number(),
-  count:    z.number(),
+  currency:       z.enum(['BRL', 'USD']),
+  type:           z.enum(['expense', 'income']),
+  category:       z.string().nullable(),
+  category_names: z.string().nullable().default(null),
+  total:          z.number(),
+  count:          z.number(),
 })
 // Decoded summary row shape — kept in wire/db so the repo doesn't import a logic type.
 export type SummaryRow = z.infer<typeof SummaryRowSchema>

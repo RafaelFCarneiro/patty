@@ -7,6 +7,6 @@ export type SpendingSummary = { period: Period; currencies: CurrencySummary[] }
 
 export const getSpendingSummary = async (deps: Deps, period: Period): Promise<SpendingSummary> => {
   const { from, to } = periodRange(period)
-  const rows = await deps.transactions.summaryRows(from, to)
-  return { period, currencies: summarize(rows) }
+  const [rows, locale] = await Promise.all([deps.transactions.summaryRows(from, to), deps.locale()])
+  return { period, currencies: summarize(rows, locale) }
 }
