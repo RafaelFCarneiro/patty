@@ -23,11 +23,11 @@ export const resolveDisplayName = (cat: Category, locale: string): Category => (
 })
 
 export const localizeCategoryName = (
-  name: string | undefined,
+  name: string | null | undefined,
   names: Record<string, string> | null | undefined,
   locale: string,
 ): string | undefined =>
-  name !== undefined ? (names?.[locale] ?? name) : undefined
+  name != null ? (names?.[locale] ?? name) : undefined
 
 export const allNames = (cat: Category): readonly string[] => [
   cat.name,

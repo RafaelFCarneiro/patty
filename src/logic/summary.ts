@@ -1,14 +1,24 @@
 import * as R from 'remeda'
+import { purry } from 'remeda'
+import { localizeCategoryName } from './category.js'
 import type { CurrencyCode } from '../models/common.js'
-import type { TransactionType } from '../models/transaction.js'
+import type { Locale } from '../models/locale.js'
+import { TransactionType } from '../models/transaction.js'
 
 /** Raw aggregation row from the database (transfers already excluded in SQL). */
 export type SummaryRow = {
   currency: CurrencyCode
   type: TransactionType
   category: string | null
+  categoryNames: Record<string, string> | null
   total: number
   count: number
+}
+
+const uncategorizedLabels: Record<Locale, string> = {
+  en: 'Uncategorized',
+  pt: 'Sem categoria',
+  es: 'Sin categoría',
 }
 
 export type CategoryTotal = { category: string; type: TransactionType; total: number; count: number }
@@ -32,9 +42,9 @@ const sumOf = (rows: readonly SummaryRow[], type: TransactionType): number =>
     ),
   )
 
-const toCurrencySummary = ([currency, rows]: [string, SummaryRow[]]): CurrencySummary => {
-  const income = sumOf(rows, 'income')
-  const expenses = sumOf(rows, 'expense')
+const _toCurrencySummary = ([currency, rows]: [string, SummaryRow[]], locale: Locale): CurrencySummary => {
+  const income = sumOf(rows, TransactionType.enum.income)
+  const expenses = sumOf(rows, TransactionType.enum.expense)
   return {
     currency: currency as CurrencyCode,
     income,
@@ -43,7 +53,7 @@ const toCurrencySummary = ([currency, rows]: [string, SummaryRow[]]): CurrencySu
     byCategory: R.pipe(
       rows,
       R.map((r) => ({
-        category: r.category ?? 'Sem categoria',
+        category: localizeCategoryName(r.category, r.categoryNames, locale) ?? uncategorizedLabels[locale],
         type: r.type,
         total: roundMoney(r.total),
         count: r.count,
@@ -53,12 +63,18 @@ const toCurrencySummary = ([currency, rows]: [string, SummaryRow[]]): CurrencySu
   }
 }
 
+function toCurrencySummary(entry: [string, SummaryRow[]], locale: Locale): CurrencySummary
+function toCurrencySummary(locale: Locale): (entry: [string, SummaryRow[]]) => CurrencySummary
+function toCurrencySummary(...args: readonly unknown[]) {
+  return purry(_toCurrencySummary, args)
+}
+
 /** Group raw rows per currency — NEVER mix currencies in totals. */
-export const summarize = (rows: readonly SummaryRow[]): CurrencySummary[] =>
+export const summarize = (rows: readonly SummaryRow[], locale: Locale): CurrencySummary[] =>
   R.pipe(
     rows,
     R.groupBy((r) => r.currency),
     R.entries(),
-    R.map(toCurrencySummary),
+    R.map(toCurrencySummary(locale)),
     R.sortBy((s) => s.currency),
   )
