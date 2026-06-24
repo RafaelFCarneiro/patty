@@ -7,6 +7,11 @@ type CategoryTotal = { category: string; type: string; total: number; count: num
 type CurrencySummary = { currency: string; income: number; expenses: number; balance: number; byCategory: CategoryTotal[] }
 type SpendingSummary = { period: { month: number; year: number }; currencies: CurrencySummary[] }
 
+const today = new Date()
+const month = today.getMonth() + 1
+const year = today.getFullYear()
+const date = today.toISOString().slice(0, 10)
+
 describe('MCP integration > spending summary locale', () => {
   let client: Client
   let transport: StreamableHTTPClientTransport
@@ -23,6 +28,7 @@ describe('MCP integration > spending summary locale', () => {
       description: 'Summary locale test',
       amount: 80,
       type: 'expense',
+      date,
       account: 'Summary Locale Acct',
       category: 'Food',
       idempotencyKey: 'summary-locale-1',
@@ -31,6 +37,7 @@ describe('MCP integration > spending summary locale', () => {
       description: 'Uncategorized item',
       amount: 15,
       type: 'expense',
+      date,
       account: 'Summary Locale Acct',
       idempotencyKey: 'summary-locale-uncat-1',
     } })
@@ -41,13 +48,11 @@ describe('MCP integration > spending summary locale', () => {
     await transport.close()
   })
 
-  const getSummary = async (): Promise<SpendingSummary> => {
-    const now = new Date()
-    return await callTool(client, {
+  const getSummary = async (): Promise<SpendingSummary> =>
+    await callTool(client, {
       name: 'get_spending_summary',
-      args: { month: now.getMonth() + 1, year: now.getFullYear() },
+      args: { month, year },
     }) as SpendingSummary
-  }
 
   it('returns pt category names when locale is pt', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } })
