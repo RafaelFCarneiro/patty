@@ -59,7 +59,7 @@ describe('summarize', () => {
 
   it('user-created category (names=null) shows literal name', () => {
     const out = summarize([
-      row({ category: 'My Custom', category_names: null, total: 30 }),
+      row({ category: 'My Custom', categoryNames: null, total: 30 }),
     ], 'pt')
     expect(out[0]!.byCategory[0]!.category).toBe('My Custom')
   })
@@ -80,7 +80,7 @@ describe('summarize', () => {
   it('per-currency totals are unchanged by locale', () => {
     const rows = [
       row({ currency: 'BRL', type: 'expense', category: 'Food', categoryNames: { pt: 'Alimentação' }, total: 100, count: 3 }),
-      row({ currency: 'BRL', type: 'income', category: 'Salary', category_names: '{"pt":"Salário"}', total: 5000, count: 1 }),
+      row({ currency: 'BRL', type: 'income', category: 'Salary', categoryNames: { pt: 'Salário' }, total: 5000, count: 1 }),
     ]
     const en = summarize(rows, 'en')
     const pt = summarize(rows, 'pt')
