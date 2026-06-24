@@ -16,7 +16,7 @@ export const CreateTransactionInput = z.object({
   currency: CurrencyCode.optional(),
   idempotencyKey: z.string().min(1),
   rawInput: z.string().optional(),
-  note: z.string().max(NOTE_MAX_LENGTH).optional(),
+  note: z.string().min(1).max(NOTE_MAX_LENGTH).optional(),
   tags: z.array(z.string().min(1)).optional(),
 })
 export type CreateTransactionInput = z.infer<typeof CreateTransactionInput>

@@ -53,7 +53,7 @@ export const Transaction = z.object({
   idempotencyKey: z.string().min(1),
   classification: Classification,
   rawInput: z.string().optional(),
-  note: z.string().max(NOTE_MAX_LENGTH).optional(),
+  note: z.string().min(1).max(NOTE_MAX_LENGTH).optional(),
   refs: z.object({
     accountId: Id.optional(),
     toAccountId: Id.optional(),
@@ -81,7 +81,7 @@ export const TransactionView = z.object({
   idempotencyKey: z.string().min(1),
   classification: Classification,
   rawInput: z.string().optional(),
-  note: z.string().max(NOTE_MAX_LENGTH).optional(),
+  note: z.string().min(1).max(NOTE_MAX_LENGTH).optional(),
   accountId: Id.optional(),
   accountName: z.string().optional(),
   /** Destination account — present only on type 'transfer'. */

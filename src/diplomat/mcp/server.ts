@@ -75,7 +75,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
         ),
         idempotencyKey: z.string().min(1),
         rawInput: z.string().optional().describe('Original user phrasing, for audit'),
-        note: z.string().max(NOTE_MAX_LENGTH).optional().describe('Free-form memo (observação) — distinct from description/rawInput/tags'),
+        note: z.string().min(1).max(NOTE_MAX_LENGTH).optional().describe('Free-form memo (observação) — distinct from description/rawInput/tags'),
         tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
       },
     },
@@ -105,7 +105,7 @@ export const buildMcpServer = (deps: Deps): McpServer => {
               currency: CurrencyCode.optional(),
               status: TransactionStatus.optional(),
               idempotencyKey: z.string().optional(),
-              note: z.string().max(NOTE_MAX_LENGTH).optional(),
+              note: z.string().min(1).max(NOTE_MAX_LENGTH).optional(),
             }),
           )
           .min(1)

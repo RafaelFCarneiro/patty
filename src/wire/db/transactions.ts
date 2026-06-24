@@ -21,7 +21,7 @@ export const TransactionRowSchema = z.object({
   classification_method: z.string(),
   confidence:            z.number(),
   raw_input:             z.string().nullable(),
-  note:                  z.string().nullable().default(null),
+  note:                  z.string().nullable(),
   from_account_id:       z.string().nullable(),
   from_account_name:     z.string().nullable(),
   to_account_id:         z.string().nullable(),

@@ -113,6 +113,7 @@ const sqlRow = (overrides: Record<string, unknown> = {}): Record<string, unknown
   classification_method: 'rule',
   confidence: 0.8,
   raw_input: null,
+  note: null,
   from_account_id: 'acc-1',
   from_account_name: 'Nubank',
   to_account_id: null,
@@ -270,6 +271,17 @@ describe('note zod validation', () => {
     const result = wireInTransactions.UpdateTransactionInput.safeParse({
       id: 'tx-1',
       note: 'x'.repeat(NOTE_MAX_LENGTH + 1),
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects an empty string note on create', () => {
+    const result = wireInTransactions.CreateTransactionInput.safeParse({
+      description: 'Test',
+      amount: 10,
+      type: 'expense',
+      idempotencyKey: 'k1',
+      note: '',
     })
     expect(result.success).toBe(false)
   })
