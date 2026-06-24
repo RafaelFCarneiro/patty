@@ -1,7 +1,7 @@
 # Feature Design 008: Transaction notes (observações)
 
 **Type:** Feature design (a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress · **Branch:** `feat/transaction-notes` (suggested) ·
+**Implementation status:** Done · **Branch:** `feat/transaction-notes` (suggested) ·
 **Date:** 2026-06-21 · Additive transaction field.
 
 > **Implementation status** tracks delivery, distinct from the design's acceptance. Values:
