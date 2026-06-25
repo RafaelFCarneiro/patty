@@ -3,32 +3,13 @@ import { purry } from 'remeda'
 import { localizeCategoryName } from './category.js'
 import type { CurrencyCode } from '../models/common.js'
 import type { Locale } from '../models/locale.js'
+import type { CurrencySummary, SummaryRow } from '../models/summary.js'
 import { TransactionType } from '../models/transaction.js'
-
-/** Raw aggregation row from the database (transfers already excluded in SQL). */
-export type SummaryRow = {
-  currency: CurrencyCode
-  type: TransactionType
-  category: string | null
-  categoryNames: Record<string, string> | null
-  total: number
-  count: number
-}
 
 const uncategorizedLabels: Record<Locale, string> = {
   en: 'Uncategorized',
   pt: 'Sem categoria',
   es: 'Sin categoría',
-}
-
-export type CategoryTotal = { category: string; type: TransactionType; total: number; count: number }
-
-export type CurrencySummary = {
-  currency: CurrencyCode
-  income: number
-  expenses: number
-  balance: number
-  byCategory: CategoryTotal[]
 }
 
 const roundMoney = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
