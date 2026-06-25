@@ -14,6 +14,7 @@ import { createCreditCard, deleteCreditCard, listCreditCards } from '../../contr
 import type { Deps } from '../../controllers/deps.js'
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js'
+import { getStatus } from '../../controllers/status.js'
 import { getSpendingSummary } from '../../controllers/summary.js'
 import {
   confirmTransaction,
@@ -51,8 +52,9 @@ const parse = <S extends z.ZodTypeAny>(schema: S, body: unknown, reply: FastifyR
   return r.data as z.output<S>
 }
 
-export const registerRoutes = (app: FastifyInstance, deps: Deps): void => {
+export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string): void => {
   app.get('/api/health', async () => ({ status: 'ok' }))
+  app.get('/api/status', async () => getStatus(deps, version))
 
   app.get('/api/accounts', async (req, reply) => {
     const q = z.object({ type: AccountType.optional() }).safeParse(req.query)

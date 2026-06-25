@@ -11,6 +11,7 @@ import { billsRepo } from '../../../src/diplomat/db/repos/bills.js'
 import { categoriesRepo } from '../../../src/diplomat/db/repos/categories.js'
 import { subCategoriesRepo } from '../../../src/diplomat/db/repos/subCategories.js'
 import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js'
+import { healthRepo } from '../../../src/diplomat/db/repos/health.js'
 import { merchantsRepo } from '../../../src/diplomat/db/repos/merchants.js'
 import { recurringRepo } from '../../../src/diplomat/db/repos/recurring.js'
 import { settingsRepo } from '../../../src/diplomat/db/repos/settings.js'
@@ -46,6 +47,7 @@ describe('empty DB (ADR-008)', () => {
       categories: categoriesRepo(db),
       subCategories: subCategoriesRepo(db),
       creditCards: creditCardsRepo(db),
+      health: healthRepo(db),
       merchants: merchantsRepo(db),
       recurring: recurringRepo(db),
       settings: settingsR,

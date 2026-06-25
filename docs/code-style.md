@@ -47,6 +47,22 @@ export const payBill = async (deps, input) => {
   `resolveCardRef`) — never inline `resolveByName` + error mapping in a controller.
 - Expected failures are `AppError` values; unexpected errors throw (become 500s). Never `try/catch`
   business outcomes; never throw domain errors.
+- When resolving independent async deps, pipe `Promise.all` through `R.pipe` for an expression body:
+
+```ts
+// ✅ DO
+export const getStatus = async (deps: Deps, version: string): Promise<StatusOut> =>
+  R.pipe(
+    await Promise.all([deps.health.reachable(), deps.locale().catch(R.constant(Locale.enum.en))]),
+    ([reachable, locale]) => ({ name: 'fintrack', version, db: reachable ? 'ok' : 'error' as const, locale }),
+  )
+
+// ❌ DON'T
+export const getStatus = async (deps: Deps, version: string): Promise<StatusOut> => {
+  const [reachable, locale] = await Promise.all([...])
+  return { name: 'fintrack', version, db: reachable ? 'ok' : 'error', locale }
+}
+```
 
 ## logic/ — pure and declarative
 
@@ -63,7 +79,7 @@ const currencies = [...new Set(rows.map((r) => r.currency))].sort()
 return currencies.map((currency) => { const mine = rows.filter(...); ... })  // manual grouping
 ```
 
-- Native `map`/`filter` is fine for single-stage transforms. Don't force pipes onto control flow.
+- Native `map`/`filter` is fine for single-stage transforms.
 - Every logic function gets a colocated `*.test.ts` (vitest) — pure functions, no mocks.
 
 ## Testing requirements

@@ -6,6 +6,7 @@ import { createAccount, deleteAccount, getAccountBalances, listAccounts, updateA
 import { getBill, payBill } from '../../controllers/bills.js'
 import { createCategory, createSubCategory, deleteCategory, deleteSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
 import { getPreferences, setLocale } from '../../controllers/settings.js'
+import { getStatus } from '../../controllers/status.js'
 import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
@@ -45,8 +46,8 @@ const jsonError = (e: AppError) => ({
 
 const fromResult = <T>(result: Result<T, AppError>) => result.match(json, jsonError)
 
-export const buildMcpServer = (deps: Deps): McpServer => {
-  const server = new McpServer({ name: 'fintrack', version: '0.1.0' })
+export const buildMcpServer = (deps: Deps, version: string): McpServer => {
+  const server = new McpServer({ name: 'fintrack', version })
 
   server.registerTool(
     'create_transaction',
@@ -566,6 +567,20 @@ export const buildMcpServer = (deps: Deps): McpServer => {
       inputSchema: {},
     },
     async () => json(await getPreferences(deps)),
+  )
+
+  server.registerTool(
+    'get_status',
+    {
+      title: 'Get server status',
+      description:
+        'Returns server name, version, database reachability, and active locale. ' +
+        'A convenience for tool-only callers (the AI agent / chat user) — complements the ' +
+        'protocol-native initialize serverInfo (version) and ping (liveness), which are not ' +
+        'accessible via tools.',
+      inputSchema: {},
+    },
+    async () => json(await getStatus(deps, version)),
   )
 
   return server
