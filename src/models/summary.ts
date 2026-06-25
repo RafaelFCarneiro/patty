@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { CurrencyCode } from './common.js'
-import { MovementType, TransactionType } from './transaction.js'
+import { MovementType } from './transaction.js'
 
 export const SummaryRow = z.object({
   currency: CurrencyCode,
@@ -14,7 +14,7 @@ export type SummaryRow = z.infer<typeof SummaryRow>
 
 export const CategoryTotal = z.object({
   category: z.string(),
-  type: TransactionType,
+  type: MovementType,
   total: z.number(),
   count: z.number().int(),
 })
