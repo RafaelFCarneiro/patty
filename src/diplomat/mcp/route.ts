@@ -7,9 +7,9 @@ import { buildMcpServer } from './server.js'
  * Stateless MCP over streamable HTTP: a fresh server+transport per request.
  * Claude clients connect to POST /mcp.
  */
-export const registerMcpRoute = (app: FastifyInstance, deps: Deps): void => {
+export const registerMcpRoute = (app: FastifyInstance, deps: Deps, version: string): void => {
   app.post('/mcp', async (req, reply) => {
-    const server = buildMcpServer(deps)
+    const server = buildMcpServer(deps, version)
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

@@ -82,5 +82,3 @@ export const SummaryRowSchema = z.object({
   ...rest,
   categoryNames: parseCategoryNames(category_names),
 }))
-// Decoded summary row shape — kept in wire/db so the repo doesn't import a logic type.
-export type SummaryRow = z.infer<typeof SummaryRowSchema>
