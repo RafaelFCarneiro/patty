@@ -146,6 +146,7 @@ Remeda functions to prefer over manual imperative equivalents:
 | `{...a, ...b, ...c}` across many objects | `R.mergeAll([...])` |
 | `arr.find(fn) ?? fallback` | `R.firstBy` |
 | `switch` over a value to transform it | `R.conditional` |
+| `() => fixedValue` | `R.constant(fixedValue)` |
 
 The rule of thumb from `docs/code-style.md` still applies: native `map`/`filter` is fine for
 single-stage transforms. Reach for remeda when there are ≥2 stages, grouping, counting, or
