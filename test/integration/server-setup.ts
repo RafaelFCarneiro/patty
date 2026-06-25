@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { createRequire } from 'node:module'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, inject } from 'vitest'
 import { bootstrap } from '../../src/diplomat/db/bootstrap.js'
@@ -13,6 +14,7 @@ import { recurringRepo } from '../../src/diplomat/db/repos/recurring.js'
 import { settingsRepo } from '../../src/diplomat/db/repos/settings.js'
 import { tagsRepo } from '../../src/diplomat/db/repos/tags.js'
 import { transactionsRepo } from '../../src/diplomat/db/repos/transactions.js'
+import { healthRepo } from '../../src/diplomat/db/repos/health.js'
 import { McpTransport } from '../../src/config.js'
 import { Locale } from '../../src/models/locale.js'
 import { registerRoutes } from '../../src/diplomat/http/routes.js'
@@ -45,6 +47,7 @@ beforeAll(async () => {
     categories: categoriesRepo(db),
     subCategories: subCategoriesRepo(db),
     creditCards: creditCardsRepo(db),
+    health: healthRepo(db),
     merchants: merchantsRepo(db),
     recurring: recurringRepo(db),
     settings: settingsR,
@@ -59,9 +62,12 @@ beforeAll(async () => {
     resetLocale: () => {},
   }
 
+  const require = createRequire(import.meta.url)
+  const { version } = require('../../package.json') as { version: string }
+
   app = Fastify()
-  registerRoutes(app, deps)
-  registerMcpRoute(app, deps)
+  registerRoutes(app, deps, version)
+  registerMcpRoute(app, deps, version)
 
   await app.listen({ port: TEST_PORT, host: '::' })
 })

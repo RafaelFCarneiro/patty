@@ -1,7 +1,7 @@
 # Feature Design 009: `get_status` tool + accurate server version
 
 **Type:** Feature design (a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** Not started · **Branch:** `feat/mcp-status` (suggested) ·
+**Implementation status:** In progress · **Branch:** `feat/mcp-status` (suggested) ·
 **Date:** 2026-06-21 · Additive MCP tool + a server-version fix.
 
 > **Implementation status** tracks delivery, distinct from the design's acceptance. Values:

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto'
+import { createRequire } from 'node:module'
 import { loadConfig, McpTransport } from './config.js'
 import type { Deps } from './controllers/deps.js'
 import { bootstrap } from './diplomat/db/bootstrap.js'
@@ -14,8 +15,12 @@ import { recurringRepo } from './diplomat/db/repos/recurring.js'
 import { settingsRepo } from './diplomat/db/repos/settings.js'
 import { tagsRepo } from './diplomat/db/repos/tags.js'
 import { transactionsRepo } from './diplomat/db/repos/transactions.js'
+import { healthRepo } from './diplomat/db/repos/health.js'
 import { connectStdio } from './diplomat/mcp/stdio.js'
 import { Locale } from './models/locale.js'
+
+const require = createRequire(import.meta.url)
+const { version } = require('../package.json') as { version: string }
 
 const main = async (): Promise<void> => {
   const config = loadConfig()
@@ -43,6 +48,7 @@ const main = async (): Promise<void> => {
     categories: categoriesRepo(db),
     subCategories: subCategoriesRepo(db),
     creditCards: creditCardsRepo(db),
+    health: healthRepo(db),
     merchants: merchantsRepo(db),
     recurring: recurringRepo(db),
     settings: settingsR,
@@ -55,7 +61,7 @@ const main = async (): Promise<void> => {
   }
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
-    const server = await connectStdio(deps)
+    const server = await connectStdio(deps, version)
     const shutdown = (): void => {
       server.close().catch((err: unknown) => console.error(err)).finally(() => process.exit(0))
     }
@@ -73,8 +79,8 @@ const main = async (): Promise<void> => {
   const { registerMcpRoute } = await import('./diplomat/mcp/route.js')
 
   const app = Fastify({ logger: true })
-  registerRoutes(app, deps)
-  registerMcpRoute(app, deps)
+  registerRoutes(app, deps, version)
+  registerMcpRoute(app, deps, version)
 
   const shutdown = (): void => {
     app.close()

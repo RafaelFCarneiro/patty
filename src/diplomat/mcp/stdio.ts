@@ -4,8 +4,8 @@ import type { Deps } from '../../controllers/deps.js'
 import { buildMcpServer } from './server.js'
 
 /** Thin diplomat: connects the transport-agnostic MCP server to a stdio transport. */
-export const connectStdio = async (deps: Deps): Promise<McpServer> => {
-  const server = buildMcpServer(deps)
+export const connectStdio = async (deps: Deps, version: string): Promise<McpServer> => {
+  const server = buildMcpServer(deps, version)
   await server.connect(new StdioServerTransport())
   return server
 }
