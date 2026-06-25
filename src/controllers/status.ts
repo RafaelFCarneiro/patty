@@ -1,4 +1,4 @@
-import type { Locale } from '../models/locale.js'
+import { Locale } from '../models/locale.js'
 import type { HealthRepo } from '../diplomat/db/repos/health.js'
 
 type StatusDeps = {
@@ -22,10 +22,12 @@ export const getStatus = async (deps: StatusDeps, version: string): Promise<Stat
     db = 'error'
   }
 
-  return {
-    name: 'fintrack',
-    version,
-    db,
-    locale: await deps.locale(),
+  let locale: Locale
+  try {
+    locale = await deps.locale()
+  } catch {
+    locale = Locale.enum.en
   }
+
+  return { name: 'fintrack', version, db, locale }
 }
