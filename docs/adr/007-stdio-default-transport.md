@@ -18,7 +18,7 @@ personal MCP server, the HTTP-only transport has friction:
    the client spawns the process and speaks JSON-RPC over stdin/stdout. No port, no URL, no bridge, and
    no possibility of a port collision.
 
-The domain is already transport-agnostic: `buildMcpServer(deps)` in `diplomat/mcp/server.ts` registers the
+The domain is already transport-agnostic: `buildMcpServer(deps, version)` in `diplomat/mcp/server.ts` registers the
 tools and knows nothing about HTTP. HTTP is just one *edge* wired onto it. Adding stdio is adding a second
 edge — a direct fit for the diplomatic architecture (transports are edges; the domain does not move).
 
@@ -32,7 +32,7 @@ Support **two** MCP transports, selected by config, with **stdio as the default*
 2. **`stdio` (default):** build the server and connect a `StdioServerTransport` (new edge
    `diplomat/mcp/stdio.ts`). **Fastify is not started**; there is no HTTP server, no port, no REST.
 3. **`http` (opt-in):** current behaviour unchanged — Fastify with REST + streamable HTTP MCP on `PORT`.
-4. **`buildMcpServer(deps)` stays the single transport-agnostic core.** Both edges connect the same server;
+4. **`buildMcpServer(deps, version)` stays the single transport-agnostic core.** Both edges connect the same server;
    no tool, controller, logic, model, or repo changes.
 5. **stdout is reserved for the protocol in `stdio` mode.** JSON-RPC frames travel over stdout, so **all
    human-facing logging (startup, migration, seed, errors) must go to stderr** in stdio mode. This is the
