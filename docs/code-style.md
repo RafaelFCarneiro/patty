@@ -79,7 +79,7 @@ const currencies = [...new Set(rows.map((r) => r.currency))].sort()
 return currencies.map((currency) => { const mine = rows.filter(...); ... })  // manual grouping
 ```
 
-- Native `map`/`filter` is fine for single-stage transforms. Don't force pipes onto control flow.
+- Native `map`/`filter` is fine for single-stage transforms.
 - Every logic function gets a colocated `*.test.ts` (vitest) — pure functions, no mocks.
 
 ## Testing requirements
