@@ -1,20 +1,18 @@
+import type { AccountError } from '../models/account.js'
+import type { BillError } from '../models/bill.js'
+import type { CategoryError } from '../models/category.js'
+import type { CardError } from '../models/creditCard.js'
+import type { TagError } from '../models/tag.js'
+import type { TransactionError } from '../models/transaction.js'
+
 /** Expected domain failures, returned as `err(AppError)` from controllers. */
 export type AppError =
-  | { code: 'unknown_account'; query: string; candidates: string[] }
-  | { code: 'ambiguous_account'; query: string; candidates: string[] }
-  | { code: 'unknown_category'; query: string; candidates: string[] }
-  | { code: 'ambiguous_category'; query: string; candidates: string[] }
-  | { code: 'unknown_sub_category'; query: string; candidates: string[] }
-  | { code: 'ambiguous_sub_category'; query: string; candidates: string[] }
-  | { code: 'unknown_card'; query: string; candidates: string[] }
-  | { code: 'ambiguous_card'; query: string; candidates: string[] }
-  | { code: 'duplicate_name'; entity: 'account' | 'category' | 'sub_category' | 'credit_card' | 'tag'; name: string }
-  | { code: 'unknown_transaction'; id: string }
-  | { code: 'unknown_bill'; card: string; month: number; year: number }
-  | { code: 'category_kind_mismatch'; transactionType: string; categoryName: string; categoryKind: string; hint: string }
-  | { code: 'in_use'; entity: 'category' | 'sub_category'; name: string; references: { transactions: number; recurring: number; subCategories: number } }
-  | { code: 'in_use'; entity: 'account'; name: string; references: { transactions: number; recurring: number; cards: number } }
-  | { code: 'validation'; issues: string[] }
+  | AccountError
+  | CategoryError
+  | CardError
+  | TransactionError
+  | BillError
+  | TagError
 
 export const formatAppError = (e: AppError): string => {
   switch (e.code) {
@@ -41,6 +39,10 @@ export const formatAppError = (e: AppError): string => {
       return `${e.code}: ${e.id}`
     case 'unknown_bill':
       return `${e.code}: ${e.card} ${e.year}-${String(e.month).padStart(2, '0')}`
+    default: {
+      const _exhaustive: never = e
+      return `unknown error: ${JSON.stringify(_exhaustive)}`
+    }
   }
 }
 
@@ -64,5 +66,9 @@ export const httpStatus = (e: AppError): number => {
       return 422
     case 'validation':
       return 422
+    default: {
+      const _exhaustive: never = e
+      throw new Error(`unmapped error code: ${JSON.stringify(_exhaustive)}`)
+    }
   }
 }

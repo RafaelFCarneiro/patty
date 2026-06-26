@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { Id } from './common.js'
+import type { Ambiguous, DuplicateName, InUse, NotFound, ValidationError } from './error.js'
 import type { LabelMap } from './locale.js'
 
 export const CategoryKind = z.enum(['expense', 'income', 'both'])
@@ -43,4 +44,34 @@ export type CreateSubCategory = {
   id: string
   name: string
   parentId: string
+}
+
+export type CategoryReferences = { transactions: number; recurring: number; subCategories: number }
+
+export type CategoryError =
+  | NotFound<'category'>
+  | Ambiguous<'category'>
+  | NotFound<'sub_category'>
+  | Ambiguous<'sub_category'>
+  | DuplicateName<'category'>
+  | DuplicateName<'sub_category'>
+  | InUse<'category', CategoryReferences>
+  | InUse<'sub_category', CategoryReferences>
+  | { code: 'category_kind_mismatch'; transactionType: string; categoryName: string; categoryKind: string; hint: string }
+  | ValidationError
+
+export const categoryErrors = {
+  duplicateName: (entity: 'category' | 'sub_category', name: string): CategoryError => ({
+    code: 'duplicate_name', entity, name,
+  }),
+  inUse: (entity: 'category' | 'sub_category', name: string, references: CategoryReferences): CategoryError => ({
+    code: 'in_use', entity, name, references,
+  }),
+  kindMismatch: (transactionType: string, categoryName: string, categoryKind: string): CategoryError => ({
+    code: 'category_kind_mismatch',
+    transactionType,
+    categoryName,
+    categoryKind,
+    hint: `Category "${categoryName}" is ${categoryKind}-only; to use it, set type: "${categoryKind}"`,
+  }),
 }

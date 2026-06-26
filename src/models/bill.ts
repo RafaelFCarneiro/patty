@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { Id, IsoDate } from './common.js'
+import type { ValidationError } from './error.js'
 import type { LabelMap } from './locale.js'
 
 export const BillStatus = z.enum(['open', 'closed', 'paid'])
@@ -22,3 +23,13 @@ export const Bill = z.object({
   statusLabel: z.string().optional(),
 })
 export type Bill = z.infer<typeof Bill>
+
+export type BillError =
+  | { code: 'unknown_bill'; card: string; month: number; year: number }
+  | ValidationError
+
+export const billErrors = {
+  notFound: (card: string, month: number, year: number): BillError => ({
+    code: 'unknown_bill', card, month, year,
+  }),
+}

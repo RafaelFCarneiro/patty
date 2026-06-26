@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import type { AppError } from '../common/errors.js'
 import { CurrencyCode, Id } from './common.js'
+import type { Ambiguous, DuplicateName, InUse, NotFound, ValidationError } from './error.js'
 import type { LabelMap } from './locale.js'
 
 export const AccountType = z.enum(['checking', 'savings', 'wallet', 'investment', 'credit'])
@@ -53,34 +53,36 @@ export type AccountBalance = z.infer<typeof AccountBalanceSchema>
  */
 export type AccountReferences = { transactions: number; recurring: number; cards: number }
 
-/**
- * Expected-error payloads are domain vocabulary, colocated with the model.
- * Controllers raise them via `guard(condition, accountErrors.X)`; the condition lives in
- * logic/ (pure predicate) or the controller (when it needs the repo) — never the payload.
- */
+export type AccountError =
+  | NotFound<'account'>
+  | Ambiguous<'account'>
+  | DuplicateName<'account'>
+  | InUse<'account', AccountReferences>
+  | ValidationError
+
 export const accountErrors = {
   creditRejected: {
     code: 'validation',
     issues: ['credit accounts are managed by their credit card — use the card flow instead (create_credit_card / delete_credit_card)'],
-  } satisfies AppError,
-  duplicateName: (name: string): AppError => ({ code: 'duplicate_name', entity: 'account', name }),
-  inUse: (name: string, references: AccountReferences): AppError => ({
+  } satisfies AccountError,
+  duplicateName: (name: string): AccountError => ({ code: 'duplicate_name', entity: 'account', name }),
+  inUse: (name: string, references: AccountReferences): AccountError => ({
     code: 'in_use', entity: 'account', name, references,
   }),
-  typeImmutable: (transactions: number): AppError => ({
+  typeImmutable: (transactions: number): AccountError => ({
     code: 'validation',
     issues: [`type cannot be changed — account has ${transactions} transaction(s)`],
   }),
-  currencyImmutableTransactions: (transactions: number): AppError => ({
+  currencyImmutableTransactions: (transactions: number): AccountError => ({
     code: 'validation',
     issues: [`currency cannot be changed — account has ${transactions} transaction(s)`],
   }),
   currencyImmutableRecurring: {
     code: 'validation',
     issues: ['currency cannot be changed — account has recurring rules that persist the original currency'],
-  } satisfies AppError,
+  } satisfies AccountError,
   currencyImmutableCards: {
     code: 'validation',
     issues: ['currency cannot be changed — account is a credit card payment account'],
-  } satisfies AppError,
+  } satisfies AccountError,
 }

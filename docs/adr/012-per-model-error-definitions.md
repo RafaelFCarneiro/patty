@@ -1,6 +1,6 @@
 # ADR-012: Per-model error definitions; `common` composes the `AppError` union
 
-**Status:** Proposed · **Date:** 2026-06-26 · **Deciders:** Rafael · Builds on the error-payload
+**Status:** Accepted · **Date:** 2026-06-26 · **Deciders:** Rafael · Builds on the error-payload
 colocation introduced in `refactor/account`. Major, mostly-mechanical change touching every model and
 the error plumbing — recorded here before the diff.
 

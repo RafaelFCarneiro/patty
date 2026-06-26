@@ -1,6 +1,7 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
+import { validation } from '../models/error.js'
 import { Locale, LocaleSource } from '../models/locale.js'
 import type { Deps } from './deps.js'
 
@@ -32,7 +33,7 @@ export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<Prefer
       !(input.source === LocaleSource.enum.inferred &&
         current?.localeSource === LocaleSource.enum.explicit &&
         wouldChange),
-      { code: 'validation', issues: ['Cannot auto-switch locale: user set it explicitly. Use source "explicit" to override.'] },
+      validation(['Cannot auto-switch locale: user set it explicitly. Use source "explicit" to override.']),
     )
     if (!wouldChange && current) {
       return ok({ locale: current.locale, localeSource: current.localeSource })

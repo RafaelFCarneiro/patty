@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { LocalizedNames } from './category.js'
 import { CurrencyCode, Id, IsoDate, Money } from './common.js'
+import type { ValidationError } from './error.js'
 import type { LabelMap } from './locale.js'
 
 /** Whether the transaction has cleared or is still expected. Default is date-aware when omitted. */
@@ -205,3 +206,11 @@ export type CreateTransactionResult = {
 export type DeleteTransactionResult =
   | { deleted: true; transaction: TransactionView }
   | { deleted: false; dryRun: true; wouldDelete: TransactionView; hint: string }
+
+export type TransactionError =
+  | { code: 'unknown_transaction'; id: string }
+  | ValidationError
+
+export const transactionErrors = {
+  notFound: (id: string): TransactionError => ({ code: 'unknown_transaction', id }),
+}

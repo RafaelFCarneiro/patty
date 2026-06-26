@@ -1,5 +1,6 @@
 import { purry } from 'remeda'
 import type { AppError } from '../common/errors.js'
+import { validation, type ValidationError } from '../models/error.js'
 import type { Account } from '../models/account.js'
 import type { CreditCard } from '../models/creditCard.js'
 import { CurrencyCode } from '../models/common.js'
@@ -56,11 +57,11 @@ const hasCategoryInput = (input: Pick<UpdateTransactionInput, 'category' | 'subC
 export const guardTransferMutability = (
   existing: Pick<TransactionView, 'type'>,
   input: Pick<UpdateTransactionInput, 'type' | 'category' | 'subCategory'>,
-): Result<void, AppError> => {
+): Result<void, ValidationError> => {
   if (isTransfer(existing) && input.type)
-    return err({ code: 'validation', issues: ['cannot change the type of a transfer transaction'] })
+    return err(validation(['cannot change the type of a transfer transaction']))
   if (wouldBeTransfer(existing, input) && hasCategoryInput(input))
-    return err({ code: 'validation', issues: ['transfer transactions cannot have a category or sub-category'] })
+    return err(validation(['transfer transactions cannot have a category or sub-category']))
   return ok(undefined)
 }
 

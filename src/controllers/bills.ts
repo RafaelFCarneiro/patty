@@ -1,8 +1,9 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard, okOr } from '../common/result.js'
-import { BillStatus, type Bill } from '../models/bill.js'
 import { AccountType } from '../models/account.js'
+import { validation } from '../models/error.js'
+import { billErrors, BillStatus, type Bill } from '../models/bill.js'
 import { ClassificationMethod, type TransactionSource as TransactionSourceType, TransactionType } from '../models/transaction.js'
 import type { BillWithItems } from '../diplomat/db/repos/bills.js'
 import { computeBillTotal, withStatusLabel } from '../logic/bill.js'
@@ -19,12 +20,7 @@ export const getBill = (
 ): ResultAsync<BillView, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card)
-    const bill = yield* okOr(await deps.bills.get(card.id, input.month, input.year), {
-      code: 'unknown_bill',
-      card: card.name,
-      month: input.month,
-      year: input.year,
-    })
+    const bill = yield* okOr(await deps.bills.get(card.id, input.month, input.year), billErrors.notFound(card.name, input.month, input.year))
     const locale = await deps.locale()
     return ok({
       ...bill,
@@ -42,24 +38,15 @@ export const payBill = (
 ): ResultAsync<Bill, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card)
-    const existing = yield* okOr(await deps.bills.get(card.id, input.month, input.year), {
-      code: 'unknown_bill',
-      card: card.name,
-      month: input.month,
-      year: input.year,
-    })
+    const existing = yield* okOr(await deps.bills.get(card.id, input.month, input.year), billErrors.notFound(card.name, input.month, input.year))
 
     if (existing.bill.status === BillStatus.enum.paid) return ok(existing.bill)
 
     const total = computeBillTotal(existing.transactions)
 
     if (total <= 0) {
-      const paid = yield* okOr(await deps.bills.setStatus(existing.bill.id, BillStatus.enum.paid), {
-        code: 'unknown_bill',
-        card: card.name,
-        month: input.month,
-        year: input.year,
-      })
+      const paid = yield* okOr(await deps.bills.setStatus(existing.bill.id, BillStatus.enum.paid),
+        billErrors.notFound(card.name, input.month, input.year))
       return ok(paid)
     }
 
@@ -68,17 +55,13 @@ export const payBill = (
       ? yield* resolveAccountRef(deps, input.account)
       : yield* okOr(
           card.paymentAccountId ? await deps.accounts.findById(card.paymentAccountId) : null,
-          { code: 'validation', issues: ['no paying account: pass `account` or set `paymentAccount` on the card'] },
+          validation(['no paying account: pass `account` or set `paymentAccount` on the card']),
         )
 
-    yield* guard(payer.type !== AccountType.enum.credit, {
-      code: 'validation',
-      issues: ['payment account cannot be a credit account'],
-    })
-    yield* guard(payer.currency === card.currency, {
-      code: 'validation',
-      issues: [`currency mismatch: card is ${card.currency}, payer is ${payer.currency}`],
-    })
+    yield* guard(payer.type !== AccountType.enum.credit,
+      validation(['payment account cannot be a credit account']))
+    yield* guard(payer.currency === card.currency,
+      validation([`currency mismatch: card is ${card.currency}, payer is ${payer.currency}`]))
 
     const today = toIsoDate(deps.clock())
 
@@ -96,11 +79,6 @@ export const payBill = (
       refs: { accountId: payer.id, toAccountId: card.accountId, billId: existing.bill.id },
     }, [])
 
-    const paid = yield* okOr(await deps.bills.setStatus(existing.bill.id, BillStatus.enum.paid), {
-      code: 'unknown_bill',
-      card: card.name,
-      month: input.month,
-      year: input.year,
-    })
+    const paid = yield* okOr(await deps.bills.setStatus(existing.bill.id, BillStatus.enum.paid), billErrors.notFound(card.name, input.month, input.year))
     return ok(paid)
   })

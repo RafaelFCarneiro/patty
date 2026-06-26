@@ -3,8 +3,9 @@ import type { AppError } from '../common/errors.js'
 import { buildSynonyms, resolveAndSort } from '../logic/category.js'
 import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js'
 import type { Account } from '../models/account.js'
-import type { Category, SubCategory } from '../models/category.js'
+import { categoryErrors, type Category, type SubCategory } from '../models/category.js'
 import type { CreditCard } from '../models/creditCard.js'
+import { ambiguous, notFound } from '../models/error.js'
 import type { MovementType } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 
@@ -14,8 +15,9 @@ export const resolutionToResult = <T extends Named>(
   kind: 'account' | 'category' | 'sub_category' | 'card',
 ): Result<T, AppError> => {
   if (res.kind === 'found') return ok(res.entity)
-  const code = res.kind === 'none' ? (`unknown_${kind}` as const) : (`ambiguous_${kind}` as const)
-  return err({ code, query: res.query, candidates: res.candidates })
+  return res.kind === 'none'
+    ? err(notFound(kind, res.query, res.candidates))
+    : err(ambiguous(kind, res.query, res.candidates))
 }
 
 export const resolveAccountRef = (deps: Deps, name: string): ResultAsync<Account, AppError> =>
@@ -47,11 +49,5 @@ export const guardCategoryKind = (
   txType: MovementType,
 ): Result<void, AppError> => {
   if (category.kind === 'both' || category.kind === txType) return ok(undefined)
-  return err({
-    code: 'category_kind_mismatch',
-    transactionType: txType,
-    categoryName: category.name,
-    categoryKind: category.kind,
-    hint: `Category "${category.name}" is ${category.kind}-only; to use it, set type: "${category.kind}"`,
-  })
+  return err(categoryErrors.kindMismatch(txType, category.name, category.kind))
 }

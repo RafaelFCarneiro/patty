@@ -1,6 +1,7 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
+import { validation } from '../models/error.js'
 import { toIsoDate } from '../logic/period.js'
 import { addLocalizedLabels, defaultStatusFor } from '../logic/transaction.js'
 import { AccountType } from '../models/account.js'
@@ -12,24 +13,14 @@ import { resolveAccountRef } from './resolve.js'
 
 const validateTransferAccounts = (from: Account, to: Account) =>
   safeTry(function* () {
-    yield* guard(from.type !== AccountType.enum.credit, {
-      code: 'validation',
-      issues: [`cannot transfer from a credit account (${from.name}) — use pay_bill instead`],
-    })
-    yield* guard(to.type !== AccountType.enum.credit, {
-      code: 'validation',
-      issues: [`cannot transfer to a credit account (${to.name}) — use pay_bill instead`],
-    })
-    yield* guard(from.id !== to.id, {
-      code: 'validation',
-      issues: ['from and to must be different accounts'],
-    })
-    yield* guard(from.currency === to.currency, {
-      code: 'validation',
-      issues: [
-        `cross-currency transfer not supported yet: ${from.name} is ${from.currency}, ${to.name} is ${to.currency}`,
-      ],
-    })
+    yield* guard(from.type !== AccountType.enum.credit,
+      validation([`cannot transfer from a credit account (${from.name}) — use pay_bill instead`]))
+    yield* guard(to.type !== AccountType.enum.credit,
+      validation([`cannot transfer to a credit account (${to.name}) — use pay_bill instead`]))
+    yield* guard(from.id !== to.id,
+      validation(['from and to must be different accounts']))
+    yield* guard(from.currency === to.currency,
+      validation([`cross-currency transfer not supported yet: ${from.name} is ${from.currency}, ${to.name} is ${to.currency}`]))
     return ok(undefined)
   })
 

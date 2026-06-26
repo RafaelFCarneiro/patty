@@ -1,5 +1,6 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
+import { validation } from '../models/error.js'
 import { guard, okOr } from '../common/result.js'
 import { AccountType } from '../models/account.js'
 import { billPeriodFor } from '../logic/bill.js'
@@ -22,15 +23,16 @@ import {
 import {
   TransactionStatus,
 } from '../models/transaction.js'
-import type {
-  CreateTransactionInput,
-  CreateTransactionResult,
-  CreateTransactionsBulkInput,
-  DeleteTransactionResult,
-  SearchTransactionsInput,
-  TransactionView,
-  TransactionSource,
-  UpdateTransactionInput,
+import {
+  transactionErrors,
+  type CreateTransactionInput,
+  type CreateTransactionResult,
+  type CreateTransactionsBulkInput,
+  type DeleteTransactionResult,
+  type SearchTransactionsInput,
+  type TransactionView,
+  type TransactionSource,
+  type UpdateTransactionInput,
 } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { guardCategoryKind, resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
@@ -42,21 +44,14 @@ export const createTransaction = (
   source: TransactionSource,
 ): ResultAsync<CreateTransactionResult, AppError> =>
   safeTry(async function* () {
-    yield* guard(!(input.account && input.card), {
-      code: 'validation',
-      issues: ['provide account OR card, not both'],
-    })
-    yield* guard(!(input.category && input.subCategory), {
-      code: 'validation',
-      issues: ['provide category OR subCategory, not both — subCategory implies its parent category'],
-    })
+    yield* guard(!(input.account && input.card), validation(['provide account OR card, not both']))
+    yield* guard(!(input.category && input.subCategory),
+      validation(['provide category OR subCategory, not both — subCategory implies its parent category']))
 
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
     if (account) {
-      yield* guard(account.type !== AccountType.enum.credit, {
-        code: 'validation',
-        issues: ['cannot post directly to a credit account — use the card parameter instead'],
-      })
+      yield* guard(account.type !== AccountType.enum.credit,
+        validation(['cannot post directly to a credit account — use the card parameter instead']))
     }
     const card = input.card ? yield* resolveCardRef(deps, input.card) : null
 
@@ -155,15 +150,10 @@ export const updateTransaction = (
   input: UpdateTransactionInput,
 ): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
-    yield* guard(!(input.category && input.subCategory), {
-      code: 'validation',
-      issues: ['provide category OR subCategory, not both'],
-    })
+    yield* guard(!(input.category && input.subCategory),
+      validation(['provide category OR subCategory, not both']))
 
-    const existing = yield* okOr(await deps.transactions.getById(input.id), {
-      code: 'unknown_transaction',
-      id: input.id,
-    })
+    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id))
 
     yield* guardTransferMutability(existing, input)
 
@@ -204,7 +194,7 @@ export const updateTransaction = (
         },
         { accountId: account?.id ?? null, categoryId, subCategoryId, tagNames: input.tags ?? null },
       ),
-      { code: 'unknown_transaction', id: input.id },
+      transactionErrors.notFound(input.id),
     )
 
     // Learning loop: correcting the category strengthens the merchant→category association
@@ -221,20 +211,14 @@ export const confirmTransaction = (
   input: { id: string },
 ): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
-    const existing = yield* okOr(await deps.transactions.getById(input.id), {
-      code: 'unknown_transaction',
-      id: input.id,
-    })
+    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id))
 
     const locale = await deps.locale()
 
     if (existing.status === TransactionStatus.enum.effective)
       return ok(addLocalizedLabels(existing, locale))
 
-    const confirmed = yield* okOr(await deps.transactions.confirm(input.id), {
-      code: 'unknown_transaction',
-      id: input.id,
-    })
+    const confirmed = yield* okOr(await deps.transactions.confirm(input.id), transactionErrors.notFound(input.id))
     return ok(addLocalizedLabels(confirmed, locale))
   })
 
@@ -243,10 +227,7 @@ export const deleteTransaction = (
   input: { id: string; confirm: boolean },
 ): ResultAsync<DeleteTransactionResult, AppError> =>
   safeTry(async function* () {
-    const existing = yield* okOr(await deps.transactions.getById(input.id), {
-      code: 'unknown_transaction',
-      id: input.id,
-    })
+    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id))
 
     const locale = await deps.locale()
     const labeled = addLocalizedLabels(existing, locale)
