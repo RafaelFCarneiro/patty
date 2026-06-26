@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import type { z } from 'zod'
 import { CurrencyCode } from '../../models/common.js'
 import * as modelAccount from '../../models/account.js'
 
