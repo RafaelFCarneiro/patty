@@ -2,6 +2,7 @@ import type { AccountError } from '../models/account.js'
 import type { BillError } from '../models/bill.js'
 import type { CategoryError } from '../models/category.js'
 import type { CardError } from '../models/creditCard.js'
+import type { LocaleError } from '../models/locale.js'
 import type { TagError } from '../models/tag.js'
 import type { TransactionError } from '../models/transaction.js'
 
@@ -13,6 +14,7 @@ export type AppError =
   | TransactionError
   | BillError
   | TagError
+  | LocaleError
 
 export const formatAppError = (e: AppError): string => {
   switch (e.code) {
