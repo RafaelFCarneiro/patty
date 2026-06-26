@@ -32,8 +32,10 @@ dynamic values are always parameter-bound. Caller text never becomes SQL text.**
 
    ```ts
    // diplomat/db — illustrative, not literal
-   const GROUP_BY: Record<AggregateGroupBy, { expr: SQL; join: SQL; label: SQL }> = {
-     category: { expr: sql`t.category_id`, join: sql`LEFT JOIN categories c ON c.id = t.category_id`, label: sql`c.name` },
+   const GROUP_BY: Record<AggregateGroupBy, { expr: SQL; join: SQL; label: SQL; labelNames?: SQL }> = {
+     // `label`/`labelNames` select raw columns only; category names are localized in TS
+     // (logic/category.ts#localizeCategoryName) during output shaping — never in SQL.
+     category: { expr: sql`t.category_id`, join: sql`LEFT JOIN categories c ON c.id = t.category_id`, label: sql`c.name`, labelNames: sql`c.names` },
      month:    { expr: sql`substr(t.date, 1, 7)`, join: sql``, label: sql`substr(t.date, 1, 7)` },
      // account | tag | merchant …
    }
@@ -95,11 +97,13 @@ and the enum-keyed map means adding a dimension stays a one-line, reviewed chang
   types; see Feature Design 004).
 - **Shared localized category-name resolution (one source of truth).** Every query that surfaces a category name
   — `fullTxSelect` (TransactionView), `summaryRows` (spending summary), and now `aggregate_spending` — must
-  resolve the display name via the **same** `names?.[locale] ?? name` rule, threading the active locale. This
-  has already leaked one query at a time (TransactionView, then the summary), each a separate bug fix. Going
-  forward: any analysis query that groups by or returns a category resolves the name through the single shared
-  helper/SQL fragment (locale bound as a parameter), never raw `c.name`. New aggregation tools reuse it by
-  default — do not re-derive per query.
+  resolve the display name via the **same** helper, **`logic/category.ts#localizeCategoryName(name, names,
+  locale)`** (`names?.[locale] ?? name`), threading the active locale. Resolution happens **in TS**: the SQL
+  selects the raw `c.name` + `c.names` JSON, and the pure `logic/` layer resolves the label — **not**
+  `json_extract` in SQL. This has already leaked one query at a time (TransactionView, then the summary), each a
+  separate bug fix. Going forward: any analysis query that groups by or returns a category resolves the name
+  through that single helper, never raw `c.name`. New aggregation tools reuse it by default — do not re-derive
+  per query.
 - **Invariant (added to `docs/architecture.md`):** *dynamic query structure is composed only from whitelisted
   enum-keyed SQL fragments; caller-supplied values are always parameter-bound; caller text is never concatenated
   into SQL.*

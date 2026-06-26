@@ -34,15 +34,21 @@ text never reaches the SQL string. This design implements that for spending aggr
    of the grouping). Output is per-currency blocks.
 3. **Effective, non-transfer by default.** Only `effective` transactions count; `type = 'transfer'` is excluded —
    consistent with `get_spending_summary` and the balances invariant. (A `status` opt-in can come later; not v1.)
+   Note (post ADR-010): `credit` accounts are real accounts now, so `groupBy: account` naturally surfaces them —
+   card purchases post to the card's account and show up there; bill payments are transfers and are already
+   excluded, so there's no double-counting.
 4. **Safe composition (ADR-011).** `diplomat/db` owns whitelist maps `AggregateGroupBy → { expr, join, label }`
    and `AggregateMetric → aggregate`. Only those fragments are composed; every filter value is parameter-bound.
    An unmapped enum is an `assertNever`/compile error.
-5. **Locale-resolved labels — via the one shared resolver.** For `groupBy: category`, the row label resolves to
-   the active locale by the **same `names?.[locale] ?? name` rule used by every other category-name query**
-   (`fullTxSelect`/TransactionView and `summaryRows`/spending summary) — reuse the shared helper / SQL fragment
-   (`COALESCE(json_extract(c.names, '$.' || <locale>), c.name)`, locale bound as a parameter; ADR-009/ADR-011),
-   **never raw `c.name`**. This rule has leaked one query at a time as separate bug fixes; `aggregate_spending`
-   must not repeat it. Other group-bys label by their natural name/key; `month` labels `YYYY-MM`.
+5. **Locale-resolved labels — via the existing shared TS resolver.** For `groupBy: category`, the row label
+   resolves to the active locale via **`logic/category.ts#localizeCategoryName(name, names, locale)`** — the same
+   helper `summaryRows`/`summarize` and `fullTxSelect`/`dbToModel` already use (`names?.[locale] ?? name`). Follow
+   that codebase pattern: the SQL selects the category `name` **and** its `names` JSON (exactly like
+   `summaryRows` does: `c.name AS …, c.names AS …`), and the **pure `logic/` shaping** resolves the display label
+   with `localizeCategoryName` — **resolution happens in TS, not in SQL** (do *not* `json_extract` in the query;
+   the codebase resolves category names in TS, one mechanism). Never surface raw `c.name`. This rule has leaked
+   one query at a time as separate bug fixes; `aggregate_spending` must not repeat it. Other group-bys label by
+   their natural name/key; `month` labels `YYYY-MM`.
 6. **Layering (mirrors `get_spending_summary`).** Controller resolves filter *names → ids* (via `resolve.ts`),
    reads the effective locale, and calls the repo; the repo builds the parameterized aggregation and zod-decodes
    rows (`wire/db`); a pure `logic/` function shapes rows into per-currency blocks (sort, total, percent-of-total).
@@ -126,8 +132,11 @@ block makes the invariant structural.
 > `git fetch && git rebase origin/main` first. Read `CLAUDE.md` (esp. the **Definition of Done**),
 > `docs/architecture.md` (invariants, dependency table), `docs/code-style.md`, `docs/code-quality.md`. Mirror the
 > existing summary stack: `src/controllers/summary.ts`, `src/logic/summary.ts`, the `summaryRows` method in
-> `src/diplomat/db/repos/transactions.ts`, and `src/diplomat/mcp/server.ts` (`get_spending_summary`). Also skim
-> `src/controllers/resolve.ts`, `src/logic/period.ts`, the settings/locale resolution, and `src/wire/db`.
+> `src/diplomat/db/repos/transactions.ts`, and `src/diplomat/mcp/server.ts` (`get_spending_summary`). For the
+> category-label resolution pattern (select `c.name` + `c.names`, resolve in TS), study `summaryRows` +
+> `summarize` and `src/logic/category.ts` (`localizeCategoryName`) — the same path `fullTxSelect`/`dbToModel`
+> uses. Also skim `src/controllers/resolve.ts`, `src/logic/period.ts`, the settings/locale resolution, and
+> `src/wire/db`.
 
 ### Steps
 
@@ -138,12 +147,15 @@ block makes the invariant structural.
    `z.infer`; use enum members everywhere, never literals.
 2. **Whitelist maps + query** (`diplomat/db/repos/transactions.ts`, ADR-011): a `Record<AggregateGroupBy, {expr,
    join, label}>` and `Record<AggregateMetric, SQL>` of developer-authored `sql` fragments. Compose one
-   parameterized query: select `expr AS key`, `label`, `currency`, `metric AS value`, `COUNT(*) AS count`; apply
-   the group-by's join; `WHERE` the bound period + filters + `status = 'effective'` + `type != 'transfer'`; `GROUP
-   BY currency, key`; order by value per `sort`; `LIMIT` per `limit`. **Every value is parameter-bound;** the
-   category `label` localizes via the **shared category-name resolver** (the same one `fullTxSelect` and
-   `summaryRows` use) with the bound active locale — never raw `c.name`; if a shared SQL fragment/helper doesn't
-   yet exist, extract one so all three call sites share it. Decode rows through `wire/db` zod.
+   parameterized query: select `expr AS key`, the label column(s), `currency`, `metric AS value`, `COUNT(*) AS
+   count`; apply the group-by's join; `WHERE` the bound period + filters + `status = 'effective'` + `type !=
+   'transfer'`; `GROUP BY currency, key`; order by value per `sort`; `LIMIT` per `limit`. **Every value is
+   parameter-bound.** For `groupBy: category`, select **both** `c.name` and the `c.names` JSON (mirror
+   `summaryRows`' `c.name AS …, c.names AS …`) and resolve the display label **in the pure `logic/aggregate`
+   shaping** via `logic/category.ts#localizeCategoryName(name, names, locale)` — the codebase resolves category
+   names in TS, not SQL; do **not** `json_extract` in the query, and never surface raw `c.name`. Decode rows
+   through `wire/db` zod (the raw `name` + `names` ride on the decoded row; the resolved `label` is produced in
+   shaping).
 2a. **Shared filter builder** (Decision 7): extract the `WHERE` composition (period range, account, type, tags,
    `effective`, non-transfer) into one helper in `diplomat/db` and call it from **both** the existing `search`
    method and the new `aggregate` method — the two diverge only after the `WHERE`. Refactor `search` to use the
@@ -174,8 +186,9 @@ block makes the invariant structural.
 - **ADR-011:** dynamic structure only from whitelisted enum-keyed fragments; all values parameter-bound; caller
   text never concatenated into SQL. Exhaustive maps (`assertNever`).
 - **Per-currency, effective, non-transfer** aggregation by default (matches `get_spending_summary` + balances).
-- **Locale-resolved category labels** via the **shared** category-name resolver (same as `fullTxSelect` /
-  `summaryRows`), server-derived locale (ADR-009) — never raw `c.name`.
+- **Locale-resolved category labels** via the shared helper `logic/category.ts#localizeCategoryName` resolved in
+  TS (same path as `fullTxSelect`/`dbToModel` and `summaryRows`/`summarize`), server-derived locale (ADR-009) —
+  select raw `c.name` + `c.names`, never `json_extract` in SQL, never surface raw `c.name`.
 - **Diplomatic layering:** enums/IO in `models/`; whitelist + SQL in `diplomat/db`; pure shaping in `logic/`;
   orchestration + name→id resolution in the controller; thin diplomats; constants over literals.
 - **Docs in the same change:** `docs/architecture.md` (the ADR-011 dynamic-composition invariant + ADR-011 in
