@@ -32,6 +32,8 @@ import {
   createResultToWireOut,
   deleteResultToWireOut,
 } from '../../adapters/transactions.js'
+import { CreateAccountSchema, UpdateAccountSchema } from '../../wire/in/accounts.js'
+import * as accountAdapters from '../../adapters/accounts.js'
 
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. */
 
@@ -337,16 +339,11 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
     {
       title: 'Create account',
       description:
-        'Create a bank account / wallet. Currency defaults to BRL. ' +
+        'Create a bank account / wallet. Type defaults to checking, currency to USD. ' +
         'Note: credit accounts are created automatically with a credit card (create_credit_card).',
-      inputSchema: {
-        name: z.string().min(1),
-        type: AccountType.default(AccountType.enum.checking),
-        currency: CurrencyCode.default(CurrencyCode.enum.BRL),
-        initialBalance: z.number().default(0).describe('Balance at account creation'),
-      },
+      inputSchema: CreateAccountSchema.shape,
     },
-    async (args) => fromResult(await createAccount(deps, args)),
+    async (args) => fromResult(await createAccount(deps, accountAdapters.createWireInToModel(args))),
   )
 
   server.registerTool(
@@ -389,15 +386,9 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'type is only editable when the account has no transactions/transfers (and cannot be set to credit). ' +
         'currency is only editable when the account has no transactions/transfers, no recurring rules, and is not a credit card payment account. ' +
         'Credit accounts (card-managed) are rejected — use the card flow.',
-      inputSchema: {
-        name: z.string().min(1).describe('Current account name'),
-        newName: z.string().min(1).optional().describe('New account name'),
-        initialBalance: z.number().optional(),
-        type: AccountType.optional().describe('checking|savings|wallet|investment — only if no transactions'),
-        currency: CurrencyCode.optional().describe('Only if no transactions, no recurring rules, and not a card payer'),
-      },
+      inputSchema: UpdateAccountSchema.shape,
     },
-    async (args) => fromResult(await updateAccount(deps, args)),
+    async (args) => fromResult(await updateAccount(deps, accountAdapters.updateWireInToModel(args))),
   )
 
   server.registerTool(
