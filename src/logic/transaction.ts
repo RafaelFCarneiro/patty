@@ -1,5 +1,4 @@
 import { purry } from 'remeda'
-import type { AppError } from '../common/errors.js'
 import type { ValidationError } from '../models/error.js'
 import type { Account } from '../models/account.js'
 import type { CreditCard } from '../models/creditCard.js'
@@ -96,15 +95,15 @@ export const LOW_CONFIDENCE_THRESHOLD = 0.6
 export const needsReview = (c: Classification): boolean =>
   c.method === 'none' || c.confidence < LOW_CONFIDENCE_THRESHOLD
 
-export type BulkItemResult =
+export type BulkItemResult<E = unknown> =
   | { status: 'created' | 'needs_review'; transaction: TransactionView; classification: ClassifyOutcome }
   | { status: 'duplicate'; transaction: TransactionView }
-  | { status: 'error'; description: string; error: AppError }
+  | { status: 'error'; description: string; error: E }
 
-export const toBulkItemResult = (
-  result: Result<CreateTransactionResult, AppError>,
+export const toBulkItemResult = <E>(
+  result: Result<CreateTransactionResult, E>,
   description: string,
-): BulkItemResult =>
+): BulkItemResult<E> =>
   result.match(
     (r) =>
       !r.created
@@ -117,13 +116,13 @@ export const toBulkItemResult = (
     (error) => ({ status: 'error', description, error }),
   )
 
-export type BulkResult = {
+export type BulkResult<E = unknown> = {
   summary: { created: number; needsReview: number; duplicates: number; errors: number }
-  items: BulkItemResult[]
+  items: BulkItemResult<E>[]
 }
 
 export const summarizeBulkItems = (
-  items: BulkItemResult[],
+  items: BulkItemResult<unknown>[],
 ): { created: number; needsReview: number; duplicates: number; errors: number } => {
   const counts = R.countBy(items, (i) => i.status)
   return {

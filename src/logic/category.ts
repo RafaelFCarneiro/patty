@@ -1,7 +1,7 @@
 import { purry } from 'remeda'
 import { localizeCategoryKind } from './localize.js'
 import { fold } from './resolve.js'
-import type { Category, CategoryReferences } from '../models/category.js'
+import { CategoryKind, type Category, type CategoryReferences } from '../models/category.js'
 import type { Locale } from '../models/locale.js'
 
 type HasKind = { kind: Category['kind'] }
@@ -56,8 +56,8 @@ export const isCategoryUnreferenced = (refs: CategoryReferences): boolean =>
 export const parentExists = (categories: readonly Category[], parentId: string): boolean =>
   categories.some((c) => c.id === parentId)
 
-export const isKindCompatible = (categoryKind: string, transactionType: string): boolean =>
-  categoryKind === 'both' || categoryKind === transactionType
+export const isKindCompatible = (categoryKind: CategoryKind, transactionType: CategoryKind): boolean =>
+  categoryKind === CategoryKind.enum.both || categoryKind === transactionType
 
 export const resolveAndSort = (categories: readonly Category[], locale: string): Category[] => {
   const resolved = categories.map((c) => resolveDisplayName(c, locale))

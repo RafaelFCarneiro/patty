@@ -10,12 +10,14 @@ import type {
   UpdateTransactionInput,
 } from '../models/transaction.js'
 import type { BulkItemResult } from '../logic/transaction.js'
+import type { AppError } from '../common/errors.js'
 import { TransactionRowSchema, type TransactionDbProps, type TransactionDbRefs } from '../wire/db/transactions.js'
 import type * as wireIn from '../wire/in/transactions.js'
 import type { BulkItemOut } from '../wire/out/transactions.js'
 import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../wire/out/transactions.js'
 import { formatAppError } from '../common/errors.js'
 import type { BulkResult } from '../logic/transaction.js'
+
 
 /** db→model: decode a flat SQL row (from a full transaction SELECT) into a RawTransactionView. */
 export const dbToModel = (record: Record<string, unknown>): RawTransactionView => {
@@ -118,12 +120,12 @@ export const searchWireInToModel  = (input: wireIn.SearchTransactionsInput):    
 export const createResultToWireOut = (result: CreateTransactionResult): CreateTransactionOut =>
   CreateTransactionOut.parse(result)
 
-const bulkItemToWireOut = (item: BulkItemResult): BulkItemOut =>
+const bulkItemToWireOut = (item: BulkItemResult<AppError>): BulkItemOut =>
   item.status === 'error'
     ? { status: 'error', description: item.description, error: formatAppError(item.error) }
     : item
 
-export const bulkResultToWireOut = (result: BulkResult): BulkResultOut =>
+export const bulkResultToWireOut = (result: BulkResult<AppError>): BulkResultOut =>
   BulkResultOut.parse({ summary: result.summary, items: result.items.map(bulkItemToWireOut) })
 
 export const deleteResultToWireOut = (result: DeleteTransactionResult): DeleteTransactionOut =>

@@ -43,7 +43,7 @@ export const formatAppError = (e: AppError): string => {
       return `${e.code}: ${e.card} ${e.year}-${String(e.month).padStart(2, '0')}`
     default: {
       const _exhaustive: never = e
-      return `unknown error: ${JSON.stringify(_exhaustive)}`
+      throw new Error(`unmapped error code: ${JSON.stringify(_exhaustive)}`)
     }
   }
 }
