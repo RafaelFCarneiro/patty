@@ -7,10 +7,14 @@ import { filterByType, withTypeLabel } from '../logic/account.js'
 import { computeBalance, computeProjectedBalance } from '../logic/balance.js'
 import { resolveByName } from '../logic/resolve.js'
 import { AccountType } from '../models/account.js'
-import type { Account, AccountBalance, CreateAccount } from '../models/account.js'
-import type { CurrencyCode } from '../models/common.js'
+import type { Account, AccountBalance, CreateAccount, UpdateAccount } from '../models/account.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolutionToResult } from './resolve.js'
+
+const CREDIT_ACCOUNT_REJECTION = {
+  code: 'validation' as const,
+  issues: ['credit accounts are managed by their credit card — use the card flow instead (create_credit_card / delete_credit_card)'],
+}
 
 export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Account[]> => {
   const [locale, all] = await Promise.all([deps.locale(), deps.accounts.list()])
@@ -23,10 +27,7 @@ export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Acco
 
 export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Account, AppError> =>
   safeTry(async function* () {
-    yield* guard(input.type !== AccountType.enum.credit, {
-      code: 'validation',
-      issues: ['credit accounts are created automatically with a credit card — use create_credit_card instead'],
-    })
+    yield* guard(input.type !== AccountType.enum.credit, CREDIT_ACCOUNT_REJECTION)
     yield* guard(!(await deps.accounts.findByName(input.name)), {
       code: 'duplicate_name',
       entity: 'account',
@@ -63,11 +64,6 @@ export const getAccountBalances = (
     return ok(balances)
   })
 
-const CREDIT_ACCOUNT_REJECTION = {
-  code: 'validation' as const,
-  issues: ['credit accounts are managed by their credit card — use the card flow instead (create_credit_card / delete_credit_card)'],
-}
-
 export const deleteAccount = (deps: Deps, name: string): ResultAsync<{ deleted: boolean }, AppError> =>
   safeTry(async function* () {
     const account = yield* resolveAccountRef(deps, name)
@@ -83,22 +79,12 @@ export const deleteAccount = (deps: Deps, name: string): ResultAsync<{ deleted: 
     return ok({ deleted: true })
   })
 
-export type UpdateAccountInput = {
-  name: string
-  newName?: string
-  initialBalance?: number
-  type?: AccountType
-  currency?: CurrencyCode
-}
 
-export const updateAccount = (deps: Deps, input: UpdateAccountInput): ResultAsync<Account, AppError> =>
+export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<Account, AppError> =>
   safeTry(async function* () {
     const account = yield* resolveAccountRef(deps, input.name)
     yield* guard(account.type !== AccountType.enum.credit, CREDIT_ACCOUNT_REJECTION)
-    yield* guard(input.type !== AccountType.enum.credit, {
-      code: 'validation',
-      issues: ['type cannot be set to credit — credit accounts are created automatically with a credit card'],
-    })
+    yield* guard(input.type !== AccountType.enum.credit, CREDIT_ACCOUNT_REJECTION)
 
     if (input.newName && input.newName.toLowerCase() !== account.name.toLowerCase()) {
       yield* guard(!(await deps.accounts.findByName(input.newName)), {

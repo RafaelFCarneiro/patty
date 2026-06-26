@@ -13,32 +13,39 @@ export const accountTypeLabels: LabelMap<AccountType> = {
   credit:     { en: 'Credit card', pt: 'Cartão de crédito', es: 'Tarjeta de crédito' },
 }
 
-export const Account = z.object({
+export const AccountSchema = z.object({
   id: Id,
-  name: z.string().min(1),
-  type: AccountType,
+  name: z.string().min(1).describe('Current account name'),
+  type: AccountType.describe('checking|savings|wallet|investment — only if no transactions'),
   typeLabel: z.string().optional(),
-  currency: CurrencyCode,
-  /** Balance at account creation; current balance is always derived (initial + income − expenses ± transfers). */
+  currency: CurrencyCode.default(CurrencyCode.enum.USD).describe('Only if no transactions, no recurring rules, and not a card payer'),
   initialBalance: z.number().default(0),
 })
-export type Account = z.infer<typeof Account>
+export type Account = z.infer<typeof AccountSchema>
 
-/** An account with its derived current balance. */
-export const AccountBalance = Account.extend({
+export const CreateAccountSchema = AccountSchema.omit({ 
+  id: true, 
+  typeLabel: true 
+})
+export type CreateAccount = z.infer<typeof CreateAccountSchema> 
+
+export const UpdateAccountSchema = AccountSchema
+  .omit({ id: true, typeLabel: true })
+  .partial({
+    initialBalance: true,
+    type: true,
+    currency: true
+  }).extend({ 
+    newName: z.string().min(1).optional().describe('New account name')
+  })
+export type UpdateAccount = z.infer<typeof UpdateAccountSchema>
+
+export const AccountBalanceSchema = AccountSchema.extend({
   balance: z.number(),
   income: z.number(),
   expenses: z.number(),
   transfersIn: z.number(),
   transfersOut: z.number(),
-  /** Present only when projectedAsOf was supplied; effective balance + pending through that date. */
-  projectedBalance: z.number().optional(),
+  projectedBalance: z.number().optional().describe('Effective balance + pending through projectedAsOf, if supplied'),
 })
-export type AccountBalance = z.infer<typeof AccountBalance>
-
-export type CreateAccount = {
-  name: string
-  type: AccountType
-  currency: CurrencyCode
-  initialBalance: number
-}
+export type AccountBalance = z.infer<typeof AccountBalanceSchema>

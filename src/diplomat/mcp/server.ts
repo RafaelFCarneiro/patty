@@ -32,6 +32,8 @@ import {
   createResultToWireOut,
   deleteResultToWireOut,
 } from '../../adapters/transactions.js'
+import { UpdateAccountSchema } from '../../wire/in/accounts.js'
+import * as accountAdapters from '../../adapters/accounts.js'
 
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. */
 
@@ -346,7 +348,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         initialBalance: z.number().default(0).describe('Balance at account creation'),
       },
     },
-    async (args) => fromResult(await createAccount(deps, args)),
+    async (args) => fromResult(await createAccount(deps, accountAdapters.createWireInToModel(args))),
   )
 
   server.registerTool(
@@ -389,15 +391,9 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'type is only editable when the account has no transactions/transfers (and cannot be set to credit). ' +
         'currency is only editable when the account has no transactions/transfers, no recurring rules, and is not a credit card payment account. ' +
         'Credit accounts (card-managed) are rejected — use the card flow.',
-      inputSchema: {
-        name: z.string().min(1).describe('Current account name'),
-        newName: z.string().min(1).optional().describe('New account name'),
-        initialBalance: z.number().optional(),
-        type: AccountType.optional().describe('checking|savings|wallet|investment — only if no transactions'),
-        currency: CurrencyCode.optional().describe('Only if no transactions, no recurring rules, and not a card payer'),
-      },
+      inputSchema: UpdateAccountSchema,
     },
-    async (args) => fromResult(await updateAccount(deps, args)),
+    async (args) => fromResult(await updateAccount(deps, accountAdapters.updateWireInToModel(args))),
   )
 
   server.registerTool(

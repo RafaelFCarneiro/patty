@@ -38,12 +38,12 @@ describe('dbToModel', () => {
 })
 
 describe('wireInToModel', () => {
-  it('applies BRL currency and 0 initialBalance defaults when omitted', () => {
+  it('applies USD currency and 0 initialBalance defaults when omitted', () => {
     const parsed = wireInAccounts.CreateAccount.parse({ name: 'Nubank', type: AccountType.enum.checking })
-    expect(accountAdapters.wireInToModel(parsed)).toEqual({
+    expect(accountAdapters.createWireInToModel(parsed)).toEqual({
       name: 'Nubank',
       type: AccountType.enum.checking,
-      currency: CurrencyCode.enum.BRL,
+      currency: CurrencyCode.enum.USD,
       initialBalance: 0,
     })
   })
@@ -55,7 +55,7 @@ describe('wireInToModel', () => {
       currency: CurrencyCode.enum.USD,
       initialBalance: 500,
     })
-    expect(accountAdapters.wireInToModel(parsed)).toEqual({
+    expect(accountAdapters.createWireInToModel(parsed)).toEqual({
       name: 'USD Wallet',
       type: AccountType.enum.wallet,
       currency: CurrencyCode.enum.USD,

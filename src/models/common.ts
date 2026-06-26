@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const CurrencyCode = z.enum(['BRL', 'USD'])
+export const CurrencyCode = z.enum(['USD', 'BRL'])
 export type CurrencyCode = z.infer<typeof CurrencyCode>
 
 export const Id = z.string().min(1)
