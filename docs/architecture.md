@@ -40,7 +40,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | --- | --- |
 | `controllers/` | `logic/`, `models/`, `common/`, injected deps interfaces |
 | `logic/` | `logic/`, `models/` only |
-| `models/` | zod/schema helpers only |
+| `models/` | zod/schema helpers; plus **type-only** `common/errors` (`AppError`) to colocate expected-error payloads with the entity they describe (see "Domain ownership" below). `common/errors` must stay pure (no I/O). |
 | `adapters/` | `models/`, `wire/*` |
 | `diplomat/*` | `controllers/`, `adapters/`, `models/`, wire schemas, runtime clients |
 | `diplomat/db/seed/` | `models/` (types and runtime enums) — nothing outside `diplomat/db` imports `seed/` |
@@ -52,6 +52,16 @@ If any generic concept is ambiguous, this file is the source of truth for implem
   - `wire/out`: outbound contracts exposed by this service (responses, published payloads).
   - `wire/db`: storage-facing contracts (db rows/records/properties).
 - Domain layer (`controllers/`, `logic/`, `models/`) stays agnostic to wire schemas and infrastructure tools.
+
+#### Domain ownership: descriptions, defaults, and error payloads
+
+These three live with the domain entity in `models/`, not scattered across controllers/diplomats:
+
+- **Descriptions are domain information.** `.describe()` states what a field *is and represents*, so it belongs on the domain schema in `models/`. The MCP/REST edge surfaces those same descriptions by deriving its input schema from the model (`Schema.shape`) instead of re-authoring prose.
+- **Defaults split by intent.** A default that protects an **invariant** — a value that must exist for the entity to be valid ("would break if missing", e.g. `initialBalance → 0`) — lives on the **domain** schema. A **quality-of-life** default (a convenience when the caller omits an otherwise-required field, e.g. "no currency given → assume USD") lives at the **wire boundary** (`wire/in`, derived via `.extend`). The domain stays honest about what is genuinely required; not-null fields stay required in the model.
+- **Expected-error payloads are domain vocabulary.** The `AppError` objects a controller returns for a given entity (e.g. `accountErrors.creditRejected`, `accountErrors.duplicateName(name)`) are colocated on that entity's model, typed against `AppError` (type-only import). Controllers *raise* them (`guard(condition, accountErrors.X)`) but never author the `{ code, … }` literal inline.
+- **Guard conditions are named predicates, not inline boolean soup.** A pure condition is a predicate in `logic/` (e.g. `assertNonCreditType(type)`, `isUnreferenced(refs)`); a condition that needs a repo is a small async predicate in the controller (e.g. `assertNameAvailable(deps, name)`). The `guard` then reads as `guard(predicate(...), errorPayload)` — condition and payload each have a single home. Inline comparisons like `refs.transactions === 0` are the same smell as an inline error literal — extract them.
+- **The shapes a decision is made from are domain types too.** When the domain decides whether to allow/block an operation based on some derived shape (e.g. `AccountReferences` = what counts as a blocking reference to an account), that shape is a `models/` type; the repo *populates* it and `logic/` predicates *interpret* it. The model — not the repo — declares what counts.
 - Adapter functions should be grouped per domain and named by direction, for example:
   - `wireInToModel`
   - `modelToWireOut`

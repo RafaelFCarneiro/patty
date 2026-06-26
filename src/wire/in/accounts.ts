@@ -1,27 +1,14 @@
-import { z } from 'zod'
+import type { z } from 'zod'
 import { CurrencyCode } from '../../models/common.js'
-import { AccountType } from '../../models/account.js'
-import type { CreateAccount as Domain } from '../../models/account.js'
+import * as modelAccount from '../../models/account.js'
 
-export const CreateAccount = z
-  .object({
-    name: z.string().min(1),
-    type: AccountType,
-    currency: CurrencyCode.optional(),
-    initialBalance: z.number().optional(),
-  })
-  .transform((input): Domain => ({
-    name: input.name,
-    type: input.type,
-    currency: input.currency ?? 'BRL',
-    initialBalance: input.initialBalance ?? 0,
-  }))
-export type CreateAccount = z.infer<typeof CreateAccount>
-
-export const UpdateAccount = z.object({
-  newName: z.string().min(1).optional(),
-  initialBalance: z.number().optional(),
-  type: AccountType.optional(),
-  currency: CurrencyCode.optional(),
+// The boundary owns quality-of-life defaults; the domain keeps these fields required (not-null).
+// Default currency follows the default language (en → USD); default type is the most common account.
+export const CreateAccountSchema = modelAccount.CreateAccountSchema.extend({
+  type: modelAccount.CreateAccountSchema.shape.type.default(modelAccount.AccountType.enum.checking),
+  currency: modelAccount.CreateAccountSchema.shape.currency.default(CurrencyCode.enum.USD),
 })
-export type UpdateAccount = z.infer<typeof UpdateAccount>
+export type CreateAccount = z.infer<typeof CreateAccountSchema>
+
+export const UpdateAccountSchema = modelAccount.UpdateAccountSchema
+export type UpdateAccount = z.infer<typeof UpdateAccountSchema>
