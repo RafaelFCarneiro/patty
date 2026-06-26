@@ -221,6 +221,10 @@ export const transactionErrors = {
     code: 'validation',
     issues: ['provide category OR subCategory, not both — subCategory implies its parent category'],
   } satisfies TransactionError,
+  exclusiveCategorySubCategoryUpdate: {
+    code: 'validation',
+    issues: ['provide category OR subCategory, not both'],
+  } satisfies TransactionError,
   transferTypeImmutable: {
     code: 'validation',
     issues: ['cannot change the type of a transfer transaction'],

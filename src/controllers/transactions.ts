@@ -150,7 +150,7 @@ export const updateTransaction = (
   input: UpdateTransactionInput,
 ): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
-    yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory)
+    yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate)
 
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id))
 
