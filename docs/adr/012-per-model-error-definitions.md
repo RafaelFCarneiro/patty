@@ -38,7 +38,7 @@ Two forces are in tension:
   from seeing the *whole* set of errors in one place (the compiler enforces totality). Fragmenting them
   has a cost.
 
-## Decision (proposed)
+## Decision
 
 **Invert ownership: each model defines its own error union as domain vocabulary; `common/errors.ts`
 *composes* `AppError` from those per-model unions and keeps the boundary mapping.** `common` depends on
@@ -79,7 +79,7 @@ no longer imports the composed `AppError`.
 **Pros:** zero work; exhaustive switches trivially see everything.
 **Cons:** the coupling and `common/`-as-dumping-ground smell this ADR exists to fix.
 
-### Option B: Per-model unions + `common` composes the union (chosen-proposed)
+### Option B: Per-model unions + `common` composes the union (chosen)
 | Dimension | Assessment |
 |---|---|
 | Complexity | Medium (mechanical migration; one-time) |
