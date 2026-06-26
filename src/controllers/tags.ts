@@ -6,9 +6,12 @@ import type { Deps } from './deps.js'
 
 export const listTags = (deps: Deps): Promise<Tag[]> => deps.tags.list()
 
+const assertTagNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
+  !(await deps.tags.findByName(name))
+
 export const createTag = (deps: Deps, name: string): ResultAsync<Tag, AppError> =>
   safeTry(async function* () {
-    yield* guard(!(await deps.tags.findByName(name)), tagErrors.duplicateName(name))
+    yield* guard(await assertTagNameAvailable(deps, name), tagErrors.duplicateName(name))
     const tag = await deps.tags.create({ id: deps.newId(), name })
     return ok(yield* okOr(tag, tagErrors.duplicateName(name)))
   })

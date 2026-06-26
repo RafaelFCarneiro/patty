@@ -25,14 +25,22 @@ export type SetLocaleInput = {
   source: SetLocaleSource
 }
 
+/** Inferred locale changes are blocked when the user set it explicitly and the value differs. */
+const canAutoSwitchLocale = (
+  source: SetLocaleSource,
+  current: { localeSource: LocaleSource } | null | undefined,
+  wouldChange: boolean,
+): boolean =>
+  !(source === LocaleSource.enum.inferred &&
+    current?.localeSource === LocaleSource.enum.explicit &&
+    wouldChange)
+
 export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<Preferences, AppError> =>
   safeTry(async function* () {
     const current = await deps.settings.getLocale()
     const wouldChange = current?.locale !== input.locale
     yield* guard(
-      !(input.source === LocaleSource.enum.inferred &&
-        current?.localeSource === LocaleSource.enum.explicit &&
-        wouldChange),
+      canAutoSwitchLocale(input.source, current, wouldChange),
       validation(['Cannot auto-switch locale: user set it explicitly. Use source "explicit" to override.']),
     )
     if (!wouldChange && current) {

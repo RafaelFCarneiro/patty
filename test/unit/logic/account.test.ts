@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assertNonCreditType, filterByType, hasNoCards, hasNoRecurring, hasNoTransactions, isUnreferenced, withTypeLabel } from '../../../src/logic/account.js'
+import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType, filterByType, hasNoCards, hasNoRecurring, hasNoTransactions, isUnreferenced, withTypeLabel } from '../../../src/logic/account.js'
 import type { AccountReferences } from '../../../src/models/account.js'
 import { AccountType, type Account } from '../../../src/models/account.js'
 import { CurrencyCode } from '../../../src/models/common.js'
@@ -76,5 +76,25 @@ describe('reference predicates', () => {
     expect(isUnreferenced(refs({ transactions: 1 }))).toBe(false)
     expect(isUnreferenced(refs({ recurring: 1 }))).toBe(false)
     expect(isUnreferenced(refs({ cards: 1 }))).toBe(false)
+  })
+})
+
+describe('areDifferentAccounts', () => {
+  it('returns true for different ids', () => {
+    expect(areDifferentAccounts({ id: 'a' }, { id: 'b' })).toBe(true)
+  })
+
+  it('returns false for same id', () => {
+    expect(areDifferentAccounts({ id: 'a' }, { id: 'a' })).toBe(false)
+  })
+})
+
+describe('assertCurrencyMatch', () => {
+  it('returns true when currencies match', () => {
+    expect(assertCurrencyMatch({ currency: 'BRL' }, { currency: 'BRL' })).toBe(true)
+  })
+
+  it('returns false when currencies differ', () => {
+    expect(assertCurrencyMatch({ currency: 'BRL' }, { currency: 'USD' })).toBe(false)
   })
 })

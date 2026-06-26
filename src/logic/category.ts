@@ -1,7 +1,7 @@
 import { purry } from 'remeda'
 import { localizeCategoryKind } from './localize.js'
 import { fold } from './resolve.js'
-import type { Category } from '../models/category.js'
+import type { Category, CategoryReferences } from '../models/category.js'
 import type { Locale } from '../models/locale.js'
 
 type HasKind = { kind: Category['kind'] }
@@ -38,6 +38,23 @@ export const hasNameCollision = (categories: readonly Category[], name: string):
   const folded = fold(name)
   return categories.some((c) => allNames(c).some((n) => fold(n) === folded))
 }
+
+export const hasSubCategoryNameCollision = (
+  siblings: readonly { name: string }[],
+  name: string,
+): boolean => siblings.some((s) => s.name.toLowerCase() === name.toLowerCase())
+
+export const assertCategoryNameAvailable = (categories: readonly Category[], name: string): boolean =>
+  !hasNameCollision(categories, name)
+
+export const assertSubCategoryNameAvailable = (siblings: readonly { name: string }[], name: string): boolean =>
+  !hasSubCategoryNameCollision(siblings, name)
+
+export const isUnreferenced = (refs: CategoryReferences): boolean =>
+  refs.transactions === 0 && refs.recurring === 0 && refs.subCategories === 0
+
+export const parentExists = (categories: readonly Category[], parentId: string): boolean =>
+  categories.some((c) => c.id === parentId)
 
 export const resolveAndSort = (categories: readonly Category[], locale: string): Category[] => {
   const resolved = categories.map((c) => resolveDisplayName(c, locale))

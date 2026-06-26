@@ -1,8 +1,8 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
-import { validation } from '../models/error.js'
 import { guard, okOr } from '../common/result.js'
-import { AccountType } from '../models/account.js'
+import { assertNonCreditType } from '../logic/account.js'
+import { accountErrors } from '../models/account.js'
 import { billPeriodFor } from '../logic/bill.js'
 import { pickClassification, userClassification } from '../logic/classify.js'
 import { ClassificationMethod } from '../models/transaction.js'
@@ -12,6 +12,8 @@ import { periodRange, toIsoDate } from '../logic/period.js'
 import type { BulkItemResult, BulkResult } from '../logic/transaction.js'
 import {
   addLocalizedLabels,
+  assertExclusiveAccountCard,
+  assertExclusiveCategorySubCategory,
   defaultStatusFor,
   deriveIdempotencyKey,
   guardTransferMutability,
@@ -44,14 +46,12 @@ export const createTransaction = (
   source: TransactionSource,
 ): ResultAsync<CreateTransactionResult, AppError> =>
   safeTry(async function* () {
-    yield* guard(!(input.account && input.card), validation(['provide account OR card, not both']))
-    yield* guard(!(input.category && input.subCategory),
-      validation(['provide category OR subCategory, not both — subCategory implies its parent category']))
+    yield* guard(assertExclusiveAccountCard(input), transactionErrors.exclusiveAccountCard)
+    yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory)
 
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
     if (account) {
-      yield* guard(account.type !== AccountType.enum.credit,
-        validation(['cannot post directly to a credit account — use the card parameter instead']))
+      yield* guard(assertNonCreditType(account.type), accountErrors.creditPostRejected)
     }
     const card = input.card ? yield* resolveCardRef(deps, input.card) : null
 
@@ -150,8 +150,7 @@ export const updateTransaction = (
   input: UpdateTransactionInput,
 ): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
-    yield* guard(!(input.category && input.subCategory),
-      validation(['provide category OR subCategory, not both']))
+    yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory)
 
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id))
 

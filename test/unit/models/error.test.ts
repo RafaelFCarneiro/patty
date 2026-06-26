@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { validation } from '../../../src/models/error.js'
+import { ambiguous, notFound, validation } from '../../../src/models/error.js'
+import { accountErrors } from '../../../src/models/account.js'
 import { categoryErrors } from '../../../src/models/category.js'
 import { cardErrors } from '../../../src/models/creditCard.js'
 import { transactionErrors } from '../../../src/models/transaction.js'
@@ -10,6 +11,18 @@ describe('shared error primitives', () => {
   it('validation() builds a ValidationError with code and issues', () => {
     const err = validation(['field is required', 'must be positive'])
     expect(err).toEqual({ code: 'validation', issues: ['field is required', 'must be positive'] })
+  })
+
+  it('notFound() builds a NotFound with computed code', () => {
+    expect(notFound('account', 'Nubank', ['Itaú'])).toEqual({
+      code: 'unknown_account', query: 'Nubank', candidates: ['Itaú'],
+    })
+  })
+
+  it('ambiguous() builds an Ambiguous with computed code', () => {
+    expect(ambiguous('card', 'Nu', ['Nubank', 'NuGold'])).toEqual({
+      code: 'ambiguous_card', query: 'Nu', candidates: ['Nubank', 'NuGold'],
+    })
   })
 })
 
@@ -59,5 +72,49 @@ describe('per-model error builders', () => {
     expect(tagErrors.duplicateName('travel')).toEqual({
       code: 'duplicate_name', entity: 'tag', name: 'travel',
     })
+  })
+
+  it('accountErrors.creditTransferRejected embeds the account name', () => {
+    const err = accountErrors.creditTransferRejected('Nubank')
+    expect(err).toMatchObject({ code: 'validation' })
+    if (err.code === 'validation') expect(err.issues[0]).toContain('Nubank')
+  })
+
+  it('accountErrors.crossCurrencyTransfer embeds both account details', () => {
+    const err = accountErrors.crossCurrencyTransfer(
+      { name: 'Checking', currency: 'BRL' },
+      { name: 'Savings', currency: 'USD' },
+    )
+    expect(err).toMatchObject({ code: 'validation' })
+    if (err.code === 'validation') {
+      expect(err.issues[0]).toContain('Checking')
+      expect(err.issues[0]).toContain('Savings')
+    }
+  })
+
+  it('accountErrors static payloads have the right code', () => {
+    expect(accountErrors.creditPostRejected.code).toBe('validation')
+    expect(accountErrors.creditPaymentRejected.code).toBe('validation')
+    expect(accountErrors.sameAccount.code).toBe('validation')
+  })
+
+  it('transactionErrors static payloads have the right code', () => {
+    expect(transactionErrors.exclusiveAccountCard.code).toBe('validation')
+    expect(transactionErrors.exclusiveCategorySubCategory.code).toBe('validation')
+    expect(transactionErrors.transferTypeImmutable.code).toBe('validation')
+    expect(transactionErrors.transferCategoryRejected.code).toBe('validation')
+  })
+
+  it('billErrors.noPayingAccount is a validation error', () => {
+    expect(billErrors.noPayingAccount.code).toBe('validation')
+  })
+
+  it('cardErrors.currencyMismatch embeds both currencies', () => {
+    const err = cardErrors.currencyMismatch('BRL', 'USD')
+    expect(err).toMatchObject({ code: 'validation' })
+    if (err.code === 'validation') {
+      expect(err.issues[0]).toContain('BRL')
+      expect(err.issues[0]).toContain('USD')
+    }
   })
 })

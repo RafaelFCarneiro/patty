@@ -1,6 +1,6 @@
 import { purry } from 'remeda'
 import type { AppError } from '../common/errors.js'
-import { validation, type ValidationError } from '../models/error.js'
+import type { ValidationError } from '../models/error.js'
 import type { Account } from '../models/account.js'
 import type { CreditCard } from '../models/creditCard.js'
 import { CurrencyCode } from '../models/common.js'
@@ -15,7 +15,7 @@ import type {
   UpdateTransactionInput,
 } from '../models/transaction.js'
 import type { RawTransactionView } from '../models/transaction.js'
-import { TransactionStatus, TransactionType } from '../models/transaction.js'
+import { transactionErrors, TransactionStatus, TransactionType } from '../models/transaction.js'
 import { err, ok, type Result } from 'neverthrow'
 import * as R from 'remeda'
 import { localizeCategoryName } from './category.js'
@@ -41,6 +41,12 @@ export const resolveCurrency = (
   input: Pick<CreateTransactionInput, 'currency'>,
 ): CurrencyCode => account?.currency ?? card?.currency ?? input.currency ?? CurrencyCode.enum.BRL
 
+export const assertExclusiveAccountCard = (input: { account?: string; card?: string }): boolean =>
+  !(input.account && input.card)
+
+export const assertExclusiveCategorySubCategory = (input: { category?: string; subCategory?: string }): boolean =>
+  !(input.category && input.subCategory)
+
 // ─── Transfer mutability guards ───────────────────────────────────────────────
 
 const isTransfer = (t: Pick<TransactionView, 'type'>) => t.type === TransactionType.enum.transfer
@@ -59,9 +65,9 @@ export const guardTransferMutability = (
   input: Pick<UpdateTransactionInput, 'type' | 'category' | 'subCategory'>,
 ): Result<void, ValidationError> => {
   if (isTransfer(existing) && input.type)
-    return err(validation(['cannot change the type of a transfer transaction']))
+    return err(transactionErrors.transferTypeImmutable)
   if (wouldBeTransfer(existing, input) && hasCategoryInput(input))
-    return err(validation(['transfer transactions cannot have a category or sub-category']))
+    return err(transactionErrors.transferCategoryRejected)
   return ok(undefined)
 }
 

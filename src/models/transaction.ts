@@ -213,4 +213,20 @@ export type TransactionError =
 
 export const transactionErrors = {
   notFound: (id: string): TransactionError => ({ code: 'unknown_transaction', id }),
+  exclusiveAccountCard: {
+    code: 'validation',
+    issues: ['provide account OR card, not both'],
+  } satisfies TransactionError,
+  exclusiveCategorySubCategory: {
+    code: 'validation',
+    issues: ['provide category OR subCategory, not both — subCategory implies its parent category'],
+  } satisfies TransactionError,
+  transferTypeImmutable: {
+    code: 'validation',
+    issues: ['cannot change the type of a transfer transaction'],
+  } satisfies TransactionError,
+  transferCategoryRejected: {
+    code: 'validation',
+    issues: ['transfer transactions cannot have a category or sub-category'],
+  } satisfies TransactionError,
 }

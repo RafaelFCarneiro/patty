@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CategoryKind, type Category } from '../../../src/models/category.js'
 import { Locale } from '../../../src/models/locale.js'
-import { allNames, buildSynonyms, hasNameCollision, localizeCategoryName, resolveAndSort, resolveDisplayName, withKindLabel } from '../../../src/logic/category.js'
+import { allNames, buildSynonyms, hasNameCollision, hasSubCategoryNameCollision, isUnreferenced, localizeCategoryName, parentExists, resolveAndSort, resolveDisplayName, withKindLabel } from '../../../src/logic/category.js'
 
 const seeded: Category = {
   id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense,
@@ -133,5 +133,41 @@ describe('withKindLabel', () => {
   it('labels income kind', () => {
     const income: Category = { id: 'cat-inc', name: 'Salary', kind: CategoryKind.enum.income, names: null }
     expect(withKindLabel(income, Locale.enum.en).kindLabel).toBe('Income')
+  })
+})
+
+describe('hasSubCategoryNameCollision', () => {
+  const siblings = [{ name: 'Fast Food' }, { name: 'Delivery' }]
+
+  it('detects case-insensitive collision', () => {
+    expect(hasSubCategoryNameCollision(siblings, 'fast food')).toBe(true)
+  })
+
+  it('returns false for non-colliding name', () => {
+    expect(hasSubCategoryNameCollision(siblings, 'Dine-in')).toBe(false)
+  })
+})
+
+describe('isUnreferenced (CategoryReferences)', () => {
+  it('returns true when all counts are zero', () => {
+    expect(isUnreferenced({ transactions: 0, recurring: 0, subCategories: 0 })).toBe(true)
+  })
+
+  it('returns false when any count is non-zero', () => {
+    expect(isUnreferenced({ transactions: 1, recurring: 0, subCategories: 0 })).toBe(false)
+    expect(isUnreferenced({ transactions: 0, recurring: 1, subCategories: 0 })).toBe(false)
+    expect(isUnreferenced({ transactions: 0, recurring: 0, subCategories: 1 })).toBe(false)
+  })
+})
+
+describe('parentExists', () => {
+  const categories = [seeded, userCreated]
+
+  it('returns true when parent id is found', () => {
+    expect(parentExists(categories, 'cat-food')).toBe(true)
+  })
+
+  it('returns false when parent id is not found', () => {
+    expect(parentExists(categories, 'nonexistent')).toBe(false)
   })
 })

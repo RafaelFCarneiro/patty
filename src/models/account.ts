@@ -85,4 +85,28 @@ export const accountErrors = {
     code: 'validation',
     issues: ['currency cannot be changed — account is a credit card payment account'],
   } satisfies AccountError,
+  creditPostRejected: {
+    code: 'validation',
+    issues: ['cannot post directly to a credit account — use the card parameter instead'],
+  } satisfies AccountError,
+  creditTransferRejected: (name: string): AccountError => ({
+    code: 'validation',
+    issues: [`cannot transfer from a credit account (${name}) — use pay_bill instead`],
+  }),
+  creditPaymentRejected: {
+    code: 'validation',
+    issues: ['payment account cannot be a credit account'],
+  } satisfies AccountError,
+  currencyMismatch: (a: string, b: string): AccountError => ({
+    code: 'validation',
+    issues: [`currency mismatch: card is ${a}, payer is ${b}`],
+  }),
+  sameAccount: {
+    code: 'validation',
+    issues: ['from and to must be different accounts'],
+  } satisfies AccountError,
+  crossCurrencyTransfer: (from: { name: string; currency: string }, to: { name: string; currency: string }): AccountError => ({
+    code: 'validation',
+    issues: [`cross-currency transfer not supported yet: ${from.name} is ${from.currency}, ${to.name} is ${to.currency}`],
+  }),
 }

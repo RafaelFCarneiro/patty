@@ -32,4 +32,8 @@ export const billErrors = {
   notFound: (card: string, month: number, year: number): BillError => ({
     code: 'unknown_bill', card, month, year,
   }),
+  noPayingAccount: {
+    code: 'validation',
+    issues: ['no paying account: pass `account` or set `paymentAccount` on the card'],
+  } satisfies BillError,
 }
