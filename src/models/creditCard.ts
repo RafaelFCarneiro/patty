@@ -35,7 +35,7 @@ export type CardError =
 
 export const cardErrors = {
   duplicateName: (name: string): CardError => ({ code: 'duplicate_name', entity: 'credit_card', name }),
-  currencyMismatch: (cardCurrency: string, accountCurrency: string): CardError => ({
+  currencyMismatch: (cardCurrency: CurrencyCode, accountCurrency: CurrencyCode): CardError => ({
     code: 'validation',
     issues: [`currency mismatch: card is ${cardCurrency}, payment account is ${accountCurrency}`],
   }),

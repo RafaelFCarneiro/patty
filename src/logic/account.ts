@@ -26,7 +26,7 @@ export const isUnreferenced = (refs: AccountReferences): boolean =>
 export const areDifferentAccounts = (a: Pick<Account, 'id'>, b: Pick<Account, 'id'>): boolean =>
   a.id !== b.id
 
-export const assertCurrencyMatch = (a: { currency: string }, b: { currency: string }): boolean =>
+export const assertCurrencyMatch = (a: Pick<Account, 'currency'>, b: Pick<Account, 'currency'>): boolean =>
   a.currency === b.currency
 
 const _withTypeLabel = <T extends Account>(account: T, locale: Locale): T => ({

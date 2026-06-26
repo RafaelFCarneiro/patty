@@ -101,7 +101,7 @@ export const accountErrors = {
     code: 'validation',
     issues: ['payment account cannot be a credit account'],
   } satisfies AccountError,
-  currencyMismatch: (cardCurrency: string, payerCurrency: string): AccountError => ({
+  currencyMismatch: (cardCurrency: CurrencyCode, payerCurrency: CurrencyCode): AccountError => ({
     code: 'validation',
     issues: [`currency mismatch: card is ${cardCurrency}, payer is ${payerCurrency}`],
   }),
@@ -109,7 +109,7 @@ export const accountErrors = {
     code: 'validation',
     issues: ['from and to must be different accounts'],
   } satisfies AccountError,
-  crossCurrencyTransfer: (from: { name: string; currency: string }, to: { name: string; currency: string }): AccountError => ({
+  crossCurrencyTransfer: (from: Pick<Account, 'name' | 'currency'>, to: Pick<Account, 'name' | 'currency'>): AccountError => ({
     code: 'validation',
     issues: [`cross-currency transfer not supported yet: ${from.name} is ${from.currency}, ${to.name} is ${to.currency}`],
   }),
