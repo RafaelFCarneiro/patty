@@ -37,6 +37,33 @@ describe('dbToModel', () => {
   })
 })
 
+describe('wire CreateAccountSchema', () => {
+  it('inherits .describe() from domain schema — no duplicated descriptions', () => {
+    const domainType = wireInAccounts.CreateAccountSchema.shape.type.removeDefault().description
+    const domainCurrency = wireInAccounts.CreateAccountSchema.shape.currency.removeDefault().description
+    expect(domainType).toBeDefined()
+    expect(domainCurrency).toBeDefined()
+    expect(domainType).toContain('checking')
+    expect(domainCurrency).toContain('ISO')
+  })
+})
+
+describe('wire UpdateAccountSchema (HTTP PATCH pattern)', () => {
+  it('rejects body without name (domain requires it)', () => {
+    expect(wireInAccounts.UpdateAccountSchema.safeParse({ newName: 'B' }).success).toBe(false)
+  })
+
+  it('succeeds when name is merged from URL params before parsing', () => {
+    const body = { newName: 'Renamed' }
+    const merged = { ...body, name: 'Original' }
+    const result = wireInAccounts.UpdateAccountSchema.safeParse(merged)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toMatchObject({ name: 'Original', newName: 'Renamed' })
+    }
+  })
+})
+
 describe('wireInToModel', () => {
   it('applies USD currency and 0 initialBalance defaults when omitted', () => {
     const parsed = wireInAccounts.CreateAccountSchema.parse({ name: 'Nubank', type: AccountType.enum.checking })
