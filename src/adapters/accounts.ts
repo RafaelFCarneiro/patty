@@ -3,7 +3,6 @@ import type { CreateAccount, UpdateAccount } from '../models/account.js'
 import type { AccountRow } from '../wire/db/accounts.js'
 import type * as wireIn from '../wire/in/accounts.js'
 
-// Input is the schema-derived Drizzle row; Account.parse enforces domain constraints.
 export const dbToModel = (row: AccountRow): Account =>
   AccountSchema.parse({
     id:             row.id,
