@@ -73,15 +73,15 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
     return send(reply, await getAccountBalances(deps, q.data))
   })
   app.post('/api/accounts', async (req, reply) => {
-    const wireIn = parse(wireInAccounts.CreateAccount, req.body, reply)
+    const wireIn = parse(wireInAccounts.CreateAccountSchema, req.body, reply)
     if (!wireIn) return reply
-    return send(reply, await createAccount(deps, accountAdapters.wireInToModel(wireIn)), 201)
+    return send(reply, await createAccount(deps, accountAdapters.createWireInToModel(wireIn)), 201)
   })
   app.patch('/api/accounts/:name', async (req, reply) => {
     const { name } = req.params as { name: string }
-    const wireIn = parse(wireInAccounts.UpdateAccount, req.body ?? {}, reply)
+    const wireIn = parse(wireInAccounts.UpdateAccountSchema, { ...(req.body ?? {}), name }, reply)
     if (!wireIn) return reply
-    return send(reply, await updateAccount(deps, { name, ...wireIn }))
+    return send(reply, await updateAccount(deps, accountAdapters.updateWireInToModel(wireIn)))
   })
   app.delete('/api/accounts/:name', async (req, reply) => {
     const { name } = req.params as { name: string }

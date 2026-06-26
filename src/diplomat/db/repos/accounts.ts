@@ -1,14 +1,12 @@
 import { eq, sql } from 'drizzle-orm'
 import * as accountAdapters from '../../../adapters/accounts.js'
 import { expectPresent } from '../../../common/present.js'
-import type { Account, AccountType } from '../../../models/account.js'
+import type { Account, AccountReferences, AccountType } from '../../../models/account.js'
 import type { CurrencyCode } from '../../../models/common.js'
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js'
 import { BalancePartsRow } from '../../../wire/db/accounts.js'
 import type { Db } from '../driver.js'
 import { accounts, creditCards, recurringRules, transactions } from '../schema.js'
-
-export type AccountReferences = { transactions: number; recurring: number; cards: number }
 
 export type AccountPatch = {
   name?: string

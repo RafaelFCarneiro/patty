@@ -37,29 +37,74 @@ describe('dbToModel', () => {
   })
 })
 
-describe('wireInToModel', () => {
-  it('applies BRL currency and 0 initialBalance defaults when omitted', () => {
-    const parsed = wireInAccounts.CreateAccount.parse({ name: 'Nubank', type: AccountType.enum.checking })
-    expect(accountAdapters.wireInToModel(parsed)).toEqual({
+describe('wire CreateAccountSchema', () => {
+  it('inherits .describe() from domain schema — no duplicated descriptions', () => {
+    const domainType = wireInAccounts.CreateAccountSchema.shape.type.removeDefault().description
+    const domainCurrency = wireInAccounts.CreateAccountSchema.shape.currency.removeDefault().description
+    expect(domainType).toBeDefined()
+    expect(domainCurrency).toBeDefined()
+    expect(domainType).toContain('checking')
+    expect(domainCurrency).toContain('ISO')
+  })
+})
+
+describe('wire UpdateAccountSchema (HTTP PATCH pattern)', () => {
+  it('rejects body without name (domain requires it)', () => {
+    expect(wireInAccounts.UpdateAccountSchema.safeParse({ newName: 'B' }).success).toBe(false)
+  })
+
+  it('succeeds when name is merged from URL params before parsing', () => {
+    const body = { newName: 'Renamed' }
+    const merged = { ...body, name: 'Original' }
+    const result = wireInAccounts.UpdateAccountSchema.safeParse(merged)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toMatchObject({ name: 'Original', newName: 'Renamed' })
+    }
+  })
+})
+
+describe('createWireInToModel', () => {
+  it('applies USD currency and 0 initialBalance defaults when omitted', () => {
+    const parsed = wireInAccounts.CreateAccountSchema.parse({ name: 'Nubank', type: AccountType.enum.checking })
+    expect(accountAdapters.createWireInToModel(parsed)).toEqual({
       name: 'Nubank',
       type: AccountType.enum.checking,
-      currency: CurrencyCode.enum.BRL,
+      currency: CurrencyCode.enum.USD,
       initialBalance: 0,
     })
   })
 
   it('preserves explicit currency and initialBalance when provided', () => {
-    const parsed = wireInAccounts.CreateAccount.parse({
+    const parsed = wireInAccounts.CreateAccountSchema.parse({
       name: 'USD Wallet',
       type: AccountType.enum.wallet,
       currency: CurrencyCode.enum.USD,
       initialBalance: 500,
     })
-    expect(accountAdapters.wireInToModel(parsed)).toEqual({
+    expect(accountAdapters.createWireInToModel(parsed)).toEqual({
       name: 'USD Wallet',
       type: AccountType.enum.wallet,
       currency: CurrencyCode.enum.USD,
       initialBalance: 500,
     })
+  })
+})
+
+describe('updateWireInToModel', () => {
+  it('passes through a full update payload unchanged', () => {
+    const parsed = wireInAccounts.UpdateAccountSchema.parse({
+      name: 'Nubank',
+      newName: 'Nubank Ultravioleta',
+      type: AccountType.enum.checking,
+      currency: CurrencyCode.enum.BRL,
+      initialBalance: 100,
+    })
+    expect(accountAdapters.updateWireInToModel(parsed)).toEqual(parsed)
+  })
+
+  it('passes through a minimal update (name only) unchanged', () => {
+    const parsed = wireInAccounts.UpdateAccountSchema.parse({ name: 'Nubank' })
+    expect(accountAdapters.updateWireInToModel(parsed)).toEqual({ name: 'Nubank' })
   })
 })

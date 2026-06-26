@@ -24,7 +24,7 @@ describe('MCP integration > spending summary locale', () => {
     await client.connect(transport)
 
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } })
-    await callTool(client, { name: 'create_account', args: { name: 'Summary Locale Acct' } })
+    await callTool(client, { name: 'create_account', args: { name: 'Summary Locale Acct', currency: 'BRL' } })
     await callTool(client, { name: 'create_transaction', args: {
       description: 'Summary locale test',
       amount: 80,

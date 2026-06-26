@@ -37,6 +37,19 @@ export const payBill = async (deps, input) => {
 ```
 
 - Preconditions: `yield* guard(cond, error)`. Nullables: `yield* okOr(value, error)` (`common/result.ts`).
+  Both arguments are named, not inline: the **condition** is a predicate (pure → `logic/`; repo-touching →
+  a small async controller helper) and the **error** is a colocated model payload. Don't bury the rule in
+  an inline boolean or hand-roll the `{ code, … }` literal:
+
+  ```ts
+  // ✅ DO — condition + payload each have a home
+  yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)        // pure predicate (logic/)
+  yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name)) // repo predicate (controller)
+
+  // ❌ DON'T — inline condition + inline error literal
+  yield* guard(input.type !== AccountType.enum.credit, { code: 'validation', issues: ['…'] })
+  yield* guard(!(await deps.accounts.findByName(input.name)), { code: 'duplicate_name', entity: 'account', name: input.name })
+  ```
 - Controllers work with **models only**: hand repos domain drafts (e.g. `TransactionDraft`); never build
   flat db props (`classificationMethod`, `rawInput: null`) and never import `adapters/` — model→db
   flattening lives in `diplomat/db` via `adapters/`.
@@ -80,6 +93,10 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 ```
 
 - Native `map`/`filter` is fine for single-stage transforms.
+- **Guard conditions belong here when pure.** Extract a reusable boolean precondition into a named
+  predicate (e.g. `assertNonCreditType(type)`) instead of inlining `x !== Enum.value` at the `guard` call.
+  Predicates are trivially unit-tested and reused across create/update/delete. (Repo-dependent conditions
+  can't be pure — keep those as small async helpers in the controller.)
 - Every logic function gets a colocated `*.test.ts` (vitest) — pure functions, no mocks.
 
 ## Testing requirements
@@ -92,9 +109,41 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 ## models/ — zod single source of truth
 
 - Types are ALWAYS `z.infer<typeof Schema>` — never hand-written interfaces for domain data.
+- **Naming: the zod value gets the `Schema` suffix; the inferred type gets the bare name.**
+  `export const AccountSchema = z.object({...})` + `export type Account = z.infer<typeof AccountSchema>`.
+  Derived schemas keep the suffix (`CreateAccountSchema`, `UpdateAccountSchema`) with bare-name types
+  (`CreateAccount`, `UpdateAccount`). This removes the value-vs-type ambiguity at import sites.
 - Distinguish input schemas (`CreateTransactionInput` — names, optional fields) from entity
   schemas (`Transaction` — ids, resolved). Inputs use `MovementType`; only entities carry
   `TransactionType` (which includes `'transfer'`).
+- **`.describe()` is domain info — put it on the model field**, not re-authored at the edge. It says
+  what the field *is*; the MCP/REST edge derives its schema (`Schema.shape`) so the same text surfaces.
+- **Defaults by intent:** integrity defaults (a value that must exist for validity, e.g.
+  `initialBalance: z.number().default(0)`) go on the **domain** schema; not-null fields stay **required**
+  in the model. Quality-of-life defaults (convenience when omitted, e.g. currency → USD) go on the
+  **wire** schema via `.extend` — never weaken the domain contract for caller convenience.
+
+  ```ts
+  // models/account.ts — domain: currency is required (integrity), described once
+  currency: CurrencyCode.describe('Account currency (ISO code); fixed once the account has activity'),
+  // wire/in/accounts.ts — boundary: QoL default only
+  export const CreateAccountSchema = modelAccount.CreateAccountSchema.extend({
+    currency: CurrencyCode.default(CurrencyCode.enum.USD),
+  })
+  ```
+
+- **Expected-error payloads live with the entity.** Colocate the `AppError` objects a controller returns
+  for an entity on its model (typed via a *type-only* `AppError` import), as constants/builders:
+
+  ```ts
+  // models/account.ts
+  export const accountErrors = {
+    creditRejected: { code: 'validation', issues: ['…use the card flow…'] } as AppError,
+    duplicateName: (name: string): AppError => ({ code: 'duplicate_name', entity: 'account', name }),
+  }
+  ```
+
+  Controllers raise them; they never inline the `{ code, … }` literal (see code-quality "Constants over literals").
 
 ## diplomat/ — thin, no business logic
 
