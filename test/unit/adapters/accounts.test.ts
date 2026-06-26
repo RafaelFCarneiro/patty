@@ -90,3 +90,21 @@ describe('createWireInToModel', () => {
     })
   })
 })
+
+describe('updateWireInToModel', () => {
+  it('passes through a full update payload unchanged', () => {
+    const parsed = wireInAccounts.UpdateAccountSchema.parse({
+      name: 'Nubank',
+      newName: 'Nubank Ultravioleta',
+      type: AccountType.enum.checking,
+      currency: CurrencyCode.enum.BRL,
+      initialBalance: 100,
+    })
+    expect(accountAdapters.updateWireInToModel(parsed)).toEqual(parsed)
+  })
+
+  it('passes through a minimal update (name only) unchanged', () => {
+    const parsed = wireInAccounts.UpdateAccountSchema.parse({ name: 'Nubank' })
+    expect(accountAdapters.updateWireInToModel(parsed)).toEqual({ name: 'Nubank' })
+  })
+})
