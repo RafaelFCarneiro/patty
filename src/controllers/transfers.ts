@@ -13,8 +13,8 @@ import { resolveAccountRef } from './resolve.js'
 
 const validateTransferAccounts = (from: Account, to: Account) =>
   safeTry(function* () {
-    yield* guard(assertNonCreditType(from.type), accountErrors.creditTransferRejected(from.name))
-    yield* guard(assertNonCreditType(to.type), accountErrors.creditTransferRejected(to.name))
+    yield* guard(assertNonCreditType(from.type), accountErrors.creditTransferFromRejected(from.name))
+    yield* guard(assertNonCreditType(to.type), accountErrors.creditTransferToRejected(to.name))
     yield* guard(areDifferentAccounts(from, to), accountErrors.sameAccount)
     yield* guard(assertCurrencyMatch(from, to), accountErrors.crossCurrencyTransfer(from, to))
     return ok(undefined)

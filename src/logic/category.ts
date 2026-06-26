@@ -50,11 +50,14 @@ export const assertCategoryNameAvailable = (categories: readonly Category[], nam
 export const assertSubCategoryNameAvailable = (siblings: readonly { name: string }[], name: string): boolean =>
   !hasSubCategoryNameCollision(siblings, name)
 
-export const isUnreferenced = (refs: CategoryReferences): boolean =>
+export const isCategoryUnreferenced = (refs: CategoryReferences): boolean =>
   refs.transactions === 0 && refs.recurring === 0 && refs.subCategories === 0
 
 export const parentExists = (categories: readonly Category[], parentId: string): boolean =>
   categories.some((c) => c.id === parentId)
+
+export const isKindCompatible = (categoryKind: string, transactionType: string): boolean =>
+  categoryKind === 'both' || categoryKind === transactionType
 
 export const resolveAndSort = (categories: readonly Category[], locale: string): Category[] => {
   const resolved = categories.map((c) => resolveDisplayName(c, locale))

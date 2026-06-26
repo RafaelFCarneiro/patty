@@ -89,17 +89,21 @@ export const accountErrors = {
     code: 'validation',
     issues: ['cannot post directly to a credit account — use the card parameter instead'],
   } satisfies AccountError,
-  creditTransferRejected: (name: string): AccountError => ({
+  creditTransferFromRejected: (name: string): AccountError => ({
     code: 'validation',
     issues: [`cannot transfer from a credit account (${name}) — use pay_bill instead`],
+  }),
+  creditTransferToRejected: (name: string): AccountError => ({
+    code: 'validation',
+    issues: [`cannot transfer to a credit account (${name}) — use pay_bill instead`],
   }),
   creditPaymentRejected: {
     code: 'validation',
     issues: ['payment account cannot be a credit account'],
   } satisfies AccountError,
-  currencyMismatch: (a: string, b: string): AccountError => ({
+  currencyMismatch: (cardCurrency: string, payerCurrency: string): AccountError => ({
     code: 'validation',
-    issues: [`currency mismatch: card is ${a}, payer is ${b}`],
+    issues: [`currency mismatch: card is ${cardCurrency}, payer is ${payerCurrency}`],
   }),
   sameAccount: {
     code: 'validation',

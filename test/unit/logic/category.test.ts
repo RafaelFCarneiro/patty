@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CategoryKind, type Category } from '../../../src/models/category.js'
 import { Locale } from '../../../src/models/locale.js'
-import { allNames, buildSynonyms, hasNameCollision, hasSubCategoryNameCollision, isUnreferenced, localizeCategoryName, parentExists, resolveAndSort, resolveDisplayName, withKindLabel } from '../../../src/logic/category.js'
+import { allNames, buildSynonyms, hasNameCollision, hasSubCategoryNameCollision, isCategoryUnreferenced, isKindCompatible, localizeCategoryName, parentExists, resolveAndSort, resolveDisplayName, withKindLabel } from '../../../src/logic/category.js'
 
 const seeded: Category = {
   id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense,
@@ -148,15 +148,15 @@ describe('hasSubCategoryNameCollision', () => {
   })
 })
 
-describe('isUnreferenced (CategoryReferences)', () => {
+describe('isCategoryUnreferenced', () => {
   it('returns true when all counts are zero', () => {
-    expect(isUnreferenced({ transactions: 0, recurring: 0, subCategories: 0 })).toBe(true)
+    expect(isCategoryUnreferenced({ transactions: 0, recurring: 0, subCategories: 0 })).toBe(true)
   })
 
   it('returns false when any count is non-zero', () => {
-    expect(isUnreferenced({ transactions: 1, recurring: 0, subCategories: 0 })).toBe(false)
-    expect(isUnreferenced({ transactions: 0, recurring: 1, subCategories: 0 })).toBe(false)
-    expect(isUnreferenced({ transactions: 0, recurring: 0, subCategories: 1 })).toBe(false)
+    expect(isCategoryUnreferenced({ transactions: 1, recurring: 0, subCategories: 0 })).toBe(false)
+    expect(isCategoryUnreferenced({ transactions: 0, recurring: 1, subCategories: 0 })).toBe(false)
+    expect(isCategoryUnreferenced({ transactions: 0, recurring: 0, subCategories: 1 })).toBe(false)
   })
 })
 
@@ -169,5 +169,22 @@ describe('parentExists', () => {
 
   it('returns false when parent id is not found', () => {
     expect(parentExists(categories, 'nonexistent')).toBe(false)
+  })
+})
+
+describe('isKindCompatible', () => {
+  it('returns true when kind is both', () => {
+    expect(isKindCompatible('both', 'expense')).toBe(true)
+    expect(isKindCompatible('both', 'income')).toBe(true)
+  })
+
+  it('returns true when kind matches transaction type', () => {
+    expect(isKindCompatible('expense', 'expense')).toBe(true)
+    expect(isKindCompatible('income', 'income')).toBe(true)
+  })
+
+  it('returns false when kind conflicts with transaction type', () => {
+    expect(isKindCompatible('expense', 'income')).toBe(false)
+    expect(isKindCompatible('income', 'expense')).toBe(false)
   })
 })

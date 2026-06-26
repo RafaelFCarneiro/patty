@@ -1,7 +1,7 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
-import { assertCategoryNameAvailable, assertSubCategoryNameAvailable, isUnreferenced, parentExists, resolveAndSort, withKindLabel } from '../logic/category.js'
+import { assertCategoryNameAvailable, assertSubCategoryNameAvailable, isCategoryUnreferenced, parentExists, resolveAndSort, withKindLabel } from '../logic/category.js'
 import { categoryErrors, type Category, type CreateCategory, type SubCategory } from '../models/category.js'
 import { notFound } from '../models/error.js'
 import type { Deps } from './deps.js'
@@ -23,7 +23,7 @@ export const deleteCategory = (deps: Deps, name: string): ResultAsync<{ deleted:
   safeTry(async function* () {
     const category = yield* resolveCategoryRef(deps, name)
     const refs = await deps.categories.countReferences(category.id)
-    yield* guard(isUnreferenced(refs), categoryErrors.inUse('category', category.name, refs))
+    yield* guard(isCategoryUnreferenced(refs), categoryErrors.inUse('category', category.name, refs))
     await deps.categories.delete(category.id)
     return ok({ deleted: true })
   })
@@ -32,7 +32,7 @@ export const deleteSubCategory = (deps: Deps, name: string): ResultAsync<{ delet
   safeTry(async function* () {
     const subCategory = yield* resolveSubCategoryRef(deps, name)
     const refs = await deps.subCategories.countReferences(subCategory.id)
-    yield* guard(isUnreferenced(refs), categoryErrors.inUse('sub_category', subCategory.name, refs))
+    yield* guard(isCategoryUnreferenced(refs), categoryErrors.inUse('sub_category', subCategory.name, refs))
     await deps.subCategories.delete(subCategory.id)
     return ok({ deleted: true })
   })

@@ -1,6 +1,6 @@
 import { err, ok, type Result, ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
-import { buildSynonyms, resolveAndSort } from '../logic/category.js'
+import { buildSynonyms, isKindCompatible, resolveAndSort } from '../logic/category.js'
 import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js'
 import type { Account } from '../models/account.js'
 import { categoryErrors, type Category, type SubCategory } from '../models/category.js'
@@ -48,6 +48,6 @@ export const guardCategoryKind = (
   category: Category | SubCategory,
   txType: MovementType,
 ): Result<void, AppError> => {
-  if (category.kind === 'both' || category.kind === txType) return ok(undefined)
+  if (isKindCompatible(category.kind, txType)) return ok(undefined)
   return err(categoryErrors.kindMismatch(txType, category.name, category.kind))
 }

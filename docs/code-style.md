@@ -132,14 +132,19 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
   })
   ```
 
-- **Expected-error payloads live with the entity.** Colocate the `AppError` objects a controller returns
-  for an entity on its model (typed via a *type-only* `AppError` import), as constants/builders:
+- **Expected-error payloads live with the entity (ADR-012).** Each model defines its own error union
+  (e.g. `AccountError`) typed against shared primitives from `models/error.ts`, and colocates payload
+  builders. Models never import the composed `AppError`:
 
   ```ts
   // models/account.ts
+  import type { DuplicateName, ValidationError } from './error.js'
+
+  export type AccountError = DuplicateName<'account'> | ValidationError
+
   export const accountErrors = {
-    creditRejected: { code: 'validation', issues: ['…use the card flow…'] } as AppError,
-    duplicateName: (name: string): AppError => ({ code: 'duplicate_name', entity: 'account', name }),
+    creditRejected: { code: 'validation', issues: ['…use the card flow…'] } satisfies AccountError,
+    duplicateName: (name: string): AccountError => ({ code: 'duplicate_name', entity: 'account', name }),
   }
   ```
 

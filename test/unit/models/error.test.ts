@@ -74,10 +74,22 @@ describe('per-model error builders', () => {
     })
   })
 
-  it('accountErrors.creditTransferRejected embeds the account name', () => {
-    const err = accountErrors.creditTransferRejected('Nubank')
+  it('accountErrors.creditTransferFromRejected embeds the account name', () => {
+    const err = accountErrors.creditTransferFromRejected('Nubank')
     expect(err).toMatchObject({ code: 'validation' })
-    if (err.code === 'validation') expect(err.issues[0]).toContain('Nubank')
+    if (err.code === 'validation') {
+      expect(err.issues[0]).toContain('Nubank')
+      expect(err.issues[0]).toContain('from')
+    }
+  })
+
+  it('accountErrors.creditTransferToRejected embeds the account name', () => {
+    const err = accountErrors.creditTransferToRejected('Nubank')
+    expect(err).toMatchObject({ code: 'validation' })
+    if (err.code === 'validation') {
+      expect(err.issues[0]).toContain('Nubank')
+      expect(err.issues[0]).toContain('to')
+    }
   })
 
   it('accountErrors.crossCurrencyTransfer embeds both account details', () => {
