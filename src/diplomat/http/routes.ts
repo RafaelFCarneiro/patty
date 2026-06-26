@@ -81,7 +81,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
     const { name } = req.params as { name: string }
     const wireIn = parse(wireInAccounts.UpdateAccountSchema, { ...(req.body ?? {}), name }, reply)
     if (!wireIn) return reply
-    return send(reply, await updateAccount(deps, wireIn))
+    return send(reply, await updateAccount(deps, accountAdapters.updateWireInToModel(wireIn)))
   })
   app.delete('/api/accounts/:name', async (req, reply) => {
     const { name } = req.params as { name: string }
