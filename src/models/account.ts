@@ -62,7 +62,7 @@ export const accountErrors = {
   creditRejected: {
     code: 'validation',
     issues: ['credit accounts are managed by their credit card — use the card flow instead (create_credit_card / delete_credit_card)'],
-  } as AppError,
+  } satisfies AppError,
   duplicateName: (name: string): AppError => ({ code: 'duplicate_name', entity: 'account', name }),
   inUse: (name: string, references: AccountReferences): AppError => ({
     code: 'in_use', entity: 'account', name, references,
@@ -78,9 +78,9 @@ export const accountErrors = {
   currencyImmutableRecurring: {
     code: 'validation',
     issues: ['currency cannot be changed — account has recurring rules that persist the original currency'],
-  } as AppError,
+  } satisfies AppError,
   currencyImmutableCards: {
     code: 'validation',
     issues: ['currency cannot be changed — account is a credit card payment account'],
-  } as AppError,
+  } satisfies AppError,
 }

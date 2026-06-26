@@ -64,7 +64,7 @@ describe('wire UpdateAccountSchema (HTTP PATCH pattern)', () => {
   })
 })
 
-describe('wireInToModel', () => {
+describe('createWireInToModel', () => {
   it('applies USD currency and 0 initialBalance defaults when omitted', () => {
     const parsed = wireInAccounts.CreateAccountSchema.parse({ name: 'Nubank', type: AccountType.enum.checking })
     expect(accountAdapters.createWireInToModel(parsed)).toEqual({
