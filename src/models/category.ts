@@ -57,7 +57,7 @@ export type CategoryError =
   | DuplicateName<'sub_category'>
   | InUse<'category', CategoryReferences>
   | InUse<'sub_category', CategoryReferences>
-  | { code: 'category_kind_mismatch'; transactionType: string; categoryName: string; categoryKind: string; hint: string }
+  | { code: 'category_kind_mismatch'; transactionType: 'expense' | 'income'; categoryName: string; categoryKind: CategoryKind; hint: string }
   | ValidationError
 
 export const categoryErrors = {
@@ -67,7 +67,7 @@ export const categoryErrors = {
   inUse: (entity: 'category' | 'sub_category', name: string, references: CategoryReferences): CategoryError => ({
     code: 'in_use', entity, name, references,
   }),
-  kindMismatch: (transactionType: string, categoryName: string, categoryKind: string): CategoryError => ({
+  kindMismatch: (transactionType: 'expense' | 'income', categoryName: string, categoryKind: CategoryKind): CategoryError => ({
     code: 'category_kind_mismatch',
     transactionType,
     categoryName,
