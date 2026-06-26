@@ -3,18 +3,17 @@ import * as R from 'remeda'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
 import type { AccountPatch } from '../diplomat/db/repos/accounts.js'
-import { filterByType, withTypeLabel } from '../logic/account.js'
+import { assertNonCreditType, filterByType, hasNoCards, hasNoRecurring, hasNoTransactions, isUnreferenced, withTypeLabel } from '../logic/account.js'
 import { computeBalance, computeProjectedBalance } from '../logic/balance.js'
 import { resolveByName } from '../logic/resolve.js'
-import { AccountType } from '../models/account.js'
-import type { Account, AccountBalance, CreateAccount, UpdateAccount } from '../models/account.js'
+import { accountErrors } from '../models/account.js'
+import type { Account, AccountBalance, AccountType, CreateAccount, UpdateAccount } from '../models/account.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolutionToResult } from './resolve.js'
 
-const CREDIT_ACCOUNT_REJECTION = {
-  code: 'validation' as const,
-  issues: ['credit accounts are managed by their credit card — use the card flow instead (create_credit_card / delete_credit_card)'],
-}
+/** Repo-touching precondition: true when no account already holds this name. */
+const assertNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
+  !(await deps.accounts.findByName(name))
 
 export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Account[]> => {
   const [locale, all] = await Promise.all([deps.locale(), deps.accounts.list()])
@@ -27,12 +26,8 @@ export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Acco
 
 export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Account, AppError> =>
   safeTry(async function* () {
-    yield* guard(input.type !== AccountType.enum.credit, CREDIT_ACCOUNT_REJECTION)
-    yield* guard(!(await deps.accounts.findByName(input.name)), {
-      code: 'duplicate_name',
-      entity: 'account',
-      name: input.name,
-    })
+    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)
+    yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name))
     return ok(await deps.accounts.create({ id: deps.newId(), ...input }))
   })
 
@@ -67,14 +62,9 @@ export const getAccountBalances = (
 export const deleteAccount = (deps: Deps, name: string): ResultAsync<{ deleted: boolean }, AppError> =>
   safeTry(async function* () {
     const account = yield* resolveAccountRef(deps, name)
-    yield* guard(account.type !== AccountType.enum.credit, CREDIT_ACCOUNT_REJECTION)
+    yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected)
     const refs = await deps.accounts.countReferences(account.id)
-    yield* guard(refs.transactions === 0 && refs.recurring === 0 && refs.cards === 0, {
-      code: 'in_use',
-      entity: 'account',
-      name: account.name,
-      references: refs,
-    })
+    yield* guard(isUnreferenced(refs), accountErrors.inUse(account.name, refs))
     await deps.accounts.delete(account.id)
     return ok({ deleted: true })
   })
@@ -83,38 +73,22 @@ export const deleteAccount = (deps: Deps, name: string): ResultAsync<{ deleted: 
 export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<Account, AppError> =>
   safeTry(async function* () {
     const account = yield* resolveAccountRef(deps, input.name)
-    yield* guard(account.type !== AccountType.enum.credit, CREDIT_ACCOUNT_REJECTION)
-    yield* guard(input.type !== AccountType.enum.credit, CREDIT_ACCOUNT_REJECTION)
+    yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected)
+    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)
 
     if (input.newName && input.newName.toLowerCase() !== account.name.toLowerCase()) {
-      yield* guard(!(await deps.accounts.findByName(input.newName)), {
-        code: 'duplicate_name',
-        entity: 'account',
-        name: input.newName,
-      })
+      yield* guard(await assertNameAvailable(deps, input.newName), accountErrors.duplicateName(input.newName))
     }
 
     if (input.type !== undefined || input.currency !== undefined) {
       const refs = await deps.accounts.countReferences(account.id)
       if (input.type !== undefined) {
-        yield* guard(refs.transactions === 0, {
-          code: 'validation',
-          issues: [`type cannot be changed — account has ${refs.transactions} transaction(s)`],
-        })
+        yield* guard(hasNoTransactions(refs), accountErrors.typeImmutable(refs.transactions))
       }
       if (input.currency !== undefined) {
-        yield* guard(refs.transactions === 0, {
-          code: 'validation',
-          issues: [`currency cannot be changed — account has ${refs.transactions} transaction(s)`],
-        })
-        yield* guard(refs.recurring === 0, {
-          code: 'validation',
-          issues: ['currency cannot be changed — account has recurring rules that persist the original currency'],
-        })
-        yield* guard(refs.cards === 0, {
-          code: 'validation',
-          issues: ['currency cannot be changed — account is a credit card payment account'],
-        })
+        yield* guard(hasNoTransactions(refs), accountErrors.currencyImmutableTransactions(refs.transactions))
+        yield* guard(hasNoRecurring(refs), accountErrors.currencyImmutableRecurring)
+        yield* guard(hasNoCards(refs), accountErrors.currencyImmutableCards)
       }
     }
 

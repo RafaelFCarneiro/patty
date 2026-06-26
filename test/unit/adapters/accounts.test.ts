@@ -39,7 +39,7 @@ describe('dbToModel', () => {
 
 describe('wireInToModel', () => {
   it('applies USD currency and 0 initialBalance defaults when omitted', () => {
-    const parsed = wireInAccounts.CreateAccount.parse({ name: 'Nubank', type: AccountType.enum.checking })
+    const parsed = wireInAccounts.CreateAccountSchema.parse({ name: 'Nubank', type: AccountType.enum.checking })
     expect(accountAdapters.createWireInToModel(parsed)).toEqual({
       name: 'Nubank',
       type: AccountType.enum.checking,
@@ -49,7 +49,7 @@ describe('wireInToModel', () => {
   })
 
   it('preserves explicit currency and initialBalance when provided', () => {
-    const parsed = wireInAccounts.CreateAccount.parse({
+    const parsed = wireInAccounts.CreateAccountSchema.parse({
       name: 'USD Wallet',
       type: AccountType.enum.wallet,
       currency: CurrencyCode.enum.USD,

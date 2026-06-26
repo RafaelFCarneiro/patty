@@ -73,7 +73,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
     return send(reply, await getAccountBalances(deps, q.data))
   })
   app.post('/api/accounts', async (req, reply) => {
-    const wireIn = parse(wireInAccounts.CreateAccount, req.body, reply)
+    const wireIn = parse(wireInAccounts.CreateAccountSchema, req.body, reply)
     if (!wireIn) return reply
     return send(reply, await createAccount(deps, accountAdapters.createWireInToModel(wireIn)), 201)
   })

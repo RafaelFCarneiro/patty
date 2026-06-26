@@ -32,7 +32,7 @@ import {
   createResultToWireOut,
   deleteResultToWireOut,
 } from '../../adapters/transactions.js'
-import { UpdateAccountSchema } from '../../wire/in/accounts.js'
+import { CreateAccountSchema, UpdateAccountSchema } from '../../wire/in/accounts.js'
 import * as accountAdapters from '../../adapters/accounts.js'
 
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. */
@@ -339,14 +339,9 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
     {
       title: 'Create account',
       description:
-        'Create a bank account / wallet. Currency defaults to BRL. ' +
+        'Create a bank account / wallet. Type defaults to checking, currency to USD. ' +
         'Note: credit accounts are created automatically with a credit card (create_credit_card).',
-      inputSchema: {
-        name: z.string().min(1),
-        type: AccountType.default(AccountType.enum.checking),
-        currency: CurrencyCode.default(CurrencyCode.enum.BRL),
-        initialBalance: z.number().default(0).describe('Balance at account creation'),
-      },
+      inputSchema: CreateAccountSchema.shape,
     },
     async (args) => fromResult(await createAccount(deps, accountAdapters.createWireInToModel(args))),
   )
@@ -391,7 +386,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'type is only editable when the account has no transactions/transfers (and cannot be set to credit). ' +
         'currency is only editable when the account has no transactions/transfers, no recurring rules, and is not a credit card payment account. ' +
         'Credit accounts (card-managed) are rejected — use the card flow.',
-      inputSchema: UpdateAccountSchema,
+      inputSchema: UpdateAccountSchema.shape,
     },
     async (args) => fromResult(await updateAccount(deps, accountAdapters.updateWireInToModel(args))),
   )

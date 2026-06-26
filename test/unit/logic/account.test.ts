@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { filterByType, withTypeLabel } from '../../../src/logic/account.js'
+import { assertNonCreditType, filterByType, hasNoCards, hasNoRecurring, hasNoTransactions, isUnreferenced, withTypeLabel } from '../../../src/logic/account.js'
+import type { AccountReferences } from '../../../src/models/account.js'
 import { AccountType, type Account } from '../../../src/models/account.js'
 import { CurrencyCode } from '../../../src/models/common.js'
 import { Locale } from '../../../src/models/locale.js'
@@ -40,5 +41,40 @@ describe('withTypeLabel', () => {
   it('preserves original type value', () => {
     const labeled = withTypeLabel(account, Locale.enum.pt)
     expect(labeled.type).toBe(AccountType.enum.checking)
+  })
+})
+
+describe('assertNonCreditType', () => {
+  it('passes for every manageable (non-credit) type', () => {
+    for (const type of [AccountType.enum.checking, AccountType.enum.savings, AccountType.enum.wallet, AccountType.enum.investment]) {
+      expect(assertNonCreditType(type)).toBe(true)
+    }
+  })
+
+  it('fails for credit (card-managed)', () => {
+    expect(assertNonCreditType(AccountType.enum.credit)).toBe(false)
+  })
+
+  it('passes for undefined (an omitted type is not a credit assignment)', () => {
+    expect(assertNonCreditType(undefined)).toBe(true)
+  })
+})
+
+describe('reference predicates', () => {
+  const refs = (over: Partial<AccountReferences> = {}): AccountReferences =>
+    ({ transactions: 0, recurring: 0, cards: 0, ...over })
+
+  it('hasNoTransactions / hasNoRecurring / hasNoCards reflect their single count', () => {
+    expect(hasNoTransactions(refs())).toBe(true)
+    expect(hasNoTransactions(refs({ transactions: 1 }))).toBe(false)
+    expect(hasNoRecurring(refs({ recurring: 2 }))).toBe(false)
+    expect(hasNoCards(refs({ cards: 1 }))).toBe(false)
+  })
+
+  it('isUnreferenced is true only when every reference count is zero', () => {
+    expect(isUnreferenced(refs())).toBe(true)
+    expect(isUnreferenced(refs({ transactions: 1 }))).toBe(false)
+    expect(isUnreferenced(refs({ recurring: 1 }))).toBe(false)
+    expect(isUnreferenced(refs({ cards: 1 }))).toBe(false)
   })
 })

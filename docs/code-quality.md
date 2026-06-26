@@ -21,6 +21,18 @@ kind: 'expense'
 - Zod enums expose `.enum` — always use it at call sites.
 - If the value is used in more than one place, define a constant; do not copy-paste the literal.
 - This applies to error codes, status strings, numeric thresholds, and any other repeated value.
+- **`AppError` payloads are not inline literals either.** Colocate them as named constants/builders on the
+  entity's model (`accountErrors.creditRejected`, `accountErrors.duplicateName(name)`) and reference them at
+  the `guard`/`err` call. An inline `{ code: 'validation', issues: ['…'] }` in a controller is the same smell
+  as a bare string — it scatters domain vocabulary and duplicates messages. (See code-style "models/".)
+
+  ```ts
+  // ✅ DO
+  yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)
+
+  // ❌ DON'T
+  yield* guard(input.type !== AccountType.enum.credit, { code: 'validation', issues: ['…'] })
+  ```
 
 ## Naming clarity
 
