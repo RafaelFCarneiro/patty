@@ -80,12 +80,12 @@ export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<Acc
       yield* guard(await assertNameAvailable(deps, input.newName), accountErrors.duplicateName(input.newName))
     }
 
-    if (input.type !== undefined || input.currency !== undefined) {
+    if (R.isDefined(input.type) || R.isDefined(input.currency)) {
       const refs = await deps.accounts.countReferences(account.id)
-      if (input.type !== undefined) {
+      if (R.isDefined(input.type)) {
         yield* guard(hasNoTransactions(refs), accountErrors.typeImmutable(refs.transactions))
       }
-      if (input.currency !== undefined) {
+      if (R.isDefined(input.currency)) {
         yield* guard(hasNoTransactions(refs), accountErrors.currencyImmutableTransactions(refs.transactions))
         yield* guard(hasNoRecurring(refs), accountErrors.currencyImmutableRecurring)
         yield* guard(hasNoCards(refs), accountErrors.currencyImmutableCards)
@@ -93,10 +93,10 @@ export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<Acc
     }
 
     const patch: AccountPatch = {}
-    if (input.newName !== undefined) patch.name = input.newName
-    if (input.initialBalance !== undefined) patch.initialBalance = input.initialBalance
-    if (input.type !== undefined) patch.type = input.type
-    if (input.currency !== undefined) patch.currency = input.currency
+    if (R.isDefined(input.newName)) patch.name = input.newName
+    if (R.isDefined(input.initialBalance)) patch.initialBalance = input.initialBalance
+    if (R.isDefined(input.type)) patch.type = input.type
+    if (R.isDefined(input.currency)) patch.currency = input.currency
 
     const locale = await deps.locale()
     return ok(withTypeLabel(await deps.accounts.update(account.id, patch), locale))
