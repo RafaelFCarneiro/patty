@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  BulkTransactionItemSchema as ModelBulkTransactionItemSchema,
   CreateTransactionSchema,
   CreateTransactionsBulkSchema,
   CreateTransferSchema,
@@ -14,7 +15,7 @@ import type { SearchTransactions } from '../../models/transaction.js'
 export const CreateTransactionInputSchema = CreateTransactionSchema
 export type CreateTransactionInput = z.infer<typeof CreateTransactionInputSchema>
 
-export const BulkTransactionItemSchema = CreateTransactionsBulkSchema.shape.items.element
+export const BulkTransactionItemSchema = ModelBulkTransactionItemSchema
 export type BulkTransactionItem = z.infer<typeof BulkTransactionItemSchema>
 
 export const CreateTransactionsBulkInputSchema = CreateTransactionsBulkSchema
