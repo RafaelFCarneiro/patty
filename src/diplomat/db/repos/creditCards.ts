@@ -1,13 +1,13 @@
 import { eq, sql } from 'drizzle-orm'
 import { expectPresent } from '../../../common/present.js'
 import type { Account } from '../../../models/account.js'
-import { CreditCard } from '../../../models/creditCard.js'
+import { CreditCardSchema, type CreditCard } from '../../../models/creditCard.js'
 import type { CreditCardRow } from '../../../wire/db/creditCards.js'
 import type { Db } from '../driver.js'
 import { accounts, bills, creditCards } from '../schema.js'
 
 const toCard = (row: CreditCardRow): CreditCard =>
-  CreditCard.parse({
+  CreditCardSchema.parse({
     id:               row.id,
     name:             row.name,
     currency:         row.currency,

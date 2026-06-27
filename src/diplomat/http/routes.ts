@@ -134,7 +134,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
 
   app.get('/api/credit-cards', async () => listCreditCards(deps))
   app.post('/api/credit-cards', async (req, reply) => {
-    const wireIn = parse(wireInCreditCards.CreateCreditCard, req.body, reply)
+    const wireIn = parse(wireInCreditCards.CreateCreditCardSchema, req.body, reply)
     if (!wireIn) return reply
     return send(reply, await createCreditCard(deps, creditCardAdapters.wireInToModel(wireIn)), 201)
   })
