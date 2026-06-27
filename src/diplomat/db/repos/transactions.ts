@@ -1,99 +1,19 @@
 import { eq, inArray, sql } from 'drizzle-orm'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { expectPresent } from '../../../common/present.js'
-import { AggregateGroupBy, AggregateMetric, AggregateSort } from '../../../models/aggregate.js'
+import { AggregateSort } from '../../../models/aggregate.js'
 import { TransactionStatus, TransactionType, type Transaction, type RawTransactionView, type TransactionPatch } from '../../../models/transaction.js'
 import type { SummaryRow } from '../../../models/summary.js'
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js'
 import { SummaryRowSchema } from '../../../wire/db/transactions.js'
+import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js'
 import type { Db } from '../driver.js'
+import { buildCommonWhere, type AggregateFilters, type SearchFilters } from '../filters.js'
 import { toMatchQuery } from '../fts.js'
 import { merchants, tags, transactionTags, transactions } from '../schema.js'
 import { fullTxSelect } from '../transactionSelect.js'
 
 export type CreateTxResult = { transaction: RawTransactionView; created: boolean }
-
-export type CommonFilters = {
-  from: string | null
-  to: string | null
-  type: string | null
-  accountId: string | null
-  categoryId: string | null
-  tagNames: string[]
-}
-
-export type SearchFilters = CommonFilters & {
-  status: TransactionStatus | null
-  text: string | null
-  subCategoryId: string | null
-  limit: number
-}
-
-export type AggregateFilters = CommonFilters & {
-  groupBy: AggregateGroupBy
-  metric: AggregateMetric
-  sort: AggregateSort
-  limit: number
-}
-
-const buildCommonWhere = (filters: CommonFilters): ReturnType<typeof sql>[] => {
-  const conditions: ReturnType<typeof sql>[] = []
-  if (filters.from)       conditions.push(sql`t.date >= ${filters.from}`)
-  if (filters.to)         conditions.push(sql`t.date < ${filters.to}`)
-  if (filters.type)       conditions.push(sql`t.type = ${filters.type}`)
-  if (filters.accountId)  conditions.push(sql`(t.from_account_id = ${filters.accountId} OR t.to_account_id = ${filters.accountId})`)
-  if (filters.categoryId) conditions.push(sql`t.category_id = ${filters.categoryId}`)
-  if (filters.tagNames.length > 0) {
-    const placeholders = sql.join(filters.tagNames.map((n) => sql`${n}`), sql`, `)
-    conditions.push(sql`EXISTS (
-      SELECT 1 FROM transaction_tags tt2
-      JOIN tags tg2 ON tg2.id = tt2.tag_id
-      WHERE tt2.transaction_id = t.id AND tg2.name IN (${placeholders})
-    )`)
-  }
-  return conditions
-}
-
-// ADR-011: whitelist maps — dynamic structure from developer-authored fragments only.
-type SqlFragment = ReturnType<typeof sql>
-type GroupByFragment = {
-  expr: SqlFragment; join: SqlFragment; label: SqlFragment; labelNames?: SqlFragment
-}
-
-const GROUP_BY_MAP: Record<AggregateGroupBy, GroupByFragment> = {
-  [AggregateGroupBy.enum.category]: {
-    expr: sql`t.category_id`,
-    join: sql`LEFT JOIN categories c ON c.id = t.category_id`,
-    label: sql`c.name`,
-    labelNames: sql`c.names`,
-  },
-  [AggregateGroupBy.enum.account]: {
-    expr: sql`t.from_account_id`,
-    join: sql`LEFT JOIN accounts a ON a.id = t.from_account_id`,
-    label: sql`a.name`,
-  },
-  [AggregateGroupBy.enum.tag]: {
-    expr: sql`tg.name`,
-    join: sql`JOIN transaction_tags tt ON tt.transaction_id = t.id JOIN tags tg ON tg.id = tt.tag_id`,
-    label: sql`tg.name`,
-  },
-  [AggregateGroupBy.enum.month]: {
-    expr: sql`substr(t.date, 1, 7)`,
-    join: sql``,
-    label: sql`substr(t.date, 1, 7)`,
-  },
-  [AggregateGroupBy.enum.merchant]: {
-    expr: sql`t.merchant_key`,
-    join: sql``,
-    label: sql`t.merchant_key`,
-  },
-}
-
-const METRIC_MAP: Record<AggregateMetric, ReturnType<typeof sql>> = {
-  [AggregateMetric.enum.sum]: sql`SUM(t.amount)`,
-  [AggregateMetric.enum.count]: sql`COUNT(*)`,
-  [AggregateMetric.enum.avg]: sql`AVG(t.amount)`,
-}
 
 const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
   const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`))

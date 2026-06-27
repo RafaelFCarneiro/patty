@@ -1,4 +1,5 @@
-import type { Period } from '../models/date.js'
+import { isNonNullish } from 'remeda'
+import type { IsoDate, Period } from '../models/date.js'
 
 export type DateRange = { from: string; to: string }
 
@@ -13,3 +14,14 @@ export const periodRange = ({ month, year }: Period): DateRange => {
 
 export const toIsoDate = (d: Date): string =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+type PeriodInput = { month?: number | null; year?: number | null; from?: IsoDate | null; to?: IsoDate | null }
+
+export const hasPeriod = (input: PeriodInput): boolean =>
+  isNonNullish(input.month) && isNonNullish(input.year)
+
+export const hasDateRange = (input: PeriodInput): boolean =>
+  isNonNullish(input.from) || isNonNullish(input.to)
+
+export const assertHasPeriodOrRange = (input: PeriodInput): boolean =>
+  hasPeriod(input) || hasDateRange(input)

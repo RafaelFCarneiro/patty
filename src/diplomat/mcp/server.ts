@@ -27,7 +27,9 @@ import {
   updateTransaction,
 } from '../../controllers/transactions.js'
 import { createTransfer } from '../../controllers/transfers.js'
-import { AggregateMetric, AggregateSort, AggregateSpendingSchema } from '../../models/aggregate.js'
+import {
+  AggregateMetric, AggregateSort, AggregateSpendingSchema, type ResolvedAggregateSpending,
+} from '../../models/aggregate.js'
 import {
   TransactionSource,
   CreateTransactionSchema,
@@ -269,7 +271,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         limit: AggregateSpendingSchema.shape.limit.default(50),
       },
     },
-    async (args) => fromResult(await aggregateSpending(deps, args as Parameters<typeof aggregateSpending>[1])),
+    async (args) => fromResult(await aggregateSpending(deps, args as ResolvedAggregateSpending)),
   )
 
   server.registerTool(

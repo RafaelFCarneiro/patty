@@ -14,18 +14,17 @@ const uncategorizedLabels: Record<Locale, string> = {
   es: 'Sin categoría',
 }
 
-const resolveKey = (row: AggregateDbRow, groupBy: AggregateGroupBy): string => {
-  if (row.key != null) return row.key
-  if (groupBy === AggregateGroupBy.enum.category) return UNCATEGORIZED_KEY
-  return UNCATEGORIZED_KEY
-}
+const resolveKey = (row: AggregateDbRow): string =>
+  row.key ?? UNCATEGORIZED_KEY
 
 const resolveLabel = (row: AggregateDbRow, groupBy: AggregateGroupBy, locale: Locale): string => {
-  if (row.key == null && groupBy === AggregateGroupBy.enum.category) return uncategorizedLabels[locale]
-  if (groupBy === AggregateGroupBy.enum.category) {
-    return localizeCategoryName(row.label, row.labelNames, locale) ?? row.key!
+  if (!R.isNonNullish(row.key) && groupBy === AggregateGroupBy.enum.category) {
+    return uncategorizedLabels[locale]
   }
-  return row.label ?? row.key ?? UNCATEGORIZED_KEY
+  if (groupBy === AggregateGroupBy.enum.category) {
+    return localizeCategoryName(row.label, row.labelNames, locale) ?? resolveKey(row)
+  }
+  return row.label ?? resolveKey(row)
 }
 
 const pct = (value: number, total: number): number =>
@@ -47,7 +46,7 @@ export const shapeAggregateResult = (
         ? R.sortBy(currencyRows, (r) => r.value)
         : R.sortBy(currencyRows, [(r) => r.value, 'desc'])
       const shapedRows: AggregateRow[] = sorted.map((r) => ({
-        key: resolveKey(r, groupBy),
+        key: resolveKey(r),
         label: resolveLabel(r, groupBy, locale),
         value: roundMoney(r.value),
         count: r.count,

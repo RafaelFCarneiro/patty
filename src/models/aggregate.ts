@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { IsoDate, PeriodSchema } from './date.js'
+import type { ValidationError } from './error.js'
 import { CurrencyCode } from './money.js'
 import { MovementType } from './transaction.js'
 
@@ -50,3 +51,19 @@ export const AggregateResultSchema = z.object({
   currencies: z.array(CurrencyBlockSchema),
 })
 export type AggregateResult = z.infer<typeof AggregateResultSchema>
+
+/** Resolved input with QoL defaults applied at the wire boundary. */
+export type ResolvedAggregateSpending = AggregateSpending & {
+  metric: AggregateMetric
+  sort: AggregateSort
+  limit: number
+}
+
+export type AggregateError = ValidationError
+
+export const aggregateErrors = {
+  missingPeriod: {
+    code: 'validation',
+    issues: ['provide month+year or from/to date range'],
+  } satisfies AggregateError,
+}
