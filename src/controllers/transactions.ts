@@ -27,14 +27,14 @@ import {
 } from '../models/transaction.js'
 import {
   transactionErrors,
-  type CreateTransactionInput,
+  type CreateTransaction,
   type CreateTransactionResult,
-  type CreateTransactionsBulkInput,
+  type CreateTransactionsBulk,
   type DeleteTransactionResult,
-  type SearchTransactionsInput,
+  type SearchTransactions,
   type TransactionView,
   type TransactionSource,
-  type UpdateTransactionInput,
+  type UpdateTransaction,
 } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { guardCategoryKind, resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
@@ -42,7 +42,7 @@ import { guardCategoryKind, resolveAccountRef, resolveCardRef, resolveCategoryRe
 
 export const createTransaction = (
   deps: Deps,
-  input: CreateTransactionInput,
+  input: CreateTransaction,
   source: TransactionSource,
 ): ResultAsync<CreateTransactionResult, AppError> =>
   safeTry(async function* () {
@@ -118,7 +118,7 @@ export const createTransaction = (
 /** Statement paste/import: each line idempotent, classified, flagged for review when uncertain. */
 export const createTransactionsBulk = (
   deps: Deps,
-  input: CreateTransactionsBulkInput,
+  input: CreateTransactionsBulk,
   source: TransactionSource,
 ): ResultAsync<BulkResult<AppError>, AppError> =>
   safeTry(async function* () {
@@ -147,7 +147,7 @@ export const createTransactionsBulk = (
 
 export const updateTransaction = (
   deps: Deps,
-  input: UpdateTransactionInput,
+  input: UpdateTransaction,
 ): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate)
@@ -245,7 +245,7 @@ export const deleteTransaction = (
 
 export const searchTransactions = (
   deps: Deps,
-  input: SearchTransactionsInput,
+  input: SearchTransactions,
 ): ResultAsync<TransactionView[], AppError> =>
   safeTry(async function* () {
     const range = input.month && input.year ? periodRange({ month: input.month, year: input.year }) : null

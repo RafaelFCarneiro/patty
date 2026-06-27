@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ClassificationMethod, TransactionView } from '../../models/transaction.js'
+import { ClassificationMethod, TransactionViewSchema } from '../../models/transaction.js'
 
 // ─── Outbound wire schemas ────────────────────────────────────────────────────
 // These are the serialized shapes that diplomats (MCP/HTTP) send to clients.
@@ -16,7 +16,7 @@ const ClassifyOutcomeOut = z.object({
 })
 
 export const CreateTransactionOut = z.object({
-  transaction: TransactionView,
+  transaction: TransactionViewSchema,
   created: z.boolean(),
   classification: ClassifyOutcomeOut,
 })
@@ -25,15 +25,15 @@ export type CreateTransactionOut = z.infer<typeof CreateTransactionOut>
 const BulkItemOut = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('created'),
-    transaction: TransactionView,
+    transaction: TransactionViewSchema,
     classification: ClassifyOutcomeOut,
   }),
   z.object({
     status: z.literal('needs_review'),
-    transaction: TransactionView,
+    transaction: TransactionViewSchema,
     classification: ClassifyOutcomeOut,
   }),
-  z.object({ status: z.literal('duplicate'), transaction: TransactionView }),
+  z.object({ status: z.literal('duplicate'), transaction: TransactionViewSchema }),
   z.object({ status: z.literal('error'), description: z.string(), error: z.string() }),
 ])
 export type BulkItemOut = z.infer<typeof BulkItemOut>
@@ -50,11 +50,11 @@ export const BulkResultOut = z.object({
 export type BulkResultOut = z.infer<typeof BulkResultOut>
 
 export const DeleteTransactionOut = z.discriminatedUnion('deleted', [
-  z.object({ deleted: z.literal(true), transaction: TransactionView }),
+  z.object({ deleted: z.literal(true), transaction: TransactionViewSchema }),
   z.object({
     deleted: z.literal(false),
     dryRun: z.literal(true),
-    wouldDelete: TransactionView,
+    wouldDelete: TransactionViewSchema,
     hint: z.string(),
   }),
 ])

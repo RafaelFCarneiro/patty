@@ -21,8 +21,14 @@ import {
   updateTransaction,
 } from '../../controllers/transactions.js'
 import { createTransfer } from '../../controllers/transfers.js'
-import { TransactionSource, TransactionStatus, TransactionType, MovementType, NOTE_MAX_LENGTH } from '../../models/transaction.js'
-import { CurrencyCode } from '../../models/common.js'
+import {
+  TransactionSource,
+  CreateTransactionSchema,
+  CreateTransactionsBulkSchema,
+  CreateTransferSchema,
+  UpdateTransactionSchema,
+  SearchTransactionsSchema,
+} from '../../models/transaction.js'
 import { CreateCategorySchema, CreateSubCategorySchema } from '../../wire/in/categories.js'
 import { Locale, LocaleSource } from '../../models/locale.js'
 import { AccountType } from '../../models/account.js'
@@ -63,26 +69,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         '(confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — generate a ' +
         'stable key like "<date>-<description>-<amount>". Currency comes from the account, or the ' +
         'currency field (default BRL).',
-      inputSchema: {
-        description: z.string().describe('What was paid/received, e.g. "Uber para o aeroporto"'),
-        amount: z.number().positive().describe('Positive amount in full units (reais/dollars)'),
-        type: MovementType,
-        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD; defaults to today'),
-        account: z.string().optional().describe('Account name, e.g. "Nubank"'),
-        card: z.string().optional().describe('Credit card name — transaction joins the cycle bill (fatura). Use account OR card, not both'),
-        category: z.string().optional().describe('Category name; omit when using subCategory or to auto-classify. expense transactions need an expense/both category; income needs income/both'),
-        subCategory: z.string().optional().describe('Sub-category name (implies its parent category — do not set both category and subCategory)'),
-        currency: CurrencyCode.optional(),
-        status: TransactionStatus.optional().describe(
-          'Omit to use the date-aware default (future date → pending, today/past → effective). ' +
-          '"effective" = already happened, counts toward balances and summaries. ' +
-          '"pending" = expected but not yet cleared, excluded until confirmed.',
-        ),
-        idempotencyKey: z.string().min(1),
-        rawInput: z.string().optional().describe('Original user phrasing, for audit'),
-        note: z.string().min(1).max(NOTE_MAX_LENGTH).optional().describe('Free-form memo (observação) — distinct from description/rawInput/tags'),
-        tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
-      },
+      inputSchema: CreateTransactionSchema.shape,
     },
     async (args) => fromResult((await createTransaction(deps, args, TransactionSource.enum.mcp)).map(createResultToWireOut)),
   )
@@ -96,29 +83,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'and idempotent (key derived from date+description+amount — re-importing is safe). Returns a ' +
         'per-item status: created, needs_review (low confidence — confirm categories with the user), ' +
         'duplicate, or error. Top-level account/card apply to items that do not set their own.',
-      inputSchema: {
-        items: z
-          .array(
-            z.object({
-              description: z.string().min(1),
-              amount: z.number().positive(),
-              type: MovementType,
-              date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-              account: z.string().optional(),
-              card: z.string().optional(),
-              category: z.string().optional(),
-              currency: CurrencyCode.optional(),
-              status: TransactionStatus.optional(),
-              idempotencyKey: z.string().optional(),
-              note: z.string().min(1).max(NOTE_MAX_LENGTH).optional(),
-            }),
-          )
-          .min(1)
-          .max(200),
-        account: z.string().optional().describe('Default account for all items'),
-        card: z.string().optional().describe('Default credit card for all items'),
-        rawInput: z.string().optional().describe('The original pasted statement text'),
-      },
+      inputSchema: CreateTransactionsBulkSchema.shape,
     },
     async (args) => fromResult((await createTransactionsBulk(deps, args, TransactionSource.enum.import)).map(bulkResultToWireOut)),
   )
@@ -240,18 +205,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'Update fields of an existing transaction by id (from search_transactions). Only provided fields ' +
         'change. Setting category counts as a user correction (confidence 1) and strengthens the merchant→category association. ' +
         'Changing the account also updates the currency to match it.',
-      inputSchema: {
-        id: z.string().min(1).describe('Transaction id'),
-        description: z.string().min(1).optional(),
-        amount: z.number().positive().optional(),
-        type: MovementType.optional(),
-        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-        account: z.string().optional().describe('New account name'),
-        category: z.string().optional().describe('New category name (user correction). Do not set together with subCategory'),
-        subCategory: z.string().optional().describe('New sub-category name (implies parent category; do not set together with category)'),
-        note: z.string().max(NOTE_MAX_LENGTH).optional().describe('Free-form memo (observação). Empty string clears; omit to leave unchanged'),
-        tags: z.array(z.string().min(1)).optional().describe('Replaces the full tag set when provided; pass [] to remove all tags'),
-      },
+      inputSchema: UpdateTransactionSchema.shape,
     },
     async (args) => fromResult(await updateTransaction(deps, args)),
   )
@@ -280,18 +234,8 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'category/account name, or free text. With an account filter this is the full account ' +
         'statement (extrato): expenses, income, and transfers in either direction.',
       inputSchema: {
-        month: z.number().int().min(1).max(12).optional(),
-        year: z.number().int().min(2000).max(2100).optional(),
-        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-        type: TransactionType.optional(),
-        status: TransactionStatus.optional().describe('"pending" to list scheduled transactions; omit for all'),
-        category: z.string().optional(),
-        subCategory: z.string().optional().describe('Filter to transactions with this sub-category'),
-        account: z.string().optional(),
-        text: z.string().optional(),
-        tags: z.array(z.string().min(1)).optional().describe('Filter to transactions having any of these tags'),
-        limit: z.number().int().min(1).max(200).default(50),
+        ...SearchTransactionsSchema.shape,
+        limit: SearchTransactionsSchema.shape.limit.optional().default(50),
       },
     },
     async (args) => fromResult(await searchTransactions(deps, args)),
@@ -392,15 +336,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         "with type 'transfer' (FROM + TO accounts): debits one balance, credits the other, never appears " +
         'in spending summaries, and shows in both account histories (search_transactions). Both accounts ' +
         'must share the same currency (FX not available yet). Idempotent via idempotencyKey.',
-      inputSchema: {
-        from: z.string().min(1).describe('Source account name'),
-        to: z.string().min(1).describe('Destination account name'),
-        amount: z.number().positive(),
-        status: TransactionStatus.optional().describe('pending | effective; omit for date-aware default'),
-        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD; defaults to today'),
-        description: z.string().optional().describe('e.g. "aporte mensal"'),
-        idempotencyKey: z.string().min(1),
-      },
+      inputSchema: CreateTransferSchema.shape,
     },
     async (args) => fromResult(await createTransfer(deps, args, TransactionSource.enum.mcp)),
   )

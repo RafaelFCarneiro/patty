@@ -8,10 +8,10 @@ import type { Locale } from '../models/locale.js'
 import type {
   Classification,
   ClassifyOutcome,
-  CreateTransactionInput,
+  CreateTransaction,
   CreateTransactionResult,
   TransactionView,
-  UpdateTransactionInput,
+  UpdateTransaction,
 } from '../models/transaction.js'
 import type { RawTransactionView } from '../models/transaction.js'
 import { transactionErrors, TransactionStatus, TransactionType } from '../models/transaction.js'
@@ -37,7 +37,7 @@ export const defaultStatusFor = (date: IsoDate, today: IsoDate): TransactionStat
 export const resolveCurrency = (
   account: Pick<Account, 'currency'> | null,
   card: Pick<CreditCard, 'currency'> | null,
-  input: Pick<CreateTransactionInput, 'currency'>,
+  input: Pick<CreateTransaction, 'currency'>,
 ): CurrencyCode => account?.currency ?? card?.currency ?? input.currency ?? CurrencyCode.enum.USD
 
 export const assertExclusiveAccountCard = (input: { account?: string; card?: string }): boolean =>
@@ -49,9 +49,9 @@ export const assertExclusiveCategorySubCategory = (input: { category?: string; s
 // ─── Transfer mutability guards ───────────────────────────────────────────────
 
 const isTransfer = (t: Pick<TransactionView, 'type'>) => t.type === TransactionType.enum.transfer
-const wouldBeTransfer = (existing: Pick<TransactionView, 'type'>, input: Pick<UpdateTransactionInput, 'type'>) =>
+const wouldBeTransfer = (existing: Pick<TransactionView, 'type'>, input: Pick<UpdateTransaction, 'type'>) =>
   (input.type ?? existing.type) === TransactionType.enum.transfer
-const hasCategoryInput = (input: Pick<UpdateTransactionInput, 'category' | 'subCategory'>) =>
+const hasCategoryInput = (input: Pick<UpdateTransaction, 'category' | 'subCategory'>) =>
   !!(input.category || input.subCategory)
 
 /**
@@ -61,7 +61,7 @@ const hasCategoryInput = (input: Pick<UpdateTransactionInput, 'category' | 'subC
  */
 export const guardTransferMutability = (
   existing: Pick<TransactionView, 'type'>,
-  input: Pick<UpdateTransactionInput, 'type' | 'category' | 'subCategory'>,
+  input: Pick<UpdateTransaction, 'type' | 'category' | 'subCategory'>,
 ): Result<void, ValidationError> => {
   if (isTransfer(existing) && input.type)
     return err(transactionErrors.transferTypeImmutable)
@@ -73,7 +73,7 @@ export const guardTransferMutability = (
 /** The effective movement type after applying an update, or undefined for transfers. */
 export const resolveEffectiveType = (
   existing: Pick<TransactionView, 'type'>,
-  input: Pick<UpdateTransactionInput, 'type'>,
+  input: Pick<UpdateTransaction, 'type'>,
 ): 'income' | 'expense' | undefined => {
   const resolved = input.type ?? existing.type
   return resolved !== TransactionType.enum.transfer ? resolved : undefined

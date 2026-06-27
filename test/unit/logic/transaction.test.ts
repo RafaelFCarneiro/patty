@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CurrencyCode } from '../../../src/models/common.js'
 import { Locale } from '../../../src/models/locale.js'
-import { ClassificationMethod, TransactionSource, TransactionStatus, TransactionType, TransactionView } from '../../../src/models/transaction.js'
+import { ClassificationMethod, TransactionSource, TransactionStatus, TransactionType, TransactionViewSchema } from '../../../src/models/transaction.js'
 import type { RawTransactionView } from '../../../src/models/transaction.js'
 import {
   addLocalizedLabels,
@@ -102,7 +102,7 @@ describe('resolveEffectiveType', () => {
 })
 
 describe('summarizeBulkItems', () => {
-  const tx = TransactionView.parse({
+  const tx = TransactionViewSchema.parse({
     id: 'tx-1', description: 'Test', amount: 1, type: 'expense',
     status: TransactionStatus.enum.effective,
     date: '2026-01-01', currency: CurrencyCode.enum.BRL,

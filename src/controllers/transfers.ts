@@ -7,7 +7,7 @@ import { addLocalizedLabels, defaultStatusFor } from '../logic/transaction.js'
 import { accountErrors } from '../models/account.js'
 import type { Account } from '../models/account.js'
 import { ClassificationMethod, TransactionType } from '../models/transaction.js'
-import type { CreateTransferInput, TransactionView, TransactionSource } from '../models/transaction.js'
+import type { CreateTransfer, TransactionView, TransactionSource } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef } from './resolve.js'
 
@@ -26,7 +26,7 @@ const validateTransferAccounts = (from: Account, to: Account) =>
  */
 export const createTransfer = (
   deps: Deps,
-  input: CreateTransferInput,
+  input: CreateTransfer,
   source: TransactionSource,
 ): ResultAsync<{ transaction: TransactionView; created: boolean }, AppError> =>
   safeTry(async function* () {
