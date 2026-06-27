@@ -2,30 +2,26 @@ import { z } from 'zod'
 import { CurrencyCode, Id } from './common.js'
 import type { Ambiguous, DuplicateName, NotFound, ValidationError } from './error.js'
 
-export const CreditCard = z.object({
+// `.describe()` is domain information — it states what each field is and represents.
+// Defaults split by intent: integrity defaults (a value that must exist for the entity to be
+// valid) live here; quality-of-life convenience defaults live at the wire boundary
+// (see wire/in/creditCards.ts), keeping the domain contract honest about what is required.
+export const CreditCardSchema = z.object({
   id: Id,
-  name: z.string().min(1),
-  currency: CurrencyCode,
-  /** Day the bill (fatura) closes; transactions after this day go to next month's bill. */
-  closingDay: z.number().int().min(1).max(28),
-  /** Day the bill is due. */
-  dueDay: z.number().int().min(1).max(28),
-  limit: z.number().positive().optional(),
-  /** The card's internal liability account (ADR-010). */
-  accountId: Id,
-  /** Default paying account for bill payment. */
-  paymentAccountId: Id.optional(),
+  name: z.string().min(1).describe('Card display name'),
+  currency: CurrencyCode.describe('Card currency (ISO code); fixed at creation'),
+  closingDay: z.number().int().min(1).max(28).describe('Day the bill (fatura) closes; transactions after it go to next month'),
+  dueDay: z.number().int().min(1).max(28).describe('Day the bill is due for payment'),
+  limit: z.number().positive().optional().describe('Credit limit'),
+  accountId: Id.describe('Internal liability account (ADR-010)'),
+  paymentAccountId: Id.optional().describe('Default paying account for bill payment'),
 })
-export type CreditCard = z.infer<typeof CreditCard>
+export type CreditCard = z.infer<typeof CreditCardSchema>
 
-export type CreateCreditCard = {
-  name: string
-  currency: CurrencyCode
-  closingDay: number
-  dueDay: number
-  limit?: number
-  paymentAccount?: string
-}
+export const CreateCreditCardSchema = CreditCardSchema.omit({ id: true, accountId: true, paymentAccountId: true }).extend({
+  paymentAccount: z.string().min(1).optional().describe('Default paying account name for bill payment'),
+})
+export type CreateCreditCard = z.infer<typeof CreateCreditCardSchema>
 
 export type CardError =
   | NotFound<'card'>
