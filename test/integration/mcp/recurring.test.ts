@@ -183,4 +183,41 @@ describe('MCP integration > recurring', () => {
       await transport.close()
     }
   })
+
+  it('defaults currency to USD when no account is linked', async () => {
+    const stamp = Date.now()
+    const ruleDescription = `No-account rule ${stamp}`
+    const pastDate = new Date()
+    pastDate.setDate(pastDate.getDate() - 3)
+    const startDate = toIsoDate(pastDate)
+
+    const { client, transport } = makeClient()
+
+    try {
+      await client.connect(transport)
+
+      await callTool(client, {
+        name: 'create_recurring',
+        args: {
+          description: ruleDescription,
+          amount: 50,
+          type: 'expense',
+          period: 'monthly',
+          startDate,
+          category: 'Assinaturas',
+        },
+      })
+
+      const listed = (await callTool(client, {
+        name: 'list_recurring',
+        args: {},
+      })) as Array<{ description?: string; currency?: string }>
+
+      const ours = listed.find((r) => r.description === ruleDescription)
+      expect(ours).toBeDefined()
+      expect(ours!.currency).toBe('USD')
+    } finally {
+      await transport.close()
+    }
+  })
 })
