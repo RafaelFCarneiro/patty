@@ -33,6 +33,7 @@ import { createTransfer } from '../../controllers/transfers.js'
 import { AccountType } from '../../models/account.js'
 import { TransactionSource } from '../../models/transaction.js'
 import { PeriodSchema } from '../../models/common.js'
+import { coerceToNumber } from '../../wire/in/coerce.js'
 import {
   BillQuery, PayBill,
   type BillQuery as BillQueryType, type PayBill as PayBillType,
@@ -225,7 +226,10 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.get('/api/summary', async (req, reply) => {
-    const input = parse(PeriodSchema.extend({ month: z.coerce.number(), year: z.coerce.number() }), req.query, reply)
+    const input = parse(PeriodSchema.extend({
+      month: z.preprocess(coerceToNumber, PeriodSchema.shape.month),
+      year: z.preprocess(coerceToNumber, PeriodSchema.shape.year),
+    }), req.query, reply)
     if (!input) return reply
     return reply.send(await getSpendingSummary(deps, input))
   })
