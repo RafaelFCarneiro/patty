@@ -255,6 +255,30 @@ describe('dbToModel', () => {
   })
 })
 
+describe('BulkTransactionItemSchema', () => {
+  it('strips subCategory and tags from bulk items', () => {
+    const input = {
+      description: 'Uber',
+      amount: 30,
+      type: 'expense',
+      subCategory: 'Ride',
+      tags: ['work'],
+    }
+    const parsed = wireInTransactions.BulkTransactionItemSchema.parse(input)
+    expect(parsed).not.toHaveProperty('subCategory')
+    expect(parsed).not.toHaveProperty('tags')
+  })
+
+  it('accepts bulk items without subCategory and tags', () => {
+    const result = wireInTransactions.BulkTransactionItemSchema.safeParse({
+      description: 'Groceries',
+      amount: 50,
+      type: 'expense',
+    })
+    expect(result.success).toBe(true)
+  })
+})
+
 describe('note zod validation', () => {
   it('rejects a note longer than NOTE_MAX_LENGTH on create', () => {
     const result = wireInTransactions.CreateTransactionInputSchema.safeParse({
