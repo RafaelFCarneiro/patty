@@ -32,7 +32,9 @@ export const dbToModel = (record: Record<string, unknown>): RawTransactionView =
   const parsedTags = row.tags ? (JSON.parse(row.tags) as unknown[]) : []
   const tags = parsedTags.filter((tag): tag is string => typeof tag === 'string')
   const categoryNames = row.category_names !== null ? LocalizedNamesSchema.parse(JSON.parse(row.category_names)) : null
-  const subCategoryNames = row.subcategory_names !== null ? LocalizedNamesSchema.parse(JSON.parse(row.subcategory_names)) : null
+  const subCategoryNames = row.subcategory_names !== null
+    ? LocalizedNamesSchema.parse(JSON.parse(row.subcategory_names))
+    : null
 
   return RawTransactionViewSchema.parse({
     id:              row.id,

@@ -2,9 +2,14 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Result } from 'neverthrow'
 import { z } from 'zod'
 import type { AppError } from '../../common/errors.js'
-import { createAccount, deleteAccount, getAccountBalances, listAccounts, updateAccount } from '../../controllers/accounts.js'
+import {
+  createAccount, deleteAccount, getAccountBalances, listAccounts, updateAccount,
+} from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
-import { createCategory, createSubCategory, deleteCategory, deleteSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
+import {
+  createCategory, createSubCategory, deleteCategory, deleteSubCategory,
+  listCategories, listSubCategories,
+} from '../../controllers/categories.js'
 import { getPreferences, setLocale } from '../../controllers/settings.js'
 import { getStatus } from '../../controllers/status.js'
 import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js'
@@ -65,13 +70,16 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       title: 'Create transaction',
       description:
         'Create an expense or income from natural input. Resolves account/category by name; ' +
-        'when category is omitted, classifies via learned merchant→category associations and returns method + confidence ' +
+        'when category is omitted, classifies via learned merchant→category associations ' +
+        'and returns method + confidence ' +
         '(confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — generate a ' +
         'stable key like "<date>-<description>-<amount>". Currency comes from the account, or the ' +
         'currency field (default USD).',
       inputSchema: CreateTransactionSchema.shape,
     },
-    async (args) => fromResult((await createTransaction(deps, args, TransactionSource.enum.mcp)).map(createResultToWireOut)),
+    async (args) => fromResult(
+      (await createTransaction(deps, args, TransactionSource.enum.mcp)).map(createResultToWireOut),
+    ),
   )
 
   server.registerTool(
@@ -85,7 +93,9 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'duplicate, or error. Top-level account/card apply to items that do not set their own.',
       inputSchema: CreateTransactionsBulkSchema.shape,
     },
-    async (args) => fromResult((await createTransactionsBulk(deps, args, TransactionSource.enum.import)).map(bulkResultToWireOut)),
+    async (args) => fromResult(
+      (await createTransactionsBulk(deps, args, TransactionSource.enum.import)).map(bulkResultToWireOut),
+    ),
   )
 
   server.registerTool(
@@ -203,7 +213,8 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       title: 'Update transaction',
       description:
         'Update fields of an existing transaction by id (from search_transactions). Only provided fields ' +
-        'change. Setting category counts as a user correction (confidence 1) and strengthens the merchant→category association. ' +
+        'change. Setting category counts as a user correction (confidence 1) ' +
+        'and strengthens the merchant→category association. ' +
         'Changing the account also updates the currency to match it.',
       inputSchema: UpdateTransactionSchema.shape,
     },
@@ -246,7 +257,8 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
     {
       title: 'Get spending summary',
       description:
-        'Income, expenses, balance and per-category totals for a month — grouped per currency (BRL/USD are never mixed).',
+        'Income, expenses, balance and per-category totals for a month — ' +
+        'grouped per currency (BRL/USD are never mixed).',
       inputSchema: {
         month: z.number().int().min(1).max(12),
         year: z.number().int().min(2000).max(2100),
@@ -305,7 +317,8 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       description:
         'Update a bank account. name (via newName) and initialBalance are always editable. ' +
         'type is only editable when the account has no transactions/transfers (and cannot be set to credit). ' +
-        'currency is only editable when the account has no transactions/transfers, no recurring rules, and is not a credit card payment account. ' +
+        'currency is only editable when the account has no transactions/transfers, ' +
+        'no recurring rules, and is not a credit card payment account. ' +
         'Credit accounts (card-managed) are rejected — use the card flow.',
       inputSchema: UpdateAccountSchema.shape,
     },
@@ -318,7 +331,8 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       title: 'Delete account',
       description:
         'Delete a bank account by name. Blocked if any transactions, transfers, recurring rules, or credit cards ' +
-        'reference it — returns an in_use error with reference counts so you can guide the user to clear them first. ' +
+        'reference it — returns an in_use error with reference counts ' +
+        'so you can guide the user to clear them first. ' +
         'Credit accounts (card-managed) are rejected — use delete_credit_card instead.',
       inputSchema: {
         name: z.string().min(1).describe('Account name'),
@@ -354,7 +368,12 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
 
   server.registerTool(
     'list_categories',
-    { title: 'List categories', description: 'List all categories. Names are resolved to the active locale for default categories.', inputSchema: {} },
+    {
+      title: 'List categories',
+      description:
+        'List all categories. Names are resolved to the active locale for default categories.',
+      inputSchema: {},
+    },
     async () => json(await listCategories(deps)),
   )
 
@@ -400,7 +419,8 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
     {
       title: 'Delete sub-category',
       description:
-        'Delete a sub-category by name. Blocked if any transactions, recurring rules, or child sub-categories reference it — ' +
+        'Delete a sub-category by name. Blocked if any transactions, recurring rules, ' +
+        'or child sub-categories reference it — ' +
         'returns an in_use error with reference counts. ' +
         'On success, also removes learned merchant classification rules for this sub-category.',
       inputSchema: { name: z.string().min(1).describe('Sub-category name') },
@@ -418,7 +438,9 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
     'create_tag',
     {
       title: 'Create tag',
-      description: 'Create a tag. Tags can be attached to transactions to label them (e.g. "work", "travel", "reembolsável").',
+      description:
+        'Create a tag. Tags can be attached to transactions to label them ' +
+        '(e.g. "work", "travel", "reembolsável").',
       inputSchema: { name: z.string().min(1) },
     },
     async (args) => fromResult(await createTag(deps, args.name)),
@@ -461,7 +483,8 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       description:
         'Returns the stored locale preference and locale_source. Use this to check whether the user set the ' +
         'locale explicitly before attempting an inferred switch. Note: the FINTRACK_LOCALE env var can ' +
-        'override the effective display locale used by list_categories; this tool reports the stored preference, not the effective override.',
+        'override the effective display locale used by list_categories; ' +
+        'this tool reports the stored preference, not the effective override.',
       inputSchema: {},
     },
     async () => json(await getPreferences(deps)),

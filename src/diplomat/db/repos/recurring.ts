@@ -31,7 +31,10 @@ const RULE_SELECT = sql`
 
 export type RecurringRepo = {
   create: (
-    rule: { id: string; description: string; amount: number; type: string; period: string; nextDue: string; currency: string },
+    rule: {
+      id: string; description: string; amount: number; type: string
+      period: string; nextDue: string; currency: string
+    },
     refs: { accountId: string | null; categoryId: string | null },
   ) => Promise<RecurringRuleView>
   list: () => Promise<RecurringRuleView[]>

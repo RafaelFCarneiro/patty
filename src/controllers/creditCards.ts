@@ -9,7 +9,12 @@ import { resolveAccountRef, resolveCardRef } from './resolve.js'
 
 export type DeleteCreditCardResult =
   | { deleted: true; card: string }
-  | { deleted: false; dryRun: true; wouldDelete: { card: string; account: string; transactions: number; bills: number }; hint: string }
+  | {
+      deleted: false
+      dryRun: true
+      wouldDelete: { card: string; account: string; transactions: number; bills: number }
+      hint: string
+    }
 
 export const listCreditCards = (deps: Deps): Promise<CreditCard[]> => deps.creditCards.list()
 

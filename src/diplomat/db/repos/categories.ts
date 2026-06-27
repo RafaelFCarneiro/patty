@@ -31,7 +31,12 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
   create: async (category) => {
     const [row] = await db
       .insert(categories)
-      .values({ id: category.id, name: category.name, kind: category.kind, names: category.names ? JSON.stringify(category.names) : null })
+      .values({
+        id: category.id,
+        name: category.name,
+        kind: category.kind,
+        names: category.names ? JSON.stringify(category.names) : null,
+      })
       .returning()
     return categoryAdapters.dbToModel(expectPresent(row, 'categories: row not found after insert'))
   },

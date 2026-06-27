@@ -18,7 +18,9 @@ export const CreditCardSchema = z.object({
 })
 export type CreditCard = z.infer<typeof CreditCardSchema>
 
-export const CreateCreditCardSchema = CreditCardSchema.omit({ id: true, accountId: true, paymentAccountId: true }).extend({
+export const CreateCreditCardSchema = CreditCardSchema.omit({
+  id: true, accountId: true, paymentAccountId: true,
+}).extend({
   paymentAccount: z.string().min(1).optional().describe('Default paying account name for bill payment'),
 })
 export type CreateCreditCard = z.infer<typeof CreateCreditCardSchema>
