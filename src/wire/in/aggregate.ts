@@ -5,8 +5,8 @@ import { coerceToNumber } from './coerce.js'
 export const AggregateSpendingInputSchema = AggregateSpendingSchema.extend({
   metric: AggregateSpendingSchema.shape.metric.default(AggregateMetric.enum.sum),
   sort: AggregateSpendingSchema.shape.sort.default(AggregateSort.enum.desc),
-  limit: AggregateSpendingSchema.shape.limit.default(50),
+  limit: z.preprocess(coerceToNumber, AggregateSpendingSchema.shape.limit.default(50)),
   month: z.preprocess(coerceToNumber, AggregateSpendingSchema.shape.month),
   year: z.preprocess(coerceToNumber, AggregateSpendingSchema.shape.year),
 })
-export type AggregateSpendingInputSchema = z.infer<typeof AggregateSpendingInputSchema>
+export type AggregateSpendingInput = z.infer<typeof AggregateSpendingInputSchema>
