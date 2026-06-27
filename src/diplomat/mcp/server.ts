@@ -26,6 +26,7 @@ import { CurrencyCode } from '../../models/common.js'
 import { CreateCategorySchema, CreateSubCategorySchema } from '../../wire/in/categories.js'
 import { Locale, LocaleSource } from '../../models/locale.js'
 import { AccountType } from '../../models/account.js'
+import { BillQuerySchema, PayBillSchema } from '../../models/bill.js'
 import { CreateRecurringSchema } from '../../wire/in/recurring.js'
 import { CreateCreditCardSchema } from '../../wire/in/creditCards.js'
 import {
@@ -163,11 +164,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       title: 'Get credit card bill (fatura)',
       description:
         'Get a card bill for a month: status (open/closed/paid), close/due dates, total, and its transactions.',
-      inputSchema: {
-        card: z.string().min(1).describe('Card name'),
-        month: z.number().int().min(1).max(12),
-        year: z.number().int().min(2000).max(2100),
-      },
+      inputSchema: BillQuerySchema.shape,
     },
     async (args) => fromResult(await getBill(deps, args)),
   )
@@ -180,12 +177,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'Pay a credit card bill. Creates a canonical transfer (payer account → card internal account) ' +
         'for the full bill total, then marks the bill paid. Idempotent — re-calling on a paid bill is a no-op. ' +
         'Paying account resolution: explicit `account` → card default `paymentAccount` → error.',
-      inputSchema: {
-        card: z.string().min(1),
-        month: z.number().int().min(1).max(12),
-        year: z.number().int().min(2000).max(2100),
-        account: z.string().min(1).optional().describe('Paying account name (overrides card default)'),
-      },
+      inputSchema: PayBillSchema.shape,
     },
     async (args) => fromResult(await payBill(deps, { ...args, source: TransactionSource.enum.mcp })),
   )

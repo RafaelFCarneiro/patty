@@ -6,7 +6,7 @@ import { computeBillTotal, withStatusLabel } from '../logic/bill.js'
 import { toIsoDate } from '../logic/period.js'
 import { addLocalizedLabels, defaultStatusFor } from '../logic/transaction.js'
 import { accountErrors } from '../models/account.js'
-import { billErrors, BillStatus, type Bill } from '../models/bill.js'
+import { billErrors, BillStatus, type Bill, type BillQuery, type PayBill } from '../models/bill.js'
 import { ClassificationMethod, type TransactionSource as TransactionSourceType, TransactionType } from '../models/transaction.js'
 import type { BillWithItems } from '../diplomat/db/repos/bills.js'
 import type { Deps } from './deps.js'
@@ -16,7 +16,7 @@ export type BillView = BillWithItems & { total: number }
 
 export const getBill = (
   deps: Deps,
-  input: { card: string; month: number; year: number },
+  input: BillQuery,
 ): ResultAsync<BillView, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card)
@@ -30,7 +30,7 @@ export const getBill = (
     })
   })
 
-export type PayBillInput = { card: string; month: number; year: number; account?: string; source: TransactionSourceType }
+export type PayBillInput = PayBill & { source: TransactionSourceType }
 
 export const payBill = (
   deps: Deps,

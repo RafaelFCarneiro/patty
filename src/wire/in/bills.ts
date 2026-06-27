@@ -1,13 +1,13 @@
 import { z } from 'zod'
+import { BillQuerySchema, PayBillSchema } from '../../models/bill.js'
 
-export const BillQuery = z.object({
-  card: z.string().min(1),
+export const BillQuery = BillQuerySchema.extend({
   month: z.coerce.number().int().min(1).max(12),
   year: z.coerce.number().int().min(2000).max(2100),
 })
 export type BillQuery = z.infer<typeof BillQuery>
 
-export const PayBillInput = BillQuery.extend({
-  account: z.string().min(1).optional(),
+export const PayBill = BillQuery.extend({
+  account: PayBillSchema.shape.account,
 })
-export type PayBillInput = z.infer<typeof PayBillInput>
+export type PayBill = z.infer<typeof PayBill>
