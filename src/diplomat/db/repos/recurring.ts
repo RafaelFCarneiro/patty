@@ -1,7 +1,6 @@
 import { eq, sql } from 'drizzle-orm'
 import { expectPresent } from '../../../common/present.js'
-import { RecurringRuleViewSchema } from '../../../models/recurring.js'
-import type { RecurringRuleView } from '../../../models/recurring.js'
+import { RecurringRuleViewSchema, type RecurringRuleView } from '../../../models/recurring.js'
 import { RecurringRowSchema } from '../../../wire/db/recurring.js'
 import type { Db } from '../driver.js'
 import { recurringRules } from '../schema.js'
