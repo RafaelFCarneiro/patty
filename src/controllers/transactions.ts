@@ -17,6 +17,7 @@ import {
   defaultStatusFor,
   deriveIdempotencyKey,
   guardTransferMutability,
+  isCategoryKindAllowed,
   resolveCurrency,
   resolveEffectiveType,
   summarizeBulkItems,
@@ -37,7 +38,7 @@ import {
   type UpdateTransaction,
 } from '../models/transaction.js'
 import type { Deps } from './deps.js'
-import { guardCategoryKind, resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
+import { resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
 
 
 export const createTransaction = (
@@ -60,12 +61,12 @@ export const createTransaction = (
 
     if (input.subCategory) {
       const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)
-      yield* guardCategoryKind(subCat, input.type)
+      yield* guard(isCategoryKindAllowed(input.type, subCat.kind), transactionErrors.categoryKindMismatch(input.type, subCat.name, subCat.kind))
       subCategoryId = subCat.id
       classification = userClassification({ id: subCat.parentId, name: subCat.parentName })
     } else if (input.category) {
       const cat = yield* resolveCategoryRef(deps, input.category)
-      yield* guardCategoryKind(cat, input.type)
+      yield* guard(isCategoryKindAllowed(input.type, cat.kind), transactionErrors.categoryKindMismatch(input.type, cat.name, cat.kind))
       classification = userClassification(cat)
     } else {
       classification = pickClassification(
@@ -165,12 +166,12 @@ export const updateTransaction = (
 
     if (input.subCategory) {
       const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)
-      if (effectiveType) yield* guardCategoryKind(subCat, effectiveType)
+      if (effectiveType) yield* guard(isCategoryKindAllowed(effectiveType, subCat.kind), transactionErrors.categoryKindMismatch(effectiveType, subCat.name, subCat.kind))
       subCategoryId = subCat.id
       categoryId = subCat.parentId
     } else if (input.category) {
       const cat = yield* resolveCategoryRef(deps, input.category)
-      if (effectiveType) yield* guardCategoryKind(cat, effectiveType)
+      if (effectiveType) yield* guard(isCategoryKindAllowed(effectiveType, cat.kind), transactionErrors.categoryKindMismatch(effectiveType, cat.name, cat.kind))
       categoryId = cat.id
       // Business rule: assigning a plain category clears any prior sub-category —
       // "sub-category always paired with its parent" would otherwise go stale.

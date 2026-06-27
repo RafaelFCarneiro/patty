@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { LocalizedNamesSchema } from './category.js'
 import { CurrencyCode, Id, IsoDate, Money } from './common.js'
+import type { CategoryKind } from './category.js'
 import type { ValidationError } from './error.js'
 import type { LabelMap } from './locale.js'
 
@@ -229,10 +230,18 @@ export type DeleteTransactionResult =
 
 export type TransactionError =
   | { code: 'unknown_transaction'; id: string }
+  | { code: 'category_kind_mismatch'; transactionType: MovementType; categoryName: string; categoryKind: CategoryKind; hint: string }
   | ValidationError
 
 export const transactionErrors = {
   notFound: (id: string): TransactionError => ({ code: 'unknown_transaction', id }),
+  categoryKindMismatch: (transactionType: MovementType, categoryName: string, categoryKind: CategoryKind): TransactionError => ({
+    code: 'category_kind_mismatch',
+    transactionType,
+    categoryName,
+    categoryKind,
+    hint: `Category "${categoryName}" is ${categoryKind}-only; to use it, set type: "${categoryKind}"`,
+  }),
   exclusiveAccountCard: {
     code: 'validation',
     issues: ['provide account OR card, not both'],

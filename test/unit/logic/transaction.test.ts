@@ -9,6 +9,7 @@ import {
   assertExclusiveCategorySubCategory,
   deriveIdempotencyKey,
   guardTransferMutability,
+  isCategoryKindAllowed,
   needsReview,
   resolveCurrency,
   resolveEffectiveType,
@@ -232,6 +233,26 @@ describe('addLocalizedLabels', () => {
     const labeled = mapper(tx)
     expect(labeled.categoryName).toBe('Alimentação')
     expect(labeled.categoryNames).toBeUndefined()
+  })
+})
+
+describe('isCategoryKindAllowed', () => {
+  it('allows both-kind categories for any transaction type', () => {
+    expect(isCategoryKindAllowed('expense', 'both')).toBe(true)
+    expect(isCategoryKindAllowed('income', 'both')).toBe(true)
+  })
+
+  it('allows matching kind', () => {
+    expect(isCategoryKindAllowed('expense', 'expense')).toBe(true)
+    expect(isCategoryKindAllowed('income', 'income')).toBe(true)
+  })
+
+  it('rejects expense category for income transaction', () => {
+    expect(isCategoryKindAllowed('income', 'expense')).toBe(false)
+  })
+
+  it('rejects income category for expense transaction', () => {
+    expect(isCategoryKindAllowed('expense', 'income')).toBe(false)
   })
 })
 

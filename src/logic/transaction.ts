@@ -14,7 +14,8 @@ import type {
   UpdateTransaction,
 } from '../models/transaction.js'
 import type { RawTransactionView } from '../models/transaction.js'
-import { transactionErrors, TransactionStatus, TransactionType } from '../models/transaction.js'
+import { transactionErrors, TransactionStatus, TransactionType, type MovementType } from '../models/transaction.js'
+import { CategoryKind } from '../models/category.js'
 import { err, ok, type Result } from 'neverthrow'
 import * as R from 'remeda'
 import { localizeCategoryName } from './category.js'
@@ -45,6 +46,9 @@ export const assertExclusiveAccountCard = (input: { account?: string; card?: str
 
 export const assertExclusiveCategorySubCategory = (input: { category?: string; subCategory?: string }): boolean =>
   !(input.category && input.subCategory)
+
+export const isCategoryKindAllowed = (txType: MovementType, categoryKind: CategoryKind): boolean =>
+  categoryKind === CategoryKind.enum.both || categoryKind === txType
 
 // ─── Transfer mutability guards ───────────────────────────────────────────────
 

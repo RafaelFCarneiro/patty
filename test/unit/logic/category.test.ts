@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CategoryKind, type Category } from '../../../src/models/category.js'
 import { Locale } from '../../../src/models/locale.js'
-import { allNames, buildSynonyms, hasNameCollision, hasSubCategoryNameCollision, isCategoryUnreferenced, isKindCompatible, localizeCategoryName, parentExists, resolveAndSort, resolveDisplayName, withKindLabel } from '../../../src/logic/category.js'
+import { allNames, buildSynonyms, hasNameCollision, hasSubCategoryNameCollision, isCategoryUnreferenced, localizeCategoryName, parentExists, resolveAndSort, resolveDisplayName, withKindLabel } from '../../../src/logic/category.js'
 
 const seeded: Category = {
   id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense,
@@ -172,19 +172,3 @@ describe('parentExists', () => {
   })
 })
 
-describe('isKindCompatible', () => {
-  it('returns true when kind is both', () => {
-    expect(isKindCompatible('both', 'expense')).toBe(true)
-    expect(isKindCompatible('both', 'income')).toBe(true)
-  })
-
-  it('returns true when kind matches transaction type', () => {
-    expect(isKindCompatible('expense', 'expense')).toBe(true)
-    expect(isKindCompatible('income', 'income')).toBe(true)
-  })
-
-  it('returns false when kind conflicts with transaction type', () => {
-    expect(isKindCompatible('expense', 'income')).toBe(false)
-    expect(isKindCompatible('income', 'expense')).toBe(false)
-  })
-})
