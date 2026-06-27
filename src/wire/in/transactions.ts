@@ -29,4 +29,4 @@ export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInputSchema
 export const SearchTransactionsInputSchema = SearchTransactionsSchema
   .extend({ limit: SearchTransactionsSchema.shape.limit.optional() })
   .transform((input): SearchTransactions => ({ ...input, limit: input.limit ?? 50 }))
-export type SearchTransactionsInput = SearchTransactions
+export type SearchTransactionsInput = z.output<typeof SearchTransactionsInputSchema>

@@ -68,7 +68,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'when category is omitted, classifies via learned merchant→category associations and returns method + confidence ' +
         '(confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — generate a ' +
         'stable key like "<date>-<description>-<amount>". Currency comes from the account, or the ' +
-        'currency field (default BRL).',
+        'currency field (default USD).',
       inputSchema: CreateTransactionSchema.shape,
     },
     async (args) => fromResult((await createTransaction(deps, args, TransactionSource.enum.mcp)).map(createResultToWireOut)),
