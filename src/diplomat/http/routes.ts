@@ -10,6 +10,7 @@ import * as transactionAdapters from '../../adapters/transactions.js'
 import {
   createAccount, deleteAccount, getAccountBalances, listAccounts, updateAccount,
 } from '../../controllers/accounts.js'
+import { aggregateSpending } from '../../controllers/aggregate.js'
 import { getBill, payBill } from '../../controllers/bills.js'
 import {
   createCategory, createSubCategory, deleteCategory,
@@ -32,8 +33,8 @@ import {
 import { createTransfer } from '../../controllers/transfers.js'
 import { AccountType } from '../../models/account.js'
 import { TransactionSource } from '../../models/transaction.js'
-import { PeriodSchema } from '../../models/date.js'
-import { coerceToNumber } from '../../wire/in/coerce.js'
+import { AggregateSpendingInput } from '../../wire/in/aggregate.js'
+import { CoercedPeriodSchema } from '../../wire/in/period.js'
 import {
   BillQuery, PayBill,
   type BillQuery as BillQueryType, type PayBill as PayBillType,
@@ -225,11 +226,14 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
     return send(reply, await deleteTag(deps, id))
   })
 
+  app.get('/api/aggregate', async (req, reply) => {
+    const wireIn = parse(AggregateSpendingInput, req.query, reply)
+    if (!wireIn) return reply
+    return send(reply, await aggregateSpending(deps, wireIn))
+  })
+
   app.get('/api/summary', async (req, reply) => {
-    const input = parse(PeriodSchema.extend({
-      month: z.preprocess(coerceToNumber, PeriodSchema.shape.month),
-      year: z.preprocess(coerceToNumber, PeriodSchema.shape.year),
-    }), req.query, reply)
+    const input = parse(CoercedPeriodSchema, req.query, reply)
     if (!input) return reply
     return reply.send(await getSpendingSummary(deps, input))
   })

@@ -84,6 +84,35 @@ Filter by `month`+`year` (or `from`/`to`), `type` (`expense|income|transfer`), `
 
 Use `status: "pending"` to list scheduled/expected transactions (e.g. "what is due today" or "what income is expected this month").
 
+## aggregate_spending
+
+Flexible spending aggregation: group transactions by a chosen dimension, measured by a chosen metric. Results are per-currency blocks with totals and percentages. Only effective, non-transfer transactions are counted (consistent with `get_spending_summary` and balances). Category labels are locale-resolved via `localizeCategoryName`.
+
+**Input:**
+- `groupBy` (required): `category | account | tag | month | merchant`
+- `metric` (default `sum`): `sum | count | avg`
+- Period: `month` + `year` **or** `from`/`to` (`YYYY-MM-DD`)
+- Filters (all optional): `account` (name), `category` (name), `type` (`expense | income`), `tags` (names)
+- `limit` (default 50, max 100): top-N rows per currency
+- `sort` (default `desc`): `asc | desc` by metric value
+
+**Output:**
+```jsonc
+{ "groupBy": "category", "metric": "sum",
+  "currencies": [
+    { "currency": "BRL", "total": 1850.0,
+      "rows": [
+        { "key": "cat-food", "label": "Alimentação", "value": 1200.0, "count": 18, "pct": 64.9 },
+        { "key": "cat-transport", "label": "Transporte", "value": 650.0, "count": 9, "pct": 35.1 }
+      ] } ] }
+```
+
+**Errors:** `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `validation` (missing period).
+
+**Safety (ADR-011):** dynamic query structure comes only from whitelisted enum-keyed SQL fragments; all filter values are parameter-bound; caller text never reaches SQL.
+
+REST mirror: `GET /api/aggregate?groupBy=category&month=6&year=2026`.
+
 ## get_spending_summary
 
 Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `balance`, `byCategory` (sorted by total desc). Currencies are never mixed or converted.

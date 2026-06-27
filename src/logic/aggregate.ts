@@ -1,0 +1,45 @@
+import * as R from 'remeda'
+import { localizeCategoryName } from './category.js'
+import { AggregateGroupBy, AggregateSort, type AggregateRow, type CurrencyBlock } from '../models/aggregate.js'
+import type { CurrencyCode } from '../models/money.js'
+import type { Locale } from '../models/locale.js'
+import type { AggregateDbRow } from '../wire/db/aggregate.js'
+
+const roundMoney = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
+
+const resolveLabel = (row: AggregateDbRow, groupBy: AggregateGroupBy, locale: Locale): string => {
+  if (groupBy === AggregateGroupBy.enum.category) {
+    return localizeCategoryName(row.label, row.labelNames, locale) ?? row.key
+  }
+  return row.label ?? row.key
+}
+
+const pct = (value: number, total: number): number =>
+  total === 0 ? 0 : roundMoney((value / total) * 100)
+
+export const shapeAggregateResult = (
+  rows: readonly AggregateDbRow[],
+  groupBy: AggregateGroupBy,
+  sort: AggregateSort,
+  locale: Locale,
+): CurrencyBlock[] =>
+  R.pipe(
+    rows,
+    R.groupBy((r) => r.currency),
+    R.entries(),
+    R.map(([currency, currencyRows]): CurrencyBlock => {
+      const total = roundMoney(R.sumBy(currencyRows, (r) => r.value))
+      const sorted = sort === AggregateSort.enum.asc
+        ? R.sortBy(currencyRows, (r) => r.value)
+        : R.sortBy(currencyRows, [(r) => r.value, 'desc'])
+      const shapedRows: AggregateRow[] = sorted.map((r) => ({
+        key: r.key,
+        label: resolveLabel(r, groupBy, locale),
+        value: roundMoney(r.value),
+        count: r.count,
+        pct: pct(r.value, total),
+      }))
+      return { currency: currency as CurrencyCode, total, rows: shapedRows }
+    }),
+    R.sortBy((b) => b.currency),
+  )

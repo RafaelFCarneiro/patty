@@ -1,8 +1,10 @@
 import { eq, inArray, sql } from 'drizzle-orm'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { expectPresent } from '../../../common/present.js'
+import { AggregateGroupBy, AggregateMetric, AggregateSort } from '../../../models/aggregate.js'
 import { TransactionStatus, TransactionType, type Transaction, type RawTransactionView, type TransactionPatch } from '../../../models/transaction.js'
 import type { SummaryRow } from '../../../models/summary.js'
+import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js'
 import { SummaryRowSchema } from '../../../wire/db/transactions.js'
 import type { Db } from '../driver.js'
 import { toMatchQuery } from '../fts.js'
@@ -11,17 +13,86 @@ import { fullTxSelect } from '../transactionSelect.js'
 
 export type CreateTxResult = { transaction: RawTransactionView; created: boolean }
 
-export type SearchFilters = {
+export type CommonFilters = {
   from: string | null
   to: string | null
   type: string | null
-  status: TransactionStatus | null
-  text: string | null
   accountId: string | null
   categoryId: string | null
-  subCategoryId: string | null
   tagNames: string[]
+}
+
+export type SearchFilters = CommonFilters & {
+  status: TransactionStatus | null
+  text: string | null
+  subCategoryId: string | null
   limit: number
+}
+
+export type AggregateFilters = CommonFilters & {
+  groupBy: AggregateGroupBy
+  metric: AggregateMetric
+  sort: AggregateSort
+  limit: number
+}
+
+const buildCommonWhere = (filters: CommonFilters): ReturnType<typeof sql>[] => {
+  const conditions: ReturnType<typeof sql>[] = []
+  if (filters.from)       conditions.push(sql`t.date >= ${filters.from}`)
+  if (filters.to)         conditions.push(sql`t.date < ${filters.to}`)
+  if (filters.type)       conditions.push(sql`t.type = ${filters.type}`)
+  if (filters.accountId)  conditions.push(sql`(t.from_account_id = ${filters.accountId} OR t.to_account_id = ${filters.accountId})`)
+  if (filters.categoryId) conditions.push(sql`t.category_id = ${filters.categoryId}`)
+  if (filters.tagNames.length > 0) {
+    const placeholders = sql.join(filters.tagNames.map((n) => sql`${n}`), sql`, `)
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM transaction_tags tt2
+      JOIN tags tg2 ON tg2.id = tt2.tag_id
+      WHERE tt2.transaction_id = t.id AND tg2.name IN (${placeholders})
+    )`)
+  }
+  return conditions
+}
+
+// ADR-011: whitelist maps — dynamic structure from developer-authored fragments only.
+type SqlFragment = ReturnType<typeof sql>
+type GroupByFragment = {
+  expr: SqlFragment; join: SqlFragment; label: SqlFragment; labelNames?: SqlFragment
+}
+
+const GROUP_BY_MAP: Record<AggregateGroupBy, GroupByFragment> = {
+  [AggregateGroupBy.enum.category]: {
+    expr: sql`t.category_id`,
+    join: sql`LEFT JOIN categories c ON c.id = t.category_id`,
+    label: sql`c.name`,
+    labelNames: sql`c.names`,
+  },
+  [AggregateGroupBy.enum.account]: {
+    expr: sql`t.from_account_id`,
+    join: sql`LEFT JOIN accounts a ON a.id = t.from_account_id`,
+    label: sql`a.name`,
+  },
+  [AggregateGroupBy.enum.tag]: {
+    expr: sql`tg.name`,
+    join: sql`JOIN transaction_tags tt ON tt.transaction_id = t.id JOIN tags tg ON tg.id = tt.tag_id`,
+    label: sql`tg.name`,
+  },
+  [AggregateGroupBy.enum.month]: {
+    expr: sql`substr(t.date, 1, 7)`,
+    join: sql``,
+    label: sql`substr(t.date, 1, 7)`,
+  },
+  [AggregateGroupBy.enum.merchant]: {
+    expr: sql`t.merchant_key`,
+    join: sql``,
+    label: sql`t.merchant_key`,
+  },
+}
+
+const METRIC_MAP: Record<AggregateMetric, ReturnType<typeof sql>> = {
+  [AggregateMetric.enum.sum]: sql`SUM(t.amount)`,
+  [AggregateMetric.enum.count]: sql`COUNT(*)`,
+  [AggregateMetric.enum.avg]: sql`AVG(t.amount)`,
 }
 
 const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
@@ -62,6 +133,7 @@ export type TransactionsRepo = {
   confirm: (id: string) => Promise<RawTransactionView | null>
   delete: (id: string) => Promise<boolean>
   search: (filters: SearchFilters) => Promise<RawTransactionView[]>
+  aggregate: (filters: AggregateFilters) => Promise<AggregateDbRow[]>
   summaryRows: (from: string, to: string) => Promise<SummaryRow[]>
   /** Aggregated pending amounts for an account dated on/before asOf. */
   pendingBalanceParts: (accountId: string, asOf: string) => Promise<{
@@ -166,27 +238,11 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
   },
 
   search: async (filters) => {
-    const conditions: ReturnType<typeof sql>[] = []
+    const conditions = buildCommonWhere(filters)
 
-    if (filters.from)         conditions.push(sql`t.date >= ${filters.from}`)
-    if (filters.to)           conditions.push(sql`t.date < ${filters.to}`)
-    if (filters.type)         conditions.push(sql`t.type = ${filters.type}`)
-    if (filters.status)       conditions.push(sql`t.status = ${filters.status}`)
-    if (filters.accountId)    conditions.push(sql`(t.from_account_id = ${filters.accountId} OR t.to_account_id = ${filters.accountId})`)
-    if (filters.categoryId)   conditions.push(sql`t.category_id = ${filters.categoryId}`)
-    if (filters.subCategoryId)conditions.push(sql`t.subcategory_id = ${filters.subCategoryId}`)
-    if (filters.tagNames.length > 0) {
-      const placeholders = sql.join(filters.tagNames.map((n) => sql`${n}`), sql`, `)
-      conditions.push(sql`EXISTS (
-        SELECT 1 FROM transaction_tags tt2
-        JOIN tags tg2 ON tg2.id = tt2.tag_id
-        WHERE tt2.transaction_id = t.id AND tg2.name IN (${placeholders})
-      )`)
-    }
+    if (filters.status)        conditions.push(sql`t.status = ${filters.status}`)
+    if (filters.subCategoryId) conditions.push(sql`t.subcategory_id = ${filters.subCategoryId}`)
 
-    // Free-text search stays inside the main query as a correlated FTS5 subquery.
-    // A whitespace-only text has no searchable token — toMatchQuery returns null and
-    // the filter is skipped entirely (no text filter), not treated as "match nothing".
     if (filters.text) {
       const matchQuery = toMatchQuery(filters.text)
       if (matchQuery !== null) {
@@ -202,6 +258,33 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     `)
 
     return rows.map(transactionAdapters.dbToModel)
+  },
+
+  aggregate: async (filters) => {
+    const g = GROUP_BY_MAP[filters.groupBy]
+    const metric = METRIC_MAP[filters.metric]
+
+    const conditions = buildCommonWhere(filters)
+    conditions.push(sql`t.status = ${TransactionStatus.enum.effective}`)
+    conditions.push(sql`t.type != ${TransactionType.enum.transfer}`)
+
+    const where = sql.join(conditions, sql` AND `)
+    const orderDir = filters.sort === AggregateSort.enum.asc ? sql`ASC` : sql`DESC`
+
+    const labelNames = g.labelNames ? sql`, ${g.labelNames} AS label_names` : sql`, NULL AS label_names`
+
+    const rows = await db.all<Record<string, unknown>>(sql`
+      SELECT ${g.expr} AS key, ${g.label} AS label${labelNames},
+             t.currency, ${metric} AS value, COUNT(*) AS count
+      FROM transactions t
+      ${g.join}
+      WHERE ${where}
+      GROUP BY t.currency, key
+      ORDER BY t.currency, value ${orderDir}
+      LIMIT ${filters.limit}
+    `)
+
+    return rows.map((r) => AggregateDbRowSchema.parse(r))
   },
 
   summaryRows: async (from, to) => {

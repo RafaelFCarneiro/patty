@@ -1,7 +1,7 @@
 # Feature Design 004: `aggregate_spending` — the dashboard primitive
 
 **Type:** Feature design (a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** Not started · **Branch:** `feat/aggregate-spending` (suggested) ·
+**Implementation status:** In progress · **Branch:** `feat/aggregate-spending` (suggested) ·
 **Date:** 2026-06-21 · Governed by **ADR-011** (safe dynamic aggregation). Opens **Phase 3** (Insights).
 
 > **Implementation status** tracks delivery, distinct from the design's acceptance. Values:
