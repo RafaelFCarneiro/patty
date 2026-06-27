@@ -1,13 +1,18 @@
-import { RawTransactionView, type Transaction, type TransactionPatch } from '../models/transaction.js'
+import {
+  RawTransactionViewSchema,
+  type RawTransactionView,
+  type Transaction,
+  type TransactionPatch,
+} from '../models/transaction.js'
 import { LocalizedNamesSchema } from '../models/category.js'
 import type {
-  CreateTransactionInput,
+  CreateTransaction,
   CreateTransactionResult,
-  CreateTransactionsBulkInput,
-  CreateTransferInput,
+  CreateTransactionsBulk,
+  CreateTransfer,
   DeleteTransactionResult,
-  SearchTransactionsInput,
-  UpdateTransactionInput,
+  SearchTransactions,
+  UpdateTransaction,
 } from '../models/transaction.js'
 import type { BulkItemResult } from '../logic/transaction.js'
 import type { AppError } from '../common/errors.js'
@@ -27,9 +32,11 @@ export const dbToModel = (record: Record<string, unknown>): RawTransactionView =
   const parsedTags = row.tags ? (JSON.parse(row.tags) as unknown[]) : []
   const tags = parsedTags.filter((tag): tag is string => typeof tag === 'string')
   const categoryNames = row.category_names !== null ? LocalizedNamesSchema.parse(JSON.parse(row.category_names)) : null
-  const subCategoryNames = row.subcategory_names !== null ? LocalizedNamesSchema.parse(JSON.parse(row.subcategory_names)) : null
+  const subCategoryNames = row.subcategory_names !== null
+    ? LocalizedNamesSchema.parse(JSON.parse(row.subcategory_names))
+    : null
 
-  return RawTransactionView.parse({
+  return RawTransactionViewSchema.parse({
     id:              row.id,
     description:     row.description,
     amount:          row.amount,
@@ -109,11 +116,11 @@ export const patchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> 
 
 // ─── wire/in→model ───────────────────────────────────────────────────────────
 
-export const createWireInToModel  = (input: wireIn.CreateTransactionInput):       CreateTransactionInput       => input
-export const bulkWireInToModel    = (input: wireIn.CreateTransactionsBulkInput):  CreateTransactionsBulkInput  => input
-export const transferWireInToModel= (input: wireIn.CreateTransferInput):          CreateTransferInput          => input
-export const updateWireInToModel  = (input: wireIn.UpdateTransactionInput):       UpdateTransactionInput       => input
-export const searchWireInToModel  = (input: wireIn.SearchTransactionsInput):      SearchTransactionsInput      => input
+export const createWireInToModel  = (input: wireIn.CreateTransactionInput):       CreateTransaction       => input
+export const bulkWireInToModel    = (input: wireIn.CreateTransactionsBulkInput):  CreateTransactionsBulk  => input
+export const transferWireInToModel= (input: wireIn.CreateTransferInput):          CreateTransfer          => input
+export const updateWireInToModel  = (input: wireIn.UpdateTransactionInput):       UpdateTransaction       => input
+export const searchWireInToModel  = (input: wireIn.SearchTransactionsInput):      SearchTransactions      => input
 
 // ─── model→wire/out ──────────────────────────────────────────────────────────
 

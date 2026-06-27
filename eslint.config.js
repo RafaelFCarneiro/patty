@@ -35,6 +35,13 @@ export default tseslint.config(
       'prefer-const': 'error',
       // Strict equality, except the idiomatic `== null` / `!= null` null-ish guard.
       eqeqeq: ['error', 'always', { null: 'ignore' }],
+      'max-len': ['error', {
+        code: 120,
+        ignoreUrls: true,
+        ignoreStrings: true,
+        ignoreTemplateLiterals: true,
+        ignoreRegExpLiterals: true,
+      }],
     },
   },
 )

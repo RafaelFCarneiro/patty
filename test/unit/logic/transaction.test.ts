@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { CurrencyCode } from '../../../src/models/common.js'
 import { Locale } from '../../../src/models/locale.js'
-import { ClassificationMethod, TransactionSource, TransactionStatus, TransactionType, TransactionView } from '../../../src/models/transaction.js'
+import {
+  ClassificationMethod,
+  TransactionSource,
+  TransactionStatus,
+  TransactionType,
+  TransactionViewSchema,
+} from '../../../src/models/transaction.js'
 import type { RawTransactionView } from '../../../src/models/transaction.js'
 import {
   addLocalizedLabels,
@@ -9,6 +15,7 @@ import {
   assertExclusiveCategorySubCategory,
   deriveIdempotencyKey,
   guardTransferMutability,
+  isCategoryKindAllowed,
   needsReview,
   resolveCurrency,
   resolveEffectiveType,
@@ -102,7 +109,7 @@ describe('resolveEffectiveType', () => {
 })
 
 describe('summarizeBulkItems', () => {
-  const tx = TransactionView.parse({
+  const tx = TransactionViewSchema.parse({
     id: 'tx-1', description: 'Test', amount: 1, type: 'expense',
     status: TransactionStatus.enum.effective,
     date: '2026-01-01', currency: CurrencyCode.enum.BRL,
@@ -232,6 +239,26 @@ describe('addLocalizedLabels', () => {
     const labeled = mapper(tx)
     expect(labeled.categoryName).toBe('Alimentação')
     expect(labeled.categoryNames).toBeUndefined()
+  })
+})
+
+describe('isCategoryKindAllowed', () => {
+  it('allows both-kind categories for any transaction type', () => {
+    expect(isCategoryKindAllowed('expense', 'both')).toBe(true)
+    expect(isCategoryKindAllowed('income', 'both')).toBe(true)
+  })
+
+  it('allows matching kind', () => {
+    expect(isCategoryKindAllowed('expense', 'expense')).toBe(true)
+    expect(isCategoryKindAllowed('income', 'income')).toBe(true)
+  })
+
+  it('rejects expense category for income transaction', () => {
+    expect(isCategoryKindAllowed('income', 'expense')).toBe(false)
+  })
+
+  it('rejects income category for expense transaction', () => {
+    expect(isCategoryKindAllowed('expense', 'income')).toBe(false)
   })
 })
 

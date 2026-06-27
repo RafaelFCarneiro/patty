@@ -117,7 +117,9 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 4. **Balances are derived**, never stored: `initialBalance + income − expenses + transfers in − transfers out`. **Only `effective` transactions count** — pending transactions never affect the current balance. Projection (balance + pending-through-date) is opt-in via `projectedAsOf` on `get_account_balances`.
    - **Effective-only invariant (Feature Design 001)**: `get_account_balances` and `get_spending_summary` MUST filter `status = 'effective'`. Projection queries explicitly include `pending`. Classification ignores status. This is enforced in `diplomat/db/repos/` — violations are bugs.
 5. **Classification via merchant_category**: normalized description → `merchants.key` → strongest `merchant_category` edge; user corrections increment `weight` (`onConflictDoUpdate`).
-6. **Category kind must match transaction type**: `expense` transactions may only link to `expense` or `both` categories; `income` to `income` or `both`. Enforced in `controllers/resolve.ts#guardCategoryKind`.
+6. **Category kind must match transaction type**: `expense` transactions may only use `expense` or `both` categories;
+   `income` may only use `income` or `both`. Enforced inline in `controllers/transactions.ts`
+   via `isCategoryKindAllowed` (predicate in `logic/transaction.ts`).
 7. **Sub-category always paired with parent**: `subcategory_id` set → `category_id` must also be set to the sub-category's parent. Enforced by a `CHECK` constraint and in `controllers/resolve.ts`.
 8. **Card purchases are funded by the card's internal liability account (debt).** Bill payment is a canonical transfer (ADR-002) from a bank account to the card account, excluded from spending summaries — never an expense (double-count). `pay_bill` creates it and marks the bill paid. Value enters a `credit` account only via `pay_bill`.
 9. **Encryption on by default**: the database is always opened with an encryption key (from keychain or `FINTRACK_DB_KEY`). Opening without a key is a startup error. The key is never logged or committed (ADR-005).
