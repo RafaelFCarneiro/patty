@@ -60,7 +60,8 @@ export const TransactionSchema = z.object({
   idempotencyKey: z.string().min(1),
   classification: ClassificationSchema,
   rawInput: z.string().optional().describe('Original user phrasing, for audit'),
-  note: z.string().min(1).max(NOTE_MAX_LENGTH).optional().describe('Free-form memo (observação) — distinct from description/rawInput/tags'),
+  note: z.string().min(1).max(NOTE_MAX_LENGTH).optional()
+    .describe('Free-form memo (observação) — distinct from description/rawInput/tags'),
   refs: z.object({
     accountId: Id.optional(),
     toAccountId: Id.optional(),
@@ -125,29 +126,39 @@ export type TransactionPatch = {
   note?: string
 }
 
-// ─── Input contracts ─────────────────────────────────────────────────────────
+// ─── Input contracts ──────────────────────────────────────────
 // Zod-first, types inferred. Wire derives from these (re-export / extend).
 
-/** Natural input accepted by controllers: names instead of ids, optional date/currency. */
+/** Natural input accepted by controllers: names instead of ids. */
 export const CreateTransactionSchema = z.object({
-  description: z.string().min(1).describe('What was paid/received, e.g. "Uber para o aeroporto"'),
+  description: z.string().min(1)
+    .describe('What was paid/received, e.g. "Uber para o aeroporto"'),
   amount: Money.describe('Positive amount in full units (reais/dollars)'),
   type: MovementType.describe('expense | income'),
   status: TransactionStatus.optional().describe(
-    'Omit to use the date-aware default (future date → pending, today/past → effective). ' +
-    '"effective" = already happened, counts toward balances and summaries. ' +
-    '"pending" = expected but not yet cleared, excluded until confirmed.',
+    'Omit for date-aware default (future → pending, today/past → effective). ' +
+    '"effective" = cleared, counts in balances/summaries. ' +
+    '"pending" = expected, excluded until confirmed.',
   ),
   date: IsoDate.optional().describe('YYYY-MM-DD; defaults to today'),
-  account: z.string().optional().describe('Account name, e.g. "Nubank"'),
-  card: z.string().optional().describe('Credit card name — transaction joins the cycle bill (fatura). Use account OR card, not both'),
-  category: z.string().optional().describe('Category name; omit when using subCategory or to auto-classify. expense transactions need an expense/both category; income needs income/both'),
-  subCategory: z.string().optional().describe('Sub-category name (implies its parent category — do not set both category and subCategory)'),
-  currency: CurrencyCode.optional().describe('Transaction currency; resolved from account/card when omitted'),
-  idempotencyKey: z.string().min(1).describe('Stable dedup key, e.g. "<date>-<description>-<amount>"'),
-  rawInput: z.string().optional().describe('Original user phrasing, for audit'),
-  note: z.string().min(1).max(NOTE_MAX_LENGTH).optional().describe('Free-form memo (observação) — distinct from description/rawInput/tags'),
-  tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
+  account: z.string().optional()
+    .describe('Account name, e.g. "Nubank"'),
+  card: z.string().optional()
+    .describe('Credit card name — joins the cycle bill. Use account OR card, not both'),
+  category: z.string().optional()
+    .describe('Category name; omit to auto-classify. Must match transaction type kind'),
+  subCategory: z.string().optional()
+    .describe('Sub-category name (implies its parent — do not set both)'),
+  currency: CurrencyCode.optional()
+    .describe('Transaction currency; resolved from account/card when omitted'),
+  idempotencyKey: z.string().min(1)
+    .describe('Stable dedup key, e.g. "<date>-<description>-<amount>"'),
+  rawInput: z.string().optional()
+    .describe('Original user phrasing, for audit'),
+  note: z.string().min(1).max(NOTE_MAX_LENGTH).optional()
+    .describe('Free-form memo (observação)'),
+  tags: z.array(z.string().min(1)).optional()
+    .describe('Labels to attach, e.g. ["work", "travel"]'),
 })
 export type CreateTransaction = z.infer<typeof CreateTransactionSchema>
 
@@ -186,10 +197,14 @@ export const UpdateTransactionSchema = z.object({
   type: MovementType.optional().describe('Updated movement type'),
   date: IsoDate.optional().describe('Updated date (YYYY-MM-DD)'),
   account: z.string().optional().describe('New account name'),
-  category: z.string().optional().describe('New category name (user correction). Do not set together with subCategory'),
-  subCategory: z.string().optional().describe('New sub-category name (implies parent category; do not set together with category)'),
-  note: z.string().max(NOTE_MAX_LENGTH).optional().describe('Free-form memo (observação). Empty string clears; omit to leave unchanged'),
-  tags: z.array(z.string().min(1)).optional().describe('Replaces the full tag set when provided; pass [] to remove all tags'),
+  category: z.string().optional()
+    .describe('New category name (user correction). Do not set with subCategory'),
+  subCategory: z.string().optional()
+    .describe('New sub-category name (implies parent; do not set with category)'),
+  note: z.string().max(NOTE_MAX_LENGTH).optional()
+    .describe('Free-form memo. Empty string clears; omit to leave unchanged'),
+  tags: z.array(z.string().min(1)).optional()
+    .describe('Replaces the full tag set when provided; pass [] to remove all'),
 })
 export type UpdateTransaction = z.infer<typeof UpdateTransactionSchema>
 
@@ -209,7 +224,7 @@ export const SearchTransactionsSchema = z.object({
 })
 export type SearchTransactions = z.infer<typeof SearchTransactionsSchema>
 
-// ─── Domain result types ──────────────────────────────────────────────────────
+// ─── Domain result types ──────────────────────────────────────────
 
 /** Classification enriched with resolved category/merchant — returned alongside every transaction write. */
 export type ClassifyOutcome = Classification & {
@@ -230,12 +245,24 @@ export type DeleteTransactionResult =
 
 export type TransactionError =
   | { code: 'unknown_transaction'; id: string }
-  | { code: 'category_kind_mismatch'; transactionType: MovementType; categoryName: string; categoryKind: CategoryKind; hint: string }
+  | {
+      code: 'category_kind_mismatch'
+      transactionType: MovementType
+      categoryName: string
+      categoryKind: CategoryKind
+      hint: string
+    }
   | ValidationError
 
 export const transactionErrors = {
-  notFound: (id: string): TransactionError => ({ code: 'unknown_transaction', id }),
-  categoryKindMismatch: (transactionType: MovementType, categoryName: string, categoryKind: CategoryKind): TransactionError => ({
+  notFound: (id: string): TransactionError => ({
+    code: 'unknown_transaction', id,
+  }),
+  categoryKindMismatch: (
+    transactionType: MovementType,
+    categoryName: string,
+    categoryKind: CategoryKind,
+  ): TransactionError => ({
     code: 'category_kind_mismatch',
     transactionType,
     categoryName,

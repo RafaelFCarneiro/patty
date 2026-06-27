@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { CategoryKind, type Category } from '../../../src/models/category.js'
 import { Locale } from '../../../src/models/locale.js'
-import { allNames, buildSynonyms, hasNameCollision, hasSubCategoryNameCollision, isCategoryUnreferenced, localizeCategoryName, parentExists, resolveAndSort, resolveDisplayName, withKindLabel } from '../../../src/logic/category.js'
+import {
+  allNames,
+  buildSynonyms,
+  hasNameCollision,
+  hasSubCategoryNameCollision,
+  isCategoryUnreferenced,
+  localizeCategoryName,
+  parentExists,
+  resolveAndSort,
+  resolveDisplayName,
+  withKindLabel,
+} from '../../../src/logic/category.js'
 
 const seeded: Category = {
   id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense,

@@ -61,12 +61,18 @@ export const createTransaction = (
 
     if (input.subCategory) {
       const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)
-      yield* guard(isCategoryKindAllowed(input.type, subCat.kind), transactionErrors.categoryKindMismatch(input.type, subCat.name, subCat.kind))
+      yield* guard(
+        isCategoryKindAllowed(input.type, subCat.kind),
+        transactionErrors.categoryKindMismatch(input.type, subCat.name, subCat.kind),
+      )
       subCategoryId = subCat.id
       classification = userClassification({ id: subCat.parentId, name: subCat.parentName })
     } else if (input.category) {
       const cat = yield* resolveCategoryRef(deps, input.category)
-      yield* guard(isCategoryKindAllowed(input.type, cat.kind), transactionErrors.categoryKindMismatch(input.type, cat.name, cat.kind))
+      yield* guard(
+        isCategoryKindAllowed(input.type, cat.kind),
+        transactionErrors.categoryKindMismatch(input.type, cat.name, cat.kind),
+      )
       classification = userClassification(cat)
     } else {
       classification = pickClassification(
@@ -166,12 +172,18 @@ export const updateTransaction = (
 
     if (input.subCategory) {
       const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)
-      if (effectiveType) yield* guard(isCategoryKindAllowed(effectiveType, subCat.kind), transactionErrors.categoryKindMismatch(effectiveType, subCat.name, subCat.kind))
+      if (effectiveType) yield* guard(
+        isCategoryKindAllowed(effectiveType, subCat.kind),
+        transactionErrors.categoryKindMismatch(effectiveType, subCat.name, subCat.kind),
+      )
       subCategoryId = subCat.id
       categoryId = subCat.parentId
     } else if (input.category) {
       const cat = yield* resolveCategoryRef(deps, input.category)
-      if (effectiveType) yield* guard(isCategoryKindAllowed(effectiveType, cat.kind), transactionErrors.categoryKindMismatch(effectiveType, cat.name, cat.kind))
+      if (effectiveType) yield* guard(
+        isCategoryKindAllowed(effectiveType, cat.kind),
+        transactionErrors.categoryKindMismatch(effectiveType, cat.name, cat.kind),
+      )
       categoryId = cat.id
       // Business rule: assigning a plain category clears any prior sub-category —
       // "sub-category always paired with its parent" would otherwise go stale.

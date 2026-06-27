@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { CurrencyCode } from '../../../src/models/common.js'
 import { Locale } from '../../../src/models/locale.js'
-import { ClassificationMethod, TransactionSource, TransactionStatus, TransactionType, TransactionViewSchema } from '../../../src/models/transaction.js'
+import {
+  ClassificationMethod,
+  TransactionSource,
+  TransactionStatus,
+  TransactionType,
+  TransactionViewSchema,
+} from '../../../src/models/transaction.js'
 import type { RawTransactionView } from '../../../src/models/transaction.js'
 import {
   addLocalizedLabels,

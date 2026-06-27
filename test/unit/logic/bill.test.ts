@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { BillStatus, type Bill } from '../../../src/models/bill.js'
 import { CurrencyCode } from '../../../src/models/common.js'
 import { Locale } from '../../../src/models/locale.js'
-import { ClassificationMethod, TransactionSource, TransactionStatus, TransactionType, TransactionViewSchema } from '../../../src/models/transaction.js'
+import {
+  ClassificationMethod,
+  TransactionSource,
+  TransactionStatus,
+  TransactionType,
+  TransactionViewSchema,
+} from '../../../src/models/transaction.js'
 import type { TransactionView } from '../../../src/models/transaction.js'
 import { billPeriodFor, computeBillTotal, withStatusLabel } from '../../../src/logic/bill.js'
 
