@@ -2,7 +2,7 @@ import { eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { expectPresent } from '../../../common/present.js'
-import { Bill, BillStatus } from '../../../models/bill.js'
+import { BillSchema, BillStatus, type Bill } from '../../../models/bill.js'
 import type { RawTransactionView } from '../../../models/transaction.js'
 import type { BillPeriod } from '../../../logic/bill.js'
 import { BillRowSchema } from '../../../wire/db/bills.js'
@@ -12,7 +12,7 @@ import { fullTxSelect } from '../transactionSelect.js'
 
 const toBill = (record: Record<string, unknown>): Bill => {
   const row = BillRowSchema.parse(record)
-  return Bill.parse({
+  return BillSchema.parse({
     id:        row.id,
     month:     row.month,
     year:      row.year,
