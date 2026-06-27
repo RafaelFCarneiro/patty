@@ -28,4 +28,12 @@ describe('PeriodSchema with coercion (HTTP query params)', () => {
   it('rejects year below range', () => {
     expect(() => CoercedPeriod.parse({ month: '6', year: '1999' })).toThrow()
   })
+
+  it('rejects year above range', () => {
+    expect(() => CoercedPeriod.parse({ month: '6', year: '2101' })).toThrow()
+  })
+
+  it('rejects non-integer year', () => {
+    expect(() => CoercedPeriod.parse({ month: '6', year: '2026.5' })).toThrow()
+  })
 })
