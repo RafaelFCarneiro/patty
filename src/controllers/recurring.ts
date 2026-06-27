@@ -2,9 +2,8 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { nextDue, recurringIdempotencyKey, withPeriodLabel } from '../logic/recurring.js'
 import { toIsoDate } from '../logic/period.js'
-import { CurrencyCode } from '../models/common.js'
 import type { CreateRecurringInput, RecurringRuleView } from '../models/recurring.js'
-import { addLocalizedLabels, defaultStatusFor } from '../logic/transaction.js'
+import { addLocalizedLabels, defaultStatusFor, resolveCurrency } from '../logic/transaction.js'
 import { ClassificationMethod, TransactionSource, type TransactionView } from '../models/transaction.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
@@ -30,7 +29,7 @@ export const createRecurring = (
         type: input.type,
         period: input.period,
         nextDue: input.startDate,
-        currency: account?.currency ?? input.currency ?? CurrencyCode.enum.USD,
+        currency: resolveCurrency(account, null, input),
       },
       { accountId: account?.id ?? null, categoryId: category?.id ?? null },
     )
