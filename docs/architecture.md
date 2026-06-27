@@ -124,6 +124,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 8. **Card purchases are funded by the card's internal liability account (debt).** Bill payment is a canonical transfer (ADR-002) from a bank account to the card account, excluded from spending summaries — never an expense (double-count). `pay_bill` creates it and marks the bill paid. Value enters a `credit` account only via `pay_bill`.
 9. **Encryption on by default**: the database is always opened with an encryption key (from keychain or `FINTRACK_DB_KEY`). Opening without a key is a startup error. The key is never logged or committed (ADR-005).
 10. Decode at the boundary: every external input and SQL row is zod-parsed before entering the domain.
+15. **Dynamic query structure is composed only from whitelisted enum-keyed SQL fragments** (ADR-011); caller-supplied values are always parameter-bound; caller text is never concatenated into SQL. Exhaustive `Record<Enum, Fragment>` maps in `diplomat/db` are the only source of structural SQL; `assertNever` / TS exhaustiveness guards unmapped keys at compile time.
 11. Behavior changes require tests: domain and boundary behavior updates must include unit tests in the same change (success and expected-failure paths).
 12. **Category identity is the slug/id, not the localized name** (Feature Design 002, ADR-009). Default categories carry a JSON `names` column (`{"pt":"…","es":"…"}`); display name is resolved at read time as `names?.[locale] ?? name`. Merchant rules and classification key on the slug, never the display name. User-created categories have `names = null` and keep their literal `name`.
 13. **Locale is AI-determined, stored, env-overridable** (Feature Design 002). `settings.locale` (`en|es|pt`), default `en`. Resolution: `FINTRACK_LOCALE` env → `settings.locale` → `'en'`. `set_locale` with `source: inferred` is rejected when `locale_source` is `explicit`.
@@ -131,7 +132,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 
 ## Tool surface
 
-32 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
+33 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
 
 **Transport:** controlled by `MCP_TRANSPORT` (zod enum, `config.ts`). Default is **`stdio`** — the client spawns the process; no port, no Fastify. Set `MCP_TRANSPORT=http` to start the Fastify server (REST + streamable HTTP MCP on `PORT`). Both transports connect the same `buildMcpServer(deps, version)` core; no domain code moves. (ADR-007)
 
@@ -147,4 +148,5 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 - ADR-008: seed data lives in `diplomat/db/seed`; the domain never depends on it
 - ADR-009: localized content lives on the entity (JSON `names`); i18n catalogs are for chrome only
 - ADR-010: credit cards are liability accounts (1:1 internal `credit` account per card)
+- ADR-011: safe composition of dynamic aggregation queries (whitelist enum→fragment maps + parameter binding)
 - ADR-012: per-model error definitions; `common` composes `AppError` (supersedes the type-only `AppError` import exception)

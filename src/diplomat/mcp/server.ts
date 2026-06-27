@@ -5,6 +5,7 @@ import type { AppError } from '../../common/errors.js'
 import {
   createAccount, deleteAccount, getAccountBalances, listAccounts, updateAccount,
 } from '../../controllers/accounts.js'
+import { aggregateSpending } from '../../controllers/aggregate.js'
 import { getBill, payBill } from '../../controllers/bills.js'
 import {
   createCategory, createSubCategory, deleteCategory, deleteSubCategory,
@@ -26,6 +27,9 @@ import {
   updateTransaction,
 } from '../../controllers/transactions.js'
 import { createTransfer } from '../../controllers/transfers.js'
+import {
+  AggregateMetric, AggregateSort, AggregateSpendingSchema, type ResolvedAggregateSpending,
+} from '../../models/aggregate.js'
 import {
   TransactionSource,
   CreateTransactionSchema,
@@ -250,6 +254,24 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       },
     },
     async (args) => fromResult(await searchTransactions(deps, args)),
+  )
+
+  server.registerTool(
+    'aggregate_spending',
+    {
+      title: 'Aggregate spending',
+      description:
+        'Flexible spending aggregation: group transactions by category, account, tag, month, or merchant, ' +
+        'measured as sum, count, or avg. Results are per-currency blocks with totals and percentages. ' +
+        'Only effective, non-transfer transactions are counted. Provide a period via month+year or from/to date range.',
+      inputSchema: {
+        ...AggregateSpendingSchema.shape,
+        metric: AggregateSpendingSchema.shape.metric.default(AggregateMetric.enum.sum),
+        sort: AggregateSpendingSchema.shape.sort.default(AggregateSort.enum.desc),
+        limit: AggregateSpendingSchema.shape.limit.default(50),
+      },
+    },
+    async (args) => fromResult(await aggregateSpending(deps, args as ResolvedAggregateSpending)),
   )
 
   server.registerTool(
