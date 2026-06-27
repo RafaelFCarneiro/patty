@@ -30,7 +30,7 @@ export const createRecurring = (
         type: input.type,
         period: input.period,
         nextDue: input.startDate,
-        currency: account?.currency ?? input.currency ?? CurrencyCode.enum.BRL,
+        currency: account?.currency ?? input.currency ?? CurrencyCode.enum.USD,
       },
       { accountId: account?.id ?? null, categoryId: category?.id ?? null },
     )
