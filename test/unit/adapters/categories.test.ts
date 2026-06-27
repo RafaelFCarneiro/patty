@@ -48,12 +48,12 @@ describe('dbToModel', () => {
 
 describe('wireInToModel', () => {
   it('applies expense kind default when omitted', () => {
-    const parsed = wireInCategories.CreateCategory.parse({ name: 'Salário' })
+    const parsed = wireInCategories.CreateCategorySchema.parse({ name: 'Salário' })
     expect(categoryAdapters.wireInToModel(parsed)).toEqual({ name: 'Salário', kind: CategoryKind.enum.expense })
   })
 
   it('preserves explicit kind when provided', () => {
-    const parsed = wireInCategories.CreateCategory.parse({ name: 'Salário', kind: CategoryKind.enum.income })
+    const parsed = wireInCategories.CreateCategorySchema.parse({ name: 'Salário', kind: CategoryKind.enum.income })
     expect(categoryAdapters.wireInToModel(parsed)).toEqual({ name: 'Salário', kind: CategoryKind.enum.income })
   })
 })

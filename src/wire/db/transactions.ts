@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { LocalizedNames } from '../../models/category.js'
+import { LocalizedNamesSchema } from '../../models/category.js'
 import { CurrencyCode } from '../../models/common.js'
 import { MovementType, TransactionStatus } from '../../models/transaction.js'
 import type { transactions } from '../../diplomat/db/schema.js'
@@ -69,7 +69,7 @@ export type TransactionDbRefs = {
 }
 
 const parseCategoryNames = (raw: string | null): Record<string, string> | null =>
-  raw ? LocalizedNames.parse(JSON.parse(raw)) : null
+  raw ? LocalizedNamesSchema.parse(JSON.parse(raw)) : null
 
 export const SummaryRowSchema = z.object({
   currency:       CurrencyCode,

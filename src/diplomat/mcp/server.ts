@@ -23,7 +23,7 @@ import {
 import { createTransfer } from '../../controllers/transfers.js'
 import { TransactionSource, TransactionStatus, TransactionType, MovementType, NOTE_MAX_LENGTH } from '../../models/transaction.js'
 import { CurrencyCode } from '../../models/common.js'
-import { CategoryKind } from '../../models/category.js'
+import { CreateCategorySchema, CreateSubCategorySchema } from '../../wire/in/categories.js'
 import { Locale, LocaleSource } from '../../models/locale.js'
 import { AccountType } from '../../models/account.js'
 import { RecurringPeriod } from '../../models/recurring.js'
@@ -428,10 +428,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
     {
       title: 'Create category',
       description: 'Create a category. Prefer existing categories (list_categories) before creating new ones.',
-      inputSchema: {
-        name: z.string().min(1),
-        kind: CategoryKind.default(CategoryKind.enum.expense),
-      },
+      inputSchema: CreateCategorySchema.shape,
     },
     async (args) => fromResult(await createCategory(deps, args)),
   )
@@ -449,10 +446,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       description:
         'Create a sub-category under an existing category. Sub-categories inherit the kind (expense/income/both) ' +
         'of their parent. Use list_categories to find the parent id. Names must be unique within the same parent.',
-      inputSchema: {
-        name: z.string().min(1),
-        parentId: z.string().min(1).describe('ID of the parent category (from list_categories)'),
-      },
+      inputSchema: CreateSubCategorySchema.shape,
     },
     async (args) => fromResult(await createSubCategory(deps, args)),
   )

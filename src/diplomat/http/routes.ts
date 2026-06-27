@@ -90,7 +90,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
 
   app.get('/api/categories', async () => listCategories(deps))
   app.post('/api/categories', async (req, reply) => {
-    const wireIn = parse(wireInCategories.CreateCategory, req.body, reply)
+    const wireIn = parse(wireInCategories.CreateCategorySchema, req.body, reply)
     if (!wireIn) return reply
     return send(reply, await createCategory(deps, categoryAdapters.wireInToModel(wireIn)), 201)
   })
@@ -100,7 +100,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
     return reply.send(await listSubCategories(deps, q.data.parentId))
   })
   app.post('/api/sub-categories', async (req, reply) => {
-    const wireIn = parse(wireInCategories.CreateSubCategory, req.body, reply)
+    const wireIn = parse(wireInCategories.CreateSubCategorySchema, req.body, reply)
     if (!wireIn) return reply
     return send(reply, await createSubCategory(deps, wireIn), 201)
   })
