@@ -1,7 +1,7 @@
 import * as R from 'remeda'
 import { periodRange } from '../logic/period.js'
 import { summarize } from '../logic/summary.js'
-import type { Period } from '../models/common.js'
+import type { Period } from '../models/date.js'
 import type { SpendingSummaryOut } from '../wire/out/summary.js'
 import type { Deps } from './deps.js'
 

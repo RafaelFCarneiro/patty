@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType, filterByType, hasNoCards, hasNoRecurring, hasNoTransactions, isUnreferenced, withTypeLabel } from '../../../src/logic/account.js'
 import type { AccountReferences } from '../../../src/models/account.js'
 import { AccountType, type Account } from '../../../src/models/account.js'
-import { CurrencyCode } from '../../../src/models/common.js'
+import { CurrencyCode } from '../../../src/models/money.js'
 import { Locale } from '../../../src/models/locale.js'
 
 const account: Account = {

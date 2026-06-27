@@ -32,7 +32,7 @@ import {
 import { createTransfer } from '../../controllers/transfers.js'
 import { AccountType } from '../../models/account.js'
 import { TransactionSource } from '../../models/transaction.js'
-import { PeriodSchema } from '../../models/common.js'
+import { PeriodSchema } from '../../models/date.js'
 import { coerceToNumber } from '../../wire/in/coerce.js'
 import {
   BillQuery, PayBill,

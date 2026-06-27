@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { CurrencyCode, Id } from './common.js'
+import { Id } from './id.js'
+import { CurrencyCode } from './money.js'
 import type { Ambiguous, DuplicateName, NotFound, ValidationError } from './error.js'
 
 // `.describe()` is domain information — it states what each field is and represents.

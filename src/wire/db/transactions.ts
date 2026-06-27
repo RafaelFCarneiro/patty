@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { LocalizedNamesSchema } from '../../models/category.js'
-import { CurrencyCode } from '../../models/common.js'
+import { CurrencyCode } from '../../models/money.js'
 import { MovementType, TransactionStatus } from '../../models/transaction.js'
 import type { transactions } from '../../diplomat/db/schema.js'
 

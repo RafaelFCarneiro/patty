@@ -1,7 +1,7 @@
 import * as R from 'remeda'
 import { purry } from 'remeda'
 import { localizeCategoryName } from './category.js'
-import type { CurrencyCode } from '../models/common.js'
+import type { CurrencyCode } from '../models/money.js'
 import type { Locale } from '../models/locale.js'
 import type { CurrencySummary, SummaryRow } from '../models/summary.js'
 import { TransactionType } from '../models/transaction.js'

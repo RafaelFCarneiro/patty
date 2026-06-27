@@ -1,4 +1,4 @@
-import { CurrencyCode } from '../../../models/common.js'
+import { CurrencyCode } from '../../../models/money.js'
 
 export const CURRENCIES = [
   { code: CurrencyCode.enum.BRL, symbol: 'R$', name: 'Real Brasileiro' },
