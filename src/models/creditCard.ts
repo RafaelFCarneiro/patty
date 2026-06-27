@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { CurrencyCode, Id } from './common.js'
+import type { Ambiguous, DuplicateName, NotFound, ValidationError } from './error.js'
 
 export const CreditCard = z.object({
   id: Id,
@@ -24,4 +25,18 @@ export type CreateCreditCard = {
   dueDay: number
   limit?: number
   paymentAccount?: string
+}
+
+export type CardError =
+  | NotFound<'card'>
+  | Ambiguous<'card'>
+  | DuplicateName<'credit_card'>
+  | ValidationError
+
+export const cardErrors = {
+  duplicateName: (name: string): CardError => ({ code: 'duplicate_name', entity: 'credit_card', name }),
+  currencyMismatch: (cardCurrency: CurrencyCode, accountCurrency: CurrencyCode): CardError => ({
+    code: 'validation',
+    issues: [`currency mismatch: card is ${cardCurrency}, payment account is ${accountCurrency}`],
+  }),
 }

@@ -1,5 +1,5 @@
 import { purry } from 'remeda'
-import type { AppError } from '../common/errors.js'
+import type { ValidationError } from '../models/error.js'
 import type { Account } from '../models/account.js'
 import type { CreditCard } from '../models/creditCard.js'
 import { CurrencyCode } from '../models/common.js'
@@ -14,7 +14,7 @@ import type {
   UpdateTransactionInput,
 } from '../models/transaction.js'
 import type { RawTransactionView } from '../models/transaction.js'
-import { TransactionStatus, TransactionType } from '../models/transaction.js'
+import { transactionErrors, TransactionStatus, TransactionType } from '../models/transaction.js'
 import { err, ok, type Result } from 'neverthrow'
 import * as R from 'remeda'
 import { localizeCategoryName } from './category.js'
@@ -40,6 +40,12 @@ export const resolveCurrency = (
   input: Pick<CreateTransactionInput, 'currency'>,
 ): CurrencyCode => account?.currency ?? card?.currency ?? input.currency ?? CurrencyCode.enum.BRL
 
+export const assertExclusiveAccountCard = (input: { account?: string; card?: string }): boolean =>
+  !(input.account && input.card)
+
+export const assertExclusiveCategorySubCategory = (input: { category?: string; subCategory?: string }): boolean =>
+  !(input.category && input.subCategory)
+
 // ─── Transfer mutability guards ───────────────────────────────────────────────
 
 const isTransfer = (t: Pick<TransactionView, 'type'>) => t.type === TransactionType.enum.transfer
@@ -56,11 +62,11 @@ const hasCategoryInput = (input: Pick<UpdateTransactionInput, 'category' | 'subC
 export const guardTransferMutability = (
   existing: Pick<TransactionView, 'type'>,
   input: Pick<UpdateTransactionInput, 'type' | 'category' | 'subCategory'>,
-): Result<void, AppError> => {
+): Result<void, ValidationError> => {
   if (isTransfer(existing) && input.type)
-    return err({ code: 'validation', issues: ['cannot change the type of a transfer transaction'] })
+    return err(transactionErrors.transferTypeImmutable)
   if (wouldBeTransfer(existing, input) && hasCategoryInput(input))
-    return err({ code: 'validation', issues: ['transfer transactions cannot have a category or sub-category'] })
+    return err(transactionErrors.transferCategoryRejected)
   return ok(undefined)
 }
 
@@ -89,15 +95,15 @@ export const LOW_CONFIDENCE_THRESHOLD = 0.6
 export const needsReview = (c: Classification): boolean =>
   c.method === 'none' || c.confidence < LOW_CONFIDENCE_THRESHOLD
 
-export type BulkItemResult =
+export type BulkItemResult<E = unknown> =
   | { status: 'created' | 'needs_review'; transaction: TransactionView; classification: ClassifyOutcome }
   | { status: 'duplicate'; transaction: TransactionView }
-  | { status: 'error'; description: string; error: AppError }
+  | { status: 'error'; description: string; error: E }
 
-export const toBulkItemResult = (
-  result: Result<CreateTransactionResult, AppError>,
+export const toBulkItemResult = <E>(
+  result: Result<CreateTransactionResult, E>,
   description: string,
-): BulkItemResult =>
+): BulkItemResult<E> =>
   result.match(
     (r) =>
       !r.created
@@ -110,13 +116,13 @@ export const toBulkItemResult = (
     (error) => ({ status: 'error', description, error }),
   )
 
-export type BulkResult = {
+export type BulkResult<E = unknown> = {
   summary: { created: number; needsReview: number; duplicates: number; errors: number }
-  items: BulkItemResult[]
+  items: BulkItemResult<E>[]
 }
 
 export const summarizeBulkItems = (
-  items: BulkItemResult[],
+  items: BulkItemResult<unknown>[],
 ): { created: number; needsReview: number; duplicates: number; errors: number } => {
   const counts = R.countBy(items, (i) => i.status)
   return {

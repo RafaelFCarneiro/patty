@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { LocalizedNames } from './category.js'
 import { CurrencyCode, Id, IsoDate, Money } from './common.js'
+import type { ValidationError } from './error.js'
 import type { LabelMap } from './locale.js'
 
 /** Whether the transaction has cleared or is still expected. Default is date-aware when omitted. */
@@ -205,3 +206,31 @@ export type CreateTransactionResult = {
 export type DeleteTransactionResult =
   | { deleted: true; transaction: TransactionView }
   | { deleted: false; dryRun: true; wouldDelete: TransactionView; hint: string }
+
+export type TransactionError =
+  | { code: 'unknown_transaction'; id: string }
+  | ValidationError
+
+export const transactionErrors = {
+  notFound: (id: string): TransactionError => ({ code: 'unknown_transaction', id }),
+  exclusiveAccountCard: {
+    code: 'validation',
+    issues: ['provide account OR card, not both'],
+  } satisfies TransactionError,
+  exclusiveCategorySubCategory: {
+    code: 'validation',
+    issues: ['provide category OR subCategory, not both — subCategory implies its parent category'],
+  } satisfies TransactionError,
+  exclusiveCategorySubCategoryUpdate: {
+    code: 'validation',
+    issues: ['provide category OR subCategory, not both'],
+  } satisfies TransactionError,
+  transferTypeImmutable: {
+    code: 'validation',
+    issues: ['cannot change the type of a transfer transaction'],
+  } satisfies TransactionError,
+  transferCategoryRejected: {
+    code: 'validation',
+    issues: ['transfer transactions cannot have a category or sub-category'],
+  } satisfies TransactionError,
+}
