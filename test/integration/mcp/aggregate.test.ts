@@ -1,20 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { toIsoDate } from '../../../src/logic/period.js'
-import { callTool, callToolError, makeClient } from './helpers.js'
+import { callTool, makeClient } from './helpers.js'
 
 type AggRow = { key: string; label: string; value: number; count: number; pct: number }
 type CurrencyBlock = { currency: string; total: number; rows: AggRow[] }
 type AggResult = { groupBy: string; metric: string; currencies: CurrencyBlock[] }
 
-const now = new Date()
-const month = now.getMonth() + 1
-const year = now.getFullYear()
-const date = toIsoDate(now)
-const prevMonth = month === 1
-  ? toIsoDate(new Date(year - 1, 11, 15))
-  : toIsoDate(new Date(year, month - 2, 15))
+const month = 3
+const year = 2025
+const date = '2025-03-15'
+const prevMonth = '2025-02-15'
 
 describe('MCP integration > aggregate_spending', () => {
   let client: Client
@@ -137,8 +133,8 @@ describe('MCP integration > aggregate_spending', () => {
 
   // (e) month time series over from/to range
   it('groups by month over date range', async () => {
-    const fromDate = prevMonth < date ? prevMonth : date
-    const toDate = '2099-12-31'
+    const fromDate = prevMonth
+    const toDate = '2025-04-01'
     const result = await callTool(client, {
       name: 'aggregate_spending',
       args: { groupBy: 'month', from: fromDate, to: toDate, account: 'AggAcctBRL', sort: 'asc' },
