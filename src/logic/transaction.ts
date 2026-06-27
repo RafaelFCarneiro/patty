@@ -33,12 +33,12 @@ export const defaultStatusFor = (date: IsoDate, today: IsoDate): TransactionStat
 
 // ─── Currency ────────────────────────────────────────────────────────────────
 
-/** Resolve transaction currency: account > card > explicit > BRL default. */
+/** Resolve transaction currency: account > card > explicit > USD default. */
 export const resolveCurrency = (
   account: Pick<Account, 'currency'> | null,
   card: Pick<CreditCard, 'currency'> | null,
   input: Pick<CreateTransactionInput, 'currency'>,
-): CurrencyCode => account?.currency ?? card?.currency ?? input.currency ?? CurrencyCode.enum.BRL
+): CurrencyCode => account?.currency ?? card?.currency ?? input.currency ?? CurrencyCode.enum.USD
 
 export const assertExclusiveAccountCard = (input: { account?: string; card?: string }): boolean =>
   !(input.account && input.card)
