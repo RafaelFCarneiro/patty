@@ -1,8 +1,9 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
-import { AccountType } from '../models/account.js'
-import type { CreateCreditCard, CreditCard } from '../models/creditCard.js'
+import { assertCurrencyMatch, assertNonCreditType } from '../logic/account.js'
+import { accountErrors, AccountType } from '../models/account.js'
+import { cardErrors, type CreateCreditCard, type CreditCard } from '../models/creditCard.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCardRef } from './resolve.js'
 
@@ -11,6 +12,14 @@ export type DeleteCreditCardResult =
   | { deleted: false; dryRun: true; wouldDelete: { card: string; account: string; transactions: number; bills: number }; hint: string }
 
 export const listCreditCards = (deps: Deps): Promise<CreditCard[]> => deps.creditCards.list()
+
+/** Repo-touching precondition: true when no card already holds this name. */
+const assertCardNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
+  !(await deps.creditCards.findByName(name))
+
+/** Repo-touching precondition: true when no account already holds this name. */
+const assertAccountNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
+  !(await deps.accounts.findByName(name))
 
 export const deleteCreditCard = (
   deps: Deps,
@@ -42,32 +51,20 @@ export const createCreditCard = (
   input: CreateCreditCard,
 ): ResultAsync<CreditCard, AppError> =>
   safeTry(async function* () {
-    yield* guard(!(await deps.creditCards.findByName(input.name)), {
-      code: 'duplicate_name',
-      entity: 'credit_card',
-      name: input.name,
-    })
+    yield* guard(await assertCardNameAvailable(deps, input.name), cardErrors.duplicateName(input.name))
 
     let paymentAccountId: string | undefined
     if (input.paymentAccount) {
       const paymentAccount = yield* resolveAccountRef(deps, input.paymentAccount)
-      yield* guard(paymentAccount.type !== AccountType.enum.credit, {
-        code: 'validation',
-        issues: ['payment account cannot be a credit account'],
-      })
-      yield* guard(paymentAccount.currency === input.currency, {
-        code: 'validation',
-        issues: [`currency mismatch: card is ${input.currency}, payment account is ${paymentAccount.currency}`],
-      })
+      yield* guard(assertNonCreditType(paymentAccount.type), accountErrors.creditPaymentRejected)
+      yield* guard(assertCurrencyMatch({ currency: input.currency }, paymentAccount),
+        cardErrors.currencyMismatch(input.currency, paymentAccount.currency))
       paymentAccountId = paymentAccount.id
     }
 
     const internalAccountName = `Card: ${input.name}`
-    yield* guard(!(await deps.accounts.findByName(internalAccountName)), {
-      code: 'duplicate_name',
-      entity: 'account',
-      name: internalAccountName,
-    })
+    yield* guard(await assertAccountNameAvailable(deps, internalAccountName),
+      accountErrors.duplicateName(internalAccountName))
 
     const accountId = deps.newId()
     const internalAccount = {

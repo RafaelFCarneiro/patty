@@ -23,6 +23,12 @@ export const hasNoCards = (refs: AccountReferences): boolean => refs.cards === 0
 export const isUnreferenced = (refs: AccountReferences): boolean =>
   hasNoTransactions(refs) && hasNoRecurring(refs) && hasNoCards(refs)
 
+export const areDifferentAccounts = (a: Pick<Account, 'id'>, b: Pick<Account, 'id'>): boolean =>
+  a.id !== b.id
+
+export const assertCurrencyMatch = (a: Pick<Account, 'currency'>, b: Pick<Account, 'currency'>): boolean =>
+  a.currency === b.currency
+
 const _withTypeLabel = <T extends Account>(account: T, locale: Locale): T => ({
   ...account,
   typeLabel: localizeAccountType(account.type, locale),

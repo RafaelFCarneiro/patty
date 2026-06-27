@@ -5,6 +5,8 @@ import { ClassificationMethod, TransactionSource, TransactionStatus, Transaction
 import type { RawTransactionView } from '../../../src/models/transaction.js'
 import {
   addLocalizedLabels,
+  assertExclusiveAccountCard,
+  assertExclusiveCategorySubCategory,
   deriveIdempotencyKey,
   guardTransferMutability,
   needsReview,
@@ -230,5 +232,37 @@ describe('addLocalizedLabels', () => {
     const labeled = mapper(tx)
     expect(labeled.categoryName).toBe('Alimentação')
     expect(labeled.categoryNames).toBeUndefined()
+  })
+})
+
+describe('assertExclusiveAccountCard', () => {
+  it('passes when only account is provided', () => {
+    expect(assertExclusiveAccountCard({ account: 'A' })).toBe(true)
+  })
+
+  it('passes when only card is provided', () => {
+    expect(assertExclusiveAccountCard({ card: 'C' })).toBe(true)
+  })
+
+  it('passes when neither is provided', () => {
+    expect(assertExclusiveAccountCard({})).toBe(true)
+  })
+
+  it('fails when both are provided', () => {
+    expect(assertExclusiveAccountCard({ account: 'A', card: 'C' })).toBe(false)
+  })
+})
+
+describe('assertExclusiveCategorySubCategory', () => {
+  it('passes when only category is provided', () => {
+    expect(assertExclusiveCategorySubCategory({ category: 'C' })).toBe(true)
+  })
+
+  it('passes when only subCategory is provided', () => {
+    expect(assertExclusiveCategorySubCategory({ subCategory: 'S' })).toBe(true)
+  })
+
+  it('fails when both are provided', () => {
+    expect(assertExclusiveCategorySubCategory({ category: 'C', subCategory: 'S' })).toBe(false)
   })
 })
