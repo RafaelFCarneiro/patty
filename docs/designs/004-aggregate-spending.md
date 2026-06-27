@@ -61,6 +61,28 @@ text never reaches the SQL string. This design implements that for spending aggr
    *name → id* resolution already lives in `controllers/resolve.ts` and is shared as-is. This captures the real
    overlap between the two tools without merging them (see Options).
 
+8. **Follow the current baseline conventions (post-sweep).** The whole model/wire layer was standardized after
+   this design was first written; `aggregate_spending` must be built to that baseline, not the old one:
+   - **Naming:** object/input schemas use the `Schema` suffix with a bare inferred type (`AggregateSpendingSchema`
+     + `type AggregateSpending`; result `AggregateResultSchema` + `type AggregateResult`), and **no `Input`
+     suffix**. The `AggregateGroupBy` / `AggregateMetric` **enums stay bare**.
+   - **Input contract = zod-in-model + `infer`:** define the input zod once in `models/aggregate.ts`; `wire/in`
+     derives it. No hand-written input interfaces.
+   - **`.describe()` is domain info → on the model fields;** the MCP tool derives its `inputSchema` from
+     `AggregateSpendingSchema.shape` (do not re-author describes at the edge).
+   - **Defaults by intent:** quality-of-life defaults (`metric → sum`, `sort → desc`, the top-N `limit` default)
+     live at the **wire boundary**; the domain stays strict.
+   - **Value objects** come from the split modules: `PeriodSchema`/`IsoDate` from `models/date.ts`,
+     `CurrencyCode` from `models/money.ts` (the old `models/common.ts` is gone).
+   - **REST period coercion** reuses `coerceToNumber` (`wire/in/coerce.ts`) via
+     `z.preprocess(coerceToNumber, PeriodSchema.shape.month/year)` — same pattern as `wire/in/bills.ts`; this is
+     also the moment to extract the still-inline coerced-period schema out of the summary route into `wire/in`
+     and share it.
+   - **Errors (ADR-012):** the only expected failures are name→id resolution (`NotFound<'account'|'category'>`,
+     already owned by those models via `resolve.ts`) and an invalid period → use the shared `ValidationError`
+     primitive (`models/error.ts`, `validation([...])`). No new god-union entry; only add an `AggregateError`
+     union (composed into `AppError`) if an aggregate-specific code actually emerges (none expected for v1).
+
 ### Output shape (illustrative)
 
 ```jsonc
@@ -113,11 +135,16 @@ block makes the invariant structural.
 
 ## Consequences
 
-- **New:** `models/aggregate.ts` (enums + `AggregateSpendingInput`/`AggregateSpendingResult`), a repo method
+- **New:** `models/aggregate.ts` (bare enums + `AggregateSpendingSchema`/`AggregateResultSchema` with describes),
+  `wire/in/aggregate.ts` (derives the input + QoL defaults + coerced period), a repo method
   `transactions.aggregate(params)` with the ADR-011 whitelist composition, a pure `logic/aggregate.ts` shaper,
-  the controller, and the MCP tool + REST route. Mirrors the summary stack.
+  the controller, and the MCP tool (inputSchema derived from `.shape`) + REST route. Mirrors the summary stack on
+  the current baseline.
 - **Reuse:** filter name→id resolution via `controllers/resolve.ts`; effective locale via the settings deps;
-  `wire/db` decode; the per-currency shaping pattern from `logic/summary.ts`.
+  `wire/db` decode; `coerceToNumber` (`wire/in/coerce.ts`) + `PeriodSchema` (`models/date.ts`) for period parsing;
+  `ValidationError`/`validation` (`models/error.ts`); the per-currency shaping pattern from `logic/summary.ts`.
+- **Cleanup folded in:** extract the inline coerced-period schema from the `/api/summary` route into `wire/in`
+  (the previously-deferred summary-coercion follow-up), shared by summary + aggregate.
 - **`find_correlations` and `save_view`** will build directly on this (same enums + the ADR-011 pattern).
 - **Invariant added** to `docs/architecture.md` (ADR-011 dynamic-composition rule) + ADR-011 indexed.
 - **Blast radius:** additive — new files + two new edges (mcp/http) + one repo method. No change to existing
@@ -135,16 +162,32 @@ block makes the invariant structural.
 > `src/diplomat/db/repos/transactions.ts`, and `src/diplomat/mcp/server.ts` (`get_spending_summary`). For the
 > category-label resolution pattern (select `c.name` + `c.names`, resolve in TS), study `summaryRows` +
 > `summarize` and `src/logic/category.ts` (`localizeCategoryName`) — the same path `fullTxSelect`/`dbToModel`
-> uses. Also skim `src/controllers/resolve.ts`, `src/logic/period.ts`, the settings/locale resolution, and
-> `src/wire/db`.
+> uses. **For the current model/wire/MCP conventions, mirror a recently-converted domain end-to-end** — read
+> `src/models/bill.ts` + `src/wire/in/bills.ts` (Schema-suffix, zod-in-model, wire-derives, REST coercion via
+> `coerceToNumber`) and how a tool derives `inputSchema` from `XxxSchema.shape` in `server.ts`. Also skim
+> `src/models/date.ts` (`PeriodSchema`, `IsoDate`), `src/models/money.ts` (`CurrencyCode`), `src/models/error.ts`
+> (`ValidationError`, `validation`), `src/wire/in/coerce.ts`, the `search` method + its `conditions`/`where` in
+> `src/diplomat/db/repos/transactions.ts` (Decision 7), `src/controllers/resolve.ts`, `src/logic/period.ts`, the
+> settings/locale resolution, and `src/wire/db`. (`models/common.ts` no longer exists — value objects live in
+> `date`/`money`/`id`.)
 
 ### Steps
 
-1. **Models** (`models/aggregate.ts`): `AggregateGroupBy = z.enum(['category','account','tag','month','merchant'])`,
-   `AggregateMetric = z.enum(['sum','count','avg'])`, plus `AggregateSpendingInput` (groupBy, metric default sum,
-   period as month+year OR from/to, optional filters {account, category, type, tags}, optional limit, sort default
-   desc) and `AggregateSpendingResult` (per-currency blocks of `{ key, label, value, count, pct }`). Types are
-   `z.infer`; use enum members everywhere, never literals.
+1. **Models** (`models/aggregate.ts`, current conventions — see Decision 8): bare enums
+   `AggregateGroupBy = z.enum(['category','account','tag','month','merchant'])` and
+   `AggregateMetric = z.enum(['sum','count','avg'])`. Input as a zod schema in the model with the `Schema` suffix
+   and a bare inferred type: `AggregateSpendingSchema` (groupBy; metric; period = month+year OR from/to using
+   `PeriodSchema`/`IsoDate` from `models/date.ts`; optional filters {account, category, type (`MovementType`),
+   tags}; optional `limit`; `sort`) + `type AggregateSpending = z.infer<…>`. Result as
+   `AggregateResultSchema` (per-currency blocks of `{ key, label, value, count, pct }`) + `type AggregateResult`.
+   Put `.describe()` on the fields (domain info). Keep the domain strict — do NOT bake the metric/sort/limit
+   convenience defaults here (those go on the wire schema, step 1b). `CurrencyCode` from `models/money.ts`. Use
+   enum members everywhere, never literals.
+1b. **Wire** (`wire/in/aggregate.ts`): derive from `AggregateSpendingSchema`; add the quality-of-life defaults
+   here (`metric → sum`, `sort → desc`, the top-N `limit` default) and the REST period coercion via
+   `z.preprocess(coerceToNumber, PeriodSchema.shape.month/year)` (reuse `wire/in/coerce.ts`, mirroring
+   `wire/in/bills.ts`). While here, extract the still-inline coerced-period schema out of the `/api/summary`
+   route into `wire/in` and share it (the deferred summary-coercion cleanup).
 2. **Whitelist maps + query** (`diplomat/db/repos/transactions.ts`, ADR-011): a `Record<AggregateGroupBy, {expr,
    join, label}>` and `Record<AggregateMetric, SQL>` of developer-authored `sql` fragments. Compose one
    parameterized query: select `expr AS key`, the label column(s), `currency`, `metric AS value`, `COUNT(*) AS
@@ -163,11 +206,14 @@ block makes the invariant structural.
    existing tests.)
 3. **Pure shaping** (`logic/aggregate.ts`): group decoded rows into per-currency blocks, sort, compute each
    block's `total` and each row's `pct`. Pure, unit-tested, no I/O.
-4. **Controller** (`controllers/aggregate.ts`): resolve filter names → ids via `resolve.ts`; read the effective
-   locale from settings deps; call `deps.transactions.aggregate(...)`; shape via `logic/aggregate.ts`. `safeTry`,
-   returns `ResultAsync`.
-5. **Surface:** `aggregate_spending` MCP tool (rich description + `.describe()` on `groupBy`/`metric`/period/
-   filters) + REST route, mirroring `get_spending_summary`.
+4. **Controller** (`controllers/aggregate.ts`): resolve filter names → ids via `resolve.ts` (its `NotFound`
+   errors are already owned by account/category); validate the period (neither month/year nor from/to →
+   `validation([...])` from `models/error.ts`); read the effective locale from settings deps; call
+   `deps.transactions.aggregate(...)`; shape via `logic/aggregate.ts`. `safeTry`, returns
+   `ResultAsync<AggregateResult, AppError>` (no new error union needed — reuses resolve errors + `ValidationError`).
+5. **Surface:** `aggregate_spending` MCP tool — derive `inputSchema` from the wire `AggregateSpendingSchema.shape`
+   (descriptions come from the domain; do not re-author them inline) + a rich tool-level `description`. REST route
+   parses the wire schema (coerced period). Mirror `get_spending_summary`.
 
 ### Tests
 - **Unit** (`logic/aggregate.ts`): shaping — per-currency grouping, sort desc/asc, total + pct (incl. empty,
@@ -191,6 +237,11 @@ block makes the invariant structural.
   select raw `c.name` + `c.names`, never `json_extract` in SQL, never surface raw `c.name`.
 - **Diplomatic layering:** enums/IO in `models/`; whitelist + SQL in `diplomat/db`; pure shaping in `logic/`;
   orchestration + name→id resolution in the controller; thin diplomats; constants over literals.
+- **Current conventions (Decision 8):** `Schema`-suffix value + bare inferred type (no `Input` suffix); bare
+  enums; input zod lives in `models/` and `wire/in` derives it; `.describe()` on the model fields with the MCP
+  `inputSchema` derived from `.shape`; QoL defaults (metric/sort/limit) + REST period coercion at the wire
+  boundary; value objects from `models/date|money|id`; expected errors reuse `resolve.ts` + the shared
+  `ValidationError` (no new god-union entry).
 - **Docs in the same change:** `docs/architecture.md` (the ADR-011 dynamic-composition invariant + ADR-011 in
   the index), `docs/mcp-tools.md` (`aggregate_spending` schema, errors, example).
 - **Definition of Done (CLAUDE.md):** self-review pass + gate before every push; this is **feature-sized** (a new
