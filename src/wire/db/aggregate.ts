@@ -6,7 +6,7 @@ const parseCategoryNames = (raw: string | null): Record<string, string> | null =
   raw ? LocalizedNamesSchema.parse(JSON.parse(raw)) : null
 
 export const AggregateDbRowSchema = z.object({
-  key: z.string(),
+  key: z.string().nullable(),
   label: z.string().nullable(),
   label_names: z.string().nullable().default(null),
   currency: CurrencyCode,

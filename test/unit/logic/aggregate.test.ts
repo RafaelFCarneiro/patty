@@ -128,4 +128,15 @@ describe('shapeAggregateResult', () => {
     )
     expect(out[0]!.rows[0]!.label).toBe('some-merchant')
   })
+
+  it('handles null key (uncategorized) with locale-aware label', () => {
+    const out = shapeAggregateResult(
+      [row({ key: null, label: null, value: 50 })],
+      AggregateGroupBy.enum.category,
+      AggregateSort.enum.desc,
+      'pt',
+    )
+    expect(out[0]!.rows[0]!.key).toBe('uncategorized')
+    expect(out[0]!.rows[0]!.label).toBe('Sem categoria')
+  })
 })

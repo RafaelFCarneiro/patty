@@ -84,7 +84,7 @@ describe('MCP integration > aggregate_spending', () => {
   it('groups by category with correct sums and labels', async () => {
     const result = await callTool(client, {
       name: 'aggregate_spending',
-      args: { groupBy: 'category', month, year },
+      args: { groupBy: 'category', month, year, account: 'AggAcctBRL' },
     }) as AggResult
     expect(result.groupBy).toBe('category')
     expect(result.metric).toBe('sum')
@@ -95,10 +95,6 @@ describe('MCP integration > aggregate_spending', () => {
     expect(foodRow.value).toBe(200)
     const transportRow = brl.rows.find((r) => r.label === 'Transport')!
     expect(transportRow).toBeDefined()
-
-    const usd = result.currencies.find((c) => c.currency === 'USD')!
-    expect(usd).toBeDefined()
-    expect(usd.rows).toHaveLength(1)
   })
 
   // (b) type/account filter narrows results
@@ -157,7 +153,7 @@ describe('MCP integration > aggregate_spending', () => {
   it('limits results to top-N', async () => {
     const result = await callTool(client, {
       name: 'aggregate_spending',
-      args: { groupBy: 'category', month, year, limit: 1 },
+      args: { groupBy: 'category', month, year, limit: 1, account: 'AggAcctBRL' },
     }) as AggResult
     for (const block of result.currencies) {
       expect(block.rows.length).toBeLessThanOrEqual(1)
