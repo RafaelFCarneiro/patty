@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { PeriodSchema } from '../../../src/models/common.js'
-import { coerceToNumber } from '../../../src/wire/coerce.js'
+import { PeriodSchema } from '../../../../src/models/common.js'
+import { coerceToNumber } from '../../../../src/wire/in/coerce.js'
 
 const CoercedPeriod = PeriodSchema.extend({
   month: z.preprocess(coerceToNumber, PeriodSchema.shape.month),
