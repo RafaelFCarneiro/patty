@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { LocalizedNamesSchema, type LocalizedNames } from './category.js'
+import { LocalizedNamesSchema } from './category.js'
 import { CurrencyCode, Id, IsoDate, Money } from './common.js'
 import type { ValidationError } from './error.js'
 import type { LabelMap } from './locale.js'

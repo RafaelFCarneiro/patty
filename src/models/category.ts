@@ -43,9 +43,9 @@ export const SubCategorySchema = z.object({
 export type SubCategory = z.infer<typeof SubCategorySchema>
 
 export const CreateSubCategorySchema = z.object({
-  id: z.string().min(1),
+  id: Id,
   name: z.string().min(1).describe('Sub-category display name'),
-  parentId: z.string().min(1).describe('ID of the parent category'),
+  parentId: Id.describe('ID of the parent category'),
 })
 export type CreateSubCategory = z.infer<typeof CreateSubCategorySchema>
 
