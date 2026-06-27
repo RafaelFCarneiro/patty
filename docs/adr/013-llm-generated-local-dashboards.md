@@ -52,7 +52,7 @@ The goal: **the agent authors the presentation (the shell); the data stays live 
    data-less template** FinTrack ships (the cleaned-up version of the draft).
 6. **REST-first.** The existing read endpoints (`aggregate_spending`, `get_spending_summary`,
    `search_transactions`, balances, `list_*`) are the dashboard data sources; add read endpoints as gaps
-   appear. **GraphQL is deferred** to a later ADR if UI data-shape needs outgrow REST.
+   appear. **GraphQL is deferred** to a later ADR if UI data-shape needs to outgrow REST.
 7. **The stdio MCP process is the resilient primary; the HTTP/UI service is optional and isolated.** Chat over
    **stdio** stays the always-available entry point (ADR-007), with no port to bind and so no port-conflict
    surface. The HTTP service (`/api` + `/ui`) is a **best-effort, independently-lifecycled sidecar**: if it can't
@@ -140,13 +140,13 @@ or stale data.
    tracks this gap — reference it from the implementing PR.)
 
 **Phase B — UI generation**
-4. [ ] Ship a baseline **data-less** dashboard template (the cleaned-up draft: fetch-on-load, no inline data).
-5. [ ] Author the **UI-building skill**: fetch-only guardrails, OpenAPI-contract usage, allowed CDN libs,
+5. [ ] Ship a baseline **data-less** dashboard template (the cleaned-up draft: fetch-on-load, no inline data).
+6. [ ] Author the **UI-building skill**: fetch-only guardrails, OpenAPI-contract usage, allowed CDN libs,
    theming/accessibility, the real-time rule.
 
 **Phase C — data coverage + integration**
-6. [ ] Fill REST read-endpoint gaps the template/skill require (accounts+balances, recurring, installments, …).
-7. [ ] Wire `save_view` as dashboard panels; later, `find_correlations` / budgets as cards.
+7. [ ] Fill REST read-endpoint gaps the template/skill require (accounts+balances, recurring, installments, …).
+8. [ ] Wire `save_view` as dashboard panels; later, `find_correlations` / budgets as cards.
 
 **Later (separate ADRs):** GraphQL data layer if REST proves insufficient; auth if the threat model changes.
 
