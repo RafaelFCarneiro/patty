@@ -1,20 +1,13 @@
-import { z } from 'zod'
+import type { z } from 'zod'
 import { CategoryKind } from '../../models/category.js'
-import type { CreateCategory as Domain } from '../../models/category.js'
+import * as modelCategory from '../../models/category.js'
 
-export const CreateCategory = z
-  .object({
-    name: z.string().min(1),
-    kind: CategoryKind.optional(),
-  })
-  .transform((input): Domain => ({
-    name: input.name,
-    kind: input.kind ?? 'expense',
-  }))
-export type CreateCategory = z.infer<typeof CreateCategory>
-
-export const CreateSubCategory = z.object({
-  name: z.string().min(1),
-  parentId: z.string().min(1).describe('ID of the parent category'),
+// The boundary owns quality-of-life defaults; the domain keeps these fields required (not-null).
+// Default kind is the most common category usage.
+export const CreateCategorySchema = modelCategory.CreateCategorySchema.extend({
+  kind: modelCategory.CreateCategorySchema.shape.kind.default(CategoryKind.enum.expense),
 })
-export type CreateSubCategory = z.infer<typeof CreateSubCategory>
+export type CreateCategory = z.infer<typeof CreateCategorySchema>
+
+export const CreateSubCategorySchema = modelCategory.CreateSubCategorySchema.omit({ id: true })
+export type CreateSubCategory = z.infer<typeof CreateSubCategorySchema>

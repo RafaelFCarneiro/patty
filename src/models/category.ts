@@ -12,39 +12,42 @@ export const categoryKindLabels: LabelMap<CategoryKind> = {
   both:    { en: 'Both',    pt: 'Ambos',   es: 'Ambos' },
 }
 
-export const LocalizedNames = z.record(z.string().min(1), z.string().min(1)).nullable()
-export type LocalizedNames = z.infer<typeof LocalizedNames>
+export const LocalizedNamesSchema = z.record(z.string().min(1), z.string().min(1)).nullable()
+export type LocalizedNames = z.infer<typeof LocalizedNamesSchema>
 
-export const Category = z.object({
+// `.describe()` is domain information — it states what each field is and represents.
+// Defaults split by intent: integrity defaults (a value that must exist for the entity to be
+// valid) live here; quality-of-life convenience defaults live at the wire boundary
+// (see wire/in/categories.ts), keeping the domain contract honest about what is required.
+export const CategorySchema = z.object({
   id: Id,
-  name: z.string().min(1),
-  kind: CategoryKind,
+  name: z.string().min(1).describe('Category display name'),
+  kind: CategoryKind.describe('expense | income | both — controls which transaction types may use this category'),
   kindLabel: z.string().optional(),
-  names: LocalizedNames,
+  names: LocalizedNamesSchema.describe('Locale-keyed display names for default categories; null for user-created'),
 })
-export type Category = z.infer<typeof Category>
+export type Category = z.infer<typeof CategorySchema>
 
-export type CreateCategory = {
-  name: string
-  kind: CategoryKind
-}
+export const CreateCategorySchema = CategorySchema.omit({ id: true, kindLabel: true, names: true })
+export type CreateCategory = z.infer<typeof CreateCategorySchema>
 
 /** Sub-category read projection — includes parent info joined from [:BELONGS_TO]->(:Category). */
-export const SubCategory = z.object({
+export const SubCategorySchema = z.object({
   id: Id,
-  name: z.string().min(1),
-  parentId: Id,
-  parentName: z.string().min(1),
-  kind: CategoryKind,
+  name: z.string().min(1).describe('Sub-category display name'),
+  parentId: Id.describe('Parent category ID'),
+  parentName: z.string().min(1).describe('Parent category name'),
+  kind: CategoryKind.describe('Inherited from the parent category'),
   kindLabel: z.string().optional(),
 })
-export type SubCategory = z.infer<typeof SubCategory>
+export type SubCategory = z.infer<typeof SubCategorySchema>
 
-export type CreateSubCategory = {
-  id: string
-  name: string
-  parentId: string
-}
+export const CreateSubCategorySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).describe('Sub-category display name'),
+  parentId: z.string().min(1).describe('ID of the parent category'),
+})
+export type CreateSubCategory = z.infer<typeof CreateSubCategorySchema>
 
 export type CategoryReferences = { transactions: number; recurring: number; subCategories: number }
 
