@@ -1,7 +1,6 @@
 import { eq, inArray, sql } from 'drizzle-orm'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { expectPresent } from '../../../common/present.js'
-import { AggregateSort } from '../../../models/aggregate.js'
 import {
   TransactionStatus, TransactionType,
   type CreateTxResult, type Transaction, type RawTransactionView, type TransactionPatch,
@@ -190,7 +189,6 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     conditions.push(sql`t.type != ${TransactionType.enum.transfer}`)
 
     const where = sql.join(conditions, sql` AND `)
-    const orderDir = filters.sort === AggregateSort.enum.asc ? sql`ASC` : sql`DESC`
 
     const labelNames = g.labelNames ? sql`, ${g.labelNames} AS label_names` : sql`, NULL AS label_names`
 
@@ -201,8 +199,6 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       ${g.join}
       WHERE ${where}
       GROUP BY t.currency, key
-      ORDER BY t.currency, value ${orderDir}
-      LIMIT ${filters.limit}
     `)
 
     return rows.map((r) => AggregateDbRowSchema.parse(r))

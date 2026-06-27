@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import type { AggregateGroupBy, AggregateMetric, AggregateSort } from '../../models/aggregate.js'
+import type { AggregateGroupBy, AggregateMetric } from '../../models/aggregate.js'
 import type { TransactionStatus } from '../../models/transaction.js'
 
 export type CommonFilters = {
@@ -21,8 +21,6 @@ export type SearchFilters = CommonFilters & {
 export type AggregateFilters = CommonFilters & {
   groupBy: AggregateGroupBy
   metric: AggregateMetric
-  sort: AggregateSort
-  limit: number
 }
 
 export const buildCommonWhere = (filters: CommonFilters): ReturnType<typeof sql>[] => {

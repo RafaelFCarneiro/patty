@@ -129,7 +129,7 @@ describe('shapeAggregateResult', () => {
     expect(out[0]!.rows[0]!.label).toBe('some-merchant')
   })
 
-  it('handles null key (uncategorized) with locale-aware label', () => {
+  it('handles null key (uncategorized) with locale-aware label for category groupBy', () => {
     const out = shapeAggregateResult(
       [row({ key: null, label: null, value: 50 })],
       AggregateGroupBy.enum.category,
@@ -138,5 +138,35 @@ describe('shapeAggregateResult', () => {
     )
     expect(out[0]!.rows[0]!.key).toBe('uncategorized')
     expect(out[0]!.rows[0]!.label).toBe('Sem categoria')
+  })
+
+  it('handles null key with "unknown" label for non-category groupBy', () => {
+    const out = shapeAggregateResult(
+      [row({ key: null, label: null, value: 50 })],
+      AggregateGroupBy.enum.merchant,
+      AggregateSort.enum.desc,
+      'en',
+    )
+    expect(out[0]!.rows[0]!.key).toBe('unknown')
+    expect(out[0]!.rows[0]!.label).toBe('Unknown')
+  })
+
+  it('applies limit per currency, not globally', () => {
+    const out = shapeAggregateResult(
+      [
+        row({ key: 'a', value: 300, currency: 'BRL' }),
+        row({ key: 'b', value: 200, currency: 'BRL' }),
+        row({ key: 'c', value: 100, currency: 'BRL' }),
+        row({ key: 'x', value: 50, currency: 'USD' }),
+        row({ key: 'y', value: 25, currency: 'USD' }),
+      ],
+      AggregateGroupBy.enum.category,
+      AggregateSort.enum.desc,
+      'en',
+      2,
+    )
+    expect(out).toHaveLength(2)
+    expect(out.find((b) => b.currency === 'BRL')!.rows).toHaveLength(2)
+    expect(out.find((b) => b.currency === 'USD')!.rows).toHaveLength(2)
   })
 })

@@ -33,7 +33,7 @@ import {
 import { createTransfer } from '../../controllers/transfers.js'
 import { AccountType } from '../../models/account.js'
 import { TransactionSource } from '../../models/transaction.js'
-import { AggregateSpendingInput } from '../../wire/in/aggregate.js'
+import { AggregateSpendingInputSchema } from '../../wire/in/aggregate.js'
 import { CoercedPeriodSchema } from '../../wire/in/period.js'
 import {
   BillQuery, PayBill,
@@ -227,7 +227,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.get('/api/aggregate', async (req, reply) => {
-    const wireIn = parse(AggregateSpendingInput, req.query, reply)
+    const wireIn = parse(AggregateSpendingInputSchema, req.query, reply)
     if (!wireIn) return reply
     return send(reply, await aggregateSpending(deps, wireIn))
   })

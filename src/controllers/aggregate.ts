@@ -25,8 +25,6 @@ export const aggregateSpending = (
     const rows = await deps.transactions.aggregate({
       groupBy: input.groupBy,
       metric: input.metric,
-      sort: input.sort,
-      limit: input.limit,
       from,
       to,
       type: input.type ?? null,
@@ -35,7 +33,7 @@ export const aggregateSpending = (
       tagNames: input.tags ?? [],
     })
 
-    const currencies = shapeAggregateResult(rows, input.groupBy, input.sort, locale)
+    const currencies = shapeAggregateResult(rows, input.groupBy, input.sort, locale, input.limit)
 
     return ok({
       groupBy: input.groupBy,

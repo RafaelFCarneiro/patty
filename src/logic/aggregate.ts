@@ -14,17 +14,28 @@ const uncategorizedLabels: Record<Locale, string> = {
   es: 'Sin categoría',
 }
 
-const resolveKey = (row: AggregateDbRow): string =>
-  row.key ?? UNCATEGORIZED_KEY
+const UNKNOWN_KEY = 'unknown'
+const unknownLabels: Record<Locale, string> = {
+  en: 'Unknown',
+  pt: 'Desconhecido',
+  es: 'Desconocido',
+}
+
+const resolveKey = (row: AggregateDbRow, groupBy: AggregateGroupBy): string => {
+  if (R.isNonNullish(row.key)) return row.key
+  return groupBy === AggregateGroupBy.enum.category ? UNCATEGORIZED_KEY : UNKNOWN_KEY
+}
 
 const resolveLabel = (row: AggregateDbRow, groupBy: AggregateGroupBy, locale: Locale): string => {
-  if (!R.isNonNullish(row.key) && groupBy === AggregateGroupBy.enum.category) {
-    return uncategorizedLabels[locale]
+  if (!R.isNonNullish(row.key)) {
+    return groupBy === AggregateGroupBy.enum.category
+      ? uncategorizedLabels[locale]
+      : unknownLabels[locale]
   }
   if (groupBy === AggregateGroupBy.enum.category) {
-    return localizeCategoryName(row.label, row.labelNames, locale) ?? resolveKey(row)
+    return localizeCategoryName(row.label, row.labelNames, locale) ?? resolveKey(row, groupBy)
   }
-  return row.label ?? resolveKey(row)
+  return row.label ?? resolveKey(row, groupBy)
 }
 
 const pct = (value: number, total: number): number =>
@@ -35,6 +46,7 @@ export const shapeAggregateResult = (
   groupBy: AggregateGroupBy,
   sort: AggregateSort,
   locale: Locale,
+  limit?: number,
 ): CurrencyBlock[] =>
   R.pipe(
     rows,
@@ -45,8 +57,9 @@ export const shapeAggregateResult = (
       const sorted = sort === AggregateSort.enum.asc
         ? R.sortBy(currencyRows, (r) => r.value)
         : R.sortBy(currencyRows, [(r) => r.value, 'desc'])
-      const shapedRows: AggregateRow[] = sorted.map((r) => ({
-        key: resolveKey(r),
+      const limited = R.isNonNullish(limit) ? R.take(sorted, limit) : sorted
+      const shapedRows: AggregateRow[] = limited.map((r) => ({
+        key: resolveKey(r, groupBy),
         label: resolveLabel(r, groupBy, locale),
         value: roundMoney(r.value),
         count: r.count,
