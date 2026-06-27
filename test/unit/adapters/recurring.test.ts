@@ -4,7 +4,7 @@ import * as recurringAdapters from '../../../src/adapters/recurring.js'
 
 describe('wireInToModel', () => {
   it('passes all required fields through unchanged', () => {
-    const parsed = wireInRecurring.CreateRecurringInput.parse({
+    const parsed = wireInRecurring.CreateRecurringSchema.parse({
       description: 'Spotify',
       amount: 21.9,
       type: 'expense',
@@ -21,7 +21,7 @@ describe('wireInToModel', () => {
   })
 
   it('preserves optional fields when provided', () => {
-    const parsed = wireInRecurring.CreateRecurringInput.parse({
+    const parsed = wireInRecurring.CreateRecurringSchema.parse({
       description: 'Salário',
       amount: 5000,
       type: 'income',

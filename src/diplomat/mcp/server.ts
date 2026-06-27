@@ -26,7 +26,7 @@ import { CurrencyCode } from '../../models/common.js'
 import { CreateCategorySchema, CreateSubCategorySchema } from '../../wire/in/categories.js'
 import { Locale, LocaleSource } from '../../models/locale.js'
 import { AccountType } from '../../models/account.js'
-import { RecurringPeriod } from '../../models/recurring.js'
+import { CreateRecurringSchema } from '../../wire/in/recurring.js'
 import { CreateCreditCardSchema } from '../../wire/in/creditCards.js'
 import {
   bulkResultToWireOut,
@@ -196,16 +196,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       title: 'Create recurring rule',
       description:
         'Create a recurring transaction rule (salary, rent, subscription). Materialized by apply_due_recurring.',
-      inputSchema: {
-        description: z.string().min(1),
-        amount: z.number().positive(),
-        type: MovementType,
-        period: RecurringPeriod,
-        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('First due date'),
-        account: z.string().optional(),
-        category: z.string().optional(),
-        currency: CurrencyCode.optional(),
-      },
+      inputSchema: CreateRecurringSchema.shape,
     },
     async (args) => fromResult(await createRecurring(deps, args)),
   )
