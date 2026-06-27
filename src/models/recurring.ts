@@ -42,8 +42,8 @@ export const CreateRecurringSchema = z.object({
   type: MovementType.describe('expense | income'),
   period: RecurringPeriod.describe('How often the rule fires'),
   startDate: IsoDate.describe('First due date (YYYY-MM-DD)'),
-  account: z.string().optional().describe('Account name or ID'),
-  category: z.string().optional().describe('Category name or ID'),
+  account: z.string().optional().describe('Account name (resolved by name match)'),
+  category: z.string().optional().describe('Category name (resolved by name match)'),
   currency: CurrencyCode.optional().describe('Currency (resolved from account if omitted)'),
 })
 export type CreateRecurring = z.infer<typeof CreateRecurringSchema>
