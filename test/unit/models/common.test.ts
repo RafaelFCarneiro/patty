@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { PeriodSchema } from '../../../src/models/common.js'
+import { coerceToNumber } from '../../../src/wire/coerce.js'
 
 const CoercedPeriod = PeriodSchema.extend({
-  month: z.coerce.number().int().min(1).max(12),
-  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.preprocess(coerceToNumber, PeriodSchema.shape.month),
+  year: z.preprocess(coerceToNumber, PeriodSchema.shape.year),
 })
 
 describe('PeriodSchema with coercion (HTTP query params)', () => {
