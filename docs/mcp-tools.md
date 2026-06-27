@@ -30,7 +30,7 @@ Returns `summary` counts plus per-item `status`: `created`, `needs_review` (no c
 
 ## create_credit_card / list_credit_cards
 
-`create_credit_card`: `name`, `closingDay` (1–28; transactions after it belong to next month's bill), `dueDay` (1–28), `currency` (default BRL), optional `limit`, optional `paymentAccount` (name of the default paying account for bill payment). Auto-creates an internal `credit` account (`Card: <name>`) that tracks outstanding card debt (ADR-010). Card purchases post to this account, driving its balance negative. Error: `duplicate_name`, `validation` (currency mismatch with payment account).
+`create_credit_card`: `name`, `closingDay` (1–28; transactions after it belong to next month's bill), `dueDay` (1–28), `currency` (default USD), optional `limit`, optional `paymentAccount` (name of the default paying account for bill payment). Auto-creates an internal `credit` account (`Card: <name>`) that tracks outstanding card debt (ADR-010). Card purchases post to this account, driving its balance negative. Error: `duplicate_name`, `validation` (currency mismatch with payment account).
 
 ## get_bill
 

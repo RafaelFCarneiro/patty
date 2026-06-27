@@ -27,7 +27,7 @@ import { CategoryKind } from '../../models/category.js'
 import { Locale, LocaleSource } from '../../models/locale.js'
 import { AccountType } from '../../models/account.js'
 import { RecurringPeriod } from '../../models/recurring.js'
-import { CreateCreditCardSchema } from '../../models/creditCard.js'
+import { CreateCreditCardSchema } from '../../wire/in/creditCards.js'
 import {
   bulkResultToWireOut,
   createResultToWireOut,
