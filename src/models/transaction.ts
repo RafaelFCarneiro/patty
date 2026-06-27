@@ -162,10 +162,13 @@ export const CreateTransactionSchema = z.object({
 })
 export type CreateTransaction = z.infer<typeof CreateTransactionSchema>
 
-/** Bulk item: idempotencyKey optional — derived from date+description+amount when absent. */
+/** Bulk item: idempotencyKey optional — derived from date+description+amount when absent.
+ *  subCategory/tags omitted — bulk import classifies automatically. */
 export const BulkTransactionItemSchema = CreateTransactionSchema.omit({
   idempotencyKey: true,
   rawInput: true,
+  subCategory: true,
+  tags: true,
 }).extend({
   idempotencyKey: z.string().min(1).optional(),
 })
