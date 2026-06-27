@@ -30,6 +30,16 @@ The goal: **the agent authors the presentation (the shell); the data stays live 
    surface (already secondary to MCP) hosts the read API under `/api` and the generated dashboards under a
    `/ui` surface. Same origin ⇒ dashboards `fetch()` live data with no CORS friction, and the server is the
    natural home to store/list dashboards.
+   - **Dashboards are stored *content*, not a bundled asset — so they're replaceable at runtime.** A dashboard is
+     a self-contained HTML string persisted by name (a `dashboards` entity: `name`, `html`, `updated_at`). The
+     agent writes/overrides it through a normal MCP write (`save_dashboard(name, html)` — an upsert), and
+     `GET /ui/:name` returns whatever is *currently* stored. Overriding the UI is therefore just re-upserting
+     under the same name: no rebuild, restart, or redeploy — the new shell shows on the next reload. **The shipped
+     template is only a default seed, never a fixed/compiled UI.** (This is the deliberate reason the UI is HTML
+     content the server hands back, not a front-end build artifact — generated, per-user, runtime-replaceable UIs
+     would be hard if it were the latter.) Name-keyed storage also allows several dashboards (`overview`, `cards`,
+     `month-review`) overridden independently, and `updated_at`/version history enables "revert my dashboard."
+     Serve with no-cache headers so a regenerated dashboard isn't masked by a stale browser copy.
 3. **Generated dashboards are data-less HTML shells.** The agent produces layout/charts/styling only; the page
    fetches from the documented endpoints on load and renders. **No data, no secrets, ever embedded** in the
    file — the non-negotiable rule. This makes dashboards always-fresh (real-time principle) and privacy-safe
@@ -106,8 +116,12 @@ or stale data.
 **Phase A — contract + serving groundwork**
 1. [ ] Publish an OpenAPI spec for the REST API at a route (e.g. `/api/openapi.json`) and expose it as an MCP
    resource for discovery.
-2. [ ] Serve a `/ui` surface from the http server (same-origin with `/api`); decide where generated dashboards
-   are stored and add a list endpoint.
+2. [ ] Serve a `/ui` surface from the http server (same-origin with `/api`). Add a `dashboards` entity (`name`,
+   `html`, `updated_at`) + repo; `save_dashboard(name, html)` (MCP write, upsert) and `list_dashboards` tools;
+   `GET /ui/:name` returns the currently-stored HTML (`text/html`, no-cache). Override = re-upsert by name (the
+   template is only a default seed). Optionally retain version history for "revert my dashboard". Light save-time
+   guardrail (skill enforces no inline data/secrets; full HTML sanitization is overkill for a local single-user
+   app authoring its own UI).
 3. [ ] Document running in http mode for dashboards (and how a chat client points the UI at it).
 4. [ ] **REST integration tests (prerequisite).** The HTTP routes are currently covered only via MCP; the
    dashboards consume REST directly, so add HTTP-level integration tests (Fastify `inject` against an in-process
