@@ -54,8 +54,8 @@ describe('resolveCurrency', () => {
     expect(resolveCurrency(null, null, { currency: USD })).toBe(USD)
   })
 
-  it('defaults to BRL when nothing is provided', () => {
-    expect(resolveCurrency(null, null, {})).toBe(BRL)
+  it('defaults to USD when nothing is provided', () => {
+    expect(resolveCurrency(null, null, {})).toBe(USD)
   })
 })
 

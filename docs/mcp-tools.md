@@ -4,7 +4,7 @@ Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All too
 
 - **Natural inputs**: `account`, `card`, `category`, and `subCategory` take names (case/accent-insensitive, partial match allowed). Resolution failures return structured errors the agent can self-correct from.
 - **Errors**: `{ "error": { "code": "...", ... } }` with `isError: true`. Codes: `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `unknown_sub_category`, `ambiguous_sub_category`, `unknown_card`, `ambiguous_card`, `unknown_transaction`, `unknown_bill`, `duplicate_name`, `in_use`, `category_kind_mismatch`, `validation`. Ambiguous/unknown errors include `candidates` (names) to retry with.
-- **Currency**: BRL or USD; from the account/card when one is linked, else the `currency` field, else BRL. Summaries group per currency, never converting.
+- **Currency**: BRL or USD; from the account/card when one is linked, else the `currency` field, else USD. Summaries group per currency, never converting.
 - **Dates**: `YYYY-MM-DD`.
 - **Localized labels**: read views include `*Label` fields — localized display labels for fixed enum values, resolved at read time via the active locale (Design 006). The enum value itself (`type`, `status`, `kind`, `period`) is stable identity; the `*Label` is derived display only. Switching locale reflows all labels with no migration. See per-tool details below.
 
@@ -116,7 +116,7 @@ REST mirror: `DELETE /api/accounts/:name`.
 
 ## create_account / list_accounts
 
-`create_account`: `name` (required), `type` (`checking|savings|wallet|investment`, default checking — checking = conta corrente), `currency` (default BRL). Error: `duplicate_name`, `validation` (type `credit` is rejected — credit accounts are created automatically via `create_credit_card`).
+`create_account`: `name` (required), `type` (`checking|savings|wallet|investment`, default checking — checking = conta corrente), `currency` (default USD). Error: `duplicate_name`, `validation` (type `credit` is rejected — credit accounts are created automatically via `create_credit_card`).
 
 `list_accounts`: optional `type` filter (e.g. all investment accounts). Returns `typeLabel` — the localized display label for the account type (e.g. "Conta corrente" in pt).
 
