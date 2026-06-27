@@ -26,8 +26,8 @@ export type Bill = z.infer<typeof BillSchema>
 
 export const BillQuerySchema = z.object({
   card: z.string().min(1).describe('Credit card name'),
-  month: z.number().int().min(1).max(12).describe('Billing cycle month (1–12)'),
-  year: z.number().int().min(2000).max(2100).describe('Billing cycle year'),
+  month: BillSchema.shape.month,
+  year: BillSchema.shape.year,
 })
 export type BillQuery = z.infer<typeof BillQuerySchema>
 
