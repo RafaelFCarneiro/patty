@@ -114,7 +114,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.post('/api/transactions', async (req, reply) => {
-    const wireIn = parse(wireInTransactions.CreateTransactionInput, req.body, reply)
+    const wireIn = parse(wireInTransactions.CreateTransactionInputSchema, req.body, reply)
     if (!wireIn) return reply
     const result = await createTransaction(deps, transactionAdapters.createWireInToModel(wireIn), TransactionSource.enum.rest)
     return result.match(
@@ -127,7 +127,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.post('/api/transactions/bulk', async (req, reply) => {
-    const wireIn = parse(wireInTransactions.CreateTransactionsBulkInput, req.body, reply)
+    const wireIn = parse(wireInTransactions.CreateTransactionsBulkInputSchema, req.body, reply)
     if (!wireIn) return reply
     return send(reply, (await createTransactionsBulk(deps, transactionAdapters.bulkWireInToModel(wireIn), TransactionSource.enum.import)).map(transactionAdapters.bulkResultToWireOut), 201)
   })
@@ -156,7 +156,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.post('/api/transfers', async (req, reply) => {
-    const wireIn = parse(wireInTransactions.CreateTransferInput, req.body, reply)
+    const wireIn = parse(wireInTransactions.CreateTransferInputSchema, req.body, reply)
     if (!wireIn) return reply
     const result = await createTransfer(deps, transactionAdapters.transferWireInToModel(wireIn), TransactionSource.enum.rest)
     return result.match(
@@ -179,7 +179,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
 
   app.patch('/api/transactions/:id', async (req, reply) => {
     const { id } = req.params as { id: string }
-    const wireIn = parse(wireInTransactions.UpdateTransactionInput, { ...(req.body as object), id }, reply)
+    const wireIn = parse(wireInTransactions.UpdateTransactionInputSchema, { ...(req.body as object), id }, reply)
     if (!wireIn) return reply
     return send(reply, await updateTransaction(deps, transactionAdapters.updateWireInToModel(wireIn)))
   })
@@ -196,7 +196,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.get('/api/transactions', async (req, reply) => {
-    const wireIn = parse(wireInTransactions.SearchTransactionsInput, req.query, reply)
+    const wireIn = parse(wireInTransactions.SearchTransactionsInputSchema, req.query, reply)
     if (!wireIn) return reply
     return send(reply, await searchTransactions(deps, transactionAdapters.searchWireInToModel(wireIn)))
   })

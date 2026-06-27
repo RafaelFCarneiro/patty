@@ -11,22 +11,22 @@ import type { SearchTransactions } from '../../models/transaction.js'
 // Wire input schemas — derived from model schemas.
 // Boundary-only behavior (limit default) stays here; everything else is pass-through.
 
-export const CreateTransactionInput = CreateTransactionSchema
-export type CreateTransactionInput = z.infer<typeof CreateTransactionInput>
+export const CreateTransactionInputSchema = CreateTransactionSchema
+export type CreateTransactionInput = z.infer<typeof CreateTransactionInputSchema>
 
-export const BulkTransactionItem = CreateTransactionsBulkSchema.shape.items.element
-export type BulkTransactionItem = z.infer<typeof BulkTransactionItem>
+export const BulkTransactionItemSchema = CreateTransactionsBulkSchema.shape.items.element
+export type BulkTransactionItem = z.infer<typeof BulkTransactionItemSchema>
 
-export const CreateTransactionsBulkInput = CreateTransactionsBulkSchema
-export type CreateTransactionsBulkInput = z.infer<typeof CreateTransactionsBulkInput>
+export const CreateTransactionsBulkInputSchema = CreateTransactionsBulkSchema
+export type CreateTransactionsBulkInput = z.infer<typeof CreateTransactionsBulkInputSchema>
 
-export const CreateTransferInput = CreateTransferSchema
-export type CreateTransferInput = z.infer<typeof CreateTransferInput>
+export const CreateTransferInputSchema = CreateTransferSchema
+export type CreateTransferInput = z.infer<typeof CreateTransferInputSchema>
 
-export const UpdateTransactionInput = UpdateTransactionSchema
-export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInput>
+export const UpdateTransactionInputSchema = UpdateTransactionSchema
+export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInputSchema>
 
-export const SearchTransactionsInput = SearchTransactionsSchema
+export const SearchTransactionsInputSchema = SearchTransactionsSchema
   .extend({ limit: SearchTransactionsSchema.shape.limit.optional() })
   .transform((input): SearchTransactions => ({ ...input, limit: input.limit ?? 50 }))
 export type SearchTransactionsInput = SearchTransactions
