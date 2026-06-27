@@ -56,9 +56,6 @@ export const isCategoryUnreferenced = (refs: CategoryReferences): boolean =>
 export const parentExists = (categories: readonly Category[], parentId: string): boolean =>
   categories.some((c) => c.id === parentId)
 
-export const isKindCompatible = (categoryKind: CategoryKind, transactionType: CategoryKind): boolean =>
-  categoryKind === CategoryKind.enum.both || categoryKind === transactionType
-
 export const resolveAndSort = (categories: readonly Category[], locale: string): Category[] => {
   const resolved = categories.map((c) => resolveDisplayName(c, locale))
   const collator = new Intl.Collator(locale, { sensitivity: 'base' })

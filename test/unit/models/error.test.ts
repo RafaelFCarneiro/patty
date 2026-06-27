@@ -43,8 +43,8 @@ describe('per-model error builders', () => {
     })
   })
 
-  it('categoryErrors.kindMismatch builds the hint string', () => {
-    const err = categoryErrors.kindMismatch('income', 'Food', 'expense')
+  it('transactionErrors.categoryKindMismatch builds the hint string', () => {
+    const err = transactionErrors.categoryKindMismatch('income', 'Food', 'expense')
     expect(err.code).toBe('category_kind_mismatch')
     expect(err.hint).toContain('expense-only')
     expect(err.hint).toContain('Food')

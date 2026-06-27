@@ -7,9 +7,14 @@ import * as categoryAdapters from '../../adapters/categories.js'
 import * as creditCardAdapters from '../../adapters/creditCards.js'
 import * as recurringAdapters from '../../adapters/recurring.js'
 import * as transactionAdapters from '../../adapters/transactions.js'
-import { createAccount, deleteAccount, getAccountBalances, listAccounts, updateAccount } from '../../controllers/accounts.js'
+import {
+  createAccount, deleteAccount, getAccountBalances, listAccounts, updateAccount,
+} from '../../controllers/accounts.js'
 import { getBill, payBill } from '../../controllers/bills.js'
-import { createCategory, createSubCategory, deleteCategory, deleteSubCategory, listCategories, listSubCategories } from '../../controllers/categories.js'
+import {
+  createCategory, createSubCategory, deleteCategory,
+  deleteSubCategory, listCategories, listSubCategories,
+} from '../../controllers/categories.js'
 import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js'
 import type { Deps } from '../../controllers/deps.js'
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
@@ -28,7 +33,10 @@ import { createTransfer } from '../../controllers/transfers.js'
 import { AccountType } from '../../models/account.js'
 import { TransactionSource } from '../../models/transaction.js'
 import { Period } from '../../models/common.js'
-import { BillQuery, PayBill, type BillQuery as BillQueryType, type PayBill as PayBillType } from '../../wire/in/bills.js'
+import {
+  BillQuery, PayBill,
+  type BillQuery as BillQueryType, type PayBill as PayBillType,
+} from '../../wire/in/bills.js'
 import * as wireInAccounts from '../../wire/in/accounts.js'
 import * as wireInCategories from '../../wire/in/categories.js'
 import * as wireInCreditCards from '../../wire/in/creditCards.js'
@@ -114,9 +122,10 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.post('/api/transactions', async (req, reply) => {
-    const wireIn = parse(wireInTransactions.CreateTransactionInput, req.body, reply)
+    const wireIn = parse(wireInTransactions.CreateTransactionInputSchema, req.body, reply)
     if (!wireIn) return reply
-    const result = await createTransaction(deps, transactionAdapters.createWireInToModel(wireIn), TransactionSource.enum.rest)
+    const model = transactionAdapters.createWireInToModel(wireIn)
+    const result = await createTransaction(deps, model, TransactionSource.enum.rest)
     return result.match(
       (value) => {
         const out = transactionAdapters.createResultToWireOut(value)
@@ -127,9 +136,11 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.post('/api/transactions/bulk', async (req, reply) => {
-    const wireIn = parse(wireInTransactions.CreateTransactionsBulkInput, req.body, reply)
+    const wireIn = parse(wireInTransactions.CreateTransactionsBulkInputSchema, req.body, reply)
     if (!wireIn) return reply
-    return send(reply, (await createTransactionsBulk(deps, transactionAdapters.bulkWireInToModel(wireIn), TransactionSource.enum.import)).map(transactionAdapters.bulkResultToWireOut), 201)
+    const model = transactionAdapters.bulkWireInToModel(wireIn)
+    const result = await createTransactionsBulk(deps, model, TransactionSource.enum.import)
+    return send(reply, result.map(transactionAdapters.bulkResultToWireOut), 201)
   })
 
   app.get('/api/credit-cards', async () => listCreditCards(deps))
@@ -156,9 +167,10 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.post('/api/transfers', async (req, reply) => {
-    const wireIn = parse(wireInTransactions.CreateTransferInput, req.body, reply)
+    const wireIn = parse(wireInTransactions.CreateTransferInputSchema, req.body, reply)
     if (!wireIn) return reply
-    const result = await createTransfer(deps, transactionAdapters.transferWireInToModel(wireIn), TransactionSource.enum.rest)
+    const model = transactionAdapters.transferWireInToModel(wireIn)
+    const result = await createTransfer(deps, model, TransactionSource.enum.rest)
     return result.match(
       (value) => reply.status(value.created ? 201 : 200).send(value),
       (e) => reply.status(httpStatus(e)).send({ error: e }),
@@ -179,7 +191,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
 
   app.patch('/api/transactions/:id', async (req, reply) => {
     const { id } = req.params as { id: string }
-    const wireIn = parse(wireInTransactions.UpdateTransactionInput, { ...(req.body as object), id }, reply)
+    const wireIn = parse(wireInTransactions.UpdateTransactionInputSchema, { ...(req.body as object), id }, reply)
     if (!wireIn) return reply
     return send(reply, await updateTransaction(deps, transactionAdapters.updateWireInToModel(wireIn)))
   })
@@ -196,7 +208,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.get('/api/transactions', async (req, reply) => {
-    const wireIn = parse(wireInTransactions.SearchTransactionsInput, req.query, reply)
+    const wireIn = parse(wireInTransactions.SearchTransactionsInputSchema, req.query, reply)
     if (!wireIn) return reply
     return send(reply, await searchTransactions(deps, transactionAdapters.searchWireInToModel(wireIn)))
   })

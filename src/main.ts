@@ -92,8 +92,11 @@ const main = async (): Promise<void> => {
 
   // '::' binds dual-stack (IPv6 + IPv4) so both localhost (::1) and 127.0.0.1 work
   await app.listen({ port: config.PORT, host: '::' })
-  // eslint-disable-next-line no-console -- http-mode startup banner; stdout carries no MCP protocol in http mode (ADR-007)
-  console.log(`fintrack: REST http://localhost:${config.PORT}/api · MCP http://localhost:${config.PORT}/mcp`)
+  // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe (ADR-007 restricts stdio only)
+  console.log(
+    `fintrack: REST http://localhost:${config.PORT}/api` +
+    ` · MCP http://localhost:${config.PORT}/mcp`,
+  )
 }
 
 const isPortInUse = (e: unknown): e is { code: string; port: number } =>

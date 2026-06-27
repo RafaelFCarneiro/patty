@@ -131,17 +131,17 @@ const sqlRow = (overrides: Record<string, unknown> = {}): Record<string, unknown
 
 describe('wireIn adapters', () => {
   it('searchWireInToModel applies limit default of 50 when omitted', () => {
-    const parsed = wireInTransactions.SearchTransactionsInput.parse({})
+    const parsed = wireInTransactions.SearchTransactionsInputSchema.parse({})
     expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({ limit: 50 })
   })
 
   it('searchWireInToModel preserves explicit limit when provided', () => {
-    const parsed = wireInTransactions.SearchTransactionsInput.parse({ limit: 10, month: 6, year: 2026 })
+    const parsed = wireInTransactions.SearchTransactionsInputSchema.parse({ limit: 10, month: 6, year: 2026 })
     expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({ limit: 10, month: 6, year: 2026 })
   })
 
   it('createWireInToModel passes transaction input through unchanged', () => {
-    const parsed = wireInTransactions.CreateTransactionInput.parse({
+    const parsed = wireInTransactions.CreateTransactionInputSchema.parse({
       description: 'Uber',
       amount: 32.5,
       type: 'expense',
@@ -255,9 +255,33 @@ describe('dbToModel', () => {
   })
 })
 
+describe('BulkTransactionItemSchema', () => {
+  it('strips subCategory and tags from bulk items', () => {
+    const input = {
+      description: 'Uber',
+      amount: 30,
+      type: 'expense',
+      subCategory: 'Ride',
+      tags: ['work'],
+    }
+    const parsed = wireInTransactions.BulkTransactionItemSchema.parse(input)
+    expect(parsed).not.toHaveProperty('subCategory')
+    expect(parsed).not.toHaveProperty('tags')
+  })
+
+  it('accepts bulk items without subCategory and tags', () => {
+    const result = wireInTransactions.BulkTransactionItemSchema.safeParse({
+      description: 'Groceries',
+      amount: 50,
+      type: 'expense',
+    })
+    expect(result.success).toBe(true)
+  })
+})
+
 describe('note zod validation', () => {
   it('rejects a note longer than NOTE_MAX_LENGTH on create', () => {
-    const result = wireInTransactions.CreateTransactionInput.safeParse({
+    const result = wireInTransactions.CreateTransactionInputSchema.safeParse({
       description: 'Test',
       amount: 10,
       type: 'expense',
@@ -268,7 +292,7 @@ describe('note zod validation', () => {
   })
 
   it('rejects a note longer than NOTE_MAX_LENGTH on update', () => {
-    const result = wireInTransactions.UpdateTransactionInput.safeParse({
+    const result = wireInTransactions.UpdateTransactionInputSchema.safeParse({
       id: 'tx-1',
       note: 'x'.repeat(NOTE_MAX_LENGTH + 1),
     })
@@ -276,7 +300,7 @@ describe('note zod validation', () => {
   })
 
   it('rejects an empty string note on create', () => {
-    const result = wireInTransactions.CreateTransactionInput.safeParse({
+    const result = wireInTransactions.CreateTransactionInputSchema.safeParse({
       description: 'Test',
       amount: 10,
       type: 'expense',
@@ -287,7 +311,7 @@ describe('note zod validation', () => {
   })
 
   it('accepts a note at exactly NOTE_MAX_LENGTH', () => {
-    const result = wireInTransactions.CreateTransactionInput.safeParse({
+    const result = wireInTransactions.CreateTransactionInputSchema.safeParse({
       description: 'Test',
       amount: 10,
       type: 'expense',

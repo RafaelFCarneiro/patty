@@ -7,7 +7,11 @@ import { toIsoDate } from '../logic/period.js'
 import { addLocalizedLabels, defaultStatusFor } from '../logic/transaction.js'
 import { accountErrors } from '../models/account.js'
 import { billErrors, BillStatus, type Bill, type BillQuery, type PayBill } from '../models/bill.js'
-import { ClassificationMethod, type TransactionSource as TransactionSourceType, TransactionType } from '../models/transaction.js'
+import {
+  ClassificationMethod,
+  type TransactionSource as TransactionSourceType,
+  TransactionType,
+} from '../models/transaction.js'
 import type { BillWithItems } from '../diplomat/db/repos/bills.js'
 import type { Deps } from './deps.js'
 import { resolveAccountRef, resolveCardRef } from './resolve.js'
@@ -20,7 +24,10 @@ export const getBill = (
 ): ResultAsync<BillView, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card)
-    const bill = yield* okOr(await deps.bills.get(card.id, input.month, input.year), billErrors.notFound(card.name, input.month, input.year))
+    const bill = yield* okOr(
+      await deps.bills.get(card.id, input.month, input.year),
+      billErrors.notFound(card.name, input.month, input.year),
+    )
     const locale = await deps.locale()
     return ok({
       ...bill,
@@ -38,7 +45,10 @@ export const payBill = (
 ): ResultAsync<Bill, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card)
-    const existing = yield* okOr(await deps.bills.get(card.id, input.month, input.year), billErrors.notFound(card.name, input.month, input.year))
+    const existing = yield* okOr(
+      await deps.bills.get(card.id, input.month, input.year),
+      billErrors.notFound(card.name, input.month, input.year),
+    )
 
     if (existing.bill.status === BillStatus.enum.paid) return ok(existing.bill)
 
@@ -77,6 +87,9 @@ export const payBill = (
       refs: { accountId: payer.id, toAccountId: card.accountId, billId: existing.bill.id },
     }, [])
 
-    const paid = yield* okOr(await deps.bills.setStatus(existing.bill.id, BillStatus.enum.paid), billErrors.notFound(card.name, input.month, input.year))
+    const paid = yield* okOr(
+      await deps.bills.setStatus(existing.bill.id, BillStatus.enum.paid),
+      billErrors.notFound(card.name, input.month, input.year),
+    )
     return ok(paid)
   })
