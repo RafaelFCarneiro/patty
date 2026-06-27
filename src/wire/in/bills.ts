@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { BillQuerySchema, PayBillSchema } from '../../models/bill.js'
-
-const coerceToNumber = (v: unknown) => (typeof v === 'string' ? Number(v) : v)
+import { coerceToNumber } from './coerce.js'
 
 export const BillQuery = BillQuerySchema.extend({
   month: z.preprocess(coerceToNumber, BillQuerySchema.shape.month),
