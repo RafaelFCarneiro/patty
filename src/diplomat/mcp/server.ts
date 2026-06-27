@@ -27,6 +27,7 @@ import { CategoryKind } from '../../models/category.js'
 import { Locale, LocaleSource } from '../../models/locale.js'
 import { AccountType } from '../../models/account.js'
 import { RecurringPeriod } from '../../models/recurring.js'
+import { CreateCreditCardSchema } from '../../wire/in/creditCards.js'
 import {
   bulkResultToWireOut,
   createResultToWireOut,
@@ -128,15 +129,8 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       description:
         'Create a credit card with its internal liability account (ADR-010). closingDay: day the fatura ' +
         "closes (transactions after it go to next month's bill). dueDay: payment due day. Currency " +
-        'defaults to BRL. The card auto-creates an internal credit account that tracks outstanding debt.',
-      inputSchema: {
-        name: z.string().min(1),
-        closingDay: z.number().int().min(1).max(28),
-        dueDay: z.number().int().min(1).max(28),
-        currency: z.enum(['BRL', 'USD']).default('BRL'),
-        limit: z.number().positive().optional(),
-        paymentAccount: z.string().min(1).optional().describe('Default paying account name for bill payment'),
-      },
+        'defaults to USD. The card auto-creates an internal credit account that tracks outstanding debt.',
+      inputSchema: CreateCreditCardSchema.shape,
     },
     async (args) => fromResult(await createCreditCard(deps, args)),
   )
