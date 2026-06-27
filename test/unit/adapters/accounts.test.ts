@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AccountType } from '../../../src/models/account.js'
-import { CurrencyCode } from '../../../src/models/common.js'
+import { CurrencyCode } from '../../../src/models/money.js'
 import * as wireInAccounts from '../../../src/wire/in/accounts.js'
 import * as accountAdapters from '../../../src/adapters/accounts.js'
 import type { AccountRow } from '../../../src/wire/db/accounts.js'

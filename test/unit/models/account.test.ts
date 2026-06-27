@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { accountErrors, CreateAccountSchema, UpdateAccountSchema } from '../../../src/models/account.js'
-import { CurrencyCode } from '../../../src/models/common.js'
+import { CurrencyCode } from '../../../src/models/money.js'
 
 describe('accountErrors (colocated domain error payloads)', () => {
   it('creditRejected is a validation error mentioning the card flow', () => {

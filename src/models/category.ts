@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Id } from './common.js'
+import { Id } from './id.js'
 import type { Ambiguous, DuplicateName, InUse, NotFound, ValidationError } from './error.js'
 import type { LabelMap } from './locale.js'
 

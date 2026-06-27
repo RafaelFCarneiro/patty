@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import { CurrencyCode } from '../../models/common.js'
+import { CurrencyCode } from '../../models/money.js'
 import * as modelCreditCard from '../../models/creditCard.js'
 
 // The boundary owns quality-of-life defaults; the domain keeps these fields required (not-null).

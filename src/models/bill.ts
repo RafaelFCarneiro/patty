@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { Id, IsoDate } from './common.js'
+import { IsoDate } from './date.js'
+import { Id } from './id.js'
 import type { ValidationError } from './error.js'
 import type { LabelMap } from './locale.js'
 
