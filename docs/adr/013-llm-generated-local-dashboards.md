@@ -53,6 +53,15 @@ The goal: **the agent authors the presentation (the shell); the data stays live 
 6. **REST-first.** The existing read endpoints (`aggregate_spending`, `get_spending_summary`,
    `search_transactions`, balances, `list_*`) are the dashboard data sources; add read endpoints as gaps
    appear. **GraphQL is deferred** to a later ADR if UI data-shape needs outgrow REST.
+7. **The stdio MCP process is the resilient primary; the HTTP/UI service is optional and isolated.** Chat over
+   **stdio** stays the always-available entry point (ADR-007), with no port to bind and so no port-conflict
+   surface. The HTTP service (`/api` + `/ui`) is a **best-effort, independently-lifecycled sidecar**: if it can't
+   start — most likely a port already in use — that failure is **caught, surfaced, and non-fatal**; the MCP/stdio
+   process keeps working so the user can still use chat (indeed, chat is then the tool to *diagnose and fix* the
+   conflict). Only the dashboards are unavailable until HTTP is up. Concretely this changes today's behavior where
+   http mode `exit(1)`s on `EADDRINUSE`: a bind failure must never take down (or block the startup of) the stdio
+   MCP. Deployment can be two processes (stdio MCP + a separate `serve`/http process sharing the same libSQL DB)
+   or one process that starts HTTP best-effort alongside stdio — either way, **HTTP failure must not affect MCP**.
 
 ## Options Considered
 
@@ -98,8 +107,10 @@ or stale data.
 
 - **Enabling layer (new):** an OpenAPI document published at a route **and** as an MCP resource; a `/ui` serving
   surface on the http server with dashboard storage + listing; a baseline data-less dashboard template; a
-  UI-building skill. **http mode becomes required for the dashboard feature** (chat/MCP stdio default — ADR-007 —
-  is unaffected).
+  UI-building skill. **The HTTP service must be running for dashboards**, but it is an isolated, best-effort
+  sidecar (Decision 7): the stdio MCP primary (ADR-007) neither depends on it nor is taken down by its failure —
+  a port-bind conflict leaves chat fully working (and able to help fix the conflict), only dashboards offline.
+  This requires changing the current http-mode `exit(1)`-on-`EADDRINUSE` to a caught, non-fatal, surfaced error.
 - **Existing read tools become data sources:** `aggregate_spending`, `get_spending_summary`,
   `search_transactions`, `get_account_balances`, `list_*`. Read-endpoint gaps (e.g. recurring + installment
   projections the draft showed) get filled as the template/skill need them.
