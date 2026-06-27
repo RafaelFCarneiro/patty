@@ -136,8 +136,8 @@ or stale data.
 3. [ ] Document running in http mode for dashboards (and how a chat client points the UI at it).
 4. [ ] **REST integration tests (prerequisite).** The HTTP routes are currently covered only via MCP; the
    dashboards consume REST directly, so add HTTP-level integration tests (Fastify `inject` against an in-process
-   libSQL DB) for each `/api` route before relying on it as the UI contract. (An existing GitHub issue already
-   tracks this gap — reference it from the implementing PR.)
+   libSQL DB) for each `/api` route before relying on it as the UI contract. Tracked by
+   [#21](https://github.com/RafaelFCarneiro/fintrack/issues/21).
 
 **Phase B — UI generation**
 5. [ ] Ship a baseline **data-less** dashboard template (the cleaned-up draft: fetch-on-load, no inline data).

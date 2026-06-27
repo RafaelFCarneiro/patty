@@ -213,7 +213,8 @@ Minimal web frontend rendering saved views; activate owner columns for multi-use
 - **REST e2e (gap to close):** the HTTP routes (`src/diplomat/http/routes.ts`) currently have **no** integration
   coverage — only MCP does. Add HTTP-level integration tests (Fastify `inject` against an in-process libSQL DB)
   covering each `/api` route's status codes, validation, and payloads. This becomes load-bearing under **ADR-013**
-  (REST is the dashboards' data layer), so it gates that work. (Tracked as an existing GitHub issue — link it.)
+  (REST is the dashboards' data layer), so it gates that work. Tracked by
+  [#21](https://github.com/RafaelFCarneiro/fintrack/issues/21).
 - Golden set: ~100 realistic BR transaction descriptions with expected categories; classification accuracy tracked as a regression test.
 
 ## Risks & mitigations
