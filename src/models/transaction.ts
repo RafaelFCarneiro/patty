@@ -238,6 +238,8 @@ export type ClassifyOutcome = Classification & {
   merchantKey?: string
 }
 
+export type CreateTxResult = { transaction: RawTransactionView; created: boolean }
+
 export type CreateTransactionResult = {
   transaction: TransactionView
   created: boolean
