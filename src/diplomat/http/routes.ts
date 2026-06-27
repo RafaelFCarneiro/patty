@@ -225,7 +225,10 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.get('/api/summary', async (req, reply) => {
-    const input = parse(PeriodSchema.extend({ month: z.coerce.number(), year: z.coerce.number() }), req.query, reply)
+    const input = parse(PeriodSchema.extend({
+      month: z.coerce.number().int().min(1).max(12),
+      year: z.coerce.number().int().min(2000).max(2100),
+    }), req.query, reply)
     if (!input) return reply
     return reply.send(await getSpendingSummary(deps, input))
   })
