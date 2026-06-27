@@ -149,15 +149,20 @@ describe('MCP integration > aggregate_spending', () => {
     expect(months[0]! < months[months.length - 1]!).toBe(true)
   })
 
-  // (f) limit top-N
-  it('limits results to top-N', async () => {
+  // (f) limit top-N per currency (not global)
+  it('limits results per currency, not globally', async () => {
     const result = await callTool(client, {
       name: 'aggregate_spending',
-      args: { groupBy: 'category', month, year, limit: 1, account: 'AggAcctBRL' },
+      args: { groupBy: 'category', month, year, limit: 1 },
     }) as AggResult
-    for (const block of result.currencies) {
-      expect(block.rows.length).toBeLessThanOrEqual(1)
-    }
+    // Both BRL and USD currencies should be present (not truncated by a global limit)
+    const brl = result.currencies.find((c) => c.currency === 'BRL')
+    const usd = result.currencies.find((c) => c.currency === 'USD')
+    expect(brl).toBeDefined()
+    expect(usd).toBeDefined()
+    // Each currency block limited to 1 row
+    expect(brl!.rows).toHaveLength(1)
+    expect(usd!.rows).toHaveLength(1)
   })
 
   // (g) invalid groupBy rejected at boundary (zod or MCP SDK rejects before handler)
