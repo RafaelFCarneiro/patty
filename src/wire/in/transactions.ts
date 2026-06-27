@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import {
   CreateTransactionSchema,
   CreateTransactionsBulkSchema,
@@ -11,19 +12,19 @@ import type { SearchTransactions } from '../../models/transaction.js'
 // Boundary-only behavior (limit default) stays here; everything else is pass-through.
 
 export const CreateTransactionInput = CreateTransactionSchema
-export type CreateTransactionInput = typeof CreateTransactionSchema._type
+export type CreateTransactionInput = z.infer<typeof CreateTransactionSchema>
 
 export const BulkTransactionItem = CreateTransactionsBulkSchema.shape.items.element
-export type BulkTransactionItem = typeof BulkTransactionItem._type
+export type BulkTransactionItem = z.infer<typeof BulkTransactionItem>
 
 export const CreateTransactionsBulkInput = CreateTransactionsBulkSchema
-export type CreateTransactionsBulkInput = typeof CreateTransactionsBulkSchema._type
+export type CreateTransactionsBulkInput = z.infer<typeof CreateTransactionsBulkSchema>
 
 export const CreateTransferInput = CreateTransferSchema
-export type CreateTransferInput = typeof CreateTransferSchema._type
+export type CreateTransferInput = z.infer<typeof CreateTransferSchema>
 
 export const UpdateTransactionInput = UpdateTransactionSchema
-export type UpdateTransactionInput = typeof UpdateTransactionSchema._type
+export type UpdateTransactionInput = z.infer<typeof UpdateTransactionSchema>
 
 export const SearchTransactionsInput = SearchTransactionsSchema
   .extend({ limit: SearchTransactionsSchema.shape.limit.optional() })
