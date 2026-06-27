@@ -28,7 +28,7 @@ import { createTransfer } from '../../controllers/transfers.js'
 import { AccountType } from '../../models/account.js'
 import { TransactionSource } from '../../models/transaction.js'
 import { Period } from '../../models/common.js'
-import { BillQuery, PayBillInput, type BillQuery as BillQueryInput, type PayBillInput as PayBillInputType } from '../../wire/in/bills.js'
+import { BillQuery, PayBill, type BillQuery as BillQueryType, type PayBill as PayBillType } from '../../wire/in/bills.js'
 import * as wireInAccounts from '../../wire/in/accounts.js'
 import * as wireInCategories from '../../wire/in/categories.js'
 import * as wireInCreditCards from '../../wire/in/creditCards.js'
@@ -145,12 +145,12 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   })
 
   app.get('/api/bills', async (req, reply) => {
-    const input = parse(BillQuery, req.query, reply) as BillQueryInput
+    const input = parse(BillQuery, req.query, reply) as BillQueryType
     if (!input) return reply
     return send(reply, await getBill(deps, input))
   })
   app.post('/api/bills/pay', async (req, reply) => {
-    const input = parse(PayBillInput, req.body, reply) as PayBillInputType
+    const input = parse(PayBill, req.body, reply) as PayBillType
     if (!input) return reply
     return send(reply, await payBill(deps, { ...input, source: TransactionSource.enum.rest }))
   })
