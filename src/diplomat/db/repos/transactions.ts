@@ -2,7 +2,10 @@ import { eq, inArray, sql } from 'drizzle-orm'
 import * as transactionAdapters from '../../../adapters/transactions.js'
 import { expectPresent } from '../../../common/present.js'
 import { AggregateSort } from '../../../models/aggregate.js'
-import { TransactionStatus, TransactionType, type Transaction, type RawTransactionView, type TransactionPatch } from '../../../models/transaction.js'
+import {
+  TransactionStatus, TransactionType,
+  type CreateTxResult, type Transaction, type RawTransactionView, type TransactionPatch,
+} from '../../../models/transaction.js'
 import type { SummaryRow } from '../../../models/summary.js'
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js'
 import { SummaryRowSchema } from '../../../wire/db/transactions.js'
@@ -12,8 +15,6 @@ import { buildCommonWhere, type AggregateFilters, type SearchFilters } from '../
 import { toMatchQuery } from '../fts.js'
 import { merchants, tags, transactionTags, transactions } from '../schema.js'
 import { fullTxSelect } from '../transactionSelect.js'
-
-export type CreateTxResult = { transaction: RawTransactionView; created: boolean }
 
 const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
   const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`))
