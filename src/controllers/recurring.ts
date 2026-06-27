@@ -2,7 +2,7 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { nextDue, recurringIdempotencyKey, withPeriodLabel } from '../logic/recurring.js'
 import { toIsoDate } from '../logic/period.js'
-import type { CreateRecurringInput, RecurringRuleView } from '../models/recurring.js'
+import type { CreateRecurring, RecurringRuleView } from '../models/recurring.js'
 import { addLocalizedLabels, defaultStatusFor, resolveCurrency } from '../logic/transaction.js'
 import { ClassificationMethod, TransactionSource, type TransactionView } from '../models/transaction.js'
 import type { Deps } from './deps.js'
@@ -15,7 +15,7 @@ export const listRecurring = async (deps: Deps): Promise<RecurringRuleView[]> =>
 
 export const createRecurring = (
   deps: Deps,
-  input: CreateRecurringInput,
+  input: CreateRecurring,
 ): ResultAsync<RecurringRuleView, AppError> =>
   safeTry(async function* () {
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null

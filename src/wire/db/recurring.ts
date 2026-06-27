@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // Recurring-rule row from the raw SELECT (snake_case + joined account/category names).
-// Loose; RecurringRuleView.parse enforces enums and date formats downstream.
+// Loose; RecurringRuleViewSchema.parse enforces enums and date formats downstream.
 export const RecurringRowSchema = z.object({
   id:            z.string(),
   description:   z.string(),

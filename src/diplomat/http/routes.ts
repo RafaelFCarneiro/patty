@@ -167,7 +167,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
 
   app.get('/api/recurring', async () => listRecurring(deps))
   app.post('/api/recurring', async (req, reply) => {
-    const wireIn = parse(wireInRecurring.CreateRecurringInput, req.body, reply)
+    const wireIn = parse(wireInRecurring.CreateRecurringSchema, req.body, reply)
     if (!wireIn) return reply
     return send(reply, await createRecurring(deps, recurringAdapters.wireInToModel(wireIn)), 201)
   })

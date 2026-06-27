@@ -12,36 +12,38 @@ export const recurringPeriodLabels: LabelMap<RecurringPeriod> = {
   yearly:  { en: 'Yearly',  pt: 'Anual',   es: 'Anual' },
 }
 
-/** Domain entity: node properties and resolved edge target ids. */
-export const RecurringRule = z.object({
+// `.describe()` is domain information — it states what each field is and represents.
+// Defaults split by intent: integrity defaults (a value that must exist for the entity to be
+// valid) live here; quality-of-life convenience defaults live at the wire boundary,
+// keeping the domain contract honest about what is required.
+export const RecurringRuleSchema = z.object({
   id: Id,
-  description: z.string().min(1),
-  amount: Money,
-  type: MovementType,
-  period: RecurringPeriod,
-  /** Next date this rule should materialize a transaction. */
-  nextDue: IsoDate,
-  currency: CurrencyCode,
-  accountId: Id.optional(),
-  categoryId: Id.optional(),
+  description: z.string().min(1).describe('What this rule pays for (rent, salary, subscription…)'),
+  amount: Money.describe('Recurring amount in full units'),
+  type: MovementType.describe('expense | income'),
+  period: RecurringPeriod.describe('How often the rule fires'),
+  nextDue: IsoDate.describe('Next date this rule should materialize a transaction'),
+  currency: CurrencyCode.describe('Currency for materialized transactions'),
+  accountId: Id.optional().describe('Target account for materialized transactions'),
+  categoryId: Id.optional().describe('Category for materialized transactions'),
 })
-export type RecurringRule = z.infer<typeof RecurringRule>
+export type RecurringRule = z.infer<typeof RecurringRuleSchema>
 
-/** Read projection: RecurringRule with joined reference names (account, category) resolved. */
-export const RecurringRuleView = RecurringRule.extend({
-  periodLabel: z.string().optional(),
-  accountName: z.string().optional(),
-  categoryName: z.string().optional(),
+export const RecurringRuleViewSchema = RecurringRuleSchema.extend({
+  periodLabel: z.string().optional().describe('Localized period label'),
+  accountName: z.string().optional().describe('Resolved account name'),
+  categoryName: z.string().optional().describe('Resolved category name'),
 })
-export type RecurringRuleView = z.infer<typeof RecurringRuleView>
+export type RecurringRuleView = z.infer<typeof RecurringRuleViewSchema>
 
-export type CreateRecurringInput = {
-  description: string
-  amount: number
-  type: MovementType
-  period: RecurringPeriod
-  startDate: string
-  account?: string
-  category?: string
-  currency?: CurrencyCode
-}
+export const CreateRecurringSchema = z.object({
+  description: z.string().min(1).describe('What this rule pays for (rent, salary, subscription…)'),
+  amount: Money.describe('Recurring amount in full units'),
+  type: MovementType.describe('expense | income'),
+  period: RecurringPeriod.describe('How often the rule fires'),
+  startDate: IsoDate.describe('First due date (YYYY-MM-DD)'),
+  account: z.string().optional().describe('Account name or ID'),
+  category: z.string().optional().describe('Category name or ID'),
+  currency: CurrencyCode.optional().describe('Currency (resolved from account if omitted)'),
+})
+export type CreateRecurring = z.infer<typeof CreateRecurringSchema>
