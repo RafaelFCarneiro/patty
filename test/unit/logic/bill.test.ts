@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BillStatus, type Bill } from '../../../src/models/bill.js'
-import { CurrencyCode } from '../../../src/models/common.js'
+import { CurrencyCode } from '../../../src/models/money.js'
 import { Locale } from '../../../src/models/locale.js'
 import {
   ClassificationMethod,

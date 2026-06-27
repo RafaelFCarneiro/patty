@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { PeriodSchema } from '../../models/common.js'
+import { PeriodSchema } from '../../models/date.js'
 import { CurrencySummarySchema } from '../../models/summary.js'
 
 export const SpendingSummaryOut = z.object({

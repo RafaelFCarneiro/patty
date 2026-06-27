@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CurrencyCode } from './common.js'
+import { CurrencyCode } from './money.js'
 import { MovementType } from './transaction.js'
 
 export const SummaryRowSchema = z.object({

@@ -1,4 +1,4 @@
-import type { Period } from '../models/common.js'
+import type { Period } from '../models/date.js'
 
 export type DateRange = { from: string; to: string }
 

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Id } from './common.js'
+import { Id } from './id.js'
 import type { DuplicateName } from './error.js'
 
 export const TagSchema = z.object({
