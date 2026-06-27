@@ -25,3 +25,13 @@ export const hasDateRange = (input: PeriodInput): boolean =>
 
 export const assertHasPeriodOrRange = (input: PeriodInput): boolean =>
   hasPeriod(input) || hasDateRange(input)
+
+type NullableDateRange = { from: string | null; to: string | null }
+
+export const resolveDateRange = (input: PeriodInput): NullableDateRange => {
+  const range = hasPeriod(input) ? periodRange({ month: input.month!, year: input.year! }) : null
+  return {
+    from: range?.from ?? input.from ?? null,
+    to: range?.to ?? input.to ?? null,
+  }
+}

@@ -1,9 +1,8 @@
-import { isNonNullish } from 'remeda'
 import { ok, safeTry, type ResultAsync } from 'neverthrow'
 import type { AppError } from '../common/errors.js'
 import { guard } from '../common/result.js'
 import { shapeAggregateResult } from '../logic/aggregate.js'
-import { assertHasPeriodOrRange, hasPeriod, periodRange } from '../logic/period.js'
+import { assertHasPeriodOrRange, resolveDateRange } from '../logic/period.js'
 import { aggregateErrors, type ResolvedAggregateSpending } from '../models/aggregate.js'
 import type { AggregateResult } from '../models/aggregate.js'
 import type { Deps } from './deps.js'
@@ -16,12 +15,10 @@ export const aggregateSpending = (
   safeTry(async function* () {
     yield* guard(assertHasPeriodOrRange(input), aggregateErrors.missingPeriod)
 
-    const range = hasPeriod(input) ? periodRange({ month: input.month!, year: input.year! }) : null
-    const from = range?.from ?? input.from ?? null
-    const to = range?.to ?? input.to ?? null
+    const { from, to } = resolveDateRange(input)
 
-    const account = isNonNullish(input.account) ? yield* resolveAccountRef(deps, input.account) : null
-    const category = isNonNullish(input.category) ? yield* resolveCategoryRef(deps, input.category) : null
+    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
+    const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null
 
     const locale = await deps.locale()
 
