@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { Period } from '../../models/common.js'
-import { CurrencySummary } from '../../models/summary.js'
+import { PeriodSchema } from '../../models/common.js'
+import { CurrencySummarySchema } from '../../models/summary.js'
 
 export const SpendingSummaryOut = z.object({
-  period: Period,
-  currencies: z.array(CurrencySummary),
+  period: PeriodSchema,
+  currencies: z.array(CurrencySummarySchema),
 })
 export type SpendingSummaryOut = z.infer<typeof SpendingSummaryOut>

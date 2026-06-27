@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { CurrencyCode } from './common.js'
 import { MovementType } from './transaction.js'
 
-export const SummaryRow = z.object({
+export const SummaryRowSchema = z.object({
   currency: CurrencyCode,
   type: MovementType,
   category: z.string().nullable(),
@@ -10,21 +10,21 @@ export const SummaryRow = z.object({
   total: z.number(),
   count: z.number().int(),
 })
-export type SummaryRow = z.infer<typeof SummaryRow>
+export type SummaryRow = z.infer<typeof SummaryRowSchema>
 
-export const CategoryTotal = z.object({
+export const CategoryTotalSchema = z.object({
   category: z.string(),
   type: MovementType,
   total: z.number(),
   count: z.number().int(),
 })
-export type CategoryTotal = z.infer<typeof CategoryTotal>
+export type CategoryTotal = z.infer<typeof CategoryTotalSchema>
 
-export const CurrencySummary = z.object({
+export const CurrencySummarySchema = z.object({
   currency: CurrencyCode,
   income: z.number(),
   expenses: z.number(),
   balance: z.number(),
-  byCategory: z.array(CategoryTotal),
+  byCategory: z.array(CategoryTotalSchema),
 })
-export type CurrencySummary = z.infer<typeof CurrencySummary>
+export type CurrencySummary = z.infer<typeof CurrencySummarySchema>
