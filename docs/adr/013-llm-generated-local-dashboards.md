@@ -34,9 +34,12 @@ The goal: **the agent authors the presentation (the shell); the data stays live 
      agent writes/overrides it through a normal MCP write (`save_dashboard(name, html)` — an upsert), and
      `GET /ui/:name` returns whatever is *currently* stored. Overriding the UI is therefore just re-upserting
      under the same name: no rebuild, restart, or redeploy — the new shell shows on the next reload. **The shipped
-     template is only a default seed, never a fixed/compiled UI.** (This is the deliberate reason the UI is HTML
-     content the server hands back, not a front-end build artifact — generated, per-user, runtime-replaceable UIs
-     would be hard if it were the latter.) Name-keyed storage also allows several dashboards (`overview`, `cards`,
+     template is only a default seed, never a fixed/compiled UI.** It is **seeded into the `dashboards` table
+     through `src/diplomat/db/seed/` at bootstrap, following ADR-008** (seed lives under `diplomat/db/seed`,
+     consumed only by the db bootstrap, never imported by the domain) — it must **not** introduce a new
+     globally-importable "resources"/UI-assets location. (This is the deliberate reason the UI is HTML content the
+     server hands back, not a front-end build artifact — generated, per-user, runtime-replaceable UIs would be
+     hard if it were the latter.) Name-keyed storage also allows several dashboards (`overview`, `cards`,
      `month-review`) overridden independently, and `updated_at`/version history enables "revert my dashboard."
      Serve with no-cache headers so a regenerated dashboard isn't masked by a stale browser copy.
 3. **Generated dashboards are data-less HTML shells.** The agent produces layout/charts/styling only; the page
@@ -139,7 +142,9 @@ or stale data.
    [#21](https://github.com/RafaelFCarneiro/fintrack/issues/21).
 
 **Phase B — UI generation**
-5. [ ] Ship a baseline **data-less** dashboard template (the cleaned-up draft: fetch-on-load, no inline data).
+5. [ ] Ship a baseline **data-less** dashboard template (the cleaned-up draft: fetch-on-load, no inline data),
+   **seeded into the `dashboards` table via `src/diplomat/db/seed/` at bootstrap (ADR-008)** — not a new
+   importable UI-assets location.
 6. [ ] Author the **UI-building skill**: fetch-only guardrails, OpenAPI-contract usage, allowed CDN libs,
    theming/accessibility, the real-time rule.
 
