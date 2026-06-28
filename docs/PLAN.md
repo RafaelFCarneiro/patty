@@ -210,6 +210,11 @@ Minimal web frontend rendering saved views; activate owner columns for multi-use
 - `logic/`: plain vitest unit tests — pure functions, no mocks needed. This is where FP pays off.
 - Diplomat/db: integration tests against an in-process libSQL DB (Testcontainers where a real engine is needed) — no Docker required for the common path.
 - MCP e2e: drive tools through the MCP SDK client — the contract that matters most.
+- **REST e2e (gap to close):** the HTTP routes (`src/diplomat/http/routes.ts`) currently have **no** integration
+  coverage — only MCP does. Add HTTP-level integration tests (Fastify `inject` against an in-process libSQL DB)
+  covering each `/api` route's status codes, validation, and payloads. This becomes load-bearing under **ADR-013**
+  (REST is the dashboards' data layer), so it gates that work. Tracked by
+  [#21](https://github.com/RafaelFCarneiro/fintrack/issues/21).
 - Golden set: ~100 realistic BR transaction descriptions with expected categories; classification accuracy tracked as a regression test.
 
 ## Risks & mitigations
