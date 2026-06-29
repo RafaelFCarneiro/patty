@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   mergeMcpServersKey,
   mergeServersKey,
+  readJsonOrEmpty,
   resolveConfigObject,
   STDIO_ENTRY,
   VSCODE_ENTRY,
@@ -95,6 +99,36 @@ describe('resolveConfigObject', () => {
 
   it.each([null, [], 'config'])('rejects non-object config roots: %j', (value) => {
     expect(resolveConfigObject(value)).toBeNull()
+  })
+})
+
+describe('readJsonOrEmpty', () => {
+  let tempDir = ''
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    if (tempDir) rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('returns an empty object when the file does not exist', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'))
+    expect(readJsonOrEmpty(join(tempDir, 'missing.json'))).toEqual({})
+  })
+
+  it('reports the underlying file read failure message', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'))
+    const configPath = join(tempDir, 'config.json')
+    mkdirSync(configPath)
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
+      throw new Error(`process.exit:${code}`)
+    }) as typeof process.exit)
+
+    expect(() => readJsonOrEmpty(configPath)).toThrow('process.exit:1')
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(errorSpy.mock.calls[0]?.[0]).toContain(`fintrack setup: failed to read ${configPath}:`)
+    expect(errorSpy.mock.calls[0]?.[0]).toContain('EISDIR')
   })
 })
 

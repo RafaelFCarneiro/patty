@@ -55,10 +55,24 @@ const exitInvalidConfig = (path: string): never => {
   process.exit(1)
 }
 
-const readJsonOrEmpty = (path: string): Record<string, unknown> => {
+const exitReadConfig = (path: string, error: unknown): never => {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(`fintrack setup: failed to read ${path}: ${message}`)
+  process.exit(1)
+}
+
+export const readJsonOrEmpty = (path: string): Record<string, unknown> => {
   if (!existsSync(path)) return {}
+
+  let content: string
   try {
-    const config = resolveConfigObject(JSON.parse(readFileSync(path, 'utf8')))
+    content = readFileSync(path, 'utf8')
+  } catch (error) {
+    return exitReadConfig(path, error)
+  }
+
+  try {
+    const config = resolveConfigObject(JSON.parse(content))
     if (config) return config
   } catch {
     return exitInvalidConfig(path)
