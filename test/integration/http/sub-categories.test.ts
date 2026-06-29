@@ -55,18 +55,18 @@ describe('POST /api/sub-categories', () => {
 
 describe('DELETE /api/sub-categories/:name', () => {
   it('deletes a sub-category', async () => {
-    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'Del Sub Parent', kind: 'expense' } })
-    await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'Del Sub', parentId: catRes.json().id } })
-    const res = await inject({ method: 'DELETE', url: '/api/sub-categories/Del Sub' })
+    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'DelSubParent', kind: 'expense' } })
+    await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'DelSub', parentId: catRes.json().id } })
+    const res = await inject({ method: 'DELETE', url: '/api/sub-categories/DelSub' })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toHaveProperty('deleted', true)
   })
 
   it('blocked when a transaction references it (409)', async () => {
-    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'Del Sub Block Parent', kind: 'expense' } })
-    await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'Del Sub Block', parentId: catRes.json().id } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Sub ref', amount: 5, type: 'expense', date: '2026-06-01', subCategory: 'Del Sub Block', idempotencyKey: 'sub-ref-tx' } })
-    const res = await inject({ method: 'DELETE', url: '/api/sub-categories/Del Sub Block' })
+    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'DelSubBlockParent', kind: 'expense' } })
+    await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'DelSubBlock', parentId: catRes.json().id } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Sub ref', amount: 5, type: 'expense', date: '2026-06-01', subCategory: 'DelSubBlock', idempotencyKey: 'sub-ref-tx' } })
+    const res = await inject({ method: 'DELETE', url: '/api/sub-categories/DelSubBlock' })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe('in_use')
   })

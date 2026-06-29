@@ -39,14 +39,14 @@ describe('POST /api/credit-cards', () => {
 
 describe('DELETE /api/credit-cards/:name', () => {
   it('dry-run returns counts, confirm deletes everything', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Del Card Bank', type: 'checking', currency: 'USD', initialBalance: 2000 } })
-    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'Full Del Card', closingDay: 28, dueDay: 5, currency: 'USD', paymentAccount: 'Del Card Bank' } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Del card purchase', amount: 100, type: 'expense', date: '2026-06-05', card: 'Full Del Card', idempotencyKey: 'del-card-purchase' } })
-    const dryRun = await inject({ method: 'DELETE', url: '/api/credit-cards/Full Del Card' })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'DelCardBank', type: 'checking', currency: 'USD', initialBalance: 2000 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'FullDelCard', closingDay: 28, dueDay: 5, currency: 'USD', paymentAccount: 'DelCardBank' } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Del card purchase', amount: 100, type: 'expense', date: '2026-06-05', card: 'FullDelCard', idempotencyKey: 'del-card-purchase' } })
+    const dryRun = await inject({ method: 'DELETE', url: '/api/credit-cards/FullDelCard' })
     expect(dryRun.statusCode).toBe(200)
     expect(dryRun.json().dryRun).toBe(true)
     expect(dryRun.json().wouldDelete.transactions).toBeGreaterThanOrEqual(1)
-    const confirm = await inject({ method: 'DELETE', url: '/api/credit-cards/Full Del Card?confirm=true' })
+    const confirm = await inject({ method: 'DELETE', url: '/api/credit-cards/FullDelCard?confirm=true' })
     expect(confirm.statusCode).toBe(200)
     expect(confirm.json().deleted).toBe(true)
   })

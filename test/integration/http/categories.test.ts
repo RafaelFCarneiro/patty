@@ -38,33 +38,33 @@ describe('POST /api/categories', () => {
 
 describe('DELETE /api/categories/:name', () => {
   it('deletes an unreferenced category', async () => {
-    await inject({ method: 'POST', url: '/api/categories', payload: { name: 'Deletable Cat', kind: 'expense' } })
-    const res = await inject({ method: 'DELETE', url: '/api/categories/Deletable Cat' })
+    await inject({ method: 'POST', url: '/api/categories', payload: { name: 'DeletableCat', kind: 'expense' } })
+    const res = await inject({ method: 'DELETE', url: '/api/categories/DeletableCat' })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toHaveProperty('deleted', true)
   })
 
   it('blocked when a transaction references it (409)', async () => {
-    await inject({ method: 'POST', url: '/api/categories', payload: { name: 'In Use Cat', kind: 'expense' } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Cat ref', amount: 10, type: 'expense', date: '2026-06-01', category: 'In Use Cat', idempotencyKey: 'cat-ref-tx' } })
-    const res = await inject({ method: 'DELETE', url: '/api/categories/In Use Cat' })
+    await inject({ method: 'POST', url: '/api/categories', payload: { name: 'InUseCat', kind: 'expense' } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Cat ref', amount: 10, type: 'expense', date: '2026-06-01', category: 'InUseCat', idempotencyKey: 'cat-ref-tx' } })
+    const res = await inject({ method: 'DELETE', url: '/api/categories/InUseCat' })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe('in_use')
     expect(res.json().error.references.transactions).toBeGreaterThanOrEqual(1)
   })
 
   it('blocked when it has sub-categories (409)', async () => {
-    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'Parent Block', kind: 'expense' } })
-    await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'Child Block', parentId: catRes.json().id } })
-    const res = await inject({ method: 'DELETE', url: '/api/categories/Parent Block' })
+    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'ParentBlock', kind: 'expense' } })
+    await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'ChildBlock', parentId: catRes.json().id } })
+    const res = await inject({ method: 'DELETE', url: '/api/categories/ParentBlock' })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.references.subCategories).toBeGreaterThanOrEqual(1)
   })
 
   it('blocked when a recurring rule references it (409)', async () => {
-    await inject({ method: 'POST', url: '/api/categories', payload: { name: 'Rec Cat Block', kind: 'expense' } })
-    await inject({ method: 'POST', url: '/api/recurring', payload: { description: 'Cat rec', amount: 50, type: 'expense', period: 'monthly', startDate: '2026-07-01', category: 'Rec Cat Block', currency: 'USD' } })
-    const res = await inject({ method: 'DELETE', url: '/api/categories/Rec Cat Block' })
+    await inject({ method: 'POST', url: '/api/categories', payload: { name: 'RecCatBlock', kind: 'expense' } })
+    await inject({ method: 'POST', url: '/api/recurring', payload: { description: 'Cat rec', amount: 50, type: 'expense', period: 'monthly', startDate: '2026-07-01', category: 'RecCatBlock', currency: 'USD' } })
+    const res = await inject({ method: 'DELETE', url: '/api/categories/RecCatBlock' })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.references.recurring).toBeGreaterThanOrEqual(1)
   })

@@ -62,54 +62,54 @@ describe('PATCH /api/accounts/:name', () => {
   })
 
   it('allows type + currency change when no transactions', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Type Change', type: 'checking', currency: 'USD', initialBalance: 0 } })
-    const res = await inject({ method: 'PATCH', url: '/api/accounts/Type Change', payload: { type: 'savings', currency: 'BRL' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'TypeChange', type: 'checking', currency: 'USD', initialBalance: 0 } })
+    const res = await inject({ method: 'PATCH', url: '/api/accounts/TypeChange', payload: { type: 'savings', currency: 'BRL' } })
     expect(res.statusCode).toBe(200)
     expect(res.json().type).toBe('savings')
     expect(res.json().currency).toBe('BRL')
   })
 
   it('blocks type change when transactions exist (422)', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Type Block', type: 'checking', currency: 'USD', initialBalance: 0 } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Lock type', amount: 5, type: 'expense', date: '2026-06-01', account: 'Type Block', idempotencyKey: 'type-block-tx' } })
-    const res = await inject({ method: 'PATCH', url: '/api/accounts/Type Block', payload: { type: 'savings' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'TypeBlock', type: 'checking', currency: 'USD', initialBalance: 0 } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Lock type', amount: 5, type: 'expense', date: '2026-06-01', account: 'TypeBlock', idempotencyKey: 'type-block-tx' } })
+    const res = await inject({ method: 'PATCH', url: '/api/accounts/TypeBlock', payload: { type: 'savings' } })
     expect(res.statusCode).toBe(422)
     expect(res.json().error.issues[0]).toContain('type cannot be changed')
   })
 
   it('blocks currency change when account is a card payer (422)', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Cur Block Payer', type: 'checking', currency: 'BRL', initialBalance: 0 } })
-    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'Cur Block Card', closingDay: 10, dueDay: 20, currency: 'BRL', paymentAccount: 'Cur Block Payer' } })
-    const res = await inject({ method: 'PATCH', url: '/api/accounts/Cur Block Payer', payload: { currency: 'USD' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'CurBlockPayer', type: 'checking', currency: 'BRL', initialBalance: 0 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'CurBlockCard', closingDay: 10, dueDay: 20, currency: 'BRL', paymentAccount: 'CurBlockPayer' } })
+    const res = await inject({ method: 'PATCH', url: '/api/accounts/CurBlockPayer', payload: { currency: 'USD' } })
     expect(res.statusCode).toBe(422)
     expect(res.json().error.issues[0]).toContain('credit card payment account')
   })
 
   it('blocks currency change when recurring rules reference account (422)', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Cur Block Rec', type: 'checking', currency: 'BRL', initialBalance: 0 } })
-    await inject({ method: 'POST', url: '/api/recurring', payload: { description: 'Lock cur', amount: 50, type: 'expense', period: 'monthly', startDate: '2026-07-01', account: 'Cur Block Rec', currency: 'BRL' } })
-    const res = await inject({ method: 'PATCH', url: '/api/accounts/Cur Block Rec', payload: { currency: 'USD' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'CurBlockRec', type: 'checking', currency: 'BRL', initialBalance: 0 } })
+    await inject({ method: 'POST', url: '/api/recurring', payload: { description: 'Lock cur', amount: 50, type: 'expense', period: 'monthly', startDate: '2026-07-01', account: 'CurBlockRec', currency: 'BRL' } })
+    const res = await inject({ method: 'PATCH', url: '/api/accounts/CurBlockRec', payload: { currency: 'USD' } })
     expect(res.statusCode).toBe(422)
     expect(res.json().error.issues[0]).toContain('recurring rules')
   })
 
   it('rejects setting type to credit (422)', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'No Credit', type: 'checking', currency: 'USD', initialBalance: 0 } })
-    const res = await inject({ method: 'PATCH', url: '/api/accounts/No Credit', payload: { type: 'credit' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'NoCredit', type: 'checking', currency: 'USD', initialBalance: 0 } })
+    const res = await inject({ method: 'PATCH', url: '/api/accounts/NoCredit', payload: { type: 'credit' } })
     expect(res.statusCode).toBe(422)
   })
 
   it('rejects updating a credit account (422)', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Credit Upd Payer', type: 'checking', currency: 'BRL', initialBalance: 0 } })
-    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'Credit Upd Card', closingDay: 10, dueDay: 20, currency: 'BRL', paymentAccount: 'Credit Upd Payer' } })
-    const res = await inject({ method: 'PATCH', url: '/api/accounts/Card: Credit Upd Card', payload: { initialBalance: 999 } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'CreditUpdPayer', type: 'checking', currency: 'BRL', initialBalance: 0 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'CreditUpdCard', closingDay: 10, dueDay: 20, currency: 'BRL', paymentAccount: 'CreditUpdPayer' } })
+    const res = await inject({ method: 'PATCH', url: '/api/accounts/Card%3A%20CreditUpdCard', payload: { initialBalance: 999 } })
     expect(res.statusCode).toBe(422)
   })
 
   it('rejects rename to existing name (409)', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Rename A', type: 'checking', currency: 'USD', initialBalance: 0 } })
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Rename B', type: 'checking', currency: 'USD', initialBalance: 0 } })
-    const res = await inject({ method: 'PATCH', url: '/api/accounts/Rename A', payload: { newName: 'Rename B' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'RenameA', type: 'checking', currency: 'USD', initialBalance: 0 } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'RenameB', type: 'checking', currency: 'USD', initialBalance: 0 } })
+    const res = await inject({ method: 'PATCH', url: '/api/accounts/RenameA', payload: { newName: 'RenameB' } })
     expect(res.statusCode).toBe(409)
     expect(res.json()).toHaveProperty('error.code', 'duplicate_name')
   })
@@ -120,10 +120,10 @@ describe('PATCH /api/accounts/:name', () => {
   })
 
   it('no-op returns account unchanged', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Noop Acct', type: 'checking', currency: 'USD', initialBalance: 42 } })
-    const res = await inject({ method: 'PATCH', url: '/api/accounts/Noop Acct', payload: {} })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'NoopAcct', type: 'checking', currency: 'USD', initialBalance: 42 } })
+    const res = await inject({ method: 'PATCH', url: '/api/accounts/NoopAcct', payload: {} })
     expect(res.statusCode).toBe(200)
-    expect(res.json().name).toBe('Noop Acct')
+    expect(res.json().name).toBe('NoopAcct')
     expect(res.json().initialBalance).toBe(42)
   })
 })
@@ -137,34 +137,34 @@ describe('DELETE /api/accounts/:name', () => {
   })
 
   it('blocked when transactions reference it (409)', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Del Tx Block', type: 'checking', currency: 'USD', initialBalance: 0 } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Block del', amount: 5, type: 'expense', date: '2026-06-01', account: 'Del Tx Block', idempotencyKey: 'del-tx-block' } })
-    const res = await inject({ method: 'DELETE', url: '/api/accounts/Del Tx Block' })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'DelTxBlock', type: 'checking', currency: 'USD', initialBalance: 0 } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Block del', amount: 5, type: 'expense', date: '2026-06-01', account: 'DelTxBlock', idempotencyKey: 'del-tx-block' } })
+    const res = await inject({ method: 'DELETE', url: '/api/accounts/DelTxBlock' })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe('in_use')
     expect(res.json().error.references.transactions).toBeGreaterThanOrEqual(1)
   })
 
   it('blocked when recurring rule references it (409)', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Del Rec Block', type: 'checking', currency: 'USD', initialBalance: 0 } })
-    await inject({ method: 'POST', url: '/api/recurring', payload: { description: 'Block del rec', amount: 50, type: 'expense', period: 'monthly', startDate: '2026-07-01', account: 'Del Rec Block', currency: 'USD' } })
-    const res = await inject({ method: 'DELETE', url: '/api/accounts/Del Rec Block' })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'DelRecBlock', type: 'checking', currency: 'USD', initialBalance: 0 } })
+    await inject({ method: 'POST', url: '/api/recurring', payload: { description: 'Block del rec', amount: 50, type: 'expense', period: 'monthly', startDate: '2026-07-01', account: 'DelRecBlock', currency: 'USD' } })
+    const res = await inject({ method: 'DELETE', url: '/api/accounts/DelRecBlock' })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.references.recurring).toBeGreaterThanOrEqual(1)
   })
 
   it('blocked when account is a card payer (409)', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Del Card Block', type: 'checking', currency: 'USD', initialBalance: 0 } })
-    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'Del Block Card', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'Del Card Block' } })
-    const res = await inject({ method: 'DELETE', url: '/api/accounts/Del Card Block' })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'DelCardBlock', type: 'checking', currency: 'USD', initialBalance: 0 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'DelBlockCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'DelCardBlock' } })
+    const res = await inject({ method: 'DELETE', url: '/api/accounts/DelCardBlock' })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.references.cards).toBeGreaterThanOrEqual(1)
   })
 
   it('rejects deleting a credit account (422)', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Del Credit Payer', type: 'checking', currency: 'BRL', initialBalance: 0 } })
-    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'Del Credit Card', closingDay: 10, dueDay: 20, currency: 'BRL', paymentAccount: 'Del Credit Payer' } })
-    const res = await inject({ method: 'DELETE', url: '/api/accounts/Card: Del Credit Card' })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'DelCreditPayer', type: 'checking', currency: 'BRL', initialBalance: 0 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'DelCreditCard', closingDay: 10, dueDay: 20, currency: 'BRL', paymentAccount: 'DelCreditPayer' } })
+    const res = await inject({ method: 'DELETE', url: '/api/accounts/Card%3A%20DelCreditCard' })
     expect(res.statusCode).toBe(422)
   })
 
@@ -176,10 +176,10 @@ describe('DELETE /api/accounts/:name', () => {
 
 describe('GET /api/accounts/balances', () => {
   it('returns derived balances reflecting transactions', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Balance Acct', type: 'checking', currency: 'USD', initialBalance: 1000 } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Income', amount: 500, type: 'income', date: '2026-06-01', account: 'Balance Acct', idempotencyKey: 'bal-income' } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Expense', amount: 200, type: 'expense', date: '2026-06-01', account: 'Balance Acct', idempotencyKey: 'bal-expense' } })
-    const res = await inject({ method: 'GET', url: '/api/accounts/balances?account=Balance Acct' })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'BalanceAcct', type: 'checking', currency: 'USD', initialBalance: 1000 } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Income', amount: 500, type: 'income', date: '2026-06-01', account: 'BalanceAcct', idempotencyKey: 'bal-income' } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Expense', amount: 200, type: 'expense', date: '2026-06-01', account: 'BalanceAcct', idempotencyKey: 'bal-expense' } })
+    const res = await inject({ method: 'GET', url: '/api/accounts/balances?account=BalanceAcct' })
     expect(res.statusCode).toBe(200)
     const balances = res.json() as Array<{ balance: number; income: number; expenses: number }>
     expect(balances[0].balance).toBe(1300)
@@ -188,12 +188,12 @@ describe('GET /api/accounts/balances', () => {
   })
 
   it('pending excluded from balance, included in projectedBalance', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Proj Acct', type: 'checking', currency: 'USD', initialBalance: 1000 } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Pending exp', amount: 300, type: 'expense', date: '2026-06-15', account: 'Proj Acct', status: 'pending', idempotencyKey: 'proj-pend' } })
-    const noProj = await inject({ method: 'GET', url: '/api/accounts/balances?account=Proj Acct' })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'ProjAcct', type: 'checking', currency: 'USD', initialBalance: 1000 } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Pending exp', amount: 300, type: 'expense', date: '2026-06-15', account: 'ProjAcct', status: 'pending', idempotencyKey: 'proj-pend' } })
+    const noProj = await inject({ method: 'GET', url: '/api/accounts/balances?account=ProjAcct' })
     expect(noProj.json()[0].balance).toBe(1000)
     expect(noProj.json()[0].projectedBalance).toBeUndefined()
-    const withProj = await inject({ method: 'GET', url: '/api/accounts/balances?account=Proj Acct&projectedAsOf=2026-06-30' })
+    const withProj = await inject({ method: 'GET', url: '/api/accounts/balances?account=ProjAcct&projectedAsOf=2026-06-30' })
     expect(withProj.json()[0].balance).toBe(1000)
     expect(withProj.json()[0].projectedBalance).toBe(700)
   })

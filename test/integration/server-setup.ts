@@ -6,7 +6,7 @@ const TEST_PORT = 3099
 
 process.env['MCP_URL'] = `http://127.0.0.1:${TEST_PORT}/mcp`
 
-let app: FastifyInstance
+let app: FastifyInstance | undefined
 
 beforeAll(async () => {
   const ctx = await buildApp({ port: TEST_PORT })

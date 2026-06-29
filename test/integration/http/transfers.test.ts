@@ -5,24 +5,24 @@ const { inject } = setupHttpTest()
 
 describe('POST /api/transfers', () => {
   it('creates a transfer, debits source, credits dest (201)', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Transfer From', type: 'checking', currency: 'USD', initialBalance: 500 } })
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'Transfer To', type: 'savings', currency: 'USD', initialBalance: 0 } })
-    const res = await inject({ method: 'POST', url: '/api/transfers', payload: { from: 'Transfer From', to: 'Transfer To', amount: 200, date: '2026-06-01', idempotencyKey: 'xfer-1' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'TransferFrom', type: 'checking', currency: 'USD', initialBalance: 500 } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'TransferTo', type: 'savings', currency: 'USD', initialBalance: 0 } })
+    const res = await inject({ method: 'POST', url: '/api/transfers', payload: { from: 'TransferFrom', to: 'TransferTo', amount: 200, date: '2026-06-01', idempotencyKey: 'xfer-1' } })
     expect(res.statusCode).toBe(201)
     expect(res.json()).toHaveProperty('created', true)
-    const srcBal = await inject({ method: 'GET', url: '/api/accounts/balances?account=Transfer From' })
+    const srcBal = await inject({ method: 'GET', url: '/api/accounts/balances?account=TransferFrom' })
     expect(srcBal.json()[0].balance).toBe(300)
-    const dstBal = await inject({ method: 'GET', url: '/api/accounts/balances?account=Transfer To' })
+    const dstBal = await inject({ method: 'GET', url: '/api/accounts/balances?account=TransferTo' })
     expect(dstBal.json()[0].balance).toBe(200)
   })
 
   it('transfer excluded from expense/income search', async () => {
-    const all = await inject({ method: 'GET', url: '/api/transactions?account=Transfer+From&from=2026-06-01&to=2026-06-30' })
+    const all = await inject({ method: 'GET', url: '/api/transactions?account=TransferFrom&from=2026-06-01&to=2026-06-30' })
     expect(all.statusCode).toBe(200)
     const allTxs = all.json() as Array<{ type: string }>
     const hasTransfer = allTxs.some((t) => t.type === 'transfer')
     expect(hasTransfer).toBe(true)
-    const expenses = await inject({ method: 'GET', url: '/api/transactions?account=Transfer+From&type=expense&from=2026-06-01&to=2026-06-30' })
+    const expenses = await inject({ method: 'GET', url: '/api/transactions?account=TransferFrom&type=expense&from=2026-06-01&to=2026-06-30' })
     expect((expenses.json() as Array<{ type: string }>).some((t) => t.type === 'transfer')).toBe(false)
   })
 
@@ -36,7 +36,7 @@ describe('POST /api/transfers', () => {
   })
 
   it('rejects same account (422)', async () => {
-    const res = await inject({ method: 'POST', url: '/api/transfers', payload: { from: 'Transfer From', to: 'Transfer From', amount: 10, date: '2026-06-01', idempotencyKey: 'xfer-same' } })
+    const res = await inject({ method: 'POST', url: '/api/transfers', payload: { from: 'TransferFrom', to: 'TransferFrom', amount: 10, date: '2026-06-01', idempotencyKey: 'xfer-same' } })
     expect(res.statusCode).toBe(422)
   })
 
