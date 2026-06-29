@@ -7,7 +7,10 @@ let tmpDir: string
 
 export const setup = (ctx: TestProject) => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-test-'))
-  ctx.provide('DB_PATH', join(tmpDir, 'test.db'))
+  ctx.provide(
+    'DB_PATH' as never,
+    join(tmpDir, 'test.db') as never
+  )
 }
 
 export const teardown = () => {

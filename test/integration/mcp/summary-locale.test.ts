@@ -5,7 +5,9 @@ import { toIsoDate } from '../../../src/logic/period.js'
 import { callTool, makeClient } from './helpers.js'
 
 type CategoryTotal = { category: string; type: string; total: number; count: number }
-type CurrencySummary = { currency: string; income: number; expenses: number; balance: number; byCategory: CategoryTotal[] }
+type CurrencySummary = {
+  currency: string; income: number; expenses: number; balance: number; byCategory: CategoryTotal[]
+}
 type SpendingSummary = { period: { month: number; year: number }; currencies: CurrencySummary[] }
 
 const now = new Date()

@@ -1,6 +1,4 @@
-import { defineConfig } from 'vitest/config'
-
-export default defineConfig({
+export default {  
   test: {
     include: [],
     coverage: {
@@ -10,4 +8,4 @@ export default defineConfig({
       reportsDirectory: 'coverage',
     },
   },
-})
+}

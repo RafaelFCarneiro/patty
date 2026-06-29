@@ -24,14 +24,18 @@ afterEach(() => {
 describe('openDatabase directory creation', () => {
   it('creates nested parent directories that do not yet exist', async () => {
     const nestedPath = join(tmpDir, 'a', 'b', 'c', 'nested.db')
-    const db = openDatabase({ DB_PATH: nestedPath, FINTRACK_DB_KEY: CORRECT_KEY, PORT: 3001, MCP_TRANSPORT: McpTransport.enum.http })
+    const db = openDatabase({
+      DB_PATH: nestedPath, FINTRACK_DB_KEY: CORRECT_KEY, PORT: 3001, MCP_TRANSPORT: McpTransport.enum.http,
+    })
     await bootstrap(db)
   })
 })
 
 describe('encryption at rest', () => {
   it('opens and seeds the DB with the correct key', async () => {
-    const db = openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: CORRECT_KEY, PORT: 3001, MCP_TRANSPORT: McpTransport.enum.http })
+    const db = openDatabase({
+      DB_PATH: dbPath, FINTRACK_DB_KEY: CORRECT_KEY, PORT: 3001, MCP_TRANSPORT: McpTransport.enum.http,
+    })
     await bootstrap(db)
 
     const rows = await db.query.currencies.findMany()
@@ -40,11 +44,15 @@ describe('encryption at rest', () => {
 
   it('fails to open the DB with a wrong key', async () => {
     // Write an encrypted DB with the correct key
-    const db = openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: CORRECT_KEY, PORT: 3001, MCP_TRANSPORT: McpTransport.enum.http })
+    const db = openDatabase({
+      DB_PATH: dbPath, FINTRACK_DB_KEY: CORRECT_KEY, PORT: 3001, MCP_TRANSPORT: McpTransport.enum.http,
+    })
     await bootstrap(db)
 
     // Attempt to open the same file with a different key — must throw (wrong key is never silently accepted)
-    const wrongDb = openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: WRONG_KEY, PORT: 3001, MCP_TRANSPORT: McpTransport.enum.http })
+    const wrongDb = openDatabase({
+      DB_PATH: dbPath, FINTRACK_DB_KEY: WRONG_KEY, PORT: 3001, MCP_TRANSPORT: McpTransport.enum.http,
+    })
     await expect(wrongDb.query.currencies.findMany()).rejects.toThrow()
   })
 })

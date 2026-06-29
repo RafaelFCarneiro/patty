@@ -18,7 +18,8 @@ describe('pickClassification', () => {
   it('picks the strongest edge', () => {
     const out = pickClassification([
       { merchantKey: 'uber', categoryId: 'cat-transporte', categoryName: 'Transporte', weight: 3, origin: 'rule' },
-      { merchantKey: 'uber eats', categoryId: 'cat-alimentacao', categoryName: 'Alimentação', weight: 1, origin: 'history' },
+      { merchantKey: 'uber eats', categoryId: 'cat-alimentacao', categoryName: 'Alimentação', weight: 1,
+        origin: 'history' },
     ])
     expect(out.categoryId).toBe('cat-transporte')
     expect(out.method).toBe('rule')

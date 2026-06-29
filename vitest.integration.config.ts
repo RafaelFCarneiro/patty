@@ -7,7 +7,7 @@ export default defineConfig({
     testTimeout: 30_000,
     reporters: ['default', 'verbose'],
     globalSetup: 'test/integration/setup.ts',
-    setupFiles: ['test/integration/server-setup.ts'],
+    setupFiles: ['test/integration/mcp/setup.ts'],
     fileParallelism: false,
     coverage: {
       provider: 'v8',
