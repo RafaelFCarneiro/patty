@@ -69,8 +69,14 @@ describe('POST /api/transfers', () => {
   })
 
   it('rejects credit account as destination (422)', async () => {
-    const res = await inject({ method: 'POST', url: '/api/transfers', payload: 
-      { from: 'Xfer Credit Bank', to: 'Card: Xfer Credit Card', amount: 100, idempotencyKey: 'xfer-to-credit' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload:
+      { name: 'XferCreditDstBank', type: 'checking', currency: 'USD', initialBalance: 1000 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload:
+      { name: 'XferCreditDstCard', closingDay: 28, dueDay: 5, currency: 'USD' } })
+    const res = await inject({ method: 'POST', url: '/api/transfers', payload: {
+      from: 'XferCreditDstBank', to: 'Card: XferCreditDstCard',
+      amount: 100, idempotencyKey: 'xfer-to-credit',
+    } })
     expect(res.statusCode).toBe(422)
   })
 
