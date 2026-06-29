@@ -16,13 +16,17 @@ describe('BillSchema', () => {
   })
 
   it('rejects month outside 1–12', () => {
-    expect(BillSchema.safeParse({ id: 'b1', month: 0, year: 2025, closeDate: '2025-06-28', dueDate: '2025-07-05', status: 'open' }).success).toBe(false)
-    expect(BillSchema.safeParse({ id: 'b1', month: 13, year: 2025, closeDate: '2025-06-28', dueDate: '2025-07-05', status: 'open' }).success).toBe(false)
+    expect(BillSchema.safeParse({ id: 'b1', month: 0, year: 2025, closeDate: '2025-06-28', dueDate: '2025-07-05',
+      status: 'open' }).success).toBe(false)
+    expect(BillSchema.safeParse({ id: 'b1', month: 13, year: 2025, closeDate: '2025-06-28', dueDate: '2025-07-05',
+      status: 'open' }).success).toBe(false)
   })
 
   it('rejects year outside 2000–2100', () => {
-    expect(BillSchema.safeParse({ id: 'b1', month: 1, year: 1999, closeDate: '2025-01-28', dueDate: '2025-02-05', status: 'open' }).success).toBe(false)
-    expect(BillSchema.safeParse({ id: 'b1', month: 1, year: 2101, closeDate: '2025-01-28', dueDate: '2025-02-05', status: 'open' }).success).toBe(false)
+    expect(BillSchema.safeParse({ id: 'b1', month: 1, year: 1999, closeDate: '2025-01-28', dueDate: '2025-02-05',
+      status: 'open' }).success).toBe(false)
+    expect(BillSchema.safeParse({ id: 'b1', month: 1, year: 2101, closeDate: '2025-01-28', dueDate: '2025-02-05',
+      status: 'open' }).success).toBe(false)
   })
 })
 

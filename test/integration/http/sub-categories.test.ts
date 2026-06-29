@@ -11,8 +11,10 @@ describe('GET /api/sub-categories', () => {
   })
 
   it('filters by parentId', async () => {
-    const cat1 = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'Filter Parent A', kind: 'expense' } })
-    const cat2 = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'Filter Parent B', kind: 'expense' } })
+    const cat1 = await inject({ method: 'POST', url: '/api/categories', payload: 
+      { name: 'Filter Parent A', kind: 'expense' } })
+    const cat2 = await inject({ method: 'POST', url: '/api/categories', payload: 
+      { name: 'Filter Parent B', kind: 'expense' } })
     await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'Child A', parentId: cat1.json().id } })
     await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'Child B', parentId: cat2.json().id } })
     const res = await inject({ method: 'GET', url: `/api/sub-categories?parentId=${cat1.json().id}` })
@@ -24,7 +26,8 @@ describe('GET /api/sub-categories', () => {
 
 describe('POST /api/sub-categories', () => {
   it('creates a sub-category with parent info (201)', async () => {
-    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'Sub Parent Info', kind: 'expense' } })
+    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: 
+      { name: 'Sub Parent Info', kind: 'expense' } })
     const parentId = catRes.json().id
     const res = await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'Info Sub', parentId } })
     expect(res.statusCode).toBe(201)
@@ -34,7 +37,8 @@ describe('POST /api/sub-categories', () => {
   })
 
   it('rejects duplicate name within same parent (409)', async () => {
-    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'Dup Sub Parent', kind: 'expense' } })
+    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: 
+      { name: 'Dup Sub Parent', kind: 'expense' } })
     const parentId = catRes.json().id
     await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'Dup Sub', parentId } })
     const res = await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'Dup Sub', parentId } })
@@ -42,7 +46,8 @@ describe('POST /api/sub-categories', () => {
   })
 
   it('rejects unknown parentId (404)', async () => {
-    const res = await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'Orphan Sub', parentId: 'cat-does-not-exist' } })
+    const res = await inject({ method: 'POST', url: '/api/sub-categories', payload: 
+      { name: 'Orphan Sub', parentId: 'cat-does-not-exist' } })
     expect(res.statusCode).toBe(404)
     expect(res.json().error.code).toBe('unknown_category')
   })
@@ -55,17 +60,23 @@ describe('POST /api/sub-categories', () => {
 
 describe('DELETE /api/sub-categories/:name', () => {
   it('deletes a sub-category', async () => {
-    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'DelSubParent', kind: 'expense' } })
-    await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'DelSub', parentId: catRes.json().id } })
+    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: 
+      { name: 'DelSubParent', kind: 'expense' } })
+    await inject({ method: 'POST', url: '/api/sub-categories', payload: 
+      { name: 'DelSub', parentId: catRes.json().id } })
     const res = await inject({ method: 'DELETE', url: '/api/sub-categories/DelSub' })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toHaveProperty('deleted', true)
   })
 
   it('blocked when a transaction references it (409)', async () => {
-    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: { name: 'DelSubBlockParent', kind: 'expense' } })
-    await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'DelSubBlock', parentId: catRes.json().id } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Sub ref', amount: 5, type: 'expense', date: '2026-06-01', subCategory: 'DelSubBlock', idempotencyKey: 'sub-ref-tx' } })
+    const catRes = await inject({ method: 'POST', url: '/api/categories', payload: 
+      { name: 'DelSubBlockParent', kind: 'expense' } })
+    await inject({ method: 'POST', url: '/api/sub-categories', payload: 
+      { name: 'DelSubBlock', parentId: catRes.json().id } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: 
+      { description: 'Sub ref', amount: 5, type: 'expense', date: '2026-06-01', subCategory: 'DelSubBlock',
+        idempotencyKey: 'sub-ref-tx' } })
     const res = await inject({ method: 'DELETE', url: '/api/sub-categories/DelSubBlock' })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe('in_use')

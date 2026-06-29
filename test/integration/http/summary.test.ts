@@ -5,9 +5,14 @@ const { inject } = setupHttpTest()
 
 describe('GET /api/summary', () => {
   it('returns spending summary excluding pending', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'SumAcct', type: 'checking', currency: 'USD', initialBalance: 0 } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Sum exp', amount: 100, type: 'expense', date: '2026-05-01', account: 'SumAcct', idempotencyKey: 'sum-exp' } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Sum pending', amount: 999, type: 'expense', date: '2026-05-01', account: 'SumAcct', status: 'pending', idempotencyKey: 'sum-pend' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: 
+      { name: 'SumAcct', type: 'checking', currency: 'USD', initialBalance: 0 } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: 
+      { description: 'Sum exp', amount: 100, type: 'expense', date: '2026-05-01', account: 'SumAcct',
+        idempotencyKey: 'sum-exp' } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: 
+      { description: 'Sum pending', amount: 999, type: 'expense', date: '2026-05-01', account: 'SumAcct',
+        status: 'pending', idempotencyKey: 'sum-pend' } })
     const res = await inject({ method: 'GET', url: '/api/summary?month=5&year=2026' })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toHaveProperty('period')

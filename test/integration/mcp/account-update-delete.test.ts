@@ -5,7 +5,10 @@ import { callTool, callToolError, deleteTransactions, makeClient } from './helpe
 
 type Account = { id: string; name: string; type: string; currency: string; initialBalance: number }
 type ErrorPayload<T = unknown> = { error: T }
-type InUseError = { code: string; entity: string; name: string; references: { transactions: number; recurring: number; cards: number } }
+type InUseError = {
+  code: string; entity: string; name: string
+  references: { transactions: number; recurring: number; cards: number }
+}
 type ValidationError = { code: string; issues: string[] }
 
 describe('MCP integration > account update + delete', () => {
@@ -56,7 +59,8 @@ describe('MCP integration > account update + delete', () => {
     })) as { transaction: { id: string } }
     createdTxIds.push(txResult.transaction.id)
 
-    const { error } = (await callToolError(client, { name: 'delete_account', args: { name } })) as ErrorPayload<InUseError>
+    const { error } = (await callToolError(client, { name: 'delete_account',
+      args: { name } })) as ErrorPayload<InUseError>
     expect(error.code).toBe('in_use')
     expect(error.entity).toBe('account')
     expect(error.references.transactions).toBeGreaterThanOrEqual(1)
@@ -78,7 +82,8 @@ describe('MCP integration > account update + delete', () => {
       },
     })
 
-    const { error } = (await callToolError(client, { name: 'delete_account', args: { name } })) as ErrorPayload<InUseError>
+    const { error } = (await callToolError(client, { name: 'delete_account',
+      args: { name } })) as ErrorPayload<InUseError>
     expect(error.code).toBe('in_use')
     expect(error.references.recurring).toBeGreaterThanOrEqual(1)
   })
@@ -92,7 +97,8 @@ describe('MCP integration > account update + delete', () => {
       args: { name: `card-payer-${stamp}`, closingDay: 10, dueDay: 20, currency: 'BRL', paymentAccount: name },
     })
 
-    const { error } = (await callToolError(client, { name: 'delete_account', args: { name } })) as ErrorPayload<InUseError>
+    const { error } = (await callToolError(client, { name: 'delete_account',
+      args: { name } })) as ErrorPayload<InUseError>
     expect(error.code).toBe('in_use')
     expect(error.references.cards).toBeGreaterThanOrEqual(1)
   })
@@ -101,15 +107,18 @@ describe('MCP integration > account update + delete', () => {
     const cardName = `credit-del-${stamp}`
     const payerName = `payer-del-${stamp}`
     await callTool(client, { name: 'create_account', args: { name: payerName, type: 'checking', currency: 'BRL' } })
-    await callTool(client, { name: 'create_credit_card', args: { name: cardName, closingDay: 10, dueDay: 20, currency: 'BRL', paymentAccount: payerName } })
+    await callTool(client, { name: 'create_credit_card', args: { name: cardName, closingDay: 10, dueDay: 20,
+      currency: 'BRL', paymentAccount: payerName } })
 
     const creditAccountName = `Card: ${cardName}`
-    const { error } = (await callToolError(client, { name: 'delete_account', args: { name: creditAccountName } })) as ErrorPayload<ValidationError>
+    const { error } = (await callToolError(client, { name: 'delete_account',
+      args: { name: creditAccountName } })) as ErrorPayload<ValidationError>
     expect(error.code).toBe('validation')
   })
 
   it('delete_account returns unknown_account for non-existent name', async () => {
-    const { error } = (await callToolError(client, { name: 'delete_account', args: { name: 'nonexistent-xyz-999' } })) as ErrorPayload<{ code: string }>
+    const { error } = (await callToolError(client, { name: 'delete_account',
+      args: { name: 'nonexistent-xyz-999' } })) as ErrorPayload<{ code: string }>
     expect(error.code).toBe('unknown_account')
   })
 
@@ -117,7 +126,8 @@ describe('MCP integration > account update + delete', () => {
 
   it('update_account name + initialBalance succeeds even with transactions', async () => {
     const name = `upd-always-${stamp}`
-    await callTool(client, { name: 'create_account', args: { name, type: 'checking', currency: 'BRL', initialBalance: 100 } })
+    await callTool(client, { name: 'create_account',
+      args: { name, type: 'checking', currency: 'BRL', initialBalance: 100 } })
 
     const txResult = (await callTool(client, {
       name: 'create_transaction',
@@ -235,7 +245,8 @@ describe('MCP integration > account update + delete', () => {
     const cardName = `credit-upd-${stamp}`
     const payerName = `payer-upd-${stamp}`
     await callTool(client, { name: 'create_account', args: { name: payerName, type: 'checking', currency: 'BRL' } })
-    await callTool(client, { name: 'create_credit_card', args: { name: cardName, closingDay: 10, dueDay: 20, currency: 'BRL', paymentAccount: payerName } })
+    await callTool(client, { name: 'create_credit_card', args: { name: cardName, closingDay: 10, dueDay: 20,
+      currency: 'BRL', paymentAccount: payerName } })
 
     const creditAccountName = `Card: ${cardName}`
     const { error } = (await callToolError(client, {
@@ -260,7 +271,8 @@ describe('MCP integration > account update + delete', () => {
 
   it('update_account with no fields returns the account unchanged', async () => {
     const name = `upd-noop-${stamp}`
-    await callTool(client, { name: 'create_account', args: { name, type: 'checking', currency: 'BRL', initialBalance: 42 } })
+    await callTool(client, { name: 'create_account',
+      args: { name, type: 'checking', currency: 'BRL', initialBalance: 42 } })
 
     const result = (await callTool(client, { name: 'update_account', args: { name } })) as Account
     expect(result.name).toBe(name)

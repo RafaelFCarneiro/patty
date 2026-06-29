@@ -120,7 +120,8 @@ describe('MCP integration > transaction category locale', () => {
     } })
 
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } })
-    const ptResult = await callTool(client, { name: 'search_transactions', args: { text: 'Sub locale test' } }) as SearchResult
+    const ptResult = await callTool(client, { name: 'search_transactions',
+      args: { text: 'Sub locale test' } }) as SearchResult
     expect(ptResult[0].subCategoryId).toBe(sub.id)
     expect(ptResult[0].subCategoryName).toBe('Groceries')
   })

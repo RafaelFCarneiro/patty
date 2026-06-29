@@ -10,10 +10,17 @@ afterEach(async () => {
   createdTxIds.length = 0
 })
 
-type SubCategory = { id?: string; name?: string; parentId?: string; parentName?: string; kind?: string }
-type TransactionView = { id?: string; subCategoryId?: string; subCategoryName?: string; categoryId?: string; categoryName?: string }
+type SubCategory = {
+  id?: string; name?: string; parentId?: string; parentName?: string; kind?: string
+}
+type TransactionView = {
+  id?: string; subCategoryId?: string; subCategoryName?: string; categoryId?: string; categoryName?: string
+}
 type ErrorPayload<T = unknown> = { error: T }
-type InUseError = { code: string; entity: string; name: string; references: { transactions: number; recurring: number; subCategories: number } }
+type InUseError = {
+  code: string; entity: string; name: string
+  references: { transactions: number; recurring: number; subCategories: number }
+}
 
 describe('MCP integration > sub-categories', () => {
   it('create_sub_category returns sub-category with parent info inherited kind', async () => {
@@ -362,7 +369,8 @@ describe('MCP integration > sub-categories', () => {
     }
   })
 
-  it('update_transaction preserves the existing sub-category when neither category nor subCategory is provided', async () => {
+  it('update_transaction preserves the existing sub-category when neither category nor subCategory is provided',
+    async () => {
     const stamp = Date.now()
     const { client, transport } = makeClient()
     try {
@@ -446,8 +454,10 @@ describe('MCP integration > sub-categories', () => {
 
       const srcName = `TransferSrc-${stamp}`
       const dstName = `TransferDst-${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: srcName, type: 'checking', currency: 'BRL', initialBalance: 500 } })
-      await callTool(client, { name: 'create_account', args: { name: dstName, type: 'savings', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: srcName, type: 'checking', currency: 'BRL',
+        initialBalance: 500 } })
+      await callTool(client, { name: 'create_account', args: { name: dstName, type: 'savings', currency: 'BRL',
+        initialBalance: 0 } })
 
       const transfer = (await callTool(client, {
         name: 'create_transfer',
@@ -506,8 +516,10 @@ describe('MCP integration > sub-categories', () => {
 
       const srcName = `TransferSrc2-${stamp}`
       const dstName = `TransferDst2-${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: srcName, type: 'checking', currency: 'BRL', initialBalance: 500 } })
-      await callTool(client, { name: 'create_account', args: { name: dstName, type: 'savings', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: srcName, type: 'checking', currency: 'BRL',
+        initialBalance: 500 } })
+      await callTool(client, { name: 'create_account', args: { name: dstName, type: 'savings', currency: 'BRL',
+        initialBalance: 0 } })
 
       const transfer = (await callTool(client, {
         name: 'create_transfer',
@@ -535,7 +547,8 @@ describe('MCP integration > sub-categories', () => {
       await client.connect(transport)
 
       const accountName = `sub-del-acct-${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: accountName, type: 'checking', currency: 'BRL',
+        initialBalance: 0 } })
 
       const cat = (await callTool(client, {
         name: 'create_category',
@@ -561,7 +574,8 @@ describe('MCP integration > sub-categories', () => {
       })) as { transaction: { id: string } }
       createdTxIds.push(txResult.transaction.id)
 
-      const { error } = (await callToolError(client, { name: 'delete_sub_category', args: { name: sub.name! } })) as ErrorPayload<InUseError>
+      const { error } = (await callToolError(client, { name: 'delete_sub_category',
+        args: { name: sub.name! } })) as ErrorPayload<InUseError>
       expect(error.code).toBe('in_use')
       expect(error.entity).toBe('sub_category')
       expect(error.references.transactions).toBeGreaterThanOrEqual(1)
@@ -569,7 +583,8 @@ describe('MCP integration > sub-categories', () => {
       await callTool(client, { name: 'delete_transaction', args: { id: txResult.transaction.id, confirm: true } })
       createdTxIds.splice(createdTxIds.indexOf(txResult.transaction.id), 1)
 
-      const result = (await callTool(client, { name: 'delete_sub_category', args: { name: sub.name! } })) as { deleted: boolean }
+      const result = (await callTool(client, { name: 'delete_sub_category',
+        args: { name: sub.name! } })) as { deleted: boolean }
       expect(result.deleted).toBe(true)
     } finally {
       await transport.close()

@@ -5,9 +5,13 @@ const { inject } = setupHttpTest()
 
 describe('GET /api/bills', () => {
   it('returns a bill for an existing card', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'BillPayer', type: 'checking', currency: 'USD', initialBalance: 1000 } })
-    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'BillCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'BillPayer' } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Bill charge', amount: 50, type: 'expense', date: '2026-06-05', idempotencyKey: 'bill-chg-1', card: 'BillCard' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: 
+      { name: 'BillPayer', type: 'checking', currency: 'USD', initialBalance: 1000 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: 
+      { name: 'BillCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'BillPayer' } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: 
+      { description: 'Bill charge', amount: 50, type: 'expense', date: '2026-06-05', idempotencyKey: 'bill-chg-1',
+        card: 'BillCard' } })
     const res = await inject({ method: 'GET', url: '/api/bills?card=BillCard&month=6&year=2026' })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toHaveProperty('bill')
@@ -15,17 +19,25 @@ describe('GET /api/bills', () => {
   })
 
   it('returns note on transaction rows', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'NoteBillPayer', type: 'checking', currency: 'USD', initialBalance: 1000 } })
-    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'NoteBillCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'NoteBillPayer' } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Note bill tx', amount: 42, type: 'expense', date: '2026-06-05', card: 'NoteBillCard', idempotencyKey: 'note-bill-1', note: 'warranty' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: 
+      { name: 'NoteBillPayer', type: 'checking', currency: 'USD', initialBalance: 1000 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: 
+      { name: 'NoteBillCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'NoteBillPayer' } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: 
+      { description: 'Note bill tx', amount: 42, type: 'expense', date: '2026-06-05', card: 'NoteBillCard',
+        idempotencyKey: 'note-bill-1', note: 'warranty' } })
     const res = await inject({ method: 'GET', url: '/api/bills?card=NoteBillCard&month=6&year=2026' })
     expect(res.json().transactions.some((tx: { note?: string }) => tx.note === 'warranty')).toBe(true)
   })
 
   it('coerces string month/year', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'CoercePayer', type: 'checking', currency: 'USD', initialBalance: 1000 } })
-    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'CoerceCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'CoercePayer' } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Coerce charge', amount: 25, type: 'expense', date: '2026-06-05', card: 'CoerceCard', idempotencyKey: 'coerce-chg' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: 
+      { name: 'CoercePayer', type: 'checking', currency: 'USD', initialBalance: 1000 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: 
+      { name: 'CoerceCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'CoercePayer' } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: 
+      { description: 'Coerce charge', amount: 25, type: 'expense', date: '2026-06-05', card: 'CoerceCard',
+        idempotencyKey: 'coerce-chg' } })
     const res = await inject({ method: 'GET', url: '/api/bills?card=CoerceCard&month=6&year=2026' })
     expect(res.statusCode).toBe(200)
   })
@@ -43,10 +55,15 @@ describe('GET /api/bills', () => {
 
 describe('POST /api/bills/pay', () => {
   it('pays a bill, debits payer, credits card account', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'PayBillAcc', type: 'checking', currency: 'USD', initialBalance: 5000 } })
-    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'PayBillCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'PayBillAcc' } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Charge', amount: 300, type: 'expense', date: '2026-06-05', idempotencyKey: 'pay-bill-chg', card: 'PayBillCard' } })
-    const res = await inject({ method: 'POST', url: '/api/bills/pay', payload: { card: 'PayBillCard', month: 6, year: 2026, account: 'PayBillAcc' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: 
+      { name: 'PayBillAcc', type: 'checking', currency: 'USD', initialBalance: 5000 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: 
+      { name: 'PayBillCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'PayBillAcc' } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: 
+      { description: 'Charge', amount: 300, type: 'expense', date: '2026-06-05', idempotencyKey: 'pay-bill-chg',
+        card: 'PayBillCard' } })
+    const res = await inject({ method: 'POST', url: '/api/bills/pay', payload: 
+      { card: 'PayBillCard', month: 6, year: 2026, account: 'PayBillAcc' } })
     expect(res.statusCode).toBe(200)
     expect(res.json().status).toBe('paid')
     const balances = await inject({ method: 'GET', url: '/api/accounts/balances?account=PayBillAcc' })
@@ -56,22 +73,32 @@ describe('POST /api/bills/pay', () => {
   })
 
   it('pay_bill without account and without card default returns 422', async () => {
-    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'NoDefaultCard', closingDay: 28, dueDay: 5, currency: 'USD' } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'No def charge', amount: 50, type: 'expense', date: '2026-06-05', card: 'NoDefaultCard', idempotencyKey: 'nodef-chg' } })
-    const res = await inject({ method: 'POST', url: '/api/bills/pay', payload: { card: 'NoDefaultCard', month: 6, year: 2026 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: 
+      { name: 'NoDefaultCard', closingDay: 28, dueDay: 5, currency: 'USD' } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: 
+      { description: 'No def charge', amount: 50, type: 'expense', date: '2026-06-05', card: 'NoDefaultCard',
+        idempotencyKey: 'nodef-chg' } })
+    const res = await inject({ method: 'POST', url: '/api/bills/pay', payload: 
+      { card: 'NoDefaultCard', month: 6, year: 2026 } })
     expect(res.statusCode).toBe(422)
   })
 
   it('pay_bill with currency mismatch returns 422', async () => {
-    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'BRLMismatchAcc', type: 'checking', currency: 'BRL', initialBalance: 1000 } })
-    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'USDMismatchCard', closingDay: 28, dueDay: 5, currency: 'USD' } })
-    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Mismatch chg', amount: 25, type: 'expense', date: '2026-06-05', card: 'USDMismatchCard', idempotencyKey: 'mismatch-chg' } })
-    const res = await inject({ method: 'POST', url: '/api/bills/pay', payload: { card: 'USDMismatchCard', month: 6, year: 2026, account: 'BRLMismatchAcc' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: 
+      { name: 'BRLMismatchAcc', type: 'checking', currency: 'BRL', initialBalance: 1000 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: 
+      { name: 'USDMismatchCard', closingDay: 28, dueDay: 5, currency: 'USD' } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: 
+      { description: 'Mismatch chg', amount: 25, type: 'expense', date: '2026-06-05', card: 'USDMismatchCard',
+        idempotencyKey: 'mismatch-chg' } })
+    const res = await inject({ method: 'POST', url: '/api/bills/pay', payload: 
+      { card: 'USDMismatchCard', month: 6, year: 2026, account: 'BRLMismatchAcc' } })
     expect(res.statusCode).toBe(422)
   })
 
   it('returns 404 for unknown bill', async () => {
-    const res = await inject({ method: 'POST', url: '/api/bills/pay', payload: { card: 'Nonexistent Pay Card', month: 1, year: 2026 } })
+    const res = await inject({ method: 'POST', url: '/api/bills/pay', payload: 
+      { card: 'Nonexistent Pay Card', month: 1, year: 2026 } })
     expect(res.statusCode).toBe(404)
   })
 })
