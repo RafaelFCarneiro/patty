@@ -11,6 +11,8 @@ import {
   VSCODE_ENTRY,
 } from '../../src/setup.js'
 
+const escapeForRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 describe('mergeMcpServersKey', () => {
   it('adds fintrack entry to an empty config', () => {
     const result = mergeMcpServersKey({}, { ...STDIO_ENTRY })
@@ -127,8 +129,9 @@ describe('readJsonOrEmpty', () => {
 
     expect(() => readJsonOrEmpty(configPath)).toThrow('process.exit:1')
     expect(errorSpy).toHaveBeenCalledTimes(1)
-    expect(errorSpy.mock.calls[0]?.[0]).toContain(`fintrack setup: failed to read ${configPath}:`)
-    expect(errorSpy.mock.calls[0]?.[0]).toContain('EISDIR')
+    expect(errorSpy.mock.calls[0]?.[0]).toMatch(
+      new RegExp(`^fintrack setup: failed to read ${escapeForRegExp(configPath)}: EISDIR:`),
+    )
   })
 })
 
