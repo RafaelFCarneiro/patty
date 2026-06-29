@@ -10,81 +10,66 @@ Stack: TypeScript · Fastify · zod · neverthrow · remeda · libSQL + Drizzle 
 
 ---
 
-## Install & run
+## Getting started
 
-### As a package (recommended)
+### 1 — Authenticate (one-time per machine)
 
-FinTrack publishes privately to **GitHub Packages**. One-time per machine: create a GitHub token with the `read:packages` scope and add it to `~/.npmrc` (full steps in [`docs/releasing.md`](docs/releasing.md)):
+FinTrack publishes privately to **GitHub Packages**. Create a GitHub token with the `read:packages` scope and add it to `~/.npmrc` (full steps in [`docs/releasing.md`](docs/releasing.md)):
 
 ```ini
 @rafaelfcarneiro:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=YOUR_READ_PACKAGES_TOKEN
 ```
 
-Then run it — by default it starts as a **stdio MCP server** (no port, no setup):
+### 2 — Connect your AI client
+
+Run the setup command for your agent — it downloads FinTrack, writes the correct config, and exits. No server to start separately; the client manages that automatically from this point on.
 
 ```bash
-npx @rafaelfcarneiro/fintrack@latest
+npx @rafaelfcarneiro/fintrack@latest setup claude-code      # Claude Code CLI
+npx @rafaelfcarneiro/fintrack@latest setup claude-desktop   # Claude Desktop
+npx @rafaelfcarneiro/fintrack@latest setup copilot          # VS Code / GitHub Copilot
+npx @rafaelfcarneiro/fintrack@latest setup antigravity      # Google Antigravity
+npx @rafaelfcarneiro/fintrack@latest setup codex            # OpenAI Codex (prints snippet)
 ```
 
-On first run it creates `<home directory>/.fintrack/fintrack.db` (e.g. `~/.fintrack/fintrack.db` on macOS/Linux) and generates the encryption key in your keychain.
-
-### From source (development)
+Run without a tool name to list all options and the config file each one writes:
 
 ```bash
-npm install
-npm run dev          # stdio MCP server (reads stdin)
+npx @rafaelfcarneiro/fintrack@latest setup
 ```
 
-For manual testing or the MCP Inspector, run in HTTP mode instead:
+The setup command is safe to re-run — it merges idempotently, preserving any existing config keys.
 
-```bash
-MCP_TRANSPORT=http npm run dev          # REST + MCP on http://localhost:3001
-npm run mcp:inspect                     # MCP Inspector → http://127.0.0.1:3001/mcp
-```
+### 3 — Restart your client and start chatting
 
-Run `npx ntl` for an interactive, described list of all scripts.
+Restart the AI client (or reload the window for VS Code), then talk to your finances naturally. See [Sample usage](#sample-usage) below.
+
+> **Updating:** re-run the same setup command. `npx` with `@latest` always fetches the newest published version.
 
 ---
 
 ## Transports
 
-| Mode | When | Endpoint |
+| Mode | When | How |
 |---|---|---|
-| **stdio** (default) | A client launches the process directly. No port, no conflicts. | stdin/stdout |
+| **stdio** (default) | A client launches FinTrack directly — no port, no conflicts. | Client config points at `npx @rafaelfcarneiro/fintrack@latest` |
 | **http** (`MCP_TRANSPORT=http`) | REST API, multi-client, or debugging via the Inspector. | `http://localhost:3001` (`/mcp`, `/api`) |
 
 ---
 
-## Connecting to AI clients
+## Manual config and HTTP mode
 
-### stdio (recommended — the client launches FinTrack)
+Prefer the `setup` command above. If you need to configure manually or use HTTP mode, see [`docs/mcp-clients.md`](docs/mcp-clients.md) for per-client JSON snippets, ChatGPT, Ollama, port details, and debugging.
 
-No server to start beforehand, no port. Point the client at the command.
-
-**Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-"mcpServers": {
-  "fintrack": { "command": "npx", "args": ["-y", "@rafaelfcarneiro/fintrack"] }
-}
-```
-
-**VS Code / GitHub Copilot** — `.vscode/mcp.json` (tools appear in **Agent** mode only):
-
-```json
-{ "servers": { "fintrack": { "command": "npx", "args": ["-y", "@rafaelfcarneiro/fintrack"] } } }
-```
-
-**Claude Code (CLI):**
+**HTTP mode quick-start** — start the server explicitly, then connect by URL:
 
 ```bash
-claude mcp add fintrack -- npx -y @rafaelfcarneiro/fintrack
+MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack@latest   # published package
+MCP_TRANSPORT=http npm run dev                             # from source
 ```
 
-### HTTP (opt-in)
-
-Start the server in HTTP mode (`MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack`, or `MCP_TRANSPORT=http npm run dev` from source), then connect by URL — e.g. VS Code `.vscode/mcp.json`:
+VS Code `.vscode/mcp.json` (HTTP):
 
 ```json
 { "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:3001/mcp" } } }
@@ -92,7 +77,21 @@ Start the server in HTTP mode (`MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack
 
 > Use `127.0.0.1`, not `localhost` — VS Code resolves `localhost` to IPv6 `::1`.
 
-Running several MCP servers? Only HTTP mode uses a port; give each one its own via `PORT` (stdio never collides). Full guide (ChatGPT, Ollama, port details, debugging): [`docs/mcp-clients.md`](docs/mcp-clients.md).
+---
+
+## Development (from source)
+
+```bash
+npm install
+npm run dev          # stdio MCP server (reads stdin)
+```
+
+```bash
+MCP_TRANSPORT=http npm run dev   # REST + MCP on http://localhost:3001
+npm run mcp:inspect              # MCP Inspector → http://127.0.0.1:3001/mcp
+```
+
+Run `npx ntl` for an interactive, described list of all scripts. On first run (any mode) FinTrack creates `~/.fintrack/fintrack.db` and generates the encryption key in your OS keychain.
 
 ---
 
