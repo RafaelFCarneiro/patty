@@ -214,7 +214,7 @@ export const runSetup = (tool: string | undefined): void => {
     process.exit(0)
   }
 
-  const client = TOOLS[tool.toLowerCase()]
+  const client = TOOLS[tool.trim().toLowerCase()]
   if (!client) {
     console.error(`fintrack setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`)
     process.exit(1)
