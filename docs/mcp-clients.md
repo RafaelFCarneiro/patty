@@ -6,6 +6,30 @@ HTTP is available as an opt-in (`MCP_TRANSPORT=http`) for multi-client access, R
 
 ---
 
+## One-command setup
+
+The `setup` subcommand writes the correct config for your agent automatically. It merges idempotently — safe to re-run, existing keys are preserved.
+
+```bash
+npx @rafaelfcarneiro/fintrack setup <tool>
+```
+
+| Tool argument | Client | Config file written |
+|---|---|---|
+| `claude-code` | Claude Code CLI | `~/.claude/mcp.json` |
+| `claude-desktop` | Claude Desktop | OS-specific path (see below) |
+| `copilot` or `vscode` | VS Code / GitHub Copilot | `.vscode/mcp.json` in current directory |
+| `antigravity` | Google Antigravity (2.0, CLI, IDE) | `~/.gemini/config/mcp_config.json` |
+| `codex` | OpenAI Codex | prints the snippet to paste manually |
+
+Run without arguments for usage and paths:
+
+```bash
+npx @rafaelfcarneiro/fintrack setup
+```
+
+---
+
 ## Direct stdio (recommended — default)
 
 The client spawns FinTrack directly. No server to start separately; no port conflicts.
@@ -50,6 +74,25 @@ claude mcp add fintrack -- npx -y @rafaelfcarneiro/fintrack
 ```
 
 Or edit `~/.claude/mcp.json` directly with the same `command`/`args` shape as VS Code above.
+
+### Google Antigravity (2.0, CLI, IDE) ✅
+
+Global config at `~/.gemini/config/mcp_config.json` (or workspace-scoped at `.agents/mcp_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "fintrack": {
+      "command": "npx",
+      "args": ["-y", "@rafaelfcarneiro/fintrack"]
+    }
+  }
+}
+```
+
+Antigravity 2.0: Settings → Customizations → Installed MCP Servers → reload.
+Antigravity CLI: type `/mcp` at the prompt to open the MCP Manager and reload.
+Antigravity IDE: click `...` in the agent panel → MCP Servers → Manage → View raw config.
 
 ---
 
