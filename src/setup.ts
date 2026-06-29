@@ -95,7 +95,7 @@ const claudeDesktopConfigPath = (): string => {
 
 const setupClaudeCode = (): void => {
   const configPath = join(home, '.claude', 'mcp.json')
-  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), { ...STDIO_ENTRY }))
+  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), STDIO_ENTRY))
   // eslint-disable-next-line no-console -- CLI surface
   console.log(`  Updated: ${configPath}`)
   // eslint-disable-next-line no-console -- CLI surface
@@ -104,7 +104,7 @@ const setupClaudeCode = (): void => {
 
 const setupClaudeDesktop = (): void => {
   const configPath = claudeDesktopConfigPath()
-  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), { ...STDIO_ENTRY }))
+  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), STDIO_ENTRY))
   // eslint-disable-next-line no-console -- CLI surface
   console.log(`  Updated: ${configPath}`)
   // eslint-disable-next-line no-console -- CLI surface
@@ -113,7 +113,7 @@ const setupClaudeDesktop = (): void => {
 
 const setupCopilot = (): void => {
   const configPath = join(process.cwd(), '.vscode', 'mcp.json')
-  writeJson(configPath, mergeServersKey(readJsonOrEmpty(configPath), { ...VSCODE_ENTRY }))
+  writeJson(configPath, mergeServersKey(readJsonOrEmpty(configPath), VSCODE_ENTRY))
   // eslint-disable-next-line no-console -- CLI surface
   console.log(`  Updated: ${configPath}`)
   // eslint-disable-next-line no-console -- CLI surface
@@ -122,7 +122,7 @@ const setupCopilot = (): void => {
 
 const setupAntigravity = (): void => {
   const configPath = join(home, '.gemini', 'config', 'mcp_config.json')
-  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), { ...STDIO_ENTRY }))
+  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), STDIO_ENTRY))
   // eslint-disable-next-line no-console -- CLI surface
   console.log(`  Updated: ${configPath}`)
   // eslint-disable-next-line no-console -- CLI surface
