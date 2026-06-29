@@ -29,7 +29,7 @@ The goal: one command per client, safe to re-run, cross-platform (macOS, Linux, 
 Add a `setup` subcommand to the existing `fintrack` binary:
 
 ```bash
-npx @rafaelfcarneiro/fintrack setup <tool>
+npx @rafaelfcarneiro/fintrack@latest setup <tool>
 ```
 
 - **Branching happens before `loadConfig()`** in `main.ts` — no env-var parsing, no DB
@@ -60,7 +60,7 @@ Most clients share the `mcpServers` root key:
 ```json
 {
   "mcpServers": {
-    "fintrack": { "command": "npx", "args": ["-y", "@rafaelfcarneiro/fintrack"] }
+    "fintrack": { "command": "npx", "args": ["-y", "@rafaelfcarneiro/fintrack@latest"] }
   }
 }
 ```
@@ -69,7 +69,7 @@ VS Code requires an additional `type` field and uses `servers` (not `mcpServers`
 ```json
 {
   "servers": {
-    "fintrack": { "type": "stdio", "command": "npx", "args": ["-y", "@rafaelfcarneiro/fintrack"] }
+    "fintrack": { "type": "stdio", "command": "npx", "args": ["-y", "@rafaelfcarneiro/fintrack@latest"] }
   }
 }
 ```
@@ -86,7 +86,7 @@ VS Code requires an additional `type` field and uses `servers` (not `mcpServers`
 
 ## Options Considered
 
-### `npx @rafaelfcarneiro/fintrack setup <tool>` — **chosen**
+### `npx @rafaelfcarneiro/fintrack@latest setup <tool>` — **chosen**
 
 Ships inside the existing package. Zero extra dependencies. Cross-platform (Node.js handles
 path differences). The branching in `main.ts` keeps it completely decoupled from server
