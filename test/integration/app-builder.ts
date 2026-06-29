@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import Fastify, { type FastifyInstance } from 'fastify'
-import { afterAll, beforeAll, inject } from 'vitest'
+import { inject } from 'vitest'
 import { bootstrap } from '../../src/diplomat/db/bootstrap.js'
 import { openDatabase } from '../../src/diplomat/db/driver.js'
 import { accountsRepo } from '../../src/diplomat/db/repos/accounts.js'
@@ -19,21 +19,17 @@ import { McpTransport } from '../../src/config.js'
 import { Locale } from '../../src/models/locale.js'
 import { registerRoutes } from '../../src/diplomat/http/routes.js'
 import { registerMcpRoute } from '../../src/diplomat/mcp/route.js'
+import type { Deps } from '../../src/controllers/deps.js'
 
-const TEST_PORT = 3099
-// Fixed 64-char hex key for integration tests — never touches the OS keychain.
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64)
 
-// Set before test modules are evaluated so helpers.ts picks it up at import time.
-process.env['MCP_URL'] = `http://127.0.0.1:${TEST_PORT}/mcp`
+export type AppContext = { app: FastifyInstance; deps: Deps; version: string }
 
-let app: FastifyInstance
-
-beforeAll(async () => {
+export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promise<AppContext> => {
   const db = openDatabase({
-    DB_PATH: inject('DB_PATH') as string,
+    DB_PATH: opts?.dbPath ?? (inject('DB_PATH') as string),
     FINTRACK_DB_KEY: TEST_ENCRYPTION_KEY,
-    PORT: TEST_PORT,
+    PORT: opts?.port ?? 0,
     MCP_TRANSPORT: McpTransport.enum.http,
   })
 
@@ -41,7 +37,7 @@ beforeAll(async () => {
 
   const settingsR = settingsRepo(db)
 
-  const deps = {
+  const deps: Deps = {
     accounts: accountsRepo(db),
     bills: billsRepo(db),
     categories: categoriesRepo(db),
@@ -65,13 +61,9 @@ beforeAll(async () => {
   const require = createRequire(import.meta.url)
   const { version } = require('../../package.json') as { version: string }
 
-  app = Fastify()
+  const app = Fastify()
   registerRoutes(app, deps, version)
   registerMcpRoute(app, deps, version)
 
-  await app.listen({ port: TEST_PORT, host: '::' })
-})
-
-afterAll(async () => {
-  await app?.close()
-})
+  return { app, deps, version }
+}

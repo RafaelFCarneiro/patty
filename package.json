@@ -30,7 +30,7 @@
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
-    "lint": "eslint src",
+    "lint": "eslint src test",
     "test": "vitest run --config vitest.unit.config.ts",
     "test:coverage": "vitest run --config vitest.unit.config.ts --coverage",
     "test:coverage:integration": "vitest run --config vitest.integration.config.ts --coverage",

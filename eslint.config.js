@@ -11,7 +11,7 @@ export default tseslint.config(
     ignores: ['dist/**', 'coverage/**', 'drizzle/**', 'scripts/**', '**/*.config.ts', '**/*.config.js'],
   },
   {
-    files: ['src/**/*.ts'],
+    files: ['src/**/*.ts', 'test/**/*.ts'],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: { sourceType: 'module' },
@@ -39,6 +39,17 @@ export default tseslint.config(
         code: 120,
         ignoreUrls: true,
         ignoreStrings: true,
+        ignoreTemplateLiterals: true,
+        ignoreRegExpLiterals: true,
+      }],
+    },
+  },
+  {
+    files: ['test/**/*.ts'],
+    rules: {
+      'max-len': ['error', {
+        code: 120,
+        ignoreUrls: true,
         ignoreTemplateLiterals: true,
         ignoreRegExpLiterals: true,
       }],

@@ -5,7 +5,10 @@ import { callTool, callToolError, deleteTransactions, makeClient } from './helpe
 
 type Category = { id: string; name: string; kind: string; names: Record<string, string> | null }
 type ErrorPayload<T = unknown> = { error: T }
-type InUseError = { code: string; entity: string; name: string; references: { transactions: number; recurring: number; subCategories: number } }
+type InUseError = {
+  code: string; entity: string; name: string
+  references: { transactions: number; recurring: number; subCategories: number }
+}
 
 describe('MCP integration > categories', () => {
   let client: Client
@@ -19,7 +22,8 @@ describe('MCP integration > categories', () => {
     client = c.client
     transport = c.transport
     await client.connect(transport)
-    await callTool(client, { name: 'create_account', args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+    await callTool(client, { name: 'create_account', args: { name: accountName, type: 'checking', currency: 'BRL',
+      initialBalance: 0 } })
   })
 
   afterAll(async () => {
@@ -42,7 +46,8 @@ describe('MCP integration > categories', () => {
       args: { name: `del-cat-${stamp}`, kind: 'expense' },
     })) as Category
 
-    const result = (await callTool(client, { name: 'delete_category', args: { name: cat.name } })) as { deleted: boolean }
+    const result = (await callTool(client, { name: 'delete_category',
+      args: { name: cat.name } })) as { deleted: boolean }
     expect(result.deleted).toBe(true)
 
     const all = (await callTool(client, { name: 'list_categories' })) as Category[]
@@ -69,7 +74,8 @@ describe('MCP integration > categories', () => {
     })) as { transaction: { id: string } }
     createdTxIds.push(txResult.transaction.id)
 
-    const { error } = (await callToolError(client, { name: 'delete_category', args: { name: cat.name } })) as ErrorPayload<InUseError>
+    const { error } = (await callToolError(client, { name: 'delete_category',
+      args: { name: cat.name } })) as ErrorPayload<InUseError>
     expect(error.code).toBe('in_use')
     expect(error.entity).toBe('category')
     expect(error.references.transactions).toBeGreaterThanOrEqual(1)
@@ -89,7 +95,8 @@ describe('MCP integration > categories', () => {
       args: { name: `child-sub-${stamp}`, parentId: cat.id },
     })
 
-    const { error } = (await callToolError(client, { name: 'delete_category', args: { name: cat.name } })) as ErrorPayload<InUseError>
+    const { error } = (await callToolError(client, { name: 'delete_category',
+      args: { name: cat.name } })) as ErrorPayload<InUseError>
     expect(error.code).toBe('in_use')
     expect(error.references.subCategories).toBeGreaterThanOrEqual(1)
   })
@@ -125,7 +132,8 @@ describe('MCP integration > categories', () => {
     createdTxIds.splice(createdTxIds.indexOf(txResult.transaction.id), 1)
 
     // Category should still delete — merchant rules are not a blocker
-    const result = (await callTool(client, { name: 'delete_category', args: { name: cat.name } })) as { deleted: boolean }
+    const result = (await callTool(client, { name: 'delete_category',
+      args: { name: cat.name } })) as { deleted: boolean }
     expect(result.deleted).toBe(true)
 
     const allAfter = (await callTool(client, { name: 'list_categories' })) as Category[]
@@ -151,7 +159,8 @@ describe('MCP integration > categories', () => {
       },
     })
 
-    const { error } = (await callToolError(client, { name: 'delete_category', args: { name: cat.name } })) as ErrorPayload<InUseError>
+    const { error } = (await callToolError(client, { name: 'delete_category',
+      args: { name: cat.name } })) as ErrorPayload<InUseError>
     expect(error.code).toBe('in_use')
     expect(error.entity).toBe('category')
     expect(error.references.recurring).toBeGreaterThanOrEqual(1)

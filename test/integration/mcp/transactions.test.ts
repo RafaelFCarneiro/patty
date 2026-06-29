@@ -163,9 +163,12 @@ describe('MCP integration > transactions', () => {
         args: {
           account: accountName,
           items: [
-            { description: 'iFood refeição', amount: 45, type: 'expense', date: today, idempotencyKey: `bulk-${stamp}-1` },
-            { description: 'Salário empresa', amount: 5000, type: 'income', date: today, idempotencyKey: `bulk-${stamp}-2` },
-            { description: 'Uber corrida', amount: 22.5, type: 'expense', date: today, idempotencyKey: `bulk-${stamp}-3` },
+            { description: 'iFood refeição', amount: 45, type: 'expense', date: today,
+              idempotencyKey: `bulk-${stamp}-1` },
+            { description: 'Salário empresa', amount: 5000, type: 'income', date: today,
+              idempotencyKey: `bulk-${stamp}-2` },
+            { description: 'Uber corrida', amount: 22.5, type: 'expense', date: today,
+              idempotencyKey: `bulk-${stamp}-3` },
           ],
         },
       })) as {
@@ -187,7 +190,8 @@ describe('MCP integration > transactions', () => {
         args: {
           account: accountName,
           items: [
-            { description: 'iFood refeição', amount: 45, type: 'expense', date: today, idempotencyKey: `bulk-${stamp}-1` },
+            { description: 'iFood refeição', amount: 45, type: 'expense', date: today,
+              idempotencyKey: `bulk-${stamp}-1` },
           ],
         },
       })) as { summary?: { duplicates?: number } }
@@ -216,8 +220,10 @@ describe('MCP integration > transactions', () => {
         args: {
           account: accountName,
           items: [
-            { description: 'With note', amount: 10, type: 'expense', date: today, idempotencyKey: `bulk-note-${stamp}-1`, note: 'reembolsável' },
-            { description: 'Without note', amount: 20, type: 'expense', date: today, idempotencyKey: `bulk-note-${stamp}-2` },
+            { description: 'With note', amount: 10, type: 'expense', date: today,
+              idempotencyKey: `bulk-note-${stamp}-1`, note: 'reembolsável' },
+            { description: 'Without note', amount: 20, type: 'expense', date: today,
+              idempotencyKey: `bulk-note-${stamp}-2` },
           ],
         },
       })) as { items?: Array<{ status?: string; transaction?: { id?: string; note?: string } }> }
@@ -248,10 +254,13 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport)
 
       const account = `Tags Tx ${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL',
+        initialBalance: 0 } })
 
-      const workTag = (await callTool(client, { name: 'create_tag', args: { name: `work-${stamp}` } })) as { id?: string }
-      const travelTag = (await callTool(client, { name: 'create_tag', args: { name: `travel-${stamp}` } })) as { id?: string }
+      const workTag = (await callTool(client, { name: 'create_tag',
+        args: { name: `work-${stamp}` } })) as { id?: string }
+      const travelTag = (await callTool(client, { name: 'create_tag',
+        args: { name: `travel-${stamp}` } })) as { id?: string }
       ensure(workTag.id, 'Work tag id missing')
       ensure(travelTag.id, 'Travel tag id missing')
       createdTagIds.push(workTag.id, travelTag.id)
@@ -287,7 +296,8 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport)
 
       const account = `Tags Update ${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL',
+        initialBalance: 0 } })
 
       const tagA = (await callTool(client, { name: 'create_tag', args: { name: `tag-a-${stamp}` } })) as { id?: string }
       const tagB = (await callTool(client, { name: 'create_tag', args: { name: `tag-b-${stamp}` } })) as { id?: string }
@@ -331,9 +341,11 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport)
 
       const account = `Tags Clear ${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL',
+        initialBalance: 0 } })
 
-      const tag = (await callTool(client, { name: 'create_tag', args: { name: `clear-tag-${stamp}` } })) as { id?: string }
+      const tag = (await callTool(client, { name: 'create_tag',
+        args: { name: `clear-tag-${stamp}` } })) as { id?: string }
       ensure(tag.id, 'Tag id missing')
       createdTagIds.push(tag.id)
 
@@ -371,9 +383,11 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport)
 
       const account = `Tags Search ${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL',
+        initialBalance: 0 } })
 
-      const tag = (await callTool(client, { name: 'create_tag', args: { name: `search-tag-${stamp}` } })) as { id?: string }
+      const tag = (await callTool(client, { name: 'create_tag',
+        args: { name: `search-tag-${stamp}` } })) as { id?: string }
       ensure(tag.id, 'Tag id missing')
       createdTagIds.push(tag.id)
 
@@ -434,10 +448,13 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport)
 
       const account = `Tags Full Set ${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL',
+        initialBalance: 0 } })
 
-      const tagA = (await callTool(client, { name: 'create_tag', args: { name: `full-a-${stamp}` } })) as { id?: string }
-      const tagB = (await callTool(client, { name: 'create_tag', args: { name: `full-b-${stamp}` } })) as { id?: string }
+      const tagA = (await callTool(client, { name: 'create_tag',
+        args: { name: `full-a-${stamp}` } })) as { id?: string }
+      const tagB = (await callTool(client, { name: 'create_tag',
+        args: { name: `full-b-${stamp}` } })) as { id?: string }
       ensure(tagA.id, 'Tag A id missing')
       ensure(tagB.id, 'Tag B id missing')
       createdTagIds.push(tagA.id, tagB.id)
@@ -482,7 +499,8 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport)
 
       const account = `Ghost Tag ${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL',
+        initialBalance: 0 } })
 
       const created = (await callTool(client, {
         name: 'create_transaction',
@@ -522,7 +540,8 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport)
 
       const account = `No Tags ${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL',
+        initialBalance: 0 } })
 
       // Create with no tags field at all
       const created = (await callTool(client, {
@@ -567,7 +586,8 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport)
 
       const account = `Note RT ${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL',
+        initialBalance: 0 } })
 
       const created = (await callTool(client, {
         name: 'create_transaction',
@@ -608,7 +628,8 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport)
 
       const account = `Note Update ${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL',
+        initialBalance: 0 } })
 
       const created = (await callTool(client, {
         name: 'create_transaction',
@@ -664,10 +685,12 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport)
 
       const account = `Case Tag ${stamp}`
-      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 } })
+      await callTool(client, { name: 'create_account', args: { name: account, type: 'checking', currency: 'BRL',
+        initialBalance: 0 } })
 
       // Create tag with uppercase name
-      const tag = (await callTool(client, { name: 'create_tag', args: { name: `CASE-TAG-${stamp}` } })) as { id?: string }
+      const tag = (await callTool(client, { name: 'create_tag',
+        args: { name: `CASE-TAG-${stamp}` } })) as { id?: string }
       ensure(tag.id, 'Tag id missing')
       createdTagIds.push(tag.id)
 

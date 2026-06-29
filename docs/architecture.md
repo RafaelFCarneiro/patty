@@ -150,3 +150,4 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 - ADR-010: credit cards are liability accounts (1:1 internal `credit` account per card)
 - ADR-011: safe composition of dynamic aggregation queries (whitelist enum→fragment maps + parameter binding)
 - ADR-012: per-model error definitions; `common` composes `AppError` (supersedes the type-only `AppError` import exception)
+- ADR-013: LLM-generated data-less local dashboards over the HTTP API

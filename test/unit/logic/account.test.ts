@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType, filterByType, hasNoCards, hasNoRecurring, hasNoTransactions, isUnreferenced, withTypeLabel } from '../../../src/logic/account.js'
+import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType, filterByType, hasNoCards, hasNoRecurring,
+  hasNoTransactions, isUnreferenced, withTypeLabel } from '../../../src/logic/account.js'
 import type { AccountReferences } from '../../../src/models/account.js'
 import { AccountType, type Account } from '../../../src/models/account.js'
 import { CurrencyCode } from '../../../src/models/money.js'
@@ -46,7 +47,10 @@ describe('withTypeLabel', () => {
 
 describe('assertNonCreditType', () => {
   it('passes for every manageable (non-credit) type', () => {
-    for (const type of [AccountType.enum.checking, AccountType.enum.savings, AccountType.enum.wallet, AccountType.enum.investment]) {
+    const manageable = [
+      AccountType.enum.checking, AccountType.enum.savings, AccountType.enum.wallet, AccountType.enum.investment,
+    ]
+    for (const type of manageable) {
       expect(assertNonCreditType(type)).toBe(true)
     }
   })

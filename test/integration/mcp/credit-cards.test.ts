@@ -7,10 +7,11 @@ describe('MCP integration > credit cards', () => {
     const stamp = Date.now()
     const cardName = `Test Card ${stamp}`
     const bankName = `Card Bank ${stamp}`
-    const today = toIsoDate(new Date())
     const now = new Date()
-    const month = now.getMonth() + 1
-    const year = now.getFullYear()
+    const pinned = new Date(now.getFullYear(), now.getMonth(), 15)
+    const today = toIsoDate(pinned)
+    const month = pinned.getMonth() + 1
+    const year = pinned.getFullYear()
 
     const { client, transport } = makeClient()
 

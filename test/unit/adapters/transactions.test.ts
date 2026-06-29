@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CurrencyCode } from '../../../src/models/money.js'
-import { NOTE_MAX_LENGTH, TransactionSource, TransactionStatus, type Transaction } from '../../../src/models/transaction.js'
+import { NOTE_MAX_LENGTH, TransactionSource, TransactionStatus,
+  type Transaction } from '../../../src/models/transaction.js'
 import * as wireInTransactions from '../../../src/wire/in/transactions.js'
 import * as transactionAdapters from '../../../src/adapters/transactions.js'
 
