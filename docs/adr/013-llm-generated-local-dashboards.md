@@ -1,6 +1,6 @@
 # ADR-013: LLM-generated, data-less local dashboards over the HTTP API
 
-**Status:** Proposed · **Date:** 2026-06-27 · **Deciders:** Rafael · Opens the **presentation layer** for
+**Status:** Accepted · **Date:** 2026-06-27 · **Deciders:** Rafael · Opens the **presentation layer** for
 Phase 3/4. Strategic direction (multi-phase); each phase ships its own design + PR.
 
 ## Context

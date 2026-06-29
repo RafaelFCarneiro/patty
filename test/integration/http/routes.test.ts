@@ -104,7 +104,7 @@ describe('PATCH /api/accounts/:name', () => {
 
   it('returns 404 for unknown account', async () => {
     const res = await app.inject({
-      method: 'PATCH', url: '/api/accounts/nonexistent',
+      method: 'PATCH', url: '/api/accounts/zzz-no-match-xyz-999',
       payload: { newName: 'Whatever' },
     })
     expect(res.statusCode).toBe(404)
@@ -122,7 +122,7 @@ describe('DELETE /api/accounts/:name', () => {
   })
 
   it('returns 404 for unknown account', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/api/accounts/ghost' })
+    const res = await app.inject({ method: 'DELETE', url: '/api/accounts/zzz-zzz-no-match-xyz-999-acc-xyz' })
     expect(res.statusCode).toBe(404)
   })
 })
@@ -181,7 +181,7 @@ describe('DELETE /api/categories/:name', () => {
   })
 
   it('returns 404 for unknown category', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/api/categories/ghost' })
+    const res = await app.inject({ method: 'DELETE', url: '/api/categories/zzz-no-match-abc-999' })
     expect(res.statusCode).toBe(404)
   })
 })
@@ -224,7 +224,7 @@ describe('DELETE /api/sub-categories/:name', () => {
   })
 
   it('returns 404 for unknown sub-category', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/api/sub-categories/ghost' })
+    const res = await app.inject({ method: 'DELETE', url: '/api/sub-categories/zzz-no-match-abc-999' })
     expect(res.statusCode).toBe(404)
   })
 })
@@ -450,7 +450,7 @@ describe('DELETE /api/credit-cards/:name', () => {
   })
 
   it('returns 404 for unknown card', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/api/credit-cards/ghost?confirm=true' })
+    const res = await app.inject({ method: 'DELETE', url: '/api/credit-cards/zzz-no-match-abc-999?confirm=true' })
     expect(res.statusCode).toBe(404)
   })
 })
@@ -488,7 +488,7 @@ describe('GET /api/bills', () => {
   })
 
   it('returns 404 for unknown card bill', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/bills?card=Ghost&month=1&year=2026' })
+    const res = await app.inject({ method: 'GET', url: '/api/bills?card=Zzz No Match Abc 999&month=1&year=2026' })
     expect(res.statusCode).toBe(404)
   })
 })
@@ -517,7 +517,7 @@ describe('POST /api/bills/pay', () => {
   it('returns 404 for unknown bill', async () => {
     const res = await app.inject({
       method: 'POST', url: '/api/bills/pay',
-      payload: { card: 'Ghost Card', month: 1, year: 2026 },
+      payload: { card: 'Zzz No Match Abc 999 Card', month: 1, year: 2026 },
     })
     expect(res.statusCode).toBe(404)
   })
