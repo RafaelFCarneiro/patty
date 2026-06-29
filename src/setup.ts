@@ -122,7 +122,7 @@ const setupClaudeDesktop = (): void => {
   // eslint-disable-next-line no-console -- CLI surface
   console.log(`  Updated: ${configPath}`)
   // eslint-disable-next-line no-console -- CLI surface
-  console.log('  Fully quit (Cmd+Q) and reopen Claude Desktop to apply.')
+  console.log('  Fully quit and reopen Claude Desktop to apply.')
 }
 
 const setupCopilot = (): void => {
@@ -186,12 +186,14 @@ Available tools:
   claude-code      Claude Code CLI      (~/.claude/mcp.json)
   claude-desktop   Claude Desktop       (OS-specific config path)
   copilot          VS Code / Copilot    (.vscode/mcp.json in current directory)
+  vscode           VS Code / Copilot    (.vscode/mcp.json in current directory)
   antigravity      Google Antigravity   (~/.gemini/config/mcp_config.json)
   codex            OpenAI Codex         (prints the config snippet to paste)
 
 Examples:
   npx ${PACKAGE_SPEC} setup claude-code
   npx ${PACKAGE_SPEC} setup copilot
+  npx ${PACKAGE_SPEC} setup vscode
   npx ${PACKAGE_SPEC} setup antigravity
 `.trimStart()
 

@@ -7,6 +7,7 @@ import {
   mergeServersKey,
   readJsonOrEmpty,
   resolveConfigObject,
+  runSetup,
   STDIO_ENTRY,
   VSCODE_ENTRY,
 } from '../../src/setup.js'
@@ -146,5 +147,45 @@ describe('VSCODE_ENTRY', () => {
   it('includes type:stdio required by VS Code', () => {
     expect(VSCODE_ENTRY.type).toBe('stdio')
     expect(VSCODE_ENTRY.command).toBe('npx')
+  })
+})
+
+describe('runSetup', () => {
+  let originalCwd = ''
+  let homeDir = ''
+
+  afterEach(() => {
+    if (originalCwd) process.chdir(originalCwd)
+    if (homeDir) rmSync(homeDir, { recursive: true, force: true })
+    vi.doUnmock('node:os')
+    vi.resetModules()
+  })
+
+  it('documents the vscode alias in help output', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
+      throw new Error(`process.exit:${code}`)
+    }) as typeof process.exit)
+
+    expect(() => runSetup(undefined)).toThrow('process.exit:0')
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('vscode           VS Code / Copilot'))
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('setup vscode'))
+  })
+
+  it('prints a platform-agnostic Claude Desktop restart instruction', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'))
+    originalCwd = process.cwd()
+    process.chdir(homeDir)
+
+    vi.resetModules()
+    vi.doMock('node:os', () => ({ homedir: () => homeDir }))
+
+    const { runSetup: runSetupWithMockedHome } = await import('../../src/setup.js')
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    runSetupWithMockedHome('claude-desktop')
+
+    expect(logSpy).toHaveBeenCalledWith('  Fully quit and reopen Claude Desktop to apply.')
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Cmd+Q'))
   })
 })
