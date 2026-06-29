@@ -11,7 +11,7 @@ let app: FastifyInstance | undefined
 beforeAll(async () => {
   const ctx = await buildApp({ port: TEST_PORT })
   app = ctx.app
-  await app.listen({ port: TEST_PORT, host: '::' })
+  await app.listen({ port: TEST_PORT, host: '127.0.0.1' })
 })
 
 afterAll(async () => {
