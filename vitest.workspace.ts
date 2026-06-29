@@ -1,6 +1,4 @@
-import { defineWorkspace } from 'vitest/config'
-
-export default defineWorkspace([
+export default [
   'vitest.unit.config.ts',
   'vitest.integration.config.ts',
-])
+]
