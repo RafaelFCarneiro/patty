@@ -7,8 +7,28 @@ export default defineConfig({
     testTimeout: 30_000,
     reporters: ['default', 'verbose'],
     globalSetup: 'test/integration/setup.ts',
-    setupFiles: ['test/integration/server-setup.ts'],
     fileParallelism: false,
+    projects: [
+      {
+        test: {
+          name: 'mcp',
+          include: ['test/integration/mcp/**/*.test.ts'],
+          setupFiles: ['test/integration/mcp/setup.ts'],
+        },
+      },
+      {
+        test: {
+          name: 'http',
+          include: ['test/integration/http/**/*.test.ts'],
+        },
+      },
+      {
+        test: {
+          name: 'general',
+          include: ['test/integration/*.test.ts'],
+        },
+      },
+    ],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

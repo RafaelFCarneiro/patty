@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll } from 'vitest'
-import { buildApp } from './app-builder.js'
+import { buildApp } from '../app-builder.js'
 
 const TEST_PORT = 3099
 
