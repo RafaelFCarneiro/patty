@@ -17,12 +17,14 @@ describe('POST /api/transfers', () => {
   })
 
   it('transfer excluded from expense/income search', async () => {
-    const all = await inject({ method: 'GET', url: '/api/transactions?account=TransferFrom&from=2026-06-01&to=2026-06-30' })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'XferSearchSrc', type: 'checking', currency: 'USD', initialBalance: 500 } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'XferSearchDst', type: 'savings', currency: 'USD', initialBalance: 0 } })
+    await inject({ method: 'POST', url: '/api/transfers', payload: { from: 'XferSearchSrc', to: 'XferSearchDst', amount: 100, date: '2026-06-01', idempotencyKey: 'xfer-search-1' } })
+    const all = await inject({ method: 'GET', url: '/api/transactions?account=XferSearchSrc&from=2026-06-01&to=2026-06-30' })
     expect(all.statusCode).toBe(200)
     const allTxs = all.json() as Array<{ type: string }>
-    const hasTransfer = allTxs.some((t) => t.type === 'transfer')
-    expect(hasTransfer).toBe(true)
-    const expenses = await inject({ method: 'GET', url: '/api/transactions?account=TransferFrom&type=expense&from=2026-06-01&to=2026-06-30' })
+    expect(allTxs.some((t) => t.type === 'transfer')).toBe(true)
+    const expenses = await inject({ method: 'GET', url: '/api/transactions?account=XferSearchSrc&type=expense&from=2026-06-01&to=2026-06-30' })
     expect((expenses.json() as Array<{ type: string }>).some((t) => t.type === 'transfer')).toBe(false)
   })
 
@@ -36,7 +38,8 @@ describe('POST /api/transfers', () => {
   })
 
   it('rejects same account (422)', async () => {
-    const res = await inject({ method: 'POST', url: '/api/transfers', payload: { from: 'TransferFrom', to: 'TransferFrom', amount: 10, date: '2026-06-01', idempotencyKey: 'xfer-same' } })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'XferSameAcct', type: 'checking', currency: 'USD', initialBalance: 500 } })
+    const res = await inject({ method: 'POST', url: '/api/transfers', payload: { from: 'XferSameAcct', to: 'XferSameAcct', amount: 10, date: '2026-06-01', idempotencyKey: 'xfer-same' } })
     expect(res.statusCode).toBe(422)
   })
 

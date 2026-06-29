@@ -23,7 +23,10 @@ describe('GET /api/bills', () => {
   })
 
   it('coerces string month/year', async () => {
-    const res = await inject({ method: 'GET', url: '/api/bills?card=BillCard&month=6&year=2026' })
+    await inject({ method: 'POST', url: '/api/accounts', payload: { name: 'CoercePayer', type: 'checking', currency: 'USD', initialBalance: 1000 } })
+    await inject({ method: 'POST', url: '/api/credit-cards', payload: { name: 'CoerceCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'CoercePayer' } })
+    await inject({ method: 'POST', url: '/api/transactions', payload: { description: 'Coerce charge', amount: 25, type: 'expense', date: '2026-06-05', card: 'CoerceCard', idempotencyKey: 'coerce-chg' } })
+    const res = await inject({ method: 'GET', url: '/api/bills?card=CoerceCard&month=6&year=2026' })
     expect(res.statusCode).toBe(200)
   })
 
