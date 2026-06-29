@@ -6,6 +6,30 @@ HTTP is available as an opt-in (`MCP_TRANSPORT=http`) for multi-client access, R
 
 ---
 
+## One-command setup
+
+The `setup` subcommand writes the correct config for your agent automatically. It merges idempotently — safe to re-run, existing keys are preserved.
+
+```bash
+npx @rafaelfcarneiro/fintrack@latest setup <tool>
+```
+
+| Tool argument | Client | Config file written |
+|---|---|---|
+| `claude-code` | Claude Code CLI | `~/.claude/mcp.json` |
+| `claude-desktop` | Claude Desktop | OS-specific path (see below) |
+| `copilot` or `vscode` | VS Code / GitHub Copilot | `.vscode/mcp.json` in current directory |
+| `antigravity` | Google Antigravity (2.0, CLI, IDE) | `~/.gemini/config/mcp_config.json` |
+| `codex` | OpenAI Codex | prints the snippet to paste manually |
+
+Run without arguments for usage and paths:
+
+```bash
+npx @rafaelfcarneiro/fintrack@latest setup
+```
+
+---
+
 ## Direct stdio (recommended — default)
 
 The client spawns FinTrack directly. No server to start separately; no port conflicts.
@@ -18,7 +42,7 @@ In `~/Library/Application Support/Claude/claude_desktop_config.json`, add a top-
 "mcpServers": {
   "fintrack": {
     "command": "npx",
-    "args": ["-y", "@rafaelfcarneiro/fintrack"]
+    "args": ["-y", "@rafaelfcarneiro/fintrack@latest"]
   }
 }
 ```
@@ -35,7 +59,7 @@ Commit `.vscode/mcp.json` at the repo root (note the root key is `servers`, not 
     "fintrack": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@rafaelfcarneiro/fintrack"]
+      "args": ["-y", "@rafaelfcarneiro/fintrack@latest"]
     }
   }
 }
@@ -46,10 +70,29 @@ MCP tools only appear in **Agent** mode (not Ask/Edit). After config changes: co
 ### Claude Code (CLI) ✅
 
 ```bash
-claude mcp add fintrack -- npx -y @rafaelfcarneiro/fintrack
+claude mcp add fintrack -- npx -y @rafaelfcarneiro/fintrack@latest
 ```
 
 Or edit `~/.claude/mcp.json` directly with the same `command`/`args` shape as VS Code above.
+
+### Google Antigravity (2.0, CLI, IDE) ✅
+
+Global config at `~/.gemini/config/mcp_config.json` (or workspace-scoped at `.agents/mcp_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "fintrack": {
+      "command": "npx",
+      "args": ["-y", "@rafaelfcarneiro/fintrack@latest"]
+    }
+  }
+}
+```
+
+Antigravity 2.0: Settings → Customizations → Installed MCP Servers → reload.
+Antigravity CLI: type `/mcp` at the prompt to open the MCP Manager and reload.
+Antigravity IDE: click `...` in the agent panel → MCP Servers → Manage → View raw config.
 
 ---
 
@@ -62,7 +105,7 @@ Start the server explicitly before connecting:
 MCP_TRANSPORT=http npm run dev
 
 # or from the published package
-MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack
+MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack@latest
 ```
 
 This serves streamable HTTP MCP at `http://127.0.0.1:3001/mcp` (stateless) **and** the REST API at `/api`.

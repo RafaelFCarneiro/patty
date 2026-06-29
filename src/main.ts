@@ -23,6 +23,12 @@ const require = createRequire(import.meta.url)
 const { version } = require('../package.json') as { version: string }
 
 const main = async (): Promise<void> => {
+  if (process.argv[2] === 'setup') {
+    const { runSetup } = await import('./setup.js')
+    runSetup(process.argv[3])
+    return
+  }
+
   const config = loadConfig()
 
   const db = openDatabase(config)
