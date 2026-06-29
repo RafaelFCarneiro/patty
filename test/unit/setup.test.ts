@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { mergeMcpServersKey, mergeServersKey, STDIO_ENTRY, VSCODE_ENTRY } from '../../src/setup.js'
+import {
+  mergeMcpServersKey,
+  mergeServersKey,
+  resolveConfigObject,
+  STDIO_ENTRY,
+  VSCODE_ENTRY,
+} from '../../src/setup.js'
 
 describe('mergeMcpServersKey', () => {
   it('adds fintrack entry to an empty config', () => {
@@ -30,6 +36,12 @@ describe('mergeMcpServersKey', () => {
 
   it('treats a non-object mcpServers value as empty', () => {
     const existing = { mcpServers: 'corrupt' }
+    const result = mergeMcpServersKey(existing, { ...STDIO_ENTRY })
+    expect(result).toEqual({ mcpServers: { fintrack: STDIO_ENTRY } })
+  })
+
+  it('treats an array mcpServers value as empty', () => {
+    const existing = { mcpServers: [] }
     const result = mergeMcpServersKey(existing, { ...STDIO_ENTRY })
     expect(result).toEqual({ mcpServers: { fintrack: STDIO_ENTRY } })
   })
@@ -67,12 +79,29 @@ describe('mergeServersKey', () => {
     const result = mergeServersKey(existing, { ...VSCODE_ENTRY })
     expect(result).toEqual({ servers: { fintrack: VSCODE_ENTRY } })
   })
+
+  it('treats an array servers value as empty', () => {
+    const existing = { servers: [] }
+    const result = mergeServersKey(existing, { ...VSCODE_ENTRY })
+    expect(result).toEqual({ servers: { fintrack: VSCODE_ENTRY } })
+  })
+})
+
+describe('resolveConfigObject', () => {
+  it('returns plain objects', () => {
+    const config = { mcpServers: {} }
+    expect(resolveConfigObject(config)).toBe(config)
+  })
+
+  it.each([null, [], 'config'])('rejects non-object config roots: %j', (value) => {
+    expect(resolveConfigObject(value)).toBeNull()
+  })
 })
 
 describe('STDIO_ENTRY', () => {
   it('uses npx with the published package', () => {
     expect(STDIO_ENTRY.command).toBe('npx')
-    expect(STDIO_ENTRY.args).toContain('@rafaelfcarneiro/fintrack')
+    expect(STDIO_ENTRY.args).toEqual(['-y', '@rafaelfcarneiro/fintrack@latest'])
   })
 })
 

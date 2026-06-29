@@ -6,15 +6,22 @@ import { dirname, join } from 'node:path'
 // Shared MCP entry shapes
 // ---------------------------------------------------------------------------
 
+const PACKAGE_SPEC = '@rafaelfcarneiro/fintrack@latest'
+
+export const resolveConfigObject = (value: unknown): Record<string, unknown> | null =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+
 export const STDIO_ENTRY = {
   command: 'npx',
-  args: ['-y', '@rafaelfcarneiro/fintrack'],
+  args: ['-y', PACKAGE_SPEC],
 } as const
 
 export const VSCODE_ENTRY = {
   type: 'stdio',
   command: 'npx',
-  args: ['-y', '@rafaelfcarneiro/fintrack'],
+  args: ['-y', PACKAGE_SPEC],
 } as const
 
 // ---------------------------------------------------------------------------
@@ -26,10 +33,7 @@ export const mergeMcpServersKey = (
   existing: Record<string, unknown>,
   entry: Record<string, unknown>,
 ): Record<string, unknown> => {
-  const servers =
-    typeof existing['mcpServers'] === 'object' && existing['mcpServers'] !== null
-      ? (existing['mcpServers'] as Record<string, unknown>)
-      : {}
+  const servers = resolveConfigObject(existing['mcpServers']) ?? {}
   return { ...existing, mcpServers: { ...servers, fintrack: entry } }
 }
 
@@ -38,10 +42,7 @@ export const mergeServersKey = (
   existing: Record<string, unknown>,
   entry: Record<string, unknown>,
 ): Record<string, unknown> => {
-  const servers =
-    typeof existing['servers'] === 'object' && existing['servers'] !== null
-      ? (existing['servers'] as Record<string, unknown>)
-      : {}
+  const servers = resolveConfigObject(existing['servers']) ?? {}
   return { ...existing, servers: { ...servers, fintrack: entry } }
 }
 
@@ -49,14 +50,21 @@ export const mergeServersKey = (
 // FS helpers
 // ---------------------------------------------------------------------------
 
+const exitInvalidConfig = (path: string): never => {
+  console.error(`fintrack setup: ${path} exists but is not a valid JSON object — fix it and retry.`)
+  process.exit(1)
+}
+
 const readJsonOrEmpty = (path: string): Record<string, unknown> => {
   if (!existsSync(path)) return {}
   try {
-    return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>
+    const config = resolveConfigObject(JSON.parse(readFileSync(path, 'utf8')))
+    if (config) return config
   } catch {
-    console.error(`fintrack setup: ${path} exists but is not valid JSON — fix it and retry.`)
-    process.exit(1)
+    exitInvalidConfig(path)
   }
+
+  exitInvalidConfig(path)
 }
 
 const writeJson = (path: string, data: unknown): void => {
@@ -131,7 +139,7 @@ const setupCodex = (): void => {
     "mcpServers": {
       "fintrack": {
         "command": "npx",
-        "args": ["-y", "@rafaelfcarneiro/fintrack"]
+        "args": ["-y", "${PACKAGE_SPEC}"]
       }
     }
   }
@@ -158,7 +166,7 @@ const TOOLS: Readonly<Record<string, ClientTool>> = {
 }
 
 const HELP = `
-Usage: npx @rafaelfcarneiro/fintrack setup <tool>
+Usage: npx ${PACKAGE_SPEC} setup <tool>
 
 Available tools:
   claude-code      Claude Code CLI      (~/.claude/mcp.json)
@@ -168,9 +176,9 @@ Available tools:
   codex            OpenAI Codex         (prints the config snippet to paste)
 
 Examples:
-  npx @rafaelfcarneiro/fintrack setup claude-code
-  npx @rafaelfcarneiro/fintrack setup copilot
-  npx @rafaelfcarneiro/fintrack setup antigravity
+  npx ${PACKAGE_SPEC} setup claude-code
+  npx ${PACKAGE_SPEC} setup copilot
+  npx ${PACKAGE_SPEC} setup antigravity
 `.trimStart()
 
 // ---------------------------------------------------------------------------
