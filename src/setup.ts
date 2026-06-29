@@ -51,7 +51,7 @@ export const mergeServersKey = (
 // ---------------------------------------------------------------------------
 
 const exitInvalidConfig = (path: string): never => {
-  console.error(`fintrack setup: ${path} exists but is not a valid JSON object — fix it and retry.`)
+  console.error(`fintrack setup: ${path} exists but does not contain a JSON object at the root — fix it and retry.`)
   process.exit(1)
 }
 
