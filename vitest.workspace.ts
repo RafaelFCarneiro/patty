@@ -1,6 +1,8 @@
+import { defineProject } from 'vitest/config'
+
 export default [
   'vitest.unit.config.ts',
-  {
+  defineProject({
     test: {
       name: 'mcp',
       include: ['test/integration/mcp/**/*.test.ts'],
@@ -9,8 +11,8 @@ export default [
       setupFiles: ['test/integration/mcp/setup.ts'],
       fileParallelism: false,
     },
-  },
-  {
+  }),
+  defineProject({
     test: {
       name: 'http',
       include: ['test/integration/http/**/*.test.ts'],
@@ -18,8 +20,8 @@ export default [
       globalSetup: 'test/integration/setup.ts',
       fileParallelism: false,
     },
-  },
-  {
+  }),
+  defineProject({
     test: {
       name: 'general',
       include: ['test/integration/*.test.ts'],
@@ -27,5 +29,5 @@ export default [
       globalSetup: 'test/integration/setup.ts',
       fileParallelism: false,
     },
-  },
+  }),
 ]
