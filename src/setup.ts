@@ -192,7 +192,7 @@ Available tools:
   claude-code      Claude Code CLI      (~/.claude/mcp.json)
   claude-desktop   Claude Desktop       (OS-specific config path)
   copilot          VS Code / GitHub Copilot    (.vscode/mcp.json in current directory)
-  vscode           VS Code / GitHub Copilot    (alias for copilot)
+  vscode           VS Code / Copilot    (alias for copilot)
   antigravity      Google Antigravity   (~/.gemini/config/mcp_config.json)
   codex            OpenAI Codex         (prints the config snippet to paste)
 
