@@ -1,17 +1,23 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { buildApp } from '../app-builder.js'
 
 let app: FastifyInstance
+let tmpDir: string
 
 beforeAll(async () => {
-  const ctx = await buildApp()
+  tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-http-test-'))
+  const ctx = await buildApp({ dbPath: join(tmpDir, 'http-test.db') })
   app = ctx.app
   await app.ready()
 })
 
 afterAll(async () => {
   await app?.close()
+  if (tmpDir) rmSync(tmpDir, { recursive: true, force: true })
 })
 
 // ─── Health & Status ──────────────────────────────────────────
@@ -104,7 +110,7 @@ describe('PATCH /api/accounts/:name', () => {
 
   it('returns 404 for unknown account', async () => {
     const res = await app.inject({
-      method: 'PATCH', url: '/api/accounts/zzz-no-match-xyz-999',
+      method: 'PATCH', url: '/api/accounts/nonexistent',
       payload: { newName: 'Whatever' },
     })
     expect(res.statusCode).toBe(404)
@@ -122,7 +128,7 @@ describe('DELETE /api/accounts/:name', () => {
   })
 
   it('returns 404 for unknown account', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/api/accounts/zzz-zzz-no-match-xyz-999-acc-xyz' })
+    const res = await app.inject({ method: 'DELETE', url: '/api/accounts/zzz-nonexistent-acc-xyz' })
     expect(res.statusCode).toBe(404)
   })
 })
@@ -181,7 +187,7 @@ describe('DELETE /api/categories/:name', () => {
   })
 
   it('returns 404 for unknown category', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/api/categories/zzz-no-match-abc-999' })
+    const res = await app.inject({ method: 'DELETE', url: '/api/categories/nonexistent' })
     expect(res.statusCode).toBe(404)
   })
 })
@@ -224,7 +230,7 @@ describe('DELETE /api/sub-categories/:name', () => {
   })
 
   it('returns 404 for unknown sub-category', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/api/sub-categories/zzz-no-match-abc-999' })
+    const res = await app.inject({ method: 'DELETE', url: '/api/sub-categories/nonexistent' })
     expect(res.statusCode).toBe(404)
   })
 })
@@ -443,14 +449,14 @@ describe('DELETE /api/credit-cards/:name', () => {
     })
     await app.inject({
       method: 'POST', url: '/api/credit-cards',
-      payload: { name: 'Http Del Card', closingDay: 1, dueDay: 10, currency: 'USD', paymentAccount: 'Card Payer 3' },
+      payload: { name: 'Del Card', closingDay: 1, dueDay: 10, currency: 'USD', paymentAccount: 'Card Payer 3' },
     })
-    const res = await app.inject({ method: 'DELETE', url: '/api/credit-cards/Http Del Card' })
+    const res = await app.inject({ method: 'DELETE', url: '/api/credit-cards/Del Card' })
     expect(res.statusCode).toBe(200)
   })
 
   it('returns 404 for unknown card', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/api/credit-cards/zzz-no-match-abc-999?confirm=true' })
+    const res = await app.inject({ method: 'DELETE', url: '/api/credit-cards/nonexistent?confirm=true' })
     expect(res.statusCode).toBe(404)
   })
 })
@@ -488,7 +494,7 @@ describe('GET /api/bills', () => {
   })
 
   it('returns 404 for unknown card bill', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/bills?card=Zzz No Match Abc 999&month=1&year=2026' })
+    const res = await app.inject({ method: 'GET', url: '/api/bills?card=Nonexistent&month=1&year=2026' })
     expect(res.statusCode).toBe(404)
   })
 })
@@ -517,7 +523,7 @@ describe('POST /api/bills/pay', () => {
   it('returns 404 for unknown bill', async () => {
     const res = await app.inject({
       method: 'POST', url: '/api/bills/pay',
-      payload: { card: 'Zzz No Match Abc 999 Card', month: 1, year: 2026 },
+      payload: { card: 'Nonexistent Card', month: 1, year: 2026 },
     })
     expect(res.statusCode).toBe(404)
   })

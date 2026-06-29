@@ -25,9 +25,9 @@ const TEST_ENCRYPTION_KEY = 'a'.repeat(64)
 
 export type AppContext = { app: FastifyInstance; deps: Deps; version: string }
 
-export const buildApp = async (opts?: { port?: number }): Promise<AppContext> => {
+export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promise<AppContext> => {
   const db = openDatabase({
-    DB_PATH: inject('DB_PATH') as string,
+    DB_PATH: opts?.dbPath ?? (inject('DB_PATH') as string),
     FINTRACK_DB_KEY: TEST_ENCRYPTION_KEY,
     PORT: opts?.port ?? 0,
     MCP_TRANSPORT: McpTransport.enum.http,
