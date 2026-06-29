@@ -163,7 +163,7 @@ describe('runSetup', () => {
   })
 
   it('documents the vscode alias in help output', () => {
-    const vscodeAliasHelp = 'vscode           VS Code / Copilot    (alias for copilot)'
+    const vscodeAliasHelp = 'vscode           VS Code / GitHub Copilot    (alias for copilot)'
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
       throw new Error(`process.exit:${code}`)
