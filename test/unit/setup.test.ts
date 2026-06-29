@@ -155,6 +155,7 @@ describe('runSetup', () => {
   let homeDir = ''
 
   afterEach(() => {
+    vi.restoreAllMocks()
     if (originalCwd) process.chdir(originalCwd)
     if (homeDir) rmSync(homeDir, { recursive: true, force: true })
     vi.doUnmock('node:os')
