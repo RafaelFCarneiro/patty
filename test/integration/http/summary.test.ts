@@ -17,7 +17,8 @@ describe('GET /api/summary', () => {
     expect(res.statusCode).toBe(200)
     expect(res.json()).toHaveProperty('period')
     const usd = res.json().currencies?.find((c: { currency: string }) => c.currency === 'USD')
-    if (usd) expect(usd.expenses).toBe(100)
+    expect(usd).toBeDefined()
+    expect(usd!.expenses).toBe(100)
   })
 
   it('coerces string month/year', async () => {
