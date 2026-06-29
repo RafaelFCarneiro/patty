@@ -61,10 +61,10 @@ const readJsonOrEmpty = (path: string): Record<string, unknown> => {
     const config = resolveConfigObject(JSON.parse(readFileSync(path, 'utf8')))
     if (config) return config
   } catch {
-    exitInvalidConfig(path)
+    return exitInvalidConfig(path)
   }
 
-  exitInvalidConfig(path)
+  return exitInvalidConfig(path)
 }
 
 const writeJson = (path: string, data: unknown): void => {
