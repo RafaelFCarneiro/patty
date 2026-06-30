@@ -33,13 +33,15 @@ export const computeBillTotal = (transactions: TransactionView[]): number =>
   }, 0)
 
 /**
- * Transactions on days AFTER the closing day belong to the NEXT month's bill.
+ * Transactions on or after the closing day belong to the NEXT month's bill.
+ * The closing day marks the end of a billing cycle — any transaction dated on
+ * that day is already part of the new cycle.
  * The due date falls in the month after close when dueDay <= closingDay
  * (e.g. closes on the 28th, due on the 5th of the following month).
  */
 export const billPeriodFor = (txDate: string, closingDay: number, dueDay: number): BillPeriod => {
   const [y, m, d] = txDate.split('-').map(Number) as [number, number, number]
-  const bill = d > closingDay ? nextMonth(m, y) : { month: m, year: y }
+  const bill = d >= closingDay ? nextMonth(m, y) : { month: m, year: y }
   const due = dueDay <= closingDay ? nextMonth(bill.month, bill.year) : bill
   return {
     month: bill.month,
