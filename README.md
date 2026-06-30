@@ -12,6 +12,22 @@ Stack: TypeScript · Fastify · zod · neverthrow · remeda · libSQL + Drizzle 
 
 ## Getting started
 
+### 0 — Prerequisites
+
+Before running `npx`, make sure these tools are installed:
+
+- **Node.js 25.x**
+- **npm 11+**
+
+Quick check:
+
+```bash
+node -v
+npm -v
+```
+
+If needed, install from [nodejs.org](https://nodejs.org/) (recommended) or via your package manager (`nvm`, `fnm`, `asdf`, Homebrew).
+
 ### 1 — Authenticate (one-time per machine)
 
 FinTrack publishes privately to **GitHub Packages**. Create a GitHub token with the `read:packages` scope and add it to `~/.npmrc` (full steps in [`docs/releasing.md`](docs/releasing.md)):
