@@ -83,6 +83,16 @@ describe('billPeriodFor', () => {
       dueDate: '2026-06-15',
     })
   })
+
+  it('assigns transaction on the closing day to next month bill when dueDay > closingDay', () => {
+    // closes on the 5th, due on the 15th of the same month; on-closing-day goes to next cycle
+    expect(billPeriodFor('2026-06-05', 5, 15)).toEqual({
+      month: 7,
+      year: 2026,
+      closeDate: '2026-07-05',
+      dueDate: '2026-07-15',
+    })
+  })
 })
 
 const bill: Bill = {
