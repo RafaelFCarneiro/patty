@@ -40,6 +40,7 @@ npx @rafaelfcarneiro/fintrack@latest setup
 ```
 
 The setup command is safe to re-run — it merges idempotently, preserving any existing config keys.
+If the target config file exists but is empty/invalid (or has a non-object JSON root), setup recovers automatically by replacing that root with a valid object.
 
 ### 3 — Restart your client and start chatting
 
