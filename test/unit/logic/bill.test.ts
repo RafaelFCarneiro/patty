@@ -43,14 +43,22 @@ describe('computeBillTotal', () => {
 
 describe('billPeriodFor', () => {
   // card closes on the 20th, due on the 5th of the following month
-  it('assigns transaction on/before closing day to current month bill', () => {
+  it('assigns transaction before closing day to current month bill', () => {
     expect(billPeriodFor('2026-06-15', 20, 5)).toEqual({
       month: 6,
       year: 2026,
       closeDate: '2026-06-20',
       dueDate: '2026-07-05',
     })
-    expect(billPeriodFor('2026-06-20', 20, 5).month).toBe(6)
+  })
+
+  it('assigns transaction on the closing day to next month bill', () => {
+    expect(billPeriodFor('2026-06-20', 20, 5)).toEqual({
+      month: 7,
+      year: 2026,
+      closeDate: '2026-07-20',
+      dueDate: '2026-08-05',
+    })
   })
 
   it('assigns transaction after closing day to next month bill', () => {
@@ -73,6 +81,16 @@ describe('billPeriodFor', () => {
       year: 2026,
       closeDate: '2026-06-05',
       dueDate: '2026-06-15',
+    })
+  })
+
+  it('assigns transaction on the closing day to next month bill when dueDay > closingDay', () => {
+    // closes on the 5th, due on the 15th of the same month; on-closing-day goes to next cycle
+    expect(billPeriodFor('2026-06-05', 5, 15)).toEqual({
+      month: 7,
+      year: 2026,
+      closeDate: '2026-07-05',
+      dueDate: '2026-07-15',
     })
   })
 })
