@@ -50,9 +50,10 @@ export const mergeServersKey = (
 // FS helpers
 // ---------------------------------------------------------------------------
 
-const exitInvalidConfig = (path: string): never => {
-  console.error(`fintrack setup: ${path} exists but does not contain a JSON object at the root — fix it and retry.`)
-  process.exit(1)
+const INVALID_ROOT_MESSAGE = 'does not contain a JSON object at the root'
+
+const warnInvalidConfig = (path: string): void => {
+  console.error(`fintrack setup: ${path} ${INVALID_ROOT_MESSAGE} — replacing it during setup.`)
 }
 
 const exitReadConfig = (path: string, error: unknown): never => {
@@ -72,13 +73,17 @@ export const readJsonOrEmpty = (path: string): Record<string, unknown> => {
   }
 
   try {
-    const config = resolveConfigObject(JSON.parse(content))
-    if (config) return config
-  } catch {
-    return exitInvalidConfig(path)
-  }
+    const trimmedContent = content.trim()
+    if (!trimmedContent) return {}
 
-  return exitInvalidConfig(path)
+    const config = resolveConfigObject(JSON.parse(trimmedContent))
+    if (config) return config
+    warnInvalidConfig(path)
+    return {}
+  } catch {
+    warnInvalidConfig(path)
+    return {}
+  }
 }
 
 const writeJson = (path: string, data: unknown): void => {
