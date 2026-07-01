@@ -1,0 +1,22 @@
+# Global fallback owner
+* @RafaelFCarneiro
+
+# Architecture-sensitive backend layers
+/src/controllers/ @RafaelFCarneiro
+/src/logic/ @RafaelFCarneiro
+/src/adapters/ @RafaelFCarneiro
+/src/diplomat/ @RafaelFCarneiro
+/src/models/ @RafaelFCarneiro
+/src/wire/ @RafaelFCarneiro
+
+# Database schema and migrations
+/drizzle/ @RafaelFCarneiro
+/drizzle.config.ts @RafaelFCarneiro
+
+# Quality and release controls
+/test/ @RafaelFCarneiro
+/docs/ @RafaelFCarneiro
+/.github/workflows/ @RafaelFCarneiro
+/package.json @RafaelFCarneiro
+/tsconfig.json @RafaelFCarneiro
+/eslint.config.js @RafaelFCarneiro
