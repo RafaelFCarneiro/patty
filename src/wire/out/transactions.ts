@@ -59,3 +59,6 @@ export const DeleteTransactionOut = z.discriminatedUnion('deleted', [
   }),
 ]);
 export type DeleteTransactionOut = z.infer<typeof DeleteTransactionOut>;
+
+export const TransferResultOut = z.object({ transaction: TransactionViewSchema, created: z.boolean() });
+export type TransferResultOut = z.infer<typeof TransferResultOut>;

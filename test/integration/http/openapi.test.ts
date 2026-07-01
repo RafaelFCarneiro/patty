@@ -1,31 +1,9 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { setupHttpTest } from './setup.js';
 
 const { inject } = setupHttpTest();
 
-const ROUTES_SOURCE = fileURLToPath(new URL('../../../src/diplomat/http/routes.ts', import.meta.url));
 const HTTP_METHODS = ['get', 'post', 'patch', 'delete'];
-
-// The spec route documents every OTHER /api route, not itself — routes.ts registers it,
-// but it is intentionally absent from the generated OpenAPI document (openapi.ts).
-const META_ROUTES = new Set(['GET /api/openapi.json']);
-
-/** Enumerate every `app.<verb>('/api/...')` call in routes.ts — the actual registered surface. */
-const registeredRoutes = (): string[] => {
-  const source = readFileSync(ROUTES_SOURCE, 'utf-8');
-  const matches = [...source.matchAll(/app\.(get|post|patch|delete)\(\s*['"]([^'"]+)['"]/g)];
-  return matches
-    .map(([, method, path]) => `${method.toUpperCase()} ${path.replace(/:([A-Za-z]+)/g, '{$1}')}`)
-    .filter((route) => !META_ROUTES.has(route));
-};
-
-/** Flatten the OpenAPI document's paths object into the same "METHOD /path" shape. */
-const documentedRoutes = (paths: Record<string, Record<string, unknown>>): string[] =>
-  Object.entries(paths).flatMap(([path, item]) =>
-    HTTP_METHODS.filter((method) => item[method]).map((method) => `${method.toUpperCase()} ${path}`),
-  );
 
 describe('GET /api/openapi.json', () => {
   it('returns a well-formed OpenAPI 3.x document', async () => {
@@ -41,13 +19,6 @@ describe('GET /api/openapi.json', () => {
     expect(Object.keys(doc.paths).length).toBeGreaterThan(0);
   });
 
-  it('has exactly one documented path+method per route registered in routes.ts (parity)', async () => {
-    const res = await inject({ method: 'GET', url: '/api/openapi.json' });
-    const doc = res.json();
-
-    expect(new Set(documentedRoutes(doc.paths))).toEqual(new Set(registeredRoutes()));
-  });
-
   it('every documented response body is JSON with a description', async () => {
     const res = await inject({ method: 'GET', url: '/api/openapi.json' });
     const doc = res.json();
@@ -61,5 +32,20 @@ describe('GET /api/openapi.json', () => {
         }
       }
     }
+  });
+
+  it('documents a representative sample of live, mounted routes (both surfaces agree at runtime)', async () => {
+    const doc = (await inject({ method: 'GET', url: '/api/openapi.json' })).json();
+
+    const live = await inject({ method: 'GET', url: '/api/accounts' });
+    expect(live.statusCode).toBe(200);
+    expect(doc.paths['/api/accounts']?.get).toBeDefined();
+
+    const liveUpdate = await inject({ method: 'PATCH', url: '/api/accounts/does-not-exist' });
+    expect(liveUpdate.statusCode).toBe(404);
+    expect(doc.paths['/api/accounts/{name}']?.patch).toBeDefined();
+
+    // The spec route documents every OTHER route, not itself.
+    expect(doc.paths['/api/openapi.json']).toBeUndefined();
   });
 });

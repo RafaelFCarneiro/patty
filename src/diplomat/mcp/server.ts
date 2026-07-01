@@ -60,6 +60,7 @@ import { CreateAccountSchema, UpdateAccountSchema } from '../../wire/in/accounts
 import { CreateTagSchema } from '../../wire/in/tags.js';
 import * as accountAdapters from '../../adapters/accounts.js';
 import { buildOpenApiDocument } from '../http/openapi.js';
+import { buildRouteDefinitions } from '../http/routes.js';
 
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. */
 
@@ -77,7 +78,7 @@ const fromResult = <T>(result: Result<T, AppError>) => result.match(json, jsonEr
 export const buildMcpServer = (deps: Deps, version: string): McpServer => {
   const server = new McpServer({ name: 'fintrack', version });
 
-  const openApiDocument = buildOpenApiDocument(version);
+  const openApiDocument = buildOpenApiDocument(buildRouteDefinitions(deps, version), version);
   server.registerResource(
     'openapi',
     'fintrack://openapi',

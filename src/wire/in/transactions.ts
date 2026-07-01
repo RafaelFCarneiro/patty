@@ -27,9 +27,9 @@ export type CreateTransferInput = z.infer<typeof CreateTransferInputSchema>;
 export const UpdateTransactionInputSchema = UpdateTransactionSchema;
 export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInputSchema>;
 
-// Pre-transform query shape — a plain ZodObject, so it can also serve as the OpenAPI
-// query schema (diplomat/http/openapi.ts), which needs a ZodObject rather than the
-// ZodEffects that .transform() produces below.
+// Pre-transform query shape — a plain ZodObject, so it can also serve as the route's
+// OpenAPI query schema (routes.ts), which needs a ZodObject rather than the ZodEffects
+// that .transform() produces below.
 export const SearchTransactionsQuerySchema = SearchTransactionsSchema.extend({
   limit: SearchTransactionsSchema.shape.limit.optional(),
 });
