@@ -30,12 +30,16 @@ If needed, install from [nodejs.org](https://nodejs.org/) (recommended) or via y
 
 ### 1 — Authenticate (one-time per machine)
 
-FinTrack publishes privately to **GitHub Packages**. Create a GitHub token with the `read:packages` scope and add it to `~/.npmrc` (full steps in [`docs/releasing.md`](docs/releasing.md)):
+FinTrack publishes privately to **GitHub Packages**. Create a GitHub token with the `read:packages` scope and add it to `~/.npmrc`.
 
-```ini
-@rafaelfcarneiro:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=YOUR_READ_PACKAGES_TOKEN
-```
+1. Create a GitHub **Personal Access Token (classic)** with the `read:packages` scope:
+   GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic).
+2. Add it to your `~/.npmrc`:
+
+   ```ini
+   @rafaelfcarneiro:registry=https://npm.pkg.github.com
+   //npm.pkg.github.com/:_authToken=YOUR_READ_PACKAGES_TOKEN
+   ```
 
 ### 2 — Connect your AI client
 
