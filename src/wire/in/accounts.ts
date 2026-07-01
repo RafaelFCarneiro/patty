@@ -1,6 +1,7 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import { CurrencyCode } from '../../models/money.js';
 import * as modelAccount from '../../models/account.js';
+import { IsoDateQuerySchema } from './coerce.js';
 
 // The boundary owns quality-of-life defaults; the domain keeps these fields required (not-null).
 // Default currency follows the default language (en → USD); default type is the most common account.
@@ -12,3 +13,13 @@ export type CreateAccount = z.infer<typeof CreateAccountSchema>;
 
 export const UpdateAccountSchema = modelAccount.UpdateAccountSchema;
 export type UpdateAccount = z.infer<typeof UpdateAccountSchema>;
+
+export const AccountsQuerySchema = z.object({ type: modelAccount.AccountType.optional() });
+export type AccountsQuery = z.infer<typeof AccountsQuerySchema>;
+
+export const AccountBalancesQuerySchema = z.object({
+  account: z.string().optional(),
+  type: modelAccount.AccountType.optional(),
+  projectedAsOf: IsoDateQuerySchema.optional(),
+});
+export type AccountBalancesQuery = z.infer<typeof AccountBalancesQuerySchema>;

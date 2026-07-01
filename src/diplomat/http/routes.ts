@@ -39,7 +39,6 @@ import {
   updateTransaction,
 } from '../../controllers/transactions.js';
 import { createTransfer } from '../../controllers/transfers.js';
-import { AccountType } from '../../models/account.js';
 import { TransactionSource } from '../../models/transaction.js';
 import { AggregateSpendingInputSchema } from '../../wire/in/aggregate.js';
 import { CoercedPeriodSchema } from '../../wire/in/period.js';
@@ -54,6 +53,8 @@ import * as wireInCategories from '../../wire/in/categories.js';
 import * as wireInCreditCards from '../../wire/in/creditCards.js';
 import * as wireInRecurring from '../../wire/in/recurring.js';
 import * as wireInTransactions from '../../wire/in/transactions.js';
+import { CreateTagSchema } from '../../wire/in/tags.js';
+import { buildOpenApiDocument } from './openapi.js';
 
 /** Thin diplomat: zod-parse (wire/in) → wireInToModel → controller → map Result to HTTP. */
 
@@ -76,22 +77,16 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   app.get('/api/health', async () => ({ status: 'ok' }));
   app.get('/api/status', async () => getStatus(deps, version));
 
+  const openApiDocument = buildOpenApiDocument(version);
+  app.get('/api/openapi.json', async (_req, reply) => reply.header('cache-control', 'no-cache').send(openApiDocument));
+
   app.get('/api/accounts', async (req, reply) => {
-    const q = z.object({ type: AccountType.optional() }).safeParse(req.query);
+    const q = wireInAccounts.AccountsQuerySchema.safeParse(req.query);
     if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid type'] } });
     return reply.send(await listAccounts(deps, q.data.type));
   });
   app.get('/api/accounts/balances', async (req, reply) => {
-    const q = z
-      .object({
-        account: z.string().optional(),
-        type: AccountType.optional(),
-        projectedAsOf: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/)
-          .optional(),
-      })
-      .safeParse(req.query);
+    const q = wireInAccounts.AccountBalancesQuerySchema.safeParse(req.query);
     if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid query'] } });
     return send(reply, await getAccountBalances(deps, q.data));
   });
@@ -118,7 +113,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
     return send(reply, await createCategory(deps, categoryAdapters.wireInToModel(wireIn)), 201);
   });
   app.get('/api/sub-categories', async (req, reply) => {
-    const q = z.object({ parentId: z.string().optional() }).safeParse(req.query);
+    const q = wireInCategories.SubCategoriesQuerySchema.safeParse(req.query);
     if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid query'] } });
     return reply.send(await listSubCategories(deps, q.data.parentId));
   });
@@ -199,14 +194,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
     return send(reply, await createRecurring(deps, recurringAdapters.wireInToModel(wireIn)), 201);
   });
   app.post('/api/recurring/apply-due', async (req, reply) => {
-    const q = z
-      .object({
-        through: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/)
-          .optional(),
-      })
-      .safeParse(req.body ?? {});
+    const q = wireInRecurring.ApplyDueBodySchema.safeParse(req.body ?? {});
     if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid through date'] } });
     return reply.send(await applyDueRecurring(deps, q.data));
   });
@@ -237,7 +225,7 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
 
   app.get('/api/tags', async () => listTags(deps));
   app.post('/api/tags', async (req, reply) => {
-    const input = parse(z.object({ name: z.string().min(1) }), req.body, reply);
+    const input = parse(CreateTagSchema, req.body, reply);
     if (!input) return reply;
     return send(reply, await createTag(deps, input.name), 201);
   });

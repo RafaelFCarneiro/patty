@@ -57,7 +57,9 @@ import { CreateRecurringSchema } from '../../wire/in/recurring.js';
 import { CreateCreditCardSchema } from '../../wire/in/creditCards.js';
 import { bulkResultToWireOut, createResultToWireOut, deleteResultToWireOut } from '../../adapters/transactions.js';
 import { CreateAccountSchema, UpdateAccountSchema } from '../../wire/in/accounts.js';
+import { CreateTagSchema } from '../../wire/in/tags.js';
 import * as accountAdapters from '../../adapters/accounts.js';
+import { buildOpenApiDocument } from '../http/openapi.js';
 
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. */
 
@@ -74,6 +76,22 @@ const fromResult = <T>(result: Result<T, AppError>) => result.match(json, jsonEr
 
 export const buildMcpServer = (deps: Deps, version: string): McpServer => {
   const server = new McpServer({ name: 'fintrack', version });
+
+  const openApiDocument = buildOpenApiDocument(version);
+  server.registerResource(
+    'openapi',
+    'fintrack://openapi',
+    {
+      title: 'FinTrack OpenAPI contract',
+      description:
+        'OpenAPI 3.0 document for the REST API (GET /api/openapi.json mirrors this). ' +
+        'Read this before generating fetch() calls against /api endpoints (ADR-013).',
+      mimeType: 'application/json',
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(openApiDocument, null, 2) }],
+    }),
+  );
 
   server.registerTool(
     'create_transaction',
@@ -472,7 +490,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       description:
         'Create a tag. Tags can be attached to transactions to label them ' +
         '(e.g. "work", "travel", "reembolsável").',
-      inputSchema: { name: z.string().min(1) },
+      inputSchema: CreateTagSchema.shape,
     },
     async (args) => fromResult(await createTag(deps, args.name)),
   );

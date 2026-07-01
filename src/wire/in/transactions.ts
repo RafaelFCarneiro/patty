@@ -27,7 +27,15 @@ export type CreateTransferInput = z.infer<typeof CreateTransferInputSchema>;
 export const UpdateTransactionInputSchema = UpdateTransactionSchema;
 export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInputSchema>;
 
-export const SearchTransactionsInputSchema = SearchTransactionsSchema.extend({
+// Pre-transform query shape — a plain ZodObject, so it can also serve as the OpenAPI
+// query schema (diplomat/http/openapi.ts), which needs a ZodObject rather than the
+// ZodEffects that .transform() produces below.
+export const SearchTransactionsQuerySchema = SearchTransactionsSchema.extend({
   limit: SearchTransactionsSchema.shape.limit.optional(),
-}).transform((input): SearchTransactions => ({ ...input, limit: input.limit ?? 50 }));
+});
+
+export const SearchTransactionsInputSchema = SearchTransactionsQuerySchema.transform((input): SearchTransactions => ({
+  ...input,
+  limit: input.limit ?? 50,
+}));
 export type SearchTransactionsInput = z.output<typeof SearchTransactionsInputSchema>;
