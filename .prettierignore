@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+drizzle/
+.claude/
+*.md
+**/*.md
+*.db
+*.db-wal
+*.db-shm

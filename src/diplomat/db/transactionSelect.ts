@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm';
 
 /**
  * Full transaction SELECT with all LEFT JOINs for name resolution and tag aggregation.
@@ -22,4 +22,4 @@ export const fullTxSelect = (whereClause: ReturnType<typeof sql>) => sql`
   LEFT JOIN tags tg ON tg.id = tt.tag_id
   WHERE ${whereClause}
   GROUP BY t.id
-`
+`;

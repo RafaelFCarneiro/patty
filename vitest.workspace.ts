@@ -1,4 +1,4 @@
-import { defineProject } from 'vitest/config'
+import { defineProject } from 'vitest/config';
 
 export default [
   'vitest.unit.config.ts',
@@ -30,4 +30,4 @@ export default [
       fileParallelism: false,
     },
   }),
-]
+];

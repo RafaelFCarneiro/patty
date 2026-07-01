@@ -1,11 +1,14 @@
-import { sql } from 'drizzle-orm'
-import { AggregateGroupBy, AggregateMetric } from '../../models/aggregate.js'
+import { sql } from 'drizzle-orm';
+import { AggregateGroupBy, AggregateMetric } from '../../models/aggregate.js';
 
-type SqlFragment = ReturnType<typeof sql>
+type SqlFragment = ReturnType<typeof sql>;
 
 export type GroupByFragment = {
-  expr: SqlFragment; join: SqlFragment; label: SqlFragment; labelNames?: SqlFragment
-}
+  expr: SqlFragment;
+  join: SqlFragment;
+  label: SqlFragment;
+  labelNames?: SqlFragment;
+};
 
 export const GROUP_BY_MAP: Record<AggregateGroupBy, GroupByFragment> = {
   [AggregateGroupBy.enum.category]: {
@@ -34,10 +37,10 @@ export const GROUP_BY_MAP: Record<AggregateGroupBy, GroupByFragment> = {
     join: sql``,
     label: sql`t.merchant_key`,
   },
-}
+};
 
 export const METRIC_MAP: Record<AggregateMetric, SqlFragment> = {
   [AggregateMetric.enum.sum]: sql`SUM(t.amount)`,
   [AggregateMetric.enum.count]: sql`COUNT(*)`,
   [AggregateMetric.enum.avg]: sql`AVG(t.amount)`,
-}
+};
