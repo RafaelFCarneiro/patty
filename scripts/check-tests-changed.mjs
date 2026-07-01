@@ -10,40 +10,40 @@
  * base sha. Escape hatch for genuine no-behavior-change refactors: include the literal token
  * [no-behavior-change] in a commit message on the branch (a conscious, reviewable assertion).
  */
-import { execSync } from 'node:child_process'
+import { execSync } from 'node:child_process';
 
-const sh = (cmd) => execSync(cmd, { encoding: 'utf8' }).trim()
+const sh = (cmd) => execSync(cmd, { encoding: 'utf8' }).trim();
 
-const baseRef = process.env.BASE_REF || 'origin/main'
+const baseRef = process.env.BASE_REF || 'origin/main';
 
 const rangeFrom = () => {
   try {
-    return sh(`git merge-base ${baseRef} HEAD`)
+    return sh(`git merge-base ${baseRef} HEAD`);
   } catch {
-    return 'HEAD~1' // shallow/detached fallback
+    return 'HEAD~1'; // shallow/detached fallback
   }
-}
+};
 
-const range = `${rangeFrom()}..HEAD`
-const changed = sh(`git diff --name-only ${range}`).split('\n').filter(Boolean)
+const range = `${rangeFrom()}..HEAD`;
+const changed = sh(`git diff --name-only ${range}`).split('\n').filter(Boolean);
 
-const BEHAVIOR = /^src\/(logic|controllers|adapters)\/|^src\/diplomat\/(db\/repos|mcp|http)\//
-const TEST = /\.test\.ts$|^test\//
+const BEHAVIOR = /^src\/(logic|controllers|adapters)\/|^src\/diplomat\/(db\/repos|mcp|http)\//;
+const TEST = /\.test\.ts$|^test\//;
 
-const behaviorFiles = changed.filter((f) => BEHAVIOR.test(f))
-const hasTestChange = changed.some((f) => TEST.test(f))
+const behaviorFiles = changed.filter((f) => BEHAVIOR.test(f));
+const hasTestChange = changed.some((f) => TEST.test(f));
 
 if (behaviorFiles.length === 0) {
-  console.log('check-tests-changed: no behavior files changed — ok')
-  process.exit(0)
+  console.log('check-tests-changed: no behavior files changed — ok');
+  process.exit(0);
 }
 if (hasTestChange) {
-  console.log(`check-tests-changed: ${behaviorFiles.length} behavior file(s) changed with test changes — ok`)
-  process.exit(0)
+  console.log(`check-tests-changed: ${behaviorFiles.length} behavior file(s) changed with test changes — ok`);
+  process.exit(0);
 }
 if (/\[no-behavior-change\]/.test(sh(`git log --format=%B ${range}`))) {
-  console.log('check-tests-changed: behavior files changed, [no-behavior-change] asserted — ok')
-  process.exit(0)
+  console.log('check-tests-changed: behavior files changed, [no-behavior-change] asserted — ok');
+  process.exit(0);
 }
 
 console.error(
@@ -61,5 +61,5 @@ console.error(
     '[no-behavior-change] in a commit message on this branch.',
     '',
   ].join('\n'),
-)
-process.exit(1)
+);
+process.exit(1);

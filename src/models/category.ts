@@ -1,19 +1,19 @@
-import { z } from 'zod'
-import { Id } from './id.js'
-import type { Ambiguous, DuplicateName, InUse, NotFound, ValidationError } from './error.js'
-import type { LabelMap } from './locale.js'
+import { z } from 'zod';
+import { Id } from './id.js';
+import type { Ambiguous, DuplicateName, InUse, NotFound, ValidationError } from './error.js';
+import type { LabelMap } from './locale.js';
 
-export const CategoryKind = z.enum(['expense', 'income', 'both'])
-export type CategoryKind = z.infer<typeof CategoryKind>
+export const CategoryKind = z.enum(['expense', 'income', 'both']);
+export type CategoryKind = z.infer<typeof CategoryKind>;
 
 export const categoryKindLabels: LabelMap<CategoryKind> = {
   expense: { en: 'Expense', pt: 'Despesa', es: 'Gasto' },
-  income:  { en: 'Income',  pt: 'Receita', es: 'Ingreso' },
-  both:    { en: 'Both',    pt: 'Ambos',   es: 'Ambos' },
-}
+  income: { en: 'Income', pt: 'Receita', es: 'Ingreso' },
+  both: { en: 'Both', pt: 'Ambos', es: 'Ambos' },
+};
 
-export const LocalizedNamesSchema = z.record(z.string().min(1), z.string().min(1)).nullable()
-export type LocalizedNames = z.infer<typeof LocalizedNamesSchema>
+export const LocalizedNamesSchema = z.record(z.string().min(1), z.string().min(1)).nullable();
+export type LocalizedNames = z.infer<typeof LocalizedNamesSchema>;
 
 // `.describe()` is domain information — it states what each field is and represents.
 // Defaults split by intent: integrity defaults (a value that must exist for the entity to be
@@ -25,11 +25,11 @@ export const CategorySchema = z.object({
   kind: CategoryKind.describe('expense | income | both — controls which transaction types may use this category'),
   kindLabel: z.string().optional(),
   names: LocalizedNamesSchema.describe('Locale-keyed display names for default categories; null for user-created'),
-})
-export type Category = z.infer<typeof CategorySchema>
+});
+export type Category = z.infer<typeof CategorySchema>;
 
-export const CreateCategorySchema = CategorySchema.omit({ id: true, kindLabel: true, names: true })
-export type CreateCategory = z.infer<typeof CreateCategorySchema>
+export const CreateCategorySchema = CategorySchema.omit({ id: true, kindLabel: true, names: true });
+export type CreateCategory = z.infer<typeof CreateCategorySchema>;
 
 /** Sub-category read projection — includes parent info joined from [:BELONGS_TO]->(:Category). */
 export const SubCategorySchema = z.object({
@@ -39,17 +39,17 @@ export const SubCategorySchema = z.object({
   parentName: z.string().min(1).describe('Parent category name'),
   kind: CategoryKind.describe('Inherited from the parent category'),
   kindLabel: z.string().optional(),
-})
-export type SubCategory = z.infer<typeof SubCategorySchema>
+});
+export type SubCategory = z.infer<typeof SubCategorySchema>;
 
 export const CreateSubCategorySchema = z.object({
   id: Id,
   name: z.string().min(1).describe('Sub-category display name'),
   parentId: Id.describe('ID of the parent category'),
-})
-export type CreateSubCategory = z.infer<typeof CreateSubCategorySchema>
+});
+export type CreateSubCategory = z.infer<typeof CreateSubCategorySchema>;
 
-export type CategoryReferences = { transactions: number; recurring: number; subCategories: number }
+export type CategoryReferences = { transactions: number; recurring: number; subCategories: number };
 
 export type CategoryError =
   | NotFound<'category'>
@@ -60,13 +60,18 @@ export type CategoryError =
   | DuplicateName<'sub_category'>
   | InUse<'category', CategoryReferences>
   | InUse<'sub_category', CategoryReferences>
-  | ValidationError
+  | ValidationError;
 
 export const categoryErrors = {
   duplicateName: (entity: 'category' | 'sub_category', name: string): CategoryError => ({
-    code: 'duplicate_name', entity, name,
+    code: 'duplicate_name',
+    entity,
+    name,
   }),
   inUse: (entity: 'category' | 'sub_category', name: string, references: CategoryReferences): CategoryError => ({
-    code: 'in_use', entity, name, references,
+    code: 'in_use',
+    entity,
+    name,
+    references,
   }),
-}
+};

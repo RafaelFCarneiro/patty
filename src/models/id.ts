@@ -1,3 +1,3 @@
-import { z } from 'zod'
+import { z } from 'zod';
 
-export const Id = z.string().min(1)
+export const Id = z.string().min(1);

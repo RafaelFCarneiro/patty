@@ -1,18 +1,18 @@
-import { z } from 'zod'
-import { IsoDate } from './date.js'
-import { Id } from './id.js'
-import { CurrencyCode, Money } from './money.js'
-import type { LabelMap } from './locale.js'
-import { MovementType } from './transaction.js'
+import { z } from 'zod';
+import { IsoDate } from './date.js';
+import { Id } from './id.js';
+import { CurrencyCode, Money } from './money.js';
+import type { LabelMap } from './locale.js';
+import { MovementType } from './transaction.js';
 
-export const RecurringPeriod = z.enum(['weekly', 'monthly', 'yearly'])
-export type RecurringPeriod = z.infer<typeof RecurringPeriod>
+export const RecurringPeriod = z.enum(['weekly', 'monthly', 'yearly']);
+export type RecurringPeriod = z.infer<typeof RecurringPeriod>;
 
 export const recurringPeriodLabels: LabelMap<RecurringPeriod> = {
-  weekly:  { en: 'Weekly',  pt: 'Semanal', es: 'Semanal' },
-  monthly: { en: 'Monthly', pt: 'Mensal',  es: 'Mensual' },
-  yearly:  { en: 'Yearly',  pt: 'Anual',   es: 'Anual' },
-}
+  weekly: { en: 'Weekly', pt: 'Semanal', es: 'Semanal' },
+  monthly: { en: 'Monthly', pt: 'Mensal', es: 'Mensual' },
+  yearly: { en: 'Yearly', pt: 'Anual', es: 'Anual' },
+};
 
 // `.describe()` is domain information — it states what each field is and represents.
 // Defaults split by intent: integrity defaults (a value that must exist for the entity to be
@@ -28,15 +28,15 @@ export const RecurringRuleSchema = z.object({
   currency: CurrencyCode.describe('Currency for materialized transactions'),
   accountId: Id.optional().describe('Target account for materialized transactions'),
   categoryId: Id.optional().describe('Category for materialized transactions'),
-})
-export type RecurringRule = z.infer<typeof RecurringRuleSchema>
+});
+export type RecurringRule = z.infer<typeof RecurringRuleSchema>;
 
 export const RecurringRuleViewSchema = RecurringRuleSchema.extend({
   periodLabel: z.string().optional().describe('Localized period label'),
   accountName: z.string().optional().describe('Resolved account name'),
   categoryName: z.string().optional().describe('Resolved category name'),
-})
-export type RecurringRuleView = z.infer<typeof RecurringRuleViewSchema>
+});
+export type RecurringRuleView = z.infer<typeof RecurringRuleViewSchema>;
 
 export const CreateRecurringSchema = z.object({
   description: z.string().min(1).describe('What this rule pays for (rent, salary, subscription…)'),
@@ -47,5 +47,5 @@ export const CreateRecurringSchema = z.object({
   account: z.string().optional().describe('Account name (resolved by name match)'),
   category: z.string().optional().describe('Category name (resolved by name match)'),
   currency: CurrencyCode.optional().describe('Currency (resolved from account if omitted)'),
-})
-export type CreateRecurring = z.infer<typeof CreateRecurringSchema>
+});
+export type CreateRecurring = z.infer<typeof CreateRecurringSchema>;

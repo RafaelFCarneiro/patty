@@ -1,15 +1,15 @@
-import { ok, safeTry, type ResultAsync } from 'neverthrow'
-import type { AppError } from '../common/errors.js'
-import { guard, okOr } from '../common/result.js'
-import { assertNonCreditType } from '../logic/account.js'
-import { accountErrors } from '../models/account.js'
-import { billPeriodFor } from '../logic/bill.js'
-import { pickClassification, userClassification } from '../logic/classify.js'
-import { ClassificationMethod } from '../models/transaction.js'
-import type { ClassifyOutcome } from '../models/transaction.js'
-import { normalizeMerchant } from '../logic/merchant.js'
-import { periodRange, toIsoDate } from '../logic/period.js'
-import type { BulkItemResult, BulkResult } from '../logic/transaction.js'
+import { ok, safeTry, type ResultAsync } from 'neverthrow';
+import type { AppError } from '../common/errors.js';
+import { guard, okOr } from '../common/result.js';
+import { assertNonCreditType } from '../logic/account.js';
+import { accountErrors } from '../models/account.js';
+import { billPeriodFor } from '../logic/bill.js';
+import { pickClassification, userClassification } from '../logic/classify.js';
+import { ClassificationMethod } from '../models/transaction.js';
+import type { ClassifyOutcome } from '../models/transaction.js';
+import { normalizeMerchant } from '../logic/merchant.js';
+import { periodRange, toIsoDate } from '../logic/period.js';
+import type { BulkItemResult, BulkResult } from '../logic/transaction.js';
 import {
   addLocalizedLabels,
   assertExclusiveAccountCard,
@@ -22,10 +22,8 @@ import {
   resolveEffectiveType,
   summarizeBulkItems,
   toBulkItemResult,
-} from '../logic/transaction.js'
-import {
-  TransactionStatus,
-} from '../models/transaction.js'
+} from '../logic/transaction.js';
+import { TransactionStatus } from '../models/transaction.js';
 import {
   transactionErrors,
   type CreateTransaction,
@@ -36,10 +34,9 @@ import {
   type TransactionView,
   type TransactionSource,
   type UpdateTransaction,
-} from '../models/transaction.js'
-import type { Deps } from './deps.js'
-import { resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js'
-
+} from '../models/transaction.js';
+import type { Deps } from './deps.js';
+import { resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
 
 export const createTransaction = (
   deps: Deps,
@@ -47,42 +44,40 @@ export const createTransaction = (
   source: TransactionSource,
 ): ResultAsync<CreateTransactionResult, AppError> =>
   safeTry(async function* () {
-    yield* guard(assertExclusiveAccountCard(input), transactionErrors.exclusiveAccountCard)
-    yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory)
+    yield* guard(assertExclusiveAccountCard(input), transactionErrors.exclusiveAccountCard);
+    yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory);
 
-    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
+    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     if (account) {
-      yield* guard(assertNonCreditType(account.type), accountErrors.creditPostRejected)
+      yield* guard(assertNonCreditType(account.type), accountErrors.creditPostRejected);
     }
-    const card = input.card ? yield* resolveCardRef(deps, input.card) : null
+    const card = input.card ? yield* resolveCardRef(deps, input.card) : null;
 
-    let classification: ClassifyOutcome
-    let subCategoryId: string | undefined
+    let classification: ClassifyOutcome;
+    let subCategoryId: string | undefined;
 
     if (input.subCategory) {
-      const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)
+      const subCat = yield* resolveSubCategoryRef(deps, input.subCategory);
       yield* guard(
         isCategoryKindAllowed(input.type, subCat.kind),
         transactionErrors.categoryKindMismatch(input.type, subCat.name, subCat.kind),
-      )
-      subCategoryId = subCat.id
-      classification = userClassification({ id: subCat.parentId, name: subCat.parentName })
+      );
+      subCategoryId = subCat.id;
+      classification = userClassification({ id: subCat.parentId, name: subCat.parentName });
     } else if (input.category) {
-      const cat = yield* resolveCategoryRef(deps, input.category)
+      const cat = yield* resolveCategoryRef(deps, input.category);
       yield* guard(
         isCategoryKindAllowed(input.type, cat.kind),
         transactionErrors.categoryKindMismatch(input.type, cat.name, cat.kind),
-      )
-      classification = userClassification(cat)
+      );
+      classification = userClassification(cat);
     } else {
-      classification = pickClassification(
-        await deps.merchants.matchCandidates(normalizeMerchant(input.description)),
-      )
+      classification = pickClassification(await deps.merchants.matchCandidates(normalizeMerchant(input.description)));
     }
 
-    const today = toIsoDate(deps.clock())
-    const date = input.date ?? today
-    const status = input.status ?? defaultStatusFor(date, today)
+    const today = toIsoDate(deps.clock());
+    const date = input.date ?? today;
+    const status = input.status ?? defaultStatusFor(date, today);
 
     const { transaction, created } = await deps.transactions.create(
       {
@@ -107,7 +102,7 @@ export const createTransaction = (
         },
       },
       input.tags ?? [],
-    )
+    );
 
     // Card transactions join their cycle's bill (fatura), created open on demand
     if (card && created)
@@ -116,11 +111,11 @@ export const createTransaction = (
         transaction.id,
         billPeriodFor(date, card.closingDay, card.dueDay),
         deps.newId(),
-      )
+      );
 
-    const locale = await deps.locale()
-    return ok({ transaction: addLocalizedLabels(transaction, locale), created, classification })
-  })
+    const locale = await deps.locale();
+    return ok({ transaction: addLocalizedLabels(transaction, locale), created, classification });
+  });
 
 /** Statement paste/import: each line idempotent, classified, flagged for review when uncertain. */
 export const createTransactionsBulk = (
@@ -129,11 +124,11 @@ export const createTransactionsBulk = (
   source: TransactionSource,
 ): ResultAsync<BulkResult<AppError>, AppError> =>
   safeTry(async function* () {
-    const locale = await deps.locale()
-    const cachedDeps: Deps = { ...deps, locale: () => Promise.resolve(locale) }
-    const items: BulkItemResult<AppError>[] = []
+    const locale = await deps.locale();
+    const cachedDeps: Deps = { ...deps, locale: () => Promise.resolve(locale) };
+    const items: BulkItemResult<AppError>[] = [];
     for (const item of input.items) {
-      const date = item.date ?? toIsoDate(deps.clock())
+      const date = item.date ?? toIsoDate(deps.clock());
       const result = await createTransaction(
         cachedDeps,
         {
@@ -145,52 +140,51 @@ export const createTransactionsBulk = (
           rawInput: input.rawInput,
         },
         source,
-      )
-      items.push(toBulkItemResult(result, item.description))
+      );
+      items.push(toBulkItemResult(result, item.description));
     }
 
-    return ok({ summary: summarizeBulkItems(items), items })
-  })
+    return ok({ summary: summarizeBulkItems(items), items });
+  });
 
-export const updateTransaction = (
-  deps: Deps,
-  input: UpdateTransaction,
-): ResultAsync<TransactionView, AppError> =>
+export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
-    yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate)
+    yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
 
-    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id))
+    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
 
-    yield* guardTransferMutability(existing, input)
+    yield* guardTransferMutability(existing, input);
 
-    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
-    const effectiveType = resolveEffectiveType(existing, input)
+    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
+    const effectiveType = resolveEffectiveType(existing, input);
 
-    let categoryId: string | null = null
+    let categoryId: string | null = null;
     // undefined = leave the sub-category untouched; null = explicitly clear it.
-    let subCategoryId: string | null | undefined
+    let subCategoryId: string | null | undefined;
 
     if (input.subCategory) {
-      const subCat = yield* resolveSubCategoryRef(deps, input.subCategory)
-      if (effectiveType) yield* guard(
-        isCategoryKindAllowed(effectiveType, subCat.kind),
-        transactionErrors.categoryKindMismatch(effectiveType, subCat.name, subCat.kind),
-      )
-      subCategoryId = subCat.id
-      categoryId = subCat.parentId
+      const subCat = yield* resolveSubCategoryRef(deps, input.subCategory);
+      if (effectiveType)
+        yield* guard(
+          isCategoryKindAllowed(effectiveType, subCat.kind),
+          transactionErrors.categoryKindMismatch(effectiveType, subCat.name, subCat.kind),
+        );
+      subCategoryId = subCat.id;
+      categoryId = subCat.parentId;
     } else if (input.category) {
-      const cat = yield* resolveCategoryRef(deps, input.category)
-      if (effectiveType) yield* guard(
-        isCategoryKindAllowed(effectiveType, cat.kind),
-        transactionErrors.categoryKindMismatch(effectiveType, cat.name, cat.kind),
-      )
-      categoryId = cat.id
+      const cat = yield* resolveCategoryRef(deps, input.category);
+      if (effectiveType)
+        yield* guard(
+          isCategoryKindAllowed(effectiveType, cat.kind),
+          transactionErrors.categoryKindMismatch(effectiveType, cat.name, cat.kind),
+        );
+      categoryId = cat.id;
       // Business rule: assigning a plain category clears any prior sub-category —
       // "sub-category always paired with its parent" would otherwise go stale.
-      subCategoryId = null
+      subCategoryId = null;
     }
 
-    const isUserCorrection = !!(input.category || input.subCategory)
+    const isUserCorrection = !!(input.category || input.subCategory);
 
     const updated = yield* okOr(
       await deps.transactions.update(
@@ -207,42 +201,38 @@ export const updateTransaction = (
         { accountId: account?.id ?? null, categoryId, subCategoryId, tagNames: input.tags ?? null },
       ),
       transactionErrors.notFound(input.id),
-    )
+    );
 
     // Learning loop: correcting the category strengthens the merchant→category association
     if (categoryId && categoryId !== existing.categoryId)
-      await deps.merchants.strengthenFromTransaction(input.id, categoryId)
+      await deps.merchants.strengthenFromTransaction(input.id, categoryId);
 
-    const locale = await deps.locale()
-    return ok(addLocalizedLabels(updated, locale))
-  })
+    const locale = await deps.locale();
+    return ok(addLocalizedLabels(updated, locale));
+  });
 
 /** Flip a pending transaction to effective. No-op (returns existing) if already effective. */
-export const confirmTransaction = (
-  deps: Deps,
-  input: { id: string },
-): ResultAsync<TransactionView, AppError> =>
+export const confirmTransaction = (deps: Deps, input: { id: string }): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
-    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id))
+    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
 
-    const locale = await deps.locale()
+    const locale = await deps.locale();
 
-    if (existing.status === TransactionStatus.enum.effective)
-      return ok(addLocalizedLabels(existing, locale))
+    if (existing.status === TransactionStatus.enum.effective) return ok(addLocalizedLabels(existing, locale));
 
-    const confirmed = yield* okOr(await deps.transactions.confirm(input.id), transactionErrors.notFound(input.id))
-    return ok(addLocalizedLabels(confirmed, locale))
-  })
+    const confirmed = yield* okOr(await deps.transactions.confirm(input.id), transactionErrors.notFound(input.id));
+    return ok(addLocalizedLabels(confirmed, locale));
+  });
 
 export const deleteTransaction = (
   deps: Deps,
   input: { id: string; confirm: boolean },
 ): ResultAsync<DeleteTransactionResult, AppError> =>
   safeTry(async function* () {
-    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id))
+    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
 
-    const locale = await deps.locale()
-    const labeled = addLocalizedLabels(existing, locale)
+    const locale = await deps.locale();
+    const labeled = addLocalizedLabels(existing, locale);
 
     if (!input.confirm)
       return ok({
@@ -250,21 +240,18 @@ export const deleteTransaction = (
         dryRun: true as const,
         wouldDelete: labeled,
         hint: 'Destructive action: show the transaction to the user and call again with confirm: true.',
-      })
+      });
 
-    await deps.transactions.delete(input.id)
-    return ok({ deleted: true as const, transaction: labeled })
-  })
+    await deps.transactions.delete(input.id);
+    return ok({ deleted: true as const, transaction: labeled });
+  });
 
-export const searchTransactions = (
-  deps: Deps,
-  input: SearchTransactions,
-): ResultAsync<TransactionView[], AppError> =>
+export const searchTransactions = (deps: Deps, input: SearchTransactions): ResultAsync<TransactionView[], AppError> =>
   safeTry(async function* () {
-    const range = input.month && input.year ? periodRange({ month: input.month, year: input.year }) : null
-    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
-    const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null
-    const subCategory = input.subCategory ? yield* resolveSubCategoryRef(deps, input.subCategory) : null
+    const range = input.month && input.year ? periodRange({ month: input.month, year: input.year }) : null;
+    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
+    const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
+    const subCategory = input.subCategory ? yield* resolveSubCategoryRef(deps, input.subCategory) : null;
 
     const [locale, rows] = await Promise.all([
       deps.locale(),
@@ -280,6 +267,6 @@ export const searchTransactions = (
         tagNames: input.tags ?? [],
         limit: input.limit,
       }),
-    ])
-    return ok(rows.map(addLocalizedLabels(locale)))
-  })
+    ]);
+    return ok(rows.map(addLocalizedLabels(locale)));
+  });

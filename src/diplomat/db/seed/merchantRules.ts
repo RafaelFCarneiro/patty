@@ -1,7 +1,7 @@
-import { z } from 'zod'
-import { DefaultCategoryId } from './categories.js'
+import { z } from 'zod';
+import { DefaultCategoryId } from './categories.js';
 
-const D = DefaultCategoryId.enum
+const D = DefaultCategoryId.enum;
 
 /**
  * A seed merchant rule maps a normalized merchant **key** (matched as a substring of the
@@ -21,8 +21,8 @@ const D = DefaultCategoryId.enum
 export const MerchantRule = z.object({
   key: z.string().min(1),
   category: DefaultCategoryId,
-})
-export type MerchantRule = z.infer<typeof MerchantRule>
+});
+export type MerchantRule = z.infer<typeof MerchantRule>;
 
 // ─── Language-agnostic brands ──────────────────────────────────────────────────
 // Recognised regardless of locale, so a mixed statement (a Brazilian with Uber, Netflix
@@ -63,7 +63,7 @@ const brandRules: MerchantRule[] = [
   { key: 'airbnb', category: D['cat-travel'] },
   { key: 'booking com', category: D['cat-travel'] },
   { key: 'latam', category: D['cat-travel'] },
-]
+];
 
 // ─── English keyword pack ───────────────────────────────────────────────────────
 const enRules: MerchantRule[] = [
@@ -109,7 +109,7 @@ const enRules: MerchantRule[] = [
 
   // Taxes (avoid bare 'tax' — it embeds in 'taxi')
   { key: 'income tax', category: D['cat-taxes'] },
-]
+];
 
 // ─── Portuguese (BR/PT) keyword pack ────────────────────────────────────────────
 const ptRules: MerchantRule[] = [
@@ -163,7 +163,7 @@ const ptRules: MerchantRule[] = [
   { key: 'iptu', category: D['cat-taxes'] },
   { key: 'ipva', category: D['cat-taxes'] },
   { key: 'darf', category: D['cat-taxes'] },
-]
+];
 
 // ─── Spanish keyword pack ───────────────────────────────────────────────────────
 const esRules: MerchantRule[] = [
@@ -216,7 +216,7 @@ const esRules: MerchantRule[] = [
 
   { key: 'impuesto', category: D['cat-taxes'] },
   { key: 'hacienda', category: D['cat-taxes'] },
-]
+];
 
 /**
  * Canonical default merchant rules, additive across languages: brands + en/pt/es unioned and
@@ -224,9 +224,4 @@ const esRules: MerchantRule[] = [
  * re-normalized and deduped by (key, category) at seed time (`bootstrap.ts`). Add a locale by
  * appending a new pack here.
  */
-export const DEFAULT_MERCHANT_RULES: MerchantRule[] = [
-  ...brandRules,
-  ...enRules,
-  ...ptRules,
-  ...esRules,
-]
+export const DEFAULT_MERCHANT_RULES: MerchantRule[] = [...brandRules, ...enRules, ...ptRules, ...esRules];

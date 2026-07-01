@@ -1,4 +1,4 @@
-import type { CreateCreditCard } from '../models/creditCard.js'
-import type * as wireIn from '../wire/in/creditCards.js'
+import type { CreateCreditCard } from '../models/creditCard.js';
+import type * as wireIn from '../wire/in/creditCards.js';
 
-export const wireInToModel = (input: wireIn.CreateCreditCard): CreateCreditCard => input
+export const wireInToModel = (input: wireIn.CreateCreditCard): CreateCreditCard => input;

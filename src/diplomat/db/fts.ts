@@ -11,7 +11,7 @@
  * Returns `null` when there is no searchable token (caller skips the FTS filter).
  */
 export const toMatchQuery = (text: string): string | null => {
-  const tokens = text.split(/\s+/).filter((token) => token.length > 0)
-  if (tokens.length === 0) return null
-  return tokens.map((token) => `"${token.replaceAll('"', '""')}"`).join(' ')
-}
+  const tokens = text.split(/\s+/).filter((token) => token.length > 0);
+  if (tokens.length === 0) return null;
+  return tokens.map((token) => `"${token.replaceAll('"', '""')}"`).join(' ');
+};

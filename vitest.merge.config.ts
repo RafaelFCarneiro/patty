@@ -1,4 +1,4 @@
-export default {  
+export default {
   test: {
     include: [],
     coverage: {
@@ -8,4 +8,4 @@ export default {
       reportsDirectory: 'coverage',
     },
   },
-}
+};

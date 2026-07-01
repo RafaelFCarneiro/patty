@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from 'zod';
 import {
   BulkTransactionItemSchema as ModelBulkTransactionItemSchema,
   CreateTransactionSchema,
@@ -6,28 +6,28 @@ import {
   CreateTransferSchema,
   SearchTransactionsSchema,
   UpdateTransactionSchema,
-} from '../../models/transaction.js'
-import type { SearchTransactions } from '../../models/transaction.js'
+} from '../../models/transaction.js';
+import type { SearchTransactions } from '../../models/transaction.js';
 
 // Wire input schemas — derived from model schemas.
 // Boundary-only behavior (limit default) stays here; everything else is pass-through.
 
-export const CreateTransactionInputSchema = CreateTransactionSchema
-export type CreateTransactionInput = z.infer<typeof CreateTransactionInputSchema>
+export const CreateTransactionInputSchema = CreateTransactionSchema;
+export type CreateTransactionInput = z.infer<typeof CreateTransactionInputSchema>;
 
-export const BulkTransactionItemSchema = ModelBulkTransactionItemSchema
-export type BulkTransactionItem = z.infer<typeof BulkTransactionItemSchema>
+export const BulkTransactionItemSchema = ModelBulkTransactionItemSchema;
+export type BulkTransactionItem = z.infer<typeof BulkTransactionItemSchema>;
 
-export const CreateTransactionsBulkInputSchema = CreateTransactionsBulkSchema
-export type CreateTransactionsBulkInput = z.infer<typeof CreateTransactionsBulkInputSchema>
+export const CreateTransactionsBulkInputSchema = CreateTransactionsBulkSchema;
+export type CreateTransactionsBulkInput = z.infer<typeof CreateTransactionsBulkInputSchema>;
 
-export const CreateTransferInputSchema = CreateTransferSchema
-export type CreateTransferInput = z.infer<typeof CreateTransferInputSchema>
+export const CreateTransferInputSchema = CreateTransferSchema;
+export type CreateTransferInput = z.infer<typeof CreateTransferInputSchema>;
 
-export const UpdateTransactionInputSchema = UpdateTransactionSchema
-export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInputSchema>
+export const UpdateTransactionInputSchema = UpdateTransactionSchema;
+export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInputSchema>;
 
-export const SearchTransactionsInputSchema = SearchTransactionsSchema
-  .extend({ limit: SearchTransactionsSchema.shape.limit.optional() })
-  .transform((input): SearchTransactions => ({ ...input, limit: input.limit ?? 50 }))
-export type SearchTransactionsInput = z.output<typeof SearchTransactionsInputSchema>
+export const SearchTransactionsInputSchema = SearchTransactionsSchema.extend({
+  limit: SearchTransactionsSchema.shape.limit.optional(),
+}).transform((input): SearchTransactions => ({ ...input, limit: input.limit ?? 50 }));
+export type SearchTransactionsInput = z.output<typeof SearchTransactionsInputSchema>;
