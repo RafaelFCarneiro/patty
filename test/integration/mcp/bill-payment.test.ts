@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { toIsoDate } from '../../../src/logic/period.js'
 import { callTool, callToolError, makeClient } from './helpers.js'
 
@@ -12,6 +12,15 @@ describe('MCP integration > bill payment (Design 003)', () => {
   const today = toIsoDate(pinned)
   const month = pinned.getMonth() + 1
   const year = pinned.getFullYear()
+
+  beforeAll(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(pinned)
+  })
+
+  afterAll(() => {
+    vi.useRealTimers()
+  })
 
   it('pay_bill creates a transfer, debits payer, credits card account, marks bill paid', async () => {
     const { client, transport } = makeClient()
