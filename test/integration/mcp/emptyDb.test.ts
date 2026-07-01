@@ -1,46 +1,46 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { migrate } from 'drizzle-orm/libsql/migrator'
-import { fileURLToPath } from 'node:url'
-import { openDatabase } from '../../../src/diplomat/db/driver.js'
-import { accountsRepo } from '../../../src/diplomat/db/repos/accounts.js'
-import { billsRepo } from '../../../src/diplomat/db/repos/bills.js'
-import { categoriesRepo } from '../../../src/diplomat/db/repos/categories.js'
-import { subCategoriesRepo } from '../../../src/diplomat/db/repos/subCategories.js'
-import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js'
-import { healthRepo } from '../../../src/diplomat/db/repos/health.js'
-import { merchantsRepo } from '../../../src/diplomat/db/repos/merchants.js'
-import { recurringRepo } from '../../../src/diplomat/db/repos/recurring.js'
-import { settingsRepo } from '../../../src/diplomat/db/repos/settings.js'
-import { tagsRepo } from '../../../src/diplomat/db/repos/tags.js'
-import { transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js'
-import { McpTransport } from '../../../src/config.js'
-import { Locale, LocaleSource } from '../../../src/models/locale.js'
-import { listCategories } from '../../../src/controllers/categories.js'
-import { getPreferences, setLocale } from '../../../src/controllers/settings.js'
-import type { Deps } from '../../../src/controllers/deps.js'
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { migrate } from 'drizzle-orm/libsql/migrator';
+import { fileURLToPath } from 'node:url';
+import { openDatabase } from '../../../src/diplomat/db/driver.js';
+import { accountsRepo } from '../../../src/diplomat/db/repos/accounts.js';
+import { billsRepo } from '../../../src/diplomat/db/repos/bills.js';
+import { categoriesRepo } from '../../../src/diplomat/db/repos/categories.js';
+import { subCategoriesRepo } from '../../../src/diplomat/db/repos/subCategories.js';
+import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
+import { healthRepo } from '../../../src/diplomat/db/repos/health.js';
+import { merchantsRepo } from '../../../src/diplomat/db/repos/merchants.js';
+import { recurringRepo } from '../../../src/diplomat/db/repos/recurring.js';
+import { settingsRepo } from '../../../src/diplomat/db/repos/settings.js';
+import { tagsRepo } from '../../../src/diplomat/db/repos/tags.js';
+import { transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
+import { McpTransport } from '../../../src/config.js';
+import { Locale, LocaleSource } from '../../../src/models/locale.js';
+import { listCategories } from '../../../src/controllers/categories.js';
+import { getPreferences, setLocale } from '../../../src/controllers/settings.js';
+import type { Deps } from '../../../src/controllers/deps.js';
 
-const TEST_KEY = 'b'.repeat(64)
-const MIGRATIONS = fileURLToPath(new URL('../../../drizzle', import.meta.url))
+const TEST_KEY = 'b'.repeat(64);
+const MIGRATIONS = fileURLToPath(new URL('../../../drizzle', import.meta.url));
 
-let tmpDir: string
-let deps: Deps
+let tmpDir: string;
+let deps: Deps;
 
 describe('empty DB (ADR-008)', () => {
   beforeAll(async () => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-empty-'))
+    tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-empty-'));
     const db = openDatabase({
       DB_PATH: join(tmpDir, 'empty.db'),
       FINTRACK_DB_KEY: TEST_KEY,
       PORT: 0,
       MCP_TRANSPORT: McpTransport.enum.stdio,
-    })
-    await migrate(db, { migrationsFolder: MIGRATIONS })
+    });
+    await migrate(db, { migrationsFolder: MIGRATIONS });
 
-    const settingsR = settingsRepo(db)
+    const settingsR = settingsRepo(db);
     deps = {
       accounts: accountsRepo(db),
       bills: billsRepo(db),
@@ -56,31 +56,31 @@ describe('empty DB (ADR-008)', () => {
       clock: () => new Date(),
       newId: () => randomUUID(),
       locale: async () => {
-        const row = await settingsR.getLocale()
-        return row?.locale ?? Locale.enum.en
+        const row = await settingsR.getLocale();
+        return row?.locale ?? Locale.enum.en;
       },
       resetLocale: () => {},
-    }
-  })
+    };
+  });
 
   afterAll(() => {
-    if (tmpDir) rmSync(tmpDir, { recursive: true, force: true })
-  })
+    if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });
+  });
 
   it('list_categories returns empty array on unseeded DB', async () => {
-    const categories = await listCategories(deps)
-    expect(categories).toEqual([])
-  })
+    const categories = await listCategories(deps);
+    expect(categories).toEqual([]);
+  });
 
   it('get_preferences returns default locale on fresh DB', async () => {
-    const prefs = await getPreferences(deps)
-    expect(prefs).toEqual({ locale: Locale.enum.en, localeSource: LocaleSource.enum.default })
-  })
+    const prefs = await getPreferences(deps);
+    expect(prefs).toEqual({ locale: Locale.enum.en, localeSource: LocaleSource.enum.default });
+  });
 
   it('inferred set_locale switches locale and stores inferred source', async () => {
-    const result = await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred })
-    expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred })
-    const prefs = await getPreferences(deps)
-    expect(prefs).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred })
-  })
-})
+    const result = await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred });
+    expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });
+    const prefs = await getPreferences(deps);
+    expect(prefs).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });
+  });
+});

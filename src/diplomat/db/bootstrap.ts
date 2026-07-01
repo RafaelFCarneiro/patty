@@ -1,24 +1,24 @@
-import { fileURLToPath } from 'node:url'
-import { migrate } from 'drizzle-orm/libsql/migrator'
-import * as R from 'remeda'
-import { ClassificationMethod } from '../../models/transaction.js'
-import { normalizeMerchant } from '../../logic/merchant.js'
-import type { Db } from './driver.js'
-import { categories, currencies, merchantCategory, merchants } from './schema.js'
-import { CURRENCIES } from './seed/currencies.js'
-import { CATEGORIES } from './seed/categories.js'
-import { DEFAULT_MERCHANT_RULES } from './seed/merchantRules.js'
+import { fileURLToPath } from 'node:url';
+import { migrate } from 'drizzle-orm/libsql/migrator';
+import * as R from 'remeda';
+import { ClassificationMethod } from '../../models/transaction.js';
+import { normalizeMerchant } from '../../logic/merchant.js';
+import type { Db } from './driver.js';
+import { categories, currencies, merchantCategory, merchants } from './schema.js';
+import { CURRENCIES } from './seed/currencies.js';
+import { CATEGORIES } from './seed/categories.js';
+import { DEFAULT_MERCHANT_RULES } from './seed/merchantRules.js';
 
 // Resolve the migrations folder relative to this module (../../../drizzle), so it
 // works under both `tsx src/...` (dev) and `node dist/...` (prod/npx) regardless of cwd.
-const DEFAULT_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url))
+const DEFAULT_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
 
 // ---------------------------------------------------------------------------
 // Seed helpers
 // ---------------------------------------------------------------------------
 
 /** Seeded-rule weight (≈ 0.8 confidence). Named so the value isn't a bare literal. */
-const SEED_RULE_WEIGHT = 3
+const SEED_RULE_WEIGHT = 3;
 
 const seedRules = (): ReadonlyArray<{ key: string; categoryId: string }> =>
   R.pipe(
@@ -26,34 +26,44 @@ const seedRules = (): ReadonlyArray<{ key: string; categoryId: string }> =>
     R.map(({ key, category }) => ({ key: normalizeMerchant(key), categoryId: category })),
     R.filter(({ key }) => key.length > 0),
     R.uniqueBy(({ key, categoryId }) => `${key} ${categoryId}`),
-  )
+  );
 
 const seedCurrencies = async (db: Db): Promise<void> => {
-  await db.insert(currencies).values([...CURRENCIES]).onConflictDoNothing()
-}
+  await db
+    .insert(currencies)
+    .values([...CURRENCIES])
+    .onConflictDoNothing();
+};
 
 const seedCategories = async (db: Db): Promise<void> => {
-  await db.insert(categories).values([...CATEGORIES]).onConflictDoNothing()
-}
+  await db
+    .insert(categories)
+    .values([...CATEGORIES])
+    .onConflictDoNothing();
+};
 
 const seedMerchantRules = async (db: Db): Promise<void> => {
-  const currentYear = new Date().getFullYear()
-  const rules = seedRules()
-  const distinctKeys = [...new Set(rules.map(({ key }) => key))]
+  const currentYear = new Date().getFullYear();
+  const rules = seedRules();
+  const distinctKeys = [...new Set(rules.map(({ key }) => key))];
 
-  await db.insert(merchants)
+  await db
+    .insert(merchants)
     .values(distinctKeys.map((key) => ({ key })))
-    .onConflictDoNothing()
-  await db.insert(merchantCategory)
-    .values(rules.map(({ key, categoryId }) => ({
-      merchantKey: key,
-      categoryId,
-      weight: SEED_RULE_WEIGHT,
-      origin: ClassificationMethod.enum.rule,
-      lastSeen: currentYear,
-    })))
-    .onConflictDoNothing()
-}
+    .onConflictDoNothing();
+  await db
+    .insert(merchantCategory)
+    .values(
+      rules.map(({ key, categoryId }) => ({
+        merchantKey: key,
+        categoryId,
+        weight: SEED_RULE_WEIGHT,
+        origin: ClassificationMethod.enum.rule,
+        lastSeen: currentYear,
+      })),
+    )
+    .onConflictDoNothing();
+};
 
 // ---------------------------------------------------------------------------
 // Bootstrap
@@ -61,8 +71,8 @@ const seedMerchantRules = async (db: Db): Promise<void> => {
 
 /** Idempotent: applies pending migrations then upserts seed data. Safe on every boot. */
 export const bootstrap = async (db: Db, migrationsFolder = DEFAULT_MIGRATIONS_FOLDER): Promise<void> => {
-  await migrate(db, { migrationsFolder })
-  await seedCurrencies(db)
-  await seedCategories(db)
-  await seedMerchantRules(db)
-}
+  await migrate(db, { migrationsFolder });
+  await seedCurrencies(db);
+  await seedCategories(db);
+  await seedMerchantRules(db);
+};

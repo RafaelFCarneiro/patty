@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
-import { shapeAggregateResult } from '../../../src/logic/aggregate.js'
-import { AggregateGroupBy, AggregateSort } from '../../../src/models/aggregate.js'
-import type { AggregateDbRow } from '../../../src/wire/db/aggregate.js'
+import { describe, expect, it } from 'vitest';
+import { shapeAggregateResult } from '../../../src/logic/aggregate.js';
+import { AggregateGroupBy, AggregateSort } from '../../../src/models/aggregate.js';
+import type { AggregateDbRow } from '../../../src/wire/db/aggregate.js';
 
 const row = (overrides: Partial<AggregateDbRow> = {}): AggregateDbRow => ({
   key: 'cat-food',
@@ -11,7 +11,7 @@ const row = (overrides: Partial<AggregateDbRow> = {}): AggregateDbRow => ({
   value: 100,
   count: 5,
   ...overrides,
-})
+});
 
 describe('shapeAggregateResult', () => {
   it('groups per currency and computes total + pct', () => {
@@ -24,47 +24,41 @@ describe('shapeAggregateResult', () => {
       AggregateGroupBy.enum.category,
       AggregateSort.enum.desc,
       'en',
-    )
-    expect(out).toHaveLength(2)
-    const brl = out.find((b) => b.currency === 'BRL')!
-    expect(brl.total).toBe(1000)
-    expect(brl.rows[0]!.pct).toBe(60)
-    expect(brl.rows[1]!.pct).toBe(40)
-    const usd = out.find((b) => b.currency === 'USD')!
-    expect(usd.total).toBe(50)
-    expect(usd.rows[0]!.pct).toBe(100)
-  })
+    );
+    expect(out).toHaveLength(2);
+    const brl = out.find((b) => b.currency === 'BRL')!;
+    expect(brl.total).toBe(1000);
+    expect(brl.rows[0]!.pct).toBe(60);
+    expect(brl.rows[1]!.pct).toBe(40);
+    const usd = out.find((b) => b.currency === 'USD')!;
+    expect(usd.total).toBe(50);
+    expect(usd.rows[0]!.pct).toBe(100);
+  });
 
   it('sorts asc when requested', () => {
     const out = shapeAggregateResult(
-      [
-        row({ key: 'a', value: 300 }),
-        row({ key: 'b', value: 100 }),
-      ],
+      [row({ key: 'a', value: 300 }), row({ key: 'b', value: 100 })],
       AggregateGroupBy.enum.category,
       AggregateSort.enum.asc,
       'en',
-    )
-    expect(out[0]!.rows.map((r) => r.key)).toEqual(['b', 'a'])
-  })
+    );
+    expect(out[0]!.rows.map((r) => r.key)).toEqual(['b', 'a']);
+  });
 
   it('sorts desc by default', () => {
     const out = shapeAggregateResult(
-      [
-        row({ key: 'a', value: 100 }),
-        row({ key: 'b', value: 300 }),
-      ],
+      [row({ key: 'a', value: 100 }), row({ key: 'b', value: 300 })],
       AggregateGroupBy.enum.category,
       AggregateSort.enum.desc,
       'en',
-    )
-    expect(out[0]!.rows.map((r) => r.key)).toEqual(['b', 'a'])
-  })
+    );
+    expect(out[0]!.rows.map((r) => r.key)).toEqual(['b', 'a']);
+  });
 
   it('handles empty input', () => {
-    const out = shapeAggregateResult([], AggregateGroupBy.enum.category, AggregateSort.enum.desc, 'en')
-    expect(out).toEqual([])
-  })
+    const out = shapeAggregateResult([], AggregateGroupBy.enum.category, AggregateSort.enum.desc, 'en');
+    expect(out).toEqual([]);
+  });
 
   it('handles single row', () => {
     const out = shapeAggregateResult(
@@ -72,11 +66,11 @@ describe('shapeAggregateResult', () => {
       AggregateGroupBy.enum.account,
       AggregateSort.enum.desc,
       'en',
-    )
-    expect(out).toHaveLength(1)
-    expect(out[0]!.total).toBe(42)
-    expect(out[0]!.rows[0]!.pct).toBe(100)
-  })
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]!.total).toBe(42);
+    expect(out[0]!.rows[0]!.pct).toBe(100);
+  });
 
   it('zero-total guard: pct is 0 when total is 0', () => {
     const out = shapeAggregateResult(
@@ -84,10 +78,10 @@ describe('shapeAggregateResult', () => {
       AggregateGroupBy.enum.category,
       AggregateSort.enum.desc,
       'en',
-    )
-    expect(out[0]!.total).toBe(0)
-    expect(out[0]!.rows[0]!.pct).toBe(0)
-  })
+    );
+    expect(out[0]!.total).toBe(0);
+    expect(out[0]!.rows[0]!.pct).toBe(0);
+  });
 
   it('resolves category label from names JSON via locale', () => {
     const out = shapeAggregateResult(
@@ -95,9 +89,9 @@ describe('shapeAggregateResult', () => {
       AggregateGroupBy.enum.category,
       AggregateSort.enum.desc,
       'pt',
-    )
-    expect(out[0]!.rows[0]!.label).toBe('Alimentação')
-  })
+    );
+    expect(out[0]!.rows[0]!.label).toBe('Alimentação');
+  });
 
   it('falls back to canonical name when locale translation missing', () => {
     const out = shapeAggregateResult(
@@ -105,9 +99,9 @@ describe('shapeAggregateResult', () => {
       AggregateGroupBy.enum.category,
       AggregateSort.enum.desc,
       'es',
-    )
-    expect(out[0]!.rows[0]!.label).toBe('Food')
-  })
+    );
+    expect(out[0]!.rows[0]!.label).toBe('Food');
+  });
 
   it('non-category groupBy uses label directly', () => {
     const out = shapeAggregateResult(
@@ -115,9 +109,9 @@ describe('shapeAggregateResult', () => {
       AggregateGroupBy.enum.account,
       AggregateSort.enum.desc,
       'en',
-    )
-    expect(out[0]!.rows[0]!.label).toBe('Nubank')
-  })
+    );
+    expect(out[0]!.rows[0]!.label).toBe('Nubank');
+  });
 
   it('falls back to key when label is null', () => {
     const out = shapeAggregateResult(
@@ -125,9 +119,9 @@ describe('shapeAggregateResult', () => {
       AggregateGroupBy.enum.merchant,
       AggregateSort.enum.desc,
       'en',
-    )
-    expect(out[0]!.rows[0]!.label).toBe('some-merchant')
-  })
+    );
+    expect(out[0]!.rows[0]!.label).toBe('some-merchant');
+  });
 
   it('handles null key (uncategorized) with locale-aware label for category groupBy', () => {
     const out = shapeAggregateResult(
@@ -135,10 +129,10 @@ describe('shapeAggregateResult', () => {
       AggregateGroupBy.enum.category,
       AggregateSort.enum.desc,
       'pt',
-    )
-    expect(out[0]!.rows[0]!.key).toBe('uncategorized')
-    expect(out[0]!.rows[0]!.label).toBe('Sem categoria')
-  })
+    );
+    expect(out[0]!.rows[0]!.key).toBe('uncategorized');
+    expect(out[0]!.rows[0]!.label).toBe('Sem categoria');
+  });
 
   it('handles null key with "unknown" label for non-category groupBy', () => {
     const out = shapeAggregateResult(
@@ -146,10 +140,10 @@ describe('shapeAggregateResult', () => {
       AggregateGroupBy.enum.merchant,
       AggregateSort.enum.desc,
       'en',
-    )
-    expect(out[0]!.rows[0]!.key).toBe('unknown')
-    expect(out[0]!.rows[0]!.label).toBe('Unknown')
-  })
+    );
+    expect(out[0]!.rows[0]!.key).toBe('unknown');
+    expect(out[0]!.rows[0]!.label).toBe('Unknown');
+  });
 
   it('applies limit per currency, not globally', () => {
     const out = shapeAggregateResult(
@@ -164,9 +158,9 @@ describe('shapeAggregateResult', () => {
       AggregateSort.enum.desc,
       'en',
       2,
-    )
-    expect(out).toHaveLength(2)
-    expect(out.find((b) => b.currency === 'BRL')!.rows).toHaveLength(2)
-    expect(out.find((b) => b.currency === 'USD')!.rows).toHaveLength(2)
-  })
-})
+    );
+    expect(out).toHaveLength(2);
+    expect(out.find((b) => b.currency === 'BRL')!.rows).toHaveLength(2);
+    expect(out.find((b) => b.currency === 'USD')!.rows).toHaveLength(2);
+  });
+});

@@ -1,4 +1,4 @@
-import tseslint from 'typescript-eslint'
+import tseslint from 'typescript-eslint';
 
 /**
  * Lean, high-signal lint config. It machine-enforces the *precisely lintable* slice of
@@ -24,8 +24,7 @@ export default tseslint.config(
         {
           selector:
             "MemberExpression[computed=true][property.type='Literal'][property.value=0] > CallExpression[callee.property.name='filter']",
-          message:
-            'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/code-quality.md remeda table).',
+          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/code-quality.md remeda table).',
         },
       ],
       // ADR-007: in stdio mode stdout carries the MCP protocol — human logging must go to stderr.
@@ -35,24 +34,30 @@ export default tseslint.config(
       'prefer-const': 'error',
       // Strict equality, except the idiomatic `== null` / `!= null` null-ish guard.
       eqeqeq: ['error', 'always', { null: 'ignore' }],
-      'max-len': ['error', {
-        code: 120,
-        ignoreUrls: true,
-        ignoreStrings: true,
-        ignoreTemplateLiterals: true,
-        ignoreRegExpLiterals: true,
-      }],
+      'max-len': [
+        'error',
+        {
+          code: 120,
+          ignoreUrls: true,
+          ignoreStrings: true,
+          ignoreTemplateLiterals: true,
+          ignoreRegExpLiterals: true,
+        },
+      ],
     },
   },
   {
     files: ['test/**/*.ts'],
     rules: {
-      'max-len': ['error', {
-        code: 120,
-        ignoreUrls: true,
-        ignoreTemplateLiterals: true,
-        ignoreRegExpLiterals: true,
-      }],
+      'max-len': [
+        'error',
+        {
+          code: 120,
+          ignoreUrls: true,
+          ignoreTemplateLiterals: true,
+          ignoreRegExpLiterals: true,
+        },
+      ],
     },
   },
-)
+);

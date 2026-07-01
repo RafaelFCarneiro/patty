@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import { ClassificationMethod, TransactionViewSchema } from '../../models/transaction.js'
+import { z } from 'zod';
+import { ClassificationMethod, TransactionViewSchema } from '../../models/transaction.js';
 
 // ─── Outbound wire schemas ────────────────────────────────────────────────────
 // These are the serialized shapes that diplomats (MCP/HTTP) send to clients.
@@ -13,14 +13,14 @@ const ClassifyOutcomeOut = z.object({
   categoryId: z.string().optional(),
   categoryName: z.string().optional(),
   merchantKey: z.string().optional(),
-})
+});
 
 export const CreateTransactionOut = z.object({
   transaction: TransactionViewSchema,
   created: z.boolean(),
   classification: ClassifyOutcomeOut,
-})
-export type CreateTransactionOut = z.infer<typeof CreateTransactionOut>
+});
+export type CreateTransactionOut = z.infer<typeof CreateTransactionOut>;
 
 const BulkItemOut = z.discriminatedUnion('status', [
   z.object({
@@ -35,8 +35,8 @@ const BulkItemOut = z.discriminatedUnion('status', [
   }),
   z.object({ status: z.literal('duplicate'), transaction: TransactionViewSchema }),
   z.object({ status: z.literal('error'), description: z.string(), error: z.string() }),
-])
-export type BulkItemOut = z.infer<typeof BulkItemOut>
+]);
+export type BulkItemOut = z.infer<typeof BulkItemOut>;
 
 export const BulkResultOut = z.object({
   summary: z.object({
@@ -46,8 +46,8 @@ export const BulkResultOut = z.object({
     errors: z.number().int(),
   }),
   items: z.array(BulkItemOut),
-})
-export type BulkResultOut = z.infer<typeof BulkResultOut>
+});
+export type BulkResultOut = z.infer<typeof BulkResultOut>;
 
 export const DeleteTransactionOut = z.discriminatedUnion('deleted', [
   z.object({ deleted: z.literal(true), transaction: TransactionViewSchema }),
@@ -57,5 +57,5 @@ export const DeleteTransactionOut = z.discriminatedUnion('deleted', [
     wouldDelete: TransactionViewSchema,
     hint: z.string(),
   }),
-])
-export type DeleteTransactionOut = z.infer<typeof DeleteTransactionOut>
+]);
+export type DeleteTransactionOut = z.infer<typeof DeleteTransactionOut>;

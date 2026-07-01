@@ -1,23 +1,31 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { Result } from 'neverthrow'
-import { z } from 'zod'
-import type { AppError } from '../../common/errors.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { Result } from 'neverthrow';
+import { z } from 'zod';
+import type { AppError } from '../../common/errors.js';
 import {
-  createAccount, deleteAccount, getAccountBalances, listAccounts, updateAccount,
-} from '../../controllers/accounts.js'
-import { aggregateSpending } from '../../controllers/aggregate.js'
-import { getBill, payBill } from '../../controllers/bills.js'
+  createAccount,
+  deleteAccount,
+  getAccountBalances,
+  listAccounts,
+  updateAccount,
+} from '../../controllers/accounts.js';
+import { aggregateSpending } from '../../controllers/aggregate.js';
+import { getBill, payBill } from '../../controllers/bills.js';
 import {
-  createCategory, createSubCategory, deleteCategory, deleteSubCategory,
-  listCategories, listSubCategories,
-} from '../../controllers/categories.js'
-import { getPreferences, setLocale } from '../../controllers/settings.js'
-import { getStatus } from '../../controllers/status.js'
-import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js'
-import type { Deps } from '../../controllers/deps.js'
-import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js'
-import { createTag, deleteTag, listTags } from '../../controllers/tags.js'
-import { getSpendingSummary } from '../../controllers/summary.js'
+  createCategory,
+  createSubCategory,
+  deleteCategory,
+  deleteSubCategory,
+  listCategories,
+  listSubCategories,
+} from '../../controllers/categories.js';
+import { getPreferences, setLocale } from '../../controllers/settings.js';
+import { getStatus } from '../../controllers/status.js';
+import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js';
+import type { Deps } from '../../controllers/deps.js';
+import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
+import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
+import { getSpendingSummary } from '../../controllers/summary.js';
 import {
   confirmTransaction,
   createTransaction,
@@ -25,11 +33,14 @@ import {
   deleteTransaction,
   searchTransactions,
   updateTransaction,
-} from '../../controllers/transactions.js'
-import { createTransfer } from '../../controllers/transfers.js'
+} from '../../controllers/transactions.js';
+import { createTransfer } from '../../controllers/transfers.js';
 import {
-  AggregateMetric, AggregateSort, AggregateSpendingSchema, type ResolvedAggregateSpending,
-} from '../../models/aggregate.js'
+  AggregateMetric,
+  AggregateSort,
+  AggregateSpendingSchema,
+  type ResolvedAggregateSpending,
+} from '../../models/aggregate.js';
 import {
   TransactionSource,
   CreateTransactionSchema,
@@ -37,36 +48,32 @@ import {
   CreateTransferSchema,
   UpdateTransactionSchema,
   SearchTransactionsSchema,
-} from '../../models/transaction.js'
-import { CreateCategorySchema, CreateSubCategorySchema } from '../../wire/in/categories.js'
-import { Locale, LocaleSource } from '../../models/locale.js'
-import { AccountType } from '../../models/account.js'
-import { BillQuerySchema, PayBillSchema } from '../../models/bill.js'
-import { CreateRecurringSchema } from '../../wire/in/recurring.js'
-import { CreateCreditCardSchema } from '../../wire/in/creditCards.js'
-import {
-  bulkResultToWireOut,
-  createResultToWireOut,
-  deleteResultToWireOut,
-} from '../../adapters/transactions.js'
-import { CreateAccountSchema, UpdateAccountSchema } from '../../wire/in/accounts.js'
-import * as accountAdapters from '../../adapters/accounts.js'
+} from '../../models/transaction.js';
+import { CreateCategorySchema, CreateSubCategorySchema } from '../../wire/in/categories.js';
+import { Locale, LocaleSource } from '../../models/locale.js';
+import { AccountType } from '../../models/account.js';
+import { BillQuerySchema, PayBillSchema } from '../../models/bill.js';
+import { CreateRecurringSchema } from '../../wire/in/recurring.js';
+import { CreateCreditCardSchema } from '../../wire/in/creditCards.js';
+import { bulkResultToWireOut, createResultToWireOut, deleteResultToWireOut } from '../../adapters/transactions.js';
+import { CreateAccountSchema, UpdateAccountSchema } from '../../wire/in/accounts.js';
+import * as accountAdapters from '../../adapters/accounts.js';
 
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. */
 
 const json = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
-})
+});
 
 const jsonError = (e: AppError) => ({
   content: [{ type: 'text' as const, text: JSON.stringify({ error: e }, null, 2) }],
   isError: true,
-})
+});
 
-const fromResult = <T>(result: Result<T, AppError>) => result.match(json, jsonError)
+const fromResult = <T>(result: Result<T, AppError>) => result.match(json, jsonError);
 
 export const buildMcpServer = (deps: Deps, version: string): McpServer => {
-  const server = new McpServer({ name: 'fintrack', version })
+  const server = new McpServer({ name: 'fintrack', version });
 
   server.registerTool(
     'create_transaction',
@@ -81,10 +88,9 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'currency field (default USD).',
       inputSchema: CreateTransactionSchema.shape,
     },
-    async (args) => fromResult(
-      (await createTransaction(deps, args, TransactionSource.enum.mcp)).map(createResultToWireOut),
-    ),
-  )
+    async (args) =>
+      fromResult((await createTransaction(deps, args, TransactionSource.enum.mcp)).map(createResultToWireOut)),
+  );
 
   server.registerTool(
     'create_transactions_bulk',
@@ -97,10 +103,9 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'duplicate, or error. Top-level account/card apply to items that do not set their own.',
       inputSchema: CreateTransactionsBulkSchema.shape,
     },
-    async (args) => fromResult(
-      (await createTransactionsBulk(deps, args, TransactionSource.enum.import)).map(bulkResultToWireOut),
-    ),
-  )
+    async (args) =>
+      fromResult((await createTransactionsBulk(deps, args, TransactionSource.enum.import)).map(bulkResultToWireOut)),
+  );
 
   server.registerTool(
     'create_credit_card',
@@ -113,13 +118,13 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: CreateCreditCardSchema.shape,
     },
     async (args) => fromResult(await createCreditCard(deps, args)),
-  )
+  );
 
   server.registerTool(
     'list_credit_cards',
     { title: 'List credit cards', description: 'List all credit cards.', inputSchema: {} },
     async () => json(await listCreditCards(deps)),
-  )
+  );
 
   server.registerTool(
     'delete_credit_card',
@@ -135,7 +140,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       },
     },
     async (args) => fromResult(await deleteCreditCard(deps, args)),
-  )
+  );
 
   server.registerTool(
     'get_bill',
@@ -146,7 +151,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: BillQuerySchema.shape,
     },
     async (args) => fromResult(await getBill(deps, args)),
-  )
+  );
 
   server.registerTool(
     'pay_bill',
@@ -159,7 +164,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: PayBillSchema.shape,
     },
     async (args) => fromResult(await payBill(deps, { ...args, source: TransactionSource.enum.mcp })),
-  )
+  );
 
   server.registerTool(
     'create_recurring',
@@ -170,13 +175,13 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: CreateRecurringSchema.shape,
     },
     async (args) => fromResult(await createRecurring(deps, args)),
-  )
+  );
 
   server.registerTool(
     'list_recurring',
     { title: 'List recurring rules', description: 'List all recurring rules with next due dates.', inputSchema: {} },
     async () => json(await listRecurring(deps)),
-  )
+  );
 
   server.registerTool(
     'apply_due_recurring',
@@ -188,13 +193,17 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'so passing a future date pre-creates upcoming salary, rent, and subscriptions as pending, ' +
         'feeding projections without extra monthly effort. Idempotent — safe to call any time.',
       inputSchema: {
-        through: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe(
-          'YYYY-MM-DD horizon (default: today). Pass a future date to pre-create upcoming occurrences as pending.',
-        ),
+        through: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe(
+            'YYYY-MM-DD horizon (default: today). Pass a future date to pre-create upcoming occurrences as pending.',
+          ),
       },
     },
     async (args) => json(await applyDueRecurring(deps, args)),
-  )
+  );
 
   server.registerTool(
     'confirm_transaction',
@@ -209,7 +218,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       },
     },
     async (args) => fromResult(await confirmTransaction(deps, args)),
-  )
+  );
 
   server.registerTool(
     'update_transaction',
@@ -223,7 +232,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: UpdateTransactionSchema.shape,
     },
     async (args) => fromResult(await updateTransaction(deps, args)),
-  )
+  );
 
   server.registerTool(
     'delete_transaction',
@@ -238,7 +247,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       },
     },
     async (args) => fromResult((await deleteTransaction(deps, args)).map(deleteResultToWireOut)),
-  )
+  );
 
   server.registerTool(
     'search_transactions',
@@ -254,7 +263,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       },
     },
     async (args) => fromResult(await searchTransactions(deps, args)),
-  )
+  );
 
   server.registerTool(
     'aggregate_spending',
@@ -272,7 +281,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       },
     },
     async (args) => fromResult(await aggregateSpending(deps, args as ResolvedAggregateSpending)),
-  )
+  );
 
   server.registerTool(
     'get_spending_summary',
@@ -287,7 +296,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       },
     },
     async (args) => json(await getSpendingSummary(deps, args)),
-  )
+  );
 
   server.registerTool(
     'create_account',
@@ -299,7 +308,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: CreateAccountSchema.shape,
     },
     async (args) => fromResult(await createAccount(deps, accountAdapters.createWireInToModel(args))),
-  )
+  );
 
   server.registerTool(
     'get_account_balances',
@@ -311,14 +320,18 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: {
         account: z.string().optional().describe('Single account by name'),
         type: AccountType.optional(),
-        projectedAsOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe(
-          'YYYY-MM-DD. When provided, also returns projectedBalance = effective balance + pending ' +
-          'transactions dated on/before this date. The effective balance is always included.',
-        ),
+        projectedAsOf: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe(
+            'YYYY-MM-DD. When provided, also returns projectedBalance = effective balance + pending ' +
+              'transactions dated on/before this date. The effective balance is always included.',
+          ),
       },
     },
     async (args) => fromResult(await getAccountBalances(deps, args)),
-  )
+  );
 
   server.registerTool(
     'list_accounts',
@@ -330,7 +343,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       },
     },
     async (args) => json(await listAccounts(deps, args.type)),
-  )
+  );
 
   server.registerTool(
     'update_account',
@@ -345,7 +358,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: UpdateAccountSchema.shape,
     },
     async (args) => fromResult(await updateAccount(deps, accountAdapters.updateWireInToModel(args))),
-  )
+  );
 
   server.registerTool(
     'delete_account',
@@ -361,7 +374,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       },
     },
     async (args) => fromResult(await deleteAccount(deps, args.name)),
-  )
+  );
 
   server.registerTool(
     'create_transfer',
@@ -375,8 +388,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: CreateTransferSchema.shape,
     },
     async (args) => fromResult(await createTransfer(deps, args, TransactionSource.enum.mcp)),
-  )
-
+  );
 
   server.registerTool(
     'create_category',
@@ -386,18 +398,17 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: CreateCategorySchema.shape,
     },
     async (args) => fromResult(await createCategory(deps, args)),
-  )
+  );
 
   server.registerTool(
     'list_categories',
     {
       title: 'List categories',
-      description:
-        'List all categories. Names are resolved to the active locale for default categories.',
+      description: 'List all categories. Names are resolved to the active locale for default categories.',
       inputSchema: {},
     },
     async () => json(await listCategories(deps)),
-  )
+  );
 
   server.registerTool(
     'create_sub_category',
@@ -409,7 +420,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: CreateSubCategorySchema.shape,
     },
     async (args) => fromResult(await createSubCategory(deps, args)),
-  )
+  );
 
   server.registerTool(
     'list_sub_categories',
@@ -421,7 +432,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       },
     },
     async (args) => json(await listSubCategories(deps, args.parentId)),
-  )
+  );
 
   server.registerTool(
     'delete_category',
@@ -430,11 +441,11 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       description:
         'Delete a category by name. Blocked if any transactions, recurring rules, or sub-categories reference it — ' +
         'returns an in_use error with reference counts so you can guide the user to clear them first. ' +
-        'On success, also removes the category\'s learned merchant classification rules (re-learnable).',
+        "On success, also removes the category's learned merchant classification rules (re-learnable).",
       inputSchema: { name: z.string().min(1).describe('Category name') },
     },
     async (args) => fromResult(await deleteCategory(deps, args.name)),
-  )
+  );
 
   server.registerTool(
     'delete_sub_category',
@@ -448,13 +459,11 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: { name: z.string().min(1).describe('Sub-category name') },
     },
     async (args) => fromResult(await deleteSubCategory(deps, args.name)),
-  )
+  );
 
-  server.registerTool(
-    'list_tags',
-    { title: 'List tags', description: 'List all tags.', inputSchema: {} },
-    async () => json(await listTags(deps)),
-  )
+  server.registerTool('list_tags', { title: 'List tags', description: 'List all tags.', inputSchema: {} }, async () =>
+    json(await listTags(deps)),
+  );
 
   server.registerTool(
     'create_tag',
@@ -466,7 +475,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: { name: z.string().min(1) },
     },
     async (args) => fromResult(await createTag(deps, args.name)),
-  )
+  );
 
   server.registerTool(
     'delete_tag',
@@ -476,7 +485,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: { id: z.string().min(1) },
     },
     async (args) => fromResult(await deleteTag(deps, args.id)),
-  )
+  );
 
   server.registerTool(
     'set_locale',
@@ -496,7 +505,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       },
     },
     async (args) => fromResult(await setLocale(deps, args)),
-  )
+  );
 
   server.registerTool(
     'get_preferences',
@@ -510,7 +519,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: {},
     },
     async () => json(await getPreferences(deps)),
-  )
+  );
 
   server.registerTool(
     'get_status',
@@ -524,7 +533,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: {},
     },
     async () => json(await getStatus(deps, version)),
-  )
+  );
 
-  return server
-}
+  return server;
+};

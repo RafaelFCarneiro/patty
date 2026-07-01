@@ -1,25 +1,22 @@
-import { ok, safeTry, type ResultAsync } from 'neverthrow'
-import type { AppError } from '../common/errors.js'
-import { nextDue, recurringIdempotencyKey, withPeriodLabel } from '../logic/recurring.js'
-import { toIsoDate } from '../logic/period.js'
-import type { CreateRecurring, RecurringRuleView } from '../models/recurring.js'
-import { addLocalizedLabels, defaultStatusFor, resolveCurrency } from '../logic/transaction.js'
-import { ClassificationMethod, TransactionSource, type TransactionView } from '../models/transaction.js'
-import type { Deps } from './deps.js'
-import { resolveAccountRef, resolveCategoryRef } from './resolve.js'
+import { ok, safeTry, type ResultAsync } from 'neverthrow';
+import type { AppError } from '../common/errors.js';
+import { nextDue, recurringIdempotencyKey, withPeriodLabel } from '../logic/recurring.js';
+import { toIsoDate } from '../logic/period.js';
+import type { CreateRecurring, RecurringRuleView } from '../models/recurring.js';
+import { addLocalizedLabels, defaultStatusFor, resolveCurrency } from '../logic/transaction.js';
+import { ClassificationMethod, TransactionSource, type TransactionView } from '../models/transaction.js';
+import type { Deps } from './deps.js';
+import { resolveAccountRef, resolveCategoryRef } from './resolve.js';
 
 export const listRecurring = async (deps: Deps): Promise<RecurringRuleView[]> => {
-  const [locale, rules] = await Promise.all([deps.locale(), deps.recurring.list()])
-  return rules.map(withPeriodLabel(locale))
-}
+  const [locale, rules] = await Promise.all([deps.locale(), deps.recurring.list()]);
+  return rules.map(withPeriodLabel(locale));
+};
 
-export const createRecurring = (
-  deps: Deps,
-  input: CreateRecurring,
-): ResultAsync<RecurringRuleView, AppError> =>
+export const createRecurring = (deps: Deps, input: CreateRecurring): ResultAsync<RecurringRuleView, AppError> =>
   safeTry(async function* () {
-    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null
-    const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null
+    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
+    const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
 
     const rule = await deps.recurring.create(
       {
@@ -32,14 +29,14 @@ export const createRecurring = (
         currency: resolveCurrency(account, null, input),
       },
       { accountId: account?.id ?? null, categoryId: category?.id ?? null },
-    )
-    return ok(rule)
-  })
+    );
+    return ok(rule);
+  });
 
 export type ApplyDueResult = {
-  applied: Array<{ rule: string; date: string; transaction: TransactionView }>
-  count: number
-}
+  applied: Array<{ rule: string; date: string; transaction: TransactionView }>;
+  count: number;
+};
 
 /**
  * Materialize every rule due on/before `through` (default: today).
@@ -47,41 +44,41 @@ export type ApplyDueResult = {
  * Passing a future `through` pre-creates upcoming salary/rent/subscriptions as pending,
  * feeding projections without any extra monthly effort. Idempotent: safe to re-run.
  */
-export const applyDueRecurring = async (
-  deps: Deps,
-  options?: { through?: string },
-): Promise<ApplyDueResult> => {
-  const today = toIsoDate(deps.clock())
-  const through = options?.through ?? today
-  const applied: ApplyDueResult['applied'] = []
+export const applyDueRecurring = async (deps: Deps, options?: { through?: string }): Promise<ApplyDueResult> => {
+  const today = toIsoDate(deps.clock());
+  const through = options?.through ?? today;
+  const applied: ApplyDueResult['applied'] = [];
 
   for (const rule of await deps.recurring.due(through)) {
-    let due = rule.nextDue
+    let due = rule.nextDue;
     // bounded loop to prevent runaway on ancient rules
     for (let i = 0; i < 36 && due <= through; i++) {
-      const { transaction, created } = await deps.transactions.create({
-        id: deps.newId(),
-        description: rule.description,
-        amount: rule.amount,
-        type: rule.type,
-        status: defaultStatusFor(due, today),
-        date: due,
-        currency: rule.currency,
-        source: TransactionSource.enum.mcp,
-        idempotencyKey: recurringIdempotencyKey(rule.id, due),
-        classification: { method: ClassificationMethod.enum.user, confidence: 1 },
-        refs: { accountId: rule.accountId, categoryId: rule.categoryId },
-      }, [])
-      if (created) applied.push({ rule: rule.description, date: due, transaction })
-      due = nextDue(due, rule.period)
+      const { transaction, created } = await deps.transactions.create(
+        {
+          id: deps.newId(),
+          description: rule.description,
+          amount: rule.amount,
+          type: rule.type,
+          status: defaultStatusFor(due, today),
+          date: due,
+          currency: rule.currency,
+          source: TransactionSource.enum.mcp,
+          idempotencyKey: recurringIdempotencyKey(rule.id, due),
+          classification: { method: ClassificationMethod.enum.user, confidence: 1 },
+          refs: { accountId: rule.accountId, categoryId: rule.categoryId },
+        },
+        [],
+      );
+      if (created) applied.push({ rule: rule.description, date: due, transaction });
+      due = nextDue(due, rule.period);
     }
-    await deps.recurring.advance(rule.id, due)
+    await deps.recurring.advance(rule.id, due);
   }
 
-  const locale = await deps.locale()
+  const locale = await deps.locale();
   const labeled = applied.map((a) => ({
     ...a,
     transaction: addLocalizedLabels(a.transaction, locale),
-  }))
-  return { applied: labeled, count: labeled.length }
-}
+  }));
+  return { applied: labeled, count: labeled.length };
+};

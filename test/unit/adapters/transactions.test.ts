@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest'
-import { CurrencyCode } from '../../../src/models/money.js'
-import { NOTE_MAX_LENGTH, TransactionSource, TransactionStatus,
-  type Transaction } from '../../../src/models/transaction.js'
-import * as wireInTransactions from '../../../src/wire/in/transactions.js'
-import * as transactionAdapters from '../../../src/adapters/transactions.js'
+import { describe, expect, it } from 'vitest';
+import { CurrencyCode } from '../../../src/models/money.js';
+import {
+  NOTE_MAX_LENGTH,
+  TransactionSource,
+  TransactionStatus,
+  type Transaction,
+} from '../../../src/models/transaction.js';
+import * as wireInTransactions from '../../../src/wire/in/transactions.js';
+import * as transactionAdapters from '../../../src/adapters/transactions.js';
 
 const draft: Transaction = {
   id: 'tx-1',
@@ -18,36 +22,36 @@ const draft: Transaction = {
   classification: { method: 'rule', confidence: 0.8 },
   rawInput: 'paguei 32,50 de uber',
   refs: { accountId: 'acc-1', categoryId: 'cat-transporte', merchantKey: 'uber' },
-}
+};
 
 describe('modelToDb', () => {
   it('flattens classification into node properties', () => {
-    const { props } = transactionAdapters.modelToDb(draft)
+    const { props } = transactionAdapters.modelToDb(draft);
     expect(props).toMatchObject({
       id: 'tx-1',
       classificationMethod: 'rule',
       confidence: 0.8,
       rawInput: 'paguei 32,50 de uber',
-    })
-    expect(props).not.toHaveProperty('classification')
-    expect(props).not.toHaveProperty('refs')
-  })
+    });
+    expect(props).not.toHaveProperty('classification');
+    expect(props).not.toHaveProperty('refs');
+  });
 
   it('maps note to db (present → value, absent → null)', () => {
-    const { props: withNote } = transactionAdapters.modelToDb({ ...draft, note: 'split com João' })
-    expect(withNote.note).toBe('split com João')
+    const { props: withNote } = transactionAdapters.modelToDb({ ...draft, note: 'split com João' });
+    expect(withNote.note).toBe('split com João');
 
-    const { props: withoutNote } = transactionAdapters.modelToDb({ ...draft, note: undefined })
-    expect(withoutNote.note).toBeNull()
-  })
+    const { props: withoutNote } = transactionAdapters.modelToDb({ ...draft, note: undefined });
+    expect(withoutNote.note).toBeNull();
+  });
 
   it('converts missing optionals to explicit nulls for Cypher params', () => {
     const { props, refs } = transactionAdapters.modelToDb({
       ...draft,
       rawInput: undefined,
       refs: { accountId: 'acc-1', toAccountId: 'acc-2' },
-    })
-    expect(props.rawInput).toBeNull()
+    });
+    expect(props.rawInput).toBeNull();
     expect(refs).toEqual({
       accountId: 'acc-1',
       toAccountId: 'acc-2',
@@ -56,8 +60,8 @@ describe('modelToDb', () => {
       categoryId: null,
       subCategoryId: null,
       merchantKey: null,
-    })
-  })
+    });
+  });
 
   it('supports transfer drafts (both account refs, no classification edge data)', () => {
     const { props, refs } = transactionAdapters.modelToDb({
@@ -65,40 +69,40 @@ describe('modelToDb', () => {
       type: 'transfer',
       classification: { method: 'none', confidence: 0 },
       refs: { accountId: 'acc-1', toAccountId: 'acc-2' },
-    })
-    expect(props.type).toBe('transfer')
-    expect(props.classificationMethod).toBe('none')
-    expect(refs.accountId).toBe('acc-1')
-    expect(refs.toAccountId).toBe('acc-2')
-  })
-})
+    });
+    expect(props.type).toBe('transfer');
+    expect(props.classificationMethod).toBe('none');
+    expect(refs.accountId).toBe('acc-1');
+    expect(refs.toAccountId).toBe('acc-2');
+  });
+});
 
 describe('patchToDb', () => {
   it('emits only provided fields — absent fields never reach SET', () => {
-    expect(transactionAdapters.patchToDb({ amount: 50 })).toEqual({ amount: 50 })
-    expect(transactionAdapters.patchToDb({})).toEqual({})
-  })
+    expect(transactionAdapters.patchToDb({ amount: 50 })).toEqual({ amount: 50 });
+    expect(transactionAdapters.patchToDb({})).toEqual({});
+  });
 
   it('flattens a classification correction', () => {
     expect(transactionAdapters.patchToDb({ classification: { method: 'user', confidence: 1 } })).toEqual({
       classificationMethod: 'user',
       confidence: 1,
-    })
-  })
+    });
+  });
 
   it('keeps falsy-but-provided values', () => {
     expect(transactionAdapters.patchToDb({ description: 'x', date: '2026-01-01' })).toEqual({
       description: 'x',
       date: '2026-01-01',
-    })
-  })
+    });
+  });
 
   it('maps note: value → set, empty string → null (clear), omitted → absent', () => {
-    expect(transactionAdapters.patchToDb({ note: 'memo' })).toEqual({ note: 'memo' })
-    expect(transactionAdapters.patchToDb({ note: '' })).toEqual({ note: null })
-    expect(transactionAdapters.patchToDb({})).not.toHaveProperty('note')
-  })
-})
+    expect(transactionAdapters.patchToDb({ note: 'memo' })).toEqual({ note: 'memo' });
+    expect(transactionAdapters.patchToDb({ note: '' })).toEqual({ note: null });
+    expect(transactionAdapters.patchToDb({})).not.toHaveProperty('note');
+  });
+});
 
 // Flat SQL row as returned by a full transaction SELECT (with JOINs)
 const sqlRow = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
@@ -128,18 +132,18 @@ const sqlRow = (overrides: Record<string, unknown> = {}): Record<string, unknown
   merchant_key: null,
   tags: null,
   ...overrides,
-})
+});
 
 describe('wireIn adapters', () => {
   it('searchWireInToModel applies limit default of 50 when omitted', () => {
-    const parsed = wireInTransactions.SearchTransactionsInputSchema.parse({})
-    expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({ limit: 50 })
-  })
+    const parsed = wireInTransactions.SearchTransactionsInputSchema.parse({});
+    expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({ limit: 50 });
+  });
 
   it('searchWireInToModel preserves explicit limit when provided', () => {
-    const parsed = wireInTransactions.SearchTransactionsInputSchema.parse({ limit: 10, month: 6, year: 2026 })
-    expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({ limit: 10, month: 6, year: 2026 })
-  })
+    const parsed = wireInTransactions.SearchTransactionsInputSchema.parse({ limit: 10, month: 6, year: 2026 });
+    expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({ limit: 10, month: 6, year: 2026 });
+  });
 
   it('createWireInToModel passes transaction input through unchanged', () => {
     const parsed = wireInTransactions.CreateTransactionInputSchema.parse({
@@ -147,114 +151,126 @@ describe('wireIn adapters', () => {
       amount: 32.5,
       type: 'expense',
       idempotencyKey: 'k1',
-    })
+    });
     expect(transactionAdapters.createWireInToModel(parsed)).toMatchObject({
       description: 'Uber',
       amount: 32.5,
       type: 'expense',
       idempotencyKey: 'k1',
-    })
-  })
-})
+    });
+  });
+});
 
 describe('dbToModel', () => {
   it('nests flat db classification back into the model', () => {
-    const tx = transactionAdapters.dbToModel(sqlRow({
-      category_id: 'cat-transporte',
-      category_name: 'Transporte',
-      merchant_key: 'uber',
-    }))
-    expect(tx.classification).toEqual({ method: 'rule', confidence: 0.8 })
-    expect(tx.accountName).toBe('Nubank')
-    expect(tx.merchant).toBe('uber')
-  })
+    const tx = transactionAdapters.dbToModel(
+      sqlRow({
+        category_id: 'cat-transporte',
+        category_name: 'Transporte',
+        merchant_key: 'uber',
+      }),
+    );
+    expect(tx.classification).toEqual({ method: 'rule', confidence: 0.8 });
+    expect(tx.accountName).toBe('Nubank');
+    expect(tx.merchant).toBe('uber');
+  });
 
   it('maps null relation columns to undefined optionals', () => {
-    const tx = transactionAdapters.dbToModel(sqlRow({
-      from_account_id: null,
-      from_account_name: null,
-    }))
-    expect(tx.accountId).toBeUndefined()
-    expect(tx.toAccountId).toBeUndefined()
-    expect(tx.rawInput).toBeUndefined()
-  })
+    const tx = transactionAdapters.dbToModel(
+      sqlRow({
+        from_account_id: null,
+        from_account_name: null,
+      }),
+    );
+    expect(tx.accountId).toBeUndefined();
+    expect(tx.toAccountId).toBeUndefined();
+    expect(tx.rawInput).toBeUndefined();
+  });
 
   it('round-trips a transfer with both account sides', () => {
-    const tx = transactionAdapters.dbToModel(sqlRow({
-      type: 'transfer',
-      classification_method: 'none',
-      confidence: 0,
-      to_account_id: 'acc-2',
-      to_account_name: 'Poupança',
-    }))
-    expect(tx.type).toBe('transfer')
-    expect(tx.toAccountName).toBe('Poupança')
-  })
+    const tx = transactionAdapters.dbToModel(
+      sqlRow({
+        type: 'transfer',
+        classification_method: 'none',
+        confidence: 0,
+        to_account_id: 'acc-2',
+        to_account_name: 'Poupança',
+      }),
+    );
+    expect(tx.type).toBe('transfer');
+    expect(tx.toAccountName).toBe('Poupança');
+  });
 
   it('maps tags from db record to TransactionView', () => {
-    const tx = transactionAdapters.dbToModel(sqlRow({ tags: '["work","travel"]' }))
-    expect(tx.tags).toEqual(['work', 'travel'])
-  })
+    const tx = transactionAdapters.dbToModel(sqlRow({ tags: '["work","travel"]' }));
+    expect(tx.tags).toEqual(['work', 'travel']);
+  });
 
   it('defaults tags to empty array when absent in db record', () => {
-    const tx = transactionAdapters.dbToModel(sqlRow({ tags: null }))
-    expect(tx.tags).toEqual([])
-  })
+    const tx = transactionAdapters.dbToModel(sqlRow({ tags: null }));
+    expect(tx.tags).toEqual([]);
+  });
 
   it('handles explicit empty tags array from db', () => {
-    const tx = transactionAdapters.dbToModel(sqlRow({ tags: '[null]' }))
-    expect(tx.tags).toEqual([])
-  })
+    const tx = transactionAdapters.dbToModel(sqlRow({ tags: '[null]' }));
+    expect(tx.tags).toEqual([]);
+  });
 
   // Issue: TransactionView.tags used z.string() allowing empty strings from db
   it('rejects empty string tags coming from db', () => {
-    expect(() => transactionAdapters.dbToModel(sqlRow({ tags: '[""]' }))).toThrow()
-  })
+    expect(() => transactionAdapters.dbToModel(sqlRow({ tags: '[""]' }))).toThrow();
+  });
 
   it('parses category_names JSON into categoryNames map', () => {
-    const tx = transactionAdapters.dbToModel(sqlRow({
-      category_id: 'cat-food',
-      category_name: 'Food',
-      category_names: '{"pt":"Alimentação","es":"Alimentación"}',
-    }))
-    expect(tx.categoryNames).toEqual({ pt: 'Alimentação', es: 'Alimentación' })
-    expect(tx.categoryName).toBe('Food')
-  })
+    const tx = transactionAdapters.dbToModel(
+      sqlRow({
+        category_id: 'cat-food',
+        category_name: 'Food',
+        category_names: '{"pt":"Alimentação","es":"Alimentación"}',
+      }),
+    );
+    expect(tx.categoryNames).toEqual({ pt: 'Alimentação', es: 'Alimentación' });
+    expect(tx.categoryName).toBe('Food');
+  });
 
   it('parses subcategory_names JSON into subCategoryNames map', () => {
-    const tx = transactionAdapters.dbToModel(sqlRow({
-      subcategory_id: 'sub-1',
-      subcategory_name: 'Groceries',
-      subcategory_names: '{"pt":"Supermercado"}',
-    }))
-    expect(tx.subCategoryNames).toEqual({ pt: 'Supermercado' })
-    expect(tx.subCategoryName).toBe('Groceries')
-  })
+    const tx = transactionAdapters.dbToModel(
+      sqlRow({
+        subcategory_id: 'sub-1',
+        subcategory_name: 'Groceries',
+        subcategory_names: '{"pt":"Supermercado"}',
+      }),
+    );
+    expect(tx.subCategoryNames).toEqual({ pt: 'Supermercado' });
+    expect(tx.subCategoryName).toBe('Groceries');
+  });
 
   it('defaults categoryNames and subCategoryNames to null when absent', () => {
-    const tx = transactionAdapters.dbToModel(sqlRow())
-    expect(tx.categoryNames).toBeNull()
-    expect(tx.subCategoryNames).toBeNull()
-  })
+    const tx = transactionAdapters.dbToModel(sqlRow());
+    expect(tx.categoryNames).toBeNull();
+    expect(tx.subCategoryNames).toBeNull();
+  });
 
   it('maps note from db (present → string, null → undefined)', () => {
-    const withNote = transactionAdapters.dbToModel(sqlRow({ note: 'reembolsável' }))
-    expect(withNote.note).toBe('reembolsável')
+    const withNote = transactionAdapters.dbToModel(sqlRow({ note: 'reembolsável' }));
+    expect(withNote.note).toBe('reembolsável');
 
-    const withoutNote = transactionAdapters.dbToModel(sqlRow({ note: null }))
-    expect(withoutNote.note).toBeUndefined()
-  })
+    const withoutNote = transactionAdapters.dbToModel(sqlRow({ note: null }));
+    expect(withoutNote.note).toBeUndefined();
+  });
 
   it('handles null category_names (user-created categories)', () => {
-    const tx = transactionAdapters.dbToModel(sqlRow({
-      category_id: 'custom-1',
-      category_name: 'My Custom',
-      category_names: null,
-    }))
-    expect(tx.categoryNames).toBeNull()
-    expect(tx.categoryName).toBe('My Custom')
-  })
-})
+    const tx = transactionAdapters.dbToModel(
+      sqlRow({
+        category_id: 'custom-1',
+        category_name: 'My Custom',
+        category_names: null,
+      }),
+    );
+    expect(tx.categoryNames).toBeNull();
+    expect(tx.categoryName).toBe('My Custom');
+  });
+});
 
 describe('BulkTransactionItemSchema', () => {
   it('strips subCategory and tags from bulk items', () => {
@@ -264,21 +280,21 @@ describe('BulkTransactionItemSchema', () => {
       type: 'expense',
       subCategory: 'Ride',
       tags: ['work'],
-    }
-    const parsed = wireInTransactions.BulkTransactionItemSchema.parse(input)
-    expect(parsed).not.toHaveProperty('subCategory')
-    expect(parsed).not.toHaveProperty('tags')
-  })
+    };
+    const parsed = wireInTransactions.BulkTransactionItemSchema.parse(input);
+    expect(parsed).not.toHaveProperty('subCategory');
+    expect(parsed).not.toHaveProperty('tags');
+  });
 
   it('accepts bulk items without subCategory and tags', () => {
     const result = wireInTransactions.BulkTransactionItemSchema.safeParse({
       description: 'Groceries',
       amount: 50,
       type: 'expense',
-    })
-    expect(result.success).toBe(true)
-  })
-})
+    });
+    expect(result.success).toBe(true);
+  });
+});
 
 describe('note zod validation', () => {
   it('rejects a note longer than NOTE_MAX_LENGTH on create', () => {
@@ -288,17 +304,17 @@ describe('note zod validation', () => {
       type: 'expense',
       idempotencyKey: 'k1',
       note: 'x'.repeat(NOTE_MAX_LENGTH + 1),
-    })
-    expect(result.success).toBe(false)
-  })
+    });
+    expect(result.success).toBe(false);
+  });
 
   it('rejects a note longer than NOTE_MAX_LENGTH on update', () => {
     const result = wireInTransactions.UpdateTransactionInputSchema.safeParse({
       id: 'tx-1',
       note: 'x'.repeat(NOTE_MAX_LENGTH + 1),
-    })
-    expect(result.success).toBe(false)
-  })
+    });
+    expect(result.success).toBe(false);
+  });
 
   it('rejects an empty string note on create', () => {
     const result = wireInTransactions.CreateTransactionInputSchema.safeParse({
@@ -307,9 +323,9 @@ describe('note zod validation', () => {
       type: 'expense',
       idempotencyKey: 'k1',
       note: '',
-    })
-    expect(result.success).toBe(false)
-  })
+    });
+    expect(result.success).toBe(false);
+  });
 
   it('accepts a note at exactly NOTE_MAX_LENGTH', () => {
     const result = wireInTransactions.CreateTransactionInputSchema.safeParse({
@@ -318,7 +334,7 @@ describe('note zod validation', () => {
       type: 'expense',
       idempotencyKey: 'k1',
       note: 'x'.repeat(NOTE_MAX_LENGTH),
-    })
-    expect(result.success).toBe(true)
-  })
-})
+    });
+    expect(result.success).toBe(true);
+  });
+});

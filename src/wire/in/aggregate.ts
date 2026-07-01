@@ -1,6 +1,6 @@
-import { z } from 'zod'
-import { AggregateMetric, AggregateSort, AggregateSpendingSchema } from '../../models/aggregate.js'
-import { coerceToNumber } from './coerce.js'
+import { z } from 'zod';
+import { AggregateMetric, AggregateSort, AggregateSpendingSchema } from '../../models/aggregate.js';
+import { coerceToNumber } from './coerce.js';
 
 export const AggregateSpendingInputSchema = AggregateSpendingSchema.extend({
   metric: AggregateSpendingSchema.shape.metric.default(AggregateMetric.enum.sum),
@@ -8,5 +8,5 @@ export const AggregateSpendingInputSchema = AggregateSpendingSchema.extend({
   limit: z.preprocess(coerceToNumber, AggregateSpendingSchema.shape.limit.default(50)),
   month: z.preprocess(coerceToNumber, AggregateSpendingSchema.shape.month),
   year: z.preprocess(coerceToNumber, AggregateSpendingSchema.shape.year),
-})
-export type AggregateSpendingInput = z.infer<typeof AggregateSpendingInputSchema>
+});
+export type AggregateSpendingInput = z.infer<typeof AggregateSpendingInputSchema>;
