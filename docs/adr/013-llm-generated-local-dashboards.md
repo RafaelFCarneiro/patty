@@ -127,8 +127,10 @@ or stale data.
 ## Action Items (phased — each phase = its own design + PR)
 
 **Phase A — contract + serving groundwork**
-1. [ ] Publish an OpenAPI spec for the REST API at a route (e.g. `/api/openapi.json`) and expose it as an MCP
-   resource for discovery.
+1. [x] Publish an OpenAPI spec for the REST API at a route (e.g. `/api/openapi.json`) and expose it as an MCP
+   resource for discovery. Shipped: `GET /api/openapi.json` + MCP resource `fintrack://openapi`, both backed by
+   `diplomat/http/openapi.ts` (derived from `wire/in`/`wire/out`/`models`) — see `docs/architecture.md`
+   § OpenAPI contract.
 2. [ ] Serve a `/ui` surface from the http server (same-origin with `/api`). Add a `dashboards` entity (`name`,
    `html`, `updated_at`) + repo; `save_dashboard(name, html)` (MCP write, upsert) and `list_dashboards` tools;
    `GET /ui/:name` returns the currently-stored HTML (`text/html`, no-cache). Override = re-upsert by name (the

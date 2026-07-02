@@ -215,3 +215,11 @@ No input. Returns `{ name: "fintrack", version, db, locale }`:
 A convenience for tool-only callers (AI agent / chat user). The MCP protocol already exposes version via the `initialize` handshake `serverInfo` and liveness via `ping` — this tool complements those for callers that can only invoke tools.
 
 REST mirror: `GET /api/status` returns the same payload. `GET /api/health` remains as a bare liveness probe (`{ status: "ok" }`).
+
+## Resources
+
+Unlike tools (invoked with arguments), resources are read by URI — no input schema, no side effects.
+
+### `fintrack://openapi`
+
+Returns the same OpenAPI 3.0 document served at `GET /api/openapi.json` (`application/json`, `text` content). Generated from the `wire/in`/`wire/out`/`models` zod schemas that back the REST routes (ADR-013 Phase A) — read this before generating `fetch()` calls against `/api` so the shapes can't be guessed wrong. This is the app's first MCP resource; read via `resources/read` with `uri: "fintrack://openapi"` (discoverable via `resources/list`).
