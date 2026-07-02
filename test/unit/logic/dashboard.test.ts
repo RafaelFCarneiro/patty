@@ -77,4 +77,31 @@ describe('findHtmlValidationIssues', () => {
     const issues = findHtmlValidationIssues(html);
     expect(issues.some((issue) => issue.includes('syntax error'))).toBe(true);
   });
+
+  it('recognizes a skipped type regardless of the attribute name’s casing', () => {
+    const html =
+      '<!doctype html><html><body>' +
+      '<script TYPE="module">import { render } from "/chart.js";</script>' +
+      '</body></html>';
+    expect(findHtmlValidationIssues(html)).toEqual([]);
+  });
+
+  it('uses the first type attribute when duplicated, matching how browsers parse attributes', () => {
+    const html =
+      '<!doctype html><html><body>' +
+      '<script type="module" type="text/javascript">import { render } from "/chart.js";</script>' +
+      '</body></html>';
+    expect(findHtmlValidationIssues(html)).toEqual([]);
+  });
+
+  it('treats the first literal "</script>" as the tag end, matching real browser parsing', () => {
+    // An unescaped "</script>" inside a JS string breaks out of the element in real browsers too
+    // — this is why such literals must be authored as "<\/script>". The validator mirrors that
+    // boundary: it stops extracting the body at the same point a browser's HTML parser would, so
+    // an unescaped occurrence surfaces as a syntax error (an unterminated string here) instead of
+    // being silently missed.
+    const html = '<!doctype html><html><body><script>var s = "</script></body></html>';
+    const issues = findHtmlValidationIssues(html);
+    expect(issues.some((issue) => issue.includes('syntax error'))).toBe(true);
+  });
 });
