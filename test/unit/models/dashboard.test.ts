@@ -50,3 +50,12 @@ describe('dashboardErrors.notFound', () => {
     });
   });
 });
+
+describe('dashboardErrors.invalidHtml', () => {
+  it('builds a validation error carrying the given issues', () => {
+    expect(dashboardErrors.invalidHtml(['html must contain a <!doctype html> or <html> root element'])).toEqual({
+      code: 'validation',
+      issues: ['html must contain a <!doctype html> or <html> root element'],
+    });
+  });
+});

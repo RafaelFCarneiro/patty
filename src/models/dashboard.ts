@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { NotFound } from './error.js';
+import { validation, type NotFound, type ValidationError } from './error.js';
 
 export const DashboardSchema = z.object({
   name: z.string().min(1).describe('Dashboard identifier, used as the /ui/:name path segment (e.g. "overview")'),
@@ -16,8 +16,9 @@ export type DashboardListItem = z.infer<typeof DashboardListItemSchema>;
 export const SaveDashboardSchema = DashboardSchema.pick({ name: true, html: true });
 export type SaveDashboard = z.infer<typeof SaveDashboardSchema>;
 
-export type DashboardError = NotFound<'dashboard'>;
+export type DashboardError = NotFound<'dashboard'> | ValidationError;
 
 export const dashboardErrors = {
   notFound: (name: string): DashboardError => ({ code: 'unknown_dashboard', query: name, candidates: [] }),
+  invalidHtml: (issues: string[]): DashboardError => validation(issues),
 };

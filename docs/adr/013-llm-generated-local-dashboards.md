@@ -141,6 +141,10 @@ or stale data.
    `docs/mcp-tools.md` `save_dashboard`/`list_dashboards`. No version history yet (not required for this phase;
    could be added later for "revert my dashboard"). Full HTML sanitization is intentionally out of scope (local
    single-user app authoring its own UI); the no-inline-data guardrail is a Phase B skill concern.
+   **Addendum (Phase B):** `save_dashboard`/`POST /api/dashboards` now reject a save that can't render at all —
+   no `<html>` root, or an inline `<script>` that fails to compile — since without version history a broken save
+   permanently overwrote the working dashboard. This is a narrow render-ability check (`logic/dashboard.ts`), not
+   the sanitization deferred above.
 3. [x] Document running in http mode for dashboards (and how a chat client points the UI at it). Covered by
    `CLAUDE.md` (`FINTRACK_HTTP`/`MCP_TRANSPORT=http`, REST/MCP endpoint URLs) and `docs/architecture.md` § HTTP
    sidecar / § Dashboards.

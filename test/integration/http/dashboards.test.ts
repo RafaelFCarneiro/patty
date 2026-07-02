@@ -54,6 +54,33 @@ describe('POST /api/dashboards', () => {
     const res = await inject({ method: 'POST', url: '/api/dashboards', payload: { name: '', html: '<html></html>' } });
     expect(res.statusCode).toBe(422);
   });
+
+  it('rejects html with no <html> root (422) and does not save it', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'unrenderable-root', html: 'not html at all' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toHaveProperty('error.code', 'validation');
+
+    const stored = await inject({ method: 'GET', url: '/api/dashboards/unrenderable-root' });
+    expect(stored.statusCode).toBe(404);
+  });
+
+  it('rejects html with a broken inline <script> (422) and does not save it', async () => {
+    const html = '<!doctype html><html><body><script>function( { broken</script></body></html>';
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'unrenderable-script', html },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.issues.some((issue: string) => issue.includes('syntax error'))).toBe(true);
+
+    const stored = await inject({ method: 'GET', url: '/api/dashboards/unrenderable-script' });
+    expect(stored.statusCode).toBe(404);
+  });
 });
 
 describe('GET /api/dashboards', () => {

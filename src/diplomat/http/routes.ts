@@ -626,7 +626,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
     handler: async (req, reply) => {
       const wireIn = parse(SaveDashboardSchema, req.body, reply);
       if (!wireIn) return reply;
-      return reply.send(await saveDashboard(deps, wireIn.name, wireIn.html));
+      return send(reply, await saveDashboard(deps, wireIn.name, wireIn.html));
     },
   },
 
