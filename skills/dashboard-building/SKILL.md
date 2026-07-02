@@ -22,11 +22,29 @@ the save endpoint won't catch a violation for you.
    This is the source of truth for available routes, query params, and response shapes, including the
    localized labels (`typeLabel`, `categoryName`, `periodLabel`, `accountName`, …) the API already resolves
    for the user's locale.
-2. **Clarify what the user wants to see** if it isn't obvious: which sections, time range, accounts/cards.
-   Map each desired section to one real endpoint from the contract you just read. If nothing in the contract
-   covers a section, say so — either drop it or add a clearly labeled "coming soon" placeholder (see the
-   baseline template's Installment projections section). Never invent an endpoint or fabricate a number to
-   fill a gap.
+2. **Discover the user's perspective — ask in personal-finance terms, not layout terms.** Different users
+   (and the same user in a different financial moment) care about different views. If it isn't already clear,
+   offer the common perspectives below (2–4 targeted questions max, with your recommendation) instead of a
+   vague "which sections do you want?":
+   - **Expense × income by month** (am I earning more than I spend? trend over N months) →
+     `aggregate_spending` with `groupBy: month` per type, or per-month `get_spending_summary`.
+   - **Where the money goes** (category breakdown, top categories, month over month) →
+     `aggregate_spending` with `groupBy: category` (+ `month` for evolution), `get_spending_summary`.
+   - **Cash flow / balances now** (what do I have, per account/type) → `get_account_balances`
+     (+ `type` filter), accounts list.
+   - **Projection** (where will I land at end of month, counting pending/scheduled) →
+     `get_account_balances` with `projectedAsOf`, pending transactions via `search_transactions`
+     (`status: pending`).
+   - **Committed / recurring obligations** (subscriptions, fixed bills, what's due next) → recurring list;
+     card bills via the bills endpoints (status, due dates).
+   - **Credit card view** (current fatura, per-card spend) → bills + `aggregate_spending` filtered by card
+     account.
+   Also ask, when relevant: time range (current month vs last N months), which accounts/cards matter, and
+   whether they think per-currency (BRL/USD) or mostly one.
+   Map each chosen perspective to one real endpoint from the contract you just read. If nothing in the
+   contract covers a perspective, say so — either drop it or add a clearly labeled "coming soon" placeholder
+   (see the baseline template's Installment projections section). Never invent an endpoint or fabricate a
+   number to fill a gap.
 3. **Decide the save target.** `save_dashboard(name, html)` is an upsert — reusing an existing name replaces
    it immediately, with no version history to recover the previous HTML. Ask before overwriting a dashboard
    the user may still want, or default to a new name.
@@ -35,10 +53,16 @@ the save endpoint won't catch a violation for you.
    self-contained HTML file with inline `<style>` + inline `<script>`, one `Api` object mapping section →
    endpoint, a per-section loading/empty/error state machine, and per-currency grouping. Reuse that shape;
    change the sections/layout/endpoints to match what the user actually asked for.
-5. **Save it**: call `save_dashboard(name, html)`. If it's rejected (`validation`, 422), the message names
+5. **Record the user's preferences in the dashboard itself** so the next change doesn't re-interrogate them:
+   put a short design-manifest comment at the top of the HTML, e.g.
+   `<!-- fintrack:dashboard-manifest {"perspectives":["expense-income-by-month","cash-flow"],"range":"last-6-months","currencies":["BRL"],"notes":"user tracks USD subscriptions separately"} -->`.
+   This is metadata about the *view* (the user's chosen perspectives), never financial data — amounts,
+   account names, or transactions still must not appear in it. (`get_preferences` stores only the locale
+   today; the manifest is where dashboard preferences live.)
+6. **Save it**: call `save_dashboard(name, html)`. If it's rejected (`validation`, 422), the message names
    the render-ability problem (missing `<html>` root, or a script syntax error) — fix it and resave; the
    previously stored dashboard is untouched by a rejected save.
-6. **Hand back the URL**: `/ui/<name>` on whatever host/port the user's FinTrack HTTP sidecar is running on
+7. **Hand back the URL**: `/ui/<name>` on whatever host/port the user's FinTrack HTTP sidecar is running on
    (see `CLAUDE.md` HTTP sidecar section if unsure which). Tell them to open it in a browser.
 
 ## Hard rules (never violate these)
@@ -74,9 +98,15 @@ the save endpoint won't catch a violation for you.
 ## Overriding an existing dashboard
 
 `save_dashboard` is a name-keyed upsert with no rebuild step and no version history: regenerate the full
-HTML (steps 1–4) and call `save_dashboard` again with the same `name` to replace it. Once that save
+HTML (steps 1–5) and call `save_dashboard` again with the same `name` to replace it. Once that save
 succeeds, the previous HTML is gone — if the user is changing a dashboard they might still want, offer to
 save under a new name instead of overwriting.
+
+**Before regenerating, fetch the current dashboard (`GET /api/dashboards/:name`) and read its
+`fintrack:dashboard-manifest` comment**: preserve the recorded perspectives/range/currency choices unless
+the user is explicitly changing them, and carry the (updated) manifest into the new HTML. A request like
+"add a projections panel" changes one section — it should not silently lose the perspectives the user
+already chose.
 
 ## Self-check before calling save_dashboard
 
@@ -90,3 +120,5 @@ save under a new name instead of overwriting.
 - [ ] Every section has a loading, empty, and error branch.
 - [ ] The file starts with `<!doctype html>` or has an `<html>` root, and every inline `<script>` is
       syntactically valid.
+- [ ] The `fintrack:dashboard-manifest` comment is present, reflects the user's chosen perspectives, and
+      contains view metadata only (no amounts, account names, or transactions).
