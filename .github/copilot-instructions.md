@@ -16,13 +16,19 @@ Tests live under `test/unit/` and `test/integration/` (not colocated).
 
 ## Before generating any code
 
-Read these docs — they are the source of truth. Do not guess patterns from the code alone.
+Read these docs — they are the source of truth. Do not guess patterns from the code alone, and do not
+substitute a condensed summary (in this file or in `docs/architecture.md`) for reading the file itself.
 
-- `docs/diplomatic-architecture.md` — the core architectural pattern. Non-negotiable.
+- `docs/diplomatic-architecture.md` — the core architectural pattern. Non-negotiable. Read the file itself, not
+  just the "Diplomat alignment in this project" summary in `docs/architecture.md`.
 - `docs/architecture.md` — as-built relational schema, layer rules, invariants, dependency table.
 - `docs/code-style.md` — do/don't examples for controllers, logic, adapters, zod, remeda.
-- `docs/code-quality.md` — quality principles: constants over literals, naming, single responsibility.
+- `docs/code-quality.md` — quality principles: constants over literals, naming, single responsibility. Read the
+  file itself — this is reinforced as self-review item 1 below, not optional.
 - `docs/adr/` — accepted architectural decisions; never contradict one without a new ADR.
+
+"Architecture-related" (i.e. requires the above) includes composition-root/entrypoint changes (`main.ts`, a new
+top-level wiring module), not only changes inside `diplomat/`, `controllers/`, or `logic/`.
 
 ## Definition of Done (mandatory — verify before EVERY push, initial delivery and each PR-fix push alike)
 
@@ -39,29 +45,39 @@ npm run lint && npm run typecheck && npm run test:all && npm run build
 **Self-review pass (every time, before the gate):** produce the diff (`git diff origin/main...HEAD`), read every
 changed hunk, and check it against:
 
-1. **Layering** (`docs/architecture.md` dependency table): `logic/` is pure (no I/O, no `diplomat`/`controllers`
-   imports); the domain never imports seed (`diplomat/db/seed`); boundaries are zod-decoded; controllers return
-   `ResultAsync` via `safeTry`; diplomats stay thin.
-2. **Constants over literals** (`docs/code-quality.md`): no bare string/number where a zod `.enum.*` or named
-   constant exists.
-3. **Declarative over imperative** (`docs/code-quality.md` remeda table): no `xs.filter(...)[0]` → use
+1. **Read the source docs in full, not a summary — mandatory every time, not only for visibly "architectural"
+   changes.** Open `docs/diplomatic-architecture.md` and `docs/code-quality.md` themselves before doing items 2-7
+   below. The condensed bullets in "Before generating any code" above are a *pointer*, not a substitute — a
+   change that only touches composition-root/entrypoint files (e.g. `main.ts`, a new top-level wiring module)
+   still counts as "architecture-related" and still requires this step. Skipping the real file and relying on a
+   derived summary is how violations that are explicit in the source doc (e.g. cross-file literal duplication,
+   covered below) get missed.
+2. **Layering** (`docs/architecture.md` dependency table, `docs/diplomatic-architecture.md`): `logic/` is pure
+   (no I/O, no `diplomat`/`controllers` imports); the domain never imports seed (`diplomat/db/seed`); boundaries
+   are zod-decoded; controllers return `ResultAsync` via `safeTry`; diplomats stay thin; composition-root wiring
+   (code that imports from more than one `diplomat/*` submodule to wire them together) lives outside `diplomat/*`.
+3. **Constants over literals** (`docs/code-quality.md`): no bare string/number where a zod `.enum.*` or named
+   constant exists, **and no literal — including log/error message strings, not just domain values — copy-pasted
+   across two or more call sites, even across files.** If a value is used in more than one place, extract a
+   shared constant/function; grep the diff for repeated substrings before calling this item done.
+4. **Declarative over imperative** (`docs/code-quality.md` remeda table): no `xs.filter(...)[0]` → use
    `R.firstBy`/`R.find`; no manual accumulation loop → `R.groupBy`/`countBy`/`sumBy`/`mapValues`; no chained
    `.filter().map().sort()` → `R.pipe`. Native `map`/`filter` only for single-stage transforms.
-4. **Naming & single responsibility** (`docs/code-quality.md`): names don't restate their module; verb+noun; one
+5. **Naming & single responsibility** (`docs/code-quality.md`): names don't restate their module; verb+noun; one
    job per function.
-5. **Tests are mandatory.** Any behavior change (`logic/`, `controllers/`, `adapters/`, `diplomat/db/repos/`, MCP
+6. **Tests are mandatory.** Any behavior change (`logic/`, `controllers/`, `adapters/`, `diplomat/db/repos/`, MCP
    tools) ships added/updated tests in the SAME change — success *and* expected-failure paths. A behavior diff
    with no test diff is incomplete; CI fails it (`scripts/check-tests-changed.mjs`). List each behavior change →
    its covering test in the PR.
-6. **Docs in the same change**: `docs/architecture.md` (structural), `docs/mcp-tools.md` (tool changes),
+7. **Docs in the same change**: `docs/architecture.md` (structural), `docs/mcp-tools.md` (tool changes),
    `CLAUDE.md`/this file (conventions), and the relevant `docs/designs/NNN` status line.
 
 **Independent re-review for feature-sized changes.** The author is the worst reviewer of their own diff. For any
 feature-sized change — a new/changed MCP tool, a schema/migration, a new/revised ADR or design doc, or a diff
-spanning multiple layers or ~5+ files — do a second, independent pass over the *full* diff against the checklist
-above before pushing (a fresh review, not a glance), and fix what it finds. Small single-file fixes need only the
-inline self-review. (CLAUDE.md dispatches a verification subagent for this; in Copilot, do the equivalent fresh
-end-to-end pass.)
+spanning multiple layers or ~5+ files — do a second, independent pass over the *full* diff against all seven items
+above before pushing (a fresh review, not a glance, and confirm the source docs were actually opened, not just
+summarized), and fix what it finds. Small single-file fixes need only the inline self-review. (CLAUDE.md
+dispatches a verification subagent for this; in Copilot, do the equivalent fresh end-to-end pass.)
 
 Healthy design iteration (rethinking an approach mid-flight) is welcome and is NOT what this gate targets — it
 targets avoidable rework: style/remeda/constant misses and missing tests.

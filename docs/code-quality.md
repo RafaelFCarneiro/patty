@@ -234,6 +234,42 @@ Write the simplest code that correctly solves the problem. Do not:
 The test: if you deleted the abstraction and inlined the logic, would the code be harder to
 understand? If not, keep it simple.
 
+## Static imports over inline dynamic `import()`
+
+Keep imports at the top of the file. Reach for a static `import` by default — dynamic `import()`
+scattered through a function body hides a dependency from the reader (and from tooling) and is
+harder to reason about than a plain top-of-file import.
+
+The one sanctioned exception is a genuine **lazy-load gate**: a module that is expensive or has
+side effects on load (e.g. Fastify and the route table it registers) and is only needed for some
+runtime-conditional path (a config flag, a CLI subcommand) — not merely "used in one branch of
+this function." Even then:
+
+- Isolate the `import()` inside a single small, named, module-scope function — never inline it as
+  part of a larger expression or chain a second `await` off its result.
+- Document *why* it's lazy: what it avoids loading, and for which runtime path.
+- If more than one call site needs the same lazy module, share the one function — don't repeat
+  the `import('./path.js')` literal (see "Constants over literals" above).
+
+```ts
+// ✅ DO — one named function owns the dynamic import; call sites stay plain
+const loadServerModule = () => import('./server.js') // Fastify never loads in default stdio mode (ADR-007)
+
+const maybeStartSidecar = async (deps, version, config) => {
+  if (!config.FINTRACK_HTTP) return null
+  const { startHttpSidecar } = await loadServerModule()
+  return startHttpSidecar(deps, version, config.PORT)
+}
+
+// ❌ DON'T — import() inline, chained mid-expression, buried in control flow
+const sidecar = config.FINTRACK_HTTP
+  ? await (await import('./server.js')).startHttpSidecar(deps, version, config.PORT)
+  : null
+```
+
+If there's no genuine runtime-conditional load-avoidance reason, just use a static import — don't
+reach for `import()` to "organize" code or defer work that isn't actually optional.
+
 ## Fail loudly at boundaries, trust internally
 
 - Validate with zod at every external boundary (HTTP, MCP, DB records). See `docs/code-style.md`.

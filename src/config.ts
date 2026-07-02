@@ -9,6 +9,14 @@ export const McpTransport = z.enum(['stdio', 'http']);
 // regardless of the cwd when spawned by an MCP client (e.g. Claude Desktop).
 const DEFAULT_DB_PATH = join(homedir(), '.fintrack', 'fintrack.db');
 
+// Deliberately NOT 3000/3001/8000/8080/etc — those are the most commonly used ports across
+// Node/Fastify/React dev-server defaults, so picking one of them maximizes collision risk with
+// other software on a typical dev machine. This value sits in IANA's dynamic/private range
+// (49152-65535), which is never assigned to a registered service. This is the default for the
+// published package; `npm run dev` overrides PORT back to the familiar 3001 (package.json), so
+// a contributor's local dev instance never collides with an already-running installed instance.
+const DEFAULT_PORT = 51737;
+
 const Env = z.object({
   DB_PATH: z
     .string()
@@ -21,8 +29,14 @@ const Env = z.object({
     .regex(/^[0-9a-f]{64}$/i, 'FINTRACK_DB_KEY must be a 64-character hex string')
     .optional(),
   FINTRACK_LOCALE: Locale.optional(),
-  PORT: z.coerce.number().default(3001),
+  PORT: z.coerce.number().default(DEFAULT_PORT),
   MCP_TRANSPORT: McpTransport.default(McpTransport.enum.stdio),
+  // Opt-in HTTP sidecar alongside stdio MCP (ADR-013 Decision 7). Default off so nothing
+  // binds a port unexpectedly; set FINTRACK_HTTP=true to also serve REST/dashboards.
+  FINTRACK_HTTP: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
 });
 
 export type Config = z.infer<typeof Env>;

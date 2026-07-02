@@ -64,6 +64,9 @@ The goal: **the agent authors the presentation (the shell); the data stays live 
    http mode exits with code 1 on `EADDRINUSE`: a bind failure must never take down (or block the startup of) the
    stdio MCP. Deployment can be two processes (stdio MCP + a separate `serve`/http process sharing the same libSQL DB)
    or one process that starts HTTP best-effort alongside stdio — either way, **HTTP failure must not affect MCP**.
+   *(Implemented — one-process, opt-in sidecar (`FINTRACK_HTTP=true`), `src/server.ts` + `main.ts`; see
+   `docs/architecture.md` § HTTP sidecar. Pure `http` mode keeps its fatal exit-on-bind-failure, documented as a
+   deliberate difference since there is no stdio fallback in that mode.)*
 
 ## Options Considered
 

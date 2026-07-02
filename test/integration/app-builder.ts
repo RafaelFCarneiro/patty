@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import Fastify, { type FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { inject } from 'vitest';
 import { bootstrap } from '../../src/diplomat/db/bootstrap.js';
 import { openDatabase } from '../../src/diplomat/db/driver.js';
@@ -17,8 +17,7 @@ import { transactionsRepo } from '../../src/diplomat/db/repos/transactions.js';
 import { healthRepo } from '../../src/diplomat/db/repos/health.js';
 import { McpTransport } from '../../src/config.js';
 import { Locale } from '../../src/models/locale.js';
-import { registerRoutes } from '../../src/diplomat/http/routes.js';
-import { registerMcpRoute } from '../../src/diplomat/mcp/route.js';
+import { buildHttpApp } from '../../src/server.js';
 import type { Deps } from '../../src/controllers/deps.js';
 
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64);
@@ -61,9 +60,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
   const require = createRequire(import.meta.url);
   const { version } = require('../../package.json') as { version: string };
 
-  const app = Fastify();
-  registerRoutes(app, deps, version);
-  registerMcpRoute(app, deps, version);
+  const app = buildHttpApp(deps, version, { logger: false });
 
   return { app, deps, version };
 };
