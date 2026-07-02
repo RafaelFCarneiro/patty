@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { formatAppError, httpStatus, type AppError } from '../../../src/common/errors.js';
+import { ConflictErrorOut, NotFoundErrorOut, ValidationErrorOut } from '../../../src/wire/out/errors.js';
+
+const WIRE_SCHEMA_BY_STATUS: Record<number, typeof NotFoundErrorOut> = {
+  404: NotFoundErrorOut,
+  409: ConflictErrorOut,
+  422: ValidationErrorOut,
+};
 
 const REPRESENTATIVE_ERRORS: Array<{ error: AppError; expectedStatus: number; expectedSubstring: string }> = [
   {
@@ -150,4 +157,21 @@ describe('formatAppError / httpStatus exhaustiveness', () => {
     const err: AppError = { code: 'unknown_bill', card: 'Nubank', month: 6, year: 2026 };
     expect(formatAppError(err)).toBe('unknown_bill: Nubank 2026-06');
   });
+});
+
+// Regression test for the two error-shape gaps a PR review caught: wire/out/errors.ts's
+// 404/409/422 envelopes must accept every AppError shape httpStatus() actually buckets under
+// that status, not just the most common one per bucket (unknown_transaction/unknown_bill and
+// category_kind_mismatch each have their own shape, distinct from the generic
+// NotFound<E>/ValidationError shapes). Reuses the same representative-error table above so a
+// new AppError code that isn't reflected in wire/out/errors.ts fails here immediately.
+describe('wire/out/errors.ts documents every AppError shape at its real httpStatus', () => {
+  it.each(REPRESENTATIVE_ERRORS)(
+    '$error.code ($error.entity) matches its status-$expectedStatus wire schema',
+    ({ error, expectedStatus }) => {
+      const schema = WIRE_SCHEMA_BY_STATUS[httpStatus(error)];
+      expect(httpStatus(error)).toBe(expectedStatus);
+      expect(schema.safeParse({ error }).success).toBe(true);
+    },
+  );
 });
