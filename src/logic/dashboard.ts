@@ -12,7 +12,10 @@ export const findHtmlValidationIssues = (html: string): string[] => [
   ...findScriptSyntaxIssues(html),
 ];
 
-const HTML_DOCUMENT_ROOT_PATTERN = /<!doctype html|<html[\s>]/i;
+// The doctype only does anything if it's the very first thing in the document (leading whitespace
+// aside) — browsers ignore one that shows up after other content, so require it to start at
+// position 0 here too, rather than merely appearing anywhere in the string.
+const HTML_DOCUMENT_ROOT_PATTERN = /^\s*<!doctype html|<html[\s>]/i;
 
 const hasHtmlDocumentShape = (html: string): boolean => HTML_DOCUMENT_ROOT_PATTERN.test(html);
 
@@ -24,7 +27,11 @@ const hasHtmlDocumentShape = (html: string): boolean => HTML_DOCUMENT_ROOT_PATTE
 // syntax as broken. Either way, this checker has nothing useful to say about the script.
 const SKIPPED_SCRIPT_TYPES = ['application/json', 'application/ld+json', 'importmap', 'module'];
 
-const SCRIPT_TAG_PATTERN = /<script([^>]*)>([\s\S]*?)<\/script>/gi;
+// The attribute list uses a quote-aware repetition instead of a bare `[^>]*` so that a `>`
+// character inside a quoted attribute value (legal HTML, e.g. `aria-label=">"`) doesn't prematurely
+// close the tag — each iteration consumes either one non-quote, non-`>` character, or an entire
+// quoted string (any content, `>` included), so only a real unquoted `>` ends the attribute list.
+const SCRIPT_TAG_PATTERN = /<script((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/script>/gi;
 // HTML attribute values may be double-quoted, single-quoted, or unquoted (e.g. `type=module` is
 // valid HTML) — match all three forms, whichever one is present. `type` must start right after
 // whitespace or the beginning of the attribute list, so `data-type=` isn't mistaken for the real

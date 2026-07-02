@@ -111,4 +111,27 @@ describe('findHtmlValidationIssues', () => {
     const issues = findHtmlValidationIssues(html);
     expect(issues.some((issue) => issue.includes('syntax error'))).toBe(true);
   });
+
+  it('rejects a doctype that appears after other content instead of at the start', () => {
+    // A doctype only does anything as the very first thing in the document — browsers ignore one
+    // that shows up later, so a stray "<!doctype html>" substring elsewhere in the text (with no
+    // real <html> tag anywhere) must not count as HTML-shaped.
+    const issues = findHtmlValidationIssues('some preamble text <!doctype html> and more text after');
+    expect(issues).toContain('html must contain a <!doctype html> or <html> root element');
+  });
+
+  it('accepts a doctype preceded only by leading whitespace', () => {
+    expect(findHtmlValidationIssues('\n  <!doctype html><html></html>')).toEqual([]);
+  });
+
+  it('does not let a > inside a quoted attribute value prematurely close the <script> tag', () => {
+    // A naive [^>]* attribute matcher would stop at the ">" inside "a>b", splitting this single
+    // tag into a bogus "closed" tag plus garbage "body" text that fails to compile as JS — even
+    // though the actual script content (a plain fetch call) is completely valid.
+    const html =
+      '<!doctype html><html><body><script data-note="a>b" type="text/javascript">' +
+      'fetch("/api/summary");' +
+      '</script></body></html>';
+    expect(findHtmlValidationIssues(html)).toEqual([]);
+  });
 });
