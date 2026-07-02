@@ -39,7 +39,7 @@ describe('findHtmlValidationIssues', () => {
     expect(findHtmlValidationIssues(html)).toEqual([]);
   });
 
-  it('ignores non-executable script types (JSON-LD, import maps, modules)', () => {
+  it('ignores script types that are not classic-script syntax (JSON-LD, import maps, modules)', () => {
     const html =
       '<!doctype html><html><body>' +
       '<script type="application/ld+json">{ this is not valid JS, but that is fine }</script>' +
