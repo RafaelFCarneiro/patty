@@ -2,7 +2,7 @@
 
 FinTrack runs as a **stdio MCP server** by default — the client launches it as a subprocess and speaks JSON-RPC over stdin/stdout. No port, no URL, no bridge. This is the recommended path for all local MCP clients.
 
-HTTP is available as an opt-in (`MCP_TRANSPORT=http`) for multi-client access, REST consumers, or debugging. See the HTTP sections below. Tool contract: `docs/mcp-tools.md`.
+HTTP is available two ways: switch the transport entirely (`MCP_TRANSPORT=http`) for multi-client access, REST consumers, or debugging — see the HTTP sections below — or, while staying on stdio, opt into the **HTTP sidecar** (`FINTRACK_HTTP=true`) to also get `/api` (and, once shipped, `/ui`) without giving up the zero-port stdio connection. See "HTTP sidecar (alongside stdio)" below. Tool contract: `docs/mcp-tools.md`.
 
 ---
 
@@ -96,19 +96,44 @@ Antigravity IDE: click `...` in the agent panel → MCP Servers → Manage → V
 
 ---
 
+## HTTP sidecar (alongside stdio)
+
+Keep `MCP_TRANSPORT=stdio` (the default — no change to your client config) and add `FINTRACK_HTTP=true` to also
+start the HTTP server (`/api`, and later `/ui`) on `PORT` (default `51737` for the published package; `npm run
+dev` pins `3001` instead — a deliberately uncommon port for the published default, see
+[`docs/architecture.md`](../docs/architecture.md#http-sidecar-adr-013-decision-7)):
+
+```bash
+# from source → :3001
+FINTRACK_HTTP=true npm run dev
+
+# or from the published package → :51737
+FINTRACK_HTTP=true npx @rafaelfcarneiro/fintrack@latest
+```
+
+This is off by default — nothing binds a port unless you set `FINTRACK_HTTP=true`. If the port is already taken,
+the sidecar logs an actionable message to stderr and skips starting; **stdio MCP keeps working regardless** —
+the same chat session can then help you find and free the port (see `docs/architecture.md` § HTTP sidecar,
+ADR-013 Decision 7).
+
+The sidecar binds `127.0.0.1` only — never the LAN. This API has no auth (local-first, ADR-013), so it is
+never reachable from other devices on your network, only from this machine. Use `127.0.0.1` in the URL, not
+`localhost` — some resolvers prefer IPv6 (`::1`), which this server does not bind.
+
 ## HTTP transport (opt-in, `MCP_TRANSPORT=http`)
 
 Start the server explicitly before connecting:
 
 ```bash
-# from source
+# from source → :3001
 MCP_TRANSPORT=http npm run dev
 
-# or from the published package
+# or from the published package → :51737
 MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack@latest
 ```
 
-This serves streamable HTTP MCP at `http://127.0.0.1:3001/mcp` (stateless) **and** the REST API at `/api`.
+This serves streamable HTTP MCP at `http://127.0.0.1:51737/mcp` (stateless, published package —
+`:3001` from source) **and** the REST API at `/api`.
 
 ### Claude Desktop (HTTP mode) ✅ (with bridge)
 
@@ -118,34 +143,38 @@ Desktop only launches stdio servers, so the HTTP endpoint is bridged with `mcp-r
 "mcpServers": {
   "fintrack": {
     "command": "npx",
-    "args": ["-y", "mcp-remote@latest", "http://localhost:3001/mcp", "--transport", "http-only"]
+    "args": ["-y", "mcp-remote@latest", "http://127.0.0.1:51737/mcp", "--transport", "http-only"]
   }
 }
 ```
+
+Running from source instead? Use port `3001`.
 
 ### VS Code / GitHub Copilot (HTTP mode) ✅
 
 Native HTTP support — no bridge. In `.vscode/mcp.json`:
 
 ```json
-{ "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:3001/mcp" } } }
+{ "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:51737/mcp" } } }
 ```
 
-Use `127.0.0.1` (not `localhost`) — VS Code's fetch resolves `localhost` to IPv6 `::1`; the backend listens dual-stack (`::`) so either works, but `127.0.0.1` is explicit.
+Running from source instead (`npm run dev`)? Use port `3001` — this repo's own `.vscode/mcp.json` already does.
+
+Use `127.0.0.1`, not `localhost` — VS Code's fetch can resolve `localhost` to IPv6 `::1`, and the backend binds loopback-only on IPv4 (`127.0.0.1`), deliberately not the `::`/`0.0.0.0` wildcard, so the REST/MCP surface is never reachable from other devices on the LAN (this API has no auth). `localhost` resolving to `::1` will fail to connect; `127.0.0.1` always works.
 
 ### ChatGPT (HTTP mode, untested — requires tunnel)
 
 ChatGPT's servers connect from the internet: needs a paid plan with Developer Mode (Settings → Apps → Advanced → Developer mode) and an HTTPS tunnel:
 
 ```bash
-cloudflared tunnel --url http://localhost:3001   # → https://xxx.trycloudflare.com
+cloudflared tunnel --url http://127.0.0.1:51737   # → https://xxx.trycloudflare.com (:3001 from source)
 ```
 
 Add connector with URL `https://xxx.trycloudflare.com/mcp`, auth: none. ⚠️ The tunnel exposes the unauthenticated API to anyone with the URL — test only, kill the tunnel after. Permanent exposure needs MCP auth (Phase 4).
 
 ### Ollama (HTTP mode, untested — needs a bridge client)
 
-Ollama serves models; it has no MCP client. Use a bridge such as `ollmcp` (`uvx ollmcp`, add server by URL `http://127.0.0.1:3001/mcp`), MCPHost (unmaintained), or LM Studio (GUI, `mcp.json` like VS Code's). Use a strong tool-calling model (qwen3-class or better) — small models fumble tool arguments; that's the model, not the server.
+Ollama serves models; it has no MCP client. Use a bridge such as `ollmcp` (`uvx ollmcp`, add server by URL `http://127.0.0.1:51737/mcp` — `:3001` from source), MCPHost (unmaintained), or LM Studio (GUI, `mcp.json` like VS Code's). Use a strong tool-calling model (qwen3-class or better) — small models fumble tool arguments; that's the model, not the server.
 
 ---
 

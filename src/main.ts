@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { loadConfig, McpTransport } from './config.js';
+import type { AddressInfo } from 'node:net';
+import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
+import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
 import { openDatabase } from './diplomat/db/driver.js';
@@ -18,9 +20,24 @@ import { transactionsRepo } from './diplomat/db/repos/transactions.js';
 import { healthRepo } from './diplomat/db/repos/health.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { Locale } from './models/locale.js';
+import type { HttpSidecar } from './server.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
+
+/**
+ * Lazily imports the HTTP composition module (server.ts) so Fastify — and the whole REST /
+ * MCP-over-HTTP route table it wires up — is never loaded during the default stdio-only
+ * startup path, only when the sidecar is enabled or MCP_TRANSPORT=http actually needs it
+ * (ADR-007). Isolated here as one named function instead of an inline import() at each call site.
+ */
+const loadServerModule = () => import('./server.js');
+
+const maybeStartSidecar = async (deps: Deps, version: string, config: Config): Promise<HttpSidecar | null> => {
+  if (!config.FINTRACK_HTTP) return null;
+  const { startHttpSidecar } = await loadServerModule();
+  return startHttpSidecar(deps, version, config.PORT);
+};
 
 const main = async (): Promise<void> => {
   if (process.argv[2] === 'setup') {
@@ -70,11 +87,21 @@ const main = async (): Promise<void> => {
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
     const server = await connectStdio(deps, version);
+
+    // A bind failure inside startHttpSidecar is caught there and is never fatal — the stdio
+    // connection above is the resilient primary (ADR-013 Decision 7).
+    const sidecar = await maybeStartSidecar(deps, version, config);
+
+    // 'close' commonly follows 'end' on stdin, and a client can also send SIGINT/SIGTERM around
+    // the same disconnect — guard against shutdown() running (and double process.exit-ing) twice.
+    let shuttingDown = false;
     const shutdown = (): void => {
-      server
-        .close()
-        .catch((err: unknown) => console.error(err))
-        .finally(() => process.exit(0));
+      if (shuttingDown) return;
+      shuttingDown = true;
+      void Promise.allSettled([
+        server.close().catch((err: unknown) => console.error(err)),
+        sidecar?.listening ? sidecar.app.close().catch((err: unknown) => console.error(err)) : Promise.resolve(),
+      ]).finally(() => process.exit(0));
     };
     process.once('SIGINT', shutdown);
     process.once('SIGTERM', shutdown);
@@ -84,16 +111,17 @@ const main = async (): Promise<void> => {
     return;
   }
 
-  // MCP_TRANSPORT === 'http': start Fastify with REST + streamable HTTP MCP
-  const { default: Fastify } = await import('fastify');
-  const { registerRoutes } = await import('./diplomat/http/routes.js');
-  const { registerMcpRoute } = await import('./diplomat/mcp/route.js');
+  // MCP_TRANSPORT === 'http': start Fastify with REST + streamable HTTP MCP. Unlike the
+  // sidecar, this is the only surface running — a bind failure here is fatal by design
+  // (there is no stdio fallback to keep the process alive), handled below in main().catch.
+  const { buildHttpApp } = await loadServerModule();
+  const app = buildHttpApp(deps, version);
 
-  const app = Fastify({ logger: true });
-  registerRoutes(app, deps, version);
-  registerMcpRoute(app, deps, version);
-
+  // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.
+  let shuttingDown = false;
   const shutdown = (): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     app
       .close()
       .catch((err: unknown) => app.log.error(err))
@@ -102,25 +130,22 @@ const main = async (): Promise<void> => {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  // '::' binds dual-stack (IPv6 + IPv4) so both localhost (::1) and 127.0.0.1 work
-  await app.listen({ port: config.PORT, host: '::' });
+  await app.listen({ port: config.PORT, host: LOOPBACK_HOST });
+  // config.PORT may be 0 (OS-assigned); read back the address actually bound for the banner.
+  const boundPort = (app.server.address() as AddressInfo).port;
   // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe (ADR-007 restricts stdio only)
-  console.log(`fintrack: REST http://localhost:${config.PORT}/api` + ` · MCP http://localhost:${config.PORT}/mcp`);
+  console.log(
+    `fintrack: REST http://${LOOPBACK_HOST}:${boundPort}/api` + ` · MCP http://${LOOPBACK_HOST}:${boundPort}/mcp`,
+  );
 };
-
-const isPortInUse = (e: unknown): e is { code: string; port: number } =>
-  typeof e === 'object' &&
-  e !== null &&
-  (e as { code?: string }).code === 'EADDRINUSE' &&
-  typeof (e as { port?: unknown }).port === 'number';
 
 main().catch((e: unknown) => {
   if (isPortInUse(e)) {
     const port = e.port;
     console.error(
-      `fintrack: port ${port} is already in use (another service or MCP server is on it).\n` +
+      `fintrack: ${portInUseReason(port)}.\n` +
         `Set a different port and retry, e.g. PORT=${port + 1} fintrack\n` +
-        `Then point your MCP client at http://127.0.0.1:${port + 1}/mcp`,
+        `Then point your MCP client at http://${LOOPBACK_HOST}:${port + 1}/mcp`,
     );
     process.exit(1);
   }

@@ -10,13 +10,15 @@ FinTrack v2 is an AI-first personal finance manager. The primary interface is AI
 
 ```bash
 npm install
-npm run dev   # REST + MCP on http://localhost:3001
+npm run dev   # stdio MCP server by default (ADR-007) — no port bound
 ```
 
 The database is a local encrypted libSQL file (`fintrack.db`). On first run the encryption key is generated and stored in the OS keychain (`@napi-rs/keyring`). For CI/headless environments set `FINTRACK_DB_KEY` (64-char hex string) — never commit or log it.
 
-- REST API: `http://localhost:3001/api`
-- MCP endpoint (streamable HTTP): `http://localhost:3001/mcp`
+Add `MCP_TRANSPORT=http` (switches transport entirely) or `FINTRACK_HTTP=true` (keeps stdio, adds a best-effort sidecar — ADR-013 Decision 7) for REST/dashboards. `npm run dev` pins `PORT=3001` for either (package.json); the published package defaults to `PORT=51737` instead — deliberately not a common Node/Fastify dev-server port, to minimize collisions with other software (`docs/architecture.md` § HTTP sidecar).
+
+- REST API: `http://127.0.0.1:3001/api` (from source) / `http://127.0.0.1:51737/api` (published package)
+- MCP endpoint (streamable HTTP): `http://127.0.0.1:3001/mcp` (from source) / `http://127.0.0.1:51737/mcp` (published package)
 - Run `npx ntl` for an interactive, described list of all scripts.
 
 ## Commands
@@ -49,16 +51,17 @@ npm run lint && npm run typecheck && npm run test:all && npm run build
 
 **Self-review pass (do this every time, before the gate):** produce the diff (`git diff origin/main...HEAD`), read every changed hunk, and check it against:
 
-1. **Layering** (`docs/architecture.md` dependency table): `logic/` is pure (no I/O, no `diplomat`/`controllers` imports); the domain never imports seed (`diplomat/db/seed`); boundaries are zod-decoded; controllers return `ResultAsync` via `safeTry`; diplomats stay thin.
-2. **Constants over literals** (`docs/code-quality.md`): no bare string/number where a zod `.enum.*` or named constant exists.
-3. **Declarative over imperative** (`docs/code-quality.md` remeda table): no `xs.filter(...)[0]` → use `R.firstBy`/`R.find`; no manual accumulation loop → `R.groupBy`/`countBy`/`sumBy`/`mapValues`; no chained `.filter().map().sort()` → `R.pipe`. Native `map`/`filter` only for single-stage transforms.
-4. **Naming & single responsibility** (`docs/code-quality.md`): names don't restate their module; verb+noun; one job per function.
-5. **Tests are mandatory.** Any behavior change (`logic/`, `controllers/`, `adapters/`, `diplomat/db/repos/`, MCP tools) ships added/updated tests in the SAME change — success *and* expected-failure paths. A behavior diff with no test diff is incomplete. In the PR, list each behavior change → the test that covers it. (CI enforces this; don't rely on it — author the tests yourself.)
-6. **Docs in the same change**: `docs/architecture.md` (structural changes), `docs/mcp-tools.md` (tool changes), this file (data conventions), and the relevant `docs/designs/NNN` status line. When this file's non-negotiables or this Definition of Done change, mirror them into `.github/copilot-instructions.md` in the same change (CLAUDE.md is the source of truth; the two must not drift).
+1. **Read the source docs in full, not a summary — mandatory every time, not only for visibly "architectural" changes.** Open `docs/diplomatic-architecture.md` and `docs/code-quality.md` themselves before doing items 2-6 below. The condensed bullets elsewhere in this file (Architecture guidance, Agent-level non-negotiables, Documentation map) are a *pointer* to those docs, not a substitute for reading them — a change that only touches composition-root/entrypoint files (e.g. `main.ts`, a new top-level wiring module) still counts as "architecture-related" and still requires this step. Skipping the real file and relying on a derived summary is how violations that are explicit in the source doc (e.g. cross-file literal duplication, covered below) get missed.
+2. **Layering** (`docs/architecture.md` dependency table, `docs/diplomatic-architecture.md`): `logic/` is pure (no I/O, no `diplomat`/`controllers` imports); the domain never imports seed (`diplomat/db/seed`); boundaries are zod-decoded; controllers return `ResultAsync` via `safeTry`; diplomats stay thin; composition-root wiring (e.g. code that imports from more than one `diplomat/*` submodule to wire them together) lives outside `diplomat/*`, not inside it.
+3. **Constants over literals** (`docs/code-quality.md`): no bare string/number where a zod `.enum.*` or named constant exists, **and no literal — including log/error message strings, not just domain values — copy-pasted across two or more call sites, even across files.** If a value is used in more than one place, extract a shared constant/function; grep the diff for repeated substrings before calling this item done.
+4. **Declarative over imperative** (`docs/code-quality.md` remeda table): no `xs.filter(...)[0]` → use `R.firstBy`/`R.find`; no manual accumulation loop → `R.groupBy`/`countBy`/`sumBy`/`mapValues`; no chained `.filter().map().sort()` → `R.pipe`. Native `map`/`filter` only for single-stage transforms.
+5. **Naming & single responsibility** (`docs/code-quality.md`): names don't restate their module; verb+noun; one job per function.
+6. **Tests are mandatory.** Any behavior change (`logic/`, `controllers/`, `adapters/`, `diplomat/db/repos/`, MCP tools) ships added/updated tests in the SAME change — success *and* expected-failure paths. A behavior diff with no test diff is incomplete. In the PR, list each behavior change → the test that covers it. (CI enforces this; don't rely on it — author the tests yourself.)
+7. **Docs in the same change**: `docs/architecture.md` (structural changes), `docs/mcp-tools.md` (tool changes), this file (data conventions), and the relevant `docs/designs/NNN` status line. When this file's non-negotiables or this Definition of Done change, mirror them into `.github/copilot-instructions.md` in the same change (CLAUDE.md is the source of truth; the two must not drift).
 
 **Independent subagent verification (required for feature-sized changes).** The author is the worst reviewer of their own diff — it's easy to rationalize what you just wrote. For any feature-sized change, after your own self-review and a green gate, dispatch a fresh verification subagent (the `Task` tool) to re-audit the change independently, then fix what it finds before pushing. A change is "feature-sized" if ANY of these hold: it adds or changes an MCP tool; it touches the schema or a migration; it adds or revises an ADR or design doc; or its diff spans multiple layers or roughly five or more files. Small, single-file fixes need only the inline self-review above.
 
-Give the subagent the diff and a verifier brief, not a vague ask. It should: read `git diff origin/main...HEAD`; check every hunk against the six self-review items and the dependency table in `docs/architecture.md`; confirm each behavior change has a matching test (success + expected-failure); confirm `docs/*` were updated in the same change; and return a concrete list of violations with file:line, not a "looks good". Treat its findings as a blocking checklist. Because it didn't write the code, it catches the constant-over-literal, remeda, and missing-test misses the author's eye skips.
+Give the subagent the diff and a verifier brief, not a vague ask. It should: confirm it read `docs/diplomatic-architecture.md` and `docs/code-quality.md` directly (not a summary); read `git diff origin/main...HEAD`; check every hunk against all seven self-review items above and the dependency table in `docs/architecture.md`; confirm each behavior change has a matching test (success + expected-failure); confirm `docs/*` were updated in the same change; and return a concrete list of violations with file:line, not a "looks good". Treat its findings as a blocking checklist. Because it didn't write the code, it catches the constant-over-literal, remeda, and missing-test misses the author's eye skips.
 
 Healthy design iteration (rethinking an approach mid-flight) is welcome and is NOT what this gate targets — it targets avoidable rework: style/remeda/constant misses and missing tests.
 
@@ -69,8 +72,11 @@ Architecture and domain behavior are documented in canonical docs and should not
 Before changing architecture-related code, read:
 
 - `docs/architecture.md` (as-built project architecture, invariants, dependency direction)
-- `docs/diplomatic-architecture.md` (core Diplomat concepts)
+- `docs/diplomatic-architecture.md` (core Diplomat concepts) — **read the file itself**, not just the "Diplomat alignment in this project" summary in `docs/architecture.md`
 - `docs/code-style.md` (controller/logic/adapters implementation patterns)
+- `docs/code-quality.md` (constants over literals, naming, single responsibility, no magic values) — same rule: read the file itself, this is reinforced as self-review item 1 below, not optional
+
+"Architecture-related" includes composition-root/entrypoint changes (`main.ts`, new top-level wiring modules), not only changes inside `diplomat/`, `controllers/`, or `logic/`.
 
 Agent-level non-negotiables:
 

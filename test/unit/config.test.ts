@@ -83,4 +83,32 @@ describe('loadConfig', () => {
     const config = loadConfig();
     expect(config.FINTRACK_LOCALE).toBeUndefined();
   });
+
+  it('FINTRACK_HTTP defaults to false when omitted', () => {
+    delete process.env['FINTRACK_HTTP'];
+    expect(loadConfig().FINTRACK_HTTP).toBe(false);
+  });
+
+  it('FINTRACK_HTTP is true only for the literal string "true"', () => {
+    process.env['FINTRACK_HTTP'] = 'true';
+    expect(loadConfig().FINTRACK_HTTP).toBe(true);
+
+    process.env['FINTRACK_HTTP'] = '1';
+    expect(loadConfig().FINTRACK_HTTP).toBe(false);
+
+    process.env['FINTRACK_HTTP'] = 'false';
+    expect(loadConfig().FINTRACK_HTTP).toBe(false);
+  });
+
+  it('default PORT is not a common Node/Fastify dev-server port (3000/3001/8080/etc)', () => {
+    delete process.env['PORT'];
+    const config = loadConfig();
+    expect(config.PORT).toBe(51737);
+    expect([3000, 3001, 4000, 5000, 8000, 8080]).not.toContain(config.PORT);
+  });
+
+  it('PORT env override is respected', () => {
+    process.env['PORT'] = '4000';
+    expect(loadConfig().PORT).toBe(4000);
+  });
 });
