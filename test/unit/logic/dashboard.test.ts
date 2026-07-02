@@ -55,4 +55,12 @@ describe('findHtmlValidationIssues', () => {
     const issues = findHtmlValidationIssues(html);
     expect(issues.some((issue) => issue.includes('syntax error'))).toBe(true);
   });
+
+  it('recognizes a skipped script type even with MIME parameters and stray whitespace', () => {
+    const html =
+      '<!doctype html><html><body>' +
+      '<script type=" application/json; charset=utf-8 ">{ this is not valid JS, but that is fine }</script>' +
+      '</body></html>';
+    expect(findHtmlValidationIssues(html)).toEqual([]);
+  });
 });

@@ -35,10 +35,15 @@ type ScriptTag = { attributes: string; body: string };
 
 const parseScriptTag = (match: RegExpMatchArray): ScriptTag => ({ attributes: match[1] ?? '', body: match[2] ?? '' });
 
+// A MIME type may carry parameters (`application/json; charset=utf-8`) and stray whitespace —
+// strip both before comparing, so a parameterized type still matches its base type.
+const normalizeScriptType = (rawType: string): string => (rawType.split(';')[0] ?? '').trim().toLowerCase();
+
 /** External (`src=`) tags have no inline body to check; skipped `type`s can't be classic-script-checked. */
 const isCheckableInlineScript = (script: ScriptTag): boolean => {
   if (SCRIPT_SRC_ATTRIBUTE_PATTERN.test(script.attributes)) return false;
-  const type = script.attributes.match(SCRIPT_TYPE_ATTRIBUTE_PATTERN)?.[1]?.toLowerCase();
+  const rawType = script.attributes.match(SCRIPT_TYPE_ATTRIBUTE_PATTERN)?.[1];
+  const type = rawType ? normalizeScriptType(rawType) : undefined;
   return !type || !SKIPPED_SCRIPT_TYPES.includes(type);
 };
 
