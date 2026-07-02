@@ -4,9 +4,10 @@ import * as R from 'remeda';
 import { ClassificationMethod } from '../../models/transaction.js';
 import { normalizeMerchant } from '../../logic/merchant.js';
 import type { Db } from './driver.js';
-import { categories, currencies, merchantCategory, merchants } from './schema.js';
+import { categories, currencies, dashboards, merchantCategory, merchants } from './schema.js';
 import { CURRENCIES } from './seed/currencies.js';
 import { CATEGORIES } from './seed/categories.js';
+import { DEFAULT_DASHBOARD_HTML, DEFAULT_DASHBOARD_NAME } from './seed/dashboards.js';
 import { DEFAULT_MERCHANT_RULES } from './seed/merchantRules.js';
 
 // Resolve the migrations folder relative to this module (../../../drizzle), so it
@@ -39,6 +40,15 @@ const seedCategories = async (db: Db): Promise<void> => {
   await db
     .insert(categories)
     .values([...CATEGORIES])
+    .onConflictDoNothing();
+};
+
+// Seeded once (onConflictDoNothing on the `name` PK); a later save_dashboard upsert overrides it
+// and survives future boots — bootstrap never re-seeds over a dashboard that already exists.
+const seedDashboards = async (db: Db): Promise<void> => {
+  await db
+    .insert(dashboards)
+    .values({ name: DEFAULT_DASHBOARD_NAME, html: DEFAULT_DASHBOARD_HTML, updatedAt: new Date().toISOString() })
     .onConflictDoNothing();
 };
 
@@ -75,4 +85,5 @@ export const bootstrap = async (db: Db, migrationsFolder = DEFAULT_MIGRATIONS_FO
   await seedCurrencies(db);
   await seedCategories(db);
   await seedMerchantRules(db);
+  await seedDashboards(db);
 };

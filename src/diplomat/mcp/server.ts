@@ -11,6 +11,7 @@ import {
 } from '../../controllers/accounts.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { getBill, payBill } from '../../controllers/bills.js';
+import { listDashboards, saveDashboard } from '../../controllers/dashboards.js';
 import {
   createCategory,
   createSubCategory,
@@ -53,6 +54,7 @@ import { CreateCategorySchema, CreateSubCategorySchema } from '../../wire/in/cat
 import { Locale, LocaleSource } from '../../models/locale.js';
 import { AccountType } from '../../models/account.js';
 import { BillQuerySchema, PayBillSchema } from '../../models/bill.js';
+import { SaveDashboardSchema } from '../../models/dashboard.js';
 import { CreateRecurringSchema } from '../../wire/in/recurring.js';
 import { CreateCreditCardSchema } from '../../wire/in/creditCards.js';
 import { bulkResultToWireOut, createResultToWireOut, deleteResultToWireOut } from '../../adapters/transactions.js';
@@ -504,6 +506,32 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: { id: z.string().min(1) },
     },
     async (args) => fromResult(await deleteTag(deps, args.id)),
+  );
+
+  server.registerTool(
+    'save_dashboard',
+    {
+      title: 'Save dashboard',
+      description:
+        'Create or override a named dashboard: an HTML shell you author, stored and served live at ' +
+        'GET /ui/:name (ADR-013). Upsert semantics — saving to an existing name replaces it immediately, ' +
+        'no rebuild or restart needed. CRITICAL: the HTML must NEVER embed financial data, secrets, or ' +
+        'tokens inline — render layout/styling only and fetch data client-side from the documented /api ' +
+        'endpoints (read the fintrack://openapi resource for the contract) on page load, so the dashboard ' +
+        'is always live and safe to share.',
+      inputSchema: SaveDashboardSchema.shape,
+    },
+    async (args) => json(await saveDashboard(deps, args.name, args.html)),
+  );
+
+  server.registerTool(
+    'list_dashboards',
+    {
+      title: 'List dashboards',
+      description: 'List saved dashboards by name and last-updated time (HTML content omitted).',
+      inputSchema: {},
+    },
+    async () => json(await listDashboards(deps)),
   );
 
   server.registerTool(

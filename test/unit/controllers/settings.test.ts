@@ -14,6 +14,7 @@ const makeDeps = (stored?: { locale: Locale; localeSource: LocaleSource }, envLo
   categories: {} as Deps['categories'],
   subCategories: {} as Deps['subCategories'],
   creditCards: {} as Deps['creditCards'],
+  dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
   merchants: {} as Deps['merchants'],
   recurring: {} as Deps['recurring'],

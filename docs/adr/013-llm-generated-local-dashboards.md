@@ -134,13 +134,16 @@ or stale data.
    resource for discovery. Shipped: `GET /api/openapi.json` + MCP resource `fintrack://openapi`, both backed by
    `diplomat/http/openapi.ts` (derived from `wire/in`/`wire/out`/`models`) — see `docs/architecture.md`
    § OpenAPI contract.
-2. [ ] Serve a `/ui` surface from the http server (same-origin with `/api`). Add a `dashboards` entity (`name`,
+2. [x] Serve a `/ui` surface from the http server (same-origin with `/api`). Add a `dashboards` entity (`name`,
    `html`, `updated_at`) + repo; `save_dashboard(name, html)` (MCP write, upsert) and `list_dashboards` tools;
    `GET /ui/:name` returns the currently-stored HTML (`text/html`, no-cache). Override = re-upsert by name (the
-   template is only a default seed). Optionally retain version history for "revert my dashboard". Light save-time
-   guardrail (skill enforces no inline data/secrets; full HTML sanitization is overkill for a local single-user
-   app authoring its own UI).
-3. [ ] Document running in http mode for dashboards (and how a chat client points the UI at it).
+   template is only a default seed). Shipped: `docs/architecture.md` § Dashboards / `/ui` surface,
+   `docs/mcp-tools.md` `save_dashboard`/`list_dashboards`. No version history yet (not required for this phase;
+   could be added later for "revert my dashboard"). Full HTML sanitization is intentionally out of scope (local
+   single-user app authoring its own UI); the no-inline-data guardrail is a Phase B skill concern.
+3. [x] Document running in http mode for dashboards (and how a chat client points the UI at it). Covered by
+   `CLAUDE.md` (`FINTRACK_HTTP`/`MCP_TRANSPORT=http`, REST/MCP endpoint URLs) and `docs/architecture.md` § HTTP
+   sidecar / § Dashboards.
 4. [ ] **REST integration tests (prerequisite).** The HTTP routes are currently covered only via MCP; the
    dashboards consume REST directly, so add HTTP-level integration tests (Fastify `inject` against an in-process
    libSQL DB) for each `/api` route before relying on it as the UI contract. Tracked by

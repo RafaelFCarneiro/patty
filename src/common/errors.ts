@@ -2,12 +2,14 @@ import type { AccountError } from '../models/account.js';
 import type { BillError } from '../models/bill.js';
 import type { CategoryError } from '../models/category.js';
 import type { CardError } from '../models/creditCard.js';
+import type { DashboardError } from '../models/dashboard.js';
 import type { LocaleError } from '../models/locale.js';
 import type { TagError } from '../models/tag.js';
 import type { TransactionError } from '../models/transaction.js';
 
 /** Expected domain failures, returned as `err(AppError)` from controllers. */
-export type AppError = AccountError | CategoryError | CardError | TransactionError | BillError | TagError | LocaleError;
+export type AppError =
+  AccountError | CategoryError | CardError | TransactionError | BillError | TagError | LocaleError | DashboardError;
 
 export const formatAppError = (e: AppError): string => {
   switch (e.code) {
@@ -19,6 +21,7 @@ export const formatAppError = (e: AppError): string => {
     case 'ambiguous_sub_category':
     case 'unknown_card':
     case 'ambiguous_card':
+    case 'unknown_dashboard':
       return `${e.code}: "${e.query}" (candidates: ${e.candidates.join(', ')})`;
     case 'validation':
       return `${e.code}: ${e.issues.join(', ')}`;
@@ -49,6 +52,7 @@ export const httpStatus = (e: AppError): number => {
     case 'unknown_card':
     case 'unknown_transaction':
     case 'unknown_bill':
+    case 'unknown_dashboard':
       return 404;
     case 'ambiguous_account':
     case 'ambiguous_category':

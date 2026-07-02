@@ -162,6 +162,12 @@ export const recurringRules = sqliteTable('recurring_rules', {
   categoryId: text('category_id').references(() => categories.id),
 });
 
+export const dashboards = sqliteTable('dashboards', {
+  name: text('name').primaryKey(),
+  html: text('html').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
   locale: text('locale', { enum: Locale.options }).notNull().default(Locale.enum.en),

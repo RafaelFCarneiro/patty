@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { expectPresent } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Account } from '../../../models/account.js';
 import { CreditCardSchema, type CreditCard } from '../../../models/creditCard.js';
 import type { CreditCardRow } from '../../../wire/db/creditCards.js';
@@ -57,7 +57,7 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
         })
         .returning();
     });
-    return toCard(expectPresent(row, 'credit_cards: row not found after insert'));
+    return toCard(expectPresent(row, rowNotFoundAfterWrite('credit_cards', 'insert')));
   },
 
   findByName: async (name) => {
