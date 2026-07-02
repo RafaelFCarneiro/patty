@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { callTool, callToolError, makeClient } from './helpers.js';
+import { callTool, callToolError, makeClient, mcpUrl } from './helpers.js';
 
 type ValidationErrorPayload = { error: { code: string; issues: string[] } };
+
+// MCP has no get_dashboard tool to re-read stored HTML by name — REST does (GET
+// /api/dashboards/:name), and the same Fastify instance backs both surfaces in this test harness
+// (test/integration/mcp/setup.ts), so this is the only way to actually assert the stored content,
+// not just that the name still appears in list_dashboards (which omits html).
+const fetchStoredHtml = async (name: string): Promise<string> => {
+  const res = await fetch(new URL(`/api/dashboards/${name}`, new URL(mcpUrl).origin));
+  const body = (await res.json()) as { html: string };
+  return body.html;
+};
 
 describe('MCP integration > dashboards', () => {
   it('save_dashboard upserts and list_dashboards includes it without the html blob', async () => {
@@ -36,10 +46,11 @@ describe('MCP integration > dashboards', () => {
   it('save_dashboard rejects html with no <html> root and leaves the prior save in place', async () => {
     const stamp = Date.now();
     const name = `mcp-dash-invalid-${stamp}`;
+    const goodHtml = '<html><body>good</body></html>';
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      await callTool(client, { name: 'save_dashboard', args: { name, html: '<html><body>good</body></html>' } });
+      await callTool(client, { name: 'save_dashboard', args: { name, html: goodHtml } });
 
       const { error } = (await callToolError(client, {
         name: 'save_dashboard',
@@ -49,6 +60,7 @@ describe('MCP integration > dashboards', () => {
 
       const list = (await callTool(client, { name: 'list_dashboards', args: {} })) as Array<Record<string, unknown>>;
       expect(list.some((d) => d.name === name)).toBe(true);
+      expect(await fetchStoredHtml(name)).toBe(goodHtml);
     } finally {
       await transport.close();
     }
