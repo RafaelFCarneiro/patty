@@ -81,6 +81,11 @@ const REPRESENTATIVE_ERRORS: Array<{ error: AppError; expectedStatus: number; ex
     expectedSubstring: 'unknown_bill',
   },
   {
+    error: { code: 'unknown_dashboard', query: 'overview', candidates: [] },
+    expectedStatus: 404,
+    expectedSubstring: 'unknown_dashboard',
+  },
+  {
     error: {
       code: 'category_kind_mismatch',
       transactionType: 'income',
