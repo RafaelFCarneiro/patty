@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import * as accountAdapters from '../../../adapters/accounts.js';
-import { expectPresent, rowNotFoundAfterWrite } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Account, AccountReferences, AccountType } from '../../../models/account.js';
 import type { CurrencyCode } from '../../../models/money.js';
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';

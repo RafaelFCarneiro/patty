@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { expectPresent, rowNotFoundAfterWrite } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Account } from '../../../models/account.js';
 import { CreditCardSchema, type CreditCard } from '../../../models/creditCard.js';
 import type { CreditCardRow } from '../../../wire/db/creditCards.js';

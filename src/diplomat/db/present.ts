@@ -4,6 +4,9 @@
  * surfaced as a 500) with a traceable message instead of a silent `value!`
  * non-null assertion, so an invariant violation fails loudly rather than
  * propagating `undefined` into the domain.
+ *
+ * Lives under `diplomat/db` (not `common/`): every caller is a repo asserting a row it
+ * just wrote is readable back, a `diplomat/db`-internal invariant, not cross-layer plumbing.
  */
 export const expectPresent = <T>(value: T | null | undefined, message: string): T => {
   if (value == null) throw new Error(message);

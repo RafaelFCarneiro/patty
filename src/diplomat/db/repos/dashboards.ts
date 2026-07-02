@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import * as dashboardAdapters from '../../../adapters/dashboards.js';
-import { expectPresent, rowNotFoundAfterWrite } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Dashboard, DashboardListItem } from '../../../models/dashboard.js';
 import type { Db } from '../driver.js';
 import { dashboards } from '../schema.js';

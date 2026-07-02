@@ -1,6 +1,6 @@
 import { eq, isNull, sql } from 'drizzle-orm';
 import * as categoryAdapters from '../../../adapters/categories.js';
-import { expectPresent, rowNotFoundAfterWrite } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Category } from '../../../models/category.js';
 import type { Db } from '../driver.js';
 import { categories, merchantCategory, recurringRules, transactions } from '../schema.js';

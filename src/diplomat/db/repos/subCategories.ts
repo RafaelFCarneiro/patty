@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import * as categoryAdapters from '../../../adapters/categories.js';
-import { expectPresent } from '../../../common/present.js';
+import { expectPresent } from '../present.js';
 import type { SubCategory, CreateSubCategory } from '../../../models/category.js';
 import type { BlockingReferences } from './categories.js';
 import type { Db } from '../driver.js';

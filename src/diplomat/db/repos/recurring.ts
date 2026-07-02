@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { expectPresent, rowNotFoundAfterWrite } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import { RecurringRuleViewSchema, type RecurringRuleView } from '../../../models/recurring.js';
 import { RecurringRowSchema } from '../../../wire/db/recurring.js';
 import type { Db } from '../driver.js';
