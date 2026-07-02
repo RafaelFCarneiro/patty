@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DASHBOARD_HTML_MAX_LENGTH,
   dashboardErrors,
   DashboardListItemSchema,
   DashboardSchema,
@@ -21,6 +22,24 @@ describe('DashboardSchema', () => {
       DashboardSchema.safeParse({ name: '', html: '<html></html>', updatedAt: '2026-01-01T00:00:00.000Z' }).success,
     ).toBe(false);
   });
+
+  it('accepts html right at the max length', () => {
+    const result = DashboardSchema.safeParse({
+      name: 'overview',
+      html: 'x'.repeat(DASHBOARD_HTML_MAX_LENGTH),
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects html over the max length', () => {
+    const result = DashboardSchema.safeParse({
+      name: 'overview',
+      html: 'x'.repeat(DASHBOARD_HTML_MAX_LENGTH + 1),
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('DashboardListItemSchema', () => {
@@ -39,6 +58,14 @@ describe('SaveDashboardSchema', () => {
   it('rejects empty name', () => {
     expect(SaveDashboardSchema.safeParse({ name: '', html: '<html></html>' }).success).toBe(false);
   });
+
+  it('rejects html over the max length (inherited from DashboardSchema)', () => {
+    const result = SaveDashboardSchema.safeParse({
+      name: 'overview',
+      html: 'x'.repeat(DASHBOARD_HTML_MAX_LENGTH + 1),
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('dashboardErrors.notFound', () => {
@@ -47,6 +74,15 @@ describe('dashboardErrors.notFound', () => {
       code: 'unknown_dashboard',
       query: 'missing',
       candidates: [],
+    });
+  });
+});
+
+describe('dashboardErrors.invalidHtml', () => {
+  it('builds a validation error carrying the given issues', () => {
+    expect(dashboardErrors.invalidHtml(['html must contain a <!doctype html> or <html> root element'])).toEqual({
+      code: 'validation',
+      issues: ['html must contain a <!doctype html> or <html> root element'],
     });
   });
 });

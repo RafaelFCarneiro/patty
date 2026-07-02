@@ -36,9 +36,37 @@ const makeDeps = (overrides?: Partial<Deps['dashboards']>): Deps => ({
 describe('saveDashboard', () => {
   it('upserts using the current clock as updatedAt', async () => {
     const deps = makeDeps();
-    const dashboard = await saveDashboard(deps, 'overview', '<html></html>');
-    expect(dashboard).toEqual({ name: 'overview', html: '<html></html>', updatedAt: FIXED_CLOCK.toISOString() });
+    const result = await saveDashboard(deps, 'overview', '<html></html>');
+    expect(result._unsafeUnwrap()).toEqual({
+      name: 'overview',
+      html: '<html></html>',
+      updatedAt: FIXED_CLOCK.toISOString(),
+    });
     expect(deps.dashboards.upsert).toHaveBeenCalledWith('overview', '<html></html>', FIXED_CLOCK.toISOString());
+  });
+
+  it('rejects html with no <html> root without touching the repo', async () => {
+    const deps = makeDeps();
+    const result = await saveDashboard(deps, 'overview', 'not html at all');
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe('validation');
+    // The exact wording is covered by findHtmlValidationIssues's own unit tests
+    // (test/unit/logic/dashboard.test.ts) — asserting a substring here keeps this test focused on
+    // saveDashboard's own behavior (reject + never touch the repo) without duplicating that string.
+    expect((error as { issues: string[] }).issues.some((issue) => issue.includes('root element'))).toBe(true);
+    expect(deps.dashboards.upsert).not.toHaveBeenCalled();
+  });
+
+  it('rejects html with a broken inline <script> without touching the repo', async () => {
+    const deps = makeDeps();
+    const html = '<!doctype html><html><body><script>function( { broken</script></body></html>';
+    const result = await saveDashboard(deps, 'overview', html);
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe('validation');
+    expect((error as { issues: string[] }).issues.some((issue) => issue.includes('syntax error'))).toBe(true);
+    expect(deps.dashboards.upsert).not.toHaveBeenCalled();
   });
 });
 
