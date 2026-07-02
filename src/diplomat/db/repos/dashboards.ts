@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import * as dashboardAdapters from '../../../adapters/dashboards.js';
-import { expectPresent } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../../../common/present.js';
 import type { Dashboard, DashboardListItem } from '../../../models/dashboard.js';
 import type { Db } from '../driver.js';
 import { dashboards } from '../schema.js';
@@ -18,7 +18,7 @@ export const dashboardsRepo = (db: Db): DashboardsRepo => ({
       .values({ name, html, updatedAt })
       .onConflictDoUpdate({ target: dashboards.name, set: { html, updatedAt } })
       .returning();
-    return dashboardAdapters.dbToModel(expectPresent(row, 'dashboards: row not found after upsert'));
+    return dashboardAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('dashboards', 'upsert')));
   },
 
   get: async (name) => {

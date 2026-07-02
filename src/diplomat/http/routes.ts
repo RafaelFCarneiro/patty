@@ -81,6 +81,9 @@ import { buildOpenApiDocument, jsonBody, mountRoutes, okResponse, type RouteDefi
 
 /** Thin diplomat: zod-parse (wire/in) → wireInToModel → controller → map Result to HTTP. */
 
+// Shared by /ui/:name and /api/openapi.json — both must never be masked by a stale browser copy.
+const CACHE_CONTROL_NO_CACHE = 'no-cache';
+
 const send = <T>(reply: FastifyReply, result: Result<T, AppError>, okStatus = 200) =>
   result.match(
     (value) => reply.status(okStatus).send(value),
@@ -672,12 +675,15 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
     const { name } = req.params as { name: string };
     const result = await getDashboard(deps, name);
     return result.match(
-      (dashboard) => reply.header('cache-control', 'no-cache').type('text/html; charset=utf-8').send(dashboard.html),
+      (dashboard) =>
+        reply.header('cache-control', CACHE_CONTROL_NO_CACHE).type('text/html; charset=utf-8').send(dashboard.html),
       (e) => reply.status(httpStatus(e)).send({ error: e }),
     );
   });
 
   // Built from the same list just mounted; excluded from its own document by design.
   const openApiDocument = buildOpenApiDocument(definitions, version);
-  app.get('/api/openapi.json', async (_req, reply) => reply.header('cache-control', 'no-cache').send(openApiDocument));
+  app.get('/api/openapi.json', async (_req, reply) =>
+    reply.header('cache-control', CACHE_CONTROL_NO_CACHE).send(openApiDocument),
+  );
 };

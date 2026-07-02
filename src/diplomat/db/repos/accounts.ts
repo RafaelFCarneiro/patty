@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import * as accountAdapters from '../../../adapters/accounts.js';
-import { expectPresent } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../../../common/present.js';
 import type { Account, AccountReferences, AccountType } from '../../../models/account.js';
 import type { CurrencyCode } from '../../../models/money.js';
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
@@ -44,7 +44,7 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
         currency: account.currency,
       })
       .returning();
-    return accountAdapters.dbToModel(expectPresent(row, 'accounts: row not found after insert'));
+    return accountAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('accounts', 'insert')));
   },
 
   findById: async (id) => {
@@ -129,6 +129,6 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
       return accountAdapters.dbToModel(expectPresent(existing[0], 'accounts: row not found'));
     }
     const [row] = await db.update(accounts).set(values).where(eq(accounts.id, accountId)).returning();
-    return accountAdapters.dbToModel(expectPresent(row, 'accounts: row not found after update'));
+    return accountAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('accounts', 'update')));
   },
 });

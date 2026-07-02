@@ -1,6 +1,6 @@
 import { eq, inArray, sql } from 'drizzle-orm';
 import * as transactionAdapters from '../../../adapters/transactions.js';
-import { expectPresent } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../../../common/present.js';
 import {
   TransactionStatus,
   TransactionType,
@@ -122,7 +122,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       transaction = existing ? transactionAdapters.dbToModel(existing) : null;
     }
 
-    return { transaction: expectPresent(transaction, 'transactions: row not found after write'), created };
+    return { transaction: expectPresent(transaction, rowNotFoundAfterWrite('transactions', 'write')), created };
   },
 
   getById: (id) => fetchTx(db, id),

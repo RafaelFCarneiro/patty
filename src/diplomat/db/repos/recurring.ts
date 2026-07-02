@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { expectPresent } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../../../common/present.js';
 import { RecurringRuleViewSchema, type RecurringRuleView } from '../../../models/recurring.js';
 import { RecurringRowSchema } from '../../../wire/db/recurring.js';
 import type { Db } from '../driver.js';
@@ -63,7 +63,7 @@ export const recurringRepo = (db: Db): RecurringRepo => ({
     const [row] = await db.all<Record<string, unknown>>(sql`
       ${RULE_SELECT} WHERE r.id = ${rule.id}
     `);
-    return toRule(expectPresent(row, 'recurring_rules: row not found after insert'));
+    return toRule(expectPresent(row, rowNotFoundAfterWrite('recurring_rules', 'insert')));
   },
 
   list: async () => {

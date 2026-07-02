@@ -9,3 +9,6 @@ export const expectPresent = <T>(value: T | null | undefined, message: string): 
   if (value == null) throw new Error(message);
   return value;
 };
+
+/** Shared `expectPresent` message shape for a row re-read immediately after the write that created it. */
+export const rowNotFoundAfterWrite = (table: string, verb: string): string => `${table}: row not found after ${verb}`;
