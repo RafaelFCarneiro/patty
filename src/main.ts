@@ -116,7 +116,11 @@ const main = async (): Promise<void> => {
   const { buildHttpApp } = await loadServerModule();
   const app = buildHttpApp(deps, version);
 
+  // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.
+  let shuttingDown = false;
   const shutdown = (): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     app
       .close()
       .catch((err: unknown) => app.log.error(err))
