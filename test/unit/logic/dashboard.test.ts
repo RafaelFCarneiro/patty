@@ -63,4 +63,18 @@ describe('findHtmlValidationIssues', () => {
       '</body></html>';
     expect(findHtmlValidationIssues(html)).toEqual([]);
   });
+
+  it('recognizes an unquoted type=module attribute (valid HTML) and skips module-only syntax', () => {
+    const html =
+      '<!doctype html><html><body>' +
+      '<script type=module>import { render } from "/chart.js"; render();</script>' +
+      '</body></html>';
+    expect(findHtmlValidationIssues(html)).toEqual([]);
+  });
+
+  it('still validates a classic inline script with an unquoted type attribute', () => {
+    const html = '<!doctype html><html><body><script type=text/javascript>function( { broken</script></body></html>';
+    const issues = findHtmlValidationIssues(html);
+    expect(issues.some((issue) => issue.includes('syntax error'))).toBe(true);
+  });
 });

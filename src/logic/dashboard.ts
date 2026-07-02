@@ -25,7 +25,9 @@ const hasHtmlDocumentShape = (html: string): boolean => HTML_DOCUMENT_ROOT_PATTE
 const SKIPPED_SCRIPT_TYPES = ['application/json', 'application/ld+json', 'importmap', 'module'];
 
 const SCRIPT_TAG_PATTERN = /<script([^>]*)>([\s\S]*?)<\/script>/gi;
-const SCRIPT_TYPE_ATTRIBUTE_PATTERN = /type\s*=\s*["']([^"']+)["']/i;
+// HTML attribute values may be double-quoted, single-quoted, or unquoted (e.g. `type=module` is
+// valid HTML) — match all three forms, whichever one is present.
+const SCRIPT_TYPE_ATTRIBUTE_PATTERN = /type\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
 // `\b` alone would also match inside `data-src=` (the `-` still counts as a word boundary before
 // `src`) — require `src` to start right after whitespace or the start of the attribute list, so a
 // custom `data-src` attribute doesn't get mistaken for the real `src` and skip validation.
@@ -39,10 +41,16 @@ const parseScriptTag = (match: RegExpMatchArray): ScriptTag => ({ attributes: ma
 // strip both before comparing, so a parameterized type still matches its base type.
 const normalizeScriptType = (rawType: string): string => (rawType.split(';')[0] ?? '').trim().toLowerCase();
 
+/** Whichever of the pattern's three quoting-style groups matched holds the value. */
+const extractScriptType = (attributes: string): string | undefined => {
+  const match = attributes.match(SCRIPT_TYPE_ATTRIBUTE_PATTERN);
+  return match?.[1] ?? match?.[2] ?? match?.[3];
+};
+
 /** External (`src=`) tags have no inline body to check; skipped `type`s can't be classic-script-checked. */
 const isCheckableInlineScript = (script: ScriptTag): boolean => {
   if (SCRIPT_SRC_ATTRIBUTE_PATTERN.test(script.attributes)) return false;
-  const rawType = script.attributes.match(SCRIPT_TYPE_ATTRIBUTE_PATTERN)?.[1];
+  const rawType = extractScriptType(script.attributes);
   const type = rawType ? normalizeScriptType(rawType) : undefined;
   return !type || !SKIPPED_SCRIPT_TYPES.includes(type);
 };
