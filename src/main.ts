@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { isPortInUse } from './common/net.js';
+import { isPortInUse, portInUseReason } from './common/net.js';
 import { loadConfig, McpTransport } from './config.js';
 import type { Deps } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
@@ -119,7 +119,7 @@ main().catch((e: unknown) => {
   if (isPortInUse(e)) {
     const port = e.port;
     console.error(
-      `fintrack: port ${port} is already in use (another service or MCP server is on it).\n` +
+      `fintrack: ${portInUseReason(port)}.\n` +
         `Set a different port and retry, e.g. PORT=${port + 1} fintrack\n` +
         `Then point your MCP client at http://127.0.0.1:${port + 1}/mcp`,
     );

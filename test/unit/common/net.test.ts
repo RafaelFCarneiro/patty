@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPortInUse } from '../../../src/common/net.js';
+import { isPortInUse, portInUseReason } from '../../../src/common/net.js';
 
 describe('isPortInUse', () => {
   it('recognizes an EADDRINUSE error carrying a port number', () => {
@@ -19,5 +19,11 @@ describe('isPortInUse', () => {
     expect(isPortInUse(null)).toBe(false);
     expect(isPortInUse(undefined)).toBe(false);
     expect(isPortInUse('EADDRINUSE')).toBe(false);
+  });
+});
+
+describe('portInUseReason', () => {
+  it('names the port in a human-readable reason', () => {
+    expect(portInUseReason(3001)).toBe('port 3001 is already in use (another service or MCP server is on it)');
   });
 });

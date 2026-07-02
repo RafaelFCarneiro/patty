@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { isPortInUse } from './common/net.js';
+import { isPortInUse, portInUseReason } from './common/net.js';
 import type { Deps } from './controllers/deps.js';
 import { registerRoutes } from './diplomat/http/routes.js';
 import { registerMcpRoute } from './diplomat/mcp/route.js';
@@ -38,9 +38,7 @@ export const startHttpSidecar = async (deps: Deps, version: string, port: number
     );
     return { app, listening: true };
   } catch (e) {
-    const reason = isPortInUse(e)
-      ? `port ${port} is already in use (another service or MCP server is on it)`
-      : String(e);
+    const reason = isPortInUse(e) ? portInUseReason(port) : String(e);
     console.error(
       `fintrack: HTTP sidecar disabled — ${reason}. Dashboards/REST are unavailable this run; MCP over stdio ` +
         `keeps working. Free the port (or set PORT=<other> and restart) to enable it.`,
