@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { isPortInUse, portInUseReason } from './common/net.js';
-import { loadConfig, McpTransport } from './config.js';
+import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
 import { openDatabase } from './diplomat/db/driver.js';
@@ -23,6 +23,20 @@ import type { HttpSidecar } from './server.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
+
+/**
+ * Lazily imports the HTTP composition module (server.ts) so Fastify — and the whole REST /
+ * MCP-over-HTTP route table it wires up — is never loaded during the default stdio-only
+ * startup path, only when the sidecar is enabled or MCP_TRANSPORT=http actually needs it
+ * (ADR-007). Isolated here as one named function instead of an inline import() at each call site.
+ */
+const loadServerModule = () => import('./server.js');
+
+const maybeStartSidecar = async (deps: Deps, version: string, config: Config): Promise<HttpSidecar | null> => {
+  if (!config.FINTRACK_HTTP) return null;
+  const { startHttpSidecar } = await loadServerModule();
+  return startHttpSidecar(deps, version, config.PORT);
+};
 
 const main = async (): Promise<void> => {
   if (process.argv[2] === 'setup') {
@@ -73,12 +87,9 @@ const main = async (): Promise<void> => {
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
     const server = await connectStdio(deps, version);
 
-    // Sidecar is opt-in (FINTRACK_HTTP) and lazily imports Fastify so the default stdio
-    // startup path stays light. A bind failure inside startHttpSidecar is caught there and
-    // is never fatal — the stdio connection above is the resilient primary (ADR-013 Decision 7).
-    const sidecar: HttpSidecar | null = config.FINTRACK_HTTP
-      ? await (await import('./server.js')).startHttpSidecar(deps, version, config.PORT)
-      : null;
+    // A bind failure inside startHttpSidecar is caught there and is never fatal — the stdio
+    // connection above is the resilient primary (ADR-013 Decision 7).
+    const sidecar = await maybeStartSidecar(deps, version, config);
 
     const shutdown = (): void => {
       void Promise.allSettled([
@@ -97,7 +108,7 @@ const main = async (): Promise<void> => {
   // MCP_TRANSPORT === 'http': start Fastify with REST + streamable HTTP MCP. Unlike the
   // sidecar, this is the only surface running — a bind failure here is fatal by design
   // (there is no stdio fallback to keep the process alive), handled below in main().catch.
-  const { buildHttpApp } = await import('./server.js');
+  const { buildHttpApp } = await loadServerModule();
   const app = buildHttpApp(deps, version);
 
   const shutdown = (): void => {
