@@ -435,6 +435,7 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
             period = { month: month, year: year };
             loadSummary();
             loadCategorySpending();
+            markUpdated();
           });
 
           document.getElementById('refresh-all').addEventListener('click', loadAll);
