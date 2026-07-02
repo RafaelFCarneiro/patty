@@ -161,8 +161,10 @@ or stale data.
    load, renders per-currency blocks with loading/empty/error states, and leaves installment projections as a
    labeled placeholder (no endpoint yet). See `docs/architecture.md` § Dashboards / `/ui` surface; regression
    guard at `test/integration/http/dashboardTemplate.test.ts`.
-6. [ ] Author the **UI-building skill**: fetch-only guardrails, OpenAPI-contract usage, allowed CDN libs,
-   theming/accessibility, the real-time rule.
+6. [x] Author the **UI-building skill**: fetch-only guardrails, OpenAPI-contract usage, allowed CDN libs,
+   theming/accessibility, the real-time rule. Shipped: `skills/dashboard-building/SKILL.md` (docs-only,
+   distributed via `package.json`'s `files` array) — see `docs/architecture.md` § Dashboards / `/ui` surface
+   and `docs/mcp-tools.md` `save_dashboard`/`list_dashboards`.
 
 **Phase C — data coverage + integration**
 7. [ ] Fill REST read-endpoint gaps the template/skill require (accounts+balances, recurring, installments, …).

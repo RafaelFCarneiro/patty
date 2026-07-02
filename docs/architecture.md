@@ -170,6 +170,15 @@ A baseline dashboard (name `overview`) is seeded via `src/diplomat/db/seed/dashb
 
 **(Phase B)** The seed is a single self-contained HTML string — layout, CSS, and vanilla JS all inline, with Chart.js loaded from a CDN as the only external resource. It renders income/expenses/balance, spending-by-category (chart + table), accounts & balances, recurring rules, and recent transactions, one block per currency, plus a clearly-labeled "coming soon" placeholder for installment projections (no endpoint exists yet — Phase C). On `DOMContentLoaded` it issues same-origin `fetch('/api/...')` calls against the routes documented at `GET /api/openapi.json` (`/api/summary`, `/api/aggregate`, `/api/accounts/balances`, `/api/recurring`, `/api/transactions`) and renders whatever comes back, using the localized labels the API already returns (`typeLabel`, `categoryName`, `periodLabel`, …) rather than hardcoding vocabulary. Every section has its own loading/empty/error state, so a slow or failing endpoint degrades one card instead of blanking the page. **The template embeds zero financial data or secrets** — this is the ADR-013 non-negotiable, and `test/integration/http/dashboardTemplate.test.ts` is a regression guard: it asserts the served HTML contains the expected `fetch()` calls, contains no inline-data-blob patterns (e.g. `const spending = [...]`), references no external host besides the Chart.js CDN, and that every fetched path exists in the live OpenAPI document.
 
+**(Phase B)** `skills/dashboard-building/SKILL.md` is the guardrail checklist an MCP client follows to build or
+adapt a dashboard for the user: read the contract (`fintrack://openapi`/`GET /api/openapi.json`) before
+writing any `fetch()` call, map each requested section to a real endpoint, start from the baseline template
+above as the structural pattern, then self-check the generated HTML (no embedded data, same-origin `/api`
+only, the pinned Chart.js CDN script as the sole other external reference, per-currency grouping, localized
+labels, loading/empty/error states) before calling `save_dashboard`. It is a docs-only artifact — no runtime
+behavior depends on it — shipped in the published npm package via `package.json`'s `files` array so it's
+available alongside the server.
+
 ## ADR index
 
 - ADR-001: neverthrow for Result (reaffirmed vs fp-ts/Effect/Ramda)
