@@ -26,7 +26,10 @@ const SKIPPED_SCRIPT_TYPES = ['application/json', 'application/ld+json', 'import
 
 const SCRIPT_TAG_PATTERN = /<script([^>]*)>([\s\S]*?)<\/script>/gi;
 const SCRIPT_TYPE_ATTRIBUTE_PATTERN = /type\s*=\s*["']([^"']+)["']/i;
-const SCRIPT_SRC_ATTRIBUTE_PATTERN = /\bsrc\s*=/i;
+// `\b` alone would also match inside `data-src=` (the `-` still counts as a word boundary before
+// `src`) — require `src` to start right after whitespace or the start of the attribute list, so a
+// custom `data-src` attribute doesn't get mistaken for the real `src` and skip validation.
+const SCRIPT_SRC_ATTRIBUTE_PATTERN = /(?:^|\s)src\s*=/i;
 
 type ScriptTag = { attributes: string; body: string };
 

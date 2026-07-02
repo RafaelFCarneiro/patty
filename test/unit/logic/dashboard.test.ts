@@ -46,4 +46,13 @@ describe('findHtmlValidationIssues', () => {
       '</body></html>';
     expect(findHtmlValidationIssues(html)).toEqual([]);
   });
+
+  it('still validates an inline script carrying a custom data-src attribute (not the real src)', () => {
+    const html =
+      '<!doctype html><html><body>' +
+      '<script data-src="not-a-real-src">function( { broken</script>' +
+      '</body></html>';
+    const issues = findHtmlValidationIssues(html);
+    expect(issues.some((issue) => issue.includes('syntax error'))).toBe(true);
+  });
 });
