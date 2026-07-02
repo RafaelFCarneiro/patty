@@ -12,7 +12,13 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FinTrack — Overview</title>
-    <script defer referrerpolicy="no-referrer" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script
+      defer
+      referrerpolicy="no-referrer"
+      crossorigin="anonymous"
+      integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt"
+      src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+    ></script>
     <style>
       :root {
         color-scheme: dark;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DASHBOARD_HTML_MAX_LENGTH } from '../../../src/models/dashboard.js';
 import { setupHttpTest } from './setup.js';
 
 const { inject } = setupHttpTest();
@@ -79,6 +80,18 @@ describe('POST /api/dashboards', () => {
     expect(res.json().error.issues.some((issue: string) => issue.includes('syntax error'))).toBe(true);
 
     const stored = await inject({ method: 'GET', url: '/api/dashboards/unrenderable-script' });
+    expect(stored.statusCode).toBe(404);
+  });
+
+  it('rejects html over the max length (422) and does not save it', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'too-large', html: 'x'.repeat(DASHBOARD_HTML_MAX_LENGTH + 1) },
+    });
+    expect(res.statusCode).toBe(422);
+
+    const stored = await inject({ method: 'GET', url: '/api/dashboards/too-large' });
     expect(stored.statusCode).toBe(404);
   });
 });

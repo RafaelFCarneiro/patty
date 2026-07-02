@@ -32,15 +32,16 @@ const SKIPPED_SCRIPT_TYPES = ['application/json', 'application/ld+json', 'import
 // close the tag — each iteration consumes either one non-quote, non-`>` character, or an entire
 // quoted string (any content, `>` included), so only a real unquoted `>` ends the attribute list.
 const SCRIPT_TAG_PATTERN = /<script((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/script>/gi;
-// HTML attribute values may be double-quoted, single-quoted, or unquoted (e.g. `type=module` is
-// valid HTML) — match all three forms, whichever one is present. `type` must start right after
-// whitespace or the beginning of the attribute list, so `data-type=` isn't mistaken for the real
-// `type` attribute (same boundary issue `SCRIPT_SRC_ATTRIBUTE_PATTERN` below guards against).
-const SCRIPT_TYPE_ATTRIBUTE_PATTERN = /(?:^|\s)type\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
-// `\b` alone would also match inside `data-src=` (the `-` still counts as a word boundary before
-// `src`) — require `src` to start right after whitespace or the start of the attribute list, so a
-// custom `data-src` attribute doesn't get mistaken for the real `src` and skip validation.
-const SCRIPT_SRC_ATTRIBUTE_PATTERN = /(?:^|\s)src\s*=/i;
+
+// Matches one HTML attribute at a time: a name, optionally followed by `=` and a double-quoted,
+// single-quoted, or unquoted value. Scanning attribute-by-attribute (rather than testing a
+// name= pattern against the raw, unparsed attribute-list string) is what makes this safe against
+// a `src=`/`type=`-shaped substring appearing *inside* another attribute's quoted value (e.g.
+// `data-note="foo src=bar"`) — the whole quoted value is consumed as this one attribute's value,
+// so its contents are never re-scanned as if they were separate attributes. Attribute names here
+// are scoped to the practical case (letter start, then word/hyphen/colon/dot) — this is still the
+// cheap render-ability check ADR-013 describes, not a spec-complete HTML5 attribute tokenizer.
+const ATTRIBUTE_PATTERN = /([a-zA-Z][-\w:.]*)\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
 
 type ScriptTag = { attributes: string; body: string };
 
@@ -50,17 +51,24 @@ const parseScriptTag = (match: RegExpMatchArray): ScriptTag => ({ attributes: ma
 // strip both before comparing, so a parameterized type still matches its base type.
 const normalizeScriptType = (rawType: string): string => (rawType.split(';')[0] ?? '').trim().toLowerCase();
 
-/** Whichever of the pattern's three quoting-style groups matched holds the value. */
-const extractScriptType = (attributes: string): string | undefined => {
-  const match = attributes.match(SCRIPT_TYPE_ATTRIBUTE_PATTERN);
-  return match?.[1] ?? match?.[2] ?? match?.[3];
+/** Boolean attributes (no `=value`) parse to `true`; real HTML keeps the first of a duplicate name. */
+const parseAttributes = (attributes: string): Map<string, string | true> => {
+  const result = new Map<string, string | true>();
+  for (const [, name, doubleQuoted, singleQuoted, unquoted] of attributes.matchAll(ATTRIBUTE_PATTERN)) {
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (result.has(key)) continue;
+    result.set(key, doubleQuoted ?? singleQuoted ?? unquoted ?? true);
+  }
+  return result;
 };
 
 /** External (`src=`) tags have no inline body to check; skipped `type`s can't be classic-script-checked. */
 const isCheckableInlineScript = (script: ScriptTag): boolean => {
-  if (SCRIPT_SRC_ATTRIBUTE_PATTERN.test(script.attributes)) return false;
-  const rawType = extractScriptType(script.attributes);
-  const type = rawType ? normalizeScriptType(rawType) : undefined;
+  const attributes = parseAttributes(script.attributes);
+  if (attributes.has('src')) return false;
+  const rawType = attributes.get('type');
+  const type = typeof rawType === 'string' ? normalizeScriptType(rawType) : undefined;
   return !type || !SKIPPED_SCRIPT_TYPES.includes(type);
 };
 

@@ -134,4 +134,23 @@ describe('findHtmlValidationIssues', () => {
       '</script></body></html>';
     expect(findHtmlValidationIssues(html)).toEqual([]);
   });
+
+  it('does not treat a "src=" substring inside another attribute\'s quoted value as the real src', () => {
+    // Scanning for "src=" against the raw, unparsed attribute-list string (rather than tokenizing
+    // attributes one at a time) would find this substring inside data-note's value and wrongly
+    // treat the script as external, skipping the syntax check on a body that is actually broken.
+    const html =
+      '<!doctype html><html><body>' + '<script data-note="foo src=bar">function( { broken</script>' + '</body></html>';
+    const issues = findHtmlValidationIssues(html);
+    expect(issues.some((issue) => issue.includes('syntax error'))).toBe(true);
+  });
+
+  it('does not treat a "type=" substring inside another attribute\'s quoted value as the real type', () => {
+    const html =
+      '<!doctype html><html><body>' +
+      '<script data-note=" type=module ">function( { broken</script>' +
+      '</body></html>';
+    const issues = findHtmlValidationIssues(html);
+    expect(issues.some((issue) => issue.includes('syntax error'))).toBe(true);
+  });
 });
