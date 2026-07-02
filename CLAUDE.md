@@ -10,13 +10,15 @@ FinTrack v2 is an AI-first personal finance manager. The primary interface is AI
 
 ```bash
 npm install
-npm run dev   # REST + MCP on http://localhost:3001
+npm run dev   # stdio MCP server by default (ADR-007) — no port bound
 ```
 
 The database is a local encrypted libSQL file (`fintrack.db`). On first run the encryption key is generated and stored in the OS keychain (`@napi-rs/keyring`). For CI/headless environments set `FINTRACK_DB_KEY` (64-char hex string) — never commit or log it.
 
-- REST API: `http://localhost:3001/api`
-- MCP endpoint (streamable HTTP): `http://localhost:3001/mcp`
+Add `MCP_TRANSPORT=http` (switches transport entirely) or `FINTRACK_HTTP=true` (keeps stdio, adds a best-effort sidecar — ADR-013 Decision 7) for REST/dashboards. `npm run dev` pins `PORT=3001` for either (package.json); the published package defaults to `PORT=51737` instead — deliberately not a common Node/Fastify dev-server port, to minimize collisions with other software (`docs/architecture.md` § HTTP sidecar).
+
+- REST API: `http://localhost:3001/api` (from source) / `http://localhost:51737/api` (published package)
+- MCP endpoint (streamable HTTP): `http://localhost:3001/mcp` (from source) / `http://localhost:51737/mcp` (published package)
 - Run `npx ntl` for an interactive, described list of all scripts.
 
 ## Commands

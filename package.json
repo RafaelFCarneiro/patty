@@ -27,7 +27,7 @@
     "npm": ">=11"
   },
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "PORT=3001 tsx watch src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "lint": "eslint src test",
@@ -45,7 +45,7 @@
   },
   "ntl": {
     "descriptions": {
-      "dev": "Run backend in watch mode (REST + MCP on :3001)",
+      "dev": "Run backend in watch mode (stdio by default; MCP_TRANSPORT=http or FINTRACK_HTTP=true for REST + MCP on :3001)",
       "build": "Compile TypeScript to dist/",
       "lint": "Lint src/ with ESLint (style/quality smell rules — part of the gate)",
       "format": "Format the repository with Prettier",
@@ -58,7 +58,7 @@
       "test:all": "Run unit + integration Vitest projects",
       "test:watch": "Run unit tests in watch mode (Vitest project: unit)",
       "typecheck": "Type-check everything, including tests",
-      "mcp:inspect": "Open MCP Inspector — connect to http://127.0.0.1:3001/mcp (Streamable HTTP)"
+      "mcp:inspect": "Open MCP Inspector — connect to http://127.0.0.1:3001/mcp (Streamable HTTP, after `MCP_TRANSPORT=http npm run dev`)"
     }
   },
   "dependencies": {

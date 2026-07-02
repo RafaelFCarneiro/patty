@@ -99,13 +99,15 @@ Antigravity IDE: click `...` in the agent panel → MCP Servers → Manage → V
 ## HTTP sidecar (alongside stdio)
 
 Keep `MCP_TRANSPORT=stdio` (the default — no change to your client config) and add `FINTRACK_HTTP=true` to also
-start the HTTP server (`/api`, and later `/ui`) on `PORT` (default `3001`):
+start the HTTP server (`/api`, and later `/ui`) on `PORT` (default `51737` for the published package; `npm run
+dev` pins `3001` instead — a deliberately uncommon port for the published default, see
+[`docs/architecture.md`](../docs/architecture.md#http-sidecar-adr-013-decision-7)):
 
 ```bash
-# from source
+# from source → :3001
 FINTRACK_HTTP=true npm run dev
 
-# or from the published package
+# or from the published package → :51737
 FINTRACK_HTTP=true npx @rafaelfcarneiro/fintrack@latest
 ```
 
@@ -123,14 +125,15 @@ never reachable from other devices on your network, only from this machine. Use 
 Start the server explicitly before connecting:
 
 ```bash
-# from source
+# from source → :3001
 MCP_TRANSPORT=http npm run dev
 
-# or from the published package
+# or from the published package → :51737
 MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack@latest
 ```
 
-This serves streamable HTTP MCP at `http://127.0.0.1:3001/mcp` (stateless) **and** the REST API at `/api`.
+This serves streamable HTTP MCP at `http://127.0.0.1:51737/mcp` (stateless, published package —
+`:3001` from source) **and** the REST API at `/api`.
 
 ### Claude Desktop (HTTP mode) ✅ (with bridge)
 
@@ -140,18 +143,22 @@ Desktop only launches stdio servers, so the HTTP endpoint is bridged with `mcp-r
 "mcpServers": {
   "fintrack": {
     "command": "npx",
-    "args": ["-y", "mcp-remote@latest", "http://127.0.0.1:3001/mcp", "--transport", "http-only"]
+    "args": ["-y", "mcp-remote@latest", "http://127.0.0.1:51737/mcp", "--transport", "http-only"]
   }
 }
 ```
+
+Running from source instead? Use port `3001`.
 
 ### VS Code / GitHub Copilot (HTTP mode) ✅
 
 Native HTTP support — no bridge. In `.vscode/mcp.json`:
 
 ```json
-{ "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:3001/mcp" } } }
+{ "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:51737/mcp" } } }
 ```
+
+Running from source instead (`npm run dev`)? Use port `3001` — this repo's own `.vscode/mcp.json` already does.
 
 Use `127.0.0.1`, not `localhost` — VS Code's fetch can resolve `localhost` to IPv6 `::1`, and the backend binds loopback-only on IPv4 (`127.0.0.1`), deliberately not the `::`/`0.0.0.0` wildcard, so the REST/MCP surface is never reachable from other devices on the LAN (this API has no auth). `localhost` resolving to `::1` will fail to connect; `127.0.0.1` always works.
 
@@ -160,14 +167,14 @@ Use `127.0.0.1`, not `localhost` — VS Code's fetch can resolve `localhost` to 
 ChatGPT's servers connect from the internet: needs a paid plan with Developer Mode (Settings → Apps → Advanced → Developer mode) and an HTTPS tunnel:
 
 ```bash
-cloudflared tunnel --url http://127.0.0.1:3001   # → https://xxx.trycloudflare.com
+cloudflared tunnel --url http://127.0.0.1:51737   # → https://xxx.trycloudflare.com (:3001 from source)
 ```
 
 Add connector with URL `https://xxx.trycloudflare.com/mcp`, auth: none. ⚠️ The tunnel exposes the unauthenticated API to anyone with the URL — test only, kill the tunnel after. Permanent exposure needs MCP auth (Phase 4).
 
 ### Ollama (HTTP mode, untested — needs a bridge client)
 
-Ollama serves models; it has no MCP client. Use a bridge such as `ollmcp` (`uvx ollmcp`, add server by URL `http://127.0.0.1:3001/mcp`), MCPHost (unmaintained), or LM Studio (GUI, `mcp.json` like VS Code's). Use a strong tool-calling model (qwen3-class or better) — small models fumble tool arguments; that's the model, not the server.
+Ollama serves models; it has no MCP client. Use a bridge such as `ollmcp` (`uvx ollmcp`, add server by URL `http://127.0.0.1:51737/mcp` — `:3001` from source), MCPHost (unmaintained), or LM Studio (GUI, `mcp.json` like VS Code's). Use a strong tool-calling model (qwen3-class or better) — small models fumble tool arguments; that's the model, not the server.
 
 ---
 

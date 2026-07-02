@@ -44,7 +44,7 @@ Because the package is private on GitHub Packages, npm needs a token to download
    npm install -g @rafaelfcarneiro/fintrack && fintrack
    ```
 
-By default this starts a **stdio MCP server** — the client spawns it directly (no port, no URL). See `docs/mcp-clients.md` for client config. To start in HTTP mode instead (REST + streamable HTTP MCP on port 3001): `MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack`. The package only replaces the clone + `npm run dev` step with a single command; the encrypted database at `<home directory>/.fintrack/fintrack.db` (key in the OS keychain; set `FINTRACK_DB_KEY` for headless) is otherwise identical.
+By default this starts a **stdio MCP server** — the client spawns it directly (no port, no URL). See `docs/mcp-clients.md` for client config. To start in HTTP mode instead (REST + streamable HTTP MCP on port 51737): `MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack`. The package only replaces the clone + `npm run dev` step with a single command; the encrypted database at `<home directory>/.fintrack/fintrack.db` (key in the OS keychain; set `FINTRACK_DB_KEY` for headless) is otherwise identical.
 
 ## Updating to a new version
 
@@ -74,13 +74,13 @@ FinTrack supports two MCP transports, selected by the `MCP_TRANSPORT` env var (d
 |-------|-------------|--------------|-----------------|
 | `stdio` (default) | Client spawns the process; JSON-RPC over stdin/stdout | **No** | No |
 | `stdio` + `FINTRACK_HTTP=true` | stdio MCP, **plus** a best-effort Fastify sidecar on `PORT` | Optional (non-fatal if taken) | Yes, if the sidecar bound |
-| `http` | Fastify on `PORT` (default 3001); streamable HTTP MCP + REST | Yes (fatal if taken) | Yes |
+| `http` | Fastify on `PORT` (default 51737); streamable HTTP MCP + REST | Yes (fatal if taken) | Yes |
 
 The default `stdio` mode has **no port concerns** — it can't conflict. Use it for all local MCP client configs (see `docs/mcp-clients.md`). Optionally add `FINTRACK_HTTP=true` on top of `stdio` to also start `/api` (and later `/ui`) as a **best-effort sidecar** — see the next section.
 
 ## Port configuration (HTTP mode and the sidecar)
 
-`PORT` (default `3001`) is read whenever the HTTP server starts: pure `http` mode, or the `stdio` + `FINTRACK_HTTP=true` sidecar. The server binds **one fixed port** — it does not auto-pick a free port, because the client config must match.
+`PORT` (default `51737` for the published package — deliberately not a common Node/Fastify dev-server port like 3000/3001/8080, to minimize collisions with other software; `npm run dev` overrides this to `3001` for contributors, see `docs/architecture.md` § HTTP sidecar) is read whenever the HTTP server starts: pure `http` mode, or the `stdio` + `FINTRACK_HTTP=true` sidecar. The server binds **one fixed port** — it does not auto-pick a free port, because the client config must match.
 
 If you run several servers in HTTP mode, give each its own port:
 

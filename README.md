@@ -75,7 +75,7 @@ Restart the AI client (or reload the window for VS Code), then talk to your fina
 | Mode | When | How |
 |---|---|---|
 | **stdio** (default) | A client launches FinTrack directly — no port, no conflicts. | Client config points at `npx @rafaelfcarneiro/fintrack@latest` |
-| **http** (`MCP_TRANSPORT=http`) | REST API, multi-client, or debugging via the Inspector. | `http://localhost:3001` (`/mcp`, `/api`) |
+| **http** (`MCP_TRANSPORT=http`) | REST API, multi-client, or debugging via the Inspector. | `http://localhost:51737` (`/mcp`, `/api`) — `:3001` if run via `npm run dev` |
 
 ---
 
@@ -86,17 +86,18 @@ Prefer the `setup` command above. If you need to configure manually or use HTTP 
 **HTTP mode quick-start** — start the server explicitly, then connect by URL:
 
 ```bash
-MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack@latest   # published package
-MCP_TRANSPORT=http npm run dev                             # from source
+MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack@latest   # published package → :51737
+MCP_TRANSPORT=http npm run dev                             # from source → :3001
 ```
 
-VS Code `.vscode/mcp.json` (HTTP):
+VS Code `.vscode/mcp.json` (HTTP, published package):
 
 ```json
-{ "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:3001/mcp" } } }
+{ "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:51737/mcp" } } }
 ```
 
-> Use `127.0.0.1`, not `localhost` — VS Code resolves `localhost` to IPv6 `::1`.
+> Use `127.0.0.1`, not `localhost` — VS Code resolves `localhost` to IPv6 `::1`. Running from source
+> instead? Use port `3001` (this repo's `.vscode/mcp.json` already does).
 
 ---
 
