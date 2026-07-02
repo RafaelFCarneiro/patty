@@ -61,6 +61,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
 
   it('binds loopback-only, not the LAN-reachable wildcard address', async () => {
     sidecar = await startHttpSidecar(deps, version, 0);
+    expect(sidecar.listening).toBe(true);
 
     const address = sidecar.app.server.address() as AddressInfo;
     expect(address.address).toBe(LOOPBACK_HOST);
@@ -68,6 +69,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
 
   it('drains cleanly on shutdown — the port is released', async () => {
     sidecar = await startHttpSidecar(deps, version, 0);
+    expect(sidecar.listening).toBe(true);
     const port = (sidecar.app.server.address() as AddressInfo).port;
 
     await sidecar.app.close();
