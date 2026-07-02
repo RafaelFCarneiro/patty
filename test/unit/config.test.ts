@@ -83,4 +83,20 @@ describe('loadConfig', () => {
     const config = loadConfig();
     expect(config.FINTRACK_LOCALE).toBeUndefined();
   });
+
+  it('FINTRACK_HTTP defaults to false when omitted', () => {
+    delete process.env['FINTRACK_HTTP'];
+    expect(loadConfig().FINTRACK_HTTP).toBe(false);
+  });
+
+  it('FINTRACK_HTTP is true only for the literal string "true"', () => {
+    process.env['FINTRACK_HTTP'] = 'true';
+    expect(loadConfig().FINTRACK_HTTP).toBe(true);
+
+    process.env['FINTRACK_HTTP'] = '1';
+    expect(loadConfig().FINTRACK_HTTP).toBe(false);
+
+    process.env['FINTRACK_HTTP'] = 'false';
+    expect(loadConfig().FINTRACK_HTTP).toBe(false);
+  });
 });

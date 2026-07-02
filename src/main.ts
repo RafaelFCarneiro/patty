@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { isPortInUse } from './common/net.js';
 import { loadConfig, McpTransport } from './config.js';
 import type { Deps } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
@@ -18,6 +19,7 @@ import { transactionsRepo } from './diplomat/db/repos/transactions.js';
 import { healthRepo } from './diplomat/db/repos/health.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { Locale } from './models/locale.js';
+import type { HttpSidecar } from './server.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
@@ -70,11 +72,19 @@ const main = async (): Promise<void> => {
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
     const server = await connectStdio(deps, version);
+
+    // Sidecar is opt-in (FINTRACK_HTTP) and lazily imports Fastify so the default stdio
+    // startup path stays light. A bind failure inside startHttpSidecar is caught there and
+    // is never fatal — the stdio connection above is the resilient primary (ADR-013 Decision 7).
+    const sidecar: HttpSidecar | null = config.FINTRACK_HTTP
+      ? await (await import('./server.js')).startHttpSidecar(deps, version, config.PORT)
+      : null;
+
     const shutdown = (): void => {
-      server
-        .close()
-        .catch((err: unknown) => console.error(err))
-        .finally(() => process.exit(0));
+      void Promise.allSettled([
+        server.close().catch((err: unknown) => console.error(err)),
+        sidecar?.listening ? sidecar.app.close().catch((err: unknown) => console.error(err)) : Promise.resolve(),
+      ]).finally(() => process.exit(0));
     };
     process.once('SIGINT', shutdown);
     process.once('SIGTERM', shutdown);
@@ -84,14 +94,11 @@ const main = async (): Promise<void> => {
     return;
   }
 
-  // MCP_TRANSPORT === 'http': start Fastify with REST + streamable HTTP MCP
-  const { default: Fastify } = await import('fastify');
-  const { registerRoutes } = await import('./diplomat/http/routes.js');
-  const { registerMcpRoute } = await import('./diplomat/mcp/route.js');
-
-  const app = Fastify({ logger: true });
-  registerRoutes(app, deps, version);
-  registerMcpRoute(app, deps, version);
+  // MCP_TRANSPORT === 'http': start Fastify with REST + streamable HTTP MCP. Unlike the
+  // sidecar, this is the only surface running — a bind failure here is fatal by design
+  // (there is no stdio fallback to keep the process alive), handled below in main().catch.
+  const { buildHttpApp } = await import('./server.js');
+  const app = buildHttpApp(deps, version);
 
   const shutdown = (): void => {
     app
@@ -107,12 +114,6 @@ const main = async (): Promise<void> => {
   // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe (ADR-007 restricts stdio only)
   console.log(`fintrack: REST http://localhost:${config.PORT}/api` + ` · MCP http://localhost:${config.PORT}/mcp`);
 };
-
-const isPortInUse = (e: unknown): e is { code: string; port: number } =>
-  typeof e === 'object' &&
-  e !== null &&
-  (e as { code?: string }).code === 'EADDRINUSE' &&
-  typeof (e as { port?: unknown }).port === 'number';
 
 main().catch((e: unknown) => {
   if (isPortInUse(e)) {

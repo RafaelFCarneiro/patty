@@ -23,6 +23,12 @@ const Env = z.object({
   FINTRACK_LOCALE: Locale.optional(),
   PORT: z.coerce.number().default(3001),
   MCP_TRANSPORT: McpTransport.default(McpTransport.enum.stdio),
+  // Opt-in HTTP sidecar alongside stdio MCP (ADR-013 Decision 7). Default off so nothing
+  // binds a port unexpectedly; set FINTRACK_HTTP=true to also serve REST/dashboards.
+  FINTRACK_HTTP: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
 });
 
 export type Config = z.infer<typeof Env>;

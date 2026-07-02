@@ -2,7 +2,7 @@
 
 FinTrack runs as a **stdio MCP server** by default — the client launches it as a subprocess and speaks JSON-RPC over stdin/stdout. No port, no URL, no bridge. This is the recommended path for all local MCP clients.
 
-HTTP is available as an opt-in (`MCP_TRANSPORT=http`) for multi-client access, REST consumers, or debugging. See the HTTP sections below. Tool contract: `docs/mcp-tools.md`.
+HTTP is available two ways: switch the transport entirely (`MCP_TRANSPORT=http`) for multi-client access, REST consumers, or debugging — see the HTTP sections below — or, while staying on stdio, opt into the **HTTP sidecar** (`FINTRACK_HTTP=true`) to also get `/api` (and, once shipped, `/ui`) without giving up the zero-port stdio connection. See "HTTP sidecar (alongside stdio)" below. Tool contract: `docs/mcp-tools.md`.
 
 ---
 
@@ -95,6 +95,24 @@ Antigravity CLI: type `/mcp` at the prompt to open the MCP Manager and reload.
 Antigravity IDE: click `...` in the agent panel → MCP Servers → Manage → View raw config.
 
 ---
+
+## HTTP sidecar (alongside stdio)
+
+Keep `MCP_TRANSPORT=stdio` (the default — no change to your client config) and add `FINTRACK_HTTP=true` to also
+start the HTTP server (`/api`, and later `/ui`) on `PORT` (default `3001`):
+
+```bash
+# from source
+FINTRACK_HTTP=true npm run dev
+
+# or from the published package
+FINTRACK_HTTP=true npx @rafaelfcarneiro/fintrack@latest
+```
+
+This is off by default — nothing binds a port unless you set `FINTRACK_HTTP=true`. If the port is already taken,
+the sidecar logs an actionable message to stderr and skips starting; **stdio MCP keeps working regardless** —
+the same chat session can then help you find and free the port (see `docs/architecture.md` § HTTP sidecar,
+ADR-013 Decision 7).
 
 ## HTTP transport (opt-in, `MCP_TRANSPORT=http`)
 

@@ -73,13 +73,14 @@ FinTrack supports two MCP transports, selected by the `MCP_TRANSPORT` env var (d
 | Value | What starts | Port needed? | REST available? |
 |-------|-------------|--------------|-----------------|
 | `stdio` (default) | Client spawns the process; JSON-RPC over stdin/stdout | **No** | No |
-| `http` | Fastify on `PORT` (default 3001); streamable HTTP MCP + REST | Yes | Yes |
+| `stdio` + `FINTRACK_HTTP=true` | stdio MCP, **plus** a best-effort Fastify sidecar on `PORT` | Optional (non-fatal if taken) | Yes, if the sidecar bound |
+| `http` | Fastify on `PORT` (default 3001); streamable HTTP MCP + REST | Yes (fatal if taken) | Yes |
 
-The default `stdio` mode has **no port concerns** — it can't conflict. Use it for all local MCP client configs (see `docs/mcp-clients.md`).
+The default `stdio` mode has **no port concerns** — it can't conflict. Use it for all local MCP client configs (see `docs/mcp-clients.md`). Optionally add `FINTRACK_HTTP=true` on top of `stdio` to also start `/api` (and later `/ui`) as a **best-effort sidecar** — see the next section.
 
-## Port configuration (HTTP mode only)
+## Port configuration (HTTP mode and the sidecar)
 
-`PORT` is only read when `MCP_TRANSPORT=http`. The server binds **one fixed port** (default `3001`) — it does not auto-pick a free port, because the client config must match.
+`PORT` (default `3001`) is read whenever the HTTP server starts: pure `http` mode, or the `stdio` + `FINTRACK_HTTP=true` sidecar. The server binds **one fixed port** — it does not auto-pick a free port, because the client config must match.
 
 If you run several servers in HTTP mode, give each its own port:
 
@@ -88,7 +89,10 @@ MCP_TRANSPORT=http PORT=3007 npx @rafaelfcarneiro/fintrack
 # then point the client at http://127.0.0.1:3007/mcp
 ```
 
-If the chosen port is already taken, startup fails fast with an actionable message (the port number and the exact `PORT=… fintrack` command to retry) rather than a raw `EADDRINUSE` stack trace.
+**Bind-failure behavior differs by mode, by design (ADR-013 Decision 7):**
+
+- **Pure `http` mode:** if the chosen port is already taken, startup fails fast with an actionable message (the port number and the exact `PORT=… fintrack` command to retry) rather than a raw `EADDRINUSE` stack trace, and the process exits — there's nothing else running to fall back to.
+- **`stdio` + `FINTRACK_HTTP=true` sidecar:** the same conflict is **non-fatal**. The sidecar logs the same kind of actionable message to stderr and simply doesn't start; the stdio MCP connection keeps working, so the client can diagnose/free the port and you restart with the sidecar enabled again.
 
 How this lands in each HTTP-mode client:
 
