@@ -49,10 +49,12 @@ describe('saveDashboard', () => {
     const deps = makeDeps();
     const result = await saveDashboard(deps, 'overview', 'not html at all');
     expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr()).toEqual({
-      code: 'validation',
-      issues: ['html must contain a <!doctype html> or <html> root element'],
-    });
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe('validation');
+    // The exact wording is covered by findHtmlValidationIssues's own unit tests
+    // (test/unit/logic/dashboard.test.ts) — asserting a substring here keeps this test focused on
+    // saveDashboard's own behavior (reject + never touch the repo) without duplicating that string.
+    expect((error as { issues: string[] }).issues.some((issue) => issue.includes('root element'))).toBe(true);
     expect(deps.dashboards.upsert).not.toHaveBeenCalled();
   });
 

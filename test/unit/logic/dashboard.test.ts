@@ -94,6 +94,13 @@ describe('findHtmlValidationIssues', () => {
     expect(findHtmlValidationIssues(html)).toEqual([]);
   });
 
+  it('still validates a classic inline script carrying a custom data-type attribute (not the real type)', () => {
+    const html =
+      '<!doctype html><html><body>' + '<script data-type="module">function( { broken</script>' + '</body></html>';
+    const issues = findHtmlValidationIssues(html);
+    expect(issues.some((issue) => issue.includes('syntax error'))).toBe(true);
+  });
+
   it('treats the first literal "</script>" as the tag end, matching real browser parsing', () => {
     // An unescaped "</script>" inside a JS string breaks out of the element in real browsers too
     // — this is why such literals must be authored as "<\/script>". The validator mirrors that

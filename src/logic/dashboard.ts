@@ -26,8 +26,10 @@ const SKIPPED_SCRIPT_TYPES = ['application/json', 'application/ld+json', 'import
 
 const SCRIPT_TAG_PATTERN = /<script([^>]*)>([\s\S]*?)<\/script>/gi;
 // HTML attribute values may be double-quoted, single-quoted, or unquoted (e.g. `type=module` is
-// valid HTML) — match all three forms, whichever one is present.
-const SCRIPT_TYPE_ATTRIBUTE_PATTERN = /type\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
+// valid HTML) — match all three forms, whichever one is present. `type` must start right after
+// whitespace or the beginning of the attribute list, so `data-type=` isn't mistaken for the real
+// `type` attribute (same boundary issue `SCRIPT_SRC_ATTRIBUTE_PATTERN` below guards against).
+const SCRIPT_TYPE_ATTRIBUTE_PATTERN = /(?:^|\s)type\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
 // `\b` alone would also match inside `data-src=` (the `-` still counts as a word boundary before
 // `src`) — require `src` to start right after whitespace or the start of the attribute list, so a
 // custom `data-src` attribute doesn't get mistaken for the real `src` and skip validation.
