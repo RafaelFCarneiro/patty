@@ -18,7 +18,9 @@ const FETCHED_API_PATHS = [
 // this is the enforcement of ADR-013's non-negotiable: "dashboards never contain data — they fetch it."
 const INLINE_DATA_BLOB_PATTERN =
   /(?:const|let|var)\s+\w*(spending|transactions|balances|accounts|recurring)\w*\s*=\s*[[{]/i;
-const ALLOWED_EXTERNAL_HOST_PREFIX = 'https://cdn.jsdelivr.net/npm/chart.js';
+// The `@` pins this to the official chart.js package itself — a bare `chart.js` prefix would also
+// accept a typosquat like `chart.js-malicious@...` served from the same trusted CDN host.
+const ALLOWED_EXTERNAL_HOST_PREFIX = 'https://cdn.jsdelivr.net/npm/chart.js@';
 
 describe('baseline dashboard template is data-less (ADR-013 Phase B)', () => {
   it('serves a template that fetches every section from same-origin /api, embedding no data', async () => {
@@ -33,16 +35,23 @@ describe('baseline dashboard template is data-less (ADR-013 Phase B)', () => {
 
     expect(html).not.toMatch(INLINE_DATA_BLOB_PATTERN);
 
-    const externalUrls = html.match(/https?:\/\/[^"'\s)]+/g) ?? [];
+    // Matches both absolute (https://host/...) and protocol-relative (//host/...) URLs — a
+    // protocol-relative reference would still load an external host and must be caught too.
+    const externalUrls = html.match(/(?:https?:)?\/\/[^"'\s)]+/g) ?? [];
     for (const url of externalUrls) {
-      expect(url.startsWith(ALLOWED_EXTERNAL_HOST_PREFIX), `unexpected external host: ${url}`).toBe(true);
+      const absoluteUrl = url.startsWith('//') ? 'https:' + url : url;
+      expect(absoluteUrl.startsWith(ALLOWED_EXTERNAL_HOST_PREFIX), `unexpected external host: ${url}`).toBe(true);
     }
   });
 
-  it('only fetches endpoints that exist in the live OpenAPI contract', async () => {
-    const doc = (await inject({ method: 'GET', url: '/api/openapi.json' })).json();
+  it('only fetches endpoints that exist as GET operations in the live OpenAPI contract', async () => {
+    const res = await inject({ method: 'GET', url: '/api/openapi.json' });
+    expect(res.statusCode).toBe(200);
+    const doc = res.json();
     for (const path of FETCHED_API_PATHS) {
-      expect(doc.paths[path], `${path} missing from GET /api/openapi.json`).toBeDefined();
+      // The template only ever fetches with GET — checking the path key alone would pass even if
+      // that path were documented for a different method only (e.g. POST-only).
+      expect(doc.paths[path]?.get, `GET ${path} missing from /api/openapi.json`).toBeDefined();
     }
   });
 });
