@@ -12,6 +12,7 @@ import { billsRepo } from './diplomat/db/repos/bills.js';
 import { categoriesRepo } from './diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js';
 import { creditCardsRepo } from './diplomat/db/repos/creditCards.js';
+import { dashboardsRepo } from './diplomat/db/repos/dashboards.js';
 import { merchantsRepo } from './diplomat/db/repos/merchants.js';
 import { recurringRepo } from './diplomat/db/repos/recurring.js';
 import { settingsRepo } from './diplomat/db/repos/settings.js';
@@ -73,6 +74,7 @@ const main = async (): Promise<void> => {
     categories: categoriesRepo(db),
     subCategories: subCategoriesRepo(db),
     creditCards: creditCardsRepo(db),
+    dashboards: dashboardsRepo(db),
     health: healthRepo(db),
     merchants: merchantsRepo(db),
     recurring: recurringRepo(db),

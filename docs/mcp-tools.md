@@ -3,7 +3,7 @@
 Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All tools share these conventions:
 
 - **Natural inputs**: `account`, `card`, `category`, and `subCategory` take names (case/accent-insensitive, partial match allowed). Resolution failures return structured errors the agent can self-correct from.
-- **Errors**: `{ "error": { "code": "...", ... } }` with `isError: true`. Codes: `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `unknown_sub_category`, `ambiguous_sub_category`, `unknown_card`, `ambiguous_card`, `unknown_transaction`, `unknown_bill`, `duplicate_name`, `in_use`, `category_kind_mismatch`, `validation`. Ambiguous/unknown errors include `candidates` (names) to retry with.
+- **Errors**: `{ "error": { "code": "...", ... } }` with `isError: true`. Codes: `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `unknown_sub_category`, `ambiguous_sub_category`, `unknown_card`, `ambiguous_card`, `unknown_transaction`, `unknown_bill`, `unknown_dashboard`, `duplicate_name`, `in_use`, `category_kind_mismatch`, `validation`. Ambiguous/unknown errors include `candidates` (names) to retry with.
 - **Currency**: BRL or USD; from the account/card when one is linked, else the `currency` field, else USD. Summaries group per currency, never converting.
 - **Dates**: `YYYY-MM-DD`.
 - **Localized labels**: read views include `*Label` fields — localized display labels for fixed enum values, resolved at read time via the active locale (Design 006). The enum value itself (`type`, `status`, `kind`, `period`) is stable identity; the `*Label` is derived display only. Switching locale reflows all labels with no migration. See per-tool details below.
@@ -194,6 +194,15 @@ Free-form labels attached to transactions (e.g. "work", "travel", "reembolsável
 - `delete_tag`: `id` (required). Removes the tag and all its transaction associations.
 
 Attach tags at write time via the `tags` array on `create_transaction` / `create_transactions_bulk`.
+
+## save_dashboard / list_dashboards
+
+LLM-generated local dashboards over the HTTP API (ADR-013 Phase A). A dashboard is a self-contained HTML shell stored by name and served live at `GET /ui/:name` — this is storage plumbing only; the rich data-less template and the UI-building skill guardrails ship in Phase B.
+
+- `save_dashboard`: `name`, `html` (required). **Upsert** — saving to an existing name replaces it immediately, no rebuild/restart. **CRITICAL**: the HTML must never embed financial data, secrets, or tokens — render layout/styling only and `fetch()` data client-side from `/api` on load (read the `fintrack://openapi` resource for the contract), so the dashboard is always live and safe to share. Returns the stored `{ name, html, updatedAt }`.
+- `list_dashboards`: no input — returns all dashboards as `{ name, updatedAt }` (HTML omitted).
+
+REST mirror: `GET /api/dashboards` (list, HTML omitted), `GET /api/dashboards/:name` (JSON, `unknown_dashboard` if absent), `POST /api/dashboards` (upsert). The browser-facing serving route is `GET /ui/:name` — returns the stored HTML as `text/html; charset=utf-8` with no-cache headers (404 `unknown_dashboard` if absent); it is not part of the `/api` JSON contract and does not appear in the OpenAPI document. A minimal placeholder dashboard (`overview`) is seeded on first boot; `save_dashboard` overrides it permanently.
 
 ## set_locale / get_preferences
 

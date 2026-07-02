@@ -48,4 +48,23 @@ describe('GET /api/openapi.json', () => {
     // The spec route documents every OTHER route, not itself.
     expect(doc.paths['/api/openapi.json']).toBeUndefined();
   });
+
+  it('documents /api/dashboards* (ADR-013 Phase A) but excludes /ui/:name by design', async () => {
+    const doc = (await inject({ method: 'GET', url: '/api/openapi.json' })).json();
+
+    expect(doc.paths['/api/dashboards']?.get).toBeDefined();
+    expect(doc.paths['/api/dashboards']?.post).toBeDefined();
+    expect(doc.paths['/api/dashboards/{name}']?.get).toBeDefined();
+
+    const liveList = await inject({ method: 'GET', url: '/api/dashboards' });
+    expect(liveList.statusCode).toBe(200);
+
+    // /ui/:name is a browser-facing HTML surface, not a JSON fetch contract — deliberately kept
+    // out of the OpenAPI document (docs/architecture.md § Dashboards / /ui surface), even though
+    // it's a live, mounted route.
+    expect(doc.paths['/ui/{name}']).toBeUndefined();
+    expect(doc.paths['/ui/:name']).toBeUndefined();
+    const liveUi = await inject({ method: 'GET', url: '/ui/overview' });
+    expect(liveUi.statusCode).toBe(200);
+  });
 });

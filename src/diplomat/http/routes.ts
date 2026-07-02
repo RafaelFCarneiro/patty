@@ -16,6 +16,7 @@ import {
 } from '../../controllers/accounts.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { getBill, payBill } from '../../controllers/bills.js';
+import { getDashboard, listDashboards, saveDashboard } from '../../controllers/dashboards.js';
 import {
   createCategory,
   createSubCategory,
@@ -42,6 +43,7 @@ import { createTransfer } from '../../controllers/transfers.js';
 import { AccountBalanceSchema, AccountSchema } from '../../models/account.js';
 import { AggregateResultSchema } from '../../models/aggregate.js';
 import { BillSchema } from '../../models/bill.js';
+import { DashboardListItemSchema, DashboardSchema, SaveDashboardSchema } from '../../models/dashboard.js';
 import { CategorySchema, SubCategorySchema } from '../../models/category.js';
 import { CreditCardSchema } from '../../models/creditCard.js';
 import { RecurringRuleViewSchema } from '../../models/recurring.js';
@@ -78,6 +80,9 @@ import {
 import { buildOpenApiDocument, jsonBody, mountRoutes, okResponse, type RouteDefinition } from './openapi.js';
 
 /** Thin diplomat: zod-parse (wire/in) → wireInToModel → controller → map Result to HTTP. */
+
+// Shared by /ui/:name and /api/openapi.json — both must never be masked by a stale browser copy.
+const CACHE_CONTROL_NO_CACHE = 'no-cache';
 
 const send = <T>(reply: FastifyReply, result: Result<T, AppError>, okStatus = 200) =>
   result.match(
@@ -118,6 +123,7 @@ const RouteTag = {
   tags: 'Tags',
   aggregate: 'Aggregate',
   summary: 'Summary',
+  dashboards: 'Dashboards',
 } as const;
 
 /**
@@ -592,6 +598,40 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
 
   {
     method: 'get',
+    path: '/api/dashboards',
+    tags: [RouteTag.dashboards],
+    summary: 'List dashboards',
+    responses: { 200: okResponse('Dashboards (HTML omitted)', z.array(DashboardListItemSchema)) },
+    handler: async () => listDashboards(deps),
+  },
+  {
+    method: 'get',
+    path: '/api/dashboards/:name',
+    tags: [RouteTag.dashboards],
+    summary: 'Get a dashboard as JSON',
+    request: { params: nameParam },
+    responses: { 200: okResponse('Dashboard', DashboardSchema), 404: notFound404 },
+    handler: async (req, reply) => {
+      const { name } = req.params as { name: string };
+      return send(reply, await getDashboard(deps, name));
+    },
+  },
+  {
+    method: 'post',
+    path: '/api/dashboards',
+    tags: [RouteTag.dashboards],
+    summary: 'Save (upsert) a dashboard',
+    request: { body: jsonBody(SaveDashboardSchema) },
+    responses: { 200: okResponse('Dashboard saved', DashboardSchema), 422: validation422 },
+    handler: async (req, reply) => {
+      const wireIn = parse(SaveDashboardSchema, req.body, reply);
+      if (!wireIn) return reply;
+      return reply.send(await saveDashboard(deps, wireIn.name, wireIn.html));
+    },
+  },
+
+  {
+    method: 'get',
     path: '/api/aggregate',
     tags: [RouteTag.aggregate],
     summary: 'Aggregate spending',
@@ -628,7 +668,22 @@ export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string
   const definitions = buildRouteDefinitions(deps, version);
   mountRoutes(app, definitions);
 
+  // Browser-facing HTML surface (ADR-013 Phase A item 2), not a JSON API contract — kept out of
+  // the /api OpenAPI document (which documents fetch() shapes for agent-generated dashboards,
+  // see docs/architecture.md § OpenAPI contract) rather than added as a text/html response there.
+  app.get('/ui/:name', async (req, reply) => {
+    const { name } = req.params as { name: string };
+    const result = await getDashboard(deps, name);
+    return result.match(
+      (dashboard) =>
+        reply.header('cache-control', CACHE_CONTROL_NO_CACHE).type('text/html; charset=utf-8').send(dashboard.html),
+      (e) => reply.status(httpStatus(e)).send({ error: e }),
+    );
+  });
+
   // Built from the same list just mounted; excluded from its own document by design.
   const openApiDocument = buildOpenApiDocument(definitions, version);
-  app.get('/api/openapi.json', async (_req, reply) => reply.header('cache-control', 'no-cache').send(openApiDocument));
+  app.get('/api/openapi.json', async (_req, reply) =>
+    reply.header('cache-control', CACHE_CONTROL_NO_CACHE).send(openApiDocument),
+  );
 };

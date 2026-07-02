@@ -4,6 +4,7 @@ import type { BillsRepo } from '../diplomat/db/repos/bills.js';
 import type { CategoriesRepo } from '../diplomat/db/repos/categories.js';
 import type { SubCategoriesRepo } from '../diplomat/db/repos/subCategories.js';
 import type { CreditCardsRepo } from '../diplomat/db/repos/creditCards.js';
+import type { DashboardsRepo } from '../diplomat/db/repos/dashboards.js';
 import type { HealthRepo } from '../diplomat/db/repos/health.js';
 import type { MerchantsRepo } from '../diplomat/db/repos/merchants.js';
 import type { RecurringRepo } from '../diplomat/db/repos/recurring.js';
@@ -18,6 +19,7 @@ export type Deps = {
   categories: CategoriesRepo;
   subCategories: SubCategoriesRepo;
   creditCards: CreditCardsRepo;
+  dashboards: DashboardsRepo;
   health: HealthRepo;
   merchants: MerchantsRepo;
   recurring: RecurringRepo;

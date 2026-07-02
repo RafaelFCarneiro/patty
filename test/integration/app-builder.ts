@@ -9,6 +9,7 @@ import { billsRepo } from '../../src/diplomat/db/repos/bills.js';
 import { categoriesRepo } from '../../src/diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from '../../src/diplomat/db/repos/subCategories.js';
 import { creditCardsRepo } from '../../src/diplomat/db/repos/creditCards.js';
+import { dashboardsRepo } from '../../src/diplomat/db/repos/dashboards.js';
 import { merchantsRepo } from '../../src/diplomat/db/repos/merchants.js';
 import { recurringRepo } from '../../src/diplomat/db/repos/recurring.js';
 import { settingsRepo } from '../../src/diplomat/db/repos/settings.js';
@@ -42,6 +43,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     categories: categoriesRepo(db),
     subCategories: subCategoriesRepo(db),
     creditCards: creditCardsRepo(db),
+    dashboards: dashboardsRepo(db),
     health: healthRepo(db),
     merchants: merchantsRepo(db),
     recurring: recurringRepo(db),

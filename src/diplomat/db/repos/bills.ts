@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import * as transactionAdapters from '../../../adapters/transactions.js';
-import { expectPresent } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import { BillSchema, BillStatus, type Bill } from '../../../models/bill.js';
 import type { RawTransactionView } from '../../../models/transaction.js';
 import type { BillPeriod } from '../../../logic/bill.js';
@@ -54,7 +54,7 @@ export const billsRepo = (db: Db): BillsRepo => ({
     const [rawBill] = await db.all<Record<string, unknown>>(sql`
       SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${period.month} AND year = ${period.year}
     `);
-    const bill = toBill(expectPresent(rawBill, 'bills: row not found after upsert'));
+    const bill = toBill(expectPresent(rawBill, rowNotFoundAfterWrite('bills', 'upsert')));
 
     // Link the transaction to the bill — verify the row actually existed.
     const result = await db.update(transactions).set({ billId: bill.id }).where(eq(transactions.id, transactionId));

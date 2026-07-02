@@ -1,6 +1,6 @@
 import { eq, isNull, sql } from 'drizzle-orm';
 import * as categoryAdapters from '../../../adapters/categories.js';
-import { expectPresent } from '../../../common/present.js';
+import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Category } from '../../../models/category.js';
 import type { Db } from '../driver.js';
 import { categories, merchantCategory, recurringRules, transactions } from '../schema.js';
@@ -36,7 +36,7 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
         names: category.names ? JSON.stringify(category.names) : null,
       })
       .returning();
-    return categoryAdapters.dbToModel(expectPresent(row, 'categories: row not found after insert'));
+    return categoryAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('categories', 'insert')));
   },
 
   countReferences: async (categoryId) => {

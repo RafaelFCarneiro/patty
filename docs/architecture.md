@@ -101,6 +101,7 @@ recurring_rules     (id PK, description, amount, type, period, next_due, currenc
 
 settings            (id PK DEFAULT 'singleton', locale: en|es|pt DEFAULT en,
                      locale_source: default|inferred|explicit DEFAULT default)
+dashboards          (name PK, html, updated_at — ADR-013 Phase A; see § Dashboards / `/ui` surface)
 
 transactions_fts    VIRTUAL TABLE fts5(description, content='transactions')
                     — kept in sync via INSERT/UPDATE/DELETE triggers
@@ -156,6 +157,14 @@ Every REST route is declared exactly once, in `diplomat/http/routes.ts`'s `build
 The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat/mcp/server.ts`), so a tools/resource-only agent — including under the **stdio** transport, which never starts Fastify — can read the contract without an HTTP round-trip. This is the first MCP resource in the app (as opposed to tools). It calls `buildOpenApiDocument(buildRouteDefinitions(deps, version), version)` directly: building the array only constructs handler closures (never invokes them), so it needs no live Fastify instance. `diplomat/mcp` importing `buildRouteDefinitions`/`buildOpenApiDocument` from `diplomat/http` is a narrow, documented exception to the dependency table (§ Dependency direction) — both are deterministic, no-business-logic builders, the same category of shared artifact both diplomats already import (wire schemas, models).
 
 `diplomat/http/openapi.ts` holds only routing/doc-generation mechanics (`RouteDefinition`, `mountRoutes`, `buildOpenApiDocument`) — no wire schemas. Response shapes with no dedicated `wire/out` schema before this change (e.g. `BillView`, `ApplyDueResult`, the credit-card delete dry-run union, the shared `{ error }` envelopes for 404/409/422) got new small `wire/out` schemas (`wire/out/{bills,recurring,creditCards,common,errors}.ts`), same as any other response shape; request-side generic path-param/query shapes (`name`, `id`, `confirm`) got `wire/in/common.ts`. Unlike request schemas, these response schemas are not zod-validated at runtime (routes never parse their own outbound payloads), so they are best-effort documentation, not an enforced contract.
+
+## Dashboards / `/ui` surface (ADR-013 Phase A)
+
+The `dashboards` table (`name` PK, `html`, `updated_at`) stores agent-authored HTML shells, keyed by name — `save_dashboard` (MCP tool) / `POST /api/dashboards` (REST) is an **upsert**: saving to an existing name replaces its content immediately, no rebuild, restart, or migration. `GET /ui/:name` (mounted by `registerRoutes` in `diplomat/http/routes.ts`, same Fastify instance as `/api`, so it rides the HTTP sidecar per ADR-013 Decision 7) returns the currently-stored HTML as `text/html; charset=utf-8` with `cache-control: no-cache` — a regenerated dashboard is never masked by a stale browser copy. Absent name → `unknown_dashboard` (404).
+
+`/ui/:name` is deliberately **not** part of the `/api` OpenAPI document: that document exists to give an agent correct `fetch()` shapes for the JSON data API (§ OpenAPI contract above), and `/ui` is a browser-facing HTML page, not a JSON contract. Management of dashboards (list/get/save) does have REST parity under `/api/dashboards*` and is documented in the OpenAPI spec like every other route.
+
+A minimal placeholder dashboard (name `overview`) is seeded via `src/diplomat/db/seed/dashboards.ts` at bootstrap (ADR-008 seed isolation — consumed only by `diplomat/db/bootstrap.ts`, never imported by the domain), so `GET /ui/overview` resolves on a fresh install even before the agent has generated anything. Seeding uses `onConflictDoNothing` on the `name` primary key, so a `save_dashboard` override survives future restarts — bootstrap never re-seeds over a dashboard that already exists. The seed is intentionally data-less prose (no charts, no fetch wiring); the real baseline template with fetch-on-load charts is Phase B, along with the UI-building skill that enforces the no-inline-data guardrail at generation time.
 
 ## ADR index
 
