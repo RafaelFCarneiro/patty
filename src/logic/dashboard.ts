@@ -1,4 +1,4 @@
-import vm from 'node:vm';
+import { Script as VmScript } from 'node:vm';
 import * as R from 'remeda';
 
 /**
@@ -67,7 +67,7 @@ const isCheckableInlineScript = (script: ScriptTag): boolean => {
 /** Compile-only (never executes the script) — just proves the browser could parse it. */
 const findScriptSyntaxError = (script: ScriptTag): string | null => {
   try {
-    new vm.Script(script.body);
+    new VmScript(script.body);
     return null;
   } catch (error) {
     return `inline <script> has a syntax error: ${(error as Error).message}`;
