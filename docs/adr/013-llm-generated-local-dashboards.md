@@ -150,9 +150,13 @@ or stale data.
    [#21](https://github.com/RafaelFCarneiro/fintrack/issues/21).
 
 **Phase B — UI generation**
-5. [ ] Ship a baseline **data-less** dashboard template (the cleaned-up draft: fetch-on-load, no inline data),
+5. [x] Ship a baseline **data-less** dashboard template (the cleaned-up draft: fetch-on-load, no inline data),
    **seeded into the `dashboards` table via `src/diplomat/db/seed/` at bootstrap (ADR-008)** — not a new
-   importable UI-assets location.
+   importable UI-assets location. Shipped: a self-contained HTML/CSS/vanilla-JS shell (Chart.js via CDN) that
+   fetches `/api/summary`, `/api/aggregate`, `/api/accounts/balances`, `/api/recurring`, `/api/transactions` on
+   load, renders per-currency blocks with loading/empty/error states, and leaves installment projections as a
+   labeled placeholder (no endpoint yet). See `docs/architecture.md` § Dashboards / `/ui` surface; regression
+   guard at `test/integration/http/dashboardTemplate.test.ts`.
 6. [ ] Author the **UI-building skill**: fetch-only guardrails, OpenAPI-contract usage, allowed CDN libs,
    theming/accessibility, the real-time rule.
 

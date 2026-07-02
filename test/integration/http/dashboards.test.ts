@@ -4,7 +4,7 @@ import { setupHttpTest } from './setup.js';
 const { inject } = setupHttpTest();
 
 describe('GET /ui/:name', () => {
-  it('serves the seeded placeholder dashboard on a fresh DB', async () => {
+  it('serves the seeded baseline dashboard template on a fresh DB', async () => {
     const res = await inject({ method: 'GET', url: '/ui/overview' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
