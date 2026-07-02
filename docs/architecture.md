@@ -146,6 +146,7 @@ In the default **stdio** transport, the HTTP server (REST + streamable HTTP MCP,
 - **stderr only, never stdout:** stdio carries the MCP protocol on stdout (ADR-007), so the sidecar's Fastify instance runs with `logger: false` and all sidecar messages (startup banner, bind-failure diagnostic) go through `console.error`.
 - **Clean shutdown:** SIGINT/SIGTERM and stdin end/close (client disconnect) drain both the stdio server and the sidecar (only if it's actually listening) before the process exits.
 - **Pure `http` mode is unchanged:** when `MCP_TRANSPORT=http`, the Fastify server (`buildHttpApp`, default `logger: true`) is the *only* surface running, so a bind failure there stays fatal (`process.exit(1)` with an actionable message) — there is no stdio fallback to keep the process alive. This is a deliberate, documented difference from the sidecar's non-fatal handling, not a regression.
+- **Loopback-only bind (`common/net.ts`'s `LOOPBACK_HOST`, `127.0.0.1`):** both the sidecar and pure `http` mode bind `127.0.0.1` explicitly, never the `::`/`0.0.0.0` wildcard. This API has no auth (ADR-013 assumes local-first), and binding the wildcard address is reachable from any device on the same LAN, not just this machine — verified empirically, not just in theory. `localhost` may still fail to connect on systems where it resolves to IPv6 `::1`; clients should use `127.0.0.1` explicitly (`docs/mcp-clients.md`).
 
 ## OpenAPI contract (ADR-013 Phase A)
 

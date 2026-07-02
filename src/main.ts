@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { isPortInUse, portInUseReason } from './common/net.js';
+import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
@@ -91,7 +91,12 @@ const main = async (): Promise<void> => {
     // connection above is the resilient primary (ADR-013 Decision 7).
     const sidecar = await maybeStartSidecar(deps, version, config);
 
+    // 'close' commonly follows 'end' on stdin, and a client can also send SIGINT/SIGTERM around
+    // the same disconnect — guard against shutdown() running (and double process.exit-ing) twice.
+    let shuttingDown = false;
     const shutdown = (): void => {
+      if (shuttingDown) return;
+      shuttingDown = true;
       void Promise.allSettled([
         server.close().catch((err: unknown) => console.error(err)),
         sidecar?.listening ? sidecar.app.close().catch((err: unknown) => console.error(err)) : Promise.resolve(),
@@ -120,10 +125,11 @@ const main = async (): Promise<void> => {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  // '::' binds dual-stack (IPv6 + IPv4) so both localhost (::1) and 127.0.0.1 work
-  await app.listen({ port: config.PORT, host: '::' });
+  await app.listen({ port: config.PORT, host: LOOPBACK_HOST });
   // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe (ADR-007 restricts stdio only)
-  console.log(`fintrack: REST http://localhost:${config.PORT}/api` + ` · MCP http://localhost:${config.PORT}/mcp`);
+  console.log(
+    `fintrack: REST http://${LOOPBACK_HOST}:${config.PORT}/api` + ` · MCP http://${LOOPBACK_HOST}:${config.PORT}/mcp`,
+  );
 };
 
 main().catch((e: unknown) => {
@@ -132,7 +138,7 @@ main().catch((e: unknown) => {
     console.error(
       `fintrack: ${portInUseReason(port)}.\n` +
         `Set a different port and retry, e.g. PORT=${port + 1} fintrack\n` +
-        `Then point your MCP client at http://127.0.0.1:${port + 1}/mcp`,
+        `Then point your MCP client at http://${LOOPBACK_HOST}:${port + 1}/mcp`,
     );
     process.exit(1);
   }

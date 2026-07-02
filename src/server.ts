@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { isPortInUse, portInUseReason } from './common/net.js';
+import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import type { Deps } from './controllers/deps.js';
 import { registerRoutes } from './diplomat/http/routes.js';
 import { registerMcpRoute } from './diplomat/mcp/route.js';
@@ -30,11 +30,12 @@ export type HttpSidecar = { app: FastifyInstance; listening: boolean };
 export const startHttpSidecar = async (deps: Deps, version: string, port: number): Promise<HttpSidecar> => {
   const app = buildHttpApp(deps, version, { logger: false });
   try {
-    await app.listen({ port, host: '::' });
+    await app.listen({ port, host: LOOPBACK_HOST });
     // `port` may be 0 (OS-assigned); read back the address actually bound for the banner.
     const boundPort = (app.server.address() as AddressInfo).port;
     console.error(
-      `fintrack: HTTP sidecar up — REST http://localhost:${boundPort}/api · MCP http://localhost:${boundPort}/mcp`,
+      `fintrack: HTTP sidecar up — REST http://${LOOPBACK_HOST}:${boundPort}/api · ` +
+        `MCP http://${LOOPBACK_HOST}:${boundPort}/mcp`,
     );
     return { app, listening: true };
   } catch (e) {

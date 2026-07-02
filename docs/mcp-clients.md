@@ -114,6 +114,10 @@ the sidecar logs an actionable message to stderr and skips starting; **stdio MCP
 the same chat session can then help you find and free the port (see `docs/architecture.md` § HTTP sidecar,
 ADR-013 Decision 7).
 
+The sidecar binds `127.0.0.1` only — never the LAN. This API has no auth (local-first, ADR-013), so it is
+never reachable from other devices on your network, only from this machine. Use `127.0.0.1` in the URL, not
+`localhost` — some resolvers prefer IPv6 (`::1`), which this server does not bind.
+
 ## HTTP transport (opt-in, `MCP_TRANSPORT=http`)
 
 Start the server explicitly before connecting:
@@ -136,7 +140,7 @@ Desktop only launches stdio servers, so the HTTP endpoint is bridged with `mcp-r
 "mcpServers": {
   "fintrack": {
     "command": "npx",
-    "args": ["-y", "mcp-remote@latest", "http://localhost:3001/mcp", "--transport", "http-only"]
+    "args": ["-y", "mcp-remote@latest", "http://127.0.0.1:3001/mcp", "--transport", "http-only"]
   }
 }
 ```
@@ -149,14 +153,14 @@ Native HTTP support — no bridge. In `.vscode/mcp.json`:
 { "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:3001/mcp" } } }
 ```
 
-Use `127.0.0.1` (not `localhost`) — VS Code's fetch resolves `localhost` to IPv6 `::1`; the backend listens dual-stack (`::`) so either works, but `127.0.0.1` is explicit.
+Use `127.0.0.1`, not `localhost` — VS Code's fetch can resolve `localhost` to IPv6 `::1`, and the backend binds loopback-only on IPv4 (`127.0.0.1`), deliberately not the `::`/`0.0.0.0` wildcard, so the REST/MCP surface is never reachable from other devices on the LAN (this API has no auth). `localhost` resolving to `::1` will fail to connect; `127.0.0.1` always works.
 
 ### ChatGPT (HTTP mode, untested — requires tunnel)
 
 ChatGPT's servers connect from the internet: needs a paid plan with Developer Mode (Settings → Apps → Advanced → Developer mode) and an HTTPS tunnel:
 
 ```bash
-cloudflared tunnel --url http://localhost:3001   # → https://xxx.trycloudflare.com
+cloudflared tunnel --url http://127.0.0.1:3001   # → https://xxx.trycloudflare.com
 ```
 
 Add connector with URL `https://xxx.trycloudflare.com/mcp`, auth: none. ⚠️ The tunnel exposes the unauthenticated API to anyone with the URL — test only, kill the tunnel after. Permanent exposure needs MCP auth (Phase 4).

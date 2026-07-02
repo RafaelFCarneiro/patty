@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { LOOPBACK_HOST } from '../../../src/common/net.js';
 import { McpTransport } from '../../../src/config.js';
 
 // Fixed 64-char hex key — never touches the OS keychain
@@ -38,7 +39,7 @@ beforeAll(async () => {
 
   // Occupy the sidecar's target port before the server ever starts, so its bind attempt fails.
   blocker = createServer();
-  await new Promise<void>((resolve) => blocker.listen(0, '::', () => resolve()));
+  await new Promise<void>((resolve) => blocker.listen(0, LOOPBACK_HOST, () => resolve()));
   blockedPort = (blocker.address() as AddressInfo).port;
 
   transport = new StdioClientTransport({
