@@ -141,6 +141,10 @@ or stale data.
    `docs/mcp-tools.md` `save_dashboard`/`list_dashboards`. No version history yet (not required for this phase;
    could be added later for "revert my dashboard"). Full HTML sanitization is intentionally out of scope (local
    single-user app authoring its own UI); the no-inline-data guardrail is a Phase B skill concern.
+   **Addendum (Phase B):** `save_dashboard`/`POST /api/dashboards` now reject a save that can't render at all —
+   no `<html>` root, or an inline `<script>` that fails to compile — since without version history a broken save
+   permanently overwrote the working dashboard. This is a narrow render-ability check (`logic/dashboard.ts`), not
+   the sanitization deferred above.
 3. [x] Document running in http mode for dashboards (and how a chat client points the UI at it). Covered by
    `CLAUDE.md` (`FINTRACK_HTTP`/`MCP_TRANSPORT=http`, REST/MCP endpoint URLs) and `docs/architecture.md` § HTTP
    sidecar / § Dashboards.
@@ -150,9 +154,13 @@ or stale data.
    [#21](https://github.com/RafaelFCarneiro/fintrack/issues/21).
 
 **Phase B — UI generation**
-5. [ ] Ship a baseline **data-less** dashboard template (the cleaned-up draft: fetch-on-load, no inline data),
+5. [x] Ship a baseline **data-less** dashboard template (the cleaned-up draft: fetch-on-load, no inline data),
    **seeded into the `dashboards` table via `src/diplomat/db/seed/` at bootstrap (ADR-008)** — not a new
-   importable UI-assets location.
+   importable UI-assets location. Shipped: a self-contained HTML/CSS/vanilla-JS shell (Chart.js via CDN) that
+   fetches `/api/summary`, `/api/aggregate`, `/api/accounts/balances`, `/api/recurring`, `/api/transactions` on
+   load, renders per-currency blocks with loading/empty/error states, and leaves installment projections as a
+   labeled placeholder (no endpoint yet). See `docs/architecture.md` § Dashboards / `/ui` surface; regression
+   guard at `test/integration/http/dashboardTemplate.test.ts`.
 6. [ ] Author the **UI-building skill**: fetch-only guardrails, OpenAPI-contract usage, allowed CDN libs,
    theming/accessibility, the real-time rule.
 

@@ -518,10 +518,11 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'no rebuild or restart needed. CRITICAL: the HTML must NEVER embed financial data, secrets, or ' +
         'tokens inline — render layout/styling only and fetch data client-side from the documented /api ' +
         'endpoints (read the fintrack://openapi resource for the contract) on page load, so the dashboard ' +
-        'is always live and safe to share.',
+        'is always live and safe to share. Rejected (validation error) if the HTML has no <html> root or ' +
+        'an inline <script> has a syntax error — fix the reported issue and save again.',
       inputSchema: SaveDashboardSchema.shape,
     },
-    async (args) => json(await saveDashboard(deps, args.name, args.html)),
+    async (args) => fromResult(await saveDashboard(deps, args.name, args.html)),
   );
 
   server.registerTool(
