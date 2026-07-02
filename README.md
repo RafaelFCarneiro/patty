@@ -75,7 +75,7 @@ Restart the AI client (or reload the window for VS Code), then talk to your fina
 | Mode | When | How |
 |---|---|---|
 | **stdio** (default) | A client launches FinTrack directly — no port, no conflicts. | Client config points at `npx @rafaelfcarneiro/fintrack@latest` |
-| **http** (`MCP_TRANSPORT=http`) | REST API, multi-client, or debugging via the Inspector. | `http://localhost:51737` (`/mcp`, `/api`) — `:3001` if run via `npm run dev` |
+| **http** (`MCP_TRANSPORT=http`) | REST API, multi-client, or debugging via the Inspector. | `http://127.0.0.1:51737` (`/mcp`, `/api`) — `:3001` if run via `npm run dev` |
 
 ---
 
@@ -109,7 +109,7 @@ npm run dev          # stdio MCP server (reads stdin)
 ```
 
 ```bash
-MCP_TRANSPORT=http npm run dev   # REST + MCP on http://localhost:3001
+MCP_TRANSPORT=http npm run dev   # REST + MCP on http://127.0.0.1:3001
 npm run mcp:inspect              # MCP Inspector → http://127.0.0.1:3001/mcp
 ```
 

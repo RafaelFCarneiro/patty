@@ -17,8 +17,8 @@ The database is a local encrypted libSQL file (`fintrack.db`). On first run the 
 
 Add `MCP_TRANSPORT=http` (switches transport entirely) or `FINTRACK_HTTP=true` (keeps stdio, adds a best-effort sidecar — ADR-013 Decision 7) for REST/dashboards. `npm run dev` pins `PORT=3001` for either (package.json); the published package defaults to `PORT=51737` instead — deliberately not a common Node/Fastify dev-server port, to minimize collisions with other software (`docs/architecture.md` § HTTP sidecar).
 
-- REST API: `http://localhost:3001/api` (from source) / `http://localhost:51737/api` (published package)
-- MCP endpoint (streamable HTTP): `http://localhost:3001/mcp` (from source) / `http://localhost:51737/mcp` (published package)
+- REST API: `http://127.0.0.1:3001/api` (from source) / `http://127.0.0.1:51737/api` (published package)
+- MCP endpoint (streamable HTTP): `http://127.0.0.1:3001/mcp` (from source) / `http://127.0.0.1:51737/mcp` (published package)
 - Run `npx ntl` for an interactive, described list of all scripts.
 
 ## Commands
