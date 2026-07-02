@@ -4,8 +4,9 @@ import { buildOpenApiDocument, mountRoutes } from '../../../../src/diplomat/http
 import { buildRouteDefinitions } from '../../../../src/diplomat/http/routes.js';
 
 // Route handlers are never invoked in this test — buildRouteDefinitions only needs `deps` to
-// close over it inside handler bodies. The stub proves that building the array and the OpenAPI
-// document from it requires no I/O, no controllers, and no live Fastify instance.
+// close over it inside handler bodies (routes.ts still imports controllers at module load,
+// same as always; this stub just never calls them). The point being proved is that building
+// the array and the OpenAPI document from it requires no I/O and no live Fastify instance.
 const stubDeps = {} as unknown as Deps;
 
 const HTTP_METHODS = ['get', 'post', 'patch', 'delete'] as const;
