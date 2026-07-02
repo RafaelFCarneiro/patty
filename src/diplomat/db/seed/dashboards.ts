@@ -12,7 +12,7 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FinTrack — Overview</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script defer referrerpolicy="no-referrer" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <style>
       :root {
         color-scheme: dark;
@@ -319,6 +319,18 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
         var charts = {};
         var period = currentPeriod();
 
+        // "Latest request wins" guard: rapid period changes / refresh clicks can resolve out of
+        // order, so a stale response must never overwrite a newer one already on screen.
+        var requestSequence = { summary: 0, categorySpending: 0, accounts: 0, recurring: 0, recentTransactions: 0 };
+
+        function beginRequest(section) {
+          return ++requestSequence[section];
+        }
+
+        function isCurrentRequest(section, requestId) {
+          return requestSequence[section] === requestId;
+        }
+
         function currentPeriod() {
           var now = new Date();
           return { month: now.getMonth() + 1, year: now.getFullYear() };
@@ -430,9 +442,11 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
 
         function loadSummary() {
           var container = document.getElementById('summary-cards');
+          var requestId = beginRequest('summary');
           setLoading(container, 'Loading summary…');
           fetchJson(Api.summary(period.month, period.year))
             .then(function (data) {
+              if (!isCurrentRequest('summary', requestId)) return;
               if (!data.currencies || data.currencies.length === 0) {
                 setEmpty(container, 'No transactions for this period yet.');
                 return;
@@ -443,6 +457,7 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
               });
             })
             .catch(function (err) {
+              if (!isCurrentRequest('summary', requestId)) return;
               setError(container, err.message);
             });
         }
@@ -463,13 +478,15 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
 
         function loadCategorySpending() {
           var container = document.getElementById('category-spending-blocks');
+          var requestId = beginRequest('categorySpending');
           setLoading(container, 'Loading spending by category…');
-          Object.keys(charts).forEach(function (key) {
-            charts[key].destroy();
-            delete charts[key];
-          });
           fetchJson(Api.categorySpending(period.month, period.year))
             .then(function (data) {
+              if (!isCurrentRequest('categorySpending', requestId)) return;
+              Object.keys(charts).forEach(function (key) {
+                charts[key].destroy();
+                delete charts[key];
+              });
               var blocksWithRows = (data.currencies || []).filter(function (block) {
                 return block.rows.length > 0;
               });
@@ -511,6 +528,7 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
               });
             })
             .catch(function (err) {
+              if (!isCurrentRequest('categorySpending', requestId)) return;
               setError(container, err.message);
             });
         }
@@ -538,9 +556,11 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
 
         function loadAccounts() {
           var container = document.getElementById('accounts-table-wrap');
+          var requestId = beginRequest('accounts');
           setLoading(container, 'Loading accounts…');
           fetchJson(Api.accountBalances)
             .then(function (accounts) {
+              if (!isCurrentRequest('accounts', requestId)) return;
               if (!accounts.length) {
                 setEmpty(container, 'No accounts yet.');
                 return;
@@ -549,6 +569,7 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
               container.appendChild(renderAccountsTable(accounts));
             })
             .catch(function (err) {
+              if (!isCurrentRequest('accounts', requestId)) return;
               setError(container, err.message);
             });
         }
@@ -575,9 +596,11 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
 
         function loadRecurring() {
           var container = document.getElementById('recurring-table-wrap');
+          var requestId = beginRequest('recurring');
           setLoading(container, 'Loading recurring rules…');
           fetchJson(Api.recurring)
             .then(function (rules) {
+              if (!isCurrentRequest('recurring', requestId)) return;
               if (!rules.length) {
                 setEmpty(container, 'No recurring rules set up yet.');
                 return;
@@ -586,6 +609,7 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
               container.appendChild(renderRecurringTable(rules));
             })
             .catch(function (err) {
+              if (!isCurrentRequest('recurring', requestId)) return;
               setError(container, err.message);
             });
         }
@@ -613,9 +637,11 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
 
         function loadRecentTransactions() {
           var container = document.getElementById('recent-transactions-table-wrap');
+          var requestId = beginRequest('recentTransactions');
           setLoading(container, 'Loading recent transactions…');
           fetchJson(Api.recentTransactions(RECENT_TRANSACTIONS_LIMIT))
             .then(function (transactions) {
+              if (!isCurrentRequest('recentTransactions', requestId)) return;
               if (!transactions.length) {
                 setEmpty(container, 'No transactions recorded yet.');
                 return;
@@ -624,6 +650,7 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
               container.appendChild(renderTransactionsTable(transactions));
             })
             .catch(function (err) {
+              if (!isCurrentRequest('recentTransactions', requestId)) return;
               setError(container, err.message);
             });
         }
