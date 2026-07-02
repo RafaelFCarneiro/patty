@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
+import type { AddressInfo } from 'node:net';
 import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps } from './controllers/deps.js';
@@ -130,9 +131,11 @@ const main = async (): Promise<void> => {
   process.on('SIGTERM', shutdown);
 
   await app.listen({ port: config.PORT, host: LOOPBACK_HOST });
+  // config.PORT may be 0 (OS-assigned); read back the address actually bound for the banner.
+  const boundPort = (app.server.address() as AddressInfo).port;
   // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe (ADR-007 restricts stdio only)
   console.log(
-    `fintrack: REST http://${LOOPBACK_HOST}:${config.PORT}/api` + ` · MCP http://${LOOPBACK_HOST}:${config.PORT}/mcp`,
+    `fintrack: REST http://${LOOPBACK_HOST}:${boundPort}/api` + ` · MCP http://${LOOPBACK_HOST}:${boundPort}/mcp`,
   );
 };
 
