@@ -8,3 +8,6 @@ export const StatusOut = z.object({
   locale: Locale,
 });
 export type StatusOut = z.infer<typeof StatusOut>;
+
+export const HealthOut = z.object({ status: z.literal('ok') });
+export type HealthOut = z.infer<typeof HealthOut>;
