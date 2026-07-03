@@ -34,7 +34,7 @@ the save endpoint won't catch a violation for you.
      (+ `type` filter), accounts list.
    - **Projection** [`projection`] (where will I land at end of month, counting pending/scheduled) →
      `get_account_balances` with `projectedAsOf`, pending transactions via `search_transactions`
-     (`status: pending`).
+     (`status: "pending"`).
    - **Committed / recurring obligations** [`recurring-obligations`] (subscriptions, fixed bills, what's due
      next) → recurring list; card bills via the bills endpoints (status, due dates).
    - **Credit card view** [`credit-card-view`] (current fatura, per-card spend) → bills +
@@ -68,7 +68,8 @@ the save endpoint won't catch a violation for you.
    - `currencies`: ISO codes (`BRL`, `USD`).
    The manifest has exactly these three keys — `perspectives`, `range`, `currencies` — and no others. Ad-hoc
    context ("user tracks X separately") does not go in the manifest — keep it in conversation instead.
-   (`get_preferences` stores only the locale today; the manifest is where per-dashboard view choices live.)
+   (`get_preferences` returns only `{ locale, localeSource }` today, no dashboard-view state; the manifest
+   is where per-dashboard view choices live.)
 6. **Save it**: call `save_dashboard(name, html)`. If it's rejected (`validation`, 422), the message names
    the render-ability problem (missing `<html>` root, or a script syntax error) — fix it and resave; the
    previously stored dashboard is untouched by a rejected save.
