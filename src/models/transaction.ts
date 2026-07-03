@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { BillQuerySchema } from './bill.js';
-import { CategoryFieldsSchema, LocalizedNamesSchema } from './category.js';
+import { LocalizedNamesSchema } from './category.js';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
@@ -138,6 +138,17 @@ export type TransactionPatch = {
 // ─── Input contracts ──────────────────────────────────────────
 // Zod-first, types inferred. Wire derives from these (re-export / extend).
 
+/**
+ * A category-or-subcategory-by-name selection — how a transaction create/update/search request
+ * references a category. Embedded (not the category/sub-category entities themselves, which live
+ * in models/category.ts).
+ */
+export const CategoryFieldsSchema = z.object({
+  category: z.string().optional().describe('Category name'),
+  subCategory: z.string().optional().describe('Sub-category name (implies its parent category)'),
+});
+export type CategoryFields = z.infer<typeof CategoryFieldsSchema>;
+
 /** Natural input accepted by controllers: names instead of ids. */
 export const CreateTransactionSchema = z.object({
   description: z.string().min(1).describe('What was paid/received, e.g. "Uber para o aeroporto"'),
@@ -255,6 +266,14 @@ export const SearchTransactionsSchema = z.object({
 export type SearchTransactions = z.infer<typeof SearchTransactionsSchema>;
 
 // ─── Domain result types ──────────────────────────────────────────
+
+/** A CategoryFields name resolved to ids — categoryId is always the top-level category's id. */
+export const CategorySelectionSchema = z.object({
+  categoryId: Id.describe("Resolved category id (the sub-category's parent id, when a sub-category was resolved)"),
+  categoryName: z.string().min(1).describe('Resolved category display name'),
+  subCategoryId: Id.optional().describe('Resolved sub-category id, present only when a sub-category was selected'),
+});
+export type CategorySelection = z.infer<typeof CategorySelectionSchema>;
 
 /** Classification enriched with resolved category/merchant — returned alongside every transaction write. */
 export type ClassifyOutcome = Classification & {

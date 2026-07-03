@@ -30,10 +30,11 @@ import {
   toBulkItemResult,
   withBillId,
 } from '../logic/transaction.js';
-import type { CategoryFields, CategorySelection } from '../models/category.js';
 import { TransactionStatus } from '../models/transaction.js';
 import {
   transactionErrors,
+  type CategoryFields,
+  type CategorySelection,
   type CreateTransaction,
   type CreateTransactionResult,
   type CreateTransactionsBulk,

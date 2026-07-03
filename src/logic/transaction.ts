@@ -6,6 +6,7 @@ import { CurrencyCode } from '../models/money.js';
 import type { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
 import type {
+  CategoryFields,
   Classification,
   ClassifyOutcome,
   CreateTransaction,
@@ -15,7 +16,7 @@ import type {
 } from '../models/transaction.js';
 import type { RawTransactionView } from '../models/transaction.js';
 import { transactionErrors, TransactionStatus, TransactionType, type MovementType } from '../models/transaction.js';
-import { CategoryKind, type CategoryFields } from '../models/category.js';
+import { CategoryKind } from '../models/category.js';
 import { err, ok, type Result } from 'neverthrow';
 import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
