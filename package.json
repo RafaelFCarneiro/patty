@@ -11,6 +11,8 @@
   "files": [
     "dist",
     "drizzle",
+    "skills",
+    "!skills/**/evals",
     "README.md",
     "LICENSE"
   ],

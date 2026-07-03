@@ -72,15 +72,15 @@ FinTrack supports two MCP transports, selected by the `MCP_TRANSPORT` env var (d
 
 | Value | What starts | Port needed? | REST available? |
 |-------|-------------|--------------|-----------------|
-| `stdio` (default) | Client spawns the process; JSON-RPC over stdin/stdout | **No** | No |
-| `stdio` + `FINTRACK_HTTP=true` | stdio MCP, **plus** a best-effort Fastify sidecar on `PORT` | Optional (non-fatal if taken) | Yes, if the sidecar bound |
+| `stdio` (default) | Client spawns the process; JSON-RPC over stdin/stdout, **plus** a best-effort Fastify sidecar on `PORT` (on by default) | Optional (non-fatal if taken) | Yes, unless the sidecar didn't bind |
+| `stdio` + `FINTRACK_HTTP=false` | stdio MCP only, sidecar disabled | **No** | No |
 | `http` | Fastify on `PORT` (default 51737); streamable HTTP MCP + REST | Yes (fatal if taken) | Yes |
 
-The default `stdio` mode has **no port concerns** — it can't conflict. Use it for all local MCP client configs (see `docs/mcp-clients.md`). Optionally add `FINTRACK_HTTP=true` on top of `stdio` to also start `/api` (and later `/ui`) as a **best-effort sidecar** — see the next section.
+The `stdio` transport itself has **no port concerns for the MCP connection** — the client always talks to it over stdin/stdout regardless of the sidecar. The sidecar (`/api` + `/ui`) starts automatically alongside it by default, since dashboards are a core feature, not an add-on (ADR-013 Decision 7) — see the next section for its bind behavior. Set `FINTRACK_HTTP=false` to run stdio-only with nothing bound at all.
 
 ## Port configuration (HTTP mode and the sidecar)
 
-`PORT` (default `51737` for the published package — deliberately not a common Node/Fastify dev-server port like 3000/3001/8080, to minimize collisions with other software; `npm run dev` overrides this to `3001` for contributors, see `docs/architecture.md` § HTTP sidecar) is read whenever the HTTP server starts: pure `http` mode, or the `stdio` + `FINTRACK_HTTP=true` sidecar. The server binds **one fixed port** — it does not auto-pick a free port, because the client config must match.
+`PORT` (default `51737` for the published package — deliberately not a common Node/Fastify dev-server port like 3000/3001/8080, to minimize collisions with other software; `npm run dev` overrides this to `3001` for contributors, see `docs/architecture.md` § HTTP sidecar) is read whenever the HTTP server starts: pure `http` mode, or the `stdio` sidecar (on by default). The server binds **one fixed port** — it does not auto-pick a free port, because the client config must match.
 
 If you run several servers in HTTP mode, give each its own port:
 
@@ -92,7 +92,7 @@ MCP_TRANSPORT=http PORT=3007 npx @rafaelfcarneiro/fintrack
 **Bind-failure behavior differs by mode, by design (ADR-013 Decision 7):**
 
 - **Pure `http` mode:** if the chosen port is already taken, startup fails fast with an actionable message (the port number and the exact `PORT=… fintrack` command to retry) rather than a raw `EADDRINUSE` stack trace, and the process exits — there's nothing else running to fall back to.
-- **`stdio` + `FINTRACK_HTTP=true` sidecar:** the same conflict is **non-fatal**. The sidecar logs the same kind of actionable message to stderr and simply doesn't start; the stdio MCP connection keeps working, so the client can diagnose/free the port and you restart with the sidecar enabled again.
+- **`stdio` sidecar (on by default):** the same conflict is **non-fatal** — this is a resilience fallback, not the normal state. The sidecar logs the same kind of actionable message to stderr and simply doesn't start; the stdio MCP connection keeps working, so the client can diagnose/free the port and you restart once it's free again.
 
 How this lands in each HTTP-mode client:
 

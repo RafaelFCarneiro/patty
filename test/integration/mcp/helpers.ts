@@ -13,6 +13,25 @@ export function ensure(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+/** Polls an accumulating stderr buffer until it matches `pattern` — used by tests spawning
+ *  `main.ts` as a subprocess to await a sidecar startup/failure message written asynchronously.
+ *  Resets `pattern.lastIndex` on every poll iteration, immediately before that iteration's single
+ *  `.test()` call: a `g`/`y`-flagged regex is stateful across `.test()` calls, and since the
+ *  buffer only grows, reusing `lastIndex` from a prior (failed) call could skip past a match
+ *  that's already in the buffer, causing a false-negative timeout. */
+export const waitForStderr = async (getStderr: () => string, pattern: RegExp, timeoutMs = 10_000): Promise<void> => {
+  const start = Date.now();
+  for (;;) {
+    const buffer = getStderr();
+    pattern.lastIndex = 0;
+    if (pattern.test(buffer)) return;
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`Timed out waiting for stderr to match ${pattern}. Received so far: ${buffer}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+};
+
 export const makeClient = () => {
   const client = new Client({ name: 'fintrack-vitest-integration', version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(new URL(mcpUrl));

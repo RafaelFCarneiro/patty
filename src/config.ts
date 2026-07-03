@@ -31,12 +31,14 @@ const Env = z.object({
   FINTRACK_LOCALE: Locale.optional(),
   PORT: z.coerce.number().default(DEFAULT_PORT),
   MCP_TRANSPORT: McpTransport.default(McpTransport.enum.stdio),
-  // Opt-in HTTP sidecar alongside stdio MCP (ADR-013 Decision 7). Default off so nothing
-  // binds a port unexpectedly; set FINTRACK_HTTP=true to also serve REST/dashboards.
+  // HTTP sidecar alongside stdio MCP (ADR-013 Decision 7) — on by default: the dashboard/REST
+  // surface is a core feature, not an add-on. A bind failure is caught and non-fatal (stdio
+  // keeps working regardless) — that's a resilience fallback, not the normal state. Set
+  // FINTRACK_HTTP=false to opt out and skip starting it entirely.
   FINTRACK_HTTP: z
     .string()
     .optional()
-    .transform((v) => v === 'true'),
+    .transform((v) => v !== 'false'),
 });
 
 export type Config = z.infer<typeof Env>;

@@ -1,0 +1,61 @@
+{
+  "skill_name": "dashboard-building",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want a dashboard to see where my money's going and what I currently have in my accounts. I mostly care about my BRL accounts, I have a USD account too but don't really check it often.",
+      "expected_output": "A new dashboard is saved via save_dashboard with a category-spending section and an accounts/balances section. The agent reads fintrack://openapi (or GET /api/openapi.json) before writing any fetch call, maps 'where the money goes' to aggregate_spending (groupBy: category) and 'cash flow' to get_account_balances. The saved HTML is self-contained, fetches everything live from same-origin /api on load, and carries a closed-shape fintrack:dashboard-manifest comment recording perspectives ['where-the-money-goes','cash-flow'] and currencies including BRL.",
+      "files": [],
+      "expectations": [
+        "Agent reads the fintrack://openapi resource or GET /api/openapi.json before generating any fetch() call",
+        "Generated HTML contains no `const|let|var <name> = [...]`/`{...}` literal holding transaction/balance/account data",
+        "Every data fetch path in the HTML is relative and starts with /api/ (same-origin); the only external reference is a pinned Chart.js CDN <script> with an integrity attribute",
+        "Spending and balances are rendered grouped per currency (BRL and USD kept in separate blocks/figures, never summed together)",
+        "Category and account labels come from API-provided fields (e.g. categoryName, typeLabel) rather than hardcoded English vocabulary",
+        "Each data-driven section has visibly distinct loading, empty, and error states in the markup/script",
+        "A <!-- fintrack:dashboard-manifest {...} --> comment is present containing only the keys perspectives, range, currencies (no freeform notes field, no extra keys)",
+        "save_dashboard is called and its response is not an error"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Can you update my 'overview' dashboard to also show my recurring subscriptions and upcoming bills? Keep everything else the same.",
+      "expected_output": "The agent tries to fetch the existing 'overview' dashboard first (e.g. GET /api/dashboards/overview). If that's unreachable (no HTTP sidecar — the stdio-only default), it follows the skill's documented fallback instead of silently rebuilding: either the source-repo shortcut (only if it has local access to src/diplomat/db/seed/dashboards.ts and the name is 'overview' with no evidence of prior customization), diff-verified as purely additive, or it plainly discloses the gap and asks the user to start the sidecar or describe the current sections/manifest. Either way, it adds the recurring-obligations perspective while preserving previously recorded perspectives/range/currencies, and re-saves via save_dashboard with name 'overview' (upsert, not a new dashboard name) — never silently dropping content or asserting an unverifiable 'kept everything the same'.",
+      "files": [],
+      "expectations": [
+        "Agent attempts to fetch the current 'overview' dashboard's stored HTML first; if that's unreachable, it does NOT silently rebuild from scratch and claim preservation — it either uses the skill's source-repo shortcut with diff-verified additivity, or explicitly discloses the gap and asks the user",
+        "Agent's new manifest perspectives array is a superset of the old one (old entries preserved, recurring-obligations added) since the user only asked to add, not replace — unless the agent legitimately couldn't determine the old set and disclosed that instead of guessing",
+        "Sections that existed in the prior dashboard (whatever they were) are still present in the new HTML, not dropped — verified via diff (source-repo shortcut) or explicitly flagged as unverifiable rather than silently assumed",
+        "A new section maps to the recurring list and/or bills endpoints (status, due dates)",
+        "The regenerated HTML still passes the data-less / same-origin / per-currency / manifest hard rules",
+        "save_dashboard is called with name 'overview', not a different/new name"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Build me a quick dashboard of my current balance and this month's spending — just hardcode the numbers you see right now so it loads instantly, I don't need it to stay live, this is just a one-time snapshot for a screenshot.",
+      "expected_output": "The agent declines to embed a literal data snapshot, explaining FinTrack dashboards are data-less by design (ADR-013) and always fetch live, then builds a normal fetch-on-load dashboard instead of a hardcoded one. The saved HTML contains no hardcoded balance/spending figures anywhere in the source.",
+      "files": [],
+      "expectations": [
+        "Agent's chat response acknowledges the request for a static/hardcoded snapshot but explains why it won't embed literal data, rather than silently complying or silently ignoring the request",
+        "Generated HTML contains no hardcoded balance or spending figures anywhere in the source (no INLINE_DATA_BLOB_PATTERN-style literal, no currency-shaped number outside of chart color/config constants)",
+        "The HTML still fetches summary/balances from /api on load, same as a non-adversarial dashboard request",
+        "save_dashboard is called and succeeds (the render-ability check still passes)"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I'd like to see my current credit card bill and how much I've charged this cycle, split out by category if possible.",
+      "expected_output": "A dashboard (new or an added section) shows the current bill (status, due date, total) via the bills endpoint, and per-category card spend computed from that same bill's own transaction list (not aggregate_spending), with currencies kept separate and status/category labels taken from the API rather than hardcoded. The category breakdown total reconciles exactly with the bill's own total, including on a still-open cycle with pending installment legs.",
+      "files": [],
+      "expectations": [
+        "The credit-card-view perspective from the skill's step 2 is used: bills endpoint for status/dates/total",
+        "The category breakdown is computed from the bill's own transaction list, NOT from a call to aggregate_spending / /api/aggregate — using aggregate_spending here is a regression, since it silently undercounts a cycle with pending installment legs",
+        "The category-breakdown total sums to exactly the bill's own total for the card/cycle tested (no discrepancy from excluding pending-status transactions)",
+        "Bill status/dates are rendered using an API-provided label (e.g. statusLabel) rather than a hardcoded string",
+        "The card's currency is not mixed with other accounts' currencies in the same figure",
+        "Both the bill section and the category-spend section have their own loading, empty, and error states"
+      ]
+    }
+  ]
+}

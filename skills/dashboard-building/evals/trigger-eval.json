@@ -1,0 +1,63 @@
+[
+  { "query": "can you build me a dashboard for my spending this year, something with charts", "should_trigger": true },
+  {
+    "query": "I want a visual overview of my finances, something I can just open in the browser instead of asking you every time",
+    "should_trigger": true
+  },
+  { "query": "show me my accounts and balances in some kind of page, not just chat text", "should_trigger": true },
+  {
+    "query": "meu chefe perguntou quanto eu gastei esse mes, queria montar uma telinha pra acompanhar isso todo dia",
+    "should_trigger": true
+  },
+  {
+    "query": "can you make me a page where I can see my credit card bill each month without having to ask you every time",
+    "should_trigger": true
+  },
+  {
+    "query": "update the /ui/overview page to also show my recurring bills, right now it only has spending and balances",
+    "should_trigger": true
+  },
+  {
+    "query": "I keep asking you for my spending breakdown every week, is there a way to just have a live view of it instead",
+    "should_trigger": true
+  },
+  {
+    "query": "build a simple ui to track my BRL vs USD spending side by side, ideally with a chart",
+    "should_trigger": true
+  },
+  {
+    "query": "regenerate my finance dashboard, it's showing stale category names since I renamed a couple last week",
+    "should_trigger": true
+  },
+  {
+    "query": "can you set up something like a home screen for my money that updates whenever I open it",
+    "should_trigger": true
+  },
+  { "query": "what's my current checking account balance", "should_trigger": false },
+  {
+    "query": "can you show me a quick breakdown of my spending by category for June, just tell me here in chat",
+    "should_trigger": false
+  },
+  {
+    "query": "can you build me a React dashboard for my company's internal analytics tool, it needs to hit our internal REST API",
+    "should_trigger": false
+  },
+  { "query": "I want to export a spreadsheet of all my transactions from this year", "should_trigger": false },
+  {
+    "query": "set up a recurring rule for my Netflix subscription, it's $15.99 on the 3rd of every month",
+    "should_trigger": false
+  },
+  {
+    "query": "can you add a new column to the dashboards table in the schema, I want to store a thumbnail preview",
+    "should_trigger": false
+  },
+  {
+    "query": "how do I connect FinTrack to Claude Desktop, I keep getting a connection error",
+    "should_trigger": false
+  },
+  { "query": "what does the aggregate_spending tool return when I group by month", "should_trigger": false },
+  {
+    "query": "plot my spending trend for the last 6 months right here so I can see it without leaving the chat",
+    "should_trigger": false
+  }
+]
