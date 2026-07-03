@@ -8,6 +8,7 @@ import {
   sqliteTable,
   text,
   uniqueIndex,
+  type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { Locale, LocaleSource } from '../../models/locale.js';
@@ -94,6 +95,7 @@ export const bills = sqliteTable(
     closeDate: text('close_date').notNull(),
     dueDate: text('due_date').notNull(),
     status: text('status', { enum: ['open', 'closed', 'paid'] }).notNull(),
+    paymentTransactionId: text('payment_transaction_id').references((): AnySQLiteColumn => transactions.id),
   },
   (t) => [uniqueIndex('bills_card_month_year').on(t.creditCardId, t.month, t.year)],
 );

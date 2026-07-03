@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, callToolError, makeClient } from './helpers.js';
+import { callTool, callToolError, ensure, makeClient } from './helpers.js';
 
 describe('MCP integration > bill payment (Design 003)', () => {
   const now = new Date();
@@ -281,6 +281,304 @@ describe('MCP integration > bill payment (Design 003)', () => {
         args: { account: delBank },
       })) as Array<{ balance?: number }>;
       expect(balances[0]?.balance).toBe(2000); // back to initial
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('get_bill returns the correct total across multiple transactions', async () => {
+    const multiCardName = `Multi Bill Card ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: multiCardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      });
+
+      await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Multi purchase A ${stamp}`,
+          amount: 120,
+          type: 'expense',
+          date: today,
+          card: multiCardName,
+          idempotencyKey: `multi-a-${stamp}`,
+        },
+      });
+      await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Multi purchase B ${stamp}`,
+          amount: 80,
+          type: 'expense',
+          date: today,
+          card: multiCardName,
+          idempotencyKey: `multi-b-${stamp}`,
+        },
+      });
+      // A refund/credit on the card reduces the total.
+      await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Multi refund ${stamp}`,
+          amount: 20,
+          type: 'income',
+          date: today,
+          card: multiCardName,
+          idempotencyKey: `multi-refund-${stamp}`,
+        },
+      });
+
+      const bill = (await callTool(client, {
+        name: 'get_bill',
+        args: { card: multiCardName, month, year },
+      })) as { total?: number };
+      expect(bill.total).toBe(180); // 120 + 80 - 20
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('revert_bill_payment undoes a payment: bill closes, transfer is gone, balances restored', async () => {
+    const revertCardName = `Revert Card ${stamp}`;
+    const revertBankName = `Revert Bank ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: revertBankName, type: 'checking', currency: 'BRL', initialBalance: 1000 },
+      });
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: revertCardName, closingDay: 28, dueDay: 5, currency: 'BRL', paymentAccount: revertBankName },
+      });
+      await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Revert purchase ${stamp}`,
+          amount: 200,
+          type: 'expense',
+          date: today,
+          card: revertCardName,
+          idempotencyKey: `revert-purchase-${stamp}`,
+        },
+      });
+
+      const paid = (await callTool(client, {
+        name: 'pay_bill',
+        args: { card: revertCardName, month, year },
+      })) as { status?: string; paymentTransactionId?: string };
+      expect(paid.status).toBe('paid');
+      expect(paid.paymentTransactionId).toBeTruthy();
+
+      const reverted = (await callTool(client, {
+        name: 'revert_bill_payment',
+        args: { card: revertCardName, month, year },
+      })) as { status?: string; paymentTransactionId?: string };
+      expect(reverted.status).toBe('closed');
+      expect(reverted.paymentTransactionId).toBeFalsy();
+
+      // The transfer no longer exists.
+      const afterRevert = (await callTool(client, {
+        name: 'search_transactions',
+        args: { text: `Bill payment: ${revertCardName}`, limit: 10 },
+      })) as Array<{ id?: string }>;
+      expect(afterRevert.length).toBe(0);
+
+      // Balances restored to pre-pay values.
+      const balances = (await callTool(client, {
+        name: 'get_account_balances',
+        args: { account: revertBankName },
+      })) as Array<{ balance?: number }>;
+      expect(balances[0]?.balance).toBe(1000);
+      const cardBalances = (await callTool(client, {
+        name: 'get_account_balances',
+        args: { account: `Card: ${revertCardName}` },
+      })) as Array<{ balance?: number }>;
+      expect(cardBalances[0]?.balance).toBe(-200);
+
+      // Paying again after a revert succeeds (idempotency key was freed by the delete).
+      const paidAgain = (await callTool(client, {
+        name: 'pay_bill',
+        args: { card: revertCardName, month, year },
+      })) as { status?: string };
+      expect(paidAgain.status).toBe('paid');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('revert_bill_payment on a paid bill with no transfer (non-positive total) flips it back, no error', async () => {
+    const creditBillCardName = `Credit Bill Card ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: creditBillCardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      });
+      // An income (refund/credit) on the card with no offsetting expense makes the bill total <= 0,
+      // so pay_bill marks it paid with no transfer (Design 003's non-positive-total branch).
+      await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Credit bill refund ${stamp}`,
+          amount: 30,
+          type: 'income',
+          date: today,
+          card: creditBillCardName,
+          idempotencyKey: `credit-bill-refund-${stamp}`,
+        },
+      });
+
+      const paid = (await callTool(client, {
+        name: 'pay_bill',
+        args: { card: creditBillCardName, month, year },
+      })) as { status?: string; paymentTransactionId?: string };
+      expect(paid.status).toBe('paid');
+      expect(paid.paymentTransactionId).toBeFalsy();
+
+      const reverted = (await callTool(client, {
+        name: 'revert_bill_payment',
+        args: { card: creditBillCardName, month, year },
+      })) as { status?: string; paymentTransactionId?: string };
+      expect(reverted.status).toBe('closed');
+      expect(reverted.paymentTransactionId).toBeFalsy();
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('revert_bill_payment on a bill that was never paid is a no-op success', async () => {
+    const noopCardName = `Noop Revert Card ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: noopCardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      });
+      await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Noop purchase ${stamp}`,
+          amount: 30,
+          type: 'expense',
+          date: today,
+          card: noopCardName,
+          idempotencyKey: `noop-purchase-${stamp}`,
+        },
+      });
+
+      const reverted = (await callTool(client, {
+        name: 'revert_bill_payment',
+        args: { card: noopCardName, month, year },
+      })) as { status?: string };
+      expect(reverted.status).toBe('open');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('delete_transaction rejects a bill payment transfer, hinting at revert_bill_payment', async () => {
+    const protectedCardName = `Protected Card ${stamp}`;
+    const protectedBankName = `Protected Bank ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: protectedBankName, type: 'checking', currency: 'BRL', initialBalance: 500 },
+      });
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: {
+          name: protectedCardName,
+          closingDay: 28,
+          dueDay: 5,
+          currency: 'BRL',
+          paymentAccount: protectedBankName,
+        },
+      });
+      await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Protected purchase ${stamp}`,
+          amount: 50,
+          type: 'expense',
+          date: today,
+          card: protectedCardName,
+          idempotencyKey: `protected-purchase-${stamp}`,
+        },
+      });
+      await callTool(client, { name: 'pay_bill', args: { card: protectedCardName, month, year } });
+
+      const bill = (await callTool(client, {
+        name: 'get_bill',
+        args: { card: protectedCardName, month, year },
+      })) as { bill?: { paymentTransactionId?: string } };
+      const paymentTransactionId = bill.bill?.paymentTransactionId;
+      ensure(paymentTransactionId, 'expected a linked payment transaction');
+
+      const err = (await callToolError(client, {
+        name: 'delete_transaction',
+        args: { id: paymentTransactionId, confirm: true },
+      })) as { error?: { code?: string; issues?: string[] } };
+      expect(err.error?.code).toBe('validation');
+      expect(err.error?.issues?.[0]).toContain('revert_bill_payment');
+
+      // It's still there, undeleted.
+      const stillThere = (await callTool(client, {
+        name: 'search_transactions',
+        args: { text: `Bill payment: ${protectedCardName}`, limit: 10 },
+      })) as Array<{ id?: string }>;
+      expect(stillThere.some((tx) => tx.id === paymentTransactionId)).toBe(true);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('delete_transaction still deletes an ordinary (non-bill) transfer', async () => {
+    const fromAcc = `Ordinary From ${stamp}`;
+    const toAcc = `Ordinary To ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: fromAcc, type: 'checking', currency: 'BRL', initialBalance: 500 },
+      });
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: toAcc, type: 'savings', currency: 'BRL', initialBalance: 0 },
+      });
+
+      const transfer = (await callTool(client, {
+        name: 'create_transfer',
+        args: { from: fromAcc, to: toAcc, amount: 100, idempotencyKey: `ordinary-transfer-${stamp}` },
+      })) as { transaction?: { id?: string } };
+      ensure(transfer.transaction?.id, 'expected a created transfer');
+
+      const deleted = (await callTool(client, {
+        name: 'delete_transaction',
+        args: { id: transfer.transaction.id, confirm: true },
+      })) as { deleted?: boolean };
+      expect(deleted.deleted).toBe(true);
     } finally {
       await transport.close();
     }

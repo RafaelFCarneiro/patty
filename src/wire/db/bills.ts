@@ -9,4 +9,5 @@ export const BillRowSchema = z.object({
   close_date: z.string(),
   due_date: z.string(),
   status: z.string(),
+  payment_transaction_id: z.string().nullable(),
 });

@@ -7,7 +7,7 @@ import type { RawTransactionView } from '../../../models/transaction.js';
 import type { BillPeriod } from '../../../logic/bill.js';
 import { BillRowSchema } from '../../../wire/db/bills.js';
 import type { Db } from '../driver.js';
-import { bills, transactions } from '../schema.js';
+import { bills, transactionTags, transactions } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
 
 const toBill = (record: Record<string, unknown>): Bill => {
@@ -19,7 +19,13 @@ const toBill = (record: Record<string, unknown>): Bill => {
     closeDate: row.close_date,
     dueDate: row.due_date,
     status: row.status,
+    paymentTransactionId: row.payment_transaction_id ?? undefined,
   });
+};
+
+const fetchBillById = async (db: Db, billId: string): Promise<Bill | null> => {
+  const [row] = await db.all<Record<string, unknown>>(sql`SELECT * FROM bills WHERE id = ${billId}`);
+  return row ? toBill(row) : null;
 };
 
 // The bill-with-card SELECT also returns the joined card name.
@@ -33,6 +39,12 @@ export type BillsRepo = {
   ensureAndAttach: (cardId: string, transactionId: string, period: BillPeriod, newId: string) => Promise<Bill>;
   get: (cardId: string, month: number, year: number) => Promise<BillWithItems | null>;
   setStatus: (billId: string, status: BillStatus) => Promise<Bill | null>;
+  /** Marks the bill paid and links its payment transfer, in one write. */
+  markPaid: (billId: string, transactionId: string) => Promise<Bill | null>;
+  /** Atomically deletes the payment transfer and flips the bill paid → closed. */
+  revertPayment: (billId: string, transactionId: string) => Promise<Bill | null>;
+  /** Finds the bill (if any) whose payment_transaction_id is this transaction — guards it against direct deletion. */
+  findByPaymentTransaction: (transactionId: string) => Promise<Bill | null>;
 };
 
 export const billsRepo = (db: Db): BillsRepo => ({
@@ -87,7 +99,35 @@ export const billsRepo = (db: Db): BillsRepo => ({
 
   setStatus: async (billId, status) => {
     await db.update(bills).set({ status }).where(eq(bills.id, billId));
-    const [row] = await db.all<Record<string, unknown>>(sql`SELECT * FROM bills WHERE id = ${billId}`);
+    return fetchBillById(db, billId);
+  },
+
+  markPaid: async (billId, transactionId) => {
+    await db
+      .update(bills)
+      .set({ status: BillStatus.enum.paid, paymentTransactionId: transactionId })
+      .where(eq(bills.id, billId));
+    return fetchBillById(db, billId);
+  },
+
+  revertPayment: async (billId, transactionId) => {
+    await db.transaction(async (tx) => {
+      // FK-safe order: clear the bill's reference to the transaction first (bills.payment_transaction_id
+      // → transactions.id would otherwise block deleting the row it still points to), then tags → transaction.
+      await tx
+        .update(bills)
+        .set({ status: BillStatus.enum.closed, paymentTransactionId: null })
+        .where(eq(bills.id, billId));
+      await tx.delete(transactionTags).where(eq(transactionTags.transactionId, transactionId));
+      await tx.delete(transactions).where(eq(transactions.id, transactionId));
+    });
+    return fetchBillById(db, billId);
+  },
+
+  findByPaymentTransaction: async (transactionId) => {
+    const [row] = await db.all<Record<string, unknown>>(
+      sql`SELECT * FROM bills WHERE payment_transaction_id = ${transactionId}`,
+    );
     return row ? toBill(row) : null;
   },
 });

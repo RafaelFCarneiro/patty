@@ -294,4 +294,10 @@ export const transactionErrors = {
     code: 'validation',
     issues: ['transfer transactions cannot have a category or sub-category'],
   } satisfies TransactionError,
+  billPaymentTransferProtected: {
+    code: 'validation',
+    issues: [
+      'this transaction is a bill payment transfer; use revert_bill_payment to undo it instead of deleting it directly',
+    ],
+  } satisfies TransactionError,
 };

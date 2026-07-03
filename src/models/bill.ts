@@ -22,6 +22,10 @@ export const BillSchema = z.object({
   dueDate: IsoDate.describe('Payment due date'),
   status: BillStatus.describe('open | closed | paid'),
   statusLabel: z.string().optional().describe('Localized status label'),
+  paymentTransactionId: Id.optional().describe(
+    'Id of the transfer transaction that paid this bill. Absent for open/closed bills, and for paid bills ' +
+      'settled with a non-positive total (no transfer was created)',
+  ),
 });
 export type Bill = z.infer<typeof BillSchema>;
 
