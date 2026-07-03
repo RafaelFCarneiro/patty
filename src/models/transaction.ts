@@ -169,6 +169,9 @@ export const CreateTransactionSchema = z.object({
         'Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet',
     ),
   billYear: BillQuerySchema.shape.year.optional().describe('Explicit target bill cycle year; provide with billMonth'),
+  // Spread first so a future CategoryFieldsSchema field is picked up here automatically; the
+  // explicit category/subCategory below override just the .describe() for this create context.
+  ...CategoryFieldsSchema.shape,
   category: CategoryFieldsSchema.shape.category.describe(
     'Category name; omit to auto-classify. Must match transaction type kind',
   ),
@@ -231,6 +234,7 @@ export const UpdateTransactionSchema = z.object({
   billYear: BillQuerySchema.shape.year
     .optional()
     .describe('Reassignment target bill cycle year; provide with billMonth'),
+  ...CategoryFieldsSchema.shape,
   category: CategoryFieldsSchema.shape.category.describe(
     'New category name (user correction). Do not set with subCategory',
   ),
@@ -256,6 +260,7 @@ export const SearchTransactionsSchema = z.object({
   to: IsoDate.optional().describe('End date (inclusive)'),
   type: TransactionType.optional().describe('Filter by type (expense/income/transfer)'),
   status: TransactionStatus.optional().describe('"pending" to list scheduled transactions; omit for all'),
+  ...CategoryFieldsSchema.shape,
   category: CategoryFieldsSchema.shape.category.describe('Filter by category name'),
   subCategory: CategoryFieldsSchema.shape.subCategory.describe('Filter to transactions with this sub-category'),
   account: z.string().optional().describe('Filter by account name'),
