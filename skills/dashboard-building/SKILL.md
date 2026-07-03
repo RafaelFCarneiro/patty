@@ -57,13 +57,17 @@ the save endpoint won't catch a violation for you.
    put a design-manifest comment at the top of the HTML. The manifest is **closed-shape only — no freeform
    text fields**, so it structurally cannot carry financial data:
    `<!-- fintrack:dashboard-manifest {"perspectives":["expense-income-by-month","cash-flow"],"range":"last-6-months","currencies":["BRL"]} -->`
+
+   For a custom period, `range` takes the object form instead of a token — same key, not an extra one:
+   `"range":{"from":"2026-01-01","to":"2026-06-30"}` (`YYYY-MM-DD`, matching FinTrack's date convention).
+
    - `perspectives`: array of tokens from the fixed list in step 2 — `expense-income-by-month`,
      `where-the-money-goes`, `cash-flow`, `projection`, `recurring-obligations`, `credit-card-view`.
-   - `range`: one token — `current-month`, `last-3-months`, `last-6-months`, `last-12-months`,
-     `year-to-date` — or explicit `"from"`/`"to"` `YYYY-MM-DD` dates.
+   - `range`: either one token — `current-month`, `last-3-months`, `last-6-months`, `last-12-months`,
+     `year-to-date` — or the `{"from", "to"}` object above. Never both on the same manifest.
    - `currencies`: ISO codes (`BRL`, `USD`).
-   Do NOT add other keys or any freeform value. Ad-hoc context ("user tracks X separately") does not go in
-   the manifest — keep it in conversation instead.
+   The manifest has exactly these three keys — `perspectives`, `range`, `currencies` — and no others. Ad-hoc
+   context ("user tracks X separately") does not go in the manifest — keep it in conversation instead.
    (`get_preferences` stores only the locale today; the manifest is where per-dashboard view choices live.)
 6. **Save it**: call `save_dashboard(name, html)`. If it's rejected (`validation`, 422), the message names
    the render-ability problem (missing `<html>` root, or a script syntax error) — fix it and resave; the
