@@ -1,6 +1,7 @@
 /** Pure fatura-cycle math: which bill a card transaction belongs to. */
 
 import { purry } from 'remeda';
+import * as R from 'remeda';
 import { localizeBillStatus } from './localize.js';
 import { BillStatus, type Bill } from '../models/bill.js';
 import type { Locale } from '../models/locale.js';
@@ -37,13 +38,15 @@ const periodFor = (month: number, year: number, closingDay: number, dueDay: numb
   };
 };
 
+/** Signed contribution to a bill's total: expenses add, income (refunds/credits) subtracts, transfers don't count. */
+const signedBillAmount = (t: Pick<TransactionView, 'type' | 'amount'>): number => {
+  if (t.type === TransactionType.enum.expense) return t.amount;
+  if (t.type === TransactionType.enum.income) return -t.amount;
+  return 0;
+};
+
 /** Bill amount due: expenses increase the total, income (refunds/credits) decrease it, transfers are excluded. */
-export const computeBillTotal = (transactions: TransactionView[]): number =>
-  transactions.reduce((acc, t) => {
-    if (t.type === TransactionType.enum.expense) return acc + t.amount;
-    if (t.type === TransactionType.enum.income) return acc - t.amount;
-    return acc;
-  }, 0);
+export const computeBillTotal = (transactions: TransactionView[]): number => R.sumBy(transactions, signedBillAmount);
 
 /**
  * Transactions on or after the closing day belong to the NEXT month's bill.

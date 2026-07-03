@@ -55,6 +55,9 @@ export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: n
 export const assertBillAssignmentHasCard = (billMonth: number | undefined, hasCard: boolean): boolean =>
   billMonth === undefined || hasCard;
 
+/** Reports a transaction's (new) bill assignment — used after create/update attaches or reassigns it. */
+export const withBillId = (tx: RawTransactionView, billId: string): RawTransactionView => ({ ...tx, billId });
+
 export const isCategoryKindAllowed = (txType: MovementType, categoryKind: CategoryKind): boolean =>
   categoryKind === CategoryKind.enum.both || categoryKind === txType;
 
