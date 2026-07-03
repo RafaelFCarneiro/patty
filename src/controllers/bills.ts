@@ -69,7 +69,7 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<Bill, AppE
 
     const today = toIsoDate(deps.clock());
 
-    await deps.transactions.create(
+    const { transaction } = await deps.transactions.create(
       {
         id: deps.newId(),
         description: `Bill payment: ${card.name} ${String(input.month).padStart(2, '0')}/${input.year}`,
@@ -87,8 +87,37 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<Bill, AppE
     );
 
     const paid = yield* okOr(
-      await deps.bills.setStatus(existing.bill.id, BillStatus.enum.paid),
+      await deps.bills.markPaid(existing.bill.id, transaction.id),
       billErrors.notFound(card.name, input.month, input.year),
     );
     return ok(paid);
+  });
+
+/**
+ * Undo a bill payment: deletes its payment transfer and flips paid → closed.
+ * Not-paid bills are a no-op (idempotent, mirrors payBill's own idempotency).
+ */
+export const revertBillPayment = (deps: Deps, input: BillQuery): ResultAsync<Bill, AppError> =>
+  safeTry(async function* () {
+    const card = yield* resolveCardRef(deps, input.card);
+    const existing = yield* okOr(
+      await deps.bills.get(card.id, input.month, input.year),
+      billErrors.notFound(card.name, input.month, input.year),
+    );
+
+    if (existing.bill.status !== BillStatus.enum.paid) return ok(existing.bill);
+
+    if (!existing.bill.paymentTransactionId) {
+      const reverted = yield* okOr(
+        await deps.bills.setStatus(existing.bill.id, BillStatus.enum.closed),
+        billErrors.notFound(card.name, input.month, input.year),
+      );
+      return ok(reverted);
+    }
+
+    const reverted = yield* okOr(
+      await deps.bills.revertPayment(existing.bill.id, existing.bill.paymentTransactionId),
+      billErrors.notFound(card.name, input.month, input.year),
+    );
+    return ok(reverted);
   });

@@ -202,3 +202,84 @@ describe('POST /api/bills/pay', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('POST /api/bills/revert', () => {
+  it('reverts a paid bill: closes it, deletes the transfer, restores balances', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'RevertBillAcc', type: 'checking', currency: 'USD', initialBalance: 1000 },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'RevertBillCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'RevertBillAcc' },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/transactions',
+      payload: {
+        description: 'Revert charge',
+        amount: 300,
+        type: 'expense',
+        date: '2026-06-05',
+        idempotencyKey: 'revert-bill-chg',
+        card: 'RevertBillCard',
+      },
+    });
+    const paid = await inject({
+      method: 'POST',
+      url: '/api/bills/pay',
+      payload: { card: 'RevertBillCard', month: 6, year: 2026, account: 'RevertBillAcc' },
+    });
+    expect(paid.json().status).toBe('paid');
+
+    const reverted = await inject({
+      method: 'POST',
+      url: '/api/bills/revert',
+      payload: { card: 'RevertBillCard', month: 6, year: 2026 },
+    });
+    expect(reverted.statusCode).toBe(200);
+    expect(reverted.json().status).toBe('closed');
+    expect(reverted.json().paymentTransactionId).toBeFalsy();
+
+    const balances = await inject({ method: 'GET', url: '/api/accounts/balances?account=RevertBillAcc' });
+    expect(balances.json()[0].balance).toBe(1000);
+  });
+
+  it('reverting a bill that is not paid is a no-op success', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'NoopRevertCard', closingDay: 10, dueDay: 20, currency: 'USD' },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/transactions',
+      payload: {
+        description: 'Noop revert charge',
+        amount: 20,
+        type: 'expense',
+        date: '2026-06-05',
+        idempotencyKey: 'noop-revert-chg',
+        card: 'NoopRevertCard',
+      },
+    });
+    const res = await inject({
+      method: 'POST',
+      url: '/api/bills/revert',
+      payload: { card: 'NoopRevertCard', month: 6, year: 2026 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('open');
+  });
+
+  it('returns 404 for unknown bill', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/bills/revert',
+      payload: { card: 'Nonexistent Revert Card', month: 1, year: 2026 },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});

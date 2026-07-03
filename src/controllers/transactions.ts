@@ -224,12 +224,18 @@ export const confirmTransaction = (deps: Deps, input: { id: string }): ResultAsy
     return ok(addLocalizedLabels(confirmed, locale));
   });
 
+/** Repo-touching precondition: true when the transaction is not a bill's payment transfer. */
+const assertNotBillPayment = async (deps: Deps, transactionId: string): Promise<boolean> =>
+  !(await deps.bills.findByPaymentTransaction(transactionId));
+
 export const deleteTransaction = (
   deps: Deps,
   input: { id: string; confirm: boolean },
 ): ResultAsync<DeleteTransactionResult, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
+
+    yield* guard(await assertNotBillPayment(deps, input.id), transactionErrors.billPaymentTransferProtected);
 
     const locale = await deps.locale();
     const labeled = addLocalizedLabels(existing, locale);
