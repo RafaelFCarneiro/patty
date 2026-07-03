@@ -15,7 +15,7 @@ import {
   updateAccount,
 } from '../../controllers/accounts.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
-import { getBill, payBill } from '../../controllers/bills.js';
+import { getBill, payBill, revertBillPayment } from '../../controllers/bills.js';
 import { getDashboard, listDashboards, saveDashboard } from '../../controllers/dashboards.js';
 import {
   createCategory,
@@ -424,6 +424,24 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
       const input = parse(PayBill, req.body, reply) as PayBillType;
       if (!input) return reply;
       return send(reply, await payBill(deps, { ...input, source: TransactionSource.enum.rest }));
+    },
+  },
+  {
+    method: 'post',
+    path: '/api/bills/revert',
+    tags: [RouteTag.bills],
+    summary: 'Revert a credit card bill payment',
+    request: { body: jsonBody(BillQuery) },
+    responses: {
+      200: okResponse('Bill payment reverted (or no-op if not paid)', BillSchema),
+      404: notFound404,
+      409: conflict409,
+      422: validation422,
+    },
+    handler: async (req, reply) => {
+      const input = parse(BillQuery, req.body, reply) as BillQueryType;
+      if (!input) return reply;
+      return send(reply, await revertBillPayment(deps, input));
     },
   },
 

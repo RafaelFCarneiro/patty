@@ -84,7 +84,10 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
 
   deleteCard: async (cardId, accountId) => {
     await db.transaction(async (tx) => {
-      // FK-safe order: tags → transactions → bills → card → account
+      // FK-safe order: clear bills' reference to their payment transfer first (bills.payment_transaction_id
+      // → transactions.id would otherwise block deleting a bill-payment row below), then tags → transactions
+      // → bills → card → account.
+      await tx.update(bills).set({ paymentTransactionId: null }).where(eq(bills.creditCardId, cardId));
       await tx.run(sql`
         DELETE FROM transaction_tags WHERE transaction_id IN (
           SELECT id FROM transactions

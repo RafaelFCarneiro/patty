@@ -38,7 +38,11 @@ Input: `card` (name), `month`, `year`. Returns the fatura: `bill` (`status: open
 
 ## pay_bill
 
-Input: `card`, `month`, `year`, optional `account` (paying account name override). Creates a **canonical transfer** (paying account → card internal account) for the full bill total, then marks the bill `paid` (ADR-010). The paying account is resolved as: explicit `account` → card's default `paymentAccount` → `validation` error. Same-currency only. Idempotent: re-calling on a paid bill is a no-op. If total ≤ 0, marks paid with no transfer. Errors: `unknown_bill`, `unknown_card`, `unknown_account`, `validation` (no payer, currency mismatch, credit payer).
+Input: `card`, `month`, `year`, optional `account` (paying account name override). Creates a **canonical transfer** (paying account → card internal account) for the full bill total, then marks the bill `paid` and links the transfer via `paymentTransactionId` (ADR-010, Design 011). The paying account is resolved as: explicit `account` → card's default `paymentAccount` → `validation` error. Same-currency only. Idempotent: re-calling on a paid bill is a no-op. If total ≤ 0, marks paid with no transfer (`paymentTransactionId` stays absent). Errors: `unknown_bill`, `unknown_card`, `unknown_account`, `validation` (no payer, currency mismatch, credit payer).
+
+## revert_bill_payment
+
+Input: `card`, `month`, `year`. Undoes a bill payment: deletes the linked payment transfer and flips the bill `paid → closed` (Design 011). Not `paid` → no-op success, returns the bill unchanged. Paid with no linked transfer (the `pay_bill` non-positive-total branch) → flips to `closed`, nothing to delete. This is the exact inverse of `pay_bill`; both are idempotent no-ops outside the `paid ⇄ closed` transition. The deleted transaction's idempotency key is freed, so paying again afterward creates a fresh transfer. REST mirror: `POST /api/bills/revert`. Errors: `unknown_bill`, `unknown_card`.
 
 ## delete_credit_card
 
@@ -77,6 +81,8 @@ Errors: `unknown_transaction`, resolution errors, `category_kind_mismatch`, `val
 Two-step destructive action. Without `confirm: true` it is a **dry run**: returns `{ deleted: false, dryRun: true, wouldDelete: {...} }` — show it to the user and ask before calling again with `confirm: true`. The transaction includes `typeLabel` and `statusLabel`.
 
 Input: `id` (required), `confirm` (default false).
+
+**A bill's payment transfer cannot be deleted this way** (Design 011): the id is rejected with a `validation` error before the dry-run flow, pointing at `revert_bill_payment`. Every other transaction — including ordinary transfers and card purchases — deletes normally.
 
 ## search_transactions
 

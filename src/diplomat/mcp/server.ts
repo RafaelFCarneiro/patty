@@ -10,7 +10,7 @@ import {
   updateAccount,
 } from '../../controllers/accounts.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
-import { getBill, payBill } from '../../controllers/bills.js';
+import { getBill, payBill, revertBillPayment } from '../../controllers/bills.js';
 import { listDashboards, saveDashboard } from '../../controllers/dashboards.js';
 import {
   createCategory,
@@ -185,6 +185,18 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: PayBillSchema.shape,
     },
     async (args) => fromResult(await payBill(deps, { ...args, source: TransactionSource.enum.mcp })),
+  );
+
+  server.registerTool(
+    'revert_bill_payment',
+    {
+      title: 'Revert credit card bill payment',
+      description:
+        'Undo a bill payment: deletes the payment transfer and flips the bill back from paid to closed. ' +
+        'Idempotent — calling on a bill that is not paid is a no-op that returns it unchanged.',
+      inputSchema: BillQuerySchema.shape,
+    },
+    async (args) => fromResult(await revertBillPayment(deps, args)),
   );
 
   server.registerTool(
