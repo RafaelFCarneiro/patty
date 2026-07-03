@@ -17,6 +17,8 @@ import {
   assertExclusiveCategorySubCategory,
   deriveIdempotencyKey,
   guardTransferMutability,
+  hasCategory,
+  hasSubCategory,
   isCategoryKindAllowed,
   needsReview,
   resolveCurrency,
@@ -298,6 +300,20 @@ describe('assertExclusiveCategorySubCategory', () => {
 
   it('fails when both are provided', () => {
     expect(assertExclusiveCategorySubCategory({ category: 'C', subCategory: 'S' })).toBe(false);
+  });
+});
+
+describe('hasCategory / hasSubCategory', () => {
+  it('hasCategory is true only when category is present', () => {
+    expect(hasCategory({ category: 'C' })).toBe(true);
+    expect(hasCategory({})).toBe(false);
+    expect(hasCategory({ subCategory: 'S' })).toBe(false);
+  });
+
+  it('hasSubCategory is true only when subCategory is present', () => {
+    expect(hasSubCategory({ subCategory: 'S' })).toBe(true);
+    expect(hasSubCategory({})).toBe(false);
+    expect(hasSubCategory({ category: 'C' })).toBe(false);
   });
 });
 

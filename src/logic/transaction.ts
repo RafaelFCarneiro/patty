@@ -47,6 +47,14 @@ export const assertExclusiveAccountCard = (input: { account?: string; card?: str
 export const assertExclusiveCategorySubCategory = (input: { category?: string; subCategory?: string }): boolean =>
   !(input.category && input.subCategory);
 
+export type CategoryFields = { category?: string; subCategory?: string };
+
+/** True when a category name was provided — a type guard, narrowing `category` to `string`. */
+export const hasCategory = R.hasProp<CategoryFields, 'category'>('category');
+
+/** True when a subCategory name was provided — a type guard, narrowing `subCategory` to `string`. */
+export const hasSubCategory = R.hasProp<CategoryFields, 'subCategory'>('subCategory');
+
 /** billMonth/billYear (bill assignment) must be provided together, or not at all. */
 export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: number }): boolean =>
   (input.billMonth === undefined) === (input.billYear === undefined);

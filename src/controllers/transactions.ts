@@ -1,4 +1,5 @@
-import { ok, safeTry, type ResultAsync } from 'neverthrow';
+import { ok, okAsync, safeTry, type ResultAsync } from 'neverthrow';
+import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
 import { assertNonCreditType } from '../logic/account.js';
@@ -20,12 +21,15 @@ import {
   defaultStatusFor,
   deriveIdempotencyKey,
   guardTransferMutability,
+  hasCategory,
+  hasSubCategory,
   isCategoryKindAllowed,
   resolveCurrency,
   resolveEffectiveType,
   summarizeBulkItems,
   toBulkItemResult,
   withBillId,
+  type CategoryFields,
 } from '../logic/transaction.js';
 import { TransactionStatus } from '../models/transaction.js';
 import {
@@ -45,38 +49,54 @@ import { resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCatego
 
 type CategorySelection = { categoryId: string; categoryName: string; subCategoryId?: string };
 
+/** Resolves a category by name, guarding kind-compatibility when the movement type is known. */
+const resolveCategory = (
+  deps: Deps,
+  category: string,
+  movementType: MovementType | undefined,
+): ResultAsync<CategorySelection, AppError> =>
+  safeTry(async function* () {
+    const cat = yield* resolveCategoryRef(deps, category);
+    if (movementType)
+      yield* guard(
+        isCategoryKindAllowed(movementType, cat.kind),
+        transactionErrors.categoryKindMismatch(movementType, cat.name, cat.kind),
+      );
+    return ok({ categoryId: cat.id, categoryName: cat.name });
+  });
+
+/** Resolves a sub-category by name, guarding kind-compatibility when the movement type is known. */
+const resolveSubCategory = (
+  deps: Deps,
+  subCategory: string,
+  movementType: MovementType | undefined,
+): ResultAsync<CategorySelection, AppError> =>
+  safeTry(async function* () {
+    const subCat = yield* resolveSubCategoryRef(deps, subCategory);
+    if (movementType)
+      yield* guard(
+        isCategoryKindAllowed(movementType, subCat.kind),
+        transactionErrors.categoryKindMismatch(movementType, subCat.name, subCat.kind),
+      );
+    return ok({ categoryId: subCat.parentId, categoryName: subCat.parentName, subCategoryId: subCat.id });
+  });
+
 /**
- * Resolves subCategory (preferred) or category by name, guarding kind-compatibility when the
- * movement type is known (always known on create; only known on update for a non-transfer).
- * Returns null when neither was provided — callers decide what "unset" means for them
- * (auto-classify on create, leave the existing category untouched on update).
+ * Dispatches to subCategory (preferred) or category resolution by whichever the caller provided.
+ * Returns null when neither was given — callers decide what "unset" means for them (auto-classify
+ * on create, leave the existing category untouched on update).
  */
 const resolveCategorySelection = (
   deps: Deps,
-  input: { category?: string; subCategory?: string },
+  input: CategoryFields,
   movementType: MovementType | undefined,
 ): ResultAsync<CategorySelection | null, AppError> =>
-  safeTry(async function* () {
-    if (input.subCategory) {
-      const subCat = yield* resolveSubCategoryRef(deps, input.subCategory);
-      if (movementType)
-        yield* guard(
-          isCategoryKindAllowed(movementType, subCat.kind),
-          transactionErrors.categoryKindMismatch(movementType, subCat.name, subCat.kind),
-        );
-      return ok({ categoryId: subCat.parentId, categoryName: subCat.parentName, subCategoryId: subCat.id });
-    }
-    if (input.category) {
-      const cat = yield* resolveCategoryRef(deps, input.category);
-      if (movementType)
-        yield* guard(
-          isCategoryKindAllowed(movementType, cat.kind),
-          transactionErrors.categoryKindMismatch(movementType, cat.name, cat.kind),
-        );
-      return ok({ categoryId: cat.id, categoryName: cat.name });
-    }
-    return ok(null);
-  });
+  R.conditional(
+    input,
+    [hasSubCategory, (i) => resolveSubCategory(deps, i.subCategory, movementType)],
+    [hasCategory, (i) => resolveCategory(deps, i.category, movementType)],
+    () => okAsync(null),
+  );
 
 /** Repo-touching precondition: true when the target bill cycle doesn't exist yet, or isn't paid. */
 const assertTargetBillNotPaid = async (deps: Deps, cardId: string, period: BillPeriod): Promise<boolean> => {
