@@ -86,6 +86,19 @@ guarantee an already-succeeded call stays magically re-runnable forever after th
 alternative (checking only when a row is genuinely new) risks leaving a real orphan transaction with no bill
 attached whenever the target turns out to be paid, which is strictly worse.
 
+### Closing the remaining race: the controller's pre-check is advisory, `ensureAndAttach` is authoritative
+
+The controller-level paid-bill check (`findByCycle` + `guard`) runs before the write for a fast, clean rejection
+in the common case, but it is a separate DB round-trip from the later `ensureAndAttach` call — under concurrent
+requests, a `pay_bill` could complete in the gap between the two, and the stale pre-check would let the write
+through. `bills.ensureAndAttach` closes this: it re-checks the bill's status **inside the same `db.transaction`**
+as the upsert-and-attach, and returns `null` (never attaches) if the bill is paid by the time it runs — the
+check-then-write is atomic at the SQL level, not just "checked early in the request." Both callers treat `null`
+as the authoritative `paidBillImmutable` rejection: `createTransaction` deletes the just-inserted transaction
+row first (preserving "no orphans" even on this rare race), `updateTransaction` simply surfaces the error — its
+other patched fields (amount, category, …) may already have committed, the same accepted partial-write risk
+category as any other multi-write controller flow in this codebase, not a new one introduced here.
+
 ## Consequences
 
 - **No schema/migration.** `transactions.bill_id` already exists (used by `ensureAndAttach` since Design 003);
@@ -138,8 +151,9 @@ attached whenever the target turns out to be paid, which is strictly worse.
      `guard(assertBillPeriodPaired(input), ...)` and `guard(assertBillAssignmentHasCard(input.billMonth,
      !!input.card), ...)`. After computing `date`/`today` and resolving `card`, if `card` is set, resolve
      `billPeriod` (explicit `billPeriodForCycle` when `billMonth`/`billYear` given, else the existing
-     `billPeriodFor(date, ...)`), look up the target bill (`deps.bills.get`), and `guard(!targetBill ||
-     !isBillPaid(targetBill.bill), transactionErrors.paidBillImmutable)` — **before** calling
+     `billPeriodFor(date, ...)`), look up the target bill via the lightweight `deps.bills.findByCycle` (not
+     `.get`, which also loads the bill's full transaction list — needless for a status check), and
+     `guard(!targetBill || !isBillPaid(targetBill), transactionErrors.paidBillImmutable)` — **before** calling
      `deps.transactions.create(...)** (see the "deliberate imprecision" note — never create an orphan row).
      After the create call, keep attaching via `ensureAndAttach` when `card && created`, and patch the response
      transaction's `billId` from the returned bill so the create response isn't stale.

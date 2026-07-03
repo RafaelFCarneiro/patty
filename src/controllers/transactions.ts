@@ -92,11 +92,11 @@ export const createTransaction = (
     let billPeriod: BillPeriod | null = null;
     if (card) {
       billPeriod =
-        input.billMonth && input.billYear
+        input.billMonth !== undefined && input.billYear !== undefined
           ? billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay)
           : billPeriodFor(date, card.closingDay, card.dueDay);
-      const targetBill = await deps.bills.get(card.id, billPeriod.month, billPeriod.year);
-      yield* guard(!targetBill || !isBillPaid(targetBill.bill), transactionErrors.paidBillImmutable);
+      const targetBill = await deps.bills.findByCycle(card.id, billPeriod.month, billPeriod.year);
+      yield* guard(!targetBill || !isBillPaid(targetBill), transactionErrors.paidBillImmutable);
     }
 
     const { transaction, created } = await deps.transactions.create(
@@ -124,10 +124,15 @@ export const createTransaction = (
       input.tags ?? [],
     );
 
-    // Card transactions join their cycle's bill (fatura), created open on demand
+    // Card transactions join their cycle's bill (fatura), created open on demand. ensureAndAttach
+    // re-checks paid status atomically (null = blocked) — closes the race where a concurrent
+    // pay_bill lands between the pre-check above and this attach. On the (rare) block, the
+    // transaction was already inserted above, so compensate by deleting it — no orphans survive.
     let finalTransaction = transaction;
     if (card && created && billPeriod) {
-      const bill = await deps.bills.ensureAndAttach(card.id, transaction.id, billPeriod, deps.newId());
+      const attached = await deps.bills.ensureAndAttach(card.id, transaction.id, billPeriod, deps.newId());
+      if (!attached) await deps.transactions.delete(transaction.id);
+      const bill = yield* okOr(attached, transactionErrors.paidBillImmutable);
       finalTransaction = { ...transaction, billId: bill.id };
     }
 
@@ -184,7 +189,7 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
     // Reassignment (billMonth/billYear given): validate up front — never leave the current or target
     // bill in a half-changed state — but perform the actual attach after the main update below.
     let reassignment: { cardId: string; period: BillPeriod } | null = null;
-    if (input.billMonth && input.billYear) {
+    if (input.billMonth !== undefined && input.billYear !== undefined) {
       const cardId = yield* okOr(existing.cardId, transactionErrors.billAssignmentRequiresCard);
       yield* guard(await assertBillNotPaid(deps, existing.billId), transactionErrors.paidBillImmutable);
 
@@ -193,8 +198,8 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
       // card that's missing, not the transaction that's present.
       const card = yield* okOr(await deps.creditCards.findById(cardId), notFound('card', cardId, []));
       const period = billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay);
-      const targetBill = await deps.bills.get(card.id, period.month, period.year);
-      yield* guard(!targetBill || !isBillPaid(targetBill.bill), transactionErrors.paidBillImmutable);
+      const targetBill = await deps.bills.findByCycle(card.id, period.month, period.year);
+      yield* guard(!targetBill || !isBillPaid(targetBill), transactionErrors.paidBillImmutable);
 
       reassignment = { cardId: card.id, period };
     }
@@ -252,10 +257,18 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
       await deps.merchants.strengthenFromTransaction(input.id, categoryId);
 
     // Reassign after the main update succeeds — a later validation failure above must never leave
-    // the bill assignment changed while the rest of the patch was rejected.
+    // the bill assignment changed while the rest of the patch was rejected. ensureAndAttach itself
+    // re-checks paid status atomically (null = blocked) — closes the race where a concurrent
+    // pay_bill lands between the pre-check above and this attach.
     let finalTransaction = updated;
     if (reassignment) {
-      const bill = await deps.bills.ensureAndAttach(reassignment.cardId, updated.id, reassignment.period, deps.newId());
+      const attached = await deps.bills.ensureAndAttach(
+        reassignment.cardId,
+        updated.id,
+        reassignment.period,
+        deps.newId(),
+      );
+      const bill = yield* okOr(attached, transactionErrors.paidBillImmutable);
       finalTransaction = { ...updated, billId: bill.id };
     }
 

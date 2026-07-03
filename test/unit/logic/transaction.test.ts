@@ -332,4 +332,12 @@ describe('assertBillAssignmentHasCard', () => {
   it('fails when billMonth is provided but no card is present', () => {
     expect(assertBillAssignmentHasCard(6, false)).toBe(false);
   });
+
+  // billMonth: 0 is out of the schema's valid range (1-12) and never reaches this predicate through
+  // the real API — but the check must use explicit undefined, not truthiness, so a 0 is correctly
+  // treated as "provided" rather than silently passing as "not provided".
+  it('treats billMonth 0 as provided, not as absent', () => {
+    expect(assertBillAssignmentHasCard(0, false)).toBe(false);
+    expect(assertBillAssignmentHasCard(0, true)).toBe(true);
+  });
 });

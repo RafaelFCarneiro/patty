@@ -4,7 +4,7 @@ import * as transactionAdapters from '../../../adapters/transactions.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import { BillSchema, BillStatus, type Bill } from '../../../models/bill.js';
 import type { RawTransactionView } from '../../../models/transaction.js';
-import type { BillPeriod } from '../../../logic/bill.js';
+import { isBillPaid, type BillPeriod } from '../../../logic/bill.js';
 import { BillRowSchema } from '../../../wire/db/bills.js';
 import type { Db } from '../driver.js';
 import { bills, transactionTags, transactions } from '../schema.js';
@@ -35,9 +35,15 @@ const cardNameOf = (record: Record<string, unknown>): string =>
 export type BillWithItems = { bill: Bill; cardName: string; transactions: RawTransactionView[] };
 
 export type BillsRepo = {
-  /** UPSERT the cycle's bill for a card (created open) and attach the transaction. */
-  ensureAndAttach: (cardId: string, transactionId: string, period: BillPeriod, newId: string) => Promise<Bill>;
+  /**
+   * UPSERT the cycle's bill for a card and attach the transaction, atomically. Refuses to attach
+   * onto a bill that is already `paid` (returns null) — the whole check-then-write is one DB
+   * transaction, so a concurrent pay_bill can't slip a transaction onto a bill mid-attach.
+   */
+  ensureAndAttach: (cardId: string, transactionId: string, period: BillPeriod, newId: string) => Promise<Bill | null>;
   get: (cardId: string, month: number, year: number) => Promise<BillWithItems | null>;
+  /** Lightweight cycle lookup (no card-name join, no transaction items) — for status checks. */
+  findByCycle: (cardId: string, month: number, year: number) => Promise<Bill | null>;
   findById: (billId: string) => Promise<Bill | null>;
   setStatus: (billId: string, status: BillStatus) => Promise<Bill | null>;
   /** Marks the bill paid and links its payment transfer, in one write. */
@@ -48,32 +54,37 @@ export type BillsRepo = {
 
 export const billsRepo = (db: Db): BillsRepo => ({
   ensureAndAttach: async (cardId, transactionId, period, newId) => {
-    await db
-      .insert(bills)
-      .values({
-        id: newId,
-        creditCardId: cardId,
-        month: period.month,
-        year: period.year,
-        closeDate: period.closeDate,
-        dueDate: period.dueDate,
-        status: BillStatus.enum.open,
-      })
-      .onConflictDoNothing({ target: [bills.creditCardId, bills.month, bills.year] });
+    return db.transaction(async (tx) => {
+      await tx
+        .insert(bills)
+        .values({
+          id: newId,
+          creditCardId: cardId,
+          month: period.month,
+          year: period.year,
+          closeDate: period.closeDate,
+          dueDate: period.dueDate,
+          status: BillStatus.enum.open,
+        })
+        .onConflictDoNothing({ target: [bills.creditCardId, bills.month, bills.year] });
 
-    // Resolve the bill id (may have been the pre-existing one)
-    const [rawBill] = await db.all<Record<string, unknown>>(sql`
-      SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${period.month} AND year = ${period.year}
-    `);
-    const bill = toBill(expectPresent(rawBill, rowNotFoundAfterWrite('bills', 'upsert')));
+      // Resolve the bill id (may have been the pre-existing one) — same transaction as the insert
+      // above and the attach below, so a concurrent pay_bill can't observe a stale "not yet paid".
+      const [rawBill] = await tx.all<Record<string, unknown>>(sql`
+        SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${period.month} AND year = ${period.year}
+      `);
+      const bill = toBill(expectPresent(rawBill, rowNotFoundAfterWrite('bills', 'upsert')));
 
-    // Link the transaction to the bill — verify the row actually existed.
-    const result = await db.update(transactions).set({ billId: bill.id }).where(eq(transactions.id, transactionId));
-    if ((result.rowsAffected ?? 0) === 0) {
-      throw new Error(`bills: transaction ${transactionId} not found, cannot attach to bill ${bill.id}`);
-    }
+      if (isBillPaid(bill)) return null;
 
-    return bill;
+      // Link the transaction to the bill — verify the row actually existed.
+      const result = await tx.update(transactions).set({ billId: bill.id }).where(eq(transactions.id, transactionId));
+      if ((result.rowsAffected ?? 0) === 0) {
+        throw new Error(`bills: transaction ${transactionId} not found, cannot attach to bill ${bill.id}`);
+      }
+
+      return bill;
+    });
   },
 
   get: async (cardId, month, year) => {
@@ -94,6 +105,13 @@ export const billsRepo = (db: Db): BillsRepo => ({
       cardName: cardNameOf(billRow),
       transactions: txRows.map(transactionAdapters.dbToModel),
     };
+  },
+
+  findByCycle: async (cardId, month, year) => {
+    const [row] = await db.all<Record<string, unknown>>(sql`
+      SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${month} AND year = ${year}
+    `);
+    return row ? toBill(row) : null;
   },
 
   findById: (billId) => fetchBillById(db, billId),
