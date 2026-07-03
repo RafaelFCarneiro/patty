@@ -58,10 +58,12 @@ the save endpoint won't catch a violation for you.
    it immediately, with no version history to recover the previous HTML. Ask before overwriting a dashboard
    the user may still want, or default to a new name.
 4. **Start from the baseline template as the structural pattern**, not necessarily its content: the seeded
-   `overview` dashboard (`GET /ui/overview`; source `src/diplomat/db/seed/dashboards.ts`) is a single
+   `overview` dashboard, viewable at `GET /ui/overview` when the HTTP sidecar is running, is a single
    self-contained HTML file with inline `<style>` + inline `<script>`, one `Api` object mapping section →
    endpoint, a per-section loading/empty/error state machine, and per-currency grouping. Reuse that shape;
-   change the sections/layout/endpoints to match what the user actually asked for.
+   change the sections/layout/endpoints to match what the user actually asked for. If you can't view it
+   (sidecar not running, or you're running from the published package with no local source to read), that's
+   fine — the hard rules and self-check below fully specify a compliant shell without it.
 5. **Record the user's preferences in the dashboard itself** so the next change doesn't re-interrogate them:
    put a design-manifest comment at the top of the HTML. The manifest is **closed-shape only — no freeform
    text fields**, so it structurally cannot carry financial data:
@@ -83,7 +85,8 @@ the save endpoint won't catch a violation for you.
    the render-ability problem (missing `<html>` root, or a script syntax error) — fix it and resave; the
    previously stored dashboard is untouched by a rejected save.
 7. **Hand back the URL**: `/ui/<name>` on whatever host/port the user's FinTrack HTTP sidecar is running on
-   (see `CLAUDE.md` HTTP sidecar section if unsure which). Tell them to open it in a browser.
+   (see the "Manual config and HTTP mode" section of the project's `README.md` — shipped with this package
+   — if unsure which). Tell them to open it in a browser.
 
 ## Hard rules (never violate these)
 
@@ -131,14 +134,18 @@ already chose.
 **If you can't fetch it** (no HTTP sidecar running — `GET /api/dashboards/:name` is REST-only, there is no
 MCP tool that reads a dashboard's HTML back — `save_dashboard` is write-only and `list_dashboards` omits
 HTML) — do not silently rebuild from scratch and tell the user you "kept everything the same"; that claim
-would be unverifiable. Instead:
-- If the name is `overview` and nothing suggests it's been customized since the seed (e.g. no evidence of a
-  prior save), treat the shipped baseline template (`src/diplomat/db/seed/dashboards.ts`) as a faithful
-  stand-in for "the original." Diff your new HTML against that source before saving, and confirm the diff is
-  purely additive (existing sections untouched, only the requested change applied) — don't just assert it.
-- Otherwise, say plainly that you can't read the dashboard's current contents back, name the reason (HTTP
-  sidecar not running / no tool exposes it), and either ask the user to start the sidecar so you can fetch
-  it, or ask what sections/manifest they currently have so nothing gets silently dropped.
+would be unverifiable. Say plainly that you can't read the dashboard's current contents back, name the
+reason (HTTP sidecar not running / no tool exposes it), and either ask the user to start the sidecar (see
+`README.md`'s HTTP-mode section) so you can fetch it, or ask what sections/manifest they currently have so
+nothing gets silently dropped. This is the default path and works regardless of how FinTrack was installed.
+
+If you happen to be working from the FinTrack source repository itself (not the published package — you
+have a local `src/` to read) *and* the name is `overview` with no evidence it's been customized since the
+seed, you may additionally treat `src/diplomat/db/seed/dashboards.ts`'s `DEFAULT_DASHBOARD_HTML` as a
+verified stand-in for "the original" instead of asking: diff your new HTML against that source before
+saving, and confirm the diff is purely additive (existing sections untouched, only the requested change
+applied) — don't just assert it. Treat this as an optional shortcut available only in that specific
+environment, not the general-purpose fallback.
 
 ## Self-check before calling save_dashboard
 

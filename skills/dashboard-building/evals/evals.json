@@ -46,10 +46,12 @@
     {
       "id": 4,
       "prompt": "I'd like to see my current credit card bill and how much I've charged this cycle, split out by category if possible.",
-      "expected_output": "A dashboard (new or an added section) shows the current bill (status, due date, total) via the bills endpoint, and per-category card spend via aggregate_spending filtered to the card's account, with currencies kept separate and status/category labels taken from the API rather than hardcoded.",
+      "expected_output": "A dashboard (new or an added section) shows the current bill (status, due date, total) via the bills endpoint, and per-category card spend computed from that same bill's own transaction list (not aggregate_spending), with currencies kept separate and status/category labels taken from the API rather than hardcoded. The category breakdown total reconciles exactly with the bill's own total, including on a still-open cycle with pending installment legs.",
       "files": [],
       "expectations": [
-        "The credit-card-view perspective from the skill's step 2 is used: bills endpoint + aggregate_spending filtered by the card's account",
+        "The credit-card-view perspective from the skill's step 2 is used: bills endpoint for status/dates/total",
+        "The category breakdown is computed from the bill's own transaction list, NOT from a call to aggregate_spending / /api/aggregate — using aggregate_spending here is a regression, since it silently undercounts a cycle with pending installment legs",
+        "The category-breakdown total sums to exactly the bill's own total for the card/cycle tested (no discrepancy from excluding pending-status transactions)",
         "Bill status/dates are rendered using an API-provided label (e.g. statusLabel) rather than a hardcoded string",
         "The card's currency is not mixed with other accounts' currencies in the same figure",
         "Both the bill section and the category-spend section have their own loading, empty, and error states"
