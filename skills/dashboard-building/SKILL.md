@@ -131,13 +131,15 @@ the user is explicitly changing them, and carry the (updated) manifest into the 
 "add a projections panel" changes one section — it should not silently lose the perspectives the user
 already chose.
 
-**If you can't fetch it** (no HTTP sidecar running — `GET /api/dashboards/:name` is REST-only, there is no
-MCP tool that reads a dashboard's HTML back — `save_dashboard` is write-only and `list_dashboards` omits
-HTML) — do not silently rebuild from scratch and tell the user you "kept everything the same"; that claim
-would be unverifiable. Say plainly that you can't read the dashboard's current contents back, name the
-reason (HTTP sidecar not running / no tool exposes it), and either ask the user to start the sidecar (see
-`README.md`'s HTTP-mode section) so you can fetch it, or ask what sections/manifest they currently have so
-nothing gets silently dropped. This is the default path and works regardless of how FinTrack was installed.
+**If you can't fetch it** — the HTTP sidecar is on by default, so this should be the exception rather than the
+norm: it happens when the sidecar was explicitly disabled (`FINTRACK_HTTP=false`) or failed to bind (e.g. the
+port was already taken). `GET /api/dashboards/:name` is REST-only, there is no MCP tool that reads a
+dashboard's HTML back (`save_dashboard` is write-only, `list_dashboards` omits HTML), so when the sidecar
+isn't reachable there's no other way to read it. Do not silently rebuild from scratch and tell the user you
+"kept everything the same"; that claim would be unverifiable. Say plainly that you can't read the dashboard's
+current contents back, name the reason (sidecar disabled or not running), and either ask the user to start it
+(see `README.md`'s HTTP-mode section) so you can fetch it, or ask what sections/manifest they currently have
+so nothing gets silently dropped. This fallback works regardless of how FinTrack was installed.
 
 If you happen to be working from the FinTrack source repository itself (not the published package — you
 have a local `src/` to read) *and* the name is `overview` with no evidence it's been customized since the
