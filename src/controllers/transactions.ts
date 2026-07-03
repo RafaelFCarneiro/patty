@@ -4,6 +4,7 @@ import { guard, okOr } from '../common/result.js';
 import { assertNonCreditType } from '../logic/account.js';
 import { accountErrors } from '../models/account.js';
 import { billPeriodFor, billPeriodForCycle, isBillPaid, type BillPeriod } from '../logic/bill.js';
+import { notFound } from '../models/error.js';
 import { pickClassification, userClassification } from '../logic/classify.js';
 import { ClassificationMethod } from '../models/transaction.js';
 import type { ClassifyOutcome } from '../models/transaction.js';
@@ -187,7 +188,10 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
       const cardId = yield* okOr(existing.cardId, transactionErrors.billAssignmentRequiresCard);
       yield* guard(await assertBillNotPaid(deps, existing.billId), transactionErrors.paidBillImmutable);
 
-      const card = yield* okOr(await deps.creditCards.findById(cardId), transactionErrors.notFound(input.id));
+      // A stale cardId here would be an internal FK inconsistency (deleting a card cascades to its
+      // transactions), not a real user-facing case — but the error, if it ever fires, should name the
+      // card that's missing, not the transaction that's present.
+      const card = yield* okOr(await deps.creditCards.findById(cardId), notFound('card', cardId, []));
       const period = billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay);
       const targetBill = await deps.bills.get(card.id, period.month, period.year);
       yield* guard(!targetBill || !isBillPaid(targetBill.bill), transactionErrors.paidBillImmutable);
