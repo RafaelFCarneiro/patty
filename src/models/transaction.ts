@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BillQuerySchema } from './bill.js';
 import { LocalizedNamesSchema } from './category.js';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
@@ -103,6 +104,8 @@ export const TransactionViewSchema = z.object({
   toAccountName: z.string().optional(),
   cardId: Id.optional(),
   cardName: z.string().optional(),
+  /** The bill (fatura) this card transaction currently belongs to — absent for account transactions. */
+  billId: Id.optional(),
   categoryId: Id.optional(),
   categoryName: z.string().optional(),
   subCategoryId: Id.optional(),
@@ -148,6 +151,13 @@ export const CreateTransactionSchema = z.object({
   date: IsoDate.optional().describe('YYYY-MM-DD; defaults to today'),
   account: z.string().optional().describe('Account name, e.g. "Nubank"'),
   card: z.string().optional().describe('Credit card name — joins the cycle bill. Use account OR card, not both'),
+  billMonth: BillQuerySchema.shape.month
+    .optional()
+    .describe(
+      'Explicit target bill cycle month (1-12) for a card transaction; overrides cycle-based auto-assignment. ' +
+        'Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet',
+    ),
+  billYear: BillQuerySchema.shape.year.optional().describe('Explicit target bill cycle year; provide with billMonth'),
   category: z.string().optional().describe('Category name; omit to auto-classify. Must match transaction type kind'),
   subCategory: z.string().optional().describe('Sub-category name (implies its parent — do not set both)'),
   currency: CurrencyCode.optional().describe('Transaction currency; resolved from account/card when omitted'),
@@ -196,6 +206,16 @@ export const UpdateTransactionSchema = z.object({
   type: MovementType.optional().describe('Updated movement type'),
   date: IsoDate.optional().describe('Updated date (YYYY-MM-DD)'),
   account: z.string().optional().describe('New account name'),
+  billMonth: BillQuerySchema.shape.month
+    .optional()
+    .describe(
+      'Reassign to this bill cycle month (1-12) — the transaction must already be a card transaction. ' +
+        'Provide with billYear together. Rejected if the current or target bill is paid; auto-creates the ' +
+        'target bill if that cycle has none yet',
+    ),
+  billYear: BillQuerySchema.shape.year
+    .optional()
+    .describe('Reassignment target bill cycle year; provide with billMonth'),
   category: z.string().optional().describe('New category name (user correction). Do not set with subCategory'),
   subCategory: z.string().optional().describe('New sub-category name (implies parent; do not set with category)'),
   note: z
@@ -294,10 +314,20 @@ export const transactionErrors = {
     code: 'validation',
     issues: ['transfer transactions cannot have a category or sub-category'],
   } satisfies TransactionError,
-  billPaymentTransferProtected: {
+  billPeriodIncomplete: {
+    code: 'validation',
+    issues: ['billMonth and billYear must be provided together'],
+  } satisfies TransactionError,
+  billAssignmentRequiresCard: {
     code: 'validation',
     issues: [
-      'this transaction is a bill payment transfer; use revert_bill_payment to undo it instead of deleting it directly',
+      'billMonth/billYear require a credit-card transaction; provide `card` (create) or the transaction must already have one (update)',
+    ],
+  } satisfies TransactionError,
+  paidBillImmutable: {
+    code: 'validation',
+    issues: [
+      'this bill is paid; its transactions cannot be added, removed, or reassigned — call revert_bill_payment first',
     ],
   } satisfies TransactionError,
 };

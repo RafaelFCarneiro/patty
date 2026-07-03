@@ -47,6 +47,14 @@ export const assertExclusiveAccountCard = (input: { account?: string; card?: str
 export const assertExclusiveCategorySubCategory = (input: { category?: string; subCategory?: string }): boolean =>
   !(input.category && input.subCategory);
 
+/** billMonth/billYear (bill assignment) must be provided together, or not at all. */
+export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: number }): boolean =>
+  (input.billMonth === undefined) === (input.billYear === undefined);
+
+/** Bill assignment only applies to card transactions. */
+export const assertBillAssignmentHasCard = (billMonth: number | undefined, hasCard: boolean): boolean =>
+  !billMonth || hasCard;
+
 export const isCategoryKindAllowed = (txType: MovementType, categoryKind: CategoryKind): boolean =>
   categoryKind === CategoryKind.enum.both || categoryKind === txType;
 

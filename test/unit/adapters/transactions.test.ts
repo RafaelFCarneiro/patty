@@ -125,6 +125,7 @@ const sqlRow = (overrides: Record<string, unknown> = {}): Record<string, unknown
   to_account_name: null,
   credit_card_id: null,
   credit_card_name: null,
+  bill_id: null,
   category_id: null,
   category_name: null,
   subcategory_id: null,
@@ -185,6 +186,12 @@ describe('dbToModel', () => {
     expect(tx.accountId).toBeUndefined();
     expect(tx.toAccountId).toBeUndefined();
     expect(tx.rawInput).toBeUndefined();
+    expect(tx.billId).toBeUndefined();
+  });
+
+  it('maps bill_id to billId when the transaction belongs to a bill', () => {
+    const tx = transactionAdapters.dbToModel(sqlRow({ bill_id: 'bill-1' }));
+    expect(tx.billId).toBe('bill-1');
   });
 
   it('round-trips a transfer with both account sides', () => {

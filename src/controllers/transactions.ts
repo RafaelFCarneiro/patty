@@ -3,7 +3,7 @@ import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
 import { assertNonCreditType } from '../logic/account.js';
 import { accountErrors } from '../models/account.js';
-import { billPeriodFor } from '../logic/bill.js';
+import { billPeriodFor, billPeriodForCycle, isBillPaid, type BillPeriod } from '../logic/bill.js';
 import { pickClassification, userClassification } from '../logic/classify.js';
 import { ClassificationMethod } from '../models/transaction.js';
 import type { ClassifyOutcome } from '../models/transaction.js';
@@ -12,6 +12,8 @@ import { periodRange, toIsoDate } from '../logic/period.js';
 import type { BulkItemResult, BulkResult } from '../logic/transaction.js';
 import {
   addLocalizedLabels,
+  assertBillAssignmentHasCard,
+  assertBillPeriodPaired,
   assertExclusiveAccountCard,
   assertExclusiveCategorySubCategory,
   defaultStatusFor,
@@ -46,6 +48,11 @@ export const createTransaction = (
   safeTry(async function* () {
     yield* guard(assertExclusiveAccountCard(input), transactionErrors.exclusiveAccountCard);
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory);
+    yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
+    yield* guard(
+      assertBillAssignmentHasCard(input.billMonth, !!input.card),
+      transactionErrors.billAssignmentRequiresCard,
+    );
 
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     if (account) {
@@ -79,6 +86,18 @@ export const createTransaction = (
     const date = input.date ?? today;
     const status = input.status ?? defaultStatusFor(date, today);
 
+    // Resolve the target bill period up front (explicit override or cycle-based auto-assignment) and
+    // reject onto a paid bill before writing the transaction — never leave an orphan, unattached row.
+    let billPeriod: BillPeriod | null = null;
+    if (card) {
+      billPeriod =
+        input.billMonth && input.billYear
+          ? billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay)
+          : billPeriodFor(date, card.closingDay, card.dueDay);
+      const targetBill = await deps.bills.get(card.id, billPeriod.month, billPeriod.year);
+      yield* guard(!targetBill || !isBillPaid(targetBill.bill), transactionErrors.paidBillImmutable);
+    }
+
     const { transaction, created } = await deps.transactions.create(
       {
         id: deps.newId(),
@@ -105,16 +124,14 @@ export const createTransaction = (
     );
 
     // Card transactions join their cycle's bill (fatura), created open on demand
-    if (card && created)
-      await deps.bills.ensureAndAttach(
-        card.id,
-        transaction.id,
-        billPeriodFor(date, card.closingDay, card.dueDay),
-        deps.newId(),
-      );
+    let finalTransaction = transaction;
+    if (card && created && billPeriod) {
+      const bill = await deps.bills.ensureAndAttach(card.id, transaction.id, billPeriod, deps.newId());
+      finalTransaction = { ...transaction, billId: bill.id };
+    }
 
     const locale = await deps.locale();
-    return ok({ transaction: addLocalizedLabels(transaction, locale), created, classification });
+    return ok({ transaction: addLocalizedLabels(finalTransaction, locale), created, classification });
   });
 
 /** Statement paste/import: each line idempotent, classified, flagged for review when uncertain. */
@@ -147,13 +164,36 @@ export const createTransactionsBulk = (
     return ok({ summary: summarizeBulkItems(items), items });
   });
 
+/** Repo-touching precondition: true when the transaction has no bill, or that bill isn't paid. */
+const assertBillNotPaid = async (deps: Deps, billId: string | undefined): Promise<boolean> => {
+  if (!billId) return true;
+  const bill = await deps.bills.findById(billId);
+  return !bill || !isBillPaid(bill);
+};
+
 export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
+    yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
 
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
 
     yield* guardTransferMutability(existing, input);
+
+    // Reassignment (billMonth/billYear given): validate up front — never leave the current or target
+    // bill in a half-changed state — but perform the actual attach after the main update below.
+    let reassignment: { cardId: string; period: BillPeriod } | null = null;
+    if (input.billMonth && input.billYear) {
+      const cardId = yield* okOr(existing.cardId, transactionErrors.billAssignmentRequiresCard);
+      yield* guard(await assertBillNotPaid(deps, existing.billId), transactionErrors.paidBillImmutable);
+
+      const card = yield* okOr(await deps.creditCards.findById(cardId), transactionErrors.notFound(input.id));
+      const period = billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay);
+      const targetBill = await deps.bills.get(card.id, period.month, period.year);
+      yield* guard(!targetBill || !isBillPaid(targetBill.bill), transactionErrors.paidBillImmutable);
+
+      reassignment = { cardId: card.id, period };
+    }
 
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     const effectiveType = resolveEffectiveType(existing, input);
@@ -207,8 +247,16 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
     if (categoryId && categoryId !== existing.categoryId)
       await deps.merchants.strengthenFromTransaction(input.id, categoryId);
 
+    // Reassign after the main update succeeds — a later validation failure above must never leave
+    // the bill assignment changed while the rest of the patch was rejected.
+    let finalTransaction = updated;
+    if (reassignment) {
+      const bill = await deps.bills.ensureAndAttach(reassignment.cardId, updated.id, reassignment.period, deps.newId());
+      finalTransaction = { ...updated, billId: bill.id };
+    }
+
     const locale = await deps.locale();
-    return ok(addLocalizedLabels(updated, locale));
+    return ok(addLocalizedLabels(finalTransaction, locale));
   });
 
 /** Flip a pending transaction to effective. No-op (returns existing) if already effective. */
@@ -224,10 +272,6 @@ export const confirmTransaction = (deps: Deps, input: { id: string }): ResultAsy
     return ok(addLocalizedLabels(confirmed, locale));
   });
 
-/** Repo-touching precondition: true when the transaction is not a bill's payment transfer. */
-const assertNotBillPayment = async (deps: Deps, transactionId: string): Promise<boolean> =>
-  !(await deps.bills.findByPaymentTransaction(transactionId));
-
 export const deleteTransaction = (
   deps: Deps,
   input: { id: string; confirm: boolean },
@@ -235,7 +279,7 @@ export const deleteTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
 
-    yield* guard(await assertNotBillPayment(deps, input.id), transactionErrors.billPaymentTransferProtected);
+    yield* guard(await assertBillNotPaid(deps, existing.billId), transactionErrors.paidBillImmutable);
 
     const locale = await deps.locale();
     const labeled = addLocalizedLabels(existing, locale);

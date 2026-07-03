@@ -11,6 +11,8 @@ import {
 import type { RawTransactionView } from '../../../src/models/transaction.js';
 import {
   addLocalizedLabels,
+  assertBillAssignmentHasCard,
+  assertBillPeriodPaired,
   assertExclusiveAccountCard,
   assertExclusiveCategorySubCategory,
   deriveIdempotencyKey,
@@ -296,5 +298,38 @@ describe('assertExclusiveCategorySubCategory', () => {
 
   it('fails when both are provided', () => {
     expect(assertExclusiveCategorySubCategory({ category: 'C', subCategory: 'S' })).toBe(false);
+  });
+});
+
+describe('assertBillPeriodPaired', () => {
+  it('passes when neither billMonth nor billYear is provided', () => {
+    expect(assertBillPeriodPaired({})).toBe(true);
+  });
+
+  it('passes when both are provided', () => {
+    expect(assertBillPeriodPaired({ billMonth: 6, billYear: 2026 })).toBe(true);
+  });
+
+  it('fails when only billMonth is provided', () => {
+    expect(assertBillPeriodPaired({ billMonth: 6 })).toBe(false);
+  });
+
+  it('fails when only billYear is provided', () => {
+    expect(assertBillPeriodPaired({ billYear: 2026 })).toBe(false);
+  });
+});
+
+describe('assertBillAssignmentHasCard', () => {
+  it('passes when billMonth is not provided, regardless of card', () => {
+    expect(assertBillAssignmentHasCard(undefined, false)).toBe(true);
+    expect(assertBillAssignmentHasCard(undefined, true)).toBe(true);
+  });
+
+  it('passes when billMonth is provided and a card is present', () => {
+    expect(assertBillAssignmentHasCard(6, true)).toBe(true);
+  });
+
+  it('fails when billMonth is provided but no card is present', () => {
+    expect(assertBillAssignmentHasCard(6, false)).toBe(false);
   });
 });

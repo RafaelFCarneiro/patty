@@ -38,13 +38,12 @@ export type BillsRepo = {
   /** UPSERT the cycle's bill for a card (created open) and attach the transaction. */
   ensureAndAttach: (cardId: string, transactionId: string, period: BillPeriod, newId: string) => Promise<Bill>;
   get: (cardId: string, month: number, year: number) => Promise<BillWithItems | null>;
+  findById: (billId: string) => Promise<Bill | null>;
   setStatus: (billId: string, status: BillStatus) => Promise<Bill | null>;
   /** Marks the bill paid and links its payment transfer, in one write. */
   markPaid: (billId: string, transactionId: string) => Promise<Bill | null>;
   /** Atomically deletes the payment transfer and flips the bill paid → closed. */
   revertPayment: (billId: string, transactionId: string) => Promise<Bill | null>;
-  /** Finds the bill (if any) whose payment_transaction_id is this transaction — guards it against direct deletion. */
-  findByPaymentTransaction: (transactionId: string) => Promise<Bill | null>;
 };
 
 export const billsRepo = (db: Db): BillsRepo => ({
@@ -97,6 +96,8 @@ export const billsRepo = (db: Db): BillsRepo => ({
     };
   },
 
+  findById: (billId) => fetchBillById(db, billId),
+
   setStatus: async (billId, status) => {
     await db.update(bills).set({ status }).where(eq(bills.id, billId));
     return fetchBillById(db, billId);
@@ -122,12 +123,5 @@ export const billsRepo = (db: Db): BillsRepo => ({
       await tx.delete(transactions).where(eq(transactions.id, transactionId));
     });
     return fetchBillById(db, billId);
-  },
-
-  findByPaymentTransaction: async (transactionId) => {
-    const [row] = await db.all<Record<string, unknown>>(
-      sql`SELECT * FROM bills WHERE payment_transaction_id = ${transactionId}`,
-    );
-    return row ? toBill(row) : null;
   },
 });

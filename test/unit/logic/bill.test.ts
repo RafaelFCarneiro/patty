@@ -10,7 +10,13 @@ import {
   TransactionViewSchema,
 } from '../../../src/models/transaction.js';
 import type { TransactionView } from '../../../src/models/transaction.js';
-import { billPeriodFor, computeBillTotal, withStatusLabel } from '../../../src/logic/bill.js';
+import {
+  billPeriodFor,
+  billPeriodForCycle,
+  computeBillTotal,
+  isBillPaid,
+  withStatusLabel,
+} from '../../../src/logic/bill.js';
 
 const tx = (type: TransactionType, amount: number): TransactionView =>
   TransactionViewSchema.parse({
@@ -100,6 +106,37 @@ describe('billPeriodFor', () => {
   });
 });
 
+describe('billPeriodForCycle', () => {
+  // Same close/due-date math as billPeriodFor, but the target cycle is already known
+  // (a manual bill assignment) rather than derived from a transaction date.
+  it('computes close/due dates for an explicit month/year', () => {
+    expect(billPeriodForCycle(6, 2026, 20, 5)).toEqual({
+      month: 6,
+      year: 2026,
+      closeDate: '2026-06-20',
+      dueDate: '2026-07-05',
+    });
+  });
+
+  it('keeps due date in the same month when dueDay > closingDay', () => {
+    expect(billPeriodForCycle(6, 2026, 5, 15)).toEqual({
+      month: 6,
+      year: 2026,
+      closeDate: '2026-06-05',
+      dueDate: '2026-06-15',
+    });
+  });
+
+  it('rolls the due date into January for a December cycle', () => {
+    expect(billPeriodForCycle(12, 2026, 20, 5)).toEqual({
+      month: 12,
+      year: 2026,
+      closeDate: '2026-12-20',
+      dueDate: '2027-01-05',
+    });
+  });
+});
+
 const bill: Bill = {
   id: 'bill-1',
   month: 6,
@@ -108,6 +145,17 @@ const bill: Bill = {
   dueDate: '2026-07-05',
   status: BillStatus.enum.open,
 };
+
+describe('isBillPaid', () => {
+  it('is false for open/closed bills', () => {
+    expect(isBillPaid(bill)).toBe(false);
+    expect(isBillPaid({ ...bill, status: BillStatus.enum.closed })).toBe(false);
+  });
+
+  it('is true for paid bills', () => {
+    expect(isBillPaid({ ...bill, status: BillStatus.enum.paid })).toBe(true);
+  });
+});
 
 describe('withStatusLabel', () => {
   it('adds statusLabel for the given locale (data-first)', () => {

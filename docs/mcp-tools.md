@@ -12,9 +12,11 @@ Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All too
 
 Create an expense/income. Omitting `category`/`subCategory` triggers auto-classification via the `merchant_category` table (learned merchant→category weights); the result reports `classification.method` (`rule|history|user|none`) and `confidence` (confirm with the user below 0.6). Idempotent: same `idempotencyKey` returns the existing transaction with `created: false`.
 
-Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `category` OR `subCategory` (not both — `subCategory` implies its parent category), `currency`, `rawInput` (original user phrasing), `note` (free-form memo/observação, max 1000 chars — distinct from description/rawInput/tags), `tags`, `status` (`effective|pending`; omit for date-aware default — see below).
+Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `billMonth` + `billYear` (optional, card transactions only — explicit target bill cycle; both required together — see below), `category` OR `subCategory` (not both — `subCategory` implies its parent category), `currency`, `rawInput` (original user phrasing), `note` (free-form memo/observação, max 1000 chars — distinct from description/rawInput/tags), `tags`, `status` (`effective|pending`; omit for date-aware default — see below).
 
-Returns `TransactionView` with `typeLabel` and `statusLabel` — localized display labels for the transaction's type and status.
+Returns `TransactionView` with `typeLabel`, `statusLabel`, and `billId` (the bill this card transaction currently belongs to; absent for account transactions) — localized display labels for the transaction's type and status.
+
+**Bill assignment** (Design 012): omit `billMonth`/`billYear` for the default cycle-based auto-assignment (from `date` + the card's `closingDay`/`dueDay`). Provide both together to target a specific cycle instead — the bill is auto-created (`open`) if that cycle has none yet. `billMonth`/`billYear` without `card` is a `validation` error. Whether auto-assigned or explicit, a request that would land the transaction on an already-`paid` bill is rejected with a `validation` error pointing at `revert_bill_payment` — a `paid` bill's transaction membership is frozen (see `update_transaction`/`delete_transaction` below).
 
 **`status` field**: `effective` means the transaction has cleared; it counts toward balances and summaries. `pending` means it is expected but not yet cleared — excluded from balances and summaries until `confirm_transaction` is called. **Default is date-aware**: when omitted, future-dated transactions default to `pending` and past/present transactions default to `effective`. An explicit `status` always overrides the default. Status is never auto-flipped by the passage of the date — call `confirm_transaction` explicitly.
 
@@ -70,9 +72,11 @@ Errors: `unknown_transaction`.
 
 Patch fields by `id`. Only provided fields change. Returns the updated transaction with `typeLabel` and `statusLabel`. Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened (the system learns). Changing `account` also updates `currency` to match.
 
-Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `category`, `subCategory`, `note` (free-form memo — empty string clears; omit to leave unchanged), `tags`.
+Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `billMonth` + `billYear` (optional — reassign to a different bill cycle; both required together), `category`, `subCategory`, `note` (free-form memo — empty string clears; omit to leave unchanged), `tags`.
 
 **Kind validation on update**: if `category`/`subCategory` is provided without `type`, the existing transaction type is used for kind validation. On mismatch, the error includes a `hint` field with the exact `type` value to pass to resolve it (e.g. `"Category \"Salário\" is income-only; to use it, set type: \"income\""`). Transfer transactions (`type: transfer`) cannot have a `category`/`subCategory` and cannot have their `type` changed — both are rejected with a `validation` error. Note: `type` on this endpoint accepts `expense|income` only; use `create_transfer` to create transfers.
+
+**Bill reassignment** (Design 012): `billMonth`/`billYear` moves the transaction to a different cycle's bill for its **own card** — there is no way to change which card a transaction belongs to, so this can never cross cards. Only valid on a transaction that already has a card (`validation` error otherwise). The target bill is auto-created (`open`) if that cycle has none yet. Rejected with a `validation` error, pointing at `revert_bill_payment`, if either the transaction's *current* bill or the *target* bill is `paid` — a `paid` bill's transaction membership is frozen.
 
 Errors: `unknown_transaction`, resolution errors, `category_kind_mismatch`, `validation`.
 
@@ -82,7 +86,7 @@ Two-step destructive action. Without `confirm: true` it is a **dry run**: return
 
 Input: `id` (required), `confirm` (default false).
 
-**A bill's payment transfer cannot be deleted this way** (Design 011): the id is rejected with a `validation` error before the dry-run flow, pointing at `revert_bill_payment`. Every other transaction — including ordinary transfers and card purchases — deletes normally.
+**Any transaction on a `paid` bill cannot be deleted this way** (Design 012, broadened from Design 011's narrower payment-transfer-only rule): the id is rejected with a `validation` error before the dry-run flow, pointing at `revert_bill_payment` — this covers ordinary purchases on a paid bill as well as the payment transfer itself (whose own bill is always the one it paid). Transactions on a non-paid bill, and transactions with no bill at all (ordinary transfers, account transactions), delete normally.
 
 ## search_transactions
 
