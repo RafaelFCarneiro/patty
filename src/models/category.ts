@@ -15,6 +15,13 @@ export const categoryKindLabels: LabelMap<CategoryKind> = {
 export const LocalizedNamesSchema = z.record(z.string().min(1), z.string().min(1)).nullable();
 export type LocalizedNames = z.infer<typeof LocalizedNamesSchema>;
 
+/** A category-or-subcategory-by-name selection, embedded in transaction create/update/search inputs. */
+export const CategoryFieldsSchema = z.object({
+  category: z.string().optional().describe('Category name'),
+  subCategory: z.string().optional().describe('Sub-category name (implies its parent category)'),
+});
+export type CategoryFields = z.infer<typeof CategoryFieldsSchema>;
+
 // `.describe()` is domain information — it states what each field is and represents.
 // Defaults split by intent: integrity defaults (a value that must exist for the entity to be
 // valid) live here; quality-of-life convenience defaults live at the wire boundary

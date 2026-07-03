@@ -15,7 +15,7 @@ import type {
 } from '../models/transaction.js';
 import type { RawTransactionView } from '../models/transaction.js';
 import { transactionErrors, TransactionStatus, TransactionType, type MovementType } from '../models/transaction.js';
-import { CategoryKind } from '../models/category.js';
+import { CategoryKind, type CategoryFields } from '../models/category.js';
 import { err, ok, type Result } from 'neverthrow';
 import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
@@ -44,10 +44,8 @@ export const resolveCurrency = (
 export const assertExclusiveAccountCard = (input: { account?: string; card?: string }): boolean =>
   !(input.account && input.card);
 
-export const assertExclusiveCategorySubCategory = (input: { category?: string; subCategory?: string }): boolean =>
+export const assertExclusiveCategorySubCategory = (input: CategoryFields): boolean =>
   !(input.category && input.subCategory);
-
-export type CategoryFields = { category?: string; subCategory?: string };
 
 /** True when a category name was provided — a type guard, narrowing `category` to `string`. */
 export const hasCategory = (input: CategoryFields): input is CategoryFields & { category: string } =>

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { BillQuerySchema } from './bill.js';
-import { LocalizedNamesSchema } from './category.js';
+import { CategoryFieldsSchema, LocalizedNamesSchema } from './category.js';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
@@ -158,8 +158,12 @@ export const CreateTransactionSchema = z.object({
         'Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet',
     ),
   billYear: BillQuerySchema.shape.year.optional().describe('Explicit target bill cycle year; provide with billMonth'),
-  category: z.string().optional().describe('Category name; omit to auto-classify. Must match transaction type kind'),
-  subCategory: z.string().optional().describe('Sub-category name (implies its parent — do not set both)'),
+  category: CategoryFieldsSchema.shape.category.describe(
+    'Category name; omit to auto-classify. Must match transaction type kind',
+  ),
+  subCategory: CategoryFieldsSchema.shape.subCategory.describe(
+    'Sub-category name (implies its parent — do not set both)',
+  ),
   currency: CurrencyCode.optional().describe('Transaction currency; resolved from account/card when omitted'),
   idempotencyKey: z.string().min(1).describe('Stable dedup key, e.g. "<date>-<description>-<amount>"'),
   rawInput: z.string().optional().describe('Original user phrasing, for audit'),
@@ -216,8 +220,12 @@ export const UpdateTransactionSchema = z.object({
   billYear: BillQuerySchema.shape.year
     .optional()
     .describe('Reassignment target bill cycle year; provide with billMonth'),
-  category: z.string().optional().describe('New category name (user correction). Do not set with subCategory'),
-  subCategory: z.string().optional().describe('New sub-category name (implies parent; do not set with category)'),
+  category: CategoryFieldsSchema.shape.category.describe(
+    'New category name (user correction). Do not set with subCategory',
+  ),
+  subCategory: CategoryFieldsSchema.shape.subCategory.describe(
+    'New sub-category name (implies parent; do not set with category)',
+  ),
   note: z
     .string()
     .max(NOTE_MAX_LENGTH)
@@ -237,8 +245,8 @@ export const SearchTransactionsSchema = z.object({
   to: IsoDate.optional().describe('End date (inclusive)'),
   type: TransactionType.optional().describe('Filter by type (expense/income/transfer)'),
   status: TransactionStatus.optional().describe('"pending" to list scheduled transactions; omit for all'),
-  category: z.string().optional().describe('Filter by category name'),
-  subCategory: z.string().optional().describe('Filter to transactions with this sub-category'),
+  category: CategoryFieldsSchema.shape.category.describe('Filter by category name'),
+  subCategory: CategoryFieldsSchema.shape.subCategory.describe('Filter to transactions with this sub-category'),
   account: z.string().optional().describe('Filter by account name'),
   text: z.string().optional().describe('Free-text search in description'),
   tags: z.array(z.string().min(1)).optional().describe('Filter to transactions having any of these tags'),

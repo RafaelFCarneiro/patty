@@ -29,8 +29,8 @@ import {
   summarizeBulkItems,
   toBulkItemResult,
   withBillId,
-  type CategoryFields,
 } from '../logic/transaction.js';
+import type { CategoryFields } from '../models/category.js';
 import { TransactionStatus } from '../models/transaction.js';
 import {
   transactionErrors,
