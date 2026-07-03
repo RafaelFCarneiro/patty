@@ -15,9 +15,10 @@ export function ensure(condition: unknown, message: string): asserts condition {
 
 /** Polls an accumulating stderr buffer until it matches `pattern` — used by tests spawning
  *  `main.ts` as a subprocess to await a sidecar startup/failure message written asynchronously.
- *  Resets `pattern.lastIndex` before every test: a `g`/`y`-flagged regex is stateful across
- *  `.test()` calls, and since the buffer only grows, reusing `lastIndex` from a prior (failed)
- *  call could skip past a match that's already in the buffer, causing a false-negative timeout. */
+ *  Resets `pattern.lastIndex` on every poll iteration, immediately before that iteration's single
+ *  `.test()` call: a `g`/`y`-flagged regex is stateful across `.test()` calls, and since the
+ *  buffer only grows, reusing `lastIndex` from a prior (failed) call could skip past a match
+ *  that's already in the buffer, causing a false-negative timeout. */
 export const waitForStderr = async (getStderr: () => string, pattern: RegExp, timeoutMs = 10_000): Promise<void> => {
   const start = Date.now();
   for (;;) {
