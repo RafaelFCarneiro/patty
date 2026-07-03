@@ -37,8 +37,17 @@ the save endpoint won't catch a violation for you.
      (`status: "pending"`).
    - **Committed / recurring obligations** [`recurring-obligations`] (subscriptions, fixed bills, what's due
      next) → recurring list; card bills via the bills endpoints (status, due dates).
-   - **Credit card view** [`credit-card-view`] (current fatura, per-card spend) → bills +
-     `aggregate_spending` filtered by card account.
+   - **Credit card view** [`credit-card-view`] (current fatura, per-card spend) → the bills endpoint for
+     status/dates/total; for the category breakdown, use the bill's own transaction list, not
+     `aggregate_spending` — see the note below.
+
+   **Why not `aggregate_spending` for a card's category breakdown**: it only counts `effective` transactions
+   (never `pending`), so on a still-open cycle with pending installment legs the category total will be
+   *lower* than the bill's own total shown right above it on the same page — a visible, confusing
+   inconsistency, not just an edge case. The bill's transaction list already reflects everything counted
+   toward that bill regardless of status, so group those rows by category client-side instead; the two
+   figures then always reconcile.
+
    Also ask, when relevant: time range (current month vs last N months), which accounts/cards matter, and
    whether they think per-currency (BRL/USD) or mostly one.
    Map each chosen perspective to one real endpoint from the contract you just read. If nothing in the
@@ -118,6 +127,18 @@ save under a new name instead of overwriting.
 the user is explicitly changing them, and carry the (updated) manifest into the new HTML. A request like
 "add a projections panel" changes one section — it should not silently lose the perspectives the user
 already chose.
+
+**If you can't fetch it** (no HTTP sidecar running — `GET /api/dashboards/:name` is REST-only, there is no
+MCP tool that reads a dashboard's HTML back — `save_dashboard` is write-only and `list_dashboards` omits
+HTML) — do not silently rebuild from scratch and tell the user you "kept everything the same"; that claim
+would be unverifiable. Instead:
+- If the name is `overview` and nothing suggests it's been customized since the seed (e.g. no evidence of a
+  prior save), treat the shipped baseline template (`src/diplomat/db/seed/dashboards.ts`) as a faithful
+  stand-in for "the original." Diff your new HTML against that source before saving, and confirm the diff is
+  purely additive (existing sections untouched, only the requested change applied) — don't just assert it.
+- Otherwise, say plainly that you can't read the dashboard's current contents back, name the reason (HTTP
+  sidecar not running / no tool exposes it), and either ask the user to start the sidecar so you can fetch
+  it, or ask what sections/manifest they currently have so nothing gets silently dropped.
 
 ## Self-check before calling save_dashboard
 
