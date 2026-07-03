@@ -130,18 +130,14 @@ export const createTransaction = (
     }
     const card = input.card ? yield* resolveCardRef(deps, input.card) : null;
 
-    const categorySelection = yield* resolveCategorySelection(deps, input, input.type);
-    const classification: ClassifyOutcome = categorySelection
-      ? userClassification({ id: categorySelection.categoryId, name: categorySelection.categoryName })
-      : pickClassification(await deps.merchants.matchCandidates(normalizeMerchant(input.description)));
-    const subCategoryId = categorySelection?.subCategoryId;
-
     const today = toIsoDate(deps.clock());
     const date = input.date ?? today;
     const status = input.status ?? defaultStatusFor(date, today);
 
     // Resolve the target bill period up front (explicit override or cycle-based auto-assignment) and
-    // reject onto a paid bill before writing the transaction — never leave an orphan, unattached row.
+    // reject onto a paid bill before doing any category/merchant resolution work or writing the
+    // transaction — a request that's going to be rejected shouldn't pay for that work first, and we
+    // never want to leave an orphan, unattached row.
     let billPeriod: BillPeriod | null = null;
     if (card) {
       billPeriod =
@@ -150,6 +146,12 @@ export const createTransaction = (
           : billPeriodFor(date, card.closingDay, card.dueDay);
       yield* guard(await assertTargetBillNotPaid(deps, card.id, billPeriod), transactionErrors.paidBillImmutable);
     }
+
+    const categorySelection = yield* resolveCategorySelection(deps, input, input.type);
+    const classification: ClassifyOutcome = categorySelection
+      ? userClassification({ id: categorySelection.categoryId, name: categorySelection.categoryName })
+      : pickClassification(await deps.merchants.matchCandidates(normalizeMerchant(input.description)));
+    const subCategoryId = categorySelection?.subCategoryId;
 
     const { transaction, created } = await deps.transactions.create(
       {
@@ -176,14 +178,17 @@ export const createTransaction = (
       input.tags ?? [],
     );
 
-    // Card transactions join their cycle's bill (fatura), created open on demand. ensureAndAttach
-    // re-checks paid status atomically (null = blocked) — closes the race where a concurrent
-    // pay_bill lands between the pre-check above and this attach. On the (rare) block, the
-    // transaction was already inserted above, so compensate by deleting it — no orphans survive.
+    // Card transactions join their cycle's bill (fatura), created open on demand. Keyed on
+    // "missing billId", not "created" — an idempotent replay of a row that was inserted but never
+    // got attached (e.g. the process died between the two writes) self-heals here instead of
+    // staying permanently orphaned. ensureAndAttach re-checks paid status atomically (null =
+    // blocked) — closes the race where a concurrent pay_bill lands between the pre-check above and
+    // this attach. On the (rare) block, only roll back by deleting the row when this call is the one
+    // that inserted it (created) — never delete a pre-existing row we're merely trying to self-heal.
     let finalTransaction = transaction;
-    if (card && created && billPeriod) {
+    if (card && billPeriod && !transaction.billId) {
       const attached = await deps.bills.ensureAndAttach(card.id, transaction.id, billPeriod, deps.newId());
-      if (!attached) await deps.transactions.delete(transaction.id);
+      if (!attached && created) await deps.transactions.delete(transaction.id);
       const bill = yield* okOr(attached, transactionErrors.paidBillImmutable);
       finalTransaction = withBillId(transaction, bill.id);
     }
