@@ -30,7 +30,7 @@ import {
   toBulkItemResult,
   withBillId,
 } from '../logic/transaction.js';
-import type { CategoryFields } from '../models/category.js';
+import type { CategoryFields, CategorySelection } from '../models/category.js';
 import { TransactionStatus } from '../models/transaction.js';
 import {
   transactionErrors,
@@ -46,8 +46,6 @@ import {
 } from '../models/transaction.js';
 import type { Deps } from './deps.js';
 import { resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
-
-type CategorySelection = { categoryId: string; categoryName: string; subCategoryId?: string };
 
 /** Resolves a category by name, guarding kind-compatibility when the movement type is known. */
 const resolveCategory = (

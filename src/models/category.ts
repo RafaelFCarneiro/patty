@@ -22,6 +22,14 @@ export const CategoryFieldsSchema = z.object({
 });
 export type CategoryFields = z.infer<typeof CategoryFieldsSchema>;
 
+/** A CategoryFields name resolved to ids — categoryId is always the top-level category's id. */
+export const CategorySelectionSchema = z.object({
+  categoryId: Id.describe("Resolved category id (the sub-category's parent id, when a sub-category was resolved)"),
+  categoryName: z.string().min(1).describe('Resolved category display name'),
+  subCategoryId: Id.optional().describe('Resolved sub-category id, present only when a sub-category was selected'),
+});
+export type CategorySelection = z.infer<typeof CategorySelectionSchema>;
+
 // `.describe()` is domain information — it states what each field is and represents.
 // Defaults split by intent: integrity defaults (a value that must exist for the entity to be
 // valid) live here; quality-of-life convenience defaults live at the wire boundary
