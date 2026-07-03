@@ -84,20 +84,23 @@ describe('loadConfig', () => {
     expect(config.FINTRACK_LOCALE).toBeUndefined();
   });
 
-  it('FINTRACK_HTTP defaults to false when omitted', () => {
+  it('FINTRACK_HTTP defaults to true when omitted (ADR-013 Decision 7 — on by default)', () => {
     delete process.env['FINTRACK_HTTP'];
-    expect(loadConfig().FINTRACK_HTTP).toBe(false);
+    expect(loadConfig().FINTRACK_HTTP).toBe(true);
   });
 
-  it('FINTRACK_HTTP is true only for the literal string "true"', () => {
+  it('FINTRACK_HTTP is false only for the literal string "false" (opt-out)', () => {
+    process.env['FINTRACK_HTTP'] = 'false';
+    expect(loadConfig().FINTRACK_HTTP).toBe(false);
+
     process.env['FINTRACK_HTTP'] = 'true';
     expect(loadConfig().FINTRACK_HTTP).toBe(true);
 
-    process.env['FINTRACK_HTTP'] = '1';
-    expect(loadConfig().FINTRACK_HTTP).toBe(false);
-
-    process.env['FINTRACK_HTTP'] = 'false';
-    expect(loadConfig().FINTRACK_HTTP).toBe(false);
+    // Any other value — including a falsy-looking one like '0' — does not opt out, since only
+    // the exact string 'false' does. This keeps the on-by-default posture from being silently
+    // undone by an unrelated or malformed env value.
+    process.env['FINTRACK_HTTP'] = '0';
+    expect(loadConfig().FINTRACK_HTTP).toBe(true);
   });
 
   it('default PORT is not a common Node/Fastify dev-server port (3000/3001/8080/etc)', () => {

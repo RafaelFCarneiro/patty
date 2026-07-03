@@ -9,6 +9,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { LOOPBACK_HOST } from '../../../src/common/net.js';
 import { McpTransport } from '../../../src/config.js';
+import { waitForStderr } from './helpers.js';
 
 // Fixed 64-char hex key — never touches the OS keychain
 const TEST_KEY = 'f'.repeat(64);
@@ -22,16 +23,6 @@ let blockedPort: number;
 let client: Client;
 let transport: StdioClientTransport;
 let stderr = '';
-
-const waitForStderr = async (pattern: RegExp, timeoutMs = 10_000): Promise<void> => {
-  const start = Date.now();
-  while (!pattern.test(stderr)) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error(`Timed out waiting for stderr to match ${pattern}. Received so far: ${stderr}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-};
 
 beforeAll(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-sidecar-stdio-test-'));
@@ -76,7 +67,7 @@ describe('HTTP sidecar bind failure alongside stdio MCP (ADR-013 Decision 7)', (
   });
 
   it('surfaces the bind failure on stderr — never on stdout, which carries the MCP protocol', async () => {
-    await waitForStderr(/HTTP sidecar disabled/i);
+    await waitForStderr(() => stderr, /HTTP sidecar disabled/i);
     expect(stderr).toContain(String(blockedPort));
   });
 });

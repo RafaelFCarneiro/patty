@@ -35,7 +35,7 @@ export const startHttpSidecar = async (deps: Deps, version: string, port: number
     const boundPort = (app.server.address() as AddressInfo).port;
     console.error(
       `fintrack: HTTP sidecar up — REST http://${LOOPBACK_HOST}:${boundPort}/api · ` +
-        `MCP http://${LOOPBACK_HOST}:${boundPort}/mcp`,
+        `MCP http://${LOOPBACK_HOST}:${boundPort}/mcp · dashboard http://${LOOPBACK_HOST}:${boundPort}/ui/overview`,
     );
     return { app, listening: true };
   } catch (e) {
