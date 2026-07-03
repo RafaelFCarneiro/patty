@@ -10,12 +10,12 @@ FinTrack v2 is an AI-first personal finance manager. The primary interface is AI
 
 ```bash
 npm install
-npm run dev   # stdio MCP server by default (ADR-007) — no port bound
+npm run dev   # stdio MCP server by default (ADR-007), HTTP sidecar (REST /api + /ui dashboards) on by default too
 ```
 
 The database is a local encrypted libSQL file (`fintrack.db`). On first run the encryption key is generated and stored in the OS keychain (`@napi-rs/keyring`). For CI/headless environments set `FINTRACK_DB_KEY` (64-char hex string) — never commit or log it.
 
-Add `MCP_TRANSPORT=http` (switches transport entirely) or `FINTRACK_HTTP=true` (keeps stdio, adds a best-effort sidecar — ADR-013 Decision 7) for REST/dashboards. `npm run dev` pins `PORT=3001` for either (package.json); the published package defaults to `PORT=51737` instead — deliberately not a common Node/Fastify dev-server port, to minimize collisions with other software (`docs/architecture.md` § HTTP sidecar).
+The HTTP sidecar (REST `/api` + `/ui` dashboards) starts automatically alongside stdio — the dashboard experience is a core feature, not opt-in (ADR-013 Decision 7). Set `FINTRACK_HTTP=false` to disable it (stdio-only, no port bound). `MCP_TRANSPORT=http` switches the transport entirely instead (no stdio fallback; a bind failure there is fatal by design). `npm run dev` pins `PORT=3001` for either (package.json); the published package defaults to `PORT=51737` instead — deliberately not a common Node/Fastify dev-server port, to minimize collisions with other software (`docs/architecture.md` § HTTP sidecar). A bind failure for the sidecar (e.g. the port is already in use) is caught and non-fatal — stdio keeps working regardless; this is a resilience fallback, not the normal state.
 
 - REST API: `http://127.0.0.1:3001/api` (from source) / `http://127.0.0.1:51737/api` (published package)
 - MCP endpoint (streamable HTTP): `http://127.0.0.1:3001/mcp` (from source) / `http://127.0.0.1:51737/mcp` (published package)

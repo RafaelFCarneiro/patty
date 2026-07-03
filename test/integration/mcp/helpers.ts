@@ -13,6 +13,18 @@ export function ensure(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+/** Polls an accumulating stderr buffer until it matches `pattern` — used by tests spawning
+ *  `main.ts` as a subprocess to await a sidecar startup/failure message written asynchronously. */
+export const waitForStderr = async (getStderr: () => string, pattern: RegExp, timeoutMs = 10_000): Promise<void> => {
+  const start = Date.now();
+  while (!pattern.test(getStderr())) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`Timed out waiting for stderr to match ${pattern}. Received so far: ${getStderr()}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+};
+
 export const makeClient = () => {
   const client = new Client({ name: 'fintrack-vitest-integration', version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(new URL(mcpUrl));

@@ -30,6 +30,10 @@ beforeAll(async () => {
     env: {
       ...process.env,
       MCP_TRANSPORT: McpTransport.enum.stdio,
+      // This test only exercises the stdio transport — the HTTP sidecar now defaults to on
+      // (ADR-013 Decision 7), so it must be explicitly disabled here to avoid an unrelated,
+      // unnecessary port bind in the test suite.
+      FINTRACK_HTTP: 'false',
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: TEST_KEY,
     },

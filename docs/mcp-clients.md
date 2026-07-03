@@ -1,8 +1,8 @@
 # Connecting FinTrack's MCP to AI clients
 
-FinTrack runs as a **stdio MCP server** by default — the client launches it as a subprocess and speaks JSON-RPC over stdin/stdout. No port, no URL, no bridge. This is the recommended path for all local MCP clients.
+FinTrack runs as a **stdio MCP server** by default — the client launches it as a subprocess and speaks JSON-RPC over stdin/stdout. No port, no URL, no bridge needed for chat itself. This is the recommended path for all local MCP clients.
 
-HTTP is available two ways: switch the transport entirely (`MCP_TRANSPORT=http`) for multi-client access, REST consumers, or debugging — see the HTTP sections below — or, while staying on stdio, opt into the **HTTP sidecar** (`FINTRACK_HTTP=true`) to also get `/api` (and, once shipped, `/ui`) without giving up the zero-port stdio connection. See "HTTP sidecar (alongside stdio)" below. Tool contract: `docs/mcp-tools.md`.
+Alongside that, the **HTTP sidecar** (`/api` + `/ui` dashboards) starts automatically by default — the dashboard experience is a core feature, not something you have to opt into (ADR-013 Decision 7). Set `FINTRACK_HTTP=false` to disable it and stay stdio-only with zero ports bound. See "HTTP sidecar (alongside stdio)" below. Separately, `MCP_TRANSPORT=http` switches the *transport itself* to HTTP, for multi-client access, REST consumers, or debugging — see the HTTP sections below. Tool contract: `docs/mcp-tools.md`.
 
 ---
 
@@ -98,23 +98,24 @@ Antigravity IDE: click `...` in the agent panel → MCP Servers → Manage → V
 
 ## HTTP sidecar (alongside stdio)
 
-Keep `MCP_TRANSPORT=stdio` (the default — no change to your client config) and add `FINTRACK_HTTP=true` to also
-start the HTTP server (`/api`, and later `/ui`) on `PORT` (default `51737` for the published package; `npm run
-dev` pins `3001` instead — a deliberately uncommon port for the published default, see
-[`docs/architecture.md`](../docs/architecture.md#http-sidecar-adr-013-decision-7)):
+Keep `MCP_TRANSPORT=stdio` (the default — no change to your client config); the HTTP server (`/api` + `/ui`)
+starts automatically alongside it on `PORT` (default `51737` for the published package; `npm run dev` pins
+`3001` instead — a deliberately uncommon port for the published default, see
+[`docs/architecture.md`](../docs/architecture.md#http-sidecar-adr-013-decision-7)). No extra flag needed:
 
 ```bash
 # from source → :3001
-FINTRACK_HTTP=true npm run dev
+npm run dev
 
 # or from the published package → :51737
-FINTRACK_HTTP=true npx @rafaelfcarneiro/fintrack@latest
+npx @rafaelfcarneiro/fintrack@latest
 ```
 
-This is off by default — nothing binds a port unless you set `FINTRACK_HTTP=true`. If the port is already taken,
-the sidecar logs an actionable message to stderr and skips starting; **stdio MCP keeps working regardless** —
-the same chat session can then help you find and free the port (see `docs/architecture.md` § HTTP sidecar,
-ADR-013 Decision 7).
+Set `FINTRACK_HTTP=false` if you want stdio-only with nothing bound at all. If the sidecar's port is already
+taken, it logs an actionable message to stderr and skips starting instead of failing the whole process —
+**stdio MCP keeps working regardless**; this is a resilience fallback, not the normal state, and the same chat
+session can then help you find and free the port (see `docs/architecture.md` § HTTP sidecar, ADR-013
+Decision 7).
 
 The sidecar binds `127.0.0.1` only — never the LAN. This API has no auth (local-first, ADR-013), so it is
 never reachable from other devices on your network, only from this machine. Use `127.0.0.1` in the URL, not
