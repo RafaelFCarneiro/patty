@@ -50,10 +50,12 @@ export const assertExclusiveCategorySubCategory = (input: { category?: string; s
 export type CategoryFields = { category?: string; subCategory?: string };
 
 /** True when a category name was provided — a type guard, narrowing `category` to `string`. */
-export const hasCategory = R.hasProp<CategoryFields, 'category'>('category');
+export const hasCategory = (input: CategoryFields): input is CategoryFields & { category: string } =>
+  input.category !== undefined;
 
 /** True when a subCategory name was provided — a type guard, narrowing `subCategory` to `string`. */
-export const hasSubCategory = R.hasProp<CategoryFields, 'subCategory'>('subCategory');
+export const hasSubCategory = (input: CategoryFields): input is CategoryFields & { subCategory: string } =>
+  input.subCategory !== undefined;
 
 /** billMonth/billYear (bill assignment) must be provided together, or not at all. */
 export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: number }): boolean =>

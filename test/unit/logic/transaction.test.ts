@@ -315,6 +315,14 @@ describe('hasCategory / hasSubCategory', () => {
     expect(hasSubCategory({})).toBe(false);
     expect(hasSubCategory({ category: 'C' })).toBe(false);
   });
+
+  // Value-based (!== undefined), not truthiness — an explicitly empty string still counts as
+  // "provided" and should reach name resolution (and fail there) rather than being silently
+  // treated as absent.
+  it('treats an empty string as provided, not as absent', () => {
+    expect(hasCategory({ category: '' })).toBe(true);
+    expect(hasSubCategory({ subCategory: '' })).toBe(true);
+  });
 });
 
 describe('assertBillPeriodPaired', () => {
