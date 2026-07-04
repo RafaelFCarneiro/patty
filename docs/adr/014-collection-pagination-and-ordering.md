@@ -34,17 +34,19 @@ whitelisted, enum-driven ordering. Small fixed collections stay plain arrays.**
 
    `sort`/`dir` apply to the first page and are baked into the returned cursor; on follow-up pages the request's
    `sort`/`dir` must match the cursor's or the boundary rejects it (Decision 4). The server pages by a **stable
-   composite key** — the sort field plus the entity id as tiebreaker; for transactions the already-used
-   `(date, id)` — with a parameter-bound keyset predicate (illustrative):
+   composite key** — the sort field plus the entity id as tiebreaker; for transactions `(date, id)`.
+
+   **Tiebreaker direction rule: the id tiebreaker follows `dir`** — the whole composite key uses one uniform
+   direction. This keeps one comparator across the key (the expanded predicate below, or equivalently SQLite's
+   row-value form `(t.date, t.id) < (?, ?)`), instead of mixed per-component comparators. For `dir: desc` this
+   makes the intra-date id order explicitly `DESC`, superseding today's implicit `ASC` — an unobservable change
+   (ids are UUIDs with no semantic order, and no cursor contract existed). The keyset predicate MUST stay
+   consistent with the chosen ORDER BY per key component; the uniform rule makes that trivial. Illustrative,
+   `dir: desc`:
 
    ```sql
-   -- the keyset predicate MUST be consistent with the chosen ORDER BY, per key component
-   -- (each component's comparator matches that component's direction — mixed directions are
-   -- fine when matched), or rows sharing a date may page incorrectly. The example below preserves
-   -- today's ordering, `t.date DESC, t.id` (tiebreaker implicitly ASC), making the tiebreaker
-   -- direction explicit and the predicate match it (`>` for the ASC component):
-   WHERE ... AND (t.date < ? OR (t.date = ? AND t.id > ?))
-   ORDER BY t.date DESC, t.id ASC
+   WHERE ... AND (t.date < ? OR (t.date = ? AND t.id < ?))
+   ORDER BY t.date DESC, t.id DESC
    LIMIT ? + 1   -- fetch one extra row to know whether a next page exists (no COUNT query)
    ```
 
@@ -82,8 +84,8 @@ whitelisted, enum-driven ordering. Small fixed collections stay plain arrays.**
 5. **Ordering rides ADR-011's rails.** Per-endpoint sort is a bare zod enum in the entity's model (e.g.
    `TransactionSortField = z.enum(['date', 'amount'])`) plus a shared `SortDirection = z.enum(['asc','desc'])`;
    `diplomat/db` owns the exhaustive `Record<SortField, SQL>` fragment map (`assertNever` on unmapped keys).
-   Caller text never reaches `ORDER BY`. Every ordering appends the entity id as the deterministic tiebreaker —
-   which is exactly what makes the keyset stable.
+   Caller text never reaches `ORDER BY`. Every ordering appends the entity id as the deterministic tiebreaker,
+   **in the same direction as `dir`** (the Decision 1 rule) — which is exactly what makes the keyset stable.
 
 6. **Shared primitives in `models/page.ts`** (the `date.ts`/`money.ts`/`id.ts` convention — a named home, not a
    catch-all): the cursor/limit/`includeTotal` request fields, `SortDirection`, and a `pageSchema(itemSchema)`
