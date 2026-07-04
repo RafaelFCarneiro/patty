@@ -301,6 +301,12 @@ describe('assertExclusiveCategorySubCategory', () => {
   it('fails when both are provided', () => {
     expect(assertExclusiveCategorySubCategory({ category: 'C', subCategory: 'S' })).toBe(false);
   });
+
+  // Value-based (via hasCategory/hasSubCategory), not truthiness — an explicitly empty string is
+  // still "provided", so this combination must be caught as a violation, not silently let through.
+  it('fails when category is an empty string and subCategory is also provided', () => {
+    expect(assertExclusiveCategorySubCategory({ category: '', subCategory: 'S' })).toBe(false);
+  });
 });
 
 describe('hasCategory / hasSubCategory', () => {

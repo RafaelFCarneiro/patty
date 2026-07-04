@@ -345,8 +345,8 @@ export const searchTransactions = (deps: Deps, input: SearchTransactions): Resul
   safeTry(async function* () {
     const range = input.month && input.year ? periodRange({ month: input.month, year: input.year }) : null;
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
-    const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
-    const subCategory = input.subCategory ? yield* resolveSubCategoryRef(deps, input.subCategory) : null;
+    const category = hasCategory(input) ? yield* resolveCategoryRef(deps, input.category) : null;
+    const subCategory = hasSubCategory(input) ? yield* resolveSubCategoryRef(deps, input.subCategory) : null;
 
     const [locale, rows] = await Promise.all([
       deps.locale(),

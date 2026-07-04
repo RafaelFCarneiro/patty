@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, deleteTransactions, ensure, makeClient, preferredAccount } from './helpers.js';
+import { callTool, callToolError, deleteTransactions, ensure, makeClient, preferredAccount } from './helpers.js';
 
 describe('MCP integration > transactions', () => {
   let createdTxIds: string[] = [];
@@ -138,6 +138,25 @@ describe('MCP integration > transactions', () => {
       })) as Array<{ id?: string }>;
 
       expect(results.some((tx) => tx.id === txId)).toBe(true);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('search_transactions with an explicitly empty category treats it as provided, not absent', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // An explicitly empty string is a provided category name, so it must reach resolution
+      // instead of being silently ignored as "no filter". Resolution itself treats '' as a partial
+      // match against every category name (pre-existing resolveByName behavior, unrelated to this
+      // fix), so the result is ambiguous_category rather than unknown_category.
+      const err = (await callToolError(client, {
+        name: 'search_transactions',
+        args: { category: '', limit: 10 },
+      })) as { error?: { code?: string } };
+      expect(err.error?.code).toBe('ambiguous_category');
     } finally {
       await transport.close();
     }

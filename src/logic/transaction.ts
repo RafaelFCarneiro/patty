@@ -45,9 +45,6 @@ export const resolveCurrency = (
 export const assertExclusiveAccountCard = (input: { account?: string; card?: string }): boolean =>
   !(input.account && input.card);
 
-export const assertExclusiveCategorySubCategory = (input: CategoryFields): boolean =>
-  !(input.category && input.subCategory);
-
 /** True when a category name was provided — a type guard, narrowing `category` to `string`. */
 export const hasCategory = (input: CategoryFields): input is CategoryFields & { category: string } =>
   input.category !== undefined;
@@ -55,6 +52,12 @@ export const hasCategory = (input: CategoryFields): input is CategoryFields & { 
 /** True when a subCategory name was provided — a type guard, narrowing `subCategory` to `string`. */
 export const hasSubCategory = (input: CategoryFields): input is CategoryFields & { subCategory: string } =>
   input.subCategory !== undefined;
+
+// Value-based (via hasCategory/hasSubCategory), not truthiness — an explicitly empty string still
+// counts as "provided", so e.g. { category: '', subCategory: 'S' } is correctly caught here instead
+// of slipping past exclusivity and into resolution.
+export const assertExclusiveCategorySubCategory = (input: CategoryFields): boolean =>
+  !(hasCategory(input) && hasSubCategory(input));
 
 /** billMonth/billYear (bill assignment) must be provided together, or not at all. */
 export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: number }): boolean =>
