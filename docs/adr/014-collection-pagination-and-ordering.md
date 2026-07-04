@@ -25,9 +25,17 @@ duplicate that tool.
 **Collection endpoints that can grow unbounded adopt keyset (cursor) pagination with a paginated envelope and
 whitelisted, enum-driven ordering. Small fixed collections stay plain arrays.**
 
-1. **Keyset cursor, not offset.** Requests take optional `cursor` (opaque string) + `limit` (existing bounds:
-   default 50, cap 200 — now *per page*). The server pages by a **stable composite key** — for transactions the
-   already-used `(date, id)` — with a parameter-bound keyset predicate (illustrative, desc):
+1. **Keyset cursor, not offset.** Paginated requests take four optional fields:
+   - `cursor` (opaque string) — continuation token from the previous page;
+   - `limit` (existing bounds: default 50, cap 200 — now *per page*);
+   - `sort` (the endpoint's whitelisted sort-field enum, Decision 5 — e.g. transactions: `date | amount`;
+     default: the endpoint's natural field, `date` for transactions);
+   - `dir` (`asc | desc`; default `desc` for transactions, matching today's ordering).
+
+   `sort`/`dir` apply to the first page and are baked into the returned cursor; on follow-up pages the request's
+   `sort`/`dir` must match the cursor's or the boundary rejects it (Decision 4). The server pages by a **stable
+   composite key** — the sort field plus the entity id as tiebreaker; for transactions the already-used
+   `(date, id)` — with a parameter-bound keyset predicate (illustrative):
 
    ```sql
    -- the keyset predicate MUST be consistent with the chosen ORDER BY, per key component
