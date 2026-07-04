@@ -166,6 +166,26 @@ describe('MCP integration > transactions', () => {
     }
   });
 
+  it('search_transactions rejects an explicitly empty subCategory at the same schema boundary', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // SearchTransactionsSchema's category field has its own coverage above; subCategory is a
+      // separate field declaration in the same schema and could independently regress (e.g. an
+      // edit that touches only this line) without that test catching it.
+      const result = await client.request(
+        { method: 'tools/call', params: { name: 'search_transactions', arguments: { subCategory: '', limit: 10 } } },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('create_transaction rejects an explicitly empty subCategory at the same schema boundary', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
