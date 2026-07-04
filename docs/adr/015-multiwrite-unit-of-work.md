@@ -21,7 +21,7 @@ SQLite serializes individual statements; it does nothing for app-level sequences
 | --- | --- | --- | --- |
 | `updateTransaction` | `bills.ensureAndAttach` → `transactions.update` → `merchants.strengthenFromTransaction` | bc1b418 reorder + `ensureAndAttach`'s atomic re-check | **High** — the twice-flagged flow; the reorder narrows one interleaving, the triple is still non-atomic |
 | `payBill` | `transactions.create` (payment transfer) → `bills.markPaid` | none across the pair | **High** — gap leaves an orphan transfer with the bill unpaid |
-| `createTransaction` (card + bill) | `transactions.create` → `bills.ensureAndAttach` → compensating `transactions.delete` on attach failure | manual compensation (saga-by-hand) | **Medium-high** — crash between create and compensation orphans the transaction |
+| `createTransaction` (card + bill) | `transactions.create` → `bills.ensureAndAttach` → compensating `transactions.delete` on attach failure | manual compensation (saga-by-hand) + idempotent-replay self-heal (attach keyed on missing `billId`, so replaying the create re-attaches an inserted-but-unattached row) | **Medium** — a crash between the writes leaves an unattached row until a replay self-heals it; the pair is still non-atomic and the hand-rolled compensation remains |
 | `applyDueRecurring` | N × `transactions.create` → `recurring.advance` | stable idempotency keys (`rec-<ruleId>-<date>`) make replay safe | **Low** — idempotent replay is a legitimate alternative to atomicity here |
 | `revertBillPayment` | `bills.revertPayment` | already one intra-repo `db.transaction` | Solved |
 | `createCreditCard` / `deleteCreditCard` | `createWithAccount` / `deleteCard` | already intra-repo transactions | Solved |
