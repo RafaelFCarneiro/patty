@@ -107,6 +107,21 @@ describe('POST /api/transactions', () => {
     expect(res.statusCode).toBe(422);
   });
 
+  it('rejects an explicitly empty category (422) — REST also enforces CategoryFieldsSchema.min(1)', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/transactions',
+      payload: {
+        description: 'Empty category',
+        amount: 10,
+        type: 'expense',
+        category: '',
+        idempotencyKey: 'empty-category',
+      },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+
   it('creates with subCategory → sets parent category', async () => {
     const catRes = await inject({
       method: 'POST',

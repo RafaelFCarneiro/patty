@@ -166,6 +166,39 @@ describe('MCP integration > transactions', () => {
     }
   });
 
+  it('create_transaction rejects an explicitly empty subCategory at the same schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // Same CategoryFieldsSchema.shape.subCategory constraint as search_transactions — proving
+      // it here too since create_transaction is a distinct consuming schema, not just re-asserting
+      // the same zod object twice.
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_transaction',
+            arguments: {
+              description: `Empty subCategory ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              subCategory: '',
+              idempotencyKey: `empty-subcategory-${stamp}`,
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('bulk import returns per-item status and treats re-imports as duplicates', async () => {
     const stamp = Date.now();
     const accountName = `Bulk Import ${stamp}`;
