@@ -32,7 +32,7 @@ whitelisted, enum-driven ordering. Small fixed collections stay plain arrays.**
    ```sql
    -- the keyset predicate MUST be consistent with the chosen ORDER BY, per key component
    -- (each component's comparator matches that component's direction — mixed directions are
-   -- fine when matched), or rows sharing a date page incorrectly. The example below preserves
+   -- fine when matched), or rows sharing a date may page incorrectly. The example below preserves
    -- today's ordering, `t.date DESC, t.id` (tiebreaker implicitly ASC), making the tiebreaker
    -- direction explicit and the predicate match it (`>` for the ASC component):
    WHERE ... AND (t.date < ? OR (t.date = ? AND t.id > ?))
