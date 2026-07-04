@@ -222,8 +222,8 @@ Minimal web frontend rendering saved views; activate owner columns for multi-use
 - **No ORM-level relation magic**: hand-written joins — mitigated by zod decode-at-boundary (`wire/db`) and keeping all SQL parameterized in `diplomat/db/`.
 - **Correlation analysis is wordier in SQL** than the original graph vision — acceptable at single-user scale; recursive CTEs/window functions cover Phase 3.
 - **Diplomat discipline** is convention, not framework-enforced — add ESLint import-boundary rules (`logic/` may not import `diplomat/`).
-- **Multi-write concurrency (partial-write / TOCTOU):** controller flows that issue more than one sequential
-  repo write are not atomic as a pair, and three concurrent write surfaces now exist (MCP, the default-on REST
+- **Multi-write concurrency (partial-write / TOCTOU):** controller flows that issue multiple sequential
+  repo writes are not atomic as a pair, and three concurrent write surfaces now exist (MCP, the default-on REST
   sidecar, scheduled `apply_due_recurring`). The same bug shape recurred twice on PR #83 and was band-aided by a
   one-off reorder. Structural fix (typed per-flow deltas consumed by a single transactional diplomat method +
   CAS race guards) is proposed in **ADR-015** (`docs/adr/015-multiwrite-unit-of-work.md`); migration is

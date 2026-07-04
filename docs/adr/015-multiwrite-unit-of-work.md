@@ -64,7 +64,8 @@ The three sub-decisions:
    treated as conflict — the same mechanic as the existing idempotency `onConflictDoNothing()` convention. The
    diplomat knows *how* to apply and *whether the row matched*; only the controller knows *what that means*.
 
-3. **Result ↔ transaction bridge — outcome-as-data at the repo boundary.** Controllers live on the neverthrow
+3. **Result ↔ `db.transaction` bridge — outcome-as-data at the repo boundary.** (The DB unit of work, not the
+   finance `Transaction` entity.) Controllers live on the neverthrow
    railway; `db.transaction` is throw-to-rollback. The bridge follows the repo convention that already exists
    (`create` → `{ transaction, created }`; `ensureAndAttach` → `Bill | null`):
 
