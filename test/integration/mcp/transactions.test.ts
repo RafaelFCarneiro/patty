@@ -172,9 +172,10 @@ describe('MCP integration > transactions', () => {
     try {
       await client.connect(transport);
 
-      // Same CategoryFieldsSchema.shape.subCategory constraint as search_transactions — proving
-      // it here too since create_transaction is a distinct consuming schema, not just re-asserting
-      // the same zod object twice.
+      // CreateTransactionSchema derives category/subCategory from CategoryFieldsSchema.shape today,
+      // but that's this schema's own contract to keep — a future edit to CreateTransactionSchema
+      // could drop that derivation without touching search_transactions at all, so this schema
+      // gets its own regression guard rather than relying on search_transactions' coverage.
       const result = await client.request(
         {
           method: 'tools/call',
@@ -188,6 +189,44 @@ describe('MCP integration > transactions', () => {
               idempotencyKey: `empty-subcategory-${stamp}`,
             },
           },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('update_transaction rejects an explicitly empty category at the same schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Update empty category ${stamp}`,
+          amount: 10,
+          type: 'expense',
+          category: 'Other',
+          idempotencyKey: `update-empty-category-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } };
+      const txId = created.transaction?.id;
+      ensure(txId, 'Transaction id missing');
+      createdTxIds.push(txId);
+
+      // UpdateTransactionSchema is its own contract — the same regression argument as create: a
+      // future edit here could independently drop the CategoryFieldsSchema derivation without
+      // create/search noticing.
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: { name: 'update_transaction', arguments: { id: txId, category: '' } },
         },
         CallToolResultSchema,
       );
