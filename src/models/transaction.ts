@@ -160,8 +160,8 @@ export const CreateTransactionSchema = z.object({
       '"pending" = expected, excluded until confirmed.',
   ),
   date: IsoDate.optional().describe('YYYY-MM-DD; defaults to today'),
-  account: z.string().optional().describe('Account name, e.g. "Nubank"'),
-  card: z.string().optional().describe('Credit card name — joins the cycle bill. Use account OR card, not both'),
+  account: z.string().min(1).optional().describe('Account name, e.g. "Nubank"'),
+  card: z.string().min(1).optional().describe('Credit card name — joins the cycle bill. Use account OR card, not both'),
   billMonth: BillQuerySchema.shape.month
     .optional()
     .describe(
@@ -200,8 +200,8 @@ export type BulkTransactionItem = z.infer<typeof BulkTransactionItemSchema>;
 
 export const CreateTransactionsBulkSchema = z.object({
   items: z.array(BulkTransactionItemSchema).min(1).max(200).describe('Transaction items to import'),
-  account: z.string().optional().describe('Default account for all items'),
-  card: z.string().optional().describe('Default credit card for all items'),
+  account: z.string().min(1).optional().describe('Default account for all items'),
+  card: z.string().min(1).optional().describe('Default credit card for all items'),
   rawInput: z.string().optional().describe('The original pasted statement text'),
 });
 export type CreateTransactionsBulk = z.infer<typeof CreateTransactionsBulkSchema>;
@@ -223,7 +223,7 @@ export const UpdateTransactionSchema = z.object({
   amount: Money.optional().describe('Updated amount in full units'),
   type: MovementType.optional().describe('Updated movement type'),
   date: IsoDate.optional().describe('Updated date (YYYY-MM-DD)'),
-  account: z.string().optional().describe('New account name'),
+  account: z.string().min(1).optional().describe('New account name'),
   billMonth: BillQuerySchema.shape.month
     .optional()
     .describe(
@@ -263,7 +263,7 @@ export const SearchTransactionsSchema = z.object({
   ...CategoryFieldsSchema.shape,
   category: CategoryFieldsSchema.shape.category.describe('Filter by category name'),
   subCategory: CategoryFieldsSchema.shape.subCategory.describe('Filter to transactions with this sub-category'),
-  account: z.string().optional().describe('Filter by account name'),
+  account: z.string().min(1).optional().describe('Filter by account name'),
   text: z.string().optional().describe('Free-text search in description'),
   tags: z.array(z.string().min(1)).optional().describe('Filter to transactions having any of these tags'),
   limit: z.number().int().min(1).max(200).describe('Maximum results to return'),

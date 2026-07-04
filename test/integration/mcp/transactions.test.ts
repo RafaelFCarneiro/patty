@@ -330,6 +330,156 @@ describe('MCP integration > transactions', () => {
     }
   });
 
+  it('create_transaction rejects an explicitly empty account at the schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // account/card were truthiness-gated downstream (input.account ? ... : null), the same bug
+      // class already fixed for category/subCategory — an explicitly empty name must be rejected,
+      // not silently treated as "no account".
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_transaction',
+            arguments: {
+              description: `Empty account ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              account: '',
+              idempotencyKey: `empty-account-${stamp}`,
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('create_transaction rejects an explicitly empty card at the schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // card: '' is especially confusing without this guard: it's treated as "no card" downstream
+      // and would trigger billAssignmentRequiresCard instead of failing fast here.
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_transaction',
+            arguments: {
+              description: `Empty card ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              card: '',
+              idempotencyKey: `empty-card-${stamp}`,
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('update_transaction rejects an explicitly empty account at the schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Update empty account ${stamp}`,
+          amount: 10,
+          type: 'expense',
+          idempotencyKey: `update-empty-account-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } };
+      const txId = created.transaction?.id;
+      ensure(txId, 'Transaction id missing');
+      createdTxIds.push(txId);
+
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: { name: 'update_transaction', arguments: { id: txId, account: '' } },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('search_transactions rejects an explicitly empty account at the schema boundary', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const result = await client.request(
+        { method: 'tools/call', params: { name: 'search_transactions', arguments: { account: '', limit: 10 } } },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('create_transactions_bulk rejects an explicitly empty top-level account default', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_transactions_bulk',
+            arguments: {
+              account: '',
+              items: [
+                {
+                  description: `Bulk empty account ${stamp}`,
+                  amount: 10,
+                  type: 'expense',
+                  idempotencyKey: `bulk-empty-account-${stamp}`,
+                },
+              ],
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('bulk import returns per-item status and treats re-imports as duplicates', async () => {
     const stamp = Date.now();
     const accountName = `Bulk Import ${stamp}`;
