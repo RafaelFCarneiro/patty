@@ -144,8 +144,8 @@ export type TransactionPatch = {
  * in models/category.ts).
  */
 export const CategoryFieldsSchema = z.object({
-  category: z.string().optional().describe('Category name'),
-  subCategory: z.string().optional().describe('Sub-category name (implies its parent category)'),
+  category: z.string().min(1).optional().describe('Category name'),
+  subCategory: z.string().min(1).optional().describe('Sub-category name (implies its parent category)'),
 });
 export type CategoryFields = z.infer<typeof CategoryFieldsSchema>;
 

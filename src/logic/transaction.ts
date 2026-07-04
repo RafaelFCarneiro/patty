@@ -45,17 +45,20 @@ export const resolveCurrency = (
 export const assertExclusiveAccountCard = (input: { account?: string; card?: string }): boolean =>
   !(input.account && input.card);
 
-/** True when a category name was provided — a type guard, narrowing `category` to `string`. */
+/**
+ * True when a category name was provided — a type guard, narrowing `category` to `string`. The
+ * schema rejects empty strings (`.min(1)`), so this only needs to rule out null/undefined; using
+ * isNonNullish (rather than `!== undefined`) means a `null` would also correctly count as absent.
+ */
 export const hasCategory = (input: CategoryFields): input is CategoryFields & { category: string } =>
-  input.category !== undefined;
+  R.isNonNullish(input.category);
 
-/** True when a subCategory name was provided — a type guard, narrowing `subCategory` to `string`. */
+/** True when a subCategory name was provided — same reasoning as hasCategory. */
 export const hasSubCategory = (input: CategoryFields): input is CategoryFields & { subCategory: string } =>
-  input.subCategory !== undefined;
+  R.isNonNullish(input.subCategory);
 
-// Value-based (via hasCategory/hasSubCategory), not truthiness — an explicitly empty string still
-// counts as "provided", so e.g. { category: '', subCategory: 'S' } is correctly caught here instead
-// of slipping past exclusivity and into resolution.
+// Value-based (via hasCategory/hasSubCategory), not truthiness — so e.g. a caller-constructed
+// { category: undefined, subCategory: 'S' } is judged consistently with resolveCategorySelection.
 export const assertExclusiveCategorySubCategory = (input: CategoryFields): boolean =>
   !(hasCategory(input) && hasSubCategory(input));
 

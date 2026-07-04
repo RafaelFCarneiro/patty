@@ -322,12 +322,20 @@ describe('hasCategory / hasSubCategory', () => {
     expect(hasSubCategory({ category: 'C' })).toBe(false);
   });
 
-  // Value-based (!== undefined), not truthiness — an explicitly empty string still counts as
-  // "provided" and should reach name resolution (and fail there) rather than being silently
-  // treated as absent.
+  // isNonNullish-based, not truthiness — at the pure-predicate level an empty string is still
+  // non-nullish ("provided"); it's CategoryFieldsSchema's .min(1) that rejects '' at the boundary
+  // before it can ever reach this predicate in a real request.
   it('treats an empty string as provided, not as absent', () => {
     expect(hasCategory({ category: '' })).toBe(true);
     expect(hasSubCategory({ subCategory: '' })).toBe(true);
+  });
+
+  // isNonNullish over !== undefined specifically to also treat null as absent — the field's type
+  // never allows null, but a caller-constructed object bypassing the type system could still pass
+  // one, and `null !== undefined` would otherwise (wrongly) count it as provided.
+  it('treats null as absent, unlike a plain !== undefined check', () => {
+    expect(hasCategory({ category: null as unknown as string })).toBe(false);
+    expect(hasSubCategory({ subCategory: null as unknown as string })).toBe(false);
   });
 });
 

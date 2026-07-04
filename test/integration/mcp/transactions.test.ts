@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, callToolError, deleteTransactions, ensure, makeClient, preferredAccount } from './helpers.js';
+import { callTool, deleteTransactions, ensure, makeClient, preferredAccount } from './helpers.js';
 
 describe('MCP integration > transactions', () => {
   let createdTxIds: string[] = [];
@@ -143,20 +143,24 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('search_transactions with an explicitly empty category treats it as provided, not absent', async () => {
+  it('search_transactions rejects an explicitly empty category at the schema boundary', async () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
 
-      // An explicitly empty string is a provided category name, so it must reach resolution
-      // instead of being silently ignored as "no filter". Resolution itself treats '' as a partial
-      // match against every category name (pre-existing resolveByName behavior, unrelated to this
-      // fix), so the result is ambiguous_category rather than unknown_category.
-      const err = (await callToolError(client, {
-        name: 'search_transactions',
-        args: { category: '', limit: 10 },
-      })) as { error?: { code?: string } };
-      expect(err.error?.code).toBe('ambiguous_category');
+      // CategoryFieldsSchema requires category/subCategory to be non-empty (.min(1)) when
+      // provided, so '' never reaches resolution — the MCP SDK rejects it against inputSchema
+      // before our handler ever runs. The result is isError: true with a raw zod "too_small"
+      // validation message (not our own {error: {code, ...}} JSON envelope, since our handler —
+      // and therefore fromResult/jsonError — is never invoked), so this reads the response
+      // directly instead of going through callTool/callToolError's JSON-payload parsing.
+      const result = await client.request(
+        { method: 'tools/call', params: { name: 'search_transactions', arguments: { category: '', limit: 10 } } },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
     } finally {
       await transport.close();
     }
