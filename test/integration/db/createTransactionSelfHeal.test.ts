@@ -3,16 +3,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildApp } from './app-builder.js';
-import { createTransaction } from '../../src/controllers/transactions.js';
-import { billPeriodFor } from '../../src/logic/bill.js';
-import { AccountType } from '../../src/models/account.js';
+import { buildApp } from '../app-builder.js';
+import { createTransaction } from '../../../src/controllers/transactions.js';
+import { billPeriodFor } from '../../../src/logic/bill.js';
+import { AccountType } from '../../../src/models/account.js';
 import {
   ClassificationMethod,
   TransactionSource,
   TransactionStatus,
   TransactionType,
-} from '../../src/models/transaction.js';
+} from '../../../src/models/transaction.js';
 
 let tmpDir: string;
 

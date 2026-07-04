@@ -3,22 +3,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { McpTransport } from '../../src/config.js';
-import { bootstrap } from '../../src/diplomat/db/bootstrap.js';
-import { openDatabase } from '../../src/diplomat/db/driver.js';
-import { accountsRepo } from '../../src/diplomat/db/repos/accounts.js';
-import { billsRepo } from '../../src/diplomat/db/repos/bills.js';
-import { creditCardsRepo } from '../../src/diplomat/db/repos/creditCards.js';
-import { transactionsRepo } from '../../src/diplomat/db/repos/transactions.js';
-import { billPeriodFor } from '../../src/logic/bill.js';
-import { AccountType } from '../../src/models/account.js';
-import { CurrencyCode } from '../../src/models/money.js';
+import { McpTransport } from '../../../src/config.js';
+import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
+import { openDatabase } from '../../../src/diplomat/db/driver.js';
+import { accountsRepo } from '../../../src/diplomat/db/repos/accounts.js';
+import { billsRepo } from '../../../src/diplomat/db/repos/bills.js';
+import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
+import { transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
+import { billPeriodFor } from '../../../src/logic/bill.js';
+import { AccountType } from '../../../src/models/account.js';
+import { CurrencyCode } from '../../../src/models/money.js';
 import {
   ClassificationMethod,
   TransactionSource,
   TransactionStatus,
   TransactionType,
-} from '../../src/models/transaction.js';
+} from '../../../src/models/transaction.js';
 
 const TEST_KEY = 'f'.repeat(64);
 
