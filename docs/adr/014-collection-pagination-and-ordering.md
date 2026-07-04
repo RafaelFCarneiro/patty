@@ -30,10 +30,11 @@ whitelisted, enum-driven ordering. Small fixed collections stay plain arrays.**
    already-used `(date, id)` — with a parameter-bound keyset predicate (illustrative, desc):
 
    ```sql
-   -- keyset predicate and ORDER BY MUST use the same direction on every key component,
-   -- or rows sharing a date page incorrectly. Today's query orders `t.date DESC, t.id`
-   -- (tiebreaker implicitly ASC); the first mover makes the tiebreaker direction explicit
-   -- and matched. Illustrative, both components desc:
+   -- the keyset predicate MUST be consistent with the chosen ORDER BY, per key component
+   -- (each component's comparator matches that component's direction — mixed directions are
+   -- fine when matched), or rows sharing a date page incorrectly. Today's query orders
+   -- `t.date DESC, t.id` (tiebreaker implicitly ASC); the first mover makes the tiebreaker
+   -- direction explicit and the predicate match it. Illustrative, both components desc:
    WHERE ... AND (t.date < ? OR (t.date = ? AND t.id < ?))
    ORDER BY t.date DESC, t.id DESC
    LIMIT ? + 1   -- fetch one extra row to know whether a next page exists (no COUNT query)

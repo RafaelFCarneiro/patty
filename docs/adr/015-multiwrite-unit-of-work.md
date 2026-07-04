@@ -56,7 +56,7 @@ The three sub-decisions:
    ```
 
    Explicitly **no generic domain-spanning `Delta`/changeset type** — that degrades into an untyped list of
-   write ops and moves flow knowledge into the diplomat. One flow, one named type.
+   write ops and moves flow knowledge into the repo. One flow, one named type.
 
 2. **One transactional repo method per flow consumes the delta** (e.g. `transactions.applyUpdate(id, delta)`
    in `diplomat/db`), wrapping every write in a single `db.transaction`. Race guards are **CAS predicates
@@ -123,7 +123,7 @@ the least reviewable form of this fix.
 | --- | --- |
 | Correctness | Pair/triple becomes atomic; rollback on conflict; no compensation code |
 | Fit | Composes three conventions the repo already has: intra-repo `db.transaction`, outcome-as-data, `rowsAffected` CAS |
-| Layering | Clean — write *intent* is domain data; the diplomat stays policy-free |
+| Layering | Clean — write *intent* is domain data; the repo stays policy-free |
 | Cost | One delta type + one repo method per migrated flow; three flows to migrate |
 
 ### Option C — Expose transaction control to controllers (`withTransaction(fn)` / transactional repos in `Deps`)
