@@ -91,13 +91,19 @@ attached whenever the target turns out to be paid, which is strictly worse.
 The controller-level paid-bill check (`findByCycle` + `guard`) runs before the write for a fast, clean rejection
 in the common case, but it is a separate DB round-trip from the later `ensureAndAttach` call — under concurrent
 requests, a `pay_bill` could complete in the gap between the two, and the stale pre-check would let the write
-through. `bills.ensureAndAttach` closes this: it re-checks the bill's status **inside the same `db.transaction`**
-as the upsert-and-attach, and returns `null` (never attaches) if the bill is paid by the time it runs — the
-check-then-write is atomic at the SQL level, not just "checked early in the request." Both callers treat `null`
-as the authoritative `paidBillImmutable` rejection: `createTransaction` deletes the just-inserted transaction
-row first (preserving "no orphans" even on this rare race), `updateTransaction` simply surfaces the error — its
-other patched fields (amount, category, …) may already have committed, the same accepted partial-write risk
-category as any other multi-write controller flow in this codebase, not a new one introduced here.
+through. `bills.ensureAndAttach` closes this: it re-checks status **inside the same `db.transaction`** as the
+upsert-and-attach, and returns `null` (never attaches) if either bill is paid by the time it runs — the
+check-then-write is atomic at the SQL level, not just "checked early in the request." "Either bill" is
+deliberate: for a reassignment, the race isn't only "does the *target* bill become paid mid-flight" (closed by
+re-checking the target inside the transaction) — the transaction's *current* bill can equally become paid in
+that same gap, which would let it be silently moved off a now-paid bill. `ensureAndAttach` also looks up the
+transaction's current `bill_id` (if any) inside the same transaction and refuses if that bill is paid, before
+ever touching the target. A fresh insert or a self-heal attach has no current bill yet, so this check is a
+no-op there — it only bites on an actual reassignment. Both callers treat `null` as the authoritative
+`paidBillImmutable` rejection: `createTransaction` deletes the just-inserted transaction row first (preserving
+"no orphans" even on this rare race), `updateTransaction` simply surfaces the error — its other patched fields
+(amount, category, …) may already have committed, the same accepted partial-write risk category as any other
+multi-write controller flow in this codebase, not a new one introduced here.
 
 ## Consequences
 

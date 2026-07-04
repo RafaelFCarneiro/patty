@@ -70,7 +70,7 @@ Errors: `unknown_transaction`.
 
 ## update_transaction
 
-Patch fields by `id`. Only provided fields change. Returns the updated transaction with `typeLabel` and `statusLabel`. Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened (the system learns). Changing `account` also updates `currency` to match.
+Patch fields by `id`. Only provided fields change. Returns the updated transaction with `typeLabel`, `statusLabel`, and `billId` (the bill this card transaction currently belongs to — reflects a `billMonth`/`billYear` reassignment immediately; absent for account transactions). Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened (the system learns). Changing `account` also updates `currency` to match.
 
 Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `billMonth` + `billYear` (optional — reassign to a different bill cycle; both required together), `category`, `subCategory`, `note` (free-form memo — empty string clears; omit to leave unchanged), `tags`.
 

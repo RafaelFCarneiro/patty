@@ -36,9 +36,11 @@ export type BillWithItems = { bill: Bill; cardName: string; transactions: RawTra
 
 export type BillsRepo = {
   /**
-   * UPSERT the cycle's bill for a card and attach the transaction, atomically. Refuses to attach
-   * onto a bill that is already `paid` (returns null) — the whole check-then-write is one DB
-   * transaction, so a concurrent pay_bill can't slip a transaction onto a bill mid-attach.
+   * UPSERT the cycle's bill for a card and attach the transaction, atomically. Refuses (returns
+   * null) if the target bill is already `paid`, or — for a reassignment — if the transaction's
+   * current bill has independently become `paid` since the controller's pre-check. The whole
+   * check-then-write is one DB transaction, so a concurrent pay_bill can't slip a transaction onto
+   * or off of a paid bill mid-attach.
    */
   ensureAndAttach: (cardId: string, transactionId: string, period: BillPeriod, newId: string) => Promise<Bill | null>;
   get: (cardId: string, month: number, year: number) => Promise<BillWithItems | null>;
@@ -55,6 +57,20 @@ export type BillsRepo = {
 export const billsRepo = (db: Db): BillsRepo => ({
   ensureAndAttach: async (cardId, transactionId, period, newId) => {
     return db.transaction(async (tx) => {
+      // Refuse if the transaction currently belongs to a bill that's already paid — the atomic
+      // counterpart to the target-bill check below, closing the same race for the "move off a
+      // paid bill" direction during a reassignment (a fresh insert or a self-heal attach has no
+      // current bill_id yet, so this is a no-op then).
+      const [currentTxRow] = await tx.all<{ bill_id: string | null }>(
+        sql`SELECT bill_id FROM transactions WHERE id = ${transactionId}`,
+      );
+      if (currentTxRow?.bill_id) {
+        const [currentBillRow] = await tx.all<Record<string, unknown>>(
+          sql`SELECT * FROM bills WHERE id = ${currentTxRow.bill_id}`,
+        );
+        if (currentBillRow && isBillPaid(toBill(currentBillRow))) return null;
+      }
+
       await tx
         .insert(bills)
         .values({
