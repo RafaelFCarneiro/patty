@@ -237,7 +237,7 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
     yield* guardTransferMutability(existing, input);
 
     // Reassignment (billMonth/billYear given): validate up front — never leave the current or target
-    // bill in a half-changed state — but perform the actual attach after the main update below.
+    // bill in a half-changed state.
     let reassignment: { cardId: string; period: BillPeriod } | null = null;
     if (input.billMonth !== undefined && input.billYear !== undefined) {
       const cardId = yield* okOr(existing.cardId, transactionErrors.billAssignmentRequiresCard);
@@ -251,6 +251,22 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
       yield* guard(await assertTargetBillNotPaid(deps, card.id, period), transactionErrors.paidBillImmutable);
 
       reassignment = { cardId: card.id, period };
+    }
+
+    // Attach before the main update: ensureAndAttach's atomic re-check (closing the race where a
+    // concurrent pay_bill lands between the pre-check above and this attach) must be able to reject
+    // the request without having already written the rest of the patch — otherwise the client sees
+    // an error response for a write that partially committed.
+    let reassignedBillId: string | undefined;
+    if (reassignment) {
+      const attached = await deps.bills.ensureAndAttach(
+        reassignment.cardId,
+        input.id,
+        reassignment.period,
+        deps.newId(),
+      );
+      const bill = yield* okOr(attached, transactionErrors.paidBillImmutable);
+      reassignedBillId = bill.id;
     }
 
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
@@ -284,21 +300,7 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
     if (categoryId && categoryId !== existing.categoryId)
       await deps.merchants.strengthenFromTransaction(input.id, categoryId);
 
-    // Reassign after the main update succeeds — a later validation failure above must never leave
-    // the bill assignment changed while the rest of the patch was rejected. ensureAndAttach itself
-    // re-checks paid status atomically (null = blocked) — closes the race where a concurrent
-    // pay_bill lands between the pre-check above and this attach.
-    let finalTransaction = updated;
-    if (reassignment) {
-      const attached = await deps.bills.ensureAndAttach(
-        reassignment.cardId,
-        updated.id,
-        reassignment.period,
-        deps.newId(),
-      );
-      const bill = yield* okOr(attached, transactionErrors.paidBillImmutable);
-      finalTransaction = withBillId(updated, bill.id);
-    }
+    const finalTransaction = reassignedBillId ? withBillId(updated, reassignedBillId) : updated;
 
     const locale = await deps.locale();
     return ok(addLocalizedLabels(finalTransaction, locale));

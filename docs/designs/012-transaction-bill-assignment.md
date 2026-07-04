@@ -101,9 +101,10 @@ transaction's current `bill_id` (if any) inside the same transaction and refuses
 ever touching the target. A fresh insert or a self-heal attach has no current bill yet, so this check is a
 no-op there — it only bites on an actual reassignment. Both callers treat `null` as the authoritative
 `paidBillImmutable` rejection: `createTransaction` deletes the just-inserted transaction row first (preserving
-"no orphans" even on this rare race), `updateTransaction` simply surfaces the error — its other patched fields
-(amount, category, …) may already have committed, the same accepted partial-write risk category as any other
-multi-write controller flow in this codebase, not a new one introduced here.
+"no orphans" even on this rare race); `updateTransaction` calls `ensureAndAttach` **before** the main
+`deps.transactions.update(...)` write, so this rare-race rejection surfaces before any other field is written —
+not after, which would otherwise mutate the transaction's other patched fields (amount, category, …) and still
+return a client-visible error for the same request.
 
 ## Consequences
 
@@ -167,10 +168,12 @@ multi-write controller flow in this codebase, not a new one introduced here.
      transaction's *current* bill (`existing.billId`) isn't paid (a small repo-touching `assertBillNotPaid(deps,
      billId)` helper — `true` when `billId` is unset or its bill isn't `paid`; reused by `deleteTransaction`
      too), resolve the target card via `deps.creditCards.findById(existing.cardId)`, compute the target period,
-     and guard the target bill isn't paid. Do the actual `ensureAndAttach` call **after** the main
-     `deps.transactions.update(...)** write (so a later, unrelated validation failure — e.g. category kind
-     mismatch — can't leave a reassignment committed with the rest of the patch rejected), then patch the
-     returned view's `billId` before localizing.
+     and guard the target bill isn't paid. Do the actual `ensureAndAttach` call **before** the main
+     `deps.transactions.update(...)` write: `ensureAndAttach` re-checks paid status atomically and can still
+     block on a race the two pre-checks above missed (a concurrent `pay_bill` landing in between), and that
+     block must reject the request before any other field is written — otherwise the client sees an error
+     response for a write that had already partially committed. Patch the returned view's `billId` before
+     localizing.
    - `deleteTransaction`: replace the `assertNotBillPayment`/`findByPaymentTransaction` guard with
      `guard(await assertBillNotPaid(deps, existing.billId), transactionErrors.paidBillImmutable)`.
 7. **Docs:** `docs/mcp-tools.md` (`create_transaction`/`update_transaction` — the new fields, paid-bill rule;
