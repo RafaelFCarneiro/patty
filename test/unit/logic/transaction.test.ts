@@ -11,10 +11,14 @@ import {
 import type { RawTransactionView } from '../../../src/models/transaction.js';
 import {
   addLocalizedLabels,
+  assertBillAssignmentHasCard,
+  assertBillPeriodPaired,
   assertExclusiveAccountCard,
   assertExclusiveCategorySubCategory,
   deriveIdempotencyKey,
   guardTransferMutability,
+  hasCategory,
+  hasSubCategory,
   isCategoryKindAllowed,
   needsReview,
   resolveCurrency,
@@ -296,5 +300,82 @@ describe('assertExclusiveCategorySubCategory', () => {
 
   it('fails when both are provided', () => {
     expect(assertExclusiveCategorySubCategory({ category: 'C', subCategory: 'S' })).toBe(false);
+  });
+
+  // Value-based (via hasCategory/hasSubCategory), not truthiness — an explicitly empty string is
+  // still "provided", so this combination must be caught as a violation, not silently let through.
+  it('fails when category is an empty string and subCategory is also provided', () => {
+    expect(assertExclusiveCategorySubCategory({ category: '', subCategory: 'S' })).toBe(false);
+  });
+});
+
+describe('hasCategory / hasSubCategory', () => {
+  it('hasCategory is true only when category is present', () => {
+    expect(hasCategory({ category: 'C' })).toBe(true);
+    expect(hasCategory({})).toBe(false);
+    expect(hasCategory({ subCategory: 'S' })).toBe(false);
+  });
+
+  it('hasSubCategory is true only when subCategory is present', () => {
+    expect(hasSubCategory({ subCategory: 'S' })).toBe(true);
+    expect(hasSubCategory({})).toBe(false);
+    expect(hasSubCategory({ category: 'C' })).toBe(false);
+  });
+
+  // isNonNullish-based, not truthiness — at the pure-predicate level an empty string is still
+  // non-nullish ("provided"); it's CategoryFieldsSchema's .min(1) that rejects '' at the boundary
+  // before it can ever reach this predicate in a real request.
+  it('treats an empty string as provided, not as absent', () => {
+    expect(hasCategory({ category: '' })).toBe(true);
+    expect(hasSubCategory({ subCategory: '' })).toBe(true);
+  });
+
+  // isNonNullish over !== undefined specifically to also treat null as absent — the field's type
+  // never allows null, but a caller-constructed object bypassing the type system could still pass
+  // one, and `null !== undefined` would otherwise (wrongly) count it as provided.
+  it('treats null as absent, unlike a plain !== undefined check', () => {
+    expect(hasCategory({ category: null as unknown as string })).toBe(false);
+    expect(hasSubCategory({ subCategory: null as unknown as string })).toBe(false);
+  });
+});
+
+describe('assertBillPeriodPaired', () => {
+  it('passes when neither billMonth nor billYear is provided', () => {
+    expect(assertBillPeriodPaired({})).toBe(true);
+  });
+
+  it('passes when both are provided', () => {
+    expect(assertBillPeriodPaired({ billMonth: 6, billYear: 2026 })).toBe(true);
+  });
+
+  it('fails when only billMonth is provided', () => {
+    expect(assertBillPeriodPaired({ billMonth: 6 })).toBe(false);
+  });
+
+  it('fails when only billYear is provided', () => {
+    expect(assertBillPeriodPaired({ billYear: 2026 })).toBe(false);
+  });
+});
+
+describe('assertBillAssignmentHasCard', () => {
+  it('passes when billMonth is not provided, regardless of card', () => {
+    expect(assertBillAssignmentHasCard(undefined, false)).toBe(true);
+    expect(assertBillAssignmentHasCard(undefined, true)).toBe(true);
+  });
+
+  it('passes when billMonth is provided and a card is present', () => {
+    expect(assertBillAssignmentHasCard(6, true)).toBe(true);
+  });
+
+  it('fails when billMonth is provided but no card is present', () => {
+    expect(assertBillAssignmentHasCard(6, false)).toBe(false);
+  });
+
+  // billMonth: 0 is out of the schema's valid range (1-12) and never reaches this predicate through
+  // the real API — but the check must use explicit undefined, not truthiness, so a 0 is correctly
+  // treated as "provided" rather than silently passing as "not provided".
+  it('treats billMonth 0 as provided, not as absent', () => {
+    expect(assertBillAssignmentHasCard(0, false)).toBe(false);
+    expect(assertBillAssignmentHasCard(0, true)).toBe(true);
   });
 });

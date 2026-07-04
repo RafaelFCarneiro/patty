@@ -6,6 +6,7 @@ import { CurrencyCode } from '../models/money.js';
 import type { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
 import type {
+  CategoryFields,
   Classification,
   ClassifyOutcome,
   CreateTransaction,
@@ -44,8 +45,33 @@ export const resolveCurrency = (
 export const assertExclusiveAccountCard = (input: { account?: string; card?: string }): boolean =>
   !(input.account && input.card);
 
-export const assertExclusiveCategorySubCategory = (input: { category?: string; subCategory?: string }): boolean =>
-  !(input.category && input.subCategory);
+/**
+ * True when a category name was provided — a type guard, narrowing `category` to `string`. The
+ * schema rejects empty strings (`.min(1)`), so this only needs to rule out null/undefined; using
+ * isNonNullish (rather than `!== undefined`) means a `null` would also correctly count as absent.
+ */
+export const hasCategory = (input: CategoryFields): input is CategoryFields & { category: string } =>
+  R.isNonNullish(input.category);
+
+/** True when a subCategory name was provided — same reasoning as hasCategory. */
+export const hasSubCategory = (input: CategoryFields): input is CategoryFields & { subCategory: string } =>
+  R.isNonNullish(input.subCategory);
+
+// Value-based (via hasCategory/hasSubCategory), not truthiness — so e.g. a caller-constructed
+// { category: undefined, subCategory: 'S' } is judged consistently with resolveCategorySelection.
+export const assertExclusiveCategorySubCategory = (input: CategoryFields): boolean =>
+  !(hasCategory(input) && hasSubCategory(input));
+
+/** billMonth/billYear (bill assignment) must be provided together, or not at all. */
+export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: number }): boolean =>
+  (input.billMonth === undefined) === (input.billYear === undefined);
+
+/** Bill assignment only applies to card transactions. */
+export const assertBillAssignmentHasCard = (billMonth: number | undefined, hasCard: boolean): boolean =>
+  billMonth === undefined || hasCard;
+
+/** Reports a transaction's (new) bill assignment — used after create/update attaches or reassigns it. */
+export const withBillId = (tx: RawTransactionView, billId: string): RawTransactionView => ({ ...tx, billId });
 
 export const isCategoryKindAllowed = (txType: MovementType, categoryKind: CategoryKind): boolean =>
   categoryKind === CategoryKind.enum.both || categoryKind === txType;

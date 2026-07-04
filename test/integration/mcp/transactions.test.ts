@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
 import { callTool, deleteTransactions, ensure, makeClient, preferredAccount } from './helpers.js';
 
@@ -138,6 +138,343 @@ describe('MCP integration > transactions', () => {
       })) as Array<{ id?: string }>;
 
       expect(results.some((tx) => tx.id === txId)).toBe(true);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('search_transactions rejects an explicitly empty category at the schema boundary', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // CategoryFieldsSchema requires category/subCategory to be non-empty (.min(1)) when
+      // provided, so '' never reaches resolution — the MCP SDK rejects it against inputSchema
+      // before our handler ever runs. The result is isError: true with a raw zod "too_small"
+      // validation message (not our own {error: {code, ...}} JSON envelope, since our handler —
+      // and therefore fromResult/jsonError — is never invoked), so this reads the response
+      // directly instead of going through callTool/callToolError's JSON-payload parsing.
+      const result = await client.request(
+        { method: 'tools/call', params: { name: 'search_transactions', arguments: { category: '', limit: 10 } } },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('search_transactions rejects an explicitly empty subCategory at the same schema boundary', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // SearchTransactionsSchema's category field has its own coverage above; subCategory is a
+      // separate field declaration in the same schema and could independently regress (e.g. an
+      // edit that touches only this line) without that test catching it.
+      const result = await client.request(
+        { method: 'tools/call', params: { name: 'search_transactions', arguments: { subCategory: '', limit: 10 } } },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('create_transaction rejects an explicitly empty subCategory at the same schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // CreateTransactionSchema derives category/subCategory from CategoryFieldsSchema.shape today,
+      // but that's this schema's own contract to keep — a future edit to CreateTransactionSchema
+      // could drop that derivation without touching search_transactions at all, so this schema
+      // gets its own regression guard rather than relying on search_transactions' coverage.
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_transaction',
+            arguments: {
+              description: `Empty subCategory ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              subCategory: '',
+              idempotencyKey: `empty-subcategory-${stamp}`,
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('create_transaction rejects an explicitly empty category at the same schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // CreateTransactionSchema's category field has its own coverage via the subCategory case
+      // above, but category is a separate field declaration in the same schema and could
+      // independently regress (e.g. an edit that touches only this line) without that test
+      // catching it.
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_transaction',
+            arguments: {
+              description: `Empty category ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              category: '',
+              idempotencyKey: `empty-category-${stamp}`,
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('update_transaction rejects an explicitly empty category at the same schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Update empty category ${stamp}`,
+          amount: 10,
+          type: 'expense',
+          category: 'Other',
+          idempotencyKey: `update-empty-category-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } };
+      const txId = created.transaction?.id;
+      ensure(txId, 'Transaction id missing');
+      createdTxIds.push(txId);
+
+      // UpdateTransactionSchema is its own contract — the same regression argument as create: a
+      // future edit here could independently drop the CategoryFieldsSchema derivation without
+      // create/search noticing.
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: { name: 'update_transaction', arguments: { id: txId, category: '' } },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('update_transaction rejects an explicitly empty subCategory at the same schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Update empty subCategory ${stamp}`,
+          amount: 10,
+          type: 'expense',
+          category: 'Other',
+          idempotencyKey: `update-empty-subcategory-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } };
+      const txId = created.transaction?.id;
+      ensure(txId, 'Transaction id missing');
+      createdTxIds.push(txId);
+
+      // UpdateTransactionSchema's category field has its own coverage above; subCategory is a
+      // separate field declaration in the same schema and could independently regress without
+      // that test catching it.
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: { name: 'update_transaction', arguments: { id: txId, subCategory: '' } },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('create_transaction rejects an explicitly empty account at the schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // account/card were truthiness-gated downstream (input.account ? ... : null), the same bug
+      // class already fixed for category/subCategory — an explicitly empty name must be rejected,
+      // not silently treated as "no account".
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_transaction',
+            arguments: {
+              description: `Empty account ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              account: '',
+              idempotencyKey: `empty-account-${stamp}`,
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('create_transaction rejects an explicitly empty card at the schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // card: '' is especially confusing without this guard: it's treated as "no card" downstream
+      // and would trigger billAssignmentRequiresCard instead of failing fast here.
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_transaction',
+            arguments: {
+              description: `Empty card ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              card: '',
+              idempotencyKey: `empty-card-${stamp}`,
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('update_transaction rejects an explicitly empty account at the schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Update empty account ${stamp}`,
+          amount: 10,
+          type: 'expense',
+          idempotencyKey: `update-empty-account-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } };
+      const txId = created.transaction?.id;
+      ensure(txId, 'Transaction id missing');
+      createdTxIds.push(txId);
+
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: { name: 'update_transaction', arguments: { id: txId, account: '' } },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('search_transactions rejects an explicitly empty account at the schema boundary', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const result = await client.request(
+        { method: 'tools/call', params: { name: 'search_transactions', arguments: { account: '', limit: 10 } } },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('create_transactions_bulk rejects an explicitly empty top-level account default', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_transactions_bulk',
+            arguments: {
+              account: '',
+              items: [
+                {
+                  description: `Bulk empty account ${stamp}`,
+                  amount: 10,
+                  type: 'expense',
+                  idempotencyKey: `bulk-empty-account-${stamp}`,
+                },
+              ],
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
     } finally {
       await transport.close();
     }

@@ -9,7 +9,7 @@ export type TransactionRow = typeof transactions.$inferSelect;
 
 // The columns dbToModel consumes from the full transaction SELECT (node columns +
 // LEFT JOINed related names/tags). Decoded at the boundary before mapping to the model;
-// unrelated columns the SELECT may also return (e.g. bill_id) are ignored by z.object.
+// unrelated columns the SELECT may also return are ignored by z.object.
 export const TransactionRowSchema = z.object({
   id: z.string(),
   description: z.string(),
@@ -30,6 +30,7 @@ export const TransactionRowSchema = z.object({
   to_account_name: z.string().nullable(),
   credit_card_id: z.string().nullable(),
   credit_card_name: z.string().nullable(),
+  bill_id: z.string().nullable(),
   category_id: z.string().nullable(),
   category_name: z.string().nullable(),
   category_names: z.string().nullable().default(null),
