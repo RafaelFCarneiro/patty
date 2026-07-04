@@ -220,6 +220,40 @@ describe('MCP integration > transactions', () => {
     }
   });
 
+  it('create_transaction rejects an explicitly empty category at the same schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // CreateTransactionSchema's category field has its own coverage via the subCategory case
+      // above, but category is a separate field declaration in the same schema and could
+      // independently regress (e.g. an edit that touches only this line) without that test
+      // catching it.
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'create_transaction',
+            arguments: {
+              description: `Empty category ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              category: '',
+              idempotencyKey: `empty-category-${stamp}`,
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('update_transaction rejects an explicitly empty category at the same schema boundary', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
@@ -247,6 +281,44 @@ describe('MCP integration > transactions', () => {
         {
           method: 'tools/call',
           params: { name: 'update_transaction', arguments: { id: txId, category: '' } },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('update_transaction rejects an explicitly empty subCategory at the same schema boundary', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const created = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Update empty subCategory ${stamp}`,
+          amount: 10,
+          type: 'expense',
+          category: 'Other',
+          idempotencyKey: `update-empty-subcategory-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } };
+      const txId = created.transaction?.id;
+      ensure(txId, 'Transaction id missing');
+      createdTxIds.push(txId);
+
+      // UpdateTransactionSchema's category field has its own coverage above; subCategory is a
+      // separate field declaration in the same schema and could independently regress without
+      // that test catching it.
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: { name: 'update_transaction', arguments: { id: txId, subCategory: '' } },
         },
         CallToolResultSchema,
       );
