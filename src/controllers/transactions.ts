@@ -1,9 +1,11 @@
-import { ok, safeTry, type ResultAsync } from 'neverthrow';
+import { ok, okAsync, safeTry, type ResultAsync } from 'neverthrow';
+import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
 import { assertNonCreditType } from '../logic/account.js';
 import { accountErrors } from '../models/account.js';
-import { billPeriodFor } from '../logic/bill.js';
+import { billPeriodFor, billPeriodForCycle, isBillPaid, type BillPeriod } from '../logic/bill.js';
+import { notFound } from '../models/error.js';
 import { pickClassification, userClassification } from '../logic/classify.js';
 import { ClassificationMethod } from '../models/transaction.js';
 import type { ClassifyOutcome } from '../models/transaction.js';
@@ -12,24 +14,32 @@ import { periodRange, toIsoDate } from '../logic/period.js';
 import type { BulkItemResult, BulkResult } from '../logic/transaction.js';
 import {
   addLocalizedLabels,
+  assertBillAssignmentHasCard,
+  assertBillPeriodPaired,
   assertExclusiveAccountCard,
   assertExclusiveCategorySubCategory,
   defaultStatusFor,
   deriveIdempotencyKey,
   guardTransferMutability,
+  hasCategory,
+  hasSubCategory,
   isCategoryKindAllowed,
   resolveCurrency,
   resolveEffectiveType,
   summarizeBulkItems,
   toBulkItemResult,
+  withBillId,
 } from '../logic/transaction.js';
 import { TransactionStatus } from '../models/transaction.js';
 import {
   transactionErrors,
+  type CategoryFields,
+  type CategorySelection,
   type CreateTransaction,
   type CreateTransactionResult,
   type CreateTransactionsBulk,
   type DeleteTransactionResult,
+  type MovementType,
   type SearchTransactions,
   type TransactionView,
   type TransactionSource,
@@ -37,6 +47,68 @@ import {
 } from '../models/transaction.js';
 import type { Deps } from './deps.js';
 import { resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
+
+/** Resolves a category by name, guarding kind-compatibility when the movement type is known. */
+const resolveCategory = (
+  deps: Deps,
+  category: string,
+  movementType: MovementType | undefined,
+): ResultAsync<CategorySelection, AppError> =>
+  safeTry(async function* () {
+    const cat = yield* resolveCategoryRef(deps, category);
+    if (movementType)
+      yield* guard(
+        isCategoryKindAllowed(movementType, cat.kind),
+        transactionErrors.categoryKindMismatch(movementType, cat.name, cat.kind),
+      );
+    return ok({ categoryId: cat.id, categoryName: cat.name });
+  });
+
+/** Resolves a sub-category by name, guarding kind-compatibility when the movement type is known. */
+const resolveSubCategory = (
+  deps: Deps,
+  subCategory: string,
+  movementType: MovementType | undefined,
+): ResultAsync<CategorySelection, AppError> =>
+  safeTry(async function* () {
+    const subCat = yield* resolveSubCategoryRef(deps, subCategory);
+    if (movementType)
+      yield* guard(
+        isCategoryKindAllowed(movementType, subCat.kind),
+        transactionErrors.categoryKindMismatch(movementType, subCat.name, subCat.kind),
+      );
+    return ok({ categoryId: subCat.parentId, categoryName: subCat.parentName, subCategoryId: subCat.id });
+  });
+
+/**
+ * Dispatches to subCategory (preferred) or category resolution by whichever the caller provided.
+ * Returns null when neither was given — callers decide what "unset" means for them (auto-classify
+ * on create, leave the existing category untouched on update).
+ */
+const resolveCategorySelection = (
+  deps: Deps,
+  input: CategoryFields,
+  movementType: MovementType | undefined,
+): ResultAsync<CategorySelection | null, AppError> =>
+  R.conditional(
+    input,
+    [hasSubCategory, (i) => resolveSubCategory(deps, i.subCategory, movementType)],
+    [hasCategory, (i) => resolveCategory(deps, i.category, movementType)],
+    () => okAsync(null),
+  );
+
+/** Repo-touching precondition: true when the target bill cycle doesn't exist yet, or isn't paid. */
+const assertTargetBillNotPaid = async (deps: Deps, cardId: string, period: BillPeriod): Promise<boolean> => {
+  const targetBill = await deps.bills.findByCycle(cardId, period.month, period.year);
+  return !targetBill || !isBillPaid(targetBill);
+};
+
+/** Repo-touching precondition: true when the transaction has no bill, or that bill isn't paid. */
+const assertBillNotPaid = async (deps: Deps, billId: string | undefined): Promise<boolean> => {
+  if (!billId) return true;
+  const bill = await deps.bills.findById(billId);
+  return !bill || !isBillPaid(bill);
+};
 
 export const createTransaction = (
   deps: Deps,
@@ -46,6 +118,11 @@ export const createTransaction = (
   safeTry(async function* () {
     yield* guard(assertExclusiveAccountCard(input), transactionErrors.exclusiveAccountCard);
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory);
+    yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
+    yield* guard(
+      assertBillAssignmentHasCard(input.billMonth, !!input.card),
+      transactionErrors.billAssignmentRequiresCard,
+    );
 
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     if (account) {
@@ -53,31 +130,28 @@ export const createTransaction = (
     }
     const card = input.card ? yield* resolveCardRef(deps, input.card) : null;
 
-    let classification: ClassifyOutcome;
-    let subCategoryId: string | undefined;
-
-    if (input.subCategory) {
-      const subCat = yield* resolveSubCategoryRef(deps, input.subCategory);
-      yield* guard(
-        isCategoryKindAllowed(input.type, subCat.kind),
-        transactionErrors.categoryKindMismatch(input.type, subCat.name, subCat.kind),
-      );
-      subCategoryId = subCat.id;
-      classification = userClassification({ id: subCat.parentId, name: subCat.parentName });
-    } else if (input.category) {
-      const cat = yield* resolveCategoryRef(deps, input.category);
-      yield* guard(
-        isCategoryKindAllowed(input.type, cat.kind),
-        transactionErrors.categoryKindMismatch(input.type, cat.name, cat.kind),
-      );
-      classification = userClassification(cat);
-    } else {
-      classification = pickClassification(await deps.merchants.matchCandidates(normalizeMerchant(input.description)));
-    }
-
     const today = toIsoDate(deps.clock());
     const date = input.date ?? today;
     const status = input.status ?? defaultStatusFor(date, today);
+
+    // Resolve the target bill period up front (explicit override or cycle-based auto-assignment) and
+    // reject onto a paid bill before doing any category/merchant resolution work or writing the
+    // transaction — a request that's going to be rejected shouldn't pay for that work first, and we
+    // never want to leave an orphan, unattached row.
+    let billPeriod: BillPeriod | null = null;
+    if (card) {
+      billPeriod =
+        input.billMonth !== undefined && input.billYear !== undefined
+          ? billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay)
+          : billPeriodFor(date, card.closingDay, card.dueDay);
+      yield* guard(await assertTargetBillNotPaid(deps, card.id, billPeriod), transactionErrors.paidBillImmutable);
+    }
+
+    const categorySelection = yield* resolveCategorySelection(deps, input, input.type);
+    const classification: ClassifyOutcome = categorySelection
+      ? userClassification({ id: categorySelection.categoryId, name: categorySelection.categoryName })
+      : pickClassification(await deps.merchants.matchCandidates(normalizeMerchant(input.description)));
+    const subCategoryId = categorySelection?.subCategoryId;
 
     const { transaction, created } = await deps.transactions.create(
       {
@@ -104,17 +178,23 @@ export const createTransaction = (
       input.tags ?? [],
     );
 
-    // Card transactions join their cycle's bill (fatura), created open on demand
-    if (card && created)
-      await deps.bills.ensureAndAttach(
-        card.id,
-        transaction.id,
-        billPeriodFor(date, card.closingDay, card.dueDay),
-        deps.newId(),
-      );
+    // Card transactions join their cycle's bill (fatura), created open on demand. Keyed on
+    // "missing billId", not "created" — an idempotent replay of a row that was inserted but never
+    // got attached (e.g. the process died between the two writes) self-heals here instead of
+    // staying permanently orphaned. ensureAndAttach re-checks paid status atomically (null =
+    // blocked) — closes the race where a concurrent pay_bill lands between the pre-check above and
+    // this attach. On the (rare) block, only roll back by deleting the row when this call is the one
+    // that inserted it (created) — never delete a pre-existing row we're merely trying to self-heal.
+    let finalTransaction = transaction;
+    if (card && billPeriod && !transaction.billId) {
+      const attached = await deps.bills.ensureAndAttach(card.id, transaction.id, billPeriod, deps.newId());
+      if (!attached && created) await deps.transactions.delete(transaction.id);
+      const bill = yield* okOr(attached, transactionErrors.paidBillImmutable);
+      finalTransaction = withBillId(transaction, bill.id);
+    }
 
     const locale = await deps.locale();
-    return ok({ transaction: addLocalizedLabels(transaction, locale), created, classification });
+    return ok({ transaction: addLocalizedLabels(finalTransaction, locale), created, classification });
   });
 
 /** Statement paste/import: each line idempotent, classified, flagged for review when uncertain. */
@@ -150,41 +230,54 @@ export const createTransactionsBulk = (
 export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
+    yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
 
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
 
     yield* guardTransferMutability(existing, input);
 
+    // Reassignment (billMonth/billYear given): validate up front — never leave the current or target
+    // bill in a half-changed state.
+    let reassignment: { cardId: string; period: BillPeriod } | null = null;
+    if (input.billMonth !== undefined && input.billYear !== undefined) {
+      const cardId = yield* okOr(existing.cardId, transactionErrors.billAssignmentRequiresCard);
+      yield* guard(await assertBillNotPaid(deps, existing.billId), transactionErrors.paidBillImmutable);
+
+      // A stale cardId here would be an internal FK inconsistency (deleting a card cascades to its
+      // transactions), not a real user-facing case — but the error, if it ever fires, should name the
+      // card that's missing, not the transaction that's present.
+      const card = yield* okOr(await deps.creditCards.findById(cardId), notFound('card', cardId, []));
+      const period = billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay);
+      yield* guard(await assertTargetBillNotPaid(deps, card.id, period), transactionErrors.paidBillImmutable);
+
+      reassignment = { cardId: card.id, period };
+    }
+
+    // Attach before the main update: ensureAndAttach's atomic re-check (closing the race where a
+    // concurrent pay_bill lands between the pre-check above and this attach) must be able to reject
+    // the request without having already written the rest of the patch — otherwise the client sees
+    // an error response for a write that partially committed.
+    let reassignedBillId: string | undefined;
+    if (reassignment) {
+      const attached = await deps.bills.ensureAndAttach(
+        reassignment.cardId,
+        input.id,
+        reassignment.period,
+        deps.newId(),
+      );
+      const bill = yield* okOr(attached, transactionErrors.paidBillImmutable);
+      reassignedBillId = bill.id;
+    }
+
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     const effectiveType = resolveEffectiveType(existing, input);
 
-    let categoryId: string | null = null;
-    // undefined = leave the sub-category untouched; null = explicitly clear it.
-    let subCategoryId: string | null | undefined;
-
-    if (input.subCategory) {
-      const subCat = yield* resolveSubCategoryRef(deps, input.subCategory);
-      if (effectiveType)
-        yield* guard(
-          isCategoryKindAllowed(effectiveType, subCat.kind),
-          transactionErrors.categoryKindMismatch(effectiveType, subCat.name, subCat.kind),
-        );
-      subCategoryId = subCat.id;
-      categoryId = subCat.parentId;
-    } else if (input.category) {
-      const cat = yield* resolveCategoryRef(deps, input.category);
-      if (effectiveType)
-        yield* guard(
-          isCategoryKindAllowed(effectiveType, cat.kind),
-          transactionErrors.categoryKindMismatch(effectiveType, cat.name, cat.kind),
-        );
-      categoryId = cat.id;
-      // Business rule: assigning a plain category clears any prior sub-category —
-      // "sub-category always paired with its parent" would otherwise go stale.
-      subCategoryId = null;
-    }
-
-    const isUserCorrection = !!(input.category || input.subCategory);
+    const categorySelection = yield* resolveCategorySelection(deps, input, effectiveType);
+    const categoryId = categorySelection?.categoryId ?? null;
+    // undefined = leave the sub-category untouched (nothing given); null = explicitly clear it
+    // (a plain category was given, with no sub-category); defined = set to the resolved sub-category.
+    const subCategoryId = categorySelection ? (categorySelection.subCategoryId ?? null) : undefined;
+    const isUserCorrection = !!categorySelection;
 
     const updated = yield* okOr(
       await deps.transactions.update(
@@ -207,8 +300,10 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
     if (categoryId && categoryId !== existing.categoryId)
       await deps.merchants.strengthenFromTransaction(input.id, categoryId);
 
+    const finalTransaction = reassignedBillId ? withBillId(updated, reassignedBillId) : updated;
+
     const locale = await deps.locale();
-    return ok(addLocalizedLabels(updated, locale));
+    return ok(addLocalizedLabels(finalTransaction, locale));
   });
 
 /** Flip a pending transaction to effective. No-op (returns existing) if already effective. */
@@ -224,10 +319,6 @@ export const confirmTransaction = (deps: Deps, input: { id: string }): ResultAsy
     return ok(addLocalizedLabels(confirmed, locale));
   });
 
-/** Repo-touching precondition: true when the transaction is not a bill's payment transfer. */
-const assertNotBillPayment = async (deps: Deps, transactionId: string): Promise<boolean> =>
-  !(await deps.bills.findByPaymentTransaction(transactionId));
-
 export const deleteTransaction = (
   deps: Deps,
   input: { id: string; confirm: boolean },
@@ -235,7 +326,7 @@ export const deleteTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
 
-    yield* guard(await assertNotBillPayment(deps, input.id), transactionErrors.billPaymentTransferProtected);
+    yield* guard(await assertBillNotPaid(deps, existing.billId), transactionErrors.paidBillImmutable);
 
     const locale = await deps.locale();
     const labeled = addLocalizedLabels(existing, locale);
@@ -256,8 +347,8 @@ export const searchTransactions = (deps: Deps, input: SearchTransactions): Resul
   safeTry(async function* () {
     const range = input.month && input.year ? periodRange({ month: input.month, year: input.year }) : null;
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
-    const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
-    const subCategory = input.subCategory ? yield* resolveSubCategoryRef(deps, input.subCategory) : null;
+    const category = hasCategory(input) ? yield* resolveCategoryRef(deps, input.category) : null;
+    const subCategory = hasSubCategory(input) ? yield* resolveSubCategoryRef(deps, input.subCategory) : null;
 
     const [locale, rows] = await Promise.all([
       deps.locale(),

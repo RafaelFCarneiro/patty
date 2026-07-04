@@ -24,6 +24,7 @@ export type CreditCardsRepo = {
   list: () => Promise<CreditCard[]>;
   createWithAccount: (card: CreditCard, account: Account) => Promise<CreditCard>;
   findByName: (name: string) => Promise<CreditCard | null>;
+  findById: (id: string) => Promise<CreditCard | null>;
   countCorrelated: (cardId: string, accountId: string) => Promise<DeleteCardCounts>;
   deleteCard: (cardId: string, accountId: string) => Promise<void>;
 };
@@ -66,6 +67,11 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
       .from(creditCards)
       .where(sql`lower(${creditCards.name}) = lower(${name})`)
       .limit(1);
+    return rows[0] ? toCard(rows[0]) : null;
+  },
+
+  findById: async (id) => {
+    const rows = await db.select().from(creditCards).where(eq(creditCards.id, id)).limit(1);
     return rows[0] ? toCard(rows[0]) : null;
   },
 

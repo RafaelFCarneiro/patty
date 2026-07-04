@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { McpTransport } from '../../src/config.js';
-import { bootstrap } from '../../src/diplomat/db/bootstrap.js';
-import { openDatabase } from '../../src/diplomat/db/driver.js';
-import { dashboardsRepo } from '../../src/diplomat/db/repos/dashboards.js';
+import { McpTransport } from '../../../src/config.js';
+import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
+import { openDatabase } from '../../../src/diplomat/db/driver.js';
+import { dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 
 const TEST_KEY = 'e'.repeat(64);
 

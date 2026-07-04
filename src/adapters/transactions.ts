@@ -56,6 +56,7 @@ export const dbToModel = (record: Record<string, unknown>): RawTransactionView =
     toAccountName: row.to_account_name ?? undefined,
     cardId: row.credit_card_id ?? undefined,
     cardName: row.credit_card_name ?? undefined,
+    billId: row.bill_id ?? undefined,
     categoryId: row.category_id ?? undefined,
     categoryName: row.category_name ?? undefined,
     categoryNames,
