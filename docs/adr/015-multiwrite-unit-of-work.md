@@ -34,9 +34,9 @@ controller splits one logical mutation across several repo calls.
 
 ## Decision (proposed)
 
-**Controllers assemble a typed, per-flow delta — the fully-decided write intent — and hand it to ONE diplomat
-method that executes all writes in a single `db.transaction`, with any last-instant race guard expressed as a
-data-driven compare-and-set (CAS) SQL predicate.** Rollback on conflict; the repo reports the conflict as a
+**Controllers assemble a typed, per-flow delta — the fully-decided write intent — and hand it to ONE
+transactional repo method (in `diplomat/db`) that executes all writes in a single `db.transaction`, with any
+last-instant race guard expressed as a data-driven compare-and-set (CAS) SQL predicate.** Rollback on conflict; the repo reports the conflict as a
 typed outcome value; the controller maps it to a colocated `AppError`.
 
 The three sub-decisions:
@@ -58,11 +58,12 @@ The three sub-decisions:
    Explicitly **no generic domain-spanning `Delta`/changeset type** — that degrades into an untyped list of
    write ops and moves flow knowledge into the diplomat. One flow, one named type.
 
-2. **One diplomat method per flow consumes the delta** (e.g. `transactions.applyUpdate(id, delta)`), wrapping
-   every write in a single `db.transaction`. Race guards are **CAS predicates supplied as data**, not policy the
-   diplomat re-derives: conditional writes like `UPDATE … WHERE status != 'paid'` with `rowsAffected === 0`
-   treated as conflict — the same mechanic as the existing idempotency `onConflictDoNothing()` convention. The
-   diplomat knows *how* to apply and *whether the row matched*; only the controller knows *what that means*.
+2. **One transactional repo method per flow consumes the delta** (e.g. `transactions.applyUpdate(id, delta)`
+   in `diplomat/db`), wrapping every write in a single `db.transaction`. Race guards are **CAS predicates
+   supplied as data**, not policy the repo re-derives: conditional writes like `UPDATE … WHERE status != 'paid'`
+   with `rowsAffected === 0` treated as conflict — the same mechanic as the existing idempotency
+   `onConflictDoNothing()` convention. The repo knows *how* to apply and *whether the row matched*; only the
+   controller knows *what that means*.
 
 3. **Result ↔ `db.transaction` bridge — outcome-as-data at the repo boundary.** (The DB unit of work, not the
    finance `Transaction` entity.) Controllers live on the neverthrow
@@ -99,7 +100,7 @@ The three sub-decisions:
 
 - Deltas in `models/` — models depend on schema definitions only: unchanged. ✓
 - Controllers build deltas from models/logic and call injected deps: unchanged. ✓
-- Diplomat consumes models (deltas) and returns models/outcomes; contains **no business logic** — the CAS
+- The repo (`diplomat/db`) consumes models (deltas) and returns models/outcomes; contains **no business logic** — the CAS
   predicate is parameterized data; the meaning of a conflict is decided by the controller. ✓ (Identical in kind
   to `ensureAndAttach` returning `null` and `create` returning `created: false` today.)
 - `Deps` keeps its shape — repo interfaces gain flow methods; nothing new is injected. ✓
@@ -117,7 +118,7 @@ The three sub-decisions:
 **Rejected.** The third recurrence is a matter of time, and compensation-by-hand (delete on failed attach) is
 the least reviewable form of this fix.
 
-### Option B — Typed per-flow deltas + single-transaction diplomat method + CAS predicates — **chosen (proposed)**
+### Option B — Typed per-flow deltas + single transactional repo method + CAS predicates — **chosen (proposed)**
 | Dimension | Assessment |
 | --- | --- |
 | Correctness | Pair/triple becomes atomic; rollback on conflict; no compensation code |
@@ -141,7 +142,7 @@ transactions short (writes only) and where they already live.
 The tension is **atomicity vs. the "diplomat has no business logic" line**. Option C buys atomicity by moving
 transaction control into the domain — wrong direction, and operationally worse on SQLite (single writer).
 Option B keeps the boundary intact by splitting the concern: the **controller decides everything** (validations,
-resolution, what to write, what a conflict means) and encodes it as data; the **diplomat executes** the decided
+resolution, what to write, what a conflict means) and encodes it as data; the **repo executes** the decided
 intent atomically and reports what happened as data. The residual risk of Option B is delta proliferation —
 mitigated by scoping deltas per flow (only flows with ≥2 writes get one) and by the existing `TransactionPatch`
 precedent. `applyDueRecurring` shows the honest boundary of the rule: where **idempotent replay** already makes
@@ -156,7 +157,7 @@ materialization stays as-is.
 - **Harder:** each migrated flow needs its delta type + repo method + outcome mapping; contributors must learn
   the "delta in, outcome out" idiom (documented in `docs/architecture.md` + `docs/code-style.md` on acceptance).
 - **New invariant (added to `docs/architecture.md` on acceptance):** *a controller flow performing more than one
-  repo write MUST either hand a per-flow delta to a single transactional diplomat method, or document why
+  repo write MUST either hand a per-flow delta to a single transactional repo method (`diplomat/db`), or document why
   idempotent replay makes the non-atomic sequence safe (as `apply_due_recurring` does).* Review/verifier
   checklists gain this item.
 - **Out of scope, noted:** guard-then-single-write races (`deleteAccount`'s countReferences → delete) don't need
