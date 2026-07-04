@@ -1,9 +1,10 @@
-# ADR-014: Unit-of-work deltas for multi-write controller flows
+# ADR-015: Unit-of-work deltas for multi-write controller flows
 
 **Status:** Proposed · **Date:** 2026-07-04 · **Deciders:** Rafael · Builds on the parameterized-SQL and
 idempotency invariants (`docs/architecture.md`) and the intra-repo `db.transaction` pattern already in use.
 Triggered by the partial-write (TOCTOU) shape recurring on PR #83 — flagged twice by review, fixed once by a
-one-off reorder (commit bc1b418).
+one-off reorder (commit bc1b418). Sequenced **after** ADR-014 (collection pagination): that contract work
+unblocks the dashboards today; this migration follows, touching a different layer (repo write paths).
 
 ## Context
 
@@ -140,7 +141,7 @@ The tension is **atomicity vs. the "diplomat has no business logic" line**. Opti
 transaction control into the domain — wrong direction, and operationally worse on SQLite (single writer).
 Option B keeps the boundary intact by splitting the concern: the **controller decides everything** (validations,
 resolution, what to write, what a conflict means) and encodes it as data; the **diplomat executes** the decided
-intent atomically and reports what happened as data. The residual risk of Option B is delta proliferation — 
+intent atomically and reports what happened as data. The residual risk of Option B is delta proliferation —
 mitigated by scoping deltas per flow (only flows with ≥2 writes get one) and by the existing `TransactionPatch`
 precedent. `applyDueRecurring` shows the honest boundary of the rule: where **idempotent replay** already makes
 a partial batch safe to re-run, that is an acceptable, documented alternative to atomicity — batch
@@ -181,5 +182,6 @@ interleavings) where feasible.
 1. [ ] Review/accept this ADR (decision review — no implementation in this PR).
 2. [ ] On acceptance: add the multi-write invariant to `docs/architecture.md` (+ index this ADR) and the idiom
    to `docs/code-style.md`.
-3. [ ] Migrate `updateTransaction` (first mover), then `payBill`, then `createTransaction` — one PR each.
+3. [ ] Migrate `updateTransaction` (first mover), then `payBill`, then `createTransaction` — one PR each
+   (after the ADR-014 pagination first mover lands).
 4. [ ] Add the invariant to the self-review/verifier checklist in `CLAUDE.md`.
