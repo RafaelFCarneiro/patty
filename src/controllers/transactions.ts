@@ -50,6 +50,9 @@ import {
 } from '../models/transaction.js';
 import type { Deps } from './deps.js';
 import { resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
+// Type-only import from diplomat/db/repos is a documented exception (docs/architecture.md §
+// Dependency direction) — this is the repo's own contract parameter type, not a diplomat/* value.
+import type { ResolvedSearchRefs } from '../diplomat/db/repos/transactions.js';
 
 /** Resolves a category by name, guarding kind-compatibility when the movement type is known. */
 const resolveCategory = (
@@ -357,24 +360,20 @@ export const searchTransactions = (
     const subCategory = hasSubCategory(input) ? yield* resolveSubCategoryRef(deps, input.subCategory) : null;
     const cursorKey = yield* resolveCursorKey(input);
 
-    const filters = {
-      from: range?.from ?? input.from ?? null,
-      to: range?.to ?? input.to ?? null,
-      type: input.type ?? null,
-      status: input.status ?? null,
-      text: input.text ?? null,
+    // The only pieces of search_transactions' filter shape that need a repo lookup or a decode —
+    // everything else the repo needs is already on `input`. Shaping this pair into the flat
+    // SQL-filter object is diplomat/db's job (`toSearchFilters`), not the controller's.
+    const refs: ResolvedSearchRefs = {
       accountId: account?.id ?? null,
       categoryId: category?.id ?? null,
       subCategoryId: subCategory?.id ?? null,
-      tagNames: input.tags ?? [],
-      limit: input.limit,
-      sort: input.sort,
-      dir: input.dir,
+      from: range?.from ?? null,
+      to: range?.to ?? null,
       cursorKey,
     };
 
-    const [locale, page] = await Promise.all([deps.locale(), deps.transactions.search(filters)]);
-    const total = input.includeTotal ? await deps.transactions.count(filters) : undefined;
+    const [locale, page] = await Promise.all([deps.locale(), deps.transactions.search(input, refs)]);
+    const total = input.includeTotal ? await deps.transactions.count(input, refs) : undefined;
 
     const items = page.items.map(addLocalizedLabels(locale));
     const lastItem = R.last(items);

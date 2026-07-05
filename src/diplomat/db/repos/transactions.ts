@@ -1,10 +1,13 @@
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, inArray, sql, type SQL } from 'drizzle-orm';
 import * as transactionAdapters from '../../../adapters/transactions.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
+import { SortDirection, type CursorKey } from '../../../models/page.js';
 import {
+  TransactionSortField,
   TransactionStatus,
   TransactionType,
   type CreateTxResult,
+  type SearchTransactions,
   type Transaction,
   type RawTransactionView,
   type TransactionPatch,
@@ -17,13 +20,18 @@ import type { Db } from '../driver.js';
 import {
   buildCommonWhere,
   buildSearchWhere,
+  toSearchFilters,
   type AggregateFilters,
-  type SearchConditionFilters,
-  type SearchFilters,
+  type ResolvedSearchRefs,
 } from '../filters.js';
 import { merchants, tags, transactionTags, transactions } from '../schema.js';
-import { keysetPredicate, orderByClause } from '../transactionOrder.js';
+import { ORDER_BY_COLUMN } from '../transactionOrderWhitelist.js';
 import { fullTxSelect } from '../transactionSelect.js';
+
+// Re-exported so controllers can reference this repo-contract parameter type via the documented
+// "import type from diplomat/db/repos" exception (docs/architecture.md § Dependency direction),
+// without importing diplomat/db/filters.js directly (controllers may not import diplomat/* modules).
+export type { ResolvedSearchRefs } from '../filters.js';
 
 const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
   const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`));
@@ -45,6 +53,22 @@ const replaceTags = async (db: Db, txId: string, tagNames: string[]): Promise<vo
   await attachTags(db, txId, tagNames);
 };
 
+/** Tiebreaker (t.id) follows `dir` — one uniform direction across the composite key, which is
+ *  what keeps the keyset predicate below stable (ADR-014 Decision 1). */
+const orderByClause = (sort: TransactionSortField, dir: SortDirection): SQL => {
+  const direction = dir === SortDirection.enum.asc ? sql`ASC` : sql`DESC`;
+  return sql`${ORDER_BY_COLUMN[sort]} ${direction}, t.id ${direction}`;
+};
+
+/** Expanded keyset predicate, consistent with `orderByClause` per key component (ADR-014):
+ *  `(col < ? OR (col = ? AND t.id < ?))` for `dir: desc`, `>` for `dir: asc`. Values are always
+ *  parameter-bound; only the column fragment and comparator come from the ORDER_BY_COLUMN whitelist. */
+const keysetPredicate = (sort: TransactionSortField, dir: SortDirection, key: CursorKey): SQL => {
+  const column = ORDER_BY_COLUMN[sort];
+  const cmp = dir === SortDirection.enum.asc ? sql`>` : sql`<`;
+  return sql`(${column} ${cmp} ${key.value} OR (${column} = ${key.value} AND t.id ${cmp} ${key.id}))`;
+};
+
 export type TransactionsRepo = {
   /** Receives domain entity; model→db flattening happens here (adapters/transactions.ts). */
   create: (entity: Transaction, tagNames: string[]) => Promise<CreateTxResult>;
@@ -63,10 +87,15 @@ export type TransactionsRepo = {
   /** Flip status pending → effective. Returns null if the id does not exist. */
   confirm: (id: string) => Promise<RawTransactionView | null>;
   delete: (id: string) => Promise<boolean>;
-  /** Keyset page: fetches one extra row (LIMIT n+1) to derive `hasMore` without a COUNT query. */
-  search: (filters: SearchFilters) => Promise<{ items: RawTransactionView[]; hasMore: boolean }>;
+  /** Keyset page: fetches one extra row (LIMIT n+1) to derive `hasMore` without a COUNT query.
+   *  Receives the model plus the refs the controller had to resolve via I/O; shaping that pair
+   *  into the flat SQL-filter object (`toSearchFilters`) happens in here, not at the call site. */
+  search: (
+    input: SearchTransactions,
+    refs: ResolvedSearchRefs,
+  ) => Promise<{ items: RawTransactionView[]; hasMore: boolean }>;
   /** Same-WHERE count for `includeTotal` — no cursor/ORDER BY/LIMIT applied. */
-  count: (filters: SearchConditionFilters) => Promise<number>;
+  count: (input: SearchTransactions, refs: ResolvedSearchRefs) => Promise<number>;
   aggregate: (filters: AggregateFilters) => Promise<AggregateDbRow[]>;
   summaryRows: (from: string, to: string) => Promise<SummaryRow[]>;
   /** Aggregated pending amounts for an account dated on/before asOf. */
@@ -179,7 +208,8 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     return (result.rowsAffected ?? 0) > 0;
   },
 
-  search: async (filters) => {
+  search: async (input, refs) => {
+    const filters = toSearchFilters(input, refs);
     const conditions = buildSearchWhere(filters);
     if (filters.cursorKey) conditions.push(keysetPredicate(filters.sort, filters.dir, filters.cursorKey));
 
@@ -194,7 +224,8 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     return { items: rows.slice(0, filters.limit).map(transactionAdapters.dbToModel), hasMore };
   },
 
-  count: async (filters) => {
+  count: async (input, refs) => {
+    const filters = toSearchFilters(input, refs);
     const conditions = buildSearchWhere(filters);
     const where = conditions.length > 0 ? sql.join(conditions, sql` AND `) : sql`1=1`;
     const [row] = await db.all<{ count: number }>(sql`SELECT COUNT(*) AS count FROM transactions t WHERE ${where}`);

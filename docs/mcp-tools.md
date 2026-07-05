@@ -94,7 +94,7 @@ Filter by `month`+`year` (or `from`/`to`), `type` (`expense|income|transfer`), `
 
 Use `status: "pending"` to list scheduled/expected transactions (e.g. "what is due today" or "what income is expected this month").
 
-**Pagination + ordering (ADR-014).** Returns a page, not a bare array:
+**Pagination + ordering.** Returns a page, not a bare array:
 
 ```jsonc
 { "items": [ /* TransactionView[] */ ],

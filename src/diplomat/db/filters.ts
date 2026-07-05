@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { AggregateGroupBy, AggregateMetric } from '../../models/aggregate.js';
 import type { CursorKey, SortDirection } from '../../models/page.js';
-import type { TransactionSortField, TransactionStatus } from '../../models/transaction.js';
+import type { SearchTransactions, TransactionSortField, TransactionStatus } from '../../models/transaction.js';
 import { toMatchQuery } from './fts.js';
 
 export type CommonFilters = {
@@ -31,6 +31,38 @@ export type AggregateFilters = CommonFilters & {
   groupBy: AggregateGroupBy;
   metric: AggregateMetric;
 };
+
+/** Name-or-period fields the controller had to resolve via a repo lookup (account/category/
+ *  subCategory names → ids, month+year → a date range) or decode (the cursor) — the parts of
+ *  `search_transactions`' filter shape that genuinely can't be derived without I/O. Everything
+ *  else needed to build `SearchFilters` already lives on the model (`SearchTransactions`). */
+export type ResolvedSearchRefs = {
+  accountId: string | null;
+  categoryId: string | null;
+  subCategoryId: string | null;
+  from: string | null;
+  to: string | null;
+  cursorKey: CursorKey | null;
+};
+
+/** The one model→SQL-filter shaping step for search_transactions — owned here (diplomat/db), not
+ *  by the controller, which hands the repo the model plus `ResolvedSearchRefs` and never builds
+ *  this flat shape itself (mirrors `transactionsRepo.create` calling `modelToDb` internally). */
+export const toSearchFilters = (input: SearchTransactions, refs: ResolvedSearchRefs): SearchFilters => ({
+  from: refs.from ?? input.from ?? null,
+  to: refs.to ?? input.to ?? null,
+  type: input.type ?? null,
+  status: input.status ?? null,
+  text: input.text ?? null,
+  accountId: refs.accountId,
+  categoryId: refs.categoryId,
+  subCategoryId: refs.subCategoryId,
+  tagNames: input.tags ?? [],
+  limit: input.limit,
+  sort: input.sort,
+  dir: input.dir,
+  cursorKey: refs.cursorKey,
+});
 
 export const buildCommonWhere = (filters: CommonFilters): ReturnType<typeof sql>[] => {
   const conditions: ReturnType<typeof sql>[] = [];

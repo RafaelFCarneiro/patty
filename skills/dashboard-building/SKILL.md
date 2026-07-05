@@ -22,7 +22,7 @@ the save endpoint won't catch a violation for you.
    This is the source of truth for available routes, query params, and response shapes, including the
    localized labels (`typeLabel`, `categoryName`, `periodLabel`, `accountName`, …) the API already resolves
    for the user's locale.
-   - **`search_transactions` / `GET /api/transactions` is paginated (ADR-014)**: it returns a page
+   - **`search_transactions` / `GET /api/transactions` is paginated**: it returns a page
      `{ items, nextCursor?, total? }`, not a bare array. Read `items` for the rows; if you need every
      matching transaction (not just a preview slice), loop: pass the previous response's `nextCursor` back
      as the next request's `cursor` and stop when `nextCursor` is absent. `sort`/`dir` must stay the same
