@@ -317,8 +317,13 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
           },
           accountBalances: '/api/accounts/balances',
           recurring: '/api/recurring',
-          recentTransactions: function (limit) {
-            return '/api/transactions?limit=' + limit;
+          // search_transactions/GET /api/transactions returns a page { items, nextCursor?, total? }
+          // (ADR-014), not a bare array — pass the previous page's nextCursor back as cursor to
+          // keep walking.
+          recentTransactions: function (limit, cursor) {
+            var url = '/api/transactions?limit=' + limit;
+            if (cursor) url += '&cursor=' + encodeURIComponent(cursor);
+            return url;
           },
         };
 
@@ -647,14 +652,15 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
           var requestId = beginRequest('recentTransactions');
           setLoading(container, 'Loading recent transactions…');
           fetchJson(Api.recentTransactions(RECENT_TRANSACTIONS_LIMIT))
-            .then(function (transactions) {
+            .then(function (page) {
               if (!isCurrentRequest('recentTransactions', requestId)) return;
-              if (!transactions.length) {
+              if (!page.items.length) {
                 setEmpty(container, 'No transactions recorded yet.');
                 return;
               }
               clearNode(container);
-              container.appendChild(renderTransactionsTable(transactions));
+              container.appendChild(renderTransactionsTable(page.items));
+              renderLoadMoreButton(container, page.nextCursor);
             })
             .catch(function (err) {
               if (!isCurrentRequest('recentTransactions', requestId)) return;
@@ -662,24 +668,59 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
             });
         }
 
+        // "Load more" walks the envelope's nextCursor (ADR-014) — appends rows to the existing
+        // table instead of re-fetching from the start, the same pattern any fetch-all agent loop uses.
+        function renderLoadMoreButton(container, cursor) {
+          var existing = document.getElementById('recent-transactions-load-more');
+          if (existing) existing.remove();
+          if (!cursor) return;
+          var button = h('button', {
+            type: 'button',
+            class: 'secondary',
+            id: 'recent-transactions-load-more',
+            text: 'Load more',
+          });
+          button.addEventListener('click', function () {
+            loadMoreRecentTransactions(container, cursor);
+          });
+          container.appendChild(button);
+        }
+
+        function loadMoreRecentTransactions(container, cursor) {
+          var requestId = beginRequest('recentTransactions');
+          fetchJson(Api.recentTransactions(RECENT_TRANSACTIONS_LIMIT, cursor))
+            .then(function (page) {
+              if (!isCurrentRequest('recentTransactions', requestId)) return;
+              var tbody = container.querySelector('table.data-table tbody');
+              if (tbody) {
+                page.items.forEach(function (tx) {
+                  tbody.appendChild(renderTransactionRow(tx));
+                });
+              }
+              renderLoadMoreButton(container, page.nextCursor);
+            })
+            .catch(function (err) {
+              if (!isCurrentRequest('recentTransactions', requestId)) return;
+              setError(container, err.message);
+            });
+        }
+
+        function renderTransactionRow(tx) {
+          return h('tr', null, [
+            h('td', { text: formatDate(tx.date) }),
+            h('td', { text: tx.description }),
+            h('td', { text: tx.categoryName || '—' }),
+            h('td', { text: tx.accountName || tx.cardName || '—' }),
+            h('td', { class: amountClass(tx.type), text: formatMoney(tx.amount, tx.currency) }),
+          ]);
+        }
+
         function renderTransactionsTable(transactions) {
           return h('table', { class: 'data-table' }, [
             h('thead', null, [h('tr', null, ['Date', 'Description', 'Category', 'Account', 'Amount'].map(function (title) {
               return h('th', { text: title });
             }))]),
-            h(
-              'tbody',
-              null,
-              transactions.map(function (tx) {
-                return h('tr', null, [
-                  h('td', { text: formatDate(tx.date) }),
-                  h('td', { text: tx.description }),
-                  h('td', { text: tx.categoryName || '—' }),
-                  h('td', { text: tx.accountName || tx.cardName || '—' }),
-                  h('td', { class: amountClass(tx.type), text: formatMoney(tx.amount, tx.currency) }),
-                ]);
-              }),
-            ),
+            h('tbody', null, transactions.map(renderTransactionRow)),
           ]);
         }
 

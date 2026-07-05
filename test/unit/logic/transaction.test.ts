@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { Locale } from '../../../src/models/locale.js';
+import { encodeCursor, SortDirection } from '../../../src/models/page.js';
 import {
   ClassificationMethod,
+  TransactionSortField,
   TransactionSource,
   TransactionStatus,
   TransactionType,
@@ -21,7 +23,9 @@ import {
   hasSubCategory,
   isCategoryKindAllowed,
   needsReview,
+  nextCursorAfter,
   resolveCurrency,
+  resolveCursorKey,
   resolveEffectiveType,
   summarizeBulkItems,
 } from '../../../src/logic/transaction.js';
@@ -377,5 +381,61 @@ describe('assertBillAssignmentHasCard', () => {
   it('treats billMonth 0 as provided, not as absent', () => {
     expect(assertBillAssignmentHasCard(0, false)).toBe(false);
     expect(assertBillAssignmentHasCard(0, true)).toBe(true);
+  });
+});
+
+describe('resolveCursorKey', () => {
+  const { date, amount } = TransactionSortField.enum;
+  const { asc, desc } = SortDirection.enum;
+
+  it('returns null when no cursor is given (first page)', () => {
+    const result = resolveCursorKey({ cursor: undefined, sort: date, dir: desc });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBeNull();
+  });
+
+  it('decodes a well-formed cursor matching the request sort/dir', () => {
+    const cursor = encodeCursor({ v: 1, sort: date, dir: desc, key: { value: '2026-06-01', id: 'tx-1' } });
+    const result = resolveCursorKey({ cursor, sort: date, dir: desc });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual({ value: '2026-06-01', id: 'tx-1' });
+  });
+
+  it('rejects a malformed cursor', () => {
+    const result = resolveCursorKey({ cursor: 'not-a-real-cursor', sort: date, dir: desc });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('rejects a cursor whose sort does not match the request', () => {
+    const cursor = encodeCursor({ v: 1, sort: date, dir: desc, key: { value: '2026-06-01', id: 'tx-1' } });
+    const result = resolveCursorKey({ cursor, sort: amount, dir: desc });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('rejects a cursor whose dir does not match the request', () => {
+    const cursor = encodeCursor({ v: 1, sort: date, dir: desc, key: { value: '2026-06-01', id: 'tx-1' } });
+    const result = resolveCursorKey({ cursor, sort: date, dir: asc });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+});
+
+describe('nextCursorAfter', () => {
+  const { date, amount } = TransactionSortField.enum;
+  const { desc } = SortDirection.enum;
+  const row = { id: 'tx-9', date: '2026-06-01', amount: 42.5 };
+
+  it('encodes the date value for sort: date', () => {
+    const cursor = nextCursorAfter(row, date, desc);
+    const result = resolveCursorKey({ cursor, sort: date, dir: desc });
+    expect(result._unsafeUnwrap()).toEqual({ value: '2026-06-01', id: 'tx-9' });
+  });
+
+  it('encodes the amount value for sort: amount', () => {
+    const cursor = nextCursorAfter(row, amount, desc);
+    const result = resolveCursorKey({ cursor, sort: amount, dir: desc });
+    expect(result._unsafeUnwrap()).toEqual({ value: 42.5, id: 'tx-9' });
   });
 });

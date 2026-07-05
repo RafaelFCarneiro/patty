@@ -67,4 +67,17 @@ describe('GET /api/openapi.json', () => {
     const liveUi = await inject({ method: 'GET', url: '/ui/overview' });
     expect(liveUi.statusCode).toBe(200);
   });
+
+  it('documents the search_transactions paginated envelope (ADR-014)', async () => {
+    const doc = (await inject({ method: 'GET', url: '/api/openapi.json' })).json();
+
+    const schema = doc.paths['/api/transactions']?.get?.responses?.['200']?.content?.['application/json']?.schema;
+    expect(schema?.properties?.items, 'expected an "items" property on the 200 response schema').toBeDefined();
+    expect(schema?.properties?.nextCursor, 'expected a "nextCursor" property on the 200 response schema').toBeDefined();
+    expect(schema?.properties?.total, 'expected a "total" property on the 200 response schema').toBeDefined();
+
+    const live = await inject({ method: 'GET', url: '/api/transactions?limit=1' });
+    expect(live.statusCode).toBe(200);
+    expect(live.json()).toHaveProperty('items');
+  });
 });

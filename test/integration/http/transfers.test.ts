@@ -55,13 +55,14 @@ describe('POST /api/transfers', () => {
       url: '/api/transactions?account=XferSearchSrc&from=2026-06-01&to=2026-06-30',
     });
     expect(all.statusCode).toBe(200);
-    const allTxs = all.json() as Array<{ type: string }>;
+    const { items: allTxs } = all.json() as { items: Array<{ type: string }> };
     expect(allTxs.some((t) => t.type === 'transfer')).toBe(true);
     const expenses = await inject({
       method: 'GET',
       url: '/api/transactions?account=XferSearchSrc&type=expense&from=2026-06-01&to=2026-06-30',
     });
-    expect((expenses.json() as Array<{ type: string }>).some((t) => t.type === 'transfer')).toBe(false);
+    const { items: expenseTxs } = expenses.json() as { items: Array<{ type: string }> };
+    expect(expenseTxs.some((t) => t.type === 'transfer')).toBe(false);
   });
 
   it('returns 200 on idempotent duplicate', async () => {

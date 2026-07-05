@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { callTool, makeClient } from './helpers.js';
+import { callTool, makeClient, searchTransactions } from './helpers.js';
 
 type TxView = {
   categoryId: string;
@@ -45,7 +45,7 @@ describe('MCP integration > transaction category locale', () => {
 
   it('search_transactions returns pt categoryName when locale is pt', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } });
-    const result = (await callTool(client, { name: 'search_transactions' })) as SearchResult;
+    const result = (await searchTransactions(client)) as SearchResult;
     const tx = result.find((t) => t.categoryId === 'cat-food');
     expect(tx).toBeDefined();
     expect(tx!.categoryName).toBe('Alimentação');
@@ -53,7 +53,7 @@ describe('MCP integration > transaction category locale', () => {
 
   it('search_transactions returns en categoryName when locale is en', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } });
-    const result = (await callTool(client, { name: 'search_transactions' })) as SearchResult;
+    const result = (await searchTransactions(client)) as SearchResult;
     const tx = result.find((t) => t.categoryId === 'cat-food');
     expect(tx).toBeDefined();
     expect(tx!.categoryName).toBe('Food');
@@ -95,7 +95,7 @@ describe('MCP integration > transaction category locale', () => {
 
   it('search_transactions returns es categoryName when locale is es', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'es', source: 'explicit' } });
-    const result = (await callTool(client, { name: 'search_transactions' })) as SearchResult;
+    const result = (await searchTransactions(client)) as SearchResult;
     const tx = result.find((t) => t.categoryId === 'cat-food');
     expect(tx).toBeDefined();
     expect(tx!.categoryName).toBe('Alimentación');
@@ -103,9 +103,9 @@ describe('MCP integration > transaction category locale', () => {
 
   it('categoryId is stable across locale changes', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } });
-    const ptResult = (await callTool(client, { name: 'search_transactions' })) as SearchResult;
+    const ptResult = (await searchTransactions(client)) as SearchResult;
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } });
-    const enResult = (await callTool(client, { name: 'search_transactions' })) as SearchResult;
+    const enResult = (await searchTransactions(client)) as SearchResult;
 
     const ptTx = ptResult.find((t) => t.categoryId === 'cat-food');
     const enTx = enResult.find((t) => t.categoryId === 'cat-food');
@@ -132,16 +132,13 @@ describe('MCP integration > transaction category locale', () => {
     });
 
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } });
-    const ptResult = (await callTool(client, {
-      name: 'search_transactions',
-      args: { text: 'Sub locale test' },
-    })) as SearchResult;
+    const ptResult = (await searchTransactions(client, { text: 'Sub locale test' })) as SearchResult;
     expect(ptResult[0].subCategoryId).toBe(sub.id);
     expect(ptResult[0].subCategoryName).toBe('Groceries');
   });
 
   it('categoryNames map is not leaked to the client', async () => {
-    const result = (await callTool(client, { name: 'search_transactions' })) as SearchResult;
+    const result = (await searchTransactions(client)) as SearchResult;
     const tx = result[0];
     expect(tx).not.toHaveProperty('categoryNames');
     expect(tx).not.toHaveProperty('subCategoryNames');

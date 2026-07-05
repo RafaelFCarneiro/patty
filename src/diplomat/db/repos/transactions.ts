@@ -14,9 +14,15 @@ import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggr
 import { SummaryRowSchema } from '../../../wire/db/transactions.js';
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
 import type { Db } from '../driver.js';
-import { buildCommonWhere, type AggregateFilters, type SearchFilters } from '../filters.js';
-import { toMatchQuery } from '../fts.js';
+import {
+  buildCommonWhere,
+  buildSearchWhere,
+  type AggregateFilters,
+  type SearchConditionFilters,
+  type SearchFilters,
+} from '../filters.js';
 import { merchants, tags, transactionTags, transactions } from '../schema.js';
+import { keysetPredicate, orderByClause } from '../transactionOrder.js';
 import { fullTxSelect } from '../transactionSelect.js';
 
 const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
@@ -57,7 +63,10 @@ export type TransactionsRepo = {
   /** Flip status pending → effective. Returns null if the id does not exist. */
   confirm: (id: string) => Promise<RawTransactionView | null>;
   delete: (id: string) => Promise<boolean>;
-  search: (filters: SearchFilters) => Promise<RawTransactionView[]>;
+  /** Keyset page: fetches one extra row (LIMIT n+1) to derive `hasMore` without a COUNT query. */
+  search: (filters: SearchFilters) => Promise<{ items: RawTransactionView[]; hasMore: boolean }>;
+  /** Same-WHERE count for `includeTotal` — no cursor/ORDER BY/LIMIT applied. */
+  count: (filters: SearchConditionFilters) => Promise<number>;
   aggregate: (filters: AggregateFilters) => Promise<AggregateDbRow[]>;
   summaryRows: (from: string, to: string) => Promise<SummaryRow[]>;
   /** Aggregated pending amounts for an account dated on/before asOf. */
@@ -171,28 +180,25 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
   },
 
   search: async (filters) => {
-    const conditions = buildCommonWhere(filters);
-
-    if (filters.status) conditions.push(sql`t.status = ${filters.status}`);
-    if (filters.subCategoryId) conditions.push(sql`t.subcategory_id = ${filters.subCategoryId}`);
-
-    if (filters.text) {
-      const matchQuery = toMatchQuery(filters.text);
-      if (matchQuery !== null) {
-        conditions.push(
-          sql`t.rowid IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${matchQuery})`,
-        );
-      }
-    }
+    const conditions = buildSearchWhere(filters);
+    if (filters.cursorKey) conditions.push(keysetPredicate(filters.sort, filters.dir, filters.cursorKey));
 
     const where = conditions.length > 0 ? sql.join(conditions, sql` AND `) : sql`1=1`;
     const rows = await db.all<Record<string, unknown>>(sql`
       ${fullTxSelect(where)}
-      ORDER BY t.date DESC, t.id
-      LIMIT ${filters.limit}
+      ORDER BY ${orderByClause(filters.sort, filters.dir)}
+      LIMIT ${filters.limit + 1}
     `);
 
-    return rows.map(transactionAdapters.dbToModel);
+    const hasMore = rows.length > filters.limit;
+    return { items: rows.slice(0, filters.limit).map(transactionAdapters.dbToModel), hasMore };
+  },
+
+  count: async (filters) => {
+    const conditions = buildSearchWhere(filters);
+    const where = conditions.length > 0 ? sql.join(conditions, sql` AND `) : sql`1=1`;
+    const [row] = await db.all<{ count: number }>(sql`SELECT COUNT(*) AS count FROM transactions t WHERE ${where}`);
+    return row?.count ?? 0;
   },
 
   aggregate: async (filters) => {

@@ -60,6 +60,13 @@ export const callTool = async (client: Client, { name, args = {} }: ToolCallOpti
   return payload;
 };
 
+/** search_transactions returns a `{ items, nextCursor?, total? }` page (ADR-014) — this helper
+ *  unwraps `items` so call sites written against the pre-pagination array shape stay simple. */
+export const searchTransactions = async (client: Client, args: JsonObject = {}): Promise<unknown> => {
+  const page = (await callTool(client, { name: 'search_transactions', args })) as { items?: unknown[] };
+  return page.items ?? [];
+};
+
 /** Like callTool but returns the error payload instead of throwing — use when asserting on error shape. */
 export const callToolError = async (client: Client, { name, args = {} }: ToolCallOptions): Promise<unknown> => {
   const result = await client.request(

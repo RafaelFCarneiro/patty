@@ -11,10 +11,12 @@ export type NameParam = z.infer<typeof NameParamSchema>;
 export const IdParamSchema = z.object({ id: z.string().min(1) });
 export type IdParam = z.infer<typeof IdParamSchema>;
 
+// A query string never carries a real boolean — every boolean query flag parses as this literal
+// "true"/"false" pair, then a `.transform()` on the specific field converts it (see
+// SearchTransactionsQuerySchema's includeTotal for another consumer).
+export const BooleanQuerySchema = z.enum(['true', 'false']);
+
 export const ConfirmQuerySchema = z.object({
-  confirm: z
-    .enum(['true', 'false'])
-    .optional()
-    .describe('Pass "true" to actually perform the action (dry-run otherwise)'),
+  confirm: BooleanQuerySchema.optional().describe('Pass "true" to actually perform the action (dry-run otherwise)'),
 });
 export type ConfirmQuery = z.infer<typeof ConfirmQuerySchema>;

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, callToolError, ensure, makeClient } from './helpers.js';
+import { callTool, callToolError, ensure, makeClient, searchTransactions } from './helpers.js';
 
 describe('MCP integration > bill payment (Design 003)', () => {
   const now = new Date();
@@ -386,9 +386,9 @@ describe('MCP integration > bill payment (Design 003)', () => {
       expect(reverted.paymentTransactionId).toBeFalsy();
 
       // The transfer no longer exists.
-      const afterRevert = (await callTool(client, {
-        name: 'search_transactions',
-        args: { text: `Bill payment: ${revertCardName}`, limit: 10 },
+      const afterRevert = (await searchTransactions(client, {
+        text: `Bill payment: ${revertCardName}`,
+        limit: 10,
       })) as Array<{ id?: string }>;
       expect(afterRevert.length).toBe(0);
 
@@ -541,9 +541,9 @@ describe('MCP integration > bill payment (Design 003)', () => {
       expect(err.error?.issues?.[0]).toContain('revert_bill_payment');
 
       // It's still there, undeleted.
-      const stillThere = (await callTool(client, {
-        name: 'search_transactions',
-        args: { text: `Bill payment: ${protectedCardName}`, limit: 10 },
+      const stillThere = (await searchTransactions(client, {
+        text: `Bill payment: ${protectedCardName}`,
+        limit: 10,
       })) as Array<{ id?: string }>;
       expect(stillThere.some((tx) => tx.id === paymentTransactionId)).toBe(true);
     } finally {

@@ -132,6 +132,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 12. **Category identity is the slug/id, not the localized name** (Feature Design 002, ADR-009). Default categories carry a JSON `names` column (`{"pt":"…","es":"…"}`); display name is resolved at read time as `names?.[locale] ?? name`. Merchant rules and classification key on the slug, never the display name. User-created categories have `names = null` and keep their literal `name`.
 13. **Locale is AI-determined, stored, env-overridable** (Feature Design 002). `settings.locale` (`en|es|pt`), default `en`. Resolution: `FINTRACK_LOCALE` env → `settings.locale` → `'en'`. `set_locale` with `source: inferred` is rejected when `locale_source` is `explicit`.
 14. **Seed is isolated (ADR-008).** Seed data lives in `diplomat/db/seed/`; the domain (`models/`, `logic/`, `controllers/`) never imports it. The app boots and works on an empty (unseeded) DB.
+16. **Unbounded collections page by keyset cursor with the paginated envelope (ADR-014).** `search_transactions` (first mover) returns `{ items, nextCursor?, total? }`; `ORDER BY` is composed only from whitelisted enum-keyed fragments (`diplomat/db/transactionOrder.ts`), the same mechanism as invariant 15 applied to ordering — caller text never reaches `ORDER BY`. Cursors are opaque, zod-validated at the boundary, and bound to the `sort`/`dir` that produced them (a mismatch is a `validation` error). `total` is opt-in (`includeTotal`) — an extra same-WHERE `COUNT(*)`, never paid by sequential "walk until no `nextCursor`" consumers. Small, cycle-bounded `list_*` endpoints stay plain arrays; the envelope is the signal a collection can page.
 
 ## Tool surface
 
@@ -195,3 +196,5 @@ available alongside the server.
 - ADR-011: safe composition of dynamic aggregation queries (whitelist enum→fragment maps + parameter binding)
 - ADR-012: per-model error definitions; `common` composes `AppError` (supersedes the type-only `AppError` import exception)
 - ADR-013: LLM-generated data-less local dashboards over the HTTP API
+- ADR-014: cursor pagination + whitelisted ordering for collection endpoints (`search_transactions` first mover)
+- ADR-015: multi-write unit-of-work for transactional multi-step writes

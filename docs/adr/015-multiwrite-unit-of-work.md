@@ -1,6 +1,6 @@
 # ADR-015: Unit-of-work deltas for multi-write controller flows
 
-**Status:** Proposed · **Date:** 2026-07-04 · **Deciders:** Rafael · Builds on the parameterized-SQL and
+**Status:** Accepted · **Date:** 2026-07-04 · **Deciders:** Rafael · Builds on the parameterized-SQL and
 idempotency invariants (`docs/architecture.md`) and the intra-repo `db.transaction` pattern already in use.
 Triggered by the partial-write (TOCTOU) shape recurring on PR #83 — flagged twice by review, fixed once by a
 one-off reorder (commit bc1b418). Sequenced **after** ADR-014 (collection pagination): that contract work

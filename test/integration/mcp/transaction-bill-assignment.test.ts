@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, callToolError, ensure, makeClient } from './helpers.js';
+import { callTool, callToolError, ensure, makeClient, searchTransactions } from './helpers.js';
 
 describe('MCP integration > transaction ↔ bill assignment (Design 012)', () => {
   const now = new Date();
@@ -387,9 +387,9 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       expect(deleteErr.error?.issues?.[0]).toContain('revert_bill_payment');
 
       // It's still there, undeleted.
-      const stillThere = (await callTool(client, {
-        name: 'search_transactions',
-        args: { text: `OffPaid purchase ${stamp}`, limit: 10 },
+      const stillThere = (await searchTransactions(client, {
+        text: `OffPaid purchase ${stamp}`,
+        limit: 10,
       })) as Array<{ id?: string }>;
       expect(stillThere.some((tx) => tx.id === purchase.transaction.id)).toBe(true);
     } finally {

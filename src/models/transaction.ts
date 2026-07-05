@@ -4,6 +4,7 @@ import { LocalizedNamesSchema } from './category.js';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
+import { cursorSchema, PageRequestSchema, SortDirection } from './page.js';
 import type { CategoryKind } from './category.js';
 import type { ValidationError } from './error.js';
 import type { LabelMap } from './locale.js';
@@ -42,6 +43,14 @@ export type Classification = z.infer<typeof ClassificationSchema>;
 
 export const TransactionSource = z.enum(['mcp', 'rest', 'import']);
 export type TransactionSource = z.infer<typeof TransactionSource>;
+
+/** search_transactions whitelisted sort fields (ADR-011/014): the only values diplomat/db's
+ *  ORDER BY fragment map accepts — caller text never reaches SQL structure. */
+export const TransactionSortField = z.enum(['date', 'amount']);
+export type TransactionSortField = z.infer<typeof TransactionSortField>;
+
+export const TransactionCursorSchema = cursorSchema(TransactionSortField);
+export type TransactionCursor = z.infer<typeof TransactionCursorSchema>;
 
 export const NOTE_MAX_LENGTH = 1000;
 
@@ -266,7 +275,9 @@ export const SearchTransactionsSchema = z.object({
   account: z.string().min(1).optional().describe('Filter by account name'),
   text: z.string().optional().describe('Free-text search in description'),
   tags: z.array(z.string().min(1)).optional().describe('Filter to transactions having any of these tags'),
-  limit: z.number().int().min(1).max(200).describe('Maximum results to return'),
+  ...PageRequestSchema.shape,
+  sort: TransactionSortField.describe('Field to sort by: date or amount. Default: date'),
+  dir: SortDirection.describe('Sort direction: asc or desc. Default: desc'),
 });
 export type SearchTransactions = z.infer<typeof SearchTransactionsSchema>;
 
@@ -361,5 +372,9 @@ export const transactionErrors = {
     issues: [
       'this bill is paid; its transactions cannot be added, removed, or reassigned — call revert_bill_payment first',
     ],
+  } satisfies TransactionError,
+  invalidCursor: {
+    code: 'validation',
+    issues: ['cursor is malformed, stale, or does not match the requested sort/dir — start a fresh first page'],
   } satisfies TransactionError,
 };

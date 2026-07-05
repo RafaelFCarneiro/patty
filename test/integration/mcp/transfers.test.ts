@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, deleteTransactions, ensure, makeClient } from './helpers.js';
+import { callTool, deleteTransactions, ensure, makeClient, searchTransactions } from './helpers.js';
 
 describe('MCP integration > transfers', () => {
   let createdTxIds: string[] = [];
@@ -60,20 +60,23 @@ describe('MCP integration > transfers', () => {
       expect(dst.balance).toBe(200); // 0 + 200
 
       // Visible in account statement when filtering by type
-      const statement = (await callTool(client, {
-        name: 'search_transactions',
-        args: { account: sourceName, type: 'transfer', limit: 10 },
+      const statement = (await searchTransactions(client, {
+        account: sourceName,
+        type: 'transfer',
+        limit: 10,
       })) as Array<{ id?: string }>;
       expect(statement.some((tx) => tx.id === txId)).toBe(true);
 
       // Absent from expense and income filters
-      const expenses = (await callTool(client, {
-        name: 'search_transactions',
-        args: { account: sourceName, type: 'expense', limit: 50 },
+      const expenses = (await searchTransactions(client, {
+        account: sourceName,
+        type: 'expense',
+        limit: 50,
       })) as Array<{ id?: string }>;
-      const incomes = (await callTool(client, {
-        name: 'search_transactions',
-        args: { account: sourceName, type: 'income', limit: 50 },
+      const incomes = (await searchTransactions(client, {
+        account: sourceName,
+        type: 'income',
+        limit: 50,
       })) as Array<{ id?: string }>;
       expect(expenses.every((tx) => tx.id !== txId)).toBe(true);
       expect(incomes.every((tx) => tx.id !== txId)).toBe(true);

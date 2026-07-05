@@ -48,6 +48,7 @@ import { CategorySchema, SubCategorySchema } from '../../models/category.js';
 import { CreditCardSchema } from '../../models/creditCard.js';
 import { RecurringRuleViewSchema } from '../../models/recurring.js';
 import { TagSchema } from '../../models/tag.js';
+import { pageSchema } from '../../models/page.js';
 import { TransactionSource, TransactionViewSchema } from '../../models/transaction.js';
 import { AggregateSpendingInputSchema } from '../../wire/in/aggregate.js';
 import { CoercedPeriodSchema } from '../../wire/in/period.js';
@@ -568,7 +569,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
     summary: 'Search transactions',
     request: { query: wireInTransactions.SearchTransactionsQuerySchema },
     responses: {
-      200: okResponse('Matching transactions', z.array(TransactionViewSchema)),
+      200: okResponse('A page of matching transactions', pageSchema(TransactionViewSchema)),
       404: notFound404,
       409: conflict409,
       422: validation422,

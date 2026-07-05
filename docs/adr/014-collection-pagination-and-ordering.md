@@ -1,6 +1,6 @@
 # ADR-014: Cursor pagination + whitelisted ordering for collection endpoints
 
-**Status:** Proposed · **Date:** 2026-07-04 · **Deciders:** Rafael · Extends the safe-composition invariant of
+**Status:** Accepted · **Date:** 2026-07-04 · **Deciders:** Rafael · Extends the safe-composition invariant of
 **ADR-011** to ordering, and unblocks the ADR-013 dashboards (REST is their data layer). Sequenced **before**
 ADR-015 (multi-write unit-of-work): this is contract work the UI needs today; the write-path migration follows.
 
@@ -150,9 +150,9 @@ legible from the response shape.
 
 ## Action Items
 
-1. [ ] Review/accept this ADR.
-2. [ ] Implement first mover: `search_transactions` (models/page.ts + sort enum + keyset repo + envelope +
+1. [x] Review/accept this ADR.
+2. [x] Implement first mover: `search_transactions` (models/page.ts + sort enum + keyset repo + envelope +
    `includeTotal` + template/skill updates + docs/OpenAPI) — one PR.
-3. [ ] On acceptance: add the invariant to `docs/architecture.md` and index this ADR.
+3. [x] On acceptance: add the invariant to `docs/architecture.md` and index this ADR.
 4. [ ] Future unbounded collections (e.g. a transactions-per-bill listing if it ever unbounds) adopt the same
    contract from day one.

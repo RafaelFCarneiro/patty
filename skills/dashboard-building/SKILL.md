@@ -22,6 +22,15 @@ the save endpoint won't catch a violation for you.
    This is the source of truth for available routes, query params, and response shapes, including the
    localized labels (`typeLabel`, `categoryName`, `periodLabel`, `accountName`, …) the API already resolves
    for the user's locale.
+   - **`search_transactions` / `GET /api/transactions` is paginated (ADR-014)**: it returns a page
+     `{ items, nextCursor?, total? }`, not a bare array. Read `items` for the rows; if you need every
+     matching transaction (not just a preview slice), loop: pass the previous response's `nextCursor` back
+     as the next request's `cursor` and stop when `nextCursor` is absent. `sort`/`dir` must stay the same
+     across that loop — they're bound to the cursor, and changing them mid-walk is rejected. Only ask for
+     `includeTotal: true` on the first call if you need the total count (e.g. for a "N transactions" label);
+     it costs an extra query and every other page already omits it. Other list endpoints (`list_accounts`,
+     `list_categories`, `list_tags`, `list_credit_cards`, `list_recurring`, a bill's `transactions`) are plain
+     arrays — the envelope is specifically the signal that a collection can page.
 2. **Discover the user's perspective — ask in personal-finance terms, not layout terms.** Different users
    (and the same user in a different financial moment) care about different views. If it isn't already clear,
    offer the common perspectives below (2–4 targeted questions max, with your recommendation) instead of a

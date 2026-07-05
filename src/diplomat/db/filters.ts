@@ -1,6 +1,8 @@
 import { sql } from 'drizzle-orm';
 import type { AggregateGroupBy, AggregateMetric } from '../../models/aggregate.js';
-import type { TransactionStatus } from '../../models/transaction.js';
+import type { CursorKey, SortDirection } from '../../models/page.js';
+import type { TransactionSortField, TransactionStatus } from '../../models/transaction.js';
+import { toMatchQuery } from './fts.js';
 
 export type CommonFilters = {
   from: string | null;
@@ -11,11 +13,18 @@ export type CommonFilters = {
   tagNames: string[];
 };
 
-export type SearchFilters = CommonFilters & {
+/** Filters that narrow the result set — shared by the paged `search` and its same-WHERE `count`. */
+export type SearchConditionFilters = CommonFilters & {
   status: TransactionStatus | null;
   text: string | null;
   subCategoryId: string | null;
+};
+
+export type SearchFilters = SearchConditionFilters & {
   limit: number;
+  sort: TransactionSortField;
+  dir: SortDirection;
+  cursorKey: CursorKey | null;
 };
 
 export type AggregateFilters = CommonFilters & {
@@ -41,6 +50,21 @@ export const buildCommonWhere = (filters: CommonFilters): ReturnType<typeof sql>
       JOIN tags tg2 ON tg2.id = tt2.tag_id
       WHERE tt2.transaction_id = t.id AND tg2.name IN (${placeholders})
     )`);
+  }
+  return conditions;
+};
+
+/** search_transactions' full WHERE — shared by the paged row query and its opt-in `count`
+ *  (ADR-011 § shared filter WHERE-builder); only the projection/keyset/ORDER-BY tail differs. */
+export const buildSearchWhere = (filters: SearchConditionFilters): ReturnType<typeof sql>[] => {
+  const conditions = buildCommonWhere(filters);
+  if (filters.status) conditions.push(sql`t.status = ${filters.status}`);
+  if (filters.subCategoryId) conditions.push(sql`t.subcategory_id = ${filters.subCategoryId}`);
+  if (filters.text) {
+    const matchQuery = toMatchQuery(filters.text);
+    if (matchQuery !== null) {
+      conditions.push(sql`t.rowid IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${matchQuery})`);
+    }
   }
   return conditions;
 };

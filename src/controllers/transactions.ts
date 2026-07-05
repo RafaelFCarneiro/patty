@@ -24,12 +24,15 @@ import {
   hasCategory,
   hasSubCategory,
   isCategoryKindAllowed,
+  nextCursorAfter,
   resolveCurrency,
+  resolveCursorKey,
   resolveEffectiveType,
   summarizeBulkItems,
   toBulkItemResult,
   withBillId,
 } from '../logic/transaction.js';
+import type { Page } from '../models/page.js';
 import { TransactionStatus } from '../models/transaction.js';
 import {
   transactionErrors,
@@ -343,27 +346,39 @@ export const deleteTransaction = (
     return ok({ deleted: true as const, transaction: labeled });
   });
 
-export const searchTransactions = (deps: Deps, input: SearchTransactions): ResultAsync<TransactionView[], AppError> =>
+export const searchTransactions = (
+  deps: Deps,
+  input: SearchTransactions,
+): ResultAsync<Page<TransactionView>, AppError> =>
   safeTry(async function* () {
     const range = input.month && input.year ? periodRange({ month: input.month, year: input.year }) : null;
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     const category = hasCategory(input) ? yield* resolveCategoryRef(deps, input.category) : null;
     const subCategory = hasSubCategory(input) ? yield* resolveSubCategoryRef(deps, input.subCategory) : null;
+    const cursorKey = yield* resolveCursorKey(input);
 
-    const [locale, rows] = await Promise.all([
-      deps.locale(),
-      deps.transactions.search({
-        from: range?.from ?? input.from ?? null,
-        to: range?.to ?? input.to ?? null,
-        type: input.type ?? null,
-        status: input.status ?? null,
-        text: input.text ?? null,
-        accountId: account?.id ?? null,
-        categoryId: category?.id ?? null,
-        subCategoryId: subCategory?.id ?? null,
-        tagNames: input.tags ?? [],
-        limit: input.limit,
-      }),
-    ]);
-    return ok(rows.map(addLocalizedLabels(locale)));
+    const filters = {
+      from: range?.from ?? input.from ?? null,
+      to: range?.to ?? input.to ?? null,
+      type: input.type ?? null,
+      status: input.status ?? null,
+      text: input.text ?? null,
+      accountId: account?.id ?? null,
+      categoryId: category?.id ?? null,
+      subCategoryId: subCategory?.id ?? null,
+      tagNames: input.tags ?? [],
+      limit: input.limit,
+      sort: input.sort,
+      dir: input.dir,
+      cursorKey,
+    };
+
+    const [locale, page] = await Promise.all([deps.locale(), deps.transactions.search(filters)]);
+    const total = input.includeTotal ? await deps.transactions.count(filters) : undefined;
+
+    const items = page.items.map(addLocalizedLabels(locale));
+    const lastItem = R.last(items);
+    const nextCursor = page.hasMore && lastItem ? nextCursorAfter(lastItem, input.sort, input.dir) : undefined;
+
+    return ok({ items, nextCursor, total });
   });
