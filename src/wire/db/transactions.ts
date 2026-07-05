@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LocalizedNamesSchema } from '../../models/category.js';
 import { CurrencyCode } from '../../models/money.js';
-import { MovementType, TransactionStatus } from '../../models/transaction.js';
+import { MovementType, TransactionSortField, TransactionStatus } from '../../models/transaction.js';
 import type { transactions } from '../../diplomat/db/schema.js';
 
 // Inferred Drizzle select type — the canonical shape of a transactions row.
@@ -67,6 +67,18 @@ export type TransactionDbRefs = {
   categoryId: string | null;
   subCategoryId: string | null;
   merchantKey: string | null;
+};
+
+/**
+ * ADR-011/014 whitelist: the only column each `search_transactions` sort field may resolve to.
+ * The caller-selected `sort` enum picks a fixed, developer-authored column name here — caller
+ * text never reaches `ORDER BY`. Plain db-column facts (this file's existing job — see
+ * `TransactionRowSchema`), not query composition: `diplomat/db/repos/transactions.ts` is the only
+ * place that turns a name from this map into an actual SQL fragment (`sql.raw`).
+ */
+export const ORDER_BY_COLUMN: Record<TransactionSortField, string> = {
+  [TransactionSortField.enum.date]: 't.date',
+  [TransactionSortField.enum.amount]: 't.amount',
 };
 
 const parseCategoryNames = (raw: string | null): Record<string, string> | null =>

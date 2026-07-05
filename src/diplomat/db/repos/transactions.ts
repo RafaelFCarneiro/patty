@@ -3,7 +3,6 @@ import * as transactionAdapters from '../../../adapters/transactions.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import { SortDirection, type CursorKey } from '../../../models/page.js';
 import {
-  TransactionSortField,
   TransactionStatus,
   TransactionType,
   type CreateTxResult,
@@ -12,15 +11,15 @@ import {
   type Transaction,
   type RawTransactionView,
   type TransactionPatch,
+  type TransactionSortField,
 } from '../../../models/transaction.js';
 import type { SummaryRow } from '../../../models/summary.js';
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js';
-import { SummaryRowSchema } from '../../../wire/db/transactions.js';
+import { ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
 import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
 import { merchants, tags, transactionTags, transactions } from '../schema.js';
-import { ORDER_BY_COLUMN } from '../transactionOrderWhitelist.js';
 import { fullTxSelect } from '../transactionSelect.js';
 
 const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
@@ -44,17 +43,20 @@ const replaceTags = async (db: Db, txId: string, tagNames: string[]): Promise<vo
 };
 
 /** Tiebreaker (t.id) follows `dir` — one uniform direction across the composite key, which is
- *  what keeps the keyset predicate below stable (ADR-014 Decision 1). */
+ *  what keeps the keyset predicate below stable (ADR-014 Decision 1). `sql.raw` is safe here:
+ *  the column name always comes from the ORDER_BY_COLUMN whitelist, never from caller input. */
 const orderByClause = (sort: TransactionSortField, dir: SortDirection): SQL => {
+  const column = sql.raw(ORDER_BY_COLUMN[sort]);
   const direction = dir === SortDirection.enum.asc ? sql`ASC` : sql`DESC`;
-  return sql`${ORDER_BY_COLUMN[sort]} ${direction}, t.id ${direction}`;
+  return sql`${column} ${direction}, t.id ${direction}`;
 };
 
 /** Expanded keyset predicate, consistent with `orderByClause` per key component (ADR-014):
  *  `(col < ? OR (col = ? AND t.id < ?))` for `dir: desc`, `>` for `dir: asc`. Values are always
- *  parameter-bound; only the column fragment and comparator come from the ORDER_BY_COLUMN whitelist. */
+ *  parameter-bound; only the column name (via `sql.raw` off the ORDER_BY_COLUMN whitelist) and
+ *  the comparator are structural. */
 const keysetPredicate = (sort: TransactionSortField, dir: SortDirection, key: CursorKey): SQL => {
-  const column = ORDER_BY_COLUMN[sort];
+  const column = sql.raw(ORDER_BY_COLUMN[sort]);
   const cmp = dir === SortDirection.enum.asc ? sql`>` : sql`<`;
   return sql`(${column} ${cmp} ${key.value} OR (${column} = ${key.value} AND t.id ${cmp} ${key.id}))`;
 };
