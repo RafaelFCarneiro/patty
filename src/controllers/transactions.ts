@@ -370,8 +370,13 @@ export const searchTransactions = (
       cursorKey,
     };
 
-    const [locale, page] = await Promise.all([deps.locale(), deps.transactions.search(input, refs)]);
-    const total = input.includeTotal ? await deps.transactions.count(input, refs) : undefined;
+    // count is independent of locale/page — run all three concurrently rather than paying its
+    // latency after the other two resolve.
+    const [locale, page, total] = await Promise.all([
+      deps.locale(),
+      deps.transactions.search(input, refs),
+      input.includeTotal ? deps.transactions.count(input, refs) : Promise.resolve(undefined),
+    ]);
 
     const items = page.items.map(addLocalizedLabels(locale));
     const lastItem = R.last(items);
