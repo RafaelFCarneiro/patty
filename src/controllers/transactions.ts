@@ -43,6 +43,7 @@ import {
   type CreateTransactionsBulk,
   type DeleteTransactionResult,
   type MovementType,
+  type ResolvedSearchRefs,
   type SearchTransactions,
   type TransactionView,
   type TransactionSource,
@@ -50,9 +51,6 @@ import {
 } from '../models/transaction.js';
 import type { Deps } from './deps.js';
 import { resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
-// Type-only import from diplomat/db/repos is a documented exception (docs/architecture.md §
-// Dependency direction) — this is the repo's own contract parameter type, not a diplomat/* value.
-import type { ResolvedSearchRefs } from '../diplomat/db/repos/transactions.js';
 
 /** Resolves a category by name, guarding kind-compatibility when the movement type is known. */
 const resolveCategory = (

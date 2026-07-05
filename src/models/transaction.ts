@@ -5,6 +5,7 @@ import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
 import { cursorSchema, PageRequestSchema, SortDirection } from './page.js';
+import type { CursorKey } from './page.js';
 import type { CategoryKind } from './category.js';
 import type { ValidationError } from './error.js';
 import type { LabelMap } from './locale.js';
@@ -280,6 +281,19 @@ export const SearchTransactionsSchema = z.object({
   dir: SortDirection.describe('Sort direction: asc or desc. Default: desc'),
 });
 export type SearchTransactions = z.infer<typeof SearchTransactionsSchema>;
+
+/** Name-or-period fields the controller had to resolve via a repo lookup (account/category/
+ *  subCategory names → ids, month+year → a date range) or decode (the cursor) — the parts of
+ *  a search that genuinely can't be derived without I/O. Everything else the repo needs already
+ *  lives on `SearchTransactions` itself; `diplomat/db` combines the two into its SQL-filter shape. */
+export type ResolvedSearchRefs = {
+  accountId: string | null;
+  categoryId: string | null;
+  subCategoryId: string | null;
+  from: string | null;
+  to: string | null;
+  cursorKey: CursorKey | null;
+};
 
 // ─── Domain result types ──────────────────────────────────────────
 

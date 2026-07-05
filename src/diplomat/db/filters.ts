@@ -1,7 +1,12 @@
 import { sql } from 'drizzle-orm';
 import type { AggregateGroupBy, AggregateMetric } from '../../models/aggregate.js';
 import type { CursorKey, SortDirection } from '../../models/page.js';
-import type { SearchTransactions, TransactionSortField, TransactionStatus } from '../../models/transaction.js';
+import type {
+  ResolvedSearchRefs,
+  SearchTransactions,
+  TransactionSortField,
+  TransactionStatus,
+} from '../../models/transaction.js';
 import { toMatchQuery } from './fts.js';
 
 export type CommonFilters = {
@@ -30,19 +35,6 @@ export type SearchFilters = SearchConditionFilters & {
 export type AggregateFilters = CommonFilters & {
   groupBy: AggregateGroupBy;
   metric: AggregateMetric;
-};
-
-/** Name-or-period fields the controller had to resolve via a repo lookup (account/category/
- *  subCategory names → ids, month+year → a date range) or decode (the cursor) — the parts of
- *  `search_transactions`' filter shape that genuinely can't be derived without I/O. Everything
- *  else needed to build `SearchFilters` already lives on the model (`SearchTransactions`). */
-export type ResolvedSearchRefs = {
-  accountId: string | null;
-  categoryId: string | null;
-  subCategoryId: string | null;
-  from: string | null;
-  to: string | null;
-  cursorKey: CursorKey | null;
 };
 
 /** The one model→SQL-filter shaping step for search_transactions — owned here (diplomat/db), not

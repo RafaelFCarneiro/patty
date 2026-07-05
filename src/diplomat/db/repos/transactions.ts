@@ -7,6 +7,7 @@ import {
   TransactionStatus,
   TransactionType,
   type CreateTxResult,
+  type ResolvedSearchRefs,
   type SearchTransactions,
   type Transaction,
   type RawTransactionView,
@@ -17,21 +18,10 @@ import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggr
 import { SummaryRowSchema } from '../../../wire/db/transactions.js';
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
 import type { Db } from '../driver.js';
-import {
-  buildCommonWhere,
-  buildSearchWhere,
-  toSearchFilters,
-  type AggregateFilters,
-  type ResolvedSearchRefs,
-} from '../filters.js';
+import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
 import { merchants, tags, transactionTags, transactions } from '../schema.js';
 import { ORDER_BY_COLUMN } from '../transactionOrderWhitelist.js';
 import { fullTxSelect } from '../transactionSelect.js';
-
-// Re-exported so controllers can reference this repo-contract parameter type via the documented
-// "import type from diplomat/db/repos" exception (docs/architecture.md § Dependency direction),
-// without importing diplomat/db/filters.js directly (controllers may not import diplomat/* modules).
-export type { ResolvedSearchRefs } from '../filters.js';
 
 const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
   const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`));
