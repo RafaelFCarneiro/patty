@@ -50,18 +50,19 @@ export type TransactionSource = z.infer<typeof TransactionSource>;
 export const TransactionSortField = z.enum(['date', 'amount']);
 export type TransactionSortField = z.infer<typeof TransactionSortField>;
 
-/** The JS type `key.value` must have for each sort field — guards against a cursor that decodes
- *  structurally (right shape) but carries a value type that doesn't match its own `sort` (e.g. a
- *  tampered `{ sort: 'date', key: { value: 123 } }`), which would otherwise reach the keyset
- *  predicate and silently mispage instead of being rejected as the malformed cursor it is. */
-const TRANSACTION_CURSOR_VALUE_TYPE: Record<TransactionSortField, 'string' | 'number'> = {
-  [TransactionSortField.enum.date]: 'string',
-  [TransactionSortField.enum.amount]: 'number',
+/** Validates `key.value` is actually well-formed for its own sort field — not just the right JS
+ *  type. A tampered/stale cursor can carry a syntactically-typed but semantically bogus value
+ *  (`{ sort: 'date', key: { value: 'not-a-date' } }`, or `{ sort: 'amount', key: { value: 1e309 } }`
+ *  → `Infinity`, still `typeof 'number'`); either would otherwise reach the keyset predicate and
+ *  silently mispage instead of being rejected as the malformed cursor it is. */
+const isValidTransactionCursorValue: Record<TransactionSortField, (value: string | number) => boolean> = {
+  [TransactionSortField.enum.date]: (value) => typeof value === 'string' && IsoDate.safeParse(value).success,
+  [TransactionSortField.enum.amount]: (value) => typeof value === 'number' && Number.isFinite(value),
 };
 
 export const TransactionCursorSchema = cursorSchema(TransactionSortField).superRefine((cursor, ctx) => {
-  if (typeof cursor.key.value !== TRANSACTION_CURSOR_VALUE_TYPE[cursor.sort]) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'cursor key value type does not match sort field' });
+  if (!isValidTransactionCursorValue[cursor.sort](cursor.key.value)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'cursor key value does not match sort field' });
   }
 });
 export type TransactionCursor = z.infer<typeof TransactionCursorSchema>;

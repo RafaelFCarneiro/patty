@@ -437,6 +437,28 @@ describe('resolveCursorKey', () => {
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('validation');
   });
+
+  // Right JS type, wrong content — a string that isn't a real ISO date must still be rejected,
+  // not just any string.
+  it('rejects a cursor whose sort: date value is a string but not a valid ISO date', () => {
+    const cursor = encodeCursor({ v: CURSOR_VERSION, sort: date, dir: desc, key: { value: 'not-a-date', id: 'tx-1' } });
+    const result = resolveCursorKey({ cursor, sort: date, dir: desc });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  // Right JS type, wrong content — the JSON numeral 1e309 parses (JSON.parse, not JS source) as
+  // the number Infinity (still `typeof 'number'`), which must still be rejected, not just any
+  // number. Built from a raw JSON string, not encodeCursor: constructing the payload as a JS
+  // object literal first would already collapse Infinity to null via JSON.stringify, before the
+  // cursor was ever encoded — that's a different bug than the one under test here.
+  it('rejects a cursor whose sort: amount value is a non-finite number', () => {
+    const rawJson = `{"v":${CURSOR_VERSION},"sort":"amount","dir":"desc","key":{"value":1e309,"id":"tx-1"}}`;
+    const cursor = Buffer.from(rawJson, 'utf8').toString('base64url');
+    const result = resolveCursorKey({ cursor, sort: amount, dir: desc });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
 });
 
 describe('nextCursorAfter', () => {
