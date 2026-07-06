@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { Locale } from '../../../src/models/locale.js';
-import { encodeCursor, SortDirection } from '../../../src/models/page.js';
+import { CURSOR_VERSION, encodeCursor, SortDirection } from '../../../src/models/page.js';
 import {
   ClassificationMethod,
   TransactionSortField,
@@ -395,7 +395,7 @@ describe('resolveCursorKey', () => {
   });
 
   it('decodes a well-formed cursor matching the request sort/dir', () => {
-    const cursor = encodeCursor({ v: 1, sort: date, dir: desc, key: { value: '2026-06-01', id: 'tx-1' } });
+    const cursor = encodeCursor({ v: CURSOR_VERSION, sort: date, dir: desc, key: { value: '2026-06-01', id: 'tx-1' } });
     const result = resolveCursorKey({ cursor, sort: date, dir: desc });
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ value: '2026-06-01', id: 'tx-1' });
@@ -408,15 +408,32 @@ describe('resolveCursorKey', () => {
   });
 
   it('rejects a cursor whose sort does not match the request', () => {
-    const cursor = encodeCursor({ v: 1, sort: date, dir: desc, key: { value: '2026-06-01', id: 'tx-1' } });
+    const cursor = encodeCursor({ v: CURSOR_VERSION, sort: date, dir: desc, key: { value: '2026-06-01', id: 'tx-1' } });
     const result = resolveCursorKey({ cursor, sort: amount, dir: desc });
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('validation');
   });
 
   it('rejects a cursor whose dir does not match the request', () => {
-    const cursor = encodeCursor({ v: 1, sort: date, dir: desc, key: { value: '2026-06-01', id: 'tx-1' } });
+    const cursor = encodeCursor({ v: CURSOR_VERSION, sort: date, dir: desc, key: { value: '2026-06-01', id: 'tx-1' } });
     const result = resolveCursorKey({ cursor, sort: date, dir: asc });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  // A tampered cursor could decode structurally (right shape) but carry a value type that
+  // doesn't match its own sort field (e.g. a number where sort: date implies a date string) —
+  // that must be rejected here, not silently reach the keyset predicate and mispage.
+  it('rejects a cursor whose key value type does not match sort: date (expects a string)', () => {
+    const cursor = encodeCursor({ v: CURSOR_VERSION, sort: date, dir: desc, key: { value: 20260601, id: 'tx-1' } });
+    const result = resolveCursorKey({ cursor, sort: date, dir: desc });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('rejects a cursor whose key value type does not match sort: amount (expects a number)', () => {
+    const cursor = encodeCursor({ v: CURSOR_VERSION, sort: amount, dir: desc, key: { value: '42.50', id: 'tx-1' } });
+    const result = resolveCursorKey({ cursor, sort: amount, dir: desc });
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('validation');
   });

@@ -50,7 +50,20 @@ export type TransactionSource = z.infer<typeof TransactionSource>;
 export const TransactionSortField = z.enum(['date', 'amount']);
 export type TransactionSortField = z.infer<typeof TransactionSortField>;
 
-export const TransactionCursorSchema = cursorSchema(TransactionSortField);
+/** The JS type `key.value` must have for each sort field — guards against a cursor that decodes
+ *  structurally (right shape) but carries a value type that doesn't match its own `sort` (e.g. a
+ *  tampered `{ sort: 'date', key: { value: 123 } }`), which would otherwise reach the keyset
+ *  predicate and silently mispage instead of being rejected as the malformed cursor it is. */
+const TRANSACTION_CURSOR_VALUE_TYPE: Record<TransactionSortField, 'string' | 'number'> = {
+  [TransactionSortField.enum.date]: 'string',
+  [TransactionSortField.enum.amount]: 'number',
+};
+
+export const TransactionCursorSchema = cursorSchema(TransactionSortField).superRefine((cursor, ctx) => {
+  if (typeof cursor.key.value !== TRANSACTION_CURSOR_VALUE_TYPE[cursor.sort]) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'cursor key value type does not match sort field' });
+  }
+});
 export type TransactionCursor = z.infer<typeof TransactionCursorSchema>;
 
 export const NOTE_MAX_LENGTH = 1000;
