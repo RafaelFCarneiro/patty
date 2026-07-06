@@ -97,7 +97,3 @@ export const SummaryRowSchema = z
     ...rest,
     categoryNames: parseCategoryNames(category_names),
   }));
-
-// search_transactions' includeTotal COUNT(*) row — decoded like every other SQL row (ADR
-// "decode at the boundary" invariant), not trusted on the strength of a type parameter alone.
-export const SearchCountRowSchema = z.object({ count: z.number().int() });

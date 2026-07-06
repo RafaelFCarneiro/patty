@@ -1,4 +1,5 @@
 import { eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { z } from 'zod';
 import * as transactionAdapters from '../../../adapters/transactions.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import { SortDirection, type CursorKey } from '../../../models/page.js';
@@ -15,12 +16,19 @@ import {
 } from '../../../models/transaction.js';
 import type { SummaryRow } from '../../../models/summary.js';
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js';
-import { ORDER_BY_COLUMN, SearchCountRowSchema, SummaryRowSchema } from '../../../wire/db/transactions.js';
+import { ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
 import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
 import { merchants, tags, transactionTags, transactions } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
+
+// search_transactions' includeTotal COUNT(*) row — decoded like every other SQL row (ADR
+// "decode at the boundary" invariant), not trusted on the strength of a type parameter alone.
+// Local to this one query (unlike SummaryRowSchema/AggregateDbRowSchema, whose row shapes are
+// genuinely reused in logic/summary.ts and logic/aggregate.ts), so it stays here rather than
+// being exported as a wire/db "storage contract" with no second consumer.
+const SearchCountRowSchema = z.object({ count: z.number().int() });
 
 const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
   const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`));
