@@ -3,7 +3,7 @@ import type { ValidationError } from '../models/error.js';
 import type { Account } from '../models/account.js';
 import type { CreditCard } from '../models/creditCard.js';
 import { CurrencyCode } from '../models/money.js';
-import type { IsoDate } from '../models/date.js';
+import { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
 import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDirection } from '../models/page.js';
 import type {
@@ -88,6 +88,16 @@ export const isCategoryKindAllowed = (txType: MovementType, categoryKind: Catego
 
 // ─── Pagination (ADR-014) ──────────────────────────────────────────────────────
 
+/** Validates `key.value` is actually well-formed for its own sort field — not just the right JS
+ *  type. A tampered/stale cursor can carry a syntactically-typed but semantically bogus value
+ *  (`{ sort: 'date', key: { value: 'not-a-date' } }`, or `{ sort: 'amount', key: { value: 1e309 } }`
+ *  → `Infinity`, still `typeof 'number'`); either would otherwise reach the keyset predicate and
+ *  silently mispage instead of being rejected as the malformed cursor it is. */
+const isValidCursorValue: Record<TransactionSortField, (value: string | number) => boolean> = {
+  [TransactionSortField.enum.date]: (value) => typeof value === 'string' && IsoDate.safeParse(value).success,
+  [TransactionSortField.enum.amount]: (value) => typeof value === 'number' && Number.isFinite(value),
+};
+
 /** Decodes + validates an opaque search cursor against the request's own sort/dir — a cursor
  *  only makes sense for the ordering that produced it. No cursor supplied → first page (null key). */
 export const resolveCursorKey = (
@@ -96,6 +106,9 @@ export const resolveCursorKey = (
   if (!input.cursor) return ok(null);
   const decoded = decodeCursor(TransactionCursorSchema, input.cursor);
   if (!decoded || decoded.sort !== input.sort || decoded.dir !== input.dir) {
+    return err(transactionErrors.invalidCursor);
+  }
+  if (!isValidCursorValue[decoded.sort](decoded.key.value)) {
     return err(transactionErrors.invalidCursor);
   }
   return ok(decoded.key);

@@ -50,21 +50,10 @@ export type TransactionSource = z.infer<typeof TransactionSource>;
 export const TransactionSortField = z.enum(['date', 'amount']);
 export type TransactionSortField = z.infer<typeof TransactionSortField>;
 
-/** Validates `key.value` is actually well-formed for its own sort field — not just the right JS
- *  type. A tampered/stale cursor can carry a syntactically-typed but semantically bogus value
- *  (`{ sort: 'date', key: { value: 'not-a-date' } }`, or `{ sort: 'amount', key: { value: 1e309 } }`
- *  → `Infinity`, still `typeof 'number'`); either would otherwise reach the keyset predicate and
- *  silently mispage instead of being rejected as the malformed cursor it is. */
-const isValidTransactionCursorValue: Record<TransactionSortField, (value: string | number) => boolean> = {
-  [TransactionSortField.enum.date]: (value) => typeof value === 'string' && IsoDate.safeParse(value).success,
-  [TransactionSortField.enum.amount]: (value) => typeof value === 'number' && Number.isFinite(value),
-};
-
-export const TransactionCursorSchema = cursorSchema(TransactionSortField).superRefine((cursor, ctx) => {
-  if (!isValidTransactionCursorValue[cursor.sort](cursor.key.value)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'cursor key value does not match sort field' });
-  }
-});
+/** Structural shape only — `resolveCursorKey` (logic/transaction.ts) is what checks `key.value`
+ *  is actually well-formed for its own `sort` field, alongside the sort/dir-match check it
+ *  already does; that's a cross-field business rule, not a schema shape. */
+export const TransactionCursorSchema = cursorSchema(TransactionSortField);
 export type TransactionCursor = z.infer<typeof TransactionCursorSchema>;
 
 export const NOTE_MAX_LENGTH = 1000;
