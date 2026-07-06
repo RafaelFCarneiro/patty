@@ -42,6 +42,7 @@ import {
   AggregateSpendingSchema,
   type ResolvedAggregateSpending,
 } from '../../models/aggregate.js';
+import { SortDirection } from '../../models/page.js';
 import {
   TransactionSource,
   CreateTransactionSchema,
@@ -49,6 +50,7 @@ import {
   CreateTransferSchema,
   UpdateTransactionSchema,
   SearchTransactionsSchema,
+  TransactionSortField,
 } from '../../models/transaction.js';
 import { CreateCategorySchema, CreateSubCategorySchema } from '../../wire/in/categories.js';
 import { Locale, LocaleSource } from '../../models/locale.js';
@@ -289,10 +291,16 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       description:
         'Search transactions by period (month/year or from/to), type (including transfers), ' +
         'category/account name, or free text. With an account filter this is the full account ' +
-        'statement (extrato): expenses, income, and transfers in either direction.',
+        'statement (extrato): expenses, income, and transfers in either direction. Returns a page ' +
+        '`{ items, nextCursor?, total? }` (ADR-014) — pass the previous `nextCursor` back as `cursor` ' +
+        'to keep walking; `nextCursor` is absent on the last page. `sort`/`dir` must stay the same ' +
+        'across a walk (they are bound to the cursor); set `includeTotal: true` on the first call ' +
+        'only if you need the total count of matching transactions.',
       inputSchema: {
         ...SearchTransactionsSchema.shape,
         limit: SearchTransactionsSchema.shape.limit.optional().default(50),
+        sort: SearchTransactionsSchema.shape.sort.optional().default(TransactionSortField.enum.date),
+        dir: SearchTransactionsSchema.shape.dir.optional().default(SortDirection.enum.desc),
       },
     },
     async (args) => fromResult(await searchTransactions(deps, args)),

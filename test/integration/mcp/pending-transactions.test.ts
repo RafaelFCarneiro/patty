@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { callTool, deleteTransactions, makeClient } from './helpers.js';
+import { callTool, deleteTransactions, makeClient, searchTransactions } from './helpers.js';
 
 describe('MCP integration > pending transactions', () => {
   let createdTxIds: string[] = [];
@@ -89,9 +89,10 @@ describe('MCP integration > pending transactions', () => {
       expect(brlSummary?.totalExpenses ?? 0).toBe(0);
 
       // status filter returns only pending transactions for this account
-      const pendingList = (await callTool(client, {
-        name: 'search_transactions',
-        args: { status: 'pending', account: accountName, limit: 50 },
+      const pendingList = (await searchTransactions(client, {
+        status: 'pending',
+        account: accountName,
+        limit: 50,
       })) as Array<{ id?: string }>;
       expect(pendingList.some((t) => t.id === pendId)).toBe(true);
       expect(pendingList.some((t) => t.id === effId)).toBe(false);

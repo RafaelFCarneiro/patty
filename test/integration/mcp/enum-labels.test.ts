@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { callTool, makeClient } from './helpers.js';
+import { callTool, makeClient, searchTransactions } from './helpers.js';
 
 type Account = { id: string; name: string; type: string; typeLabel?: string };
 type AccountBalance = Account & { balance: number };
@@ -106,10 +106,7 @@ describe('MCP integration > localized enum labels', () => {
   });
 
   it('search_transactions returns typeLabel and statusLabel', async () => {
-    const txs = (await callTool(client, {
-      name: 'search_transactions',
-      args: { account: accountName, limit: 5 },
-    })) as TransactionView[];
+    const txs = (await searchTransactions(client, { account: accountName, limit: 5 })) as TransactionView[];
     expect(txs.length).toBeGreaterThan(0);
     for (const tx of txs) {
       expect(tx.typeLabel).toBeTypeOf('string');
@@ -172,10 +169,7 @@ describe('MCP integration > localized enum labels', () => {
     expect(expense?.kindLabel).toBe('Despesa');
     expect(expense?.kind).toBe('expense');
 
-    const txs = (await callTool(client, {
-      name: 'search_transactions',
-      args: { account: accountName, limit: 1 },
-    })) as TransactionView[];
+    const txs = (await searchTransactions(client, { account: accountName, limit: 1 })) as TransactionView[];
     expect(txs.length).toBeGreaterThan(0);
     expect(txs[0].typeLabel).toBe('Despesa');
     expect(txs[0].statusLabel).toBe('Efetivada');

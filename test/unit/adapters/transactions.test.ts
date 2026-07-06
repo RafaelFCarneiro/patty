@@ -146,6 +146,35 @@ describe('wireIn adapters', () => {
     expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({ limit: 10, month: 6, year: 2026 });
   });
 
+  // ADR-014: a REST query string never carries a real number — limit must coerce like
+  // CoercedPeriodSchema (wire/in/period.js) does for month/year, or `?limit=10` 422s.
+  it('SearchTransactionsQuerySchema coerces a string limit from the query string', () => {
+    const parsed = wireInTransactions.SearchTransactionsQuerySchema.parse({ limit: '25' });
+    expect(parsed.limit).toBe(25);
+  });
+
+  it('searchWireInToModel defaults sort to date, dir to desc, includeTotal to false', () => {
+    const parsed = wireInTransactions.SearchTransactionsInputSchema.parse({});
+    expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({
+      sort: 'date',
+      dir: 'desc',
+      includeTotal: false,
+    });
+  });
+
+  it('searchWireInToModel preserves explicit sort/dir and parses includeTotal from a query string', () => {
+    const parsed = wireInTransactions.SearchTransactionsInputSchema.parse({
+      sort: 'amount',
+      dir: 'asc',
+      includeTotal: 'true',
+    });
+    expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({
+      sort: 'amount',
+      dir: 'asc',
+      includeTotal: true,
+    });
+  });
+
   it('createWireInToModel passes transaction input through unchanged', () => {
     const parsed = wireInTransactions.CreateTransactionInputSchema.parse({
       description: 'Uber',

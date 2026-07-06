@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, deleteTransactions, ensure, makeClient, preferredAccount } from './helpers.js';
+import { callTool, deleteTransactions, ensure, makeClient, preferredAccount, searchTransactions } from './helpers.js';
 
 describe('MCP integration > transactions', () => {
   let createdTxIds: string[] = [];
@@ -77,10 +77,7 @@ describe('MCP integration > transactions', () => {
       createdTxIds.push(txId);
       expect(created.created).toBe(true);
 
-      const found = (await callTool(client, {
-        name: 'search_transactions',
-        args: { text: txDescription, limit: 10 },
-      })) as Array<{ id?: string }>;
+      const found = (await searchTransactions(client, { text: txDescription, limit: 10 })) as Array<{ id?: string }>;
       expect(found.some((tx) => tx.id === txId)).toBe(true);
 
       const updated = (await callTool(client, {
@@ -103,9 +100,9 @@ describe('MCP integration > transactions', () => {
       expect(deleted.deleted).toBe(true);
       createdTxIds = createdTxIds.filter((id) => id !== txId);
 
-      const afterDelete = (await callTool(client, {
-        name: 'search_transactions',
-        args: { text: txDescriptionUpdated, limit: 10 },
+      const afterDelete = (await searchTransactions(client, {
+        text: txDescriptionUpdated,
+        limit: 10,
       })) as Array<{ id?: string }>;
       expect(afterDelete.some((tx) => tx.id === txId)).toBe(false);
     } finally {
@@ -132,10 +129,7 @@ describe('MCP integration > transactions', () => {
       ensure(txId, 'Transaction id missing');
       createdTxIds.push(txId);
 
-      const results = (await callTool(client, {
-        name: 'search_transactions',
-        args: { text: '   ', limit: 200 },
-      })) as Array<{ id?: string }>;
+      const results = (await searchTransactions(client, { text: '   ', limit: 200 })) as Array<{ id?: string }>;
 
       expect(results.some((tx) => tx.id === txId)).toBe(true);
     } finally {
@@ -810,9 +804,9 @@ describe('MCP integration > transactions', () => {
       ensure(untaggedTxId, 'Untagged transaction id missing');
       createdTxIds.push(untaggedTxId);
 
-      const results = (await callTool(client, {
-        name: 'search_transactions',
-        args: { tags: [`search-tag-${stamp}`], limit: 50 },
+      const results = (await searchTransactions(client, {
+        tags: [`search-tag-${stamp}`],
+        limit: 50,
       })) as Array<{ id?: string }>;
 
       const ids = results.map((t) => t.id);
@@ -864,9 +858,9 @@ describe('MCP integration > transactions', () => {
       createdTxIds.push(txId);
 
       // Search by only one of the two tags — the result must still carry both
-      const results = (await callTool(client, {
-        name: 'search_transactions',
-        args: { tags: [`full-a-${stamp}`], limit: 50 },
+      const results = (await searchTransactions(client, {
+        tags: [`full-a-${stamp}`],
+        limit: 50,
       })) as Array<{ id?: string; tags?: string[] }>;
 
       const match = results.find((tx) => tx.id === txId);
@@ -957,9 +951,9 @@ describe('MCP integration > transactions', () => {
       expect(created.transaction?.tags).toEqual([]);
 
       // search response: same guarantee on the read path
-      const results = (await callTool(client, {
-        name: 'search_transactions',
-        args: { text: `No tags tx ${stamp}`, limit: 10 },
+      const results = (await searchTransactions(client, {
+        text: `No tags tx ${stamp}`,
+        limit: 10,
       })) as Array<{ id?: string; tags?: string[] }>;
 
       const match = results.find((tx) => tx.id === txId);
@@ -1002,9 +996,9 @@ describe('MCP integration > transactions', () => {
 
       expect(created.transaction?.note).toBe('split com João');
 
-      const results = (await callTool(client, {
-        name: 'search_transactions',
-        args: { text: `Note roundtrip ${stamp}`, limit: 10 },
+      const results = (await searchTransactions(client, {
+        text: `Note roundtrip ${stamp}`,
+        limit: 10,
       })) as Array<{ id?: string; note?: string }>;
 
       const match = results.find((tx) => tx.id === txId);
@@ -1113,9 +1107,9 @@ describe('MCP integration > transactions', () => {
       expect(created.transaction?.tags).toContain(`CASE-TAG-${stamp}`);
 
       // Search using wrong casing — must NOT find the transaction
-      const results = (await callTool(client, {
-        name: 'search_transactions',
-        args: { tags: [`case-tag-${stamp}`], limit: 50 },
+      const results = (await searchTransactions(client, {
+        tags: [`case-tag-${stamp}`],
+        limit: 50,
       })) as Array<{ id?: string }>;
       expect(results.some((tx) => tx.id === txId)).toBe(false);
     } finally {

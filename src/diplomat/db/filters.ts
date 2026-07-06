@@ -1,6 +1,13 @@
 import { sql } from 'drizzle-orm';
 import type { AggregateGroupBy, AggregateMetric } from '../../models/aggregate.js';
-import type { TransactionStatus } from '../../models/transaction.js';
+import type { CursorKey, SortDirection } from '../../models/page.js';
+import type {
+  ResolvedSearchRefs,
+  SearchTransactions,
+  TransactionSortField,
+  TransactionStatus,
+} from '../../models/transaction.js';
+import { toMatchQuery } from './fts.js';
 
 export type CommonFilters = {
   from: string | null;
@@ -11,17 +18,43 @@ export type CommonFilters = {
   tagNames: string[];
 };
 
-export type SearchFilters = CommonFilters & {
+/** Filters that narrow the result set — shared by the paged `search` and its same-WHERE `count`. */
+export type SearchConditionFilters = CommonFilters & {
   status: TransactionStatus | null;
   text: string | null;
   subCategoryId: string | null;
+};
+
+export type SearchFilters = SearchConditionFilters & {
   limit: number;
+  sort: TransactionSortField;
+  dir: SortDirection;
+  cursorKey: CursorKey | null;
 };
 
 export type AggregateFilters = CommonFilters & {
   groupBy: AggregateGroupBy;
   metric: AggregateMetric;
 };
+
+/** The one model→SQL-filter shaping step for search_transactions — owned here (diplomat/db), not
+ *  by the controller, which hands the repo the model plus `ResolvedSearchRefs` and never builds
+ *  this flat shape itself (mirrors `transactionsRepo.create` calling `modelToDb` internally). */
+export const toSearchFilters = (input: SearchTransactions, refs: ResolvedSearchRefs): SearchFilters => ({
+  from: refs.from ?? input.from ?? null,
+  to: refs.to ?? input.to ?? null,
+  type: input.type ?? null,
+  status: input.status ?? null,
+  text: input.text ?? null,
+  accountId: refs.accountId,
+  categoryId: refs.categoryId,
+  subCategoryId: refs.subCategoryId,
+  tagNames: input.tags ?? [],
+  limit: input.limit,
+  sort: input.sort,
+  dir: input.dir,
+  cursorKey: refs.cursorKey,
+});
 
 export const buildCommonWhere = (filters: CommonFilters): ReturnType<typeof sql>[] => {
   const conditions: ReturnType<typeof sql>[] = [];
@@ -41,6 +74,21 @@ export const buildCommonWhere = (filters: CommonFilters): ReturnType<typeof sql>
       JOIN tags tg2 ON tg2.id = tt2.tag_id
       WHERE tt2.transaction_id = t.id AND tg2.name IN (${placeholders})
     )`);
+  }
+  return conditions;
+};
+
+/** search_transactions' full WHERE — shared by the paged row query and its opt-in `count`
+ *  (ADR-011 § shared filter WHERE-builder); only the projection/keyset/ORDER-BY tail differs. */
+export const buildSearchWhere = (filters: SearchConditionFilters): ReturnType<typeof sql>[] => {
+  const conditions = buildCommonWhere(filters);
+  if (filters.status) conditions.push(sql`t.status = ${filters.status}`);
+  if (filters.subCategoryId) conditions.push(sql`t.subcategory_id = ${filters.subCategoryId}`);
+  if (filters.text) {
+    const matchQuery = toMatchQuery(filters.text);
+    if (matchQuery !== null) {
+      conditions.push(sql`t.rowid IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${matchQuery})`);
+    }
   }
   return conditions;
 };

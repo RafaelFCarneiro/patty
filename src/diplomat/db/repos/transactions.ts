@@ -1,23 +1,34 @@
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { z } from 'zod';
 import * as transactionAdapters from '../../../adapters/transactions.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
+import { SortDirection, type CursorKey } from '../../../models/page.js';
 import {
   TransactionStatus,
   TransactionType,
   type CreateTxResult,
+  type ResolvedSearchRefs,
+  type SearchTransactions,
   type Transaction,
   type RawTransactionView,
   type TransactionPatch,
+  type TransactionSortField,
 } from '../../../models/transaction.js';
 import type { SummaryRow } from '../../../models/summary.js';
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js';
-import { SummaryRowSchema } from '../../../wire/db/transactions.js';
+import { ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
 import type { Db } from '../driver.js';
-import { buildCommonWhere, type AggregateFilters, type SearchFilters } from '../filters.js';
-import { toMatchQuery } from '../fts.js';
+import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
 import { merchants, tags, transactionTags, transactions } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
+
+// search_transactions' includeTotal COUNT(*) row — decoded like every other SQL row (ADR
+// "decode at the boundary" invariant), not trusted on the strength of a type parameter alone.
+// Local to this one query (unlike SummaryRowSchema/AggregateDbRowSchema, whose row shapes are
+// genuinely reused in logic/summary.ts and logic/aggregate.ts), so it stays here rather than
+// being exported as a wire/db "storage contract" with no second consumer.
+const SearchCountRowSchema = z.object({ count: z.number().int() });
 
 const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
   const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`));
@@ -39,6 +50,25 @@ const replaceTags = async (db: Db, txId: string, tagNames: string[]): Promise<vo
   await attachTags(db, txId, tagNames);
 };
 
+/** Tiebreaker (t.id) follows `dir` — one uniform direction across the composite key, which is
+ *  what keeps the keyset predicate below stable (ADR-014 Decision 1). `sql.raw` is safe here:
+ *  the column name always comes from the ORDER_BY_COLUMN whitelist, never from caller input. */
+const orderByClause = (sort: TransactionSortField, dir: SortDirection): SQL => {
+  const column = sql.raw(ORDER_BY_COLUMN[sort]);
+  const direction = dir === SortDirection.enum.asc ? sql`ASC` : sql`DESC`;
+  return sql`${column} ${direction}, t.id ${direction}`;
+};
+
+/** Expanded keyset predicate, consistent with `orderByClause` per key component (ADR-014):
+ *  `(col < ? OR (col = ? AND t.id < ?))` for `dir: desc`, `>` for `dir: asc`. Values are always
+ *  parameter-bound; only the column name (via `sql.raw` off the ORDER_BY_COLUMN whitelist) and
+ *  the comparator are structural. */
+const keysetPredicate = (sort: TransactionSortField, dir: SortDirection, key: CursorKey): SQL => {
+  const column = sql.raw(ORDER_BY_COLUMN[sort]);
+  const cmp = dir === SortDirection.enum.asc ? sql`>` : sql`<`;
+  return sql`(${column} ${cmp} ${key.value} OR (${column} = ${key.value} AND t.id ${cmp} ${key.id}))`;
+};
+
 export type TransactionsRepo = {
   /** Receives domain entity; model→db flattening happens here (adapters/transactions.ts). */
   create: (entity: Transaction, tagNames: string[]) => Promise<CreateTxResult>;
@@ -57,7 +87,15 @@ export type TransactionsRepo = {
   /** Flip status pending → effective. Returns null if the id does not exist. */
   confirm: (id: string) => Promise<RawTransactionView | null>;
   delete: (id: string) => Promise<boolean>;
-  search: (filters: SearchFilters) => Promise<RawTransactionView[]>;
+  /** Keyset page: fetches one extra row (LIMIT n+1) to derive `hasMore` without a COUNT query.
+   *  Receives the model plus the refs the controller had to resolve via I/O; shaping that pair
+   *  into the flat SQL-filter object (`toSearchFilters`) happens in here, not at the call site. */
+  search: (
+    input: SearchTransactions,
+    refs: ResolvedSearchRefs,
+  ) => Promise<{ items: RawTransactionView[]; hasMore: boolean }>;
+  /** Same-WHERE count for `includeTotal` — no cursor/ORDER BY/LIMIT applied. */
+  count: (input: SearchTransactions, refs: ResolvedSearchRefs) => Promise<number>;
   aggregate: (filters: AggregateFilters) => Promise<AggregateDbRow[]>;
   summaryRows: (from: string, to: string) => Promise<SummaryRow[]>;
   /** Aggregated pending amounts for an account dated on/before asOf. */
@@ -170,29 +208,32 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     return (result.rowsAffected ?? 0) > 0;
   },
 
-  search: async (filters) => {
-    const conditions = buildCommonWhere(filters);
-
-    if (filters.status) conditions.push(sql`t.status = ${filters.status}`);
-    if (filters.subCategoryId) conditions.push(sql`t.subcategory_id = ${filters.subCategoryId}`);
-
-    if (filters.text) {
-      const matchQuery = toMatchQuery(filters.text);
-      if (matchQuery !== null) {
-        conditions.push(
-          sql`t.rowid IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${matchQuery})`,
-        );
-      }
-    }
+  search: async (input, refs) => {
+    const filters = toSearchFilters(input, refs);
+    const conditions = buildSearchWhere(filters);
+    if (filters.cursorKey) conditions.push(keysetPredicate(filters.sort, filters.dir, filters.cursorKey));
 
     const where = conditions.length > 0 ? sql.join(conditions, sql` AND `) : sql`1=1`;
     const rows = await db.all<Record<string, unknown>>(sql`
       ${fullTxSelect(where)}
-      ORDER BY t.date DESC, t.id
-      LIMIT ${filters.limit}
+      ORDER BY ${orderByClause(filters.sort, filters.dir)}
+      LIMIT ${filters.limit + 1}
     `);
 
-    return rows.map(transactionAdapters.dbToModel);
+    const hasMore = rows.length > filters.limit;
+    return { items: rows.slice(0, filters.limit).map(transactionAdapters.dbToModel), hasMore };
+  },
+
+  count: async (input, refs) => {
+    const filters = toSearchFilters(input, refs);
+    const conditions = buildSearchWhere(filters);
+    const where = conditions.length > 0 ? sql.join(conditions, sql` AND `) : sql`1=1`;
+    // COUNT(*) always returns exactly one row (even for zero matches) — an absent row would be a
+    // genuine driver-level anomaly, not an expected case, so this is allowed to throw on it.
+    const [row] = await db.all<Record<string, unknown>>(
+      sql`SELECT COUNT(*) AS count FROM transactions t WHERE ${where}`,
+    );
+    return SearchCountRowSchema.parse(row).count;
   },
 
   aggregate: async (filters) => {

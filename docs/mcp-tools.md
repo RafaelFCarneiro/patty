@@ -90,9 +90,37 @@ Input: `id` (required), `confirm` (default false).
 
 ## search_transactions
 
-Filter by `month`+`year` (or `from`/`to`), `type` (`expense|income|transfer`), `status` (`pending|effective`), `category`/`subCategory`/`account` (names), free-text `text` (description substring), `tags`, `limit` (default 50, max 200). Returns newest first. Each `TransactionView` includes `typeLabel`, `statusLabel`, and `note` (when set). With an `account` filter this is the full extrato: the account matches as source OR destination, so transfers in both directions are included. Results include `subCategoryId`/`subCategoryName` when set.
+Filter by `month`+`year` (or `from`/`to`), `type` (`expense|income|transfer`), `status` (`pending|effective`), `category`/`subCategory`/`account` (names), free-text `text` (description substring), `tags`. Each `TransactionView` includes `typeLabel`, `statusLabel`, and `note` (when set). With an `account` filter this is the full extrato: the account matches as source OR destination, so transfers in both directions are included. Results include `subCategoryId`/`subCategoryName` when set.
 
 Use `status: "pending"` to list scheduled/expected transactions (e.g. "what is due today" or "what income is expected this month").
+
+**Pagination + ordering.** Returns a page, not a bare array:
+
+```jsonc
+{ "items": [ /* TransactionView[] */ ],
+  "nextCursor": "eyJ2IjoxLCJzb3J0IjoiZGF0ZSIs...",   // absent on the last page
+  "total": 312 }                                     // present only when includeTotal: true
+```
+
+- `limit` (default 50, max 200): rows per page.
+- `sort` (default `date`): `date | amount` — the whitelisted sort field.
+- `dir` (default `desc`): `asc | desc`.
+- `cursor` (optional): the previous page's `nextCursor`, to fetch the next page. Opaque — never
+  construct or inspect it; pass it back exactly as received.
+- `includeTotal` (default `false`): when `true`, adds `total` — the count of every transaction
+  matching the filters (not just this page). Costs an extra query; ask for it on the first page
+  only if you need a count/progress display.
+
+`sort`/`dir` are baked into the cursor: a follow-up request's `sort`/`dir` must match what produced
+the cursor, or the call fails with a `validation` error — start a fresh first page (no `cursor`) to
+change ordering. To walk every matching transaction, loop passing `nextCursor` back as `cursor` until
+it's absent from the response.
+
+REST mirror: `GET /api/transactions` (same query fields; `cursor`/`sort`/`dir`/`limit` are query
+strings, `includeTotal` is `"true"`/`"false"`).
+
+**Errors:** resolution errors (`unknown_account`, `unknown_category`, …), `validation` (malformed/stale
+cursor, or a cursor whose `sort`/`dir` doesn't match the request's).
 
 ## aggregate_spending
 

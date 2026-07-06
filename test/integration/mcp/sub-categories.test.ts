@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { callTool, callToolError, deleteTransactions, ensure, makeClient } from './helpers.js';
+import { callTool, callToolError, deleteTransactions, ensure, makeClient, searchTransactions } from './helpers.js';
 
 // Sub-categories have no delete tool — the ephemeral test DB is wiped per run.
 // We only need to clean up transactions to avoid cross-test interference.
@@ -305,10 +305,7 @@ describe('MCP integration > sub-categories', () => {
       ensure(t2.id, 'tx2 id missing');
       createdTxIds.push(t1.id, t2.id);
 
-      const results = (await callTool(client, {
-        name: 'search_transactions',
-        args: { subCategory: `Filter-${stamp}` },
-      })) as TransactionView[];
+      const results = (await searchTransactions(client, { subCategory: `Filter-${stamp}` })) as TransactionView[];
 
       expect(results.some((t) => t.id === t1.id)).toBe(true);
       expect(results.some((t) => t.id === t2.id)).toBe(false);

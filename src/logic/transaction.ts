@@ -3,19 +3,29 @@ import type { ValidationError } from '../models/error.js';
 import type { Account } from '../models/account.js';
 import type { CreditCard } from '../models/creditCard.js';
 import { CurrencyCode } from '../models/money.js';
-import type { IsoDate } from '../models/date.js';
+import { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
+import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDirection } from '../models/page.js';
 import type {
   CategoryFields,
   Classification,
   ClassifyOutcome,
   CreateTransaction,
   CreateTransactionResult,
+  SearchTransactions,
+  TransactionError,
   TransactionView,
   UpdateTransaction,
 } from '../models/transaction.js';
 import type { RawTransactionView } from '../models/transaction.js';
-import { transactionErrors, TransactionStatus, TransactionType, type MovementType } from '../models/transaction.js';
+import {
+  transactionErrors,
+  TransactionCursorSchema,
+  TransactionSortField,
+  TransactionStatus,
+  TransactionType,
+  type MovementType,
+} from '../models/transaction.js';
 import { CategoryKind } from '../models/category.js';
 import { err, ok, type Result } from 'neverthrow';
 import * as R from 'remeda';
@@ -75,6 +85,57 @@ export const withBillId = (tx: RawTransactionView, billId: string): RawTransacti
 
 export const isCategoryKindAllowed = (txType: MovementType, categoryKind: CategoryKind): boolean =>
   categoryKind === CategoryKind.enum.both || categoryKind === txType;
+
+// ─── Pagination (ADR-014) ──────────────────────────────────────────────────────
+
+/** Validates `key.value` is actually well-formed for its own sort field — not just the right JS
+ *  type. A tampered/stale cursor can carry a syntactically-typed but semantically bogus value
+ *  (`{ sort: 'date', key: { value: 'not-a-date' } }`, or `{ sort: 'amount', key: { value: 1e309 } }`
+ *  → `Infinity`, still `typeof 'number'`); either would otherwise reach the keyset predicate and
+ *  silently mispage instead of being rejected as the malformed cursor it is. */
+const isValidCursorValue: Record<TransactionSortField, (value: string | number) => boolean> = {
+  [TransactionSortField.enum.date]: (value) => typeof value === 'string' && IsoDate.safeParse(value).success,
+  [TransactionSortField.enum.amount]: (value) => typeof value === 'number' && Number.isFinite(value),
+};
+
+/** Decodes + validates an opaque search cursor against the request's own sort/dir — a cursor
+ *  only makes sense for the ordering that produced it. No cursor supplied → first page (null key). */
+export const resolveCursorKey = (
+  input: Pick<SearchTransactions, 'cursor' | 'sort' | 'dir'>,
+): Result<CursorKey | null, TransactionError> => {
+  if (!input.cursor) return ok(null);
+  const decoded = decodeCursor(TransactionCursorSchema, input.cursor);
+  if (!decoded || decoded.sort !== input.sort || decoded.dir !== input.dir) {
+    return err(transactionErrors.invalidCursor);
+  }
+  if (!isValidCursorValue[decoded.sort](decoded.key.value)) {
+    return err(transactionErrors.invalidCursor);
+  }
+  return ok(decoded.key);
+};
+
+/** ADR-014 whitelist: the only column each sort field may resolve to when deriving a cursor's
+ *  keyset value from a result row — kept as an exhaustive map, mirroring diplomat/db's ORDER BY map. */
+const CURSOR_VALUE_OF: Record<
+  TransactionSortField,
+  (row: Pick<TransactionView, 'date' | 'amount'>) => string | number
+> = {
+  [TransactionSortField.enum.date]: (row) => row.date,
+  [TransactionSortField.enum.amount]: (row) => row.amount,
+};
+
+/** Builds the opaque cursor pointing to the page after `lastRow`, under the given sort/dir. */
+export const nextCursorAfter = (
+  lastRow: Pick<TransactionView, 'date' | 'amount' | 'id'>,
+  sort: TransactionSortField,
+  dir: SortDirection,
+): string =>
+  encodeCursor({
+    v: CURSOR_VERSION,
+    sort,
+    dir,
+    key: { value: CURSOR_VALUE_OF[sort](lastRow), id: lastRow.id },
+  });
 
 // ─── Transfer mutability guards ───────────────────────────────────────────────
 

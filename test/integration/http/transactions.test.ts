@@ -592,13 +592,13 @@ describe('GET /api/transactions', () => {
   it('searches transactions by date range', async () => {
     const res = await inject({ method: 'GET', url: '/api/transactions?from=2026-06-01&to=2026-06-30' });
     expect(res.statusCode).toBe(200);
-    expect(Array.isArray(res.json())).toBe(true);
+    expect(Array.isArray(res.json().items)).toBe(true);
   });
 
   it('filters by status', async () => {
     const res = await inject({ method: 'GET', url: '/api/transactions?status=pending&from=2099-01-01&to=2099-12-31' });
     expect(res.statusCode).toBe(200);
-    const txs = res.json() as Array<{ status: string }>;
+    const { items: txs } = res.json() as { items: Array<{ status: string }> };
     expect(txs.every((t) => t.status === 'pending')).toBe(true);
   });
 
@@ -633,7 +633,7 @@ describe('GET /api/transactions', () => {
       url: '/api/transactions?tags=search-filter-tag&tags=search-filter-tag2&from=2026-06-10&to=2026-06-30',
     });
     expect(res.statusCode).toBe(200);
-    const txs = res.json() as Array<{ description: string }>;
+    const { items: txs } = res.json() as { items: Array<{ description: string }> };
     expect(txs.some((t) => t.description === 'Tagged search')).toBe(true);
     expect(txs.some((t) => t.description === 'Untagged search')).toBe(false);
   });
@@ -655,7 +655,7 @@ describe('GET /api/transactions', () => {
     });
     const res = await inject({ method: 'GET', url: '/api/transactions?from=2026-06-11&to=2026-06-30' });
     expect(res.statusCode).toBe(200);
-    const txs = res.json() as Array<{ description: string; tags: string[] }>;
+    const { items: txs } = res.json() as { items: Array<{ description: string; tags: string[] }> };
     const match = txs.find((t) => t.description === 'Full set');
     expect(match).toBeDefined();
     expect(match!.tags).toContain('full-set-a');
@@ -701,7 +701,7 @@ describe('GET /api/transactions', () => {
       url: '/api/transactions?subCategory=SearchSub&from=2026-06-01&to=2026-06-30',
     });
     expect(res.statusCode).toBe(200);
-    const txs = res.json() as Array<{ subCategoryName?: string; description?: string }>;
+    const { items: txs } = res.json() as { items: Array<{ subCategoryName?: string; description?: string }> };
     const filtered = txs.filter((t) => t.subCategoryName === 'SearchSub');
     expect(filtered.length).toBeGreaterThanOrEqual(1);
     expect(filtered[0].description).toBe('With sub filter');
@@ -710,5 +710,71 @@ describe('GET /api/transactions', () => {
   it('rejects invalid date (422)', async () => {
     const res = await inject({ method: 'GET', url: '/api/transactions?from=bad' });
     expect(res.statusCode).toBe(422);
+  });
+
+  it('paginates via cursor with no gaps or duplicates (ADR-014)', async () => {
+    for (let i = 0; i < 5; i++) {
+      await inject({
+        method: 'POST',
+        url: '/api/transactions',
+        payload: {
+          description: `REST pager ${i}`,
+          amount: 1,
+          type: 'expense',
+          date: '2032-01-15',
+          idempotencyKey: `rest-pager-${i}`,
+        },
+      });
+    }
+
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    let pages = 0;
+    do {
+      const url =
+        '/api/transactions?from=2032-01-15&to=2032-01-16&limit=2' +
+        (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+      const res = await inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(200);
+      const page = res.json() as { items: Array<{ id: string }>; nextCursor?: string };
+      seen.push(...page.items.map((t) => t.id));
+      cursor = page.nextCursor;
+      pages += 1;
+      expect(pages).toBeLessThan(20);
+    } while (cursor);
+
+    expect(seen.length).toBe(5);
+    expect(new Set(seen).size).toBe(5);
+  });
+
+  it('rejects a cursor whose sort/dir does not match the request (422)', async () => {
+    // Seeds its own 2 rows, scoped by date range, so nextCursor is guaranteed rather than
+    // depending on incidental leftovers from earlier tests in this file.
+    for (let i = 0; i < 2; i++) {
+      await inject({
+        method: 'POST',
+        url: '/api/transactions',
+        payload: {
+          description: `REST sort mismatch ${i}`,
+          amount: 1,
+          type: 'expense',
+          date: '2032-02-01',
+          idempotencyKey: `rest-sort-mismatch-${i}`,
+        },
+      });
+    }
+
+    const first = await inject({
+      method: 'GET',
+      url: '/api/transactions?from=2032-02-01&to=2032-02-02&limit=1&sort=date&dir=desc',
+    });
+    const { nextCursor } = first.json() as { nextCursor?: string };
+    expect(nextCursor).toBeDefined();
+    const res = await inject({
+      method: 'GET',
+      url: `/api/transactions?from=2032-02-01&to=2032-02-02&limit=1&sort=amount&dir=desc&cursor=${encodeURIComponent(nextCursor!)}`,
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe('validation');
   });
 });
