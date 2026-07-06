@@ -748,12 +748,31 @@ describe('GET /api/transactions', () => {
   });
 
   it('rejects a cursor whose sort/dir does not match the request (422)', async () => {
-    const first = await inject({ method: 'GET', url: '/api/transactions?limit=1&sort=date&dir=desc' });
+    // Seeds its own 2 rows, scoped by date range, so nextCursor is guaranteed rather than
+    // depending on incidental leftovers from earlier tests in this file.
+    for (let i = 0; i < 2; i++) {
+      await inject({
+        method: 'POST',
+        url: '/api/transactions',
+        payload: {
+          description: `REST sort mismatch ${i}`,
+          amount: 1,
+          type: 'expense',
+          date: '2032-02-01',
+          idempotencyKey: `rest-sort-mismatch-${i}`,
+        },
+      });
+    }
+
+    const first = await inject({
+      method: 'GET',
+      url: '/api/transactions?from=2032-02-01&to=2032-02-02&limit=1&sort=date&dir=desc',
+    });
     const { nextCursor } = first.json() as { nextCursor?: string };
-    if (!nextCursor) return; // not enough data seeded in this run to produce a next page
+    expect(nextCursor).toBeDefined();
     const res = await inject({
       method: 'GET',
-      url: `/api/transactions?limit=1&sort=amount&dir=desc&cursor=${encodeURIComponent(nextCursor)}`,
+      url: `/api/transactions?from=2032-02-01&to=2032-02-02&limit=1&sort=amount&dir=desc&cursor=${encodeURIComponent(nextCursor!)}`,
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().error.code).toBe('validation');
