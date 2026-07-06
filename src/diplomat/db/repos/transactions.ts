@@ -15,7 +15,7 @@ import {
 } from '../../../models/transaction.js';
 import type { SummaryRow } from '../../../models/summary.js';
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js';
-import { ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
+import { ORDER_BY_COLUMN, SearchCountRowSchema, SummaryRowSchema } from '../../../wire/db/transactions.js';
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
 import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
@@ -220,8 +220,12 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     const filters = toSearchFilters(input, refs);
     const conditions = buildSearchWhere(filters);
     const where = conditions.length > 0 ? sql.join(conditions, sql` AND `) : sql`1=1`;
-    const [row] = await db.all<{ count: number }>(sql`SELECT COUNT(*) AS count FROM transactions t WHERE ${where}`);
-    return row?.count ?? 0;
+    // COUNT(*) always returns exactly one row (even for zero matches) — an absent row would be a
+    // genuine driver-level anomaly, not an expected case, so this is allowed to throw on it.
+    const [row] = await db.all<Record<string, unknown>>(
+      sql`SELECT COUNT(*) AS count FROM transactions t WHERE ${where}`,
+    );
+    return SearchCountRowSchema.parse(row).count;
   },
 
   aggregate: async (filters) => {
