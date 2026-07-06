@@ -668,11 +668,19 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
             });
         }
 
+        // Removes any previous load-more button or inline retry error, without touching the
+        // already-rendered table — a failed "load more" must never wipe rows that loaded fine.
+        function clearLoadMoreControls(container) {
+          var existingButton = document.getElementById('recent-transactions-load-more');
+          if (existingButton) existingButton.remove();
+          var existingError = document.getElementById('recent-transactions-load-more-error');
+          if (existingError) existingError.remove();
+        }
+
         // "Load more" walks the envelope's nextCursor (ADR-014) — appends rows to the existing
         // table instead of re-fetching from the start, the same pattern any fetch-all agent loop uses.
         function renderLoadMoreButton(container, cursor) {
-          var existing = document.getElementById('recent-transactions-load-more');
-          if (existing) existing.remove();
+          clearLoadMoreControls(container);
           if (!cursor) return;
           var button = h('button', {
             type: 'button',
@@ -684,6 +692,28 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
             loadMoreRecentTransactions(container, cursor);
           });
           container.appendChild(button);
+        }
+
+        // A failed "load more" keeps the rows already on screen — it only replaces the button
+        // with an inline error + retry (same cursor, so retrying doesn't skip or repeat a page).
+        function renderLoadMoreError(container, message, cursor) {
+          clearLoadMoreControls(container);
+          var retry = h('button', { type: 'button', class: 'secondary', text: 'Retry' });
+          retry.addEventListener('click', function () {
+            loadMoreRecentTransactions(container, cursor);
+          });
+          container.appendChild(
+            h(
+              'p',
+              {
+                class: 'state state-error',
+                role: 'alert',
+                id: 'recent-transactions-load-more-error',
+                text: 'Could not load more: ' + message + ' ',
+              },
+              [retry],
+            ),
+          );
         }
 
         function loadMoreRecentTransactions(container, cursor) {
@@ -701,7 +731,7 @@ export const DEFAULT_DASHBOARD_HTML = `<!doctype html>
             })
             .catch(function (err) {
               if (!isCurrentRequest('recentTransactions', requestId)) return;
-              setError(container, err.message);
+              renderLoadMoreError(container, err.message, cursor);
             });
         }
 
