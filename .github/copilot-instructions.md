@@ -144,7 +144,7 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 
 ## Process
 
-- Architecture decisions get an ADR in `docs/adr/` (use the engineering:architecture skill).
+- Architecture decisions get an ADR in `docs/adr/` (use the `engineering:architecture` skill if available; otherwise follow the ADR template in `docs/adr/` and include rationale + decision + consequences).
 - Docs are updated in the same change that alters behavior — `docs/architecture.md` for structural changes, `docs/mcp-tools.md` for tool changes.
 - New MCP tools must be documented in `docs/mcp-tools.md` with schema, error codes, and an example.
 - Commit messages follow Conventional Commits: `type(scope): description`. Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`. Use `!` or `BREAKING CHANGE:` footer for incompatible changes.
