@@ -21,8 +21,13 @@ jobs:
       - name: Delete old releases and tags
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          KEEP: ${{ inputs.keep || '10' }}
         run: |
+          KEEP="${{ github.event.inputs.keep }}"
+          KEEP="${KEEP:-10}"
+          case "$KEEP" in
+            ''|*[!0-9]*) KEEP=10 ;;
+          esac
+
           gh release list \
             --repo "$GITHUB_REPOSITORY" \
             --limit 200 \
