@@ -1,6 +1,10 @@
-# CLAUDE.md
+# Copilot instructions
 
 Guidance for AI agents working in this repository.
+
+> **`CLAUDE.md` is the source of truth.** This file mirrors its non-negotiables for Copilot; if the two ever
+> diverge, `CLAUDE.md` wins, and they must be kept in sync in the same change. The canonical depth lives in
+> `docs/` (linked below).
 
 ## Project overview
 
