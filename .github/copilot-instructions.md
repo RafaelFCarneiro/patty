@@ -78,7 +78,7 @@ Before changing architecture-related code, read:
 - `docs/architecture.md` (as-built project architecture, invariants, dependency direction)
 - `docs/diplomatic-architecture.md` (core Diplomat concepts) — **read the file itself**, not just the "Diplomat alignment in this project" summary in `docs/architecture.md`
 - `docs/code-style.md` (controller/logic/adapters implementation patterns)
-- `docs/code-quality.md` (constants over literals, naming, single responsibility, no magic values) — same rule: read the file itself, this is reinforced as self-review item 1 below, not optional
+- `docs/code-quality.md` (constants over literals, naming, single responsibility, no magic values) — same rule: read the file itself; this is reinforced as self-review item 1 above, not optional
 
 "Architecture-related" includes composition-root/entrypoint changes (`main.ts`, new top-level wiring modules), not only changes inside `diplomat/`, `controllers/`, or `logic/`.
 
