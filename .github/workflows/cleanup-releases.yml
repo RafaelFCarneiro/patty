@@ -1,0 +1,32 @@
+name: Cleanup old releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: Number of most recent releases to keep
+        required: false
+        default: '10'
+  schedule:
+    # Runs every Sunday at 02:00 UTC
+    - cron: '0 2 * * 0'
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Delete old releases and tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEEP: ${{ inputs.keep || '10' }}
+        run: |
+          gh release list \
+            --repo "$GITHUB_REPOSITORY" \
+            --limit 200 \
+            --json tagName \
+            --jq ".[${KEEP}:][].tagName" \
+          | xargs -r -I{} sh -c \
+            'gh release delete {} --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag && echo "Deleted release + tag: {}"'
