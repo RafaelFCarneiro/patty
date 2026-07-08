@@ -49,12 +49,12 @@ still the row the controller read and validated?"*
 **(1) Unit of work — controllers assemble a typed, per-flow delta (the fully-decided write intent) and hand it
 to ONE transactional repo method (in `diplomat/db`) that executes all writes in a single `db.transaction`.**
 
-**(2) Race guard — generic optimistic versioning. Every mutable table gains a `version` column; reads return
-it; every conditioned write carries the expected version (`UPDATE … SET …, version = version + 1 WHERE id = ?
-AND version = ?`); `rowsAffected === 0` means the row changed since it was read — a generic `'stale'` conflict
-that rolls back the whole transaction. Controllers own ALL validation against the read snapshot and, on
-`'stale'`, re-run the read → validate → write loop (bounded retries).** The repo checks versions; it never
-checks state.
+**(2) Race guard — generic optimistic versioning. Every mutable table gains a `version` column, bumped by
+schema triggers on every update; reads return it; every conditioned write carries the expected version
+(`UPDATE … SET … WHERE id = ? AND version = ?`); `rowsAffected === 0` means the row changed since it was read —
+a generic `'stale'` conflict that rolls back the whole transaction. Controllers own ALL validation against the
+read snapshot and, on `'stale'`, re-run the read → validate → write loop (bounded retries).** The repo checks
+versions; it never checks state.
 
 The sub-decisions:
 
@@ -80,15 +80,28 @@ The sub-decisions:
    write ops. One flow, one named type.
 
 2. **Versioning mechanics.** `version INTEGER NOT NULL DEFAULT 0` on every mutable table (`transactions`,
-   `bills`, `accounts`, `categories`, `credit_cards`, `recurring_rules`, `tags`, `dashboards`, `settings`),
-   bumped by **every** write. `wire/db` rows and entity models carry it (internal field — **not** exposed on
-   `wire/out` in v1; it is a concurrency token, not client contract). Creates are governed by the existing
-   idempotency-key UNIQUE mechanism, not versions.
+   `bills`, `accounts`, `categories`, `credit_cards`, `recurring_rules`, `tags`, `dashboards`, `settings`).
+   **The bump is maintained by schema-level `AFTER UPDATE` triggers** (`SET version = version + 1` — the same
+   machinery already maintaining the FTS mirror in `drizzle/0001_fts5_search.sql`), NOT hand-written in each
+   repo write: triggers cover every write path — query builder, raw `sql` statements, and future code — so no
+   write can forget the bump (SQLite's recursive-triggers default keeps the trigger from re-firing itself).
+   App code supplies only the conditioned `WHERE … AND version = ?`. `wire/db` rows and entity models carry
+   `version` (internal field — **not** exposed on `wire/out` in v1; it is a concurrency token, not client
+   contract). Creates are governed by the existing idempotency-key UNIQUE mechanism, not versions.
+
+   *Built-in mechanisms surveyed and why they don't fit:* SQLite has no per-row version primitive —
+   `PRAGMA data_version` is a whole-database counter (any write anywhere bumps it; cross-connection only) and
+   `rowid` is identity, not version. Drizzle 0.45's `$onUpdate` column hook auto-sets values but fires only on
+   query-builder updates, silently bypassed by raw `sql` writes — unacceptable for a correctness mechanism.
+   A pessimistic `BEGIN IMMEDIATE` spanning read→validate→write would serialize via SQLite's single writer
+   lock but requires holding a transaction (and the global write lock) across controller logic — the same
+   leak-the-transaction-into-the-domain shape rejected in Option C.
 
 3. **Guard what you validated.** The discipline that makes OCC correct across rows: every row whose **validated
    state the decision depends on** must be version-guarded inside the transaction — including rows the flow
-   doesn't otherwise modify, via a version-asserting bump (`UPDATE bills SET version = version + 1 WHERE id = ?
-   AND version = ?`). Example: reassigning a transaction validates (in the controller) that neither the source
+   doesn't otherwise modify, via a version-asserting touch (a no-op conditioned update, e.g. `UPDATE bills SET
+   id = id WHERE id = ? AND version = ?`; the trigger performs the bump). Example: reassigning a transaction
+   validates (in the controller) that neither the source
    nor target bill is paid; the write set therefore version-guards the transaction row **and both bill rows**.
    If a concurrent `pay_bill` landed, the bill's version moved → `'stale'` → the retry re-reads, re-validates,
    and now returns the correct domain error (`paidBillImmutable`) **from the controller**.
