@@ -148,6 +148,34 @@ export type TransactionPatch = {
   note?: string;
 };
 
+/** Reference-side patch for updates — null = clear, undefined = leave untouched. */
+export type TransactionRefsPatch = {
+  accountId: string | null;
+  categoryId: string | null;
+  /** undefined = leave untouched; null = explicitly clear (when only the parent category changes). */
+  subCategoryId: string | null | undefined;
+  tagNames: string[] | null;
+};
+
+/**
+ * Fully-decided write intent for the update flow (ADR-015). Assembled by the controller after all
+ * validation and resolution; handed as a unit to `transactions.applyUpdate` which executes every
+ * write in ONE `db.transaction`.
+ */
+export type TransactionUpdateDelta = {
+  patch: TransactionPatch;
+  refs: TransactionRefsPatch;
+  /** Present when the transaction is being reassigned to a different bill cycle. */
+  reassignment?: { cardId: string; period: import('../logic/bill.js').BillPeriod };
+  /** Present when a user category correction should strengthen the merchant→category edge. */
+  classificationStrengthen?: { categoryId: string };
+};
+
+/** Typed outcome returned by `transactions.applyUpdate` — data, never a throw (ADR-015). */
+export type UpdateOutcome =
+  | { applied: true; row: RawTransactionView }
+  | { applied: false; conflict: 'bill_paid' };
+
 // ─── Input contracts ──────────────────────────────────────────
 // Zod-first, types inferred. Wire derives from these (re-export / extend).
 

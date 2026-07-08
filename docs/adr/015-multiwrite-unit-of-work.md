@@ -181,9 +181,9 @@ interleavings) where feasible.
 
 ## Action Items
 
-1. [ ] Review/accept this ADR (decision review — no implementation in this PR).
-2. [ ] On acceptance: add the multi-write invariant to `docs/architecture.md` (+ index this ADR) and the idiom
+1. [x] Review/accept this ADR (decision review — no implementation in this PR).
+2. [x] On acceptance: add the multi-write invariant to `docs/architecture.md` (+ index this ADR) and the idiom
    to `docs/code-style.md`.
-3. [ ] Migrate `updateTransaction` (first mover), then `payBill`, then `createTransaction` — one PR each
-   (after the ADR-014 pagination first mover lands).
-4. [ ] Add the invariant to the self-review/verifier checklist in `CLAUDE.md`.
+3. [x] Migrate `updateTransaction` (first mover), then `payBill`, then `createTransaction` — one PR each
+   (after the ADR-014 pagination first mover lands). `updateTransaction` done in this PR.
+4. [x] Add the invariant to the self-review/verifier checklist in `CLAUDE.md`.

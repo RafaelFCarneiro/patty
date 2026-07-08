@@ -48,6 +48,7 @@ import {
   type TransactionView,
   type TransactionSource,
   type UpdateTransaction,
+  type TransactionUpdateDelta,
 } from '../models/transaction.js';
 import type { Deps } from './deps.js';
 import { resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
@@ -240,37 +241,23 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
 
     yield* guardTransferMutability(existing, input);
 
-    // Reassignment (billMonth/billYear given): validate up front — never leave the current or target
-    // bill in a half-changed state.
-    let reassignment: { cardId: string; period: BillPeriod } | null = null;
+    // Reassignment (billMonth/billYear given): validate up front — never leave the current or
+    // target bill in a half-changed state. Both checks below become CAS predicates inside
+    // applyUpdate; the pre-checks here guard against obviously invalid input before doing any
+    // work, while the intra-transaction CAS closes the TOCTOU race window (ADR-015).
+    let reassignment: TransactionUpdateDelta['reassignment'];
     if (input.billMonth !== undefined && input.billYear !== undefined) {
       const cardId = yield* okOr(existing.cardId, transactionErrors.billAssignmentRequiresCard);
       yield* guard(await assertBillNotPaid(deps, existing.billId), transactionErrors.paidBillImmutable);
 
-      // A stale cardId here would be an internal FK inconsistency (deleting a card cascades to its
-      // transactions), not a real user-facing case — but the error, if it ever fires, should name the
-      // card that's missing, not the transaction that's present.
+      // A stale cardId here would be an internal FK inconsistency (deleting a card cascades to
+      // its transactions), not a real user-facing case — but the error, if it ever fires, should
+      // name the card that's missing, not the transaction that's present.
       const card = yield* okOr(await deps.creditCards.findById(cardId), notFound('card', cardId, []));
       const period = billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay);
       yield* guard(await assertTargetBillNotPaid(deps, card.id, period), transactionErrors.paidBillImmutable);
 
       reassignment = { cardId: card.id, period };
-    }
-
-    // Attach before the main update: ensureAndAttach's atomic re-check (closing the race where a
-    // concurrent pay_bill lands between the pre-check above and this attach) must be able to reject
-    // the request without having already written the rest of the patch — otherwise the client sees
-    // an error response for a write that partially committed.
-    let reassignedBillId: string | undefined;
-    if (reassignment) {
-      const attached = await deps.bills.ensureAndAttach(
-        reassignment.cardId,
-        input.id,
-        reassignment.period,
-        deps.newId(),
-      );
-      const bill = yield* okOr(attached, transactionErrors.paidBillImmutable);
-      reassignedBillId = bill.id;
     }
 
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
@@ -283,31 +270,32 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
     const subCategoryId = categorySelection ? (categorySelection.subCategoryId ?? null) : undefined;
     const isUserCorrection = !!categorySelection;
 
-    const updated = yield* okOr(
-      await deps.transactions.update(
-        input.id,
-        {
-          description: input.description,
-          amount: input.amount,
-          type: input.type,
-          date: input.date,
-          currency: account?.currency,
-          classification: isUserCorrection ? { method: ClassificationMethod.enum.user, confidence: 1 } : undefined,
-          note: input.note,
-        },
-        { accountId: account?.id ?? null, categoryId, subCategoryId, tagNames: input.tags ?? null },
-      ),
-      transactionErrors.notFound(input.id),
-    );
+    const delta: TransactionUpdateDelta = {
+      patch: {
+        description: input.description,
+        amount: input.amount,
+        type: input.type,
+        date: input.date,
+        currency: account?.currency,
+        classification: isUserCorrection ? { method: ClassificationMethod.enum.user, confidence: 1 } : undefined,
+        note: input.note,
+      },
+      refs: {
+        accountId: account?.id ?? null,
+        categoryId,
+        subCategoryId,
+        tagNames: input.tags ?? null,
+      },
+      reassignment,
+      classificationStrengthen:
+        categoryId && categoryId !== existing.categoryId ? { categoryId } : undefined,
+    };
 
-    // Learning loop: correcting the category strengthens the merchant→category association
-    if (categoryId && categoryId !== existing.categoryId)
-      await deps.merchants.strengthenFromTransaction(input.id, categoryId);
-
-    const finalTransaction = reassignedBillId ? withBillId(updated, reassignedBillId) : updated;
+    const outcome = await deps.transactions.applyUpdate(input.id, delta, deps.newId);
+    const row = yield* okOr(outcome.applied ? outcome.row : null, transactionErrors.paidBillImmutable);
 
     const locale = await deps.locale();
-    return ok(addLocalizedLabels(finalTransaction, locale));
+    return ok(addLocalizedLabels(row, locale));
   });
 
 /** Flip a pending transaction to effective. No-op (returns existing) if already effective. */

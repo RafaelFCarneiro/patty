@@ -13,14 +13,19 @@ import {
   type RawTransactionView,
   type TransactionPatch,
   type TransactionSortField,
+  type TransactionUpdateDelta,
+  type UpdateOutcome,
 } from '../../../models/transaction.js';
+import { isBillPaid } from '../../../logic/bill.js';
+import { BillSchema, BillStatus } from '../../../models/bill.js';
+import { BillRowSchema } from '../../../wire/db/bills.js';
 import type { SummaryRow } from '../../../models/summary.js';
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js';
 import { ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
 import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
-import { merchants, tags, transactionTags, transactions } from '../schema.js';
+import { bills, merchantCategory, merchants, tags, transactionTags, transactions } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
 
 // search_transactions' includeTotal COUNT(*) row — decoded like every other SQL row (ADR
@@ -69,6 +74,29 @@ const keysetPredicate = (sort: TransactionSortField, dir: SortDirection, key: Cu
   return sql`(${column} ${cmp} ${key.value} OR (${column} = ${key.value} AND t.id ${cmp} ${key.id}))`;
 };
 
+/** Decode a raw DB record into a Bill model (same logic as bills.ts — local copy to keep each
+ *  repo self-contained with its own Db instance). */
+const toBill = (record: Record<string, unknown>) => {
+  const row = BillRowSchema.parse(record);
+  return BillSchema.parse({
+    id: row.id,
+    month: row.month,
+    year: row.year,
+    closeDate: row.close_date,
+    dueDate: row.due_date,
+    status: row.status,
+    paymentTransactionId: row.payment_transaction_id ?? undefined,
+  });
+};
+
+/** Internal sentinel: thrown inside `db.transaction` to trigger rollback; caught by the caller
+ *  to convert into a typed `UpdateOutcome`. Never escapes `applyUpdate`. */
+const ROLLBACK = Symbol('rollback_sentinel');
+type RollbackSentinel = { [ROLLBACK]: true; conflict: 'bill_paid' };
+const rollbackSentinel = (conflict: 'bill_paid'): RollbackSentinel => ({ [ROLLBACK]: true, conflict });
+const isRollbackSentinel = (e: unknown): e is RollbackSentinel =>
+  typeof e === 'object' && e !== null && ROLLBACK in e;
+
 export type TransactionsRepo = {
   /** Receives domain entity; model→db flattening happens here (adapters/transactions.ts). */
   create: (entity: Transaction, tagNames: string[]) => Promise<CreateTxResult>;
@@ -84,6 +112,13 @@ export type TransactionsRepo = {
       tagNames: string[] | null;
     },
   ) => Promise<RawTransactionView | null>;
+  /**
+   * Unit-of-work update (ADR-015): applies the fully-decided delta in ONE `db.transaction`.
+   * Executes (as applicable): bill reassignment with paid-CAS both directions, the row update,
+   * and the merchant-category strengthen. Returns a typed outcome — never throws for expected
+   * conflicts; unexpected errors still propagate.
+   */
+  applyUpdate: (id: string, delta: TransactionUpdateDelta, newId: () => string) => Promise<UpdateOutcome>;
   /** Flip status pending → effective. Returns null if the id does not exist. */
   confirm: (id: string) => Promise<RawTransactionView | null>;
   delete: (id: string) => Promise<boolean>;
@@ -193,6 +228,116 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     }
 
     return fetchTx(db, id);
+  },
+
+  applyUpdate: async (id, delta, newId) => {
+    try {
+      await db.transaction(async (tx) => {
+        // ── Bill reassignment (CAS — both directions) ──────────────────────
+        if (delta.reassignment) {
+          const { cardId, period } = delta.reassignment;
+
+          // Direction 1: refuse if the transaction's *current* bill is already paid
+          // (moving a transaction off a paid bill).
+          const [currentTxRow] = await tx.all<{ bill_id: string | null }>(
+            sql`SELECT bill_id FROM transactions WHERE id = ${id}`,
+          );
+          if (currentTxRow?.bill_id) {
+            const [currentBillRow] = await tx.all<Record<string, unknown>>(
+              sql`SELECT * FROM bills WHERE id = ${currentTxRow.bill_id}`,
+            );
+            if (currentBillRow && isBillPaid(toBill(currentBillRow))) throw rollbackSentinel('bill_paid');
+          }
+
+          // Ensure the target bill exists (INSERT OR IGNORE on card+month+year).
+          await tx
+            .insert(bills)
+            .values({
+              id: newId(),
+              creditCardId: cardId,
+              month: period.month,
+              year: period.year,
+              closeDate: period.closeDate,
+              dueDate: period.dueDate,
+              status: BillStatus.enum.open,
+            })
+            .onConflictDoNothing({ target: [bills.creditCardId, bills.month, bills.year] });
+
+          // Resolve the actual bill id (may be the pre-existing one) — same transaction so a
+          // concurrent pay_bill cannot observe a stale "not yet paid" status.
+          const [rawTargetBill] = await tx.all<Record<string, unknown>>(sql`
+            SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${period.month} AND year = ${period.year}
+          `);
+          const targetBill = toBill(
+            expectPresent(rawTargetBill, rowNotFoundAfterWrite('bills', 'upsert')),
+          );
+
+          // Direction 2: refuse if the *target* bill is already paid.
+          if (isBillPaid(targetBill)) throw rollbackSentinel('bill_paid');
+
+          // Link the transaction to the target bill.
+          await tx.update(transactions).set({ billId: targetBill.id }).where(eq(transactions.id, id));
+        }
+
+        // ── Row update ──────────────────────────────────────────────────────
+        const props = transactionAdapters.patchToDb(delta.patch);
+        const setData = {
+          ...(props.description !== undefined && { description: props.description }),
+          ...(props.amount !== undefined && { amount: props.amount }),
+          ...(props.type !== undefined && { type: props.type }),
+          ...(props.status !== undefined && { status: props.status }),
+          ...(props.date !== undefined && { date: props.date }),
+          ...(props.currency !== undefined && { currency: props.currency }),
+          ...(props.classificationMethod !== undefined && { classificationMethod: props.classificationMethod }),
+          ...(props.confidence !== undefined && { confidence: props.confidence }),
+          ...(props.note !== undefined && { note: props.note }),
+          ...(delta.refs.accountId !== null && { fromAccountId: delta.refs.accountId }),
+          ...(delta.refs.categoryId !== null && { categoryId: delta.refs.categoryId }),
+          ...(delta.refs.subCategoryId !== undefined && { subcategoryId: delta.refs.subCategoryId }),
+        };
+        if (Object.keys(setData).length > 0) {
+          await tx.update(transactions).set(setData).where(eq(transactions.id, id));
+        }
+
+        if (delta.refs.tagNames !== null) {
+          await tx.delete(transactionTags).where(eq(transactionTags.transactionId, id));
+          if (delta.refs.tagNames.length > 0) {
+            const matches = await tx.select({ id: tags.id }).from(tags).where(inArray(tags.name, delta.refs.tagNames));
+            if (matches.length > 0) {
+              await tx
+                .insert(transactionTags)
+                .values(matches.map((tag) => ({ transactionId: id, tagId: tag.id })))
+                .onConflictDoNothing({ target: [transactionTags.transactionId, transactionTags.tagId] });
+            }
+          }
+        }
+
+        // ── Merchant-category learning write-back ────────────────────────────
+        if (delta.classificationStrengthen) {
+          const { categoryId } = delta.classificationStrengthen;
+          const [txRow] = await tx.all<{ merchant_key: string | null }>(
+            sql`SELECT merchant_key FROM transactions WHERE id = ${id}`,
+          );
+          if (txRow?.merchant_key) {
+            await tx.insert(merchants).values({ key: txRow.merchant_key }).onConflictDoNothing();
+            await tx
+              .insert(merchantCategory)
+              .values({ merchantKey: txRow.merchant_key, categoryId, weight: 1, origin: 'history' })
+              .onConflictDoUpdate({
+                target: [merchantCategory.merchantKey, merchantCategory.categoryId],
+                set: { weight: sql`${merchantCategory.weight} + 1` },
+              });
+          }
+        }
+      });
+    } catch (e) {
+      if (isRollbackSentinel(e)) return { applied: false, conflict: e.conflict };
+      throw e;
+    }
+    // Read the committed state AFTER the transaction so the outer db sees all writes.
+    const row = await fetchTx(db, id);
+    if (!row) throw new Error(`transactions: row ${id} not found after applyUpdate`);
+    return { applied: true, row };
   },
 
   confirm: async (id) => {

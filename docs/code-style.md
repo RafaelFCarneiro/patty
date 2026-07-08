@@ -159,6 +159,55 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 - New MCP tools: rich `description` (the agent reads it!), `.describe()` on non-obvious fields,
   documented in `docs/mcp-tools.md` in the same change.
 
+## Multi-write flows — "delta in, outcome out" idiom (ADR-015)
+
+When a controller flow needs more than one repo write, it assembles a fully-decided **typed delta** in
+`models/` (e.g. `TransactionUpdateDelta`) and hands it to **one transactional repo method** in
+`diplomat/db`. All writes happen inside a single `db.transaction`; any last-instant CAS check is a SQL
+predicate. The repo reports what happened as a **typed outcome** — never by throwing for expected outcomes.
+
+```ts
+// models/transaction.ts — fully-decided write intent, assembled by the controller
+export type TransactionUpdateDelta = {
+  patch: TransactionPatch;
+  refs: TransactionRefsPatch;
+  reassignment?: { cardId: string; period: BillPeriod };
+  classificationStrengthen?: { categoryId: string };
+};
+
+export type UpdateOutcome =
+  | { applied: true; row: RawTransactionView }
+  | { applied: false; conflict: 'bill_paid' };  // discriminant is data, not a message
+
+// diplomat/db/repos/transactions.ts — one transaction, outcome as data
+applyUpdate: async (id, delta, newId) => {
+  try {
+    await db.transaction(async (tx) => {
+      // ...all writes via tx; on a CAS miss:
+      // throw rollbackSentinel('bill_paid')  ← triggers rollback; never escapes the API
+    });
+  } catch (e) {
+    if (isRollbackSentinel(e)) return { applied: false, conflict: e.conflict };
+    throw e;  // unexpected → 500
+  }
+  // Read committed state after transaction commit.
+  const row = await fetchTx(db, id);
+  return { applied: true, row };
+};
+
+// controllers/transactions.ts — maps the typed conflict to the domain error
+const outcome = await deps.transactions.applyUpdate(id, delta, deps.newId);
+const row = yield* okOr(outcome.applied ? outcome.row : null, transactionErrors.paidBillImmutable);
+```
+
+Key rules:
+- The delta type lives in `models/` next to the entity's patch types (`TransactionPatch` precedent).
+- **One flow, one named delta type.** No generic `Delta<Op[]>` that degrades into an untyped list.
+- The sentinel throw exists only **inside the repo method** to trigger `db.transaction` rollback. The method's return type is always `Promise<Outcome>` — no throws for expected cases.
+- The controller owns **meaning**: the CAS predicate is parameterized data; only the controller decides what a conflict means and maps it to an `AppError`.
+- `applyDueRecurring` is the documented exception: idempotent replay (stable `rec-<ruleId>-<date>` keys) is the legitimate alternative to atomicity for batch materialization.
+
+
 ## Schema validation requirements (Zod)
 
 - Every external boundary must validate with Zod before entering the domain (HTTP/MCP inputs, DB records,
