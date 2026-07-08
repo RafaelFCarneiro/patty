@@ -197,4 +197,3 @@ available alongside the server.
 - ADR-012: per-model error definitions; `common` composes `AppError` (supersedes the type-only `AppError` import exception)
 - ADR-013: LLM-generated data-less local dashboards over the HTTP API
 - ADR-014: cursor pagination + whitelisted ordering for collection endpoints (`search_transactions` first mover)
-- ADR-015: multi-write unit-of-work for transactional multi-step writes
