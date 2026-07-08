@@ -4,6 +4,7 @@ import * as transactionAdapters from '../../../adapters/transactions.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import { SortDirection, type CursorKey } from '../../../models/page.js';
 import {
+  ClassificationMethod,
   TransactionStatus,
   TransactionType,
   type CreateTxResult,
@@ -322,7 +323,12 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
             await tx.insert(merchants).values({ key: txRow.merchant_key }).onConflictDoNothing();
             await tx
               .insert(merchantCategory)
-              .values({ merchantKey: txRow.merchant_key, categoryId, weight: 1, origin: 'history' })
+              .values({
+                merchantKey: txRow.merchant_key,
+                categoryId,
+                weight: 1,
+                origin: ClassificationMethod.enum.history,
+              })
               .onConflictDoUpdate({
                 target: [merchantCategory.merchantKey, merchantCategory.categoryId],
                 set: { weight: sql`${merchantCategory.weight} + 1` },
