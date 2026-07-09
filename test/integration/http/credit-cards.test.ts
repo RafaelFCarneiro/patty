@@ -106,6 +106,33 @@ describe('POST /api/credit-cards/purchases', () => {
     const res = await inject({ method: 'POST', url: '/api/credit-cards/purchases', payload: {} });
     expect(res.statusCode).toBe(422);
   });
+
+  it('rejects an account field instead of silently ignoring it (422)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'Purchase Card Account Bank', type: 'checking', currency: 'USD', initialBalance: 0 },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Strict Purchase Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'Should be rejected',
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-05',
+        card: 'Strict Purchase Card',
+        account: 'Purchase Card Account Bank',
+        idempotencyKey: 'rest-card-purchase-with-account',
+      },
+    });
+    expect(res.statusCode).toBe(422);
+  });
 });
 
 describe('DELETE /api/credit-cards/:name', () => {

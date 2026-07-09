@@ -37,10 +37,16 @@ export type CreateCreditCard = z.infer<typeof CreateCreditCardSchema>;
 /** Natural input for a credit-card purchase (ADR-016): same shape as create_transaction minus
  *  `account` (the card's own internal liability account is always the destination) with `card`
  *  required instead of optional. Depends on the transaction core's schema (aggregate → core, the
- *  allowed direction) — never the reverse. */
-export const AddCardPurchaseSchema = CreateTransactionSchema.omit({ account: true }).extend({
-  card: z.string().min(1).describe('Credit card name — joins the cycle bill'),
-});
+ *  allowed direction) — never the reverse. `.strict()`: `account` is a meaningful field on the
+ *  sibling create_transaction schema, not a server-managed one — a caller who mistakenly sends it
+ *  here should get a validation error, not have it silently stripped by zod's default
+ *  unknown-key behavior (REST boundary only; the MCP tool's inputSchema is a raw shape, which the
+ *  MCP SDK reconstructs into its own non-strict object internally). */
+export const AddCardPurchaseSchema = CreateTransactionSchema.omit({ account: true })
+  .extend({
+    card: z.string().min(1).describe('Credit card name — joins the cycle bill'),
+  })
+  .strict();
 export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
 
 export type CardError = NotFound<'card'> | Ambiguous<'card'> | DuplicateName<'credit_card'> | ValidationError;
