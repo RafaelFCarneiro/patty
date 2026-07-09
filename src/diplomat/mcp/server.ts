@@ -142,8 +142,9 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'Record a credit-card purchase, joining the cycle bill (fatura). Resolves the card and category by ' +
         'name; when category is omitted, classifies via learned merchant→category associations and returns ' +
         'method + confidence (confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — ' +
-        'generate a stable key like "<date>-<description>-<amount>". Currency comes from the card, or the ' +
-        'currency field (default USD). This is the card-purchase counterpart of create_transaction.',
+        'generate a stable key like "<date>-<description>-<amount>". Currency always comes from the card ' +
+        "(a card's currency is fixed at creation) — the currency field is accepted for schema symmetry " +
+        'with create_transaction but has no effect here. This is the card-purchase counterpart of create_transaction.',
       inputSchema: AddCardPurchaseSchema.shape,
     },
     async (args) =>

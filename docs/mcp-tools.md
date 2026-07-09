@@ -36,7 +36,7 @@ Each item is routed internally to `add_card_purchase` (below) when it resolves a
 
 Record a credit-card purchase, joining the cycle bill (fatura) — the card-purchase counterpart of `create_transaction` (ADR-016). Owned by the credit-card aggregate: it resolves the card, computes the bill period, and rejects landing on a `paid` bill before writing anything.
 
-Input: same as `create_transaction` minus `account` (the card's own internal liability account is always the destination), with `card` **required**: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required), optional `date`, `billMonth` + `billYear` (explicit target bill cycle; both required together), `category` OR `subCategory`, `currency`, `rawInput`, `note`, `tags`, `status`.
+Input: same as `create_transaction` minus `account` (the card's own internal liability account is always the destination), with `card` **required**: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required), optional `date`, `billMonth` + `billYear` (explicit target bill cycle; both required together), `category` OR `subCategory`, `currency` (accepted for schema symmetry with `create_transaction`, but has no effect — a card's currency is fixed at creation and always wins), `rawInput`, `note`, `tags`, `status`.
 
 Returns `TransactionView` with `typeLabel`, `statusLabel`, and `billId` — same shape and semantics as `create_transaction`'s response. See `create_transaction` above for the full bill-assignment, status-default, and kind-validation rules (identical here — `add_card_purchase` is the same behavior reached directly instead of via the `card` field).
 
