@@ -7,7 +7,7 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
-import { assertExclusiveAccountCard } from '../logic/transaction.js';
+import { assertExclusiveAccountCard, hasCard } from '../logic/transaction.js';
 import type { BulkResult } from '../logic/transaction.js';
 import {
   transactionErrors,
@@ -39,7 +39,7 @@ export const routeCreateTransaction = (
   safeTry(async function* () {
     yield* guard(assertExclusiveAccountCard(input), transactionErrors.exclusiveAccountCard);
     return ok(
-      input.card !== undefined
+      hasCard(input)
         ? yield* addCardPurchase(deps, { ...R.omit(input, ['account']), card: input.card }, source)
         : yield* createTransaction(deps, input, source),
     );

@@ -55,6 +55,13 @@ export const resolveCurrency = (
 export const assertExclusiveAccountCard = (input: { account?: string; card?: string }): boolean =>
   !(input.account && input.card);
 
+/** True when a card name was provided — a type guard, narrowing `card` to `string`. Same
+ *  isNonNullish reasoning as hasCategory below (also correctly treats `null` as absent, not just
+ *  `undefined`) — used to decide account-vs-card routing on value, not truthiness (an empty string
+ *  is "present but invalid", not "absent", and should fail loudly via card resolution instead of
+ *  silently falling through to the account path). */
+export const hasCard = (input: { card?: string }): input is { card: string } => R.isNonNullish(input.card);
+
 /**
  * True when a category name was provided — a type guard, narrowing `category` to `string`. The
  * schema rejects empty strings (`.min(1)`), so this only needs to rule out null/undefined; using
@@ -77,8 +84,8 @@ export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: n
   (input.billMonth === undefined) === (input.billYear === undefined);
 
 /** Bill assignment only applies to card transactions. */
-export const assertBillAssignmentHasCard = (billMonth: number | undefined, hasCard: boolean): boolean =>
-  billMonth === undefined || hasCard;
+export const assertBillAssignmentHasCard = (billMonth: number | undefined, cardProvided: boolean): boolean =>
+  billMonth === undefined || cardProvided;
 
 /** Reports a transaction's (new) bill assignment — used after create/update attaches or reassigns it. */
 export const withBillId = (tx: RawTransactionView, billId: string): RawTransactionView => ({ ...tx, billId });
