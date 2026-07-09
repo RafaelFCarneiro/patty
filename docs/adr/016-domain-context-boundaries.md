@@ -98,9 +98,11 @@ points** (per the decision to split rather than keep one routing tool):
 | `create_transfer` | `create_transfer` (unchanged) | account aggregate |
 | `create_transactions_bulk` | `create_transactions_bulk` (routes each line to the right aggregate) | import surface over both |
 
-The exact tool names and whether income/expense are two tools or one with a `type` field are settled during
-design; the decision here is that the god `create_transaction` is replaced by intent-specific tools. This is a
-**breaking change to the tool contract** — consumers (dashboards, clients, docs) migrate in the same arc.
+**Movement kinds are separate tools, not one tool with a `type` field** — `add_account_expense` and
+`add_account_income` are distinct, mirroring the natural-language intents the agent forms ("I spent…" vs. "I got
+paid…") rather than making the model set a discriminator. The god `create_transaction` is replaced by these
+intent-specific tools. This is a **breaking change to the tool contract** — consumers (dashboards, clients,
+docs) migrate in the same arc.
 
 ## Options Considered
 
@@ -165,12 +167,13 @@ for the concurrency question to even be answerable without leaking rules into th
 
 ## Open questions (settle during design, not blocking acceptance)
 
-1. Tool granularity: `add_account_income` + `add_account_expense` as two tools, or one `record_account_transaction`
-   with a `type`? Same question for card. (Leaning: mirror the natural-language intents the agent forms.)
-2. Where bulk-import routing lives — a thin import surface that dispatches each line to the owning aggregate, vs.
+1. Where bulk-import routing lives — a thin import surface that dispatches each line to the owning aggregate, vs.
    a core batch primitive the aggregates share.
-3. Whether the transaction core is exposed as controller functions, repo primitives, or both.
-4. Vocabulary in the docs: "aggregate" (DDD) vs. "context" vs. "module" — pick one and use it consistently.
+2. Whether the transaction core is exposed as controller functions, repo primitives, or both.
+3. Vocabulary in the docs: "aggregate" (DDD) vs. "context" vs. "module" — pick one and use it consistently.
+
+**Decided:** movement kinds are separate intent-specific tools (`add_account_expense` / `add_account_income`),
+not one tool with a `type` discriminator.
 
 ## Action Items
 
