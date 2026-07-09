@@ -160,7 +160,7 @@ for the concurrency question to even be answerable without leaking rules into th
 - **New invariant** (added to `docs/architecture.md` dependency table on acceptance): aggregates may depend on
   the transaction core; the transaction core (and its logic) must not import any aggregate's bill/card logic.
   Consider an ESLint import-boundary rule to enforce it.
-- **`logic/bill.js` stops being imported by the transaction controller**; bill policy is imported only within
+- **`src/logic/bill.ts` stops being imported by the transaction controller** (imported today as `../logic/bill.js`); bill policy is imported only within
   the credit-card aggregate.
 - **Docs in the same change:** `docs/architecture.md` (boundaries section + dependency table), `docs/mcp-tools.md`
   (tool split), `docs/code-style.md` if a new aggregate/core convention is added, this ADR's status on acceptance.
