@@ -27,14 +27,14 @@ import type { Deps } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
 import { getSpendingSummary } from '../../controllers/summary.js';
+import { confirmTransaction } from '../../controllers/transaction/core.js';
 import {
-  confirmTransaction,
   createTransaction,
   createTransactionsBulk,
   deleteTransaction,
-  searchTransactions,
   updateTransaction,
-} from '../../controllers/transactions.js';
+} from '../../controllers/transaction/movement.js';
+import { searchTransactions } from '../../controllers/transaction/read.js';
 import { createTransfer } from '../../controllers/transfers.js';
 import {
   AggregateMetric,

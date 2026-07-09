@@ -31,14 +31,14 @@ import { applyDueRecurring, createRecurring, listRecurring } from '../../control
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
 import { getStatus } from '../../controllers/status.js';
 import { getSpendingSummary } from '../../controllers/summary.js';
+import { confirmTransaction } from '../../controllers/transaction/core.js';
 import {
-  confirmTransaction,
   createTransaction,
   createTransactionsBulk,
   deleteTransaction,
-  searchTransactions,
   updateTransaction,
-} from '../../controllers/transactions.js';
+} from '../../controllers/transaction/movement.js';
+import { searchTransactions } from '../../controllers/transaction/read.js';
 import { createTransfer } from '../../controllers/transfers.js';
 import { AccountBalanceSchema, AccountSchema } from '../../models/account.js';
 import { AggregateResultSchema } from '../../models/aggregate.js';

@@ -1,17 +1,19 @@
+// Transitional holding file (ADR-016 step 1). createTransaction, createTransactionsBulk,
+// updateTransaction, and deleteTransaction still reach into credit-card/bill policy
+// (logic/bill.js, deps.bills) that belongs to the credit-card aggregate, not the transaction
+// core — that decomposition is ADR-016 steps 2–5. Until then this file may import bill/card
+// logic; transaction/core.ts and transaction/read.ts must not.
+
 import { ok, okAsync, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
-import type { AppError } from '../common/errors.js';
-import { guard, okOr } from '../common/result.js';
-import { assertNonCreditType } from '../logic/account.js';
-import { accountErrors } from '../models/account.js';
-import { billPeriodFor, billPeriodForCycle, isBillPaid, type BillPeriod } from '../logic/bill.js';
-import { notFound } from '../models/error.js';
-import { pickClassification, userClassification } from '../logic/classify.js';
-import { ClassificationMethod } from '../models/transaction.js';
-import type { ClassifyOutcome } from '../models/transaction.js';
-import { normalizeMerchant } from '../logic/merchant.js';
-import { periodRange, toIsoDate } from '../logic/period.js';
-import type { BulkItemResult, BulkResult } from '../logic/transaction.js';
+import type { AppError } from '../../common/errors.js';
+import { guard, okOr } from '../../common/result.js';
+import { assertNonCreditType } from '../../logic/account.js';
+import { billPeriodFor, billPeriodForCycle, isBillPaid, type BillPeriod } from '../../logic/bill.js';
+import { pickClassification, userClassification } from '../../logic/classify.js';
+import { normalizeMerchant } from '../../logic/merchant.js';
+import { toIsoDate } from '../../logic/period.js';
+import type { BulkItemResult, BulkResult } from '../../logic/transaction.js';
 import {
   addLocalizedLabels,
   assertBillAssignmentHasCard,
@@ -24,33 +26,31 @@ import {
   hasCategory,
   hasSubCategory,
   isCategoryKindAllowed,
-  nextCursorAfter,
   resolveCurrency,
-  resolveCursorKey,
   resolveEffectiveType,
   summarizeBulkItems,
   toBulkItemResult,
   withBillId,
-} from '../logic/transaction.js';
-import type { Page } from '../models/page.js';
-import { TransactionStatus } from '../models/transaction.js';
+} from '../../logic/transaction.js';
+import { accountErrors } from '../../models/account.js';
+import { notFound } from '../../models/error.js';
 import {
+  ClassificationMethod,
   transactionErrors,
   type CategoryFields,
   type CategorySelection,
+  type ClassifyOutcome,
   type CreateTransaction,
   type CreateTransactionResult,
   type CreateTransactionsBulk,
   type DeleteTransactionResult,
   type MovementType,
-  type ResolvedSearchRefs,
-  type SearchTransactions,
-  type TransactionView,
   type TransactionSource,
+  type TransactionView,
   type UpdateTransaction,
-} from '../models/transaction.js';
-import type { Deps } from './deps.js';
-import { resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
+} from '../../models/transaction.js';
+import type { Deps } from '../deps.js';
+import { resolveAccountRef, resolveCardRef, resolveCategoryRef, resolveSubCategoryRef } from '../resolve.js';
 
 /** Resolves a category by name, guarding kind-compatibility when the movement type is known. */
 const resolveCategory = (
@@ -310,19 +310,6 @@ export const updateTransaction = (deps: Deps, input: UpdateTransaction): ResultA
     return ok(addLocalizedLabels(finalTransaction, locale));
   });
 
-/** Flip a pending transaction to effective. No-op (returns existing) if already effective. */
-export const confirmTransaction = (deps: Deps, input: { id: string }): ResultAsync<TransactionView, AppError> =>
-  safeTry(async function* () {
-    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
-
-    const locale = await deps.locale();
-
-    if (existing.status === TransactionStatus.enum.effective) return ok(addLocalizedLabels(existing, locale));
-
-    const confirmed = yield* okOr(await deps.transactions.confirm(input.id), transactionErrors.notFound(input.id));
-    return ok(addLocalizedLabels(confirmed, locale));
-  });
-
 export const deleteTransaction = (
   deps: Deps,
   input: { id: string; confirm: boolean },
@@ -345,42 +332,4 @@ export const deleteTransaction = (
 
     await deps.transactions.delete(input.id);
     return ok({ deleted: true as const, transaction: labeled });
-  });
-
-export const searchTransactions = (
-  deps: Deps,
-  input: SearchTransactions,
-): ResultAsync<Page<TransactionView>, AppError> =>
-  safeTry(async function* () {
-    const range = input.month && input.year ? periodRange({ month: input.month, year: input.year }) : null;
-    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
-    const category = hasCategory(input) ? yield* resolveCategoryRef(deps, input.category) : null;
-    const subCategory = hasSubCategory(input) ? yield* resolveSubCategoryRef(deps, input.subCategory) : null;
-    const cursorKey = yield* resolveCursorKey(input);
-
-    // The only pieces of search_transactions' filter shape that need a repo lookup or a decode —
-    // everything else the repo needs is already on `input`. Shaping this pair into the flat
-    // SQL-filter object is diplomat/db's job (`toSearchFilters`), not the controller's.
-    const refs: ResolvedSearchRefs = {
-      accountId: account?.id ?? null,
-      categoryId: category?.id ?? null,
-      subCategoryId: subCategory?.id ?? null,
-      from: range?.from ?? null,
-      to: range?.to ?? null,
-      cursorKey,
-    };
-
-    // count is independent of locale/page — run all three concurrently rather than paying its
-    // latency after the other two resolve.
-    const [locale, page, total] = await Promise.all([
-      deps.locale(),
-      deps.transactions.search(input, refs),
-      input.includeTotal ? deps.transactions.count(input, refs) : Promise.resolve(undefined),
-    ]);
-
-    const items = page.items.map(addLocalizedLabels(locale));
-    const lastItem = R.last(items);
-    const nextCursor = page.hasMore && lastItem ? nextCursorAfter(lastItem, input.sort, input.dir) : undefined;
-
-    return ok({ items, nextCursor, total });
   });
