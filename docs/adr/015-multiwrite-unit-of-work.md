@@ -23,7 +23,7 @@ whatever genuinely-within-one-aggregate atomicity remains.** Several of the flow
 a single aggregate once ownership moves, so the multi-write surface this ADR targeted is expected to shrink
 before any locking mechanism is worth adding.
 
-The analysis below is retained as the record of *why* concurrency was investigated and what the survey found;
+The analysis below (including the original "Decision (proposed)" section) is retained as the record of *why* concurrency was investigated and what the survey found;
 it is not a plan of record. Do not implement it.
 
 ## Context
