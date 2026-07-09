@@ -10,7 +10,7 @@ need is scoped afterward.
 The transaction controller has become the de facto entry point for every money movement, and it has absorbed
 domain knowledge that belongs to other contexts. Concretely, on `main`:
 
-- `src/controllers/transactions.ts` is **386 lines** — the largest controller — and imports `logic/bill.js`
+- `src/controllers/transactions.ts` is the largest controller and imports `logic/bill.js`
   (`billPeriodFor`, `billPeriodForCycle`, `isBillPaid`, `BillPeriod`). Inside `createTransaction` it computes a
   bill cycle from a card's `closingDay`/`dueDay`, guards paid-bill immutability, and calls
   `bills.ensureAndAttach` with hand-rolled compensation. That is **credit-card domain policy living in the
