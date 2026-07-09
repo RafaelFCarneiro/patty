@@ -10,7 +10,7 @@ import {
   updateAccount,
 } from '../../controllers/accounts.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
-import { getBill, payBill, revertBillPayment } from '../../controllers/bills.js';
+import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
 import { listDashboards, saveDashboard } from '../../controllers/dashboards.js';
 import {
   createCategory,
@@ -22,20 +22,21 @@ import {
 } from '../../controllers/categories.js';
 import { getPreferences, setLocale } from '../../controllers/settings.js';
 import { getStatus } from '../../controllers/status.js';
-import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js';
+import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCard/creditCard.js';
+import { addCardPurchase } from '../../controllers/creditCard/creditCardTransaction.js';
 import type { Deps } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
 import { getSpendingSummary } from '../../controllers/summary.js';
 import { confirmTransaction } from '../../controllers/transaction/core.js';
-import {
-  createTransaction,
-  createTransactionsBulk,
-  deleteTransaction,
-  updateTransaction,
-} from '../../controllers/transaction/movement.js';
 import { searchTransactions } from '../../controllers/transaction/read.js';
 import { createTransfer } from '../../controllers/transfers.js';
+import {
+  routeCreateTransaction,
+  routeCreateTransactionsBulk,
+  routeDeleteTransaction,
+  routeUpdateTransaction,
+} from '../transactionRouting.js';
 import {
   AggregateMetric,
   AggregateSort,
@@ -58,8 +59,9 @@ import { AccountType } from '../../models/account.js';
 import { BillQuerySchema, PayBillSchema } from '../../models/bill.js';
 import { SaveDashboardSchema } from '../../models/dashboard.js';
 import { CreateRecurringSchema } from '../../wire/in/recurring.js';
-import { CreateCreditCardSchema } from '../../wire/in/creditCards.js';
+import { AddCardPurchaseSchema, CreateCreditCardSchema } from '../../wire/in/creditCards.js';
 import { bulkResultToWireOut, createResultToWireOut, deleteResultToWireOut } from '../../adapters/transactions.js';
+import { addCardPurchaseWireInToModel } from '../../adapters/creditCards.js';
 import { CreateAccountSchema, UpdateAccountSchema } from '../../wire/in/accounts.js';
 import { CreateTagSchema } from '../../wire/in/tags.js';
 import * as accountAdapters from '../../adapters/accounts.js';
@@ -112,7 +114,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: CreateTransactionSchema.shape,
     },
     async (args) =>
-      fromResult((await createTransaction(deps, args, TransactionSource.enum.mcp)).map(createResultToWireOut)),
+      fromResult((await routeCreateTransaction(deps, args, TransactionSource.enum.mcp)).map(createResultToWireOut)),
   );
 
   server.registerTool(
@@ -127,7 +129,29 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: CreateTransactionsBulkSchema.shape,
     },
     async (args) =>
-      fromResult((await createTransactionsBulk(deps, args, TransactionSource.enum.import)).map(bulkResultToWireOut)),
+      fromResult(
+        (await routeCreateTransactionsBulk(deps, args, TransactionSource.enum.import)).map(bulkResultToWireOut),
+      ),
+  );
+
+  server.registerTool(
+    'add_card_purchase',
+    {
+      title: 'Add credit-card purchase',
+      description:
+        'Record a credit-card purchase, joining the cycle bill (fatura). Resolves the card and category by ' +
+        'name; when category is omitted, classifies via learned merchant→category associations and returns ' +
+        'method + confidence (confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — ' +
+        'generate a stable key like "<date>-<description>-<amount>". Currency comes from the card, or the ' +
+        'currency field (default USD). This is the card-purchase counterpart of create_transaction.',
+      inputSchema: AddCardPurchaseSchema.shape,
+    },
+    async (args) =>
+      fromResult(
+        (await addCardPurchase(deps, addCardPurchaseWireInToModel(args), TransactionSource.enum.mcp)).map(
+          createResultToWireOut,
+        ),
+      ),
   );
 
   server.registerTool(
@@ -266,7 +290,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'Changing the account also updates the currency to match it.',
       inputSchema: UpdateTransactionSchema.shape,
     },
-    async (args) => fromResult(await updateTransaction(deps, args)),
+    async (args) => fromResult(await routeUpdateTransaction(deps, args)),
   );
 
   server.registerTool(
@@ -281,7 +305,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         confirm: z.boolean().default(false).describe('Must be true to actually delete'),
       },
     },
-    async (args) => fromResult((await deleteTransaction(deps, args)).map(deleteResultToWireOut)),
+    async (args) => fromResult((await routeDeleteTransaction(deps, args)).map(deleteResultToWireOut)),
   );
 
   server.registerTool(

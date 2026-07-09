@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app-builder.js';
-import { createTransaction } from '../../../src/controllers/transaction/movement.js';
+import { addCardPurchase } from '../../../src/controllers/creditCard/creditCardTransaction.js';
 import { billPeriodFor } from '../../../src/logic/bill.js';
 import { AccountType } from '../../../src/models/account.js';
 import {
@@ -24,7 +24,7 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe('createTransaction — self-heals a row that was inserted but never attached to a bill', () => {
+describe('addCardPurchase — self-heals a row that was inserted but never attached to a bill', () => {
   it('a replay with the same idempotencyKey attaches the bill instead of staying orphaned', async () => {
     const { deps } = await buildApp({ dbPath: join(tmpDir, 'self-heal.db') });
 
@@ -51,7 +51,7 @@ describe('createTransaction — self-heals a row that was inserted but never att
     const idempotencyKey = 'self-heal-purchase';
 
     // Simulate a crash between the insert and the attach: insert the row directly via the repo,
-    // bypassing createTransaction's own attach step, so it has a card but no bill.
+    // bypassing addCardPurchase's own attach step, so it has a card but no bill.
     const { transaction: inserted } = await deps.transactions.create(
       {
         id: randomUUID(),
@@ -70,9 +70,9 @@ describe('createTransaction — self-heals a row that was inserted but never att
     );
     expect(inserted.billId).toBeUndefined();
 
-    // Replay create_transaction with the same idempotencyKey — the row already exists (created:
+    // Replay add_card_purchase with the same idempotencyKey — the row already exists (created:
     // false), but it's still missing its bill, so this should self-heal rather than stay orphaned.
-    const result = await createTransaction(
+    const result = await addCardPurchase(
       deps,
       {
         description: 'Self heal purchase',
