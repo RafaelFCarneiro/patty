@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
+import { CreateTransactionSchema } from './transaction.js';
 import type { Ambiguous, DuplicateName, NotFound, ValidationError } from './error.js';
 
 // `.describe()` is domain information — it states what each field is and represents.
@@ -32,6 +33,15 @@ export const CreateCreditCardSchema = CreditCardSchema.omit({
   paymentAccount: z.string().min(1).optional().describe('Default paying account name for bill payment'),
 });
 export type CreateCreditCard = z.infer<typeof CreateCreditCardSchema>;
+
+/** Natural input for a credit-card purchase (ADR-016): same shape as create_transaction minus
+ *  `account` (the card's own internal liability account is always the destination) with `card`
+ *  required instead of optional. Depends on the transaction core's schema (aggregate → core, the
+ *  allowed direction) — never the reverse. */
+export const AddCardPurchaseSchema = CreateTransactionSchema.omit({ account: true }).extend({
+  card: z.string().min(1).describe('Credit card name — joins the cycle bill'),
+});
+export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
 
 export type CardError = NotFound<'card'> | Ambiguous<'card'> | DuplicateName<'credit_card'> | ValidationError;
 

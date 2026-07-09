@@ -29,7 +29,6 @@ import {
 import { accountErrors } from '../../models/account.js';
 import {
   transactionErrors,
-  type AddCardPurchase,
   type ClassifyOutcome,
   type CreateTransaction,
   type CreateTransactionResult,
@@ -40,11 +39,17 @@ import type { Deps } from '../deps.js';
 import { resolveAccountRef } from '../resolve.js';
 import { resolveCategorySelection } from './core.js';
 
-/** The credit-card aggregate's card-purchase entry point, injected by the diplomat composition
- *  root rather than imported directly — see module header. */
+/**
+ * The credit-card aggregate's card-purchase entry point, injected by the diplomat composition root
+ * rather than imported directly — see module header. Typed structurally against the core's own
+ * `CreateTransaction` (not by importing `models/creditCard.ts`'s `AddCardPurchase`): the transaction
+ * core must not reference the credit-card domain's model any more than its controllers, even for a
+ * type-only import — the real `addCardPurchase` (whose parameter is the nominal `AddCardPurchase`
+ * type) is structurally identical and satisfies this signature.
+ */
 export type AddCardPurchaseFn = (
   deps: Deps,
-  input: AddCardPurchase,
+  input: Omit<CreateTransaction, 'account'> & { card: string },
   source: TransactionSource,
 ) => ResultAsync<CreateTransactionResult, AppError>;
 

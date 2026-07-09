@@ -20,10 +20,10 @@ import {
   resolveCurrency,
   withBillId,
 } from '../../logic/transaction.js';
+import { type AddCardPurchase } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
 import {
   transactionErrors,
-  type AddCardPurchase,
   type ClassifyOutcome,
   type CreateTransactionResult,
   type DeleteTransactionResult,

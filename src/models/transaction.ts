@@ -199,14 +199,6 @@ export const CreateTransactionSchema = z.object({
 });
 export type CreateTransaction = z.infer<typeof CreateTransactionSchema>;
 
-/** Natural input for a credit-card purchase (ADR-016): same shape as create_transaction minus
- *  `account` (the card's own internal liability account is always the destination) with `card`
- *  required instead of optional. */
-export const AddCardPurchaseSchema = CreateTransactionSchema.omit({ account: true }).extend({
-  card: z.string().min(1).describe('Credit card name — joins the cycle bill'),
-});
-export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
-
 /** Bulk item: idempotencyKey optional — derived from date+description+amount when absent.
  *  subCategory/tags omitted — bulk import classifies automatically. */
 export const BulkTransactionItemSchema = CreateTransactionSchema.omit({
