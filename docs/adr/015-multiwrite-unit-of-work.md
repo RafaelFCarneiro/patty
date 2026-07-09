@@ -1,10 +1,30 @@
 # ADR-015: Unit-of-work deltas for multi-write controller flows
 
-**Status:** Accepted · **Date:** 2026-07-04 · **Deciders:** Rafael · Builds on the parameterized-SQL and
+**Status:** Rejected (2026-07-09) — superseded before implementation by the domain-boundary review in
+**ADR-016** · **Originally accepted:** 2026-07-04 · **Deciders:** Rafael · Builds on the parameterized-SQL and
 idempotency invariants (`docs/architecture.md`) and the intra-repo `db.transaction` pattern already in use.
 Triggered by the partial-write (TOCTOU) shape recurring on PR #83 — flagged twice by review, fixed once by a
-one-off reorder (commit bc1b418). Sequenced **after** ADR-014 (collection pagination): that contract work
-unblocks the dashboards today; this migration follows, touching a different layer (repo write paths).
+one-off reorder (commit bc1b418).
+
+## Rejection note (2026-07-09)
+
+This ADR is **rejected without implementation.** A first-mover attempt (`updateTransaction`) confirmed the
+problem it was solving is downstream of a structural one: the multi-write flows that need atomic guarding are
+non-atomic largely *because* the wrong module owns them. `createTransaction`/`updateTransaction` in the
+transaction controller carry credit-card domain knowledge (bill-period computation from `closingDay`/`dueDay`,
+paid-bill immutability, `ensureAndAttach`), so a "multi-write" is really a cross-domain write reaching from the
+transaction layer into bill/card policy — and any concurrency mechanism laid over that (CAS predicates in the
+repo, then row versioning) had to smuggle domain rules into `diplomat/db` to work.
+
+**Decision: review the domain/context boundaries first (ADR-016) — establish aggregate ownership (credit-card
+owns its transactions + bills; account owns its transactions + transfers; the transaction core owns only row
+integrity and the shared read side) — then re-examine concurrency, if still needed, in a new ADR scoped to
+whatever genuinely-within-one-aggregate atomicity remains.** Several of the flows surveyed below collapse into
+a single aggregate once ownership moves, so the multi-write surface this ADR targeted is expected to shrink
+before any locking mechanism is worth adding.
+
+The analysis below (including the original "Decision (proposed)" section) is retained as the record of *why* concurrency was investigated and what the survey found;
+it is not a plan of record. Do not implement it.
 
 ## Context
 

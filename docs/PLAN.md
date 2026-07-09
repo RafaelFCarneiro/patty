@@ -225,10 +225,11 @@ Minimal web frontend rendering saved views; activate owner columns for multi-use
 - **Multi-write concurrency (partial-write / TOCTOU):** controller flows that issue multiple sequential
   repo writes are not atomic as a pair, and three concurrent write surfaces now exist (MCP, the default-on REST
   sidecar, scheduled `apply_due_recurring`). The same bug shape recurred twice on PR #83 and was band-aided by a
-  one-off reorder. Structural fix (typed per-flow deltas consumed by a single transactional repo method +
-  CAS race guards) is proposed in **ADR-015** (`docs/adr/015-multiwrite-unit-of-work.md`); migration is
-  incremental, first mover `updateTransaction` (sequenced after the ADR-014 pagination contract, which unblocks
-  the dashboards first).
+  one-off reorder. The unit-of-work fix (**ADR-015**) was **rejected before implementation**: a first-mover
+  attempt showed the non-atomicity is downstream of a structural problem — the transaction controller owns
+  credit-card/bill policy that should live in a credit-card aggregate. **ADR-016** reviews the domain/context
+  boundaries first (aggregate ownership over a shared transaction core); concurrency is re-examined afterward,
+  scoped to whatever within-aggregate atomicity remains, in a new ADR if still needed.
 
 ## Open questions
 
