@@ -7,7 +7,7 @@ need is scoped afterward.
 
 ## Context
 
-The transaction controller has become the de-facto entry point for every money movement, and it has absorbed
+The transaction controller has become the de facto entry point for every money movement, and it has absorbed
 domain knowledge that belongs to other contexts. Concretely, on `main`:
 
 - `src/controllers/transactions.ts` is **386 lines** — the largest controller — and imports `logic/bill.js`
