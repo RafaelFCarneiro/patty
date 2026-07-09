@@ -15,7 +15,7 @@ domain knowledge that belongs to other contexts. Concretely, on `main`:
   bill cycle from a card's `closingDay`/`dueDay`, guards paid-bill immutability, and calls
   `bills.ensureAndAttach` with hand-rolled compensation. That is **credit-card domain policy living in the
   transaction controller.**
-- `src/controllers/creditCards.ts` (99 lines) is **card CRUD only** — it owns none of the card-transaction or
+- `src/controllers/creditCards.ts` is **card CRUD only** — it owns none of the card-transaction or
   bill policy that logically belongs to it.
 - `src/controllers/transfers.ts` and `src/controllers/bills.ts` reach *down* into `deps.transactions.create(...)`.
 
