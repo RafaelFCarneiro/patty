@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app-builder.js';
-import { updateTransaction } from '../../../src/controllers/transactions.js';
+import { updateTransaction } from '../../../src/controllers/transaction/movement.js';
 import { billPeriodFor } from '../../../src/logic/bill.js';
 import { AccountType } from '../../../src/models/account.js';
 import {
