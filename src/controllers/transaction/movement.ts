@@ -128,7 +128,7 @@ export const createTransactionsBulk = (
 
       const result = !assertExclusiveAccountCard({ account, card })
         ? err(transactionErrors.exclusiveAccountCard)
-        : card
+        : card !== undefined
           ? await addCardPurchase(
               cachedDeps,
               { ...R.omit(item, ['account']), date, card, idempotencyKey, rawInput: input.rawInput },

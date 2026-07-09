@@ -39,7 +39,7 @@ export const routeCreateTransaction = (
   safeTry(async function* () {
     yield* guard(assertExclusiveAccountCard(input), transactionErrors.exclusiveAccountCard);
     return ok(
-      input.card
+      input.card !== undefined
         ? yield* addCardPurchase(deps, { ...R.omit(input, ['account']), card: input.card }, source)
         : yield* createTransaction(deps, input, source),
     );
