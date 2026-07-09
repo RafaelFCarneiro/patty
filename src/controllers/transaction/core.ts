@@ -106,8 +106,11 @@ export const updateTransaction = (
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
     yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
     yield* guardTransferMutability(existing, input);
-    // Reached only for a transaction the router judged card-less (no `existing.cardId`) — any
-    // billMonth/billYear reassignment request against one is invalid, card or not.
+    // billMonth/billYear must never reach this generic patch: for a card-less transaction (the
+    // router dispatched here directly) it's simply invalid; for a card transaction (the aggregate's
+    // updateCardTransaction dispatched here after settling reassignment itself) the aggregate has
+    // already stripped these fields before delegating — if that stripping is ever removed, this
+    // guard would start wrongly rejecting legitimate reassignments instead of no-op passing.
     yield* guard(input.billMonth === undefined, transactionErrors.billAssignmentRequiresCard);
 
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
