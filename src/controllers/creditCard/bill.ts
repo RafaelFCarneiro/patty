@@ -1,20 +1,20 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
-import type { AppError } from '../common/errors.js';
-import { guard, okOr } from '../common/result.js';
-import { assertCurrencyMatch, assertNonCreditType } from '../logic/account.js';
-import { computeBillTotal, withStatusLabel } from '../logic/bill.js';
-import { toIsoDate } from '../logic/period.js';
-import { addLocalizedLabels, defaultStatusFor } from '../logic/transaction.js';
-import { accountErrors } from '../models/account.js';
-import { billErrors, BillStatus, type Bill, type BillQuery, type PayBill } from '../models/bill.js';
+import type { AppError } from '../../common/errors.js';
+import { guard, okOr } from '../../common/result.js';
+import { assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
+import { computeBillTotal, withStatusLabel } from '../../logic/bill.js';
+import { toIsoDate } from '../../logic/period.js';
+import { addLocalizedLabels, defaultStatusFor } from '../../logic/transaction.js';
+import { accountErrors } from '../../models/account.js';
+import { billErrors, BillStatus, type Bill, type BillQuery, type PayBill } from '../../models/bill.js';
 import {
   ClassificationMethod,
   type TransactionSource as TransactionSourceType,
   TransactionType,
-} from '../models/transaction.js';
-import type { BillWithItems } from '../diplomat/db/repos/bills.js';
-import type { Deps } from './deps.js';
-import { resolveAccountRef, resolveCardRef } from './resolve.js';
+} from '../../models/transaction.js';
+import type { BillWithItems } from '../../diplomat/db/repos/bills.js';
+import type { Deps } from '../deps.js';
+import { resolveAccountRef, resolveCardRef } from '../resolve.js';
 
 export type BillView = BillWithItems & { total: number };
 

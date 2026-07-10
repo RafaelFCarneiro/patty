@@ -15,7 +15,7 @@ import {
   updateAccount,
 } from '../../controllers/accounts.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
-import { getBill, payBill, revertBillPayment } from '../../controllers/bills.js';
+import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
 import { getDashboard, listDashboards, saveDashboard } from '../../controllers/dashboards.js';
 import {
   createCategory,
@@ -25,21 +25,22 @@ import {
   listCategories,
   listSubCategories,
 } from '../../controllers/categories.js';
-import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCards.js';
+import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCard/creditCard.js';
+import { addCardPurchase } from '../../controllers/creditCard/creditCardTransaction.js';
 import type { Deps } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
 import { getStatus } from '../../controllers/status.js';
 import { getSpendingSummary } from '../../controllers/summary.js';
 import { confirmTransaction } from '../../controllers/transaction/core.js';
-import {
-  createTransaction,
-  createTransactionsBulk,
-  deleteTransaction,
-  updateTransaction,
-} from '../../controllers/transaction/movement.js';
 import { searchTransactions } from '../../controllers/transaction/read.js';
 import { createTransfer } from '../../controllers/transfers.js';
+import {
+  routeCreateTransaction,
+  routeCreateTransactionsBulk,
+  routeDeleteTransaction,
+  routeUpdateTransaction,
+} from '../transactionRouting.js';
 import { AccountBalanceSchema, AccountSchema } from '../../models/account.js';
 import { AggregateResultSchema } from '../../models/aggregate.js';
 import { BillSchema } from '../../models/bill.js';
@@ -326,7 +327,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
       const wireIn = parse(wireInTransactions.CreateTransactionInputSchema, req.body, reply);
       if (!wireIn) return reply;
       const model = transactionAdapters.createWireInToModel(wireIn);
-      const result = await createTransaction(deps, model, TransactionSource.enum.rest);
+      const result = await routeCreateTransaction(deps, model, TransactionSource.enum.rest);
       return result.match(
         (value) => {
           const out = transactionAdapters.createResultToWireOut(value);
@@ -347,8 +348,35 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
       const wireIn = parse(wireInTransactions.CreateTransactionsBulkInputSchema, req.body, reply);
       if (!wireIn) return reply;
       const model = transactionAdapters.bulkWireInToModel(wireIn);
-      const result = await createTransactionsBulk(deps, model, TransactionSource.enum.import);
+      const result = await routeCreateTransactionsBulk(deps, model, TransactionSource.enum.import);
       return send(reply, result.map(transactionAdapters.bulkResultToWireOut), 201);
+    },
+  },
+  {
+    method: 'post',
+    path: '/api/credit-cards/purchases',
+    tags: [RouteTag.creditCards],
+    summary: 'Add a credit-card purchase',
+    request: { body: jsonBody(wireInCreditCards.AddCardPurchaseSchema) },
+    responses: {
+      200: okResponse('Existing purchase returned (idempotent replay)', CreateTransactionOut),
+      201: okResponse('Purchase recorded', CreateTransactionOut),
+      404: notFound404,
+      409: conflict409,
+      422: validation422,
+    },
+    handler: async (req, reply) => {
+      const wireIn = parse(wireInCreditCards.AddCardPurchaseSchema, req.body, reply);
+      if (!wireIn) return reply;
+      const model = creditCardAdapters.addCardPurchaseWireInToModel(wireIn);
+      const result = await addCardPurchase(deps, model, TransactionSource.enum.rest);
+      return result.match(
+        (value) => {
+          const out = transactionAdapters.createResultToWireOut(value);
+          return reply.status(out.created ? 201 : 200).send(out);
+        },
+        (e) => reply.status(httpStatus(e)).send({ error: e }),
+      );
     },
   },
 
@@ -528,7 +556,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
       const { id } = req.params as { id: string };
       const wireIn = parse(wireInTransactions.UpdateTransactionInputSchema, { ...(req.body as object), id }, reply);
       if (!wireIn) return reply;
-      return send(reply, await updateTransaction(deps, transactionAdapters.updateWireInToModel(wireIn)));
+      return send(reply, await routeUpdateTransaction(deps, transactionAdapters.updateWireInToModel(wireIn)));
     },
   },
   {
@@ -558,7 +586,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
       const confirm = (req.query as { confirm?: string }).confirm === 'true';
       return send(
         reply,
-        (await deleteTransaction(deps, { id, confirm })).map(transactionAdapters.deleteResultToWireOut),
+        (await routeDeleteTransaction(deps, { id, confirm })).map(transactionAdapters.deleteResultToWireOut),
       );
     },
   },

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app-builder.js';
-import { updateTransaction } from '../../../src/controllers/transaction/movement.js';
+import { updateCardTransaction } from '../../../src/controllers/creditCard/creditCardTransaction.js';
 import { billPeriodFor } from '../../../src/logic/bill.js';
 import { AccountType } from '../../../src/models/account.js';
 import {
@@ -24,7 +24,7 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe('updateTransaction — reassignment attach runs before the main write', () => {
+describe('updateCardTransaction — reassignment attach runs before the main write', () => {
   it('leaves the patched fields untouched when ensureAndAttach blocks on a concurrent paid-bill race', async () => {
     const { deps } = await buildApp({ dbPath: join(tmpDir, 'reassign-atomicity.db') });
 
@@ -70,14 +70,20 @@ describe('updateTransaction — reassignment attach runs before the main write',
     // Simulate ensureAndAttach's atomic re-check losing a race to a concurrent pay_bill — it must
     // reject before any other field in this same update request has been written.
     const racedDeps = { ...deps, bills: { ...deps.bills, ensureAndAttach: async () => null } };
+    const existing = await racedDeps.transactions.getById(transaction.id);
+    if (!existing) throw new Error('expected the transaction to exist');
 
-    const result = await updateTransaction(racedDeps, {
-      id: transaction.id,
-      description: 'Changed description',
-      amount: 999,
-      billMonth: period.month === 12 ? 1 : period.month + 1,
-      billYear: period.month === 12 ? period.year + 1 : period.year,
-    });
+    const result = await updateCardTransaction(
+      racedDeps,
+      {
+        id: transaction.id,
+        description: 'Changed description',
+        amount: 999,
+        billMonth: period.month === 12 ? 1 : period.month + 1,
+        billYear: period.month === 12 ? period.year + 1 : period.year,
+      },
+      existing,
+    );
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();

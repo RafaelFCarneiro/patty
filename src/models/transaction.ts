@@ -378,16 +378,15 @@ export const transactionErrors = {
     code: 'validation',
     issues: ['billMonth and billYear must be provided together'],
   } satisfies TransactionError,
+  // Raised by both the transaction core (transaction/{core,movement}.ts, rejecting billMonth/
+  // billYear on a card-less transaction) and the credit-card aggregate (creditCardTransaction.ts,
+  // rejecting reassignment on a transaction whose card lookup came back stale) — stays here rather
+  // than moving to creditCard.ts's cardErrors, since the core itself must be able to raise it
+  // without depending on the credit-card domain.
   billAssignmentRequiresCard: {
     code: 'validation',
     issues: [
       'billMonth/billYear require a credit-card transaction; provide `card` (create) or the transaction must already have one (update)',
-    ],
-  } satisfies TransactionError,
-  paidBillImmutable: {
-    code: 'validation',
-    issues: [
-      'this bill is paid; its transactions cannot be added, removed, or reassigned — call revert_bill_payment first',
     ],
   } satisfies TransactionError,
   invalidCursor: {

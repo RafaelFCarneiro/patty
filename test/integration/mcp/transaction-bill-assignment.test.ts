@@ -458,4 +458,61 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       await transport.close();
     }
   });
+
+  it('rejects reassigning a card transaction to an account, leaving it untouched', async () => {
+    const cardName = `AccountReject Card ${stamp}`;
+    const bankName = `AccountReject Bank ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: bankName, type: 'checking', currency: 'BRL', initialBalance: 1000 },
+      });
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      });
+      const purchase = (await callTool(client, {
+        name: 'create_transaction',
+        args: {
+          description: `AccountReject purchase ${stamp}`,
+          amount: 60,
+          type: 'expense',
+          date: today,
+          card: cardName,
+          idempotencyKey: `account-reject-purchase-${stamp}`,
+        },
+      })) as { transaction?: { id?: string; cardId?: string; billId?: string } };
+      ensure(purchase.transaction?.id, 'expected a created transaction');
+      const cardIdBefore = purchase.transaction.cardId;
+      const billIdBefore = purchase.transaction.billId;
+
+      const err = (await callToolError(client, {
+        name: 'update_transaction',
+        args: { id: purchase.transaction.id, account: bankName },
+      })) as { error?: { code?: string; issues?: string[] } };
+      expect(err.error?.code).toBe('validation');
+      expect(err.error?.issues?.[0]).toContain("card's own internal account");
+
+      // Untouched: still linked to the same card and bill, still off the bank account's statement.
+      const stillOnCard = (await searchTransactions(client, {
+        text: `AccountReject purchase ${stamp}`,
+        limit: 10,
+      })) as Array<{ id?: string; cardId?: string; billId?: string; accountId?: string }>;
+      const found = stillOnCard.find((tx) => tx.id === purchase.transaction!.id);
+      ensure(found, 'expected the transaction to still be found by search');
+      expect(found.cardId).toBe(cardIdBefore);
+      expect(found.billId).toBe(billIdBefore);
+
+      const bankStatement = (await searchTransactions(client, { account: bankName, limit: 10 })) as Array<{
+        id?: string;
+      }>;
+      expect(bankStatement.some((tx) => tx.id === purchase.transaction!.id)).toBe(false);
+    } finally {
+      await transport.close();
+    }
+  });
 });

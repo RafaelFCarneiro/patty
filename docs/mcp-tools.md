@@ -30,6 +30,22 @@ Statement paste / import (1–200 items). Each item is classified and idempotent
 
 Returns `summary` counts plus per-item `status`: `created`, `needs_review` (no category or confidence < 0.6 — confirm with the user), `duplicate`, or `error` (with the structured AppError). Each transaction includes `typeLabel` and `statusLabel`.
 
+Each item is routed internally to `add_card_purchase` (below) when it resolves a `card` — including via the top-level default — or to the account create path otherwise; an item resolving both `account` and `card` (e.g. a top-level default `account` plus an item-level `card`) is rejected with the item-level `validation` error, the same as calling `create_transaction` with both set.
+
+## add_card_purchase
+
+Record a credit-card purchase, joining the cycle bill (fatura) — the card-purchase counterpart of `create_transaction` (ADR-016). Owned by the credit-card aggregate: it resolves the card, computes the bill period, and rejects landing on a `paid` bill before writing anything.
+
+Input: same as `create_transaction` minus `account` (the card's own internal liability account is always the destination), with `card` **required**: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required), optional `date`, `billMonth` + `billYear` (explicit target bill cycle; both required together), `category` OR `subCategory`, `currency` (accepted for schema symmetry with `create_transaction`, but has no effect — a card's currency is fixed at creation and always wins), `rawInput`, `note`, `tags`, `status`.
+
+Returns `TransactionView` with `typeLabel`, `statusLabel`, and `billId` — same shape and semantics as `create_transaction`'s response. See `create_transaction` above for the full bill-assignment, status-default, and kind-validation rules (identical here — `add_card_purchase` is the same behavior reached directly instead of via the `card` field).
+
+`create_transaction` still accepts `card` transitionally and routes internally to this same aggregate entry point — the two produce identical results for the same input; `create_transaction`'s account/card split is retired in a later step. `create_transactions_bulk` routes each card line here too (see above).
+
+REST mirror: `POST /api/credit-cards/purchases`.
+
+Errors: resolution errors (`unknown_card`, `unknown_category`, …), `category_kind_mismatch`, `validation` (unpaired `billMonth`/`billYear`, landing on a `paid` bill).
+
 ## create_credit_card / list_credit_cards
 
 `create_credit_card`: `name`, `closingDay` (1–28; transactions after it belong to next month's bill), `dueDay` (1–28), `currency` (default USD), optional `limit`, optional `paymentAccount` (name of the default paying account for bill payment). Auto-creates an internal `credit` account (`Card: <name>`) that tracks outstanding card debt (ADR-010). Card purchases post to this account, driving its balance negative. Error: `duplicate_name`, `validation` (currency mismatch with payment account).
@@ -70,7 +86,7 @@ Errors: `unknown_transaction`.
 
 ## update_transaction
 
-Patch fields by `id`. Only provided fields change. Returns the updated transaction with `typeLabel`, `statusLabel`, and `billId` (the bill this card transaction currently belongs to — reflects a `billMonth`/`billYear` reassignment immediately; absent for account transactions). Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened (the system learns). Changing `account` also updates `currency` to match.
+Patch fields by `id`. Only provided fields change. Returns the updated transaction with `typeLabel`, `statusLabel`, and `billId` (the bill this card transaction currently belongs to — reflects a `billMonth`/`billYear` reassignment immediately; absent for account transactions). Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened (the system learns). Changing `account` also updates `currency` to match — **account transactions only**: a card transaction is always funded by the card's own internal liability account (ADR-010) and has no independent account to reassign, so `account` on a card transaction is rejected with a `validation` error rather than silently repointing it (which would desync the card's balance from its bill total).
 
 Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `billMonth` + `billYear` (optional — reassign to a different bill cycle; both required together), `category`, `subCategory`, `note` (free-form memo — empty string clears; omit to leave unchanged), `tags`.
 

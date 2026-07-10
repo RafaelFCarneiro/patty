@@ -291,6 +291,10 @@ describe('assertExclusiveAccountCard', () => {
   it('fails when both are provided', () => {
     expect(assertExclusiveAccountCard({ account: 'A', card: 'C' })).toBe(false);
   });
+
+  it('fails on value, not truthiness — a present-but-empty account still counts as provided', () => {
+    expect(assertExclusiveAccountCard({ account: '', card: 'C' })).toBe(false);
+  });
 });
 
 describe('assertExclusiveCategorySubCategory', () => {

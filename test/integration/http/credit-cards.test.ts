@@ -57,6 +57,84 @@ describe('POST /api/credit-cards', () => {
   });
 });
 
+describe('POST /api/credit-cards/purchases', () => {
+  it('records a purchase and joins the cycle bill (201)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Purchase Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'REST card purchase',
+        amount: 42,
+        type: 'expense',
+        date: '2026-06-05',
+        card: 'Purchase Card',
+        idempotencyKey: 'rest-card-purchase',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().transaction).toHaveProperty('billId');
+    expect(res.json().transaction.cardId).toBeDefined();
+  });
+
+  it('is idempotent — replay returns 200 with created: false', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Idempotent Purchase Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const payload = {
+      description: 'REST idempotent purchase',
+      amount: 15,
+      type: 'expense',
+      date: '2026-06-05',
+      card: 'Idempotent Purchase Card',
+      idempotencyKey: 'rest-idempotent-card-purchase',
+    };
+    const first = await inject({ method: 'POST', url: '/api/credit-cards/purchases', payload });
+    expect(first.statusCode).toBe(201);
+    const replay = await inject({ method: 'POST', url: '/api/credit-cards/purchases', payload });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json().created).toBe(false);
+  });
+
+  it('rejects invalid body (422)', async () => {
+    const res = await inject({ method: 'POST', url: '/api/credit-cards/purchases', payload: {} });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it('rejects an account field instead of silently ignoring it (422)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'Purchase Card Account Bank', type: 'checking', currency: 'USD', initialBalance: 0 },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Strict Purchase Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'Should be rejected',
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-05',
+        card: 'Strict Purchase Card',
+        account: 'Purchase Card Account Bank',
+        idempotencyKey: 'rest-card-purchase-with-account',
+      },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+});
+
 describe('DELETE /api/credit-cards/:name', () => {
   it('dry-run returns counts, confirm deletes everything', async () => {
     await inject({
