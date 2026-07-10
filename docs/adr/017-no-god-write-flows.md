@@ -116,6 +116,19 @@ scope explicit. For an AI-first system the clarity of single-purpose, self-valid
 minimal tool count, and "no god write flows" becomes a bright-line rule instead of a judgment call that erodes.
 Reads remain the one shared surface by design — a stated exception, not a loophole.
 
+The surface-growth cost is also smaller than a naive "~3 → ~7" count implies, because the split **relocates a
+discriminator the caller already had to supply — it does not introduce a new decision.** For create this is
+exact: the god `create_transaction` already required `type` (`expense`/`income`) and already required the caller
+to choose `account` or `card`, so `add_account_expense` / `add_account_income` / `add_card_purchase` just move
+that same, already-mandatory intent from a parameter value to a tool name — zero new knowledge, and a class of
+invalid-argument round-trips (both `account` and `card` set) becomes unrepresentable rather than runtime-rejected.
+Update/delete are the one case with a genuinely new requirement: the god `update_transaction` / `delete_transaction`
+took only an `id` and let the router look the owner up, whereas the split tools need the caller to know the
+owning context. But an `id` is virtually always obtained from a preceding read, and that read already returns the
+`cardId`/`accountId`/`billId` — so the discriminator is in hand from the same round-trip in the normal read→act
+flow; the only true new cost is a bare id with no preceding read, which is rare. Net: the added ergonomic cost is
+nil for create and near-nil for update/delete, not the linear growth the tool count suggests.
+
 ## Consequences
 
 - **Removed** (breaking): `update_transaction`, `delete_transaction`, `create_transactions_bulk` tools + their
