@@ -52,15 +52,18 @@ export const resolveCurrency = (
   input: Pick<CreateTransaction, 'currency'>,
 ): CurrencyCode => account?.currency ?? card?.currency ?? input.currency ?? CurrencyCode.enum.USD;
 
-export const assertExclusiveAccountCard = (input: { account?: string; card?: string }): boolean =>
-  !(input.account && input.card);
-
 /** True when a card name was provided — a type guard, narrowing `card` to `string`. Same
  *  isNonNullish reasoning as hasCategory below (also correctly treats `null` as absent, not just
  *  `undefined`) — used to decide account-vs-card routing on value, not truthiness (an empty string
  *  is "present but invalid", not "absent", and should fail loudly via card resolution instead of
  *  silently falling through to the account path). */
 export const hasCard = (input: { card?: string }): input is { card: string } => R.isNonNullish(input.card);
+
+// Value-based (via isNonNullish), not truthiness — same reasoning as
+// assertExclusiveCategorySubCategory below: a caller-constructed { account: '', card: 'X' } must
+// not be judged "no account", since it's present-but-invalid, not absent.
+export const assertExclusiveAccountCard = (input: { account?: string; card?: string }): boolean =>
+  !(R.isNonNullish(input.account) && R.isNonNullish(input.card));
 
 /**
  * True when a category name was provided — a type guard, narrowing `category` to `string`. The
