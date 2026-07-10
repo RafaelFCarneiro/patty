@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
+import { CreateTransactionSchema } from './transaction.js';
 import type { Ambiguous, DuplicateName, InUse, NotFound, ValidationError } from './error.js';
 import type { LabelMap } from './locale.js';
 
@@ -46,6 +47,25 @@ export const AccountBalanceSchema = AccountSchema.extend({
   projectedBalance: z.number().optional().describe('Effective balance + pending through projectedAsOf, if supplied'),
 });
 export type AccountBalance = z.infer<typeof AccountBalanceSchema>;
+
+/** Natural input for an account expense/income (ADR-016): same shape as create_transaction minus
+ *  `card`/`type`/`billMonth`/`billYear` (bill assignment is card-only vocabulary; the movement kind
+ *  is the tool itself — `add_account_expense` vs. `add_account_income` — not a field). `account`
+ *  stays optional, same as on `create_transaction`: an omitted account records an unattached
+ *  (e.g. cash) movement, matching today's behavior. Depends on the transaction core's schema
+ *  (aggregate → core, the allowed direction) — never the reverse. `.strict()`: `card`/`type`/
+ *  `billMonth`/`billYear` are meaningful fields on the sibling create_transaction schema, not
+ *  server-managed ones — a caller who mistakenly sends them here should get a validation error, not
+ *  have them silently stripped by zod's default unknown-key behavior (REST boundary only; the MCP
+ *  tool's inputSchema is a raw shape, which the MCP SDK reconstructs into its own non-strict object
+ *  internally). */
+export const AddAccountMovementSchema = CreateTransactionSchema.omit({
+  card: true,
+  type: true,
+  billMonth: true,
+  billYear: true,
+}).strict();
+export type AddAccountMovement = z.infer<typeof AddAccountMovementSchema>;
 
 /**
  * What counts as a reference to an account — the domain's definition of what blocks

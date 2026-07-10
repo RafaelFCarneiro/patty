@@ -30,7 +30,7 @@ Statement paste / import (1–200 items). Each item is classified and idempotent
 
 Returns `summary` counts plus per-item `status`: `created`, `needs_review` (no category or confidence < 0.6 — confirm with the user), `duplicate`, or `error` (with the structured AppError). Each transaction includes `typeLabel` and `statusLabel`.
 
-Each item is routed internally to `add_card_purchase` (below) when it resolves a `card` — including via the top-level default — or to the account create path otherwise; an item resolving both `account` and `card` (e.g. a top-level default `account` plus an item-level `card`) is rejected with the item-level `validation` error, the same as calling `create_transaction` with both set.
+Each item is routed internally to `add_card_purchase` (below) when it resolves a `card` — including via the top-level default — or to `add_account_expense`/`add_account_income` (below, chosen by the item's `type`) otherwise; an item resolving both `account` and `card` (e.g. a top-level default `account` plus an item-level `card`) is rejected with the item-level `validation` error, the same as calling `create_transaction` with both set.
 
 ## add_card_purchase
 
@@ -45,6 +45,18 @@ Returns `TransactionView` with `typeLabel`, `statusLabel`, and `billId` — same
 REST mirror: `POST /api/credit-cards/purchases`.
 
 Errors: resolution errors (`unknown_card`, `unknown_category`, …), `category_kind_mismatch`, `validation` (unpaired `billMonth`/`billYear`, landing on a `paid` bill).
+
+## add_account_expense / add_account_income
+
+Record an expense or income from a bank account / wallet — the account-movement counterparts of `create_transaction` (ADR-016), owned by the account aggregate. Two intent-specific tools instead of one tool with a `type` field, mirroring the natural-language intents ("I spent…" vs. "I got paid…").
+
+Input: same as `create_transaction` minus `card`, `type` (the tool itself is the movement kind), and `billMonth`/`billYear` (bill assignment is card-only vocabulary): `description`, `amount` (positive), `idempotencyKey` (required), optional `date`, `account` (name — omitting it records an unattached, e.g. cash, movement, same as `create_transaction` today), `category` OR `subCategory`, `currency` (resolved from the account when linked, else this field, else USD), `rawInput`, `note`, `tags`, `status`.
+
+Returns `TransactionView` with `typeLabel` and `statusLabel` — same shape as `create_transaction`'s response (no `billId`; that field only ever appears on card transactions).
+
+`create_transaction` still accepts `account` (or neither `account` nor `card`) transitionally and routes internally to these same aggregate entry points, keyed on its `type` field — the two produce identical results for the same input; `create_transaction`'s account/card split is retired in a later step. `create_transactions_bulk` routes each non-card line here too, keyed on the line's `type`.
+
+Errors: resolution errors (`unknown_account`, `ambiguous_account`, `unknown_category`, …), `category_kind_mismatch`, `validation` (credit account rejected — post via `add_card_purchase` instead, category/subCategory both set).
 
 ## create_credit_card / list_credit_cards
 

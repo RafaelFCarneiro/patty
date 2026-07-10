@@ -13,7 +13,7 @@ import {
   getAccountBalances,
   listAccounts,
   updateAccount,
-} from '../../controllers/accounts.js';
+} from '../../controllers/account/account.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
 import { getDashboard, listDashboards, saveDashboard } from '../../controllers/dashboards.js';
@@ -26,7 +26,7 @@ import {
   listSubCategories,
 } from '../../controllers/categories.js';
 import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCard/creditCard.js';
-import { addCardPurchase } from '../../controllers/creditCard/creditCardTransaction.js';
+import { addCardPurchase } from '../../controllers/creditCard/transaction.js';
 import type { Deps } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';

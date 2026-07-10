@@ -378,8 +378,8 @@ export const transactionErrors = {
     code: 'validation',
     issues: ['billMonth and billYear must be provided together'],
   } satisfies TransactionError,
-  // Raised by both the transaction core (transaction/{core,movement}.ts, rejecting billMonth/
-  // billYear on a card-less transaction) and the credit-card aggregate (creditCardTransaction.ts,
+  // Raised by both the transaction core (transaction/{core,bulk}.ts, rejecting billMonth/
+  // billYear on a card-less transaction) and the credit-card aggregate (creditCard/transaction.ts,
   // rejecting reassignment on a transaction whose card lookup came back stale) — stays here rather
   // than moving to creditCard.ts's cardErrors, since the core itself must be able to raise it
   // without depending on the credit-card domain.
