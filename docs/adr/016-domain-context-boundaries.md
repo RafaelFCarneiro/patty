@@ -37,8 +37,8 @@ Note what is **already correct** and should be preserved:
   layers from the boundary: the ownership rule below governs where **new** structures land too. A card- or
   bill-shaped type (e.g. `AddCardPurchase`) belongs to the credit-card context's model namespace
   (`models/creditCard.ts`), never nested under `models/transaction.ts`; the same holds for its adapter and wire
-  schema. (This is not hypothetical — a first cut of step 2 created card model structures under the transaction
-  model and had to be corrected.)
+  schema. (This is not hypothetical — a first cut of the credit-card purchase / bill-policy extraction created
+  card model structures under the transaction model and had to be corrected.)
 - `createTransfer` (in `transfers.ts`) already owns account-domain validation (non-credit legs, currency match,
   distinct accounts) and merely *uses* `transactions.create` to persist — this is exactly the target shape and
   becomes the template.
