@@ -204,4 +204,5 @@ available alongside the server.
 - ADR-013: LLM-generated data-less local dashboards over the HTTP API
 - ADR-014: cursor pagination + whitelisted ordering for collection endpoints (`search_transactions` first mover)
 - ADR-015: multi-write unit-of-work for transactional multi-step writes — **rejected** (superseded by ADR-016 before implementation)
-- ADR-016: domain/context boundaries — aggregate ownership (credit-card, account) over a shared transaction core (proposed)
+- ADR-016: domain/context boundaries — aggregate ownership (credit-card, account) over a shared transaction core
+- ADR-017: no god write flows — bounded-context ownership for every transaction mutation (extends ADR-016; proposed)
