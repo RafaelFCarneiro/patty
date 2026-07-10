@@ -8,7 +8,8 @@ import {
   getAccountBalances,
   listAccounts,
   updateAccount,
-} from '../../controllers/accounts.js';
+} from '../../controllers/account/account.js';
+import { addAccountExpense, addAccountIncome } from '../../controllers/account/accountTransaction.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
 import { listDashboards, saveDashboard } from '../../controllers/dashboards.js';
@@ -62,7 +63,7 @@ import { CreateRecurringSchema } from '../../wire/in/recurring.js';
 import { AddCardPurchaseSchema, CreateCreditCardSchema } from '../../wire/in/creditCards.js';
 import { bulkResultToWireOut, createResultToWireOut, deleteResultToWireOut } from '../../adapters/transactions.js';
 import { addCardPurchaseWireInToModel } from '../../adapters/creditCards.js';
-import { CreateAccountSchema, UpdateAccountSchema } from '../../wire/in/accounts.js';
+import { AddAccountMovementSchema, CreateAccountSchema, UpdateAccountSchema } from '../../wire/in/accounts.js';
 import { CreateTagSchema } from '../../wire/in/tags.js';
 import * as accountAdapters from '../../adapters/accounts.js';
 import { buildOpenApiDocument } from '../http/openapi.js';
@@ -80,6 +81,16 @@ const jsonError = (e: AppError) => ({
 });
 
 const fromResult = <T>(result: Result<T, AppError>) => result.match(json, jsonError);
+
+/** Shared by add_account_expense/add_account_income (ADR-016) — identical aside from which
+ *  movement kind is being recorded. */
+const addAccountMovementDescription = (movement: 'expense' | 'income'): string =>
+  `Record ${movement === 'expense' ? 'an expense from' : 'income into'} a bank account / wallet — the ` +
+  'account-movement counterpart of create_transaction (ADR-016). Resolves the account and category by name; ' +
+  'when category is omitted, classifies via learned merchant→category associations and returns method + ' +
+  'confidence (confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — generate a ' +
+  'stable key like "<date>-<description>-<amount>". Currency comes from the account, or the currency field ' +
+  `(default USD). Omitting account records an unattached ${movement === 'expense' ? '(e.g. cash) expense' : 'income'}.`;
 
 export const buildMcpServer = (deps: Deps, version: string): McpServer => {
   const server = new McpServer({ name: 'fintrack', version });
@@ -153,6 +164,32 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
           createResultToWireOut,
         ),
       ),
+  );
+
+  server.registerTool(
+    'add_account_expense',
+    {
+      title: 'Add account expense',
+      description: addAccountMovementDescription('expense'),
+      inputSchema: AddAccountMovementSchema.shape,
+    },
+    async (args) => {
+      const model = accountAdapters.addAccountMovementWireInToModel(args);
+      return fromResult((await addAccountExpense(deps, model, TransactionSource.enum.mcp)).map(createResultToWireOut));
+    },
+  );
+
+  server.registerTool(
+    'add_account_income',
+    {
+      title: 'Add account income',
+      description: addAccountMovementDescription('income'),
+      inputSchema: AddAccountMovementSchema.shape,
+    },
+    async (args) => {
+      const model = accountAdapters.addAccountMovementWireInToModel(args);
+      return fromResult((await addAccountIncome(deps, model, TransactionSource.enum.mcp)).map(createResultToWireOut));
+    },
   );
 
   server.registerTool(

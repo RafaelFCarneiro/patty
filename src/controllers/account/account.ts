@@ -1,8 +1,8 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
-import type { AppError } from '../common/errors.js';
-import { guard } from '../common/result.js';
-import type { AccountPatch } from '../diplomat/db/repos/accounts.js';
+import type { AppError } from '../../common/errors.js';
+import { guard } from '../../common/result.js';
+import type { AccountPatch } from '../../diplomat/db/repos/accounts.js';
 import {
   assertNonCreditType,
   filterByType,
@@ -11,13 +11,13 @@ import {
   hasNoTransactions,
   isUnreferenced,
   withTypeLabel,
-} from '../logic/account.js';
-import { computeBalance, computeProjectedBalance } from '../logic/balance.js';
-import { resolveByName } from '../logic/resolve.js';
-import { accountErrors } from '../models/account.js';
-import type { Account, AccountBalance, AccountType, CreateAccount, UpdateAccount } from '../models/account.js';
-import type { Deps } from './deps.js';
-import { resolveAccountRef, resolutionToResult } from './resolve.js';
+} from '../../logic/account.js';
+import { computeBalance, computeProjectedBalance } from '../../logic/balance.js';
+import { resolveByName } from '../../logic/resolve.js';
+import { accountErrors } from '../../models/account.js';
+import type { Account, AccountBalance, AccountType, CreateAccount, UpdateAccount } from '../../models/account.js';
+import type { Deps } from '../deps.js';
+import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 
 /** Repo-touching precondition: true when no account already holds this name. */
 const assertNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>

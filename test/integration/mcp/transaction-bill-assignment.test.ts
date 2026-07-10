@@ -166,6 +166,56 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
     }
   });
 
+  it('rejects an unpaired billYear (no billMonth, no card) on create_transaction and bulk (ADR-016)', async () => {
+    const bankName = `UnpairedBillYear Bank ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: bankName, type: 'checking', currency: 'BRL', initialBalance: 100 },
+      });
+
+      const err = (await callToolError(client, {
+        name: 'create_transaction',
+        args: {
+          description: `Unpaired billYear ${stamp}`,
+          amount: 10,
+          type: 'expense',
+          date: today,
+          account: bankName,
+          billYear: year,
+          idempotencyKey: `unpaired-billyear-${stamp}`,
+        },
+      })) as { error?: { code?: string } };
+      expect(err.error?.code).toBe('validation');
+
+      const bulkResult = (await callTool(client, {
+        name: 'create_transactions_bulk',
+        args: {
+          items: [
+            {
+              description: `Bulk unpaired billYear ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              date: today,
+              account: bankName,
+              billYear: year,
+              idempotencyKey: `bulk-unpaired-billyear-${stamp}`,
+            },
+          ],
+        },
+      })) as { items?: Array<{ status?: string; error?: string }> };
+      ensure(bulkResult.items?.length === 1, 'expected one bulk item result');
+      expect(bulkResult.items[0]?.status).toBe('error');
+      expect(bulkResult.items[0]?.error).toContain('validation');
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('reassigns a transaction via update_transaction, updating both bills correctly', async () => {
     const cardName = `Reassign Card ${stamp}`;
     const { client, transport } = makeClient();

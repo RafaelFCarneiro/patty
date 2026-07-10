@@ -1,16 +1,23 @@
-// Composition-root routing (ADR-016 step 2): decides, for a transaction id or a create request,
-// whether the credit-card aggregate or the transaction core owns it, and dispatches accordingly.
-// Shared by diplomat/mcp and diplomat/http so both surfaces route identically. This is delegation,
-// not domain logic — the actual bill/card policy lives in controllers/creditCard/*.
+// Composition-root routing (ADR-016 steps 2-3): decides, for a transaction id or a create request,
+// whether the credit-card aggregate, the account aggregate, or the transaction core owns it, and
+// dispatches accordingly. Shared by diplomat/mcp and diplomat/http so both surfaces route
+// identically. This is delegation, not domain logic — the actual bill/card policy lives in
+// controllers/creditCard/*, and account-movement policy in controllers/account/*.
 
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
-import { assertExclusiveAccountCard, hasCard } from '../logic/transaction.js';
+import {
+  assertBillAssignmentHasCard,
+  assertBillPeriodPaired,
+  assertExclusiveAccountCard,
+  hasCard,
+} from '../logic/transaction.js';
 import type { BulkResult } from '../logic/transaction.js';
 import {
   transactionErrors,
+  MovementType,
   type CreateTransaction,
   type CreateTransactionResult,
   type CreateTransactionsBulk,
@@ -19,17 +26,18 @@ import {
   type TransactionView,
   type UpdateTransaction,
 } from '../models/transaction.js';
+import { addAccountExpense, addAccountIncome } from '../controllers/account/accountTransaction.js';
 import {
   addCardPurchase,
   deleteCardTransaction,
   updateCardTransaction,
 } from '../controllers/creditCard/creditCardTransaction.js';
 import type { Deps } from '../controllers/deps.js';
+import { createTransactionsBulk } from '../controllers/transaction/bulk.js';
 import {
   deleteTransaction as coreDeleteTransaction,
   updateTransaction as coreUpdateTransaction,
 } from '../controllers/transaction/core.js';
-import { createTransaction, createTransactionsBulk } from '../controllers/transaction/movement.js';
 
 export const routeCreateTransaction = (
   deps: Deps,
@@ -38,10 +46,18 @@ export const routeCreateTransaction = (
 ): ResultAsync<CreateTransactionResult, AppError> =>
   safeTry(async function* () {
     yield* guard(assertExclusiveAccountCard(input), transactionErrors.exclusiveAccountCard);
+
+    if (hasCard(input)) {
+      return ok(yield* addCardPurchase(deps, { ...R.omit(input, ['account']), card: input.card }, source));
+    }
+
+    yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
+    yield* guard(assertBillAssignmentHasCard(input.billMonth, false), transactionErrors.billAssignmentRequiresCard);
+    const accountMovement = R.omit(input, ['card', 'type', 'billMonth', 'billYear']);
     return ok(
-      hasCard(input)
-        ? yield* addCardPurchase(deps, { ...R.omit(input, ['account']), card: input.card }, source)
-        : yield* createTransaction(deps, input, source),
+      yield* input.type === MovementType.enum.expense
+        ? addAccountExpense(deps, accountMovement, source)
+        : addAccountIncome(deps, accountMovement, source),
     );
   });
 
@@ -49,7 +65,8 @@ export const routeCreateTransactionsBulk = (
   deps: Deps,
   input: CreateTransactionsBulk,
   source: TransactionSource,
-): ResultAsync<BulkResult<AppError>, AppError> => createTransactionsBulk(deps, input, source, addCardPurchase);
+): ResultAsync<BulkResult<AppError>, AppError> =>
+  createTransactionsBulk(deps, input, source, addCardPurchase, addAccountExpense, addAccountIncome);
 
 export const routeUpdateTransaction = (deps: Deps, input: UpdateTransaction): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {

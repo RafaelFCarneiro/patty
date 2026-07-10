@@ -13,7 +13,7 @@ import {
   getAccountBalances,
   listAccounts,
   updateAccount,
-} from '../../controllers/accounts.js';
+} from '../../controllers/account/account.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
 import { getDashboard, listDashboards, saveDashboard } from '../../controllers/dashboards.js';
