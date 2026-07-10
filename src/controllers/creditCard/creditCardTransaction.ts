@@ -20,7 +20,7 @@ import {
   resolveCurrency,
   withBillId,
 } from '../../logic/transaction.js';
-import { type AddCardPurchase } from '../../models/creditCard.js';
+import { cardErrors, type AddCardPurchase } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
 import {
   transactionErrors,
@@ -75,7 +75,7 @@ export const addCardPurchase = (
       input.billMonth !== undefined && input.billYear !== undefined
         ? billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay)
         : billPeriodFor(date, card.closingDay, card.dueDay);
-    yield* guard(await assertTargetBillNotPaid(deps, card.id, billPeriod), transactionErrors.paidBillImmutable);
+    yield* guard(await assertTargetBillNotPaid(deps, card.id, billPeriod), cardErrors.paidBillImmutable);
 
     const categorySelection = yield* resolveCategorySelection(deps, input, input.type);
     const classification: ClassifyOutcome = categorySelection
@@ -119,7 +119,7 @@ export const addCardPurchase = (
     if (!transaction.billId) {
       const attached = await deps.bills.ensureAndAttach(card.id, transaction.id, billPeriod, deps.newId());
       if (!attached && created) await deps.transactions.delete(transaction.id);
-      const bill = yield* okOr(attached, transactionErrors.paidBillImmutable);
+      const bill = yield* okOr(attached, cardErrors.paidBillImmutable);
       finalTransaction = withBillId(transaction, bill.id);
     }
 
@@ -146,28 +146,28 @@ export const updateCardTransaction = (
     // the core patch, which would repoint `from_account_id` at an arbitrary account while leaving
     // `cardId`/`billId` untouched: the card's own account balance would stop reflecting the purchase
     // even though the bill total still counts it, and the new account would show a spurious expense.
-    yield* guard(!R.isNonNullish(input.account), transactionErrors.accountChangeRejectedForCard);
+    yield* guard(!R.isNonNullish(input.account), cardErrors.accountChangeRejectedForCard);
 
     // Reassignment (billMonth/billYear given): validate up front — never leave the current or target
     // bill in a half-changed state.
     let reassignedBillId: string | undefined;
     if (input.billMonth !== undefined && input.billYear !== undefined) {
       const cardId = yield* okOr(existing.cardId, transactionErrors.billAssignmentRequiresCard);
-      yield* guard(await assertBillNotPaid(deps, existing.billId), transactionErrors.paidBillImmutable);
+      yield* guard(await assertBillNotPaid(deps, existing.billId), cardErrors.paidBillImmutable);
 
       // A stale cardId here would be an internal FK inconsistency (deleting a card cascades to its
       // transactions), not a real user-facing case — but the error, if it ever fires, should name the
       // card that's missing, not the transaction that's present.
       const card = yield* okOr(await deps.creditCards.findById(cardId), notFound('card', cardId, []));
       const period = billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay);
-      yield* guard(await assertTargetBillNotPaid(deps, card.id, period), transactionErrors.paidBillImmutable);
+      yield* guard(await assertTargetBillNotPaid(deps, card.id, period), cardErrors.paidBillImmutable);
 
       // Attach before the core patch: ensureAndAttach's atomic re-check (closing the race where a
       // concurrent pay_bill lands between the pre-check above and this attach) must be able to reject
       // the request without having already written the rest of the patch — otherwise the client sees
       // an error response for a write that partially committed.
       const attached = await deps.bills.ensureAndAttach(card.id, input.id, period, deps.newId());
-      const bill = yield* okOr(attached, transactionErrors.paidBillImmutable);
+      const bill = yield* okOr(attached, cardErrors.paidBillImmutable);
       reassignedBillId = bill.id;
     }
 
@@ -182,6 +182,6 @@ export const deleteCardTransaction = (
   existing: TransactionView,
 ): ResultAsync<DeleteTransactionResult, AppError> =>
   safeTry(async function* () {
-    yield* guard(await assertBillNotPaid(deps, existing.billId), transactionErrors.paidBillImmutable);
+    yield* guard(await assertBillNotPaid(deps, existing.billId), cardErrors.paidBillImmutable);
     return ok(yield* coreDeleteTransaction(deps, input, existing));
   });

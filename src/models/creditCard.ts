@@ -57,4 +57,18 @@ export const cardErrors = {
     code: 'validation',
     issues: [`currency mismatch: card is ${cardCurrency}, payment account is ${accountCurrency}`],
   }),
+  // Raised only by the credit-card aggregate (controllers/creditCard/creditCardTransaction.ts) —
+  // never by the transaction core, which has no concept of a bill. Contrast
+  // transactionErrors.billAssignmentRequiresCard (models/transaction.ts), which the core itself
+  // also raises and so must stay there.
+  paidBillImmutable: {
+    code: 'validation',
+    issues: [
+      'this bill is paid; its transactions cannot be added, removed, or reassigned — call revert_bill_payment first',
+    ],
+  } satisfies CardError,
+  accountChangeRejectedForCard: {
+    code: 'validation',
+    issues: ["cannot change the account of a card transaction; it is always funded by the card's own internal account"],
+  } satisfies CardError,
 };
