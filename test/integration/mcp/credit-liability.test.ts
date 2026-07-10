@@ -41,7 +41,7 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
 
       // Make a card purchase
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Liability test purchase ${stamp}`,
           amount: 250,
@@ -136,11 +136,10 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
       });
 
       const err = (await callToolError(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Direct credit post ${stamp}`,
           amount: 50,
-          type: 'expense',
           date: today,
           account: `Card: ${localCard}`,
           idempotencyKey: `direct-credit-post-${stamp}`,
@@ -165,7 +164,7 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
       });
 
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Summary purchase ${stamp}`,
           amount: 150,

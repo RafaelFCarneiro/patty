@@ -1,8 +1,14 @@
-// Composition-root routing (ADR-016 steps 2-3): decides, for a transaction id or a create request,
-// whether the credit-card aggregate, the account aggregate, or the transaction core owns it, and
-// dispatches accordingly. Shared by diplomat/mcp and diplomat/http so both surfaces route
-// identically. This is delegation, not domain logic — the actual bill/card policy lives in
-// controllers/creditCard/*, and account-movement policy in controllers/account/*.
+// Composition-root routing (ADR-016 steps 2-4): decides, for a transaction id or a
+// create_transactions_bulk line, whether the credit-card aggregate, the account aggregate, or the
+// transaction core owns it, and dispatches accordingly. Shared by diplomat/mcp and diplomat/http so
+// both surfaces route identically. This is delegation, not domain logic — the actual bill/card
+// policy lives in controllers/creditCard/*, and account-movement policy in controllers/account/*.
+//
+// The god create_transaction tool/route (which used to expose this account-vs-card dispatch
+// directly) is retired (ADR-016 step 4): callers now reach add_card_purchase / add_account_expense /
+// add_account_income / create_transfer directly. The per-line dispatch decision below survives only
+// as a private helper for create_transactions_bulk — a statement paste/CSV import still needs to
+// route each line to its owning aggregate by presence of `account` vs `card`.
 
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
@@ -39,7 +45,10 @@ import {
   updateTransaction as coreUpdateTransaction,
 } from '../controllers/transaction/core.js';
 
-export const routeCreateTransaction = (
+/** Per-line dispatch used only by create_transactions_bulk (not exposed as its own MCP tool/REST
+ *  route — see module header). Same exclusivity/bill-assignment guards the retired create_transaction
+ *  used to apply before dispatching to the owning aggregate. */
+const routeTransactionLine = (
   deps: Deps,
   input: CreateTransaction,
   source: TransactionSource,
@@ -65,7 +74,7 @@ export const routeCreateTransactionsBulk = (
   deps: Deps,
   input: CreateTransactionsBulk,
   source: TransactionSource,
-): ResultAsync<BulkResult<AppError>, AppError> => createTransactionsBulk(deps, input, source, routeCreateTransaction);
+): ResultAsync<BulkResult<AppError>, AppError> => createTransactionsBulk(deps, input, source, routeTransactionLine);
 
 export const routeUpdateTransaction = (deps: Deps, input: UpdateTransaction): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {

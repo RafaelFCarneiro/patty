@@ -40,7 +40,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
 
       // Make a purchase
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `BillPay purchase ${stamp}`,
           amount: 300,
@@ -110,7 +110,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
       });
 
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `NoDefault purchase ${stamp}`,
           amount: 50,
@@ -150,7 +150,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
       });
 
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `USD purchase ${stamp}`,
           amount: 25,
@@ -190,7 +190,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
       });
 
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Note bill tx ${stamp}`,
           amount: 42,
@@ -233,7 +233,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
       });
 
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Del purchase ${stamp}`,
           amount: 100,
@@ -299,7 +299,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
       });
 
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Multi purchase A ${stamp}`,
           amount: 120,
@@ -310,7 +310,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
         },
       });
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Multi purchase B ${stamp}`,
           amount: 80,
@@ -322,7 +322,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
       });
       // A refund/credit on the card reduces the total.
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Multi refund ${stamp}`,
           amount: 20,
@@ -360,7 +360,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
         args: { name: revertCardName, closingDay: 28, dueDay: 5, currency: 'BRL', paymentAccount: revertBankName },
       });
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Revert purchase ${stamp}`,
           amount: 200,
@@ -429,7 +429,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
       // An income (refund/credit) on the card with no offsetting expense makes the bill total <= 0,
       // so pay_bill marks it paid with no transfer (Design 003's non-positive-total branch).
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Credit bill refund ${stamp}`,
           amount: 30,
@@ -470,7 +470,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
         args: { name: noopCardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
       });
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Noop purchase ${stamp}`,
           amount: 30,
@@ -514,7 +514,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
         },
       });
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Protected purchase ${stamp}`,
           amount: 50,

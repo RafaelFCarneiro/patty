@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
 import { callTool, callToolError, ensure, makeClient } from './helpers.js';
 
@@ -186,47 +187,99 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
     }
   });
 
-  it('produces the same shape as create_transaction with card (routing parity)', async () => {
-    const cardName = `AddPurchase Parity Card ${stamp}`;
+  // ADR-016 step 4: create_transaction (the god unified tool) is retired — add_card_purchase is
+  // now the sole card-purchase entry point, so there's no sibling tool left to compare parity
+  // against. The boundary-rejection cases it used to cover directly (empty category/subCategory/
+  // card) are asserted below instead.
+  it('rejects an explicitly empty category at the schema boundary', async () => {
+    const stamp2 = Date.now();
     const { client, transport } = makeClient();
-
     try {
       await client.connect(transport);
 
-      await callTool(client, {
-        name: 'create_credit_card',
-        args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
-      });
-
-      const viaLegacyTool = (await callTool(client, {
-        name: 'create_transaction',
-        args: {
-          description: `Parity via create_transaction ${stamp}`,
-          amount: 12,
-          type: 'expense',
-          date: today,
-          card: cardName,
-          idempotencyKey: `parity-legacy-${stamp}`,
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'add_card_purchase',
+            arguments: {
+              description: `Empty category ${stamp2}`,
+              amount: 10,
+              type: 'expense',
+              card: `AddPurchase Empty Category Card ${stamp2}`,
+              category: '',
+              idempotencyKey: `add-purchase-empty-category-${stamp2}`,
+            },
+          },
         },
-      })) as { transaction?: { billId?: string; cardId?: string; currency?: string } };
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
 
-      const viaNewTool = (await callTool(client, {
-        name: 'add_card_purchase',
-        args: {
-          description: `Parity via add_card_purchase ${stamp}`,
-          amount: 12,
-          type: 'expense',
-          date: today,
-          card: cardName,
-          idempotencyKey: `parity-new-${stamp}`,
+  it('rejects an explicitly empty subCategory at the schema boundary', async () => {
+    const stamp2 = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'add_card_purchase',
+            arguments: {
+              description: `Empty subCategory ${stamp2}`,
+              amount: 10,
+              type: 'expense',
+              card: `AddPurchase Empty SubCategory Card ${stamp2}`,
+              subCategory: '',
+              idempotencyKey: `add-purchase-empty-subcategory-${stamp2}`,
+            },
+          },
         },
-      })) as { transaction?: { billId?: string; cardId?: string; currency?: string } };
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
 
-      ensure(viaLegacyTool.transaction?.billId, 'expected create_transaction (card) to attach a bill');
-      ensure(viaNewTool.transaction?.billId, 'expected add_card_purchase to attach a bill');
-      expect(viaNewTool.transaction?.billId).toBe(viaLegacyTool.transaction?.billId);
-      expect(viaNewTool.transaction?.cardId).toBe(viaLegacyTool.transaction?.cardId);
-      expect(viaNewTool.transaction?.currency).toBe(viaLegacyTool.transaction?.currency);
+  it('rejects an explicitly empty card at the schema boundary', async () => {
+    const stamp2 = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // card: '' is especially confusing without this guard: it's treated as "no card" downstream
+      // and would trigger an unknown_card resolution error instead of failing fast here.
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'add_card_purchase',
+            arguments: {
+              description: `Empty card ${stamp2}`,
+              amount: 10,
+              type: 'expense',
+              card: '',
+              idempotencyKey: `add-purchase-empty-card-${stamp2}`,
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
     } finally {
       await transport.close();
     }

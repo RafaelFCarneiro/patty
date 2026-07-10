@@ -49,11 +49,10 @@ describe('MCP integration > account update + delete', () => {
     await callTool(client, { name: 'create_account', args: { name, type: 'checking', currency: 'BRL' } });
 
     const txResult = (await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: `tx-for-del-${stamp}`,
         amount: 10,
-        type: 'expense',
         date: '2026-01-15',
         account: name,
         idempotencyKey: `del-acct-tx-${stamp}`,
@@ -146,11 +145,10 @@ describe('MCP integration > account update + delete', () => {
     });
 
     const txResult = (await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: `tx-for-upd-${stamp}`,
         amount: 10,
-        type: 'expense',
         date: '2026-01-15',
         account: name,
         idempotencyKey: `upd-acct-tx-${stamp}`,
@@ -172,11 +170,10 @@ describe('MCP integration > account update + delete', () => {
     await callTool(client, { name: 'create_account', args: { name, type: 'checking', currency: 'BRL' } });
 
     const txResult = (await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: `tx-type-${stamp}`,
         amount: 5,
-        type: 'expense',
         date: '2026-01-15',
         account: name,
         idempotencyKey: `upd-type-tx-${stamp}`,

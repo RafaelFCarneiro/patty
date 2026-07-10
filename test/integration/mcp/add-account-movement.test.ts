@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
 import { callTool, callToolError, ensure, makeClient } from './helpers.js';
 
@@ -132,45 +133,94 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
     }
   });
 
-  it('produces the same shape as create_transaction with account (routing parity)', async () => {
-    const accountName = `AddExpense Parity Account ${stamp}`;
+  // ADR-016 step 4: create_transaction (the god unified tool) is retired — add_account_expense is
+  // now the sole account-expense entry point, so there's no sibling tool left to compare parity
+  // against. The boundary-rejection cases it used to cover directly (empty category/subCategory/
+  // account) are asserted below instead.
+  it('rejects an explicitly empty category at the schema boundary', async () => {
+    const stamp2 = Date.now();
     const { client, transport } = makeClient();
-
     try {
       await client.connect(transport);
 
-      await callTool(client, {
-        name: 'create_account',
-        args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 0 },
-      });
-
-      const viaLegacyTool = (await callTool(client, {
-        name: 'create_transaction',
-        args: {
-          description: `Parity via create_transaction ${stamp}`,
-          amount: 12,
-          type: 'expense',
-          date: today,
-          account: accountName,
-          idempotencyKey: `parity-account-legacy-${stamp}`,
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'add_account_expense',
+            arguments: {
+              description: `Empty category ${stamp2}`,
+              amount: 10,
+              category: '',
+              idempotencyKey: `add-expense-empty-category-${stamp2}`,
+            },
+          },
         },
-      })) as { transaction?: { accountId?: string; currency?: string } };
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
 
-      const viaNewTool = (await callTool(client, {
-        name: 'add_account_expense',
-        args: {
-          description: `Parity via add_account_expense ${stamp}`,
-          amount: 12,
-          date: today,
-          account: accountName,
-          idempotencyKey: `parity-account-new-${stamp}`,
+  it('rejects an explicitly empty subCategory at the schema boundary', async () => {
+    const stamp2 = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'add_account_expense',
+            arguments: {
+              description: `Empty subCategory ${stamp2}`,
+              amount: 10,
+              subCategory: '',
+              idempotencyKey: `add-expense-empty-subcategory-${stamp2}`,
+            },
+          },
         },
-      })) as { transaction?: { accountId?: string; currency?: string } };
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
+    } finally {
+      await transport.close();
+    }
+  });
 
-      ensure(viaLegacyTool.transaction?.accountId, 'expected create_transaction (account) to resolve an account');
-      ensure(viaNewTool.transaction?.accountId, 'expected add_account_expense to resolve an account');
-      expect(viaNewTool.transaction?.accountId).toBe(viaLegacyTool.transaction?.accountId);
-      expect(viaNewTool.transaction?.currency).toBe(viaLegacyTool.transaction?.currency);
+  it('rejects an explicitly empty account at the schema boundary', async () => {
+    const stamp2 = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      // account was truthiness-gated downstream (input.account ? ... : null) in a past regression
+      // — an explicitly empty name must be rejected, not silently treated as "no account".
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'add_account_expense',
+            arguments: {
+              description: `Empty account ${stamp2}`,
+              amount: 10,
+              account: '',
+              idempotencyKey: `add-expense-empty-account-${stamp2}`,
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('too_small');
     } finally {
       await transport.close();
     }

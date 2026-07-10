@@ -43,7 +43,12 @@ describe('MCP integration > transactions', () => {
 
       const toolsResult = await client.request({ method: 'tools/list', params: {} }, ListToolsResultSchema);
       const toolNames = new Set(toolsResult.tools.map((t) => t.name));
-      expect(toolNames.has('create_transaction')).toBe(true);
+      // create_transaction (the god unified tool) is retired (ADR-016 step 4) — replaced by the
+      // intent-specific tools below.
+      expect(toolNames.has('create_transaction')).toBe(false);
+      expect(toolNames.has('add_account_expense')).toBe(true);
+      expect(toolNames.has('add_account_income')).toBe(true);
+      expect(toolNames.has('add_card_purchase')).toBe(true);
       expect(toolNames.has('search_transactions')).toBe(true);
       expect(toolNames.has('update_transaction')).toBe(true);
       expect(toolNames.has('delete_transaction')).toBe(true);
@@ -60,11 +65,10 @@ describe('MCP integration > transactions', () => {
       }
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: txDescription,
           amount: 0.01,
-          type: 'expense',
           date: today,
           account: accountName,
           category: 'Other',
@@ -116,11 +120,10 @@ describe('MCP integration > transactions', () => {
     try {
       await client.connect(transport);
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Whitespace search ${stamp}`,
           amount: 1,
-          type: 'expense',
           category: 'Other',
           idempotencyKey: `test-ws-search-${stamp}`,
         },
@@ -180,74 +183,6 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('create_transaction rejects an explicitly empty subCategory at the same schema boundary', async () => {
-    const stamp = Date.now();
-    const { client, transport } = makeClient();
-    try {
-      await client.connect(transport);
-
-      // CreateTransactionSchema derives category/subCategory from CategoryFieldsSchema.shape today,
-      // but that's this schema's own contract to keep — a future edit to CreateTransactionSchema
-      // could drop that derivation without touching search_transactions at all, so this schema
-      // gets its own regression guard rather than relying on search_transactions' coverage.
-      const result = await client.request(
-        {
-          method: 'tools/call',
-          params: {
-            name: 'create_transaction',
-            arguments: {
-              description: `Empty subCategory ${stamp}`,
-              amount: 10,
-              type: 'expense',
-              subCategory: '',
-              idempotencyKey: `empty-subcategory-${stamp}`,
-            },
-          },
-        },
-        CallToolResultSchema,
-      );
-      expect(result.isError).toBe(true);
-      const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
-    } finally {
-      await transport.close();
-    }
-  });
-
-  it('create_transaction rejects an explicitly empty category at the same schema boundary', async () => {
-    const stamp = Date.now();
-    const { client, transport } = makeClient();
-    try {
-      await client.connect(transport);
-
-      // CreateTransactionSchema's category field has its own coverage via the subCategory case
-      // above, but category is a separate field declaration in the same schema and could
-      // independently regress (e.g. an edit that touches only this line) without that test
-      // catching it.
-      const result = await client.request(
-        {
-          method: 'tools/call',
-          params: {
-            name: 'create_transaction',
-            arguments: {
-              description: `Empty category ${stamp}`,
-              amount: 10,
-              type: 'expense',
-              category: '',
-              idempotencyKey: `empty-category-${stamp}`,
-            },
-          },
-        },
-        CallToolResultSchema,
-      );
-      expect(result.isError).toBe(true);
-      const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
-    } finally {
-      await transport.close();
-    }
-  });
-
   it('update_transaction rejects an explicitly empty category at the same schema boundary', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
@@ -255,11 +190,10 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport);
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Update empty category ${stamp}`,
           amount: 10,
-          type: 'expense',
           category: 'Other',
           idempotencyKey: `update-empty-category-${stamp}`,
         },
@@ -293,11 +227,10 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport);
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Update empty subCategory ${stamp}`,
           amount: 10,
-          type: 'expense',
           category: 'Other',
           idempotencyKey: `update-empty-subcategory-${stamp}`,
         },
@@ -324,71 +257,6 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('create_transaction rejects an explicitly empty account at the schema boundary', async () => {
-    const stamp = Date.now();
-    const { client, transport } = makeClient();
-    try {
-      await client.connect(transport);
-
-      // account/card were truthiness-gated downstream (input.account ? ... : null), the same bug
-      // class already fixed for category/subCategory — an explicitly empty name must be rejected,
-      // not silently treated as "no account".
-      const result = await client.request(
-        {
-          method: 'tools/call',
-          params: {
-            name: 'create_transaction',
-            arguments: {
-              description: `Empty account ${stamp}`,
-              amount: 10,
-              type: 'expense',
-              account: '',
-              idempotencyKey: `empty-account-${stamp}`,
-            },
-          },
-        },
-        CallToolResultSchema,
-      );
-      expect(result.isError).toBe(true);
-      const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
-    } finally {
-      await transport.close();
-    }
-  });
-
-  it('create_transaction rejects an explicitly empty card at the schema boundary', async () => {
-    const stamp = Date.now();
-    const { client, transport } = makeClient();
-    try {
-      await client.connect(transport);
-
-      // card: '' is especially confusing without this guard: it's treated as "no card" downstream
-      // and would trigger billAssignmentRequiresCard instead of failing fast here.
-      const result = await client.request(
-        {
-          method: 'tools/call',
-          params: {
-            name: 'create_transaction',
-            arguments: {
-              description: `Empty card ${stamp}`,
-              amount: 10,
-              type: 'expense',
-              card: '',
-              idempotencyKey: `empty-card-${stamp}`,
-            },
-          },
-        },
-        CallToolResultSchema,
-      );
-      expect(result.isError).toBe(true);
-      const text = result.content.find((item) => item.type === 'text')?.text;
-      expect(text).toContain('too_small');
-    } finally {
-      await transport.close();
-    }
-  });
-
   it('update_transaction rejects an explicitly empty account at the schema boundary', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
@@ -396,11 +264,10 @@ describe('MCP integration > transactions', () => {
       await client.connect(transport);
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Update empty account ${stamp}`,
           amount: 10,
-          type: 'expense',
           idempotencyKey: `update-empty-account-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
@@ -632,11 +499,10 @@ describe('MCP integration > transactions', () => {
       createdTagIds.push(workTag.id, travelTag.id);
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Tagged tx ${stamp}`,
           amount: 10,
-          type: 'expense',
           account,
           category: 'Other',
           idempotencyKey: `tagged-${stamp}`,
@@ -678,11 +544,10 @@ describe('MCP integration > transactions', () => {
       createdTagIds.push(tagA.id, tagB.id);
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Update tags tx ${stamp}`,
           amount: 5,
-          type: 'expense',
           account,
           category: 'Other',
           idempotencyKey: `update-tags-${stamp}`,
@@ -725,11 +590,10 @@ describe('MCP integration > transactions', () => {
       createdTagIds.push(tag.id);
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Clear tags tx ${stamp}`,
           amount: 3,
-          type: 'expense',
           account,
           category: 'Other',
           idempotencyKey: `clear-tags-${stamp}`,
@@ -772,11 +636,10 @@ describe('MCP integration > transactions', () => {
       const today = toIsoDate(new Date());
 
       const taggedTx = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Tagged for search ${stamp}`,
           amount: 7,
-          type: 'expense',
           date: today,
           account,
           category: 'Other',
@@ -789,11 +652,10 @@ describe('MCP integration > transactions', () => {
       createdTxIds.push(taggedTxId);
 
       const untaggedTx = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Untagged for search ${stamp}`,
           amount: 8,
-          type: 'expense',
           date: today,
           account,
           category: 'Other',
@@ -842,11 +704,10 @@ describe('MCP integration > transactions', () => {
       createdTagIds.push(tagA.id, tagB.id);
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Full tagset tx ${stamp}`,
           amount: 11,
-          type: 'expense',
           account,
           category: 'Other',
           idempotencyKey: `full-tagset-${stamp}`,
@@ -874,7 +735,7 @@ describe('MCP integration > transactions', () => {
 
   // Issue #1: attachTags used MERGE instead of MATCH, creating orphan (:Tag) nodes without
   // id when a non-existent tag name was passed — violating the Tag schema.
-  it('create_transaction silently ignores tag names that do not exist', async () => {
+  it('add_account_expense silently ignores tag names that do not exist', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -887,11 +748,10 @@ describe('MCP integration > transactions', () => {
       });
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Ghost tag tx ${stamp}`,
           amount: 1,
-          type: 'expense',
           account,
           category: 'Other',
           idempotencyKey: `ghost-tag-${stamp}`,
@@ -917,7 +777,7 @@ describe('MCP integration > transactions', () => {
   // (not [null]) for transactions with no TAGGED_WITH edges, because Cypher's
   // collect() skips nulls by design. This test confirms untagged transactions
   // parse without error and expose tags: [].
-  it('create_transaction without tags returns tags: [] — not null or [null]', async () => {
+  it('add_account_expense without tags returns tags: [] — not null or [null]', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -931,11 +791,10 @@ describe('MCP integration > transactions', () => {
 
       // Create with no tags field at all
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `No tags tx ${stamp}`,
           amount: 5,
-          type: 'expense',
           account,
           category: 'Other',
           idempotencyKey: `no-tags-${stamp}`,
@@ -978,11 +837,10 @@ describe('MCP integration > transactions', () => {
       });
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Note roundtrip ${stamp}`,
           amount: 10,
-          type: 'expense',
           account,
           category: 'Other',
           idempotencyKey: `note-rt-${stamp}`,
@@ -1022,11 +880,10 @@ describe('MCP integration > transactions', () => {
       });
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Note update ${stamp}`,
           amount: 20,
-          type: 'expense',
           account,
           category: 'Other',
           idempotencyKey: `note-update-${stamp}`,
@@ -1089,11 +946,10 @@ describe('MCP integration > transactions', () => {
 
       // Attach using exact same casing — must succeed
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Case tag tx ${stamp}`,
           amount: 4,
-          type: 'expense',
           account,
           category: 'Other',
           idempotencyKey: `case-tag-${stamp}`,

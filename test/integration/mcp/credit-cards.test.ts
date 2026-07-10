@@ -29,7 +29,7 @@ describe('MCP integration > credit cards', () => {
       });
 
       const tx = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Card purchase ${stamp}`,
           amount: 99.9,

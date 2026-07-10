@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CurrencyCode } from '../../../src/models/money.js';
 import {
+  CreateTransactionSchema,
   NOTE_MAX_LENGTH,
   TransactionSource,
   TransactionStatus,
@@ -174,21 +175,6 @@ describe('wireIn adapters', () => {
       includeTotal: true,
     });
   });
-
-  it('createWireInToModel passes transaction input through unchanged', () => {
-    const parsed = wireInTransactions.CreateTransactionInputSchema.parse({
-      description: 'Uber',
-      amount: 32.5,
-      type: 'expense',
-      idempotencyKey: 'k1',
-    });
-    expect(transactionAdapters.createWireInToModel(parsed)).toMatchObject({
-      description: 'Uber',
-      amount: 32.5,
-      type: 'expense',
-      idempotencyKey: 'k1',
-    });
-  });
 });
 
 describe('dbToModel', () => {
@@ -332,9 +318,12 @@ describe('BulkTransactionItemSchema', () => {
   });
 });
 
+// The transaction core's own CreateTransactionSchema (ADR-016) — note validation is core row
+// integrity, inherited unchanged by every aggregate schema derived from it (AddCardPurchaseSchema,
+// AddAccountMovementSchema, BulkTransactionItemSchema), so it's tested once here at the source.
 describe('note zod validation', () => {
   it('rejects a note longer than NOTE_MAX_LENGTH on create', () => {
-    const result = wireInTransactions.CreateTransactionInputSchema.safeParse({
+    const result = CreateTransactionSchema.safeParse({
       description: 'Test',
       amount: 10,
       type: 'expense',
@@ -353,7 +342,7 @@ describe('note zod validation', () => {
   });
 
   it('rejects an empty string note on create', () => {
-    const result = wireInTransactions.CreateTransactionInputSchema.safeParse({
+    const result = CreateTransactionSchema.safeParse({
       description: 'Test',
       amount: 10,
       type: 'expense',
@@ -364,7 +353,7 @@ describe('note zod validation', () => {
   });
 
   it('accepts a note at exactly NOTE_MAX_LENGTH', () => {
-    const result = wireInTransactions.CreateTransactionInputSchema.safeParse({
+    const result = CreateTransactionSchema.safeParse({
       description: 'Test',
       amount: 10,
       type: 'expense',

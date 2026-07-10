@@ -29,11 +29,10 @@ describe('MCP integration > localized enum labels', () => {
       args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 1000 },
     });
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: `Label seed ${stamp}`,
         amount: 10,
-        type: 'expense',
         account: accountName,
         idempotencyKey: `label-seed-${stamp}`,
       },
@@ -130,7 +129,7 @@ describe('MCP integration > localized enum labels', () => {
       args: { name: cardName, closingDay: 28, dueDay: 28, currency: 'BRL', paymentAccount: bankName },
     });
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_card_purchase',
       args: {
         description: `Label test ${stamp}`,
         amount: 50,

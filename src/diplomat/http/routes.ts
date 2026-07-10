@@ -34,13 +34,9 @@ import { getStatus } from '../../controllers/status.js';
 import { getSpendingSummary } from '../../controllers/summary.js';
 import { confirmTransaction } from '../../controllers/transaction/core.js';
 import { searchTransactions } from '../../controllers/transaction/read.js';
-import { createTransfer } from '../../controllers/transfers.js';
-import {
-  routeCreateTransaction,
-  routeCreateTransactionsBulk,
-  routeDeleteTransaction,
-  routeUpdateTransaction,
-} from '../transactionRouting.js';
+import { addAccountExpense, addAccountIncome } from '../../controllers/account/transaction.js';
+import { createTransfer } from '../../controllers/account/transfer.js';
+import { routeCreateTransactionsBulk, routeDeleteTransaction, routeUpdateTransaction } from '../transactionRouting.js';
 import { AccountBalanceSchema, AccountSchema } from '../../models/account.js';
 import { AggregateResultSchema } from '../../models/aggregate.js';
 import { BillSchema } from '../../models/bill.js';
@@ -312,22 +308,49 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
 
   {
     method: 'post',
-    path: '/api/transactions',
-    tags: [RouteTag.transactions],
-    summary: 'Create transaction',
-    request: { body: jsonBody(wireInTransactions.CreateTransactionInputSchema) },
+    path: '/api/accounts/expenses',
+    tags: [RouteTag.accounts],
+    summary: 'Add an account expense',
+    request: { body: jsonBody(wireInAccounts.AddAccountMovementSchema) },
     responses: {
-      200: okResponse('Existing transaction returned (idempotent replay)', CreateTransactionOut),
-      201: okResponse('Transaction created', CreateTransactionOut),
+      200: okResponse('Existing expense returned (idempotent replay)', CreateTransactionOut),
+      201: okResponse('Expense recorded', CreateTransactionOut),
       404: notFound404,
       409: conflict409,
       422: validation422,
     },
     handler: async (req, reply) => {
-      const wireIn = parse(wireInTransactions.CreateTransactionInputSchema, req.body, reply);
+      const wireIn = parse(wireInAccounts.AddAccountMovementSchema, req.body, reply);
       if (!wireIn) return reply;
-      const model = transactionAdapters.createWireInToModel(wireIn);
-      const result = await routeCreateTransaction(deps, model, TransactionSource.enum.rest);
+      const model = accountAdapters.addAccountMovementWireInToModel(wireIn);
+      const result = await addAccountExpense(deps, model, TransactionSource.enum.rest);
+      return result.match(
+        (value) => {
+          const out = transactionAdapters.createResultToWireOut(value);
+          return reply.status(out.created ? 201 : 200).send(out);
+        },
+        (e) => reply.status(httpStatus(e)).send({ error: e }),
+      );
+    },
+  },
+  {
+    method: 'post',
+    path: '/api/accounts/income',
+    tags: [RouteTag.accounts],
+    summary: 'Add account income',
+    request: { body: jsonBody(wireInAccounts.AddAccountMovementSchema) },
+    responses: {
+      200: okResponse('Existing income returned (idempotent replay)', CreateTransactionOut),
+      201: okResponse('Income recorded', CreateTransactionOut),
+      404: notFound404,
+      409: conflict409,
+      422: validation422,
+    },
+    handler: async (req, reply) => {
+      const wireIn = parse(wireInAccounts.AddAccountMovementSchema, req.body, reply);
+      if (!wireIn) return reply;
+      const model = accountAdapters.addAccountMovementWireInToModel(wireIn);
+      const result = await addAccountIncome(deps, model, TransactionSource.enum.rest);
       return result.match(
         (value) => {
           const out = transactionAdapters.createResultToWireOut(value);
@@ -479,7 +502,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
     path: '/api/transfers',
     tags: [RouteTag.transfers],
     summary: 'Transfer between accounts',
-    request: { body: jsonBody(wireInTransactions.CreateTransferInputSchema) },
+    request: { body: jsonBody(wireInAccounts.CreateTransferSchema) },
     responses: {
       200: okResponse('Existing transfer returned (idempotent replay)', TransferResultOut),
       201: okResponse('Transfer created', TransferResultOut),
@@ -488,9 +511,9 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
       422: validation422,
     },
     handler: async (req, reply) => {
-      const wireIn = parse(wireInTransactions.CreateTransferInputSchema, req.body, reply);
+      const wireIn = parse(wireInAccounts.CreateTransferSchema, req.body, reply);
       if (!wireIn) return reply;
-      const model = transactionAdapters.transferWireInToModel(wireIn);
+      const model = accountAdapters.transferWireInToModel(wireIn);
       const result = await createTransfer(deps, model, TransactionSource.enum.rest);
       return result.match(
         (value) => reply.status(value.created ? 201 : 200).send(value),

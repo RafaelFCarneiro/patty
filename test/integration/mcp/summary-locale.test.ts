@@ -32,11 +32,10 @@ describe('MCP integration > spending summary locale', () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } });
     await callTool(client, { name: 'create_account', args: { name: 'Summary Locale Acct', currency: 'BRL' } });
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Summary locale test',
         amount: 80,
-        type: 'expense',
         date,
         account: 'Summary Locale Acct',
         category: 'Food',
@@ -44,11 +43,10 @@ describe('MCP integration > spending summary locale', () => {
       },
     });
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Uncategorized item',
         amount: 15,
-        type: 'expense',
         date,
         account: 'Summary Locale Acct',
         idempotencyKey: 'summary-locale-uncat-1',

@@ -6,10 +6,8 @@ import {
 } from '../models/transaction.js';
 import { LocalizedNamesSchema } from '../models/category.js';
 import type {
-  CreateTransaction,
   CreateTransactionResult,
   CreateTransactionsBulk,
-  CreateTransfer,
   DeleteTransactionResult,
   SearchTransactions,
   UpdateTransaction,
@@ -113,9 +111,7 @@ export const patchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> 
 
 // ─── wire/in→model ───────────────────────────────────────────────────────────
 
-export const createWireInToModel = (input: wireIn.CreateTransactionInput): CreateTransaction => input;
 export const bulkWireInToModel = (input: wireIn.CreateTransactionsBulkInput): CreateTransactionsBulk => input;
-export const transferWireInToModel = (input: wireIn.CreateTransferInput): CreateTransfer => input;
 export const updateWireInToModel = (input: wireIn.UpdateTransactionInput): UpdateTransaction => input;
 export const searchWireInToModel = (input: wireIn.SearchTransactionsInput): SearchTransactions => input;
 

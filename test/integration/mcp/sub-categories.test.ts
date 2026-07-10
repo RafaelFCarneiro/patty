@@ -132,11 +132,10 @@ describe('MCP integration > sub-categories', () => {
       ensure(sc.id, 'subCategory id missing');
 
       const result = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: 'Almoço no restaurante',
           amount: 45,
-          type: 'expense',
           subCategory: `Almoço-${stamp}`,
           idempotencyKey: `test-subcat-create-${stamp}`,
         },
@@ -162,11 +161,10 @@ describe('MCP integration > sub-categories', () => {
       await client.connect(transport);
       await expect(
         callTool(client, {
-          name: 'create_transaction',
+          name: 'add_account_expense',
           args: {
             description: 'Pagamento errado',
             amount: 100,
-            type: 'expense',
             category: 'Salary',
             idempotencyKey: `test-kind-mismatch-${stamp}`,
           },
@@ -184,11 +182,10 @@ describe('MCP integration > sub-categories', () => {
       await client.connect(transport);
       await expect(
         callTool(client, {
-          name: 'create_transaction',
+          name: 'add_account_income',
           args: {
             description: 'Salário errado',
             amount: 5000,
-            type: 'income',
             category: 'Food',
             idempotencyKey: `test-income-mismatch-${stamp}`,
           },
@@ -206,11 +203,10 @@ describe('MCP integration > sub-categories', () => {
       await client.connect(transport);
       await expect(
         callTool(client, {
-          name: 'create_transaction',
+          name: 'add_account_expense',
           args: {
             description: 'Ambiguous',
             amount: 10,
-            type: 'expense',
             category: 'Food',
             subCategory: 'something',
             idempotencyKey: `test-both-${stamp}`,
@@ -240,11 +236,10 @@ describe('MCP integration > sub-categories', () => {
       ensure(sc2.id, 'sc2 id missing');
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: 'Refeição',
           amount: 30,
-          type: 'expense',
           subCategory: `SubA-${stamp}`,
           idempotencyKey: `test-update-subcat-${stamp}`,
         },
@@ -279,21 +274,19 @@ describe('MCP integration > sub-categories', () => {
       ensure(sc.id, 'subCategory id missing');
 
       const tx1 = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: 'Com subcategoria',
           amount: 20,
-          type: 'expense',
           subCategory: `Filter-${stamp}`,
           idempotencyKey: `test-search-sub-match-${stamp}`,
         },
       })) as { transaction?: TransactionView };
       const tx2 = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: 'Sem subcategoria',
           amount: 20,
-          type: 'expense',
           category: 'Food',
           idempotencyKey: `test-search-sub-no-match-${stamp}`,
         },
@@ -320,11 +313,10 @@ describe('MCP integration > sub-categories', () => {
     try {
       await client.connect(transport);
       const result = (await callToolError(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: 'Teste hint',
           amount: 100,
-          type: 'expense',
           category: 'Salary',
           idempotencyKey: `test-hint-${stamp}`,
         },
@@ -350,11 +342,10 @@ describe('MCP integration > sub-categories', () => {
       ensure(sc.id, 'subCategory id missing');
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: 'Lanche',
           amount: 15,
-          type: 'expense',
           subCategory: `ClearMe-${stamp}`,
           idempotencyKey: `test-clear-subcat-${stamp}`,
         },
@@ -389,11 +380,10 @@ describe('MCP integration > sub-categories', () => {
       ensure(sc.id, 'subCategory id missing');
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: 'Lanche',
           amount: 15,
-          type: 'expense',
           subCategory: `KeepMe-${stamp}`,
           idempotencyKey: `test-keep-subcat-${stamp}`,
         },
@@ -495,11 +485,10 @@ describe('MCP integration > sub-categories', () => {
       await client.connect(transport);
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: 'Despesa genérica',
           amount: 50,
-          type: 'expense',
           idempotencyKey: `test-kind-update-${stamp}`,
         },
       })) as { transaction?: TransactionView };
@@ -577,11 +566,10 @@ describe('MCP integration > sub-categories', () => {
       })) as SubCategory;
 
       const txResult = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `test-del-sub-${stamp}`,
           amount: 5,
-          type: 'expense',
           date: '2026-01-16',
           account: accountName,
           subCategory: sub.name!,
@@ -631,11 +619,10 @@ describe('MCP integration > sub-categories', () => {
       await client.connect(transport);
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: 'Despesa qualquer',
           amount: 20,
-          type: 'expense',
           category: 'Food',
           idempotencyKey: `test-type-transfer-${stamp}`,
         },

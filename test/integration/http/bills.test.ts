@@ -17,7 +17,7 @@ describe('GET /api/bills', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Bill charge',
         amount: 50,
@@ -46,7 +46,7 @@ describe('GET /api/bills', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Note bill tx',
         amount: 42,
@@ -74,7 +74,7 @@ describe('GET /api/bills', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Coerce charge',
         amount: 25,
@@ -113,7 +113,7 @@ describe('POST /api/bills/pay', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Charge',
         amount: 300,
@@ -144,7 +144,7 @@ describe('POST /api/bills/pay', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'No def charge',
         amount: 50,
@@ -175,7 +175,7 @@ describe('POST /api/bills/pay', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Mismatch chg',
         amount: 25,
@@ -217,7 +217,7 @@ describe('POST /api/bills/revert', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Revert charge',
         amount: 300,
@@ -255,7 +255,7 @@ describe('POST /api/bills/revert', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Noop revert charge',
         amount: 20,

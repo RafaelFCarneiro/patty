@@ -26,11 +26,10 @@ describe('MCP integration > accounts', () => {
       });
 
       const income = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_income',
         args: {
           description: `Income ${stamp}`,
           amount: 500,
-          type: 'income',
           date: today,
           account: accountName,
           category: 'Other',
@@ -40,11 +39,10 @@ describe('MCP integration > accounts', () => {
       if (income.transaction?.id) createdTxIds.push(income.transaction.id);
 
       const expense = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `Expense ${stamp}`,
           amount: 200,
-          type: 'expense',
           date: today,
           account: accountName,
           category: 'Other',

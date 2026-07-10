@@ -30,11 +30,10 @@ describe('MCP integration > pending transactions', () => {
 
       // Past-dated income with no explicit status → should default to effective
       const effective = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_income',
         args: {
           description: `PTEST EFFECTIVE ${stamp}`,
           amount: 1000,
-          type: 'income',
           date: '2026-01-15',
           account: accountName,
           idempotencyKey: `ptest-eff-${stamp}`,
@@ -47,11 +46,10 @@ describe('MCP integration > pending transactions', () => {
 
       // Explicit pending expense
       const pending = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `PTEST PENDING ${stamp}`,
           amount: 300,
-          type: 'expense',
           date: '2026-01-20',
           account: accountName,
           status: 'pending',
@@ -132,11 +130,10 @@ describe('MCP integration > pending transactions', () => {
 
       // Future-dated, no status → should default to pending via the date-aware rule
       const futureTx = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `PTEST FUTURE DEFAULT ${stamp}`,
           amount: 500,
-          type: 'expense',
           date: '2099-01-01',
           account: accountName,
           idempotencyKey: `ptest-future-${stamp}`,
@@ -149,11 +146,10 @@ describe('MCP integration > pending transactions', () => {
 
       // Past-dated, no status → should default to effective
       const pastTx = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `PTEST PAST DEFAULT ${stamp}`,
           amount: 200,
-          type: 'expense',
           date: '2020-01-01',
           account: accountName,
           idempotencyKey: `ptest-past-${stamp}`,

@@ -31,11 +31,10 @@ describe('MCP integration > aggregate_spending', () => {
 
     // (a) category grouping: two expenses in BRL, one in USD
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Agg grocery',
         amount: 200,
-        type: 'expense',
         date,
         account: 'AggAcctBRL',
         category: 'Food',
@@ -43,11 +42,10 @@ describe('MCP integration > aggregate_spending', () => {
       },
     });
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Agg bus',
         amount: 50,
-        type: 'expense',
         date,
         account: 'AggAcctBRL',
         category: 'Transport',
@@ -55,11 +53,10 @@ describe('MCP integration > aggregate_spending', () => {
       },
     });
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Agg usd sub',
         amount: 15,
-        type: 'expense',
         date,
         account: 'AggAcctUSD',
         category: 'Subscriptions',
@@ -81,11 +78,10 @@ describe('MCP integration > aggregate_spending', () => {
 
     // (c) pending — must be excluded
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Agg pending',
         amount: 999,
-        type: 'expense',
         date,
         account: 'AggAcctBRL',
         category: 'Food',
@@ -96,11 +92,10 @@ describe('MCP integration > aggregate_spending', () => {
 
     // (d) multi-tag transaction
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Agg tagged',
         amount: 30,
-        type: 'expense',
         date,
         account: 'AggAcctBRL',
         category: 'Transport',
@@ -111,11 +106,10 @@ describe('MCP integration > aggregate_spending', () => {
 
     // (e) previous month for time series
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Agg prev month',
         amount: 75,
-        type: 'expense',
         date: prevMonth,
         account: 'AggAcctBRL',
         category: 'Food',

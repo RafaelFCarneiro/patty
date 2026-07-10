@@ -8,21 +8,15 @@ Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All too
 - **Dates**: `YYYY-MM-DD`.
 - **Localized labels**: read views include `*Label` fields — localized display labels for fixed enum values, resolved at read time via the active locale (Design 006). The enum value itself (`type`, `status`, `kind`, `period`) is stable identity; the `*Label` is derived display only. Switching locale reflows all labels with no migration. See per-tool details below.
 
-## create_transaction
+## Transaction write basics
 
-Create an expense/income. Omitting `category`/`subCategory` triggers auto-classification via the `merchant_category` table (learned merchant→category weights); the result reports `classification.method` (`rule|history|user|none`) and `confidence` (confirm with the user below 0.6). Idempotent: same `idempotencyKey` returns the existing transaction with `created: false`.
-
-Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required; stable key like `<date>-<desc>-<amount>`), optional `date`, `account` OR `card` (not both — card transactions join the cycle's bill), `billMonth` + `billYear` (optional, card transactions only — explicit target bill cycle; both required together — see below), `category` OR `subCategory` (not both — `subCategory` implies its parent category), `currency`, `rawInput` (original user phrasing), `note` (free-form memo/observação, max 1000 chars — distinct from description/rawInput/tags), `tags`, `status` (`effective|pending`; omit for date-aware default — see below).
-
-Returns `TransactionView` with `typeLabel`, `statusLabel`, and `billId` (the bill this card transaction currently belongs to; absent for account transactions) — localized display labels for the transaction's type and status.
-
-**Bill assignment** (Design 012): omit `billMonth`/`billYear` for the default cycle-based auto-assignment (from `date` + the card's `closingDay`/`dueDay`). Provide both together to target a specific cycle instead — the bill is auto-created (`open`) if that cycle has none yet. `billMonth`/`billYear` without `card` is a `validation` error. Whether auto-assigned or explicit, a request that would land the transaction on an already-`paid` bill is rejected with a `validation` error pointing at `revert_bill_payment` — a `paid` bill's transaction membership is frozen (see `update_transaction`/`delete_transaction` below).
+These rules are shared by every transaction-creating tool below (`add_card_purchase`, `add_account_expense`, `add_account_income`, `create_transactions_bulk`) and are stated once here rather than repeated per tool.
 
 **`status` field**: `effective` means the transaction has cleared; it counts toward balances and summaries. `pending` means it is expected but not yet cleared — excluded from balances and summaries until `confirm_transaction` is called. **Default is date-aware**: when omitted, future-dated transactions default to `pending` and past/present transactions default to `effective`. An explicit `status` always overrides the default. Status is never auto-flipped by the passage of the date — call `confirm_transaction` explicitly.
 
 **Kind validation**: `expense` transactions must use a category/sub-category with `kind: expense` or `both`; `income` transactions must use `kind: income` or `both`. Violation returns `category_kind_mismatch`.
 
-Example: `{"description": "Almoço restaurante", "amount": 45.0, "type": "expense", "account": "nubank", "subCategory": "Restaurante", "idempotencyKey": "2026-06-14-almoco-45"}` → linked to sub-category Restaurante under Alimentação.
+**Idempotency**: every write tool takes `idempotencyKey` (required except on bulk items, which derive one when absent) — a stable key like `<date>-<description>-<amount>`. Same key returns the existing transaction with `created: false` instead of creating a duplicate.
 
 ## create_transactions_bulk
 
@@ -30,17 +24,17 @@ Statement paste / import (1–200 items). Each item is classified and idempotent
 
 Returns `summary` counts plus per-item `status`: `created`, `needs_review` (no category or confidence < 0.6 — confirm with the user), `duplicate`, or `error` (with the structured AppError). Each transaction includes `typeLabel` and `statusLabel`.
 
-Each item is routed internally to `add_card_purchase` (below) when it resolves a `card` — including via the top-level default — or to `add_account_expense`/`add_account_income` (below, chosen by the item's `type`) otherwise; an item resolving both `account` and `card` (e.g. a top-level default `account` plus an item-level `card`) is rejected with the item-level `validation` error, the same as calling `create_transaction` with both set.
+Each item is routed internally to `add_card_purchase` (below) when it resolves a `card` — including via the top-level default — or to `add_account_expense`/`add_account_income` (below, chosen by the item's `type`) otherwise; an item resolving both `account` and `card` (e.g. a top-level default `account` plus an item-level `card`) is rejected with an item-level `validation` error (`provide account OR card, not both`) — the same exclusivity rule `add_card_purchase`/`add_account_expense`/`add_account_income` enforce structurally by omitting the field that doesn't apply to them, applied here at runtime since a bulk item's schema still carries both optional fields. Likewise, an item resolving `billMonth`/`billYear` without a `card` is rejected with a `validation` error, the same rule `add_card_purchase` enforces structurally (see below).
 
 ## add_card_purchase
 
-Record a credit-card purchase, joining the cycle bill (fatura) — the card-purchase counterpart of `create_transaction` (ADR-016). Owned by the credit-card aggregate: it resolves the card, computes the bill period, and rejects landing on a `paid` bill before writing anything.
+Record a credit-card purchase, joining the cycle bill (fatura) — the credit-card aggregate's purchase entry point (ADR-016). Owned by the credit-card aggregate: it resolves the card, computes the bill period, and rejects landing on a `paid` bill before writing anything.
 
-Input: same as `create_transaction` minus `account` (the card's own internal liability account is always the destination), with `card` **required**: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required), optional `date`, `billMonth` + `billYear` (explicit target bill cycle; both required together), `category` OR `subCategory`, `currency` (accepted for schema symmetry with `create_transaction`, but has no effect — a card's currency is fixed at creation and always wins), `rawInput`, `note`, `tags`, `status`.
+Input: `description`, `amount` (positive), `type` (`expense|income`), `idempotencyKey` (required), optional `date`, `card` (name — **required**; the card's own internal liability account is always the destination, so there is no `account` field here), `billMonth` + `billYear` (optional — explicit target bill cycle; both required together, see below), `category` OR `subCategory` (not both — `subCategory` implies its parent category), `currency` (accepted for schema symmetry with `add_account_expense`/`add_account_income`, but has no effect — a card's currency is fixed at creation and always wins), `rawInput` (original user phrasing), `note` (free-form memo/observação, max 1000 chars), `tags`, `status` (see Transaction write basics above).
 
-Returns `TransactionView` with `typeLabel`, `statusLabel`, and `billId` — same shape and semantics as `create_transaction`'s response. See `create_transaction` above for the full bill-assignment, status-default, and kind-validation rules (identical here — `add_card_purchase` is the same behavior reached directly instead of via the `card` field).
+Returns `TransactionView` with `typeLabel`, `statusLabel`, and `billId` (the bill this transaction currently belongs to).
 
-`create_transaction` still accepts `card` transitionally and routes internally to this same aggregate entry point — the two produce identical results for the same input; `create_transaction`'s account/card split is retired in a later step. `create_transactions_bulk` routes each card line here too (see above).
+**Bill assignment** (Design 012): omit `billMonth`/`billYear` for the default cycle-based auto-assignment (from `date` + the card's `closingDay`/`dueDay`). Provide both together to target a specific cycle instead — the bill is auto-created (`open`) if that cycle has none yet; providing only one of the two is a `validation` error. Whether auto-assigned or explicit, a request that would land the transaction on an already-`paid` bill is rejected with a `validation` error pointing at `revert_bill_payment` — a `paid` bill's transaction membership is frozen (see `update_transaction`/`delete_transaction` below). `create_transactions_bulk` routes each card line here too (see above).
 
 REST mirror: `POST /api/credit-cards/purchases`.
 
@@ -48,13 +42,13 @@ Errors: resolution errors (`unknown_card`, `unknown_category`, …), `category_k
 
 ## add_account_expense / add_account_income
 
-Record an expense or income from a bank account / wallet — the account-movement counterparts of `create_transaction` (ADR-016), owned by the account aggregate. Two intent-specific tools instead of one tool with a `type` field, mirroring the natural-language intents ("I spent…" vs. "I got paid…").
+Record an expense or income from a bank account / wallet — the account aggregate's movement entry points (ADR-016). Two intent-specific tools instead of one tool with a `type` field, mirroring the natural-language intents ("I spent…" vs. "I got paid…").
 
-Input: same as `create_transaction` minus `card`, `type` (the tool itself is the movement kind), and `billMonth`/`billYear` (bill assignment is card-only vocabulary): `description`, `amount` (positive), `idempotencyKey` (required), optional `date`, `account` (name — omitting it records an unattached, e.g. cash, movement, same as `create_transaction` today), `category` OR `subCategory`, `currency` (resolved from the account when linked, else this field, else USD), `rawInput`, `note`, `tags`, `status`.
+Input: `description`, `amount` (positive), `idempotencyKey` (required), optional `date`, `account` (name — omitting it records an unattached, e.g. cash, movement), `category` OR `subCategory` (not both), `currency` (resolved from the account when linked, else this field, else USD), `rawInput`, `note`, `tags`, `status` (see Transaction write basics above). There is no `card`, `type`, or `billMonth`/`billYear` field: the movement kind is the tool itself, and bill assignment is card-only vocabulary that doesn't apply to an account movement — `create_transactions_bulk` routes each non-card line here, keyed on the line's `type`, since a bulk line still needs a discriminator (see above).
 
-Returns `TransactionView` with `typeLabel` and `statusLabel` — same shape as `create_transaction`'s response (no `billId`; that field only ever appears on card transactions).
+Returns `TransactionView` with `typeLabel` and `statusLabel` (no `billId`; that field only ever appears on card transactions).
 
-`create_transaction` still accepts `account` (or neither `account` nor `card`) transitionally and routes internally to these same aggregate entry points, keyed on its `type` field — the two produce identical results for the same input; `create_transaction`'s account/card split is retired in a later step. `create_transactions_bulk` routes each non-card line here too, keyed on the line's `type`.
+REST mirrors: `POST /api/accounts/expenses`, `POST /api/accounts/income`.
 
 Errors: resolution errors (`unknown_account`, `ambiguous_account`, `unknown_category`, …), `category_kind_mismatch`, `validation` (credit account rejected — post via `add_card_purchase` instead, category/subCategory both set).
 
@@ -259,7 +253,7 @@ Free-form labels attached to transactions (e.g. "work", "travel", "reembolsável
 - `list_tags`: no input — returns all tags `{ id, name }`.
 - `delete_tag`: `id` (required). Removes the tag and all its transaction associations.
 
-Attach tags at write time via the `tags` array on `create_transaction` / `create_transactions_bulk`.
+Attach tags at write time via the `tags` array on `add_card_purchase` / `add_account_expense` / `add_account_income` / `create_transactions_bulk`.
 
 ## save_dashboard / list_dashboards
 

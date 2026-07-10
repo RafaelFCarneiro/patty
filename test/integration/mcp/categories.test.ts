@@ -66,11 +66,10 @@ describe('MCP integration > categories', () => {
     })) as Category;
 
     const txResult = (await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: `test-del-cat-${stamp}`,
         amount: 10,
-        type: 'expense',
         date: '2026-01-15',
         account: accountName,
         category: cat.name,
@@ -118,11 +117,10 @@ describe('MCP integration > categories', () => {
 
     // Create a transaction WITHOUT a category so auto-classification sets a merchantKey
     const txResult = (await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Netflix subscription',
         amount: 25,
-        type: 'expense',
         date: '2026-01-20',
         account: accountName,
         idempotencyKey: `merchant-learn-${stamp}`,

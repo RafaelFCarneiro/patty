@@ -71,11 +71,10 @@ describe('MCP integration > i18n', () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } });
     await callTool(client, { name: 'create_account', args: { name: 'Test i18n' } });
     const tx = await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Test',
         amount: 10,
-        type: 'expense',
         account: 'Test i18n',
         category: 'Alimentação',
         idempotencyKey: 'i18n-resolve-pt-1',
@@ -87,11 +86,10 @@ describe('MCP integration > i18n', () => {
   it('resolveByName resolves by cross-locale synonym', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } });
     const tx = await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Test cross',
         amount: 10,
-        type: 'expense',
         account: 'Test i18n',
         category: 'Food',
         idempotencyKey: 'i18n-resolve-cross-1',
@@ -117,11 +115,10 @@ describe('MCP integration > i18n', () => {
   it('pt description classifies via multilingual merchant rules', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } });
     const tx = (await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'FARMÁCIA SÃO JOÃO',
         amount: 35,
-        type: 'expense',
         account: 'Test i18n',
         idempotencyKey: 'i18n-classify-pt-1',
       },
@@ -132,11 +129,10 @@ describe('MCP integration > i18n', () => {
 
   it('es description classifies via multilingual merchant rules', async () => {
     const tx = (await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'GASOLINERA REPSOL',
         amount: 50,
-        type: 'expense',
         account: 'Test i18n',
         idempotencyKey: 'i18n-classify-es-1',
       },

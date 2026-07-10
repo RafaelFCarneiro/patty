@@ -9,6 +9,6 @@ export const CreateCreditCardSchema = modelCreditCard.CreateCreditCardSchema.ext
 });
 export type CreateCreditCard = z.infer<typeof CreateCreditCardSchema>;
 
-// Pass-through — no boundary-only defaults needed beyond what create_transaction already has.
+// Pass-through — no boundary-only defaults needed beyond what add_account_expense/income already has.
 export const AddCardPurchaseSchema = modelCreditCard.AddCardPurchaseSchema;
 export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;

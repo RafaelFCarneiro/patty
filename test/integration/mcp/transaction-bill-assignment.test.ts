@@ -34,7 +34,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       });
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Assign purchase ${stamp}`,
           amount: 60,
@@ -80,7 +80,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       });
 
       const err = (await callToolError(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Pairing purchase ${stamp}`,
           amount: 10,
@@ -94,7 +94,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       expect(err.error?.code).toBe('validation');
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Pairing purchase ok ${stamp}`,
           amount: 10,
@@ -116,7 +116,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
     }
   });
 
-  it('rejects bill assignment on a non-card (account) transaction at create and update', async () => {
+  it('rejects bill assignment on a non-card (account) transaction at update', async () => {
     const bankName = `NonCard Bank ${stamp}`;
     const { client, transport } = makeClient();
 
@@ -128,27 +128,11 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
         args: { name: bankName, type: 'checking', currency: 'BRL', initialBalance: 100 },
       });
 
-      const err = (await callToolError(client, {
-        name: 'create_transaction',
-        args: {
-          description: `NonCard expense ${stamp}`,
-          amount: 10,
-          type: 'expense',
-          date: today,
-          account: bankName,
-          billMonth: month,
-          billYear: year,
-          idempotencyKey: `noncard-expense-${stamp}`,
-        },
-      })) as { error?: { code?: string } };
-      expect(err.error?.code).toBe('validation');
-
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_account_expense',
         args: {
           description: `NonCard expense ok ${stamp}`,
           amount: 10,
-          type: 'expense',
           date: today,
           account: bankName,
           idempotencyKey: `noncard-expense-ok-${stamp}`,
@@ -166,8 +150,13 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
     }
   });
 
-  it('rejects an unpaired billYear (no billMonth, no card) on create_transaction and bulk (ADR-016)', async () => {
-    const bankName = `UnpairedBillYear Bank ${stamp}`;
+  // add_account_expense/add_account_income structurally omit billMonth/billYear (ADR-016) — an
+  // account movement can no longer even attempt to pass them at create time, so the
+  // "account + billMonth/billYear paired but no card" rejection this test covered directly via the
+  // retired create_transaction only survives where the fields still exist: a create_transactions_bulk
+  // line (whose schema still carries both, since a line can resolve either an account or a card).
+  it('rejects a bulk line pairing billMonth/billYear with an account (no card) (ADR-016)', async () => {
+    const bankName = `BulkAccountBillPair Bank ${stamp}`;
     const { client, transport } = makeClient();
 
     try {
@@ -178,19 +167,42 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
         args: { name: bankName, type: 'checking', currency: 'BRL', initialBalance: 100 },
       });
 
-      const err = (await callToolError(client, {
-        name: 'create_transaction',
+      const bulkResult = (await callTool(client, {
+        name: 'create_transactions_bulk',
         args: {
-          description: `Unpaired billYear ${stamp}`,
-          amount: 10,
-          type: 'expense',
-          date: today,
-          account: bankName,
-          billYear: year,
-          idempotencyKey: `unpaired-billyear-${stamp}`,
+          items: [
+            {
+              description: `Bulk account bill pair ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              date: today,
+              account: bankName,
+              billMonth: month,
+              billYear: year,
+              idempotencyKey: `bulk-account-billpair-${stamp}`,
+            },
+          ],
         },
-      })) as { error?: { code?: string } };
-      expect(err.error?.code).toBe('validation');
+      })) as { items?: Array<{ status?: string; error?: string }> };
+      ensure(bulkResult.items?.length === 1, 'expected one bulk item result');
+      expect(bulkResult.items[0]?.status).toBe('error');
+      expect(bulkResult.items[0]?.error).toContain('validation');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('rejects an unpaired billYear (no billMonth, no card) on bulk (ADR-016)', async () => {
+    const bankName = `UnpairedBillYear Bank ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: bankName, type: 'checking', currency: 'BRL', initialBalance: 100 },
+      });
 
       const bulkResult = (await callTool(client, {
         name: 'create_transactions_bulk',
@@ -229,7 +241,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       });
 
       const created = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `Reassign purchase ${stamp}`,
           amount: 75,
@@ -287,7 +299,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
         args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL', paymentAccount: bankName },
       });
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `PaidGuard purchase ${stamp}`,
           amount: 40,
@@ -300,7 +312,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       await callTool(client, { name: 'pay_bill', args: { card: cardName, month, year } });
 
       const explicitErr = (await callToolError(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `PaidGuard late purchase explicit ${stamp}`,
           amount: 15,
@@ -318,7 +330,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       // Same rejection via plain cycle auto-assignment (no explicit billMonth/billYear) — a
       // transaction dated inside the now-paid cycle must not silently attach either.
       const autoErr = (await callToolError(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `PaidGuard late purchase auto ${stamp}`,
           amount: 15,
@@ -351,7 +363,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
         args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL', paymentAccount: bankName },
       });
       await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `OntoPaid paid-cycle purchase ${stamp}`,
           amount: 30,
@@ -364,7 +376,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       await callTool(client, { name: 'pay_bill', args: { card: cardName, month, year } });
 
       const openPurchase = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `OntoPaid open-cycle purchase ${stamp}`,
           amount: 20,
@@ -406,7 +418,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
         args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL', paymentAccount: bankName },
       });
       const purchase = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `OffPaid purchase ${stamp}`,
           amount: 50,
@@ -464,7 +476,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
         args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL', paymentAccount: bankName },
       });
       const purchase = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `FullFlow purchase ${stamp}`,
           amount: 90,
@@ -526,7 +538,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
         args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
       });
       const purchase = (await callTool(client, {
-        name: 'create_transaction',
+        name: 'add_card_purchase',
         args: {
           description: `AccountReject purchase ${stamp}`,
           amount: 60,

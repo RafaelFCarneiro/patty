@@ -3,18 +3,12 @@ import { setupHttpTest } from './setup.js';
 
 const { inject } = setupHttpTest();
 
-describe('POST /api/transactions', () => {
-  it('creates a transaction (201)', async () => {
+describe('POST /api/accounts/expenses', () => {
+  it('creates an expense (201)', async () => {
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'Coffee',
-        amount: 5.5,
-        type: 'expense',
-        date: '2026-06-01',
-        idempotencyKey: 'test-coffee-1',
-      },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Coffee', amount: 5.5, date: '2026-06-01', idempotencyKey: 'test-coffee-1' },
     });
     expect(res.statusCode).toBe(201);
     expect(res.json()).toHaveProperty('transaction');
@@ -24,81 +18,41 @@ describe('POST /api/transactions', () => {
   it('returns 200 on idempotent duplicate', async () => {
     await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: { description: 'Dupe', amount: 10, type: 'expense', date: '2026-06-01', idempotencyKey: 'dedup-key-1' },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Dupe', amount: 10, date: '2026-06-01', idempotencyKey: 'dedup-key-1' },
     });
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: { description: 'Dupe', amount: 10, type: 'expense', date: '2026-06-01', idempotencyKey: 'dedup-key-1' },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Dupe', amount: 10, date: '2026-06-01', idempotencyKey: 'dedup-key-1' },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toHaveProperty('created', false);
   });
 
   it('rejects invalid body (422)', async () => {
-    const res = await inject({ method: 'POST', url: '/api/transactions', payload: {} });
-    expect(res.statusCode).toBe(422);
-  });
-
-  it('rejects account + card together (422)', async () => {
-    const res = await inject({
-      method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'Bad',
-        amount: 1,
-        type: 'expense',
-        date: '2026-06-01',
-        idempotencyKey: 'bad-both',
-        account: 'SomeAcc',
-        card: 'SomeCard',
-      },
-    });
+    const res = await inject({ method: 'POST', url: '/api/accounts/expenses', payload: {} });
     expect(res.statusCode).toBe(422);
   });
 
   it('rejects expense with income-only category (422)', async () => {
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'Bad cat',
-        amount: 100,
-        type: 'expense',
-        category: 'Salary',
-        idempotencyKey: 'kind-mismatch-1',
-      },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Bad cat', amount: 100, category: 'Salary', idempotencyKey: 'kind-mismatch-1' },
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().error.code).toBe('category_kind_mismatch');
     expect(res.json().error.hint).toContain('set type: "income"');
   });
 
-  it('rejects income with expense-only category (422)', async () => {
-    const res = await inject({
-      method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'Bad cat',
-        amount: 5000,
-        type: 'income',
-        category: 'Food',
-        idempotencyKey: 'kind-mismatch-2',
-      },
-    });
-    expect(res.statusCode).toBe(422);
-    expect(res.json().error.code).toBe('category_kind_mismatch');
-  });
-
   it('rejects category + subCategory together (422)', async () => {
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Ambig',
         amount: 10,
-        type: 'expense',
         category: 'Food',
         subCategory: 'something',
         idempotencyKey: 'both-cat-sub',
@@ -110,14 +64,17 @@ describe('POST /api/transactions', () => {
   it('rejects an explicitly empty category (422) — REST also enforces CategoryFieldsSchema.min(1)', async () => {
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'Empty category',
-        amount: 10,
-        type: 'expense',
-        category: '',
-        idempotencyKey: 'empty-category',
-      },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Empty category', amount: 10, category: '', idempotencyKey: 'empty-category' },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it('rejects an explicitly empty subCategory (422)', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/accounts/expenses',
+      payload: { description: 'Empty subCategory', amount: 10, subCategory: '', idempotencyKey: 'empty-subcategory' },
     });
     expect(res.statusCode).toBe(422);
   });
@@ -132,14 +89,8 @@ describe('POST /api/transactions', () => {
     await inject({ method: 'POST', url: '/api/sub-categories', payload: { name: 'Sub Tx Child', parentId } });
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'With sub',
-        amount: 30,
-        type: 'expense',
-        subCategory: 'Sub Tx Child',
-        idempotencyKey: 'sub-tx-1',
-      },
+      url: '/api/accounts/expenses',
+      payload: { description: 'With sub', amount: 30, subCategory: 'Sub Tx Child', idempotencyKey: 'sub-tx-1' },
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().transaction.categoryId).toBe(parentId);
@@ -151,11 +102,10 @@ describe('POST /api/transactions', () => {
     await inject({ method: 'POST', url: '/api/tags', payload: { name: 'travel-tag' } });
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Tagged',
         amount: 10,
-        type: 'expense',
         date: '2026-06-01',
         idempotencyKey: 'tagged-1',
         tags: ['work-tag', 'travel-tag'],
@@ -169,8 +119,8 @@ describe('POST /api/transactions', () => {
   it('without tags returns tags: []', async () => {
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: { description: 'No tags', amount: 5, type: 'expense', date: '2026-06-01', idempotencyKey: 'no-tags-1' },
+      url: '/api/accounts/expenses',
+      payload: { description: 'No tags', amount: 5, date: '2026-06-01', idempotencyKey: 'no-tags-1' },
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().transaction.tags).toEqual([]);
@@ -179,11 +129,10 @@ describe('POST /api/transactions', () => {
   it('silently ignores non-existent tag names', async () => {
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Ghost tag',
         amount: 5,
-        type: 'expense',
         date: '2026-06-01',
         idempotencyKey: 'ghost-tag-1',
         tags: ['does-not-exist'],
@@ -196,11 +145,10 @@ describe('POST /api/transactions', () => {
   it('note round-trips via create', async () => {
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'With note',
         amount: 10,
-        type: 'expense',
         date: '2026-06-01',
         idempotencyKey: 'note-1',
         note: 'warranty until 2027',
@@ -213,20 +161,14 @@ describe('POST /api/transactions', () => {
   it('date-aware default: future → pending, past → effective', async () => {
     const future = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'Future',
-        amount: 50,
-        type: 'expense',
-        date: '2099-01-01',
-        idempotencyKey: 'future-default',
-      },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Future', amount: 50, date: '2099-01-01', idempotencyKey: 'future-default' },
     });
     expect(future.json().transaction.status).toBe('pending');
     const past = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: { description: 'Past', amount: 50, type: 'expense', date: '2020-01-01', idempotencyKey: 'past-default' },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Past', amount: 50, date: '2020-01-01', idempotencyKey: 'past-default' },
     });
     expect(past.json().transaction.status).toBe('effective');
   });
@@ -250,17 +192,28 @@ describe('POST /api/transactions', () => {
     });
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Bad post',
         amount: 50,
-        type: 'expense',
         date: '2026-06-01',
         account: 'Card: Direct Post Card',
         idempotencyKey: 'direct-credit-post',
       },
     });
     expect(res.statusCode).toBe(422);
+  });
+});
+
+describe('POST /api/accounts/income', () => {
+  it('rejects income with expense-only category (422)', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/accounts/income',
+      payload: { description: 'Bad cat', amount: 5000, category: 'Food', idempotencyKey: 'kind-mismatch-2' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe('category_kind_mismatch');
   });
 });
 
@@ -308,14 +261,52 @@ describe('POST /api/transactions/bulk', () => {
     const res = await inject({ method: 'POST', url: '/api/transactions/bulk', payload: { items: [] } });
     expect(res.statusCode).toBe(422);
   });
+
+  // The retired unified POST /api/transactions used to reject a body resolving both account and
+  // card (422) directly. add_account_expense/add_account_income and the card-purchase route are
+  // now single-purpose (no `card` field on the former, no `account` field on the latter), so that
+  // exclusivity case is impossible-by-construction there — it survives here, since a bulk item's
+  // schema still carries both optional fields and can resolve both via top-level defaults.
+  it('rejects a bulk line resolving both account and card via top-level defaults (422)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'Bulk Exclusive Bank', type: 'checking', currency: 'USD', initialBalance: 0 },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Bulk Exclusive Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'POST',
+      url: '/api/transactions/bulk',
+      payload: {
+        account: 'Bulk Exclusive Bank',
+        items: [
+          {
+            description: 'Bulk exclusive line',
+            amount: 10,
+            type: 'expense',
+            date: '2026-06-01',
+            card: 'Bulk Exclusive Card',
+            idempotencyKey: 'bulk-exclusive-rest',
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().items[0].status).toBe('error');
+    expect(res.json().items[0].error).toContain('validation');
+  });
 });
 
 describe('PATCH /api/transactions/:id', () => {
   it('updates a transaction', async () => {
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: { description: 'Updatable', amount: 7, type: 'expense', date: '2026-06-01', idempotencyKey: 'upd-1' },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Updatable', amount: 7, date: '2026-06-01', idempotencyKey: 'upd-1' },
     });
     const id = createRes.json().transaction.id;
     const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { description: 'Updated' } });
@@ -327,11 +318,10 @@ describe('PATCH /api/transactions/:id', () => {
     await inject({ method: 'POST', url: '/api/tags', payload: { name: 'tag-b' } });
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Tag upd',
         amount: 5,
-        type: 'expense',
         date: '2026-06-01',
         idempotencyKey: 'tag-upd-1',
         tags: ['tag-a'],
@@ -348,11 +338,10 @@ describe('PATCH /api/transactions/:id', () => {
     await inject({ method: 'POST', url: '/api/tags', payload: { name: 'clear-tag' } });
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Clear tags',
         amount: 3,
-        type: 'expense',
         date: '2026-06-01',
         idempotencyKey: 'clear-tags-1',
         tags: ['clear-tag'],
@@ -367,14 +356,8 @@ describe('PATCH /api/transactions/:id', () => {
   it('note: set, clear, leave unchanged', async () => {
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'Note upd',
-        amount: 5,
-        type: 'expense',
-        date: '2026-06-01',
-        idempotencyKey: 'note-upd-1',
-      },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Note upd', amount: 5, date: '2026-06-01', idempotencyKey: 'note-upd-1' },
     });
     const id = createRes.json().transaction.id;
     const set = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { note: 'added' } });
@@ -398,14 +381,8 @@ describe('PATCH /api/transactions/:id', () => {
     });
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'Sub clear',
-        amount: 15,
-        type: 'expense',
-        subCategory: 'Clear Sub',
-        idempotencyKey: 'clear-sub-1',
-      },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Sub clear', amount: 15, subCategory: 'Clear Sub', idempotencyKey: 'clear-sub-1' },
     });
     const id = createRes.json().transaction.id;
     const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { category: 'Transport' } });
@@ -427,14 +404,8 @@ describe('PATCH /api/transactions/:id', () => {
     });
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'Keep',
-        amount: 15,
-        type: 'expense',
-        subCategory: 'Keep Sub',
-        idempotencyKey: 'keep-sub-1',
-      },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Keep', amount: 15, subCategory: 'Keep Sub', idempotencyKey: 'keep-sub-1' },
     });
     const id = createRes.json().transaction.id;
     const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { amount: 20 } });
@@ -486,8 +457,8 @@ describe('PATCH /api/transactions/:id', () => {
   it('rejects kind mismatch on category change (422)', async () => {
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: { description: 'Exp', amount: 50, type: 'expense', idempotencyKey: 'kind-upd-1' },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Exp', amount: 50, idempotencyKey: 'kind-upd-1' },
     });
     const id = createRes.json().transaction.id;
     const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { category: 'Salary' } });
@@ -498,8 +469,8 @@ describe('PATCH /api/transactions/:id', () => {
   it('rejects type: transfer at wire boundary (422)', async () => {
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: { description: 'Wire type', amount: 20, type: 'expense', idempotencyKey: 'wire-type-1' },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Wire type', amount: 20, idempotencyKey: 'wire-type-1' },
     });
     const id = createRes.json().transaction.id;
     const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { type: 'transfer' } });
@@ -520,8 +491,8 @@ describe('POST /api/transactions/:id/confirm', () => {
   it('confirms a pending transaction', async () => {
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: { description: 'Pending', amount: 5, type: 'expense', date: '2099-01-01', idempotencyKey: 'pend-1' },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Pending', amount: 5, date: '2099-01-01', idempotencyKey: 'pend-1' },
     });
     const id = createRes.json().transaction.id;
     const res = await inject({ method: 'POST', url: `/api/transactions/${id}/confirm` });
@@ -532,14 +503,8 @@ describe('POST /api/transactions/:id/confirm', () => {
   it('re-confirming is a no-op', async () => {
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'Reconfirm',
-        amount: 5,
-        type: 'expense',
-        date: '2099-01-01',
-        idempotencyKey: 'reconfirm-1',
-      },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Reconfirm', amount: 5, date: '2099-01-01', idempotencyKey: 'reconfirm-1' },
     });
     const id = createRes.json().transaction.id;
     await inject({ method: 'POST', url: `/api/transactions/${id}/confirm` });
@@ -558,8 +523,8 @@ describe('DELETE /api/transactions/:id', () => {
   it('dry-run by default', async () => {
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: { description: 'Del Target', amount: 3, type: 'expense', date: '2026-06-01', idempotencyKey: 'del-1' },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Del Target', amount: 3, date: '2026-06-01', idempotencyKey: 'del-1' },
     });
     const id = createRes.json().transaction.id;
     const res = await inject({ method: 'DELETE', url: `/api/transactions/${id}` });
@@ -570,8 +535,8 @@ describe('DELETE /api/transactions/:id', () => {
   it('deletes with confirm=true', async () => {
     const createRes = await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: { description: 'Del Confirm', amount: 3, type: 'expense', date: '2026-06-01', idempotencyKey: 'del-2' },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Del Confirm', amount: 3, date: '2026-06-01', idempotencyKey: 'del-2' },
     });
     const id = createRes.json().transaction.id;
     const res = await inject({ method: 'DELETE', url: `/api/transactions/${id}?confirm=true` });
@@ -607,11 +572,10 @@ describe('GET /api/transactions', () => {
     await inject({ method: 'POST', url: '/api/tags', payload: { name: 'search-filter-tag2' } });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Tagged search',
         amount: 7,
-        type: 'expense',
         date: '2026-06-10',
         idempotencyKey: 'tag-search-1',
         tags: ['search-filter-tag', 'search-filter-tag2'],
@@ -619,14 +583,8 @@ describe('GET /api/transactions', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'Untagged search',
-        amount: 8,
-        type: 'expense',
-        date: '2026-06-10',
-        idempotencyKey: 'tag-search-2',
-      },
+      url: '/api/accounts/expenses',
+      payload: { description: 'Untagged search', amount: 8, date: '2026-06-10', idempotencyKey: 'tag-search-2' },
     });
     const res = await inject({
       method: 'GET',
@@ -643,11 +601,10 @@ describe('GET /api/transactions', () => {
     await inject({ method: 'POST', url: '/api/tags', payload: { name: 'full-set-b' } });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Full set',
         amount: 5,
-        type: 'expense',
         date: '2026-06-11',
         idempotencyKey: 'full-set-1',
         tags: ['full-set-a', 'full-set-b'],
@@ -675,11 +632,10 @@ describe('GET /api/transactions', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'With sub filter',
         amount: 20,
-        type: 'expense',
         date: '2026-06-12',
         subCategory: 'SearchSub',
         idempotencyKey: 'search-sub-1',
@@ -687,14 +643,8 @@ describe('GET /api/transactions', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
-      payload: {
-        description: 'No sub filter',
-        amount: 20,
-        type: 'expense',
-        date: '2026-06-12',
-        idempotencyKey: 'search-sub-2',
-      },
+      url: '/api/accounts/expenses',
+      payload: { description: 'No sub filter', amount: 20, date: '2026-06-12', idempotencyKey: 'search-sub-2' },
     });
     const res = await inject({
       method: 'GET',
@@ -716,11 +666,10 @@ describe('GET /api/transactions', () => {
     for (let i = 0; i < 5; i++) {
       await inject({
         method: 'POST',
-        url: '/api/transactions',
+        url: '/api/accounts/expenses',
         payload: {
           description: `REST pager ${i}`,
           amount: 1,
-          type: 'expense',
           date: '2032-01-15',
           idempotencyKey: `rest-pager-${i}`,
         },
@@ -753,11 +702,10 @@ describe('GET /api/transactions', () => {
     for (let i = 0; i < 2; i++) {
       await inject({
         method: 'POST',
-        url: '/api/transactions',
+        url: '/api/accounts/expenses',
         payload: {
           description: `REST sort mismatch ${i}`,
           amount: 1,
-          type: 'expense',
           date: '2032-02-01',
           idempotencyKey: `rest-sort-mismatch-${i}`,
         },

@@ -2,9 +2,7 @@ import { z } from 'zod';
 import { INCLUDE_TOTAL_DESCRIPTION, SortDirection } from '../../models/page.js';
 import {
   BulkTransactionItemSchema as ModelBulkTransactionItemSchema,
-  CreateTransactionSchema,
   CreateTransactionsBulkSchema,
-  CreateTransferSchema,
   SearchTransactionsSchema,
   TransactionSortField,
   UpdateTransactionSchema,
@@ -16,17 +14,11 @@ import { coerceToNumber } from './coerce.js';
 // Wire input schemas — derived from model schemas.
 // Boundary-only behavior (limit default) stays here; everything else is pass-through.
 
-export const CreateTransactionInputSchema = CreateTransactionSchema;
-export type CreateTransactionInput = z.infer<typeof CreateTransactionInputSchema>;
-
 export const BulkTransactionItemSchema = ModelBulkTransactionItemSchema;
 export type BulkTransactionItem = z.infer<typeof BulkTransactionItemSchema>;
 
 export const CreateTransactionsBulkInputSchema = CreateTransactionsBulkSchema;
 export type CreateTransactionsBulkInput = z.infer<typeof CreateTransactionsBulkInputSchema>;
-
-export const CreateTransferInputSchema = CreateTransferSchema;
-export type CreateTransferInput = z.infer<typeof CreateTransferInputSchema>;
 
 export const UpdateTransactionInputSchema = UpdateTransactionSchema;
 export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInputSchema>;

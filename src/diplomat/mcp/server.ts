@@ -31,13 +31,8 @@ import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
 import { getSpendingSummary } from '../../controllers/summary.js';
 import { confirmTransaction } from '../../controllers/transaction/core.js';
 import { searchTransactions } from '../../controllers/transaction/read.js';
-import { createTransfer } from '../../controllers/transfers.js';
-import {
-  routeCreateTransaction,
-  routeCreateTransactionsBulk,
-  routeDeleteTransaction,
-  routeUpdateTransaction,
-} from '../transactionRouting.js';
+import { createTransfer } from '../../controllers/account/transfer.js';
+import { routeCreateTransactionsBulk, routeDeleteTransaction, routeUpdateTransaction } from '../transactionRouting.js';
 import {
   AggregateMetric,
   AggregateSort,
@@ -47,9 +42,7 @@ import {
 import { SortDirection } from '../../models/page.js';
 import {
   TransactionSource,
-  CreateTransactionSchema,
   CreateTransactionsBulkSchema,
-  CreateTransferSchema,
   UpdateTransactionSchema,
   SearchTransactionsSchema,
   TransactionSortField,
@@ -63,7 +56,12 @@ import { CreateRecurringSchema } from '../../wire/in/recurring.js';
 import { AddCardPurchaseSchema, CreateCreditCardSchema } from '../../wire/in/creditCards.js';
 import { bulkResultToWireOut, createResultToWireOut, deleteResultToWireOut } from '../../adapters/transactions.js';
 import { addCardPurchaseWireInToModel } from '../../adapters/creditCards.js';
-import { AddAccountMovementSchema, CreateAccountSchema, UpdateAccountSchema } from '../../wire/in/accounts.js';
+import {
+  AddAccountMovementSchema,
+  CreateAccountSchema,
+  CreateTransferSchema,
+  UpdateAccountSchema,
+} from '../../wire/in/accounts.js';
 import { CreateTagSchema } from '../../wire/in/tags.js';
 import * as accountAdapters from '../../adapters/accounts.js';
 import { buildOpenApiDocument } from '../http/openapi.js';
@@ -86,7 +84,7 @@ const fromResult = <T>(result: Result<T, AppError>) => result.match(json, jsonEr
  *  movement kind is being recorded. */
 const addAccountMovementDescription = (movement: 'expense' | 'income'): string =>
   `Record ${movement === 'expense' ? 'an expense from' : 'income into'} a bank account / wallet — the ` +
-  'account-movement counterpart of create_transaction (ADR-016). Resolves the account and category by name; ' +
+  "account aggregate's movement entry point (ADR-016). Resolves the account and category by name; " +
   'when category is omitted, classifies via learned merchant→category associations and returns method + ' +
   'confidence (confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — generate a ' +
   'stable key like "<date>-<description>-<amount>". Currency comes from the account, or the currency field ' +
@@ -112,23 +110,6 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
   );
 
   server.registerTool(
-    'create_transaction',
-    {
-      title: 'Create transaction',
-      description:
-        'Create an expense or income from natural input. Resolves account/category by name; ' +
-        'when category is omitted, classifies via learned merchant→category associations ' +
-        'and returns method + confidence ' +
-        '(confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — generate a ' +
-        'stable key like "<date>-<description>-<amount>". Currency comes from the account, or the ' +
-        'currency field (default USD).',
-      inputSchema: CreateTransactionSchema.shape,
-    },
-    async (args) =>
-      fromResult((await routeCreateTransaction(deps, args, TransactionSource.enum.mcp)).map(createResultToWireOut)),
-  );
-
-  server.registerTool(
     'create_transactions_bulk',
     {
       title: 'Create transactions in bulk',
@@ -150,12 +131,13 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
     {
       title: 'Add credit-card purchase',
       description:
-        'Record a credit-card purchase, joining the cycle bill (fatura). Resolves the card and category by ' +
+        "Record a credit-card purchase, joining the cycle bill (fatura) — the credit-card aggregate's " +
+        'purchase entry point (ADR-016). Resolves the card and category by ' +
         'name; when category is omitted, classifies via learned merchant→category associations and returns ' +
         'method + confidence (confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — ' +
         'generate a stable key like "<date>-<description>-<amount>". Currency always comes from the card ' +
         "(a card's currency is fixed at creation) — the currency field is accepted for schema symmetry " +
-        'with create_transaction but has no effect here. This is the card-purchase counterpart of create_transaction.',
+        'with add_account_expense/add_account_income but has no effect here.',
       inputSchema: AddCardPurchaseSchema.shape,
     },
     async (args) =>
