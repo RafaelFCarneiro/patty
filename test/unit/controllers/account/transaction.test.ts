@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addAccountExpense, addAccountIncome } from '../../../../src/controllers/account/transaction.js';
+import {
+  addAccountExpense,
+  addAccountIncome,
+  deleteAccountTransaction,
+  updateAccountTransaction,
+} from '../../../../src/controllers/account/transaction.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
 import type { Account } from '../../../../src/models/account.js';
-import { TransactionSource } from '../../../../src/models/transaction.js';
+import { TransactionSource, type TransactionView } from '../../../../src/models/transaction.js';
 import { Locale } from '../../../../src/models/locale.js';
 
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
@@ -163,5 +168,75 @@ describe('addAccountExpense — classification', () => {
 
     expect(expenseResult._unsafeUnwrap().transaction.type).toBe('expense');
     expect(incomeResult._unsafeUnwrap().transaction.type).toBe('income');
+  });
+});
+
+const baseTx: TransactionView = {
+  id: 'tx-1',
+  description: 'Original',
+  amount: 10,
+  type: 'expense',
+  status: 'effective',
+  date: '2026-06-01',
+  currency: 'USD',
+  source: 'mcp',
+  idempotencyKey: 'existing-key',
+  classification: { method: 'none', confidence: 0 },
+  tags: [],
+};
+
+describe('updateAccountTransaction / deleteAccountTransaction — ownership guard (ADR-017)', () => {
+  it('updateAccountTransaction rejects a card-owned transaction, redirecting to update_card_transaction', async () => {
+    const deps = makeDeps({
+      transactions: {
+        getById: async () => ({ ...baseTx, cardId: 'card-1' }),
+      } as unknown as Deps['transactions'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', description: 'Changed' });
+
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe('validation');
+    expect(error.issues?.[0]).toContain('update_card_transaction');
+  });
+
+  it('deleteAccountTransaction rejects a card-owned transaction, redirecting to delete_card_transaction', async () => {
+    const deps = makeDeps({
+      transactions: {
+        getById: async () => ({ ...baseTx, billId: 'bill-1' }),
+      } as unknown as Deps['transactions'],
+    });
+
+    const result = await deleteAccountTransaction(deps, { id: 'tx-1', confirm: true });
+
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe('validation');
+    expect(error.issues?.[0]).toContain('delete_card_transaction');
+  });
+
+  it('updateAccountTransaction delegates to the core patch for an account-owned transaction', async () => {
+    const deps = makeDeps({
+      transactions: {
+        getById: async () => baseTx,
+        update: async () => baseTx,
+      } as unknown as Deps['transactions'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', description: 'Updated' });
+
+    expect(result.isOk()).toBe(true);
+  });
+
+  it('deleteAccountTransaction returns a dry run for an account-owned transaction without confirm', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => baseTx } as unknown as Deps['transactions'],
+    });
+
+    const result = await deleteAccountTransaction(deps, { id: 'tx-1', confirm: false });
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toMatchObject({ deleted: false, dryRun: true });
   });
 });

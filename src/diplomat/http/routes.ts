@@ -26,7 +26,11 @@ import {
   listSubCategories,
 } from '../../controllers/categories.js';
 import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCard/creditCard.js';
-import { addCardPurchase } from '../../controllers/creditCard/transaction.js';
+import {
+  addCardPurchase,
+  deleteCardTransaction,
+  updateCardTransaction,
+} from '../../controllers/creditCard/transaction.js';
 import type { Deps } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
@@ -34,9 +38,14 @@ import { getStatus } from '../../controllers/status.js';
 import { getSpendingSummary } from '../../controllers/summary.js';
 import { confirmTransaction } from '../../controllers/transaction/core.js';
 import { searchTransactions } from '../../controllers/transaction/read.js';
-import { addAccountExpense, addAccountIncome } from '../../controllers/account/transaction.js';
+import {
+  addAccountExpense,
+  addAccountIncome,
+  deleteAccountTransaction,
+  updateAccountTransaction,
+} from '../../controllers/account/transaction.js';
 import { createTransfer } from '../../controllers/account/transfer.js';
-import { routeCreateTransactionsBulk, routeDeleteTransaction, routeUpdateTransaction } from '../transactionRouting.js';
+import { routeCreateTransactionsBulk } from '../transactionRouting.js';
 import { AccountBalanceSchema, AccountSchema } from '../../models/account.js';
 import { AggregateResultSchema } from '../../models/aggregate.js';
 import { BillSchema } from '../../models/bill.js';
@@ -565,10 +574,13 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
 
   {
     method: 'patch',
-    path: '/api/transactions/:id',
-    tags: [RouteTag.transactions],
-    summary: 'Update transaction',
-    request: { params: idParam, body: jsonBody(wireInTransactions.UpdateTransactionInputSchema.omit({ id: true })) },
+    path: '/api/accounts/transactions/:id',
+    tags: [RouteTag.accounts],
+    summary: 'Update an account transaction',
+    request: {
+      params: idParam,
+      body: jsonBody(wireInAccounts.UpdateAccountTransactionSchema.omit({ id: true })),
+    },
     responses: {
       200: okResponse('Transaction updated', TransactionViewSchema),
       404: notFound404,
@@ -577,9 +589,77 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
     },
     handler: async (req, reply) => {
       const { id } = req.params as { id: string };
-      const wireIn = parse(wireInTransactions.UpdateTransactionInputSchema, { ...(req.body as object), id }, reply);
+      const wireIn = parse(wireInAccounts.UpdateAccountTransactionSchema, { ...(req.body as object), id }, reply);
       if (!wireIn) return reply;
-      return send(reply, await routeUpdateTransaction(deps, transactionAdapters.updateWireInToModel(wireIn)));
+      return send(
+        reply,
+        await updateAccountTransaction(deps, accountAdapters.updateAccountTransactionWireInToModel(wireIn)),
+      );
+    },
+  },
+  {
+    method: 'delete',
+    path: '/api/accounts/transactions/:id',
+    tags: [RouteTag.accounts],
+    summary: 'Delete an account transaction',
+    request: { params: idParam, query: confirmQuery },
+    responses: {
+      200: okResponse('Deleted, or dry-run preview when confirm is omitted', DeleteTransactionOut),
+      404: notFound404,
+      422: validation422,
+    },
+    handler: async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const confirm = (req.query as { confirm?: string }).confirm === 'true';
+      return send(
+        reply,
+        (await deleteAccountTransaction(deps, { id, confirm })).map(transactionAdapters.deleteResultToWireOut),
+      );
+    },
+  },
+  {
+    method: 'patch',
+    path: '/api/credit-cards/transactions/:id',
+    tags: [RouteTag.creditCards],
+    summary: 'Update a credit-card transaction',
+    request: {
+      params: idParam,
+      body: jsonBody(wireInCreditCards.UpdateCardTransactionSchema.omit({ id: true })),
+    },
+    responses: {
+      200: okResponse('Transaction updated', TransactionViewSchema),
+      404: notFound404,
+      409: conflict409,
+      422: validation422,
+    },
+    handler: async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const wireIn = parse(wireInCreditCards.UpdateCardTransactionSchema, { ...(req.body as object), id }, reply);
+      if (!wireIn) return reply;
+      return send(
+        reply,
+        await updateCardTransaction(deps, creditCardAdapters.updateCardTransactionWireInToModel(wireIn)),
+      );
+    },
+  },
+  {
+    method: 'delete',
+    path: '/api/credit-cards/transactions/:id',
+    tags: [RouteTag.creditCards],
+    summary: 'Delete a credit-card transaction',
+    request: { params: idParam, query: confirmQuery },
+    responses: {
+      200: okResponse('Deleted, or dry-run preview when confirm is omitted', DeleteTransactionOut),
+      404: notFound404,
+      422: validation422,
+    },
+    handler: async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const confirm = (req.query as { confirm?: string }).confirm === 'true';
+      return send(
+        reply,
+        (await deleteCardTransaction(deps, { id, confirm })).map(transactionAdapters.deleteResultToWireOut),
+      );
     },
   },
   {
@@ -592,25 +672,6 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
     handler: async (req, reply) => {
       const { id } = req.params as { id: string };
       return send(reply, await confirmTransaction(deps, { id }));
-    },
-  },
-  {
-    method: 'delete',
-    path: '/api/transactions/:id',
-    tags: [RouteTag.transactions],
-    summary: 'Delete transaction',
-    request: { params: idParam, query: confirmQuery },
-    responses: {
-      200: okResponse('Deleted, or dry-run preview when confirm is omitted', DeleteTransactionOut),
-      404: notFound404,
-    },
-    handler: async (req, reply) => {
-      const { id } = req.params as { id: string };
-      const confirm = (req.query as { confirm?: string }).confirm === 'true';
-      return send(
-        reply,
-        (await routeDeleteTransaction(deps, { id, confirm })).map(transactionAdapters.deleteResultToWireOut),
-      );
     },
   },
   {

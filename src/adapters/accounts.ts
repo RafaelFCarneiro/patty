@@ -1,5 +1,11 @@
 import { type Account, AccountSchema } from '../models/account.js';
-import type { AddAccountMovement, CreateAccount, CreateTransfer, UpdateAccount } from '../models/account.js';
+import type {
+  AddAccountMovement,
+  CreateAccount,
+  CreateTransfer,
+  UpdateAccount,
+  UpdateAccountTransaction,
+} from '../models/account.js';
 import type { AccountRow } from '../wire/db/accounts.js';
 import type * as wireIn from '../wire/in/accounts.js';
 
@@ -16,3 +22,6 @@ export const createWireInToModel = (input: wireIn.CreateAccount): CreateAccount 
 export const updateWireInToModel = (input: wireIn.UpdateAccount): UpdateAccount => input;
 export const addAccountMovementWireInToModel = (input: wireIn.AddAccountMovement): AddAccountMovement => input;
 export const transferWireInToModel = (input: wireIn.CreateTransfer): CreateTransfer => input;
+export const updateAccountTransactionWireInToModel = (
+  input: wireIn.UpdateAccountTransaction,
+): UpdateAccountTransaction => input;

@@ -44,14 +44,19 @@ describe('MCP integration > transactions', () => {
       const toolsResult = await client.request({ method: 'tools/list', params: {} }, ListToolsResultSchema);
       const toolNames = new Set(toolsResult.tools.map((t) => t.name));
       // create_transaction (the god unified tool) is retired (ADR-016 step 4) — replaced by the
-      // intent-specific tools below.
+      // intent-specific tools below. update_transaction/delete_transaction (the god update/delete
+      // tools) are retired too (ADR-017 step 1) — replaced by the four aggregate-specific tools.
       expect(toolNames.has('create_transaction')).toBe(false);
+      expect(toolNames.has('update_transaction')).toBe(false);
+      expect(toolNames.has('delete_transaction')).toBe(false);
       expect(toolNames.has('add_account_expense')).toBe(true);
       expect(toolNames.has('add_account_income')).toBe(true);
       expect(toolNames.has('add_card_purchase')).toBe(true);
       expect(toolNames.has('search_transactions')).toBe(true);
-      expect(toolNames.has('update_transaction')).toBe(true);
-      expect(toolNames.has('delete_transaction')).toBe(true);
+      expect(toolNames.has('update_account_transaction')).toBe(true);
+      expect(toolNames.has('delete_account_transaction')).toBe(true);
+      expect(toolNames.has('update_card_transaction')).toBe(true);
+      expect(toolNames.has('delete_card_transaction')).toBe(true);
 
       let accountName: string;
       if (preferredAccount) {
@@ -85,20 +90,20 @@ describe('MCP integration > transactions', () => {
       expect(found.some((tx) => tx.id === txId)).toBe(true);
 
       const updated = (await callTool(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: txId, description: txDescriptionUpdated },
       })) as { description?: string };
       expect(updated.description).toBe(txDescriptionUpdated);
 
       const dryRun = (await callTool(client, {
-        name: 'delete_transaction',
+        name: 'delete_account_transaction',
         args: { id: txId },
       })) as { dryRun?: boolean; deleted?: boolean };
       expect(dryRun.dryRun).toBe(true);
       expect(dryRun.deleted).toBe(false);
 
       const deleted = (await callTool(client, {
-        name: 'delete_transaction',
+        name: 'delete_account_transaction',
         args: { id: txId, confirm: true },
       })) as { deleted?: boolean };
       expect(deleted.deleted).toBe(true);
@@ -183,7 +188,7 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('update_transaction rejects an explicitly empty category at the same schema boundary', async () => {
+  it('update_account_transaction rejects an explicitly empty category at the same schema boundary', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -208,7 +213,7 @@ describe('MCP integration > transactions', () => {
       const result = await client.request(
         {
           method: 'tools/call',
-          params: { name: 'update_transaction', arguments: { id: txId, category: '' } },
+          params: { name: 'update_account_transaction', arguments: { id: txId, category: '' } },
         },
         CallToolResultSchema,
       );
@@ -220,7 +225,7 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('update_transaction rejects an explicitly empty subCategory at the same schema boundary', async () => {
+  it('update_account_transaction rejects an explicitly empty subCategory at the same schema boundary', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -245,7 +250,7 @@ describe('MCP integration > transactions', () => {
       const result = await client.request(
         {
           method: 'tools/call',
-          params: { name: 'update_transaction', arguments: { id: txId, subCategory: '' } },
+          params: { name: 'update_account_transaction', arguments: { id: txId, subCategory: '' } },
         },
         CallToolResultSchema,
       );
@@ -257,7 +262,7 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('update_transaction rejects an explicitly empty account at the schema boundary', async () => {
+  it('update_account_transaction rejects an explicitly empty account at the schema boundary', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -278,7 +283,7 @@ describe('MCP integration > transactions', () => {
       const result = await client.request(
         {
           method: 'tools/call',
-          params: { name: 'update_transaction', arguments: { id: txId, account: '' } },
+          params: { name: 'update_account_transaction', arguments: { id: txId, account: '' } },
         },
         CallToolResultSchema,
       );
@@ -521,7 +526,7 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('update_transaction replaces the tag set', async () => {
+  it('update_account_transaction replaces the tag set', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -561,7 +566,7 @@ describe('MCP integration > transactions', () => {
 
       // Replace tag-a with tag-b
       const updated = (await callTool(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: txId, tags: [`tag-b-${stamp}`] },
       })) as { tags?: string[] };
       expect(updated.tags).toContain(`tag-b-${stamp}`);
@@ -571,7 +576,7 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('update_transaction with empty tags removes all tags', async () => {
+  it('update_account_transaction with empty tags removes all tags', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -606,7 +611,7 @@ describe('MCP integration > transactions', () => {
       createdTxIds.push(txId);
 
       const updated = (await callTool(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: txId, tags: [] },
       })) as { tags?: string[] };
       expect(updated.tags).toEqual([]);
@@ -867,7 +872,7 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('update_transaction sets, clears, and leaves note untouched', async () => {
+  it('update_account_transaction sets, clears, and leaves note untouched', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -899,21 +904,21 @@ describe('MCP integration > transactions', () => {
 
       // Set a note
       const withNote = (await callTool(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: txId, note: 'reembolsável' },
       })) as { note?: string };
       expect(withNote.note).toBe('reembolsável');
 
       // Omit note — should remain unchanged
       const unchanged = (await callTool(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: txId, description: `Note update ${stamp} v2` },
       })) as { note?: string };
       expect(unchanged.note).toBe('reembolsável');
 
       // Clear note with empty string
       const cleared = (await callTool(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: txId, note: '' },
       })) as { note?: string };
       expect(cleared.note).toBeUndefined();

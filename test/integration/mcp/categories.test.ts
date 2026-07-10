@@ -130,12 +130,15 @@ describe('MCP integration > categories', () => {
 
     // Correct the category → strengthenFromTransaction writes a merchant_category row
     await callTool(client, {
-      name: 'update_transaction',
+      name: 'update_account_transaction',
       args: { id: txResult.transaction.id, category: cat.name },
     });
 
     // Delete the transaction so only the learned merchant rule remains
-    await callTool(client, { name: 'delete_transaction', args: { id: txResult.transaction.id, confirm: true } });
+    await callTool(client, {
+      name: 'delete_account_transaction',
+      args: { id: txResult.transaction.id, confirm: true },
+    });
     createdTxIds.splice(createdTxIds.indexOf(txResult.transaction.id), 1);
 
     // Category should still delete — merchant rules are not a blocker

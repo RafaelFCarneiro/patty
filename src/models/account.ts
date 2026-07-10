@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
-import { CreateTransactionSchema, TransactionStatus } from './transaction.js';
+import { CreateTransactionSchema, TransactionStatus, UpdateTransactionSchema } from './transaction.js';
 import type { Ambiguous, DuplicateName, InUse, NotFound, ValidationError } from './error.js';
 import type { LabelMap } from './locale.js';
 
@@ -67,6 +67,16 @@ export const AddAccountMovementSchema = CreateTransactionSchema.omit({
   billYear: true,
 }).strict();
 export type AddAccountMovement = z.infer<typeof AddAccountMovementSchema>;
+
+/** Account-aggregate update schema (ADR-017): the core's UpdateTransactionSchema minus billMonth/
+ *  billYear — bill assignment is card-only vocabulary that structurally doesn't apply to an account
+ *  movement (mirrors AddAccountMovementSchema's create-side omission). `.strict()`: same REST-boundary-
+ *  only reasoning as AddAccountMovementSchema above. */
+export const UpdateAccountTransactionSchema = UpdateTransactionSchema.omit({
+  billMonth: true,
+  billYear: true,
+}).strict();
+export type UpdateAccountTransaction = z.infer<typeof UpdateAccountTransactionSchema>;
 
 /** Natural input for a transfer (ADR-016 step 4): account-context vocabulary — a transfer request
  *  is an account-aggregate concern even though it persists as a transaction row via the shared core

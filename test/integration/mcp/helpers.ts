@@ -82,6 +82,9 @@ export const callToolError = async (client: Client, { name, args = {} }: ToolCal
   return payload;
 };
 
+/** Deletes each id via whichever aggregate-specific delete tool owns it (ADR-017) — callers don't
+ *  know or care whether a given cleanup id is account- or card-owned, so try account first and fall
+ *  back to card on a wrong-tool rejection. Best-effort throughout: cleanup must never fail a test. */
 export const deleteTransactions = async (ids: string[]): Promise<void> => {
   if (!ids.length) return;
   const { client, transport } = makeClient();
@@ -89,9 +92,13 @@ export const deleteTransactions = async (ids: string[]): Promise<void> => {
     await client.connect(transport);
     for (const id of ids) {
       try {
-        await callTool(client, { name: 'delete_transaction', args: { id, confirm: true } });
+        await callTool(client, { name: 'delete_account_transaction', args: { id, confirm: true } });
       } catch {
-        // best-effort per transaction
+        try {
+          await callTool(client, { name: 'delete_card_transaction', args: { id, confirm: true } });
+        } catch {
+          // best-effort per transaction
+        }
       }
     }
   } catch {

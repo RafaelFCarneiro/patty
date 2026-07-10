@@ -20,6 +20,10 @@ export const AddAccountMovementSchema = modelAccount.AddAccountMovementSchema;
 export type AddAccountMovement = z.infer<typeof AddAccountMovementSchema>;
 
 // Pass-through — no boundary-only defaults needed.
+export const UpdateAccountTransactionSchema = modelAccount.UpdateAccountTransactionSchema;
+export type UpdateAccountTransaction = z.infer<typeof UpdateAccountTransactionSchema>;
+
+// Pass-through — no boundary-only defaults needed.
 export const CreateTransferSchema = modelAccount.CreateTransferSchema;
 export type CreateTransfer = z.infer<typeof CreateTransferSchema>;
 

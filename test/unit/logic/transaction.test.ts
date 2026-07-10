@@ -21,6 +21,7 @@ import {
   guardTransferMutability,
   hasCategory,
   hasSubCategory,
+  isCardOwned,
   isCategoryKindAllowed,
   needsReview,
   nextCursorAfter,
@@ -99,6 +100,24 @@ describe('guardTransferMutability', () => {
   it('allows non-transfer updates on expense transactions', () => {
     expect(guardTransferMutability(expense, { type: 'income' }).isOk()).toBe(true);
     expect(guardTransferMutability(expense, { category: 'Alimentação' }).isOk()).toBe(true);
+  });
+});
+
+describe('isCardOwned (ADR-017 union ownership rule)', () => {
+  it('is card-owned when cardId is set', () => {
+    expect(isCardOwned({ cardId: 'card-1', billId: undefined })).toBe(true);
+  });
+
+  it('is card-owned when billId is set with no cardId (the bill-payment transfer)', () => {
+    expect(isCardOwned({ cardId: undefined, billId: 'bill-1' })).toBe(true);
+  });
+
+  it('is card-owned when both cardId and billId are set (an attached card purchase)', () => {
+    expect(isCardOwned({ cardId: 'card-1', billId: 'bill-1' })).toBe(true);
+  });
+
+  it('is account-owned when neither cardId nor billId is set', () => {
+    expect(isCardOwned({ cardId: undefined, billId: undefined })).toBe(false);
   });
 });
 

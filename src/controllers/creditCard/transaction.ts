@@ -24,6 +24,7 @@ import { cardErrors, type AddCardPurchase } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
 import {
   transactionErrors,
+  TransactionTool,
   type ClassifyOutcome,
   type CreateTransactionResult,
   type DeleteTransactionResult,
@@ -34,6 +35,7 @@ import {
 import type { Deps } from '../deps.js';
 import { resolveCardRef } from '../resolve.js';
 import {
+  assertOwnership,
   deleteTransaction as coreDeleteTransaction,
   resolveCategorySelection,
   updateTransaction as coreUpdateTransaction,
@@ -128,16 +130,25 @@ export const addCardPurchase = (
   });
 
 /**
- * Update a card transaction: validates and settles any bill reassignment (billMonth/billYear),
- * then delegates the remaining generic patch (category, description, amount, …) to the transaction
- * core — with the bill fields stripped, since this aggregate already owns and settled them.
+ * Update a card transaction (ADR-017): asserts the target is card-owned (`cardId` or `billId`) —
+ * an account-owned id is rejected with a redirect to `update_account_transaction`. Validates and
+ * settles any bill reassignment (billMonth/billYear), then delegates the remaining generic patch
+ * (category, description, amount, …) to the transaction core — with the bill fields stripped, since
+ * this aggregate already owns and settled them.
  */
-export const updateCardTransaction = (
-  deps: Deps,
-  input: UpdateTransaction,
-  existing: TransactionView,
-): ResultAsync<TransactionView, AppError> =>
+export const updateCardTransaction = (deps: Deps, input: UpdateTransaction): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
+    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
+    yield* assertOwnership(existing, true, TransactionTool.updateAccountTransaction);
+
+    // A card-owned transaction with no cardId is definitionally the bill-payment transfer
+    // (pay_bill's own row: billId set, no cardId — nothing else in the domain has billId without
+    // cardId). It's created/removed only by pay_bill/revert_bill_payment (ADR-017 sub-decision 4),
+    // so any direct edit — reassignment or otherwise — is rejected outright before the checks below,
+    // which assume a real card purchase. `okOr` also narrows `cardId` for reuse in the reassignment
+    // branch, replacing what used to be a second, now-unreachable lookup there.
+    const cardId = yield* okOr(existing.cardId, cardErrors.paidBillImmutable);
+
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
     yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
     yield* guardTransferMutability(existing, input);
@@ -152,7 +163,6 @@ export const updateCardTransaction = (
     // bill in a half-changed state.
     let reassignedBillId: string | undefined;
     if (input.billMonth !== undefined && input.billYear !== undefined) {
-      const cardId = yield* okOr(existing.cardId, transactionErrors.billAssignmentRequiresCard);
       yield* guard(await assertBillNotPaid(deps, existing.billId), cardErrors.paidBillImmutable);
 
       // A stale cardId here would be an internal FK inconsistency (deleting a card cascades to its
@@ -175,13 +185,18 @@ export const updateCardTransaction = (
     return ok(reassignedBillId ? withBillId(updated, reassignedBillId) : updated);
   });
 
-/** Delete a card transaction: paid-bill immutability, then the core's generic delete. */
+/**
+ * Delete a card transaction (ADR-017): asserts card-ownership, then paid-bill immutability
+ * (which also covers the bill-payment transfer — its own billId is always the bill it paid), then
+ * the core's generic delete.
+ */
 export const deleteCardTransaction = (
   deps: Deps,
   input: { id: string; confirm: boolean },
-  existing: TransactionView,
 ): ResultAsync<DeleteTransactionResult, AppError> =>
   safeTry(async function* () {
+    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
+    yield* assertOwnership(existing, true, TransactionTool.deleteAccountTransaction);
     yield* guard(await assertBillNotPaid(deps, existing.billId), cardErrors.paidBillImmutable);
     return ok(yield* coreDeleteTransaction(deps, input, existing));
   });

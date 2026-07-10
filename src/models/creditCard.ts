@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
-import { CreateTransactionSchema } from './transaction.js';
+import { CreateTransactionSchema, UpdateTransactionSchema } from './transaction.js';
 import type { Ambiguous, DuplicateName, NotFound, ValidationError } from './error.js';
 
 // `.describe()` is domain information — it states what each field is and represents.
@@ -49,6 +49,13 @@ export const AddCardPurchaseSchema = CreateTransactionSchema.omit({ account: tru
   })
   .strict();
 export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
+
+/** Card-aggregate update schema (ADR-017): unlike AddCardPurchaseSchema, nothing is omitted —
+ *  `account` must still reach the handler so it can be explicitly rejected with a helpful message
+ *  (cardErrors.accountChangeRejectedForCard) rather than silently dropped, and `billMonth`/`billYear`
+ *  are genuine card-only reassignment vocabulary. `.strict()` still rejects truly foreign fields at
+ *  the REST boundary (MCP tool args are reconstructed as a non-strict shape by the SDK). */
+export const UpdateCardTransactionSchema = UpdateTransactionSchema.strict();
 
 export type CardError = NotFound<'card'> | Ambiguous<'card'> | DuplicateName<'credit_card'> | ValidationError;
 

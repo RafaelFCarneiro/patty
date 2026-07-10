@@ -5,6 +5,7 @@ import {
   NOTE_MAX_LENGTH,
   TransactionSource,
   TransactionStatus,
+  UpdateTransactionSchema,
   type Transaction,
 } from '../../../src/models/transaction.js';
 import * as wireInTransactions from '../../../src/wire/in/transactions.js';
@@ -334,7 +335,10 @@ describe('note zod validation', () => {
   });
 
   it('rejects a note longer than NOTE_MAX_LENGTH on update', () => {
-    const result = wireInTransactions.UpdateTransactionInputSchema.safeParse({
+    // UpdateTransactionSchema (models/transaction.ts) is the shared base UpdateCardTransactionSchema/
+    // UpdateAccountTransactionSchema derive from (ADR-017) — tested once here at the source, same as
+    // CreateTransactionSchema above; no wire/in schema exists for this generic case post-split.
+    const result = UpdateTransactionSchema.safeParse({
       id: 'tx-1',
       note: 'x'.repeat(NOTE_MAX_LENGTH + 1),
     });

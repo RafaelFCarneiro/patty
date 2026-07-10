@@ -107,7 +107,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       ensure(created.transaction?.id, 'expected a created transaction');
 
       const updateErr = (await callToolError(client, {
-        name: 'update_transaction',
+        name: 'update_card_transaction',
         args: { id: created.transaction.id, billYear: nextCycle.year },
       })) as { error?: { code?: string } };
       expect(updateErr.error?.code).toBe('validation');
@@ -116,7 +116,15 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
     }
   });
 
-  it('rejects bill assignment on a non-card (account) transaction at update', async () => {
+  // Pre-ADR-017, the god update_transaction routed a card-less id straight to the generic core
+  // patch, which rejected billMonth/billYear with a validation error (billAssignmentRequiresCard)
+  // since the core has no bill concept. Post-split, update_account_transaction's schema structurally
+  // omits billMonth/billYear (mirroring add_account_expense/add_account_income's ADR-016 create-side
+  // omission) — the fields are simply not part of its vocabulary, so the MCP SDK's tool-arg parsing
+  // (a plain, non-strict z.object built from the registered shape) silently drops them rather than
+  // erroring. The equivalent protection at the REST boundary (UpdateAccountTransactionSchema.strict())
+  // is covered in test/integration/http/transactions.test.ts.
+  it('update_account_transaction silently ignores billMonth/billYear — not part of its schema', async () => {
     const bankName = `NonCard Bank ${stamp}`;
     const { client, transport } = makeClient();
 
@@ -140,11 +148,17 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       })) as { transaction?: { id?: string } };
       ensure(created.transaction?.id, 'expected a created transaction');
 
-      const updateErr = (await callToolError(client, {
-        name: 'update_transaction',
-        args: { id: created.transaction.id, billMonth: month, billYear: year },
-      })) as { error?: { code?: string } };
-      expect(updateErr.error?.code).toBe('validation');
+      const updated = (await callTool(client, {
+        name: 'update_account_transaction',
+        args: {
+          id: created.transaction.id,
+          description: `NonCard expense updated ${stamp}`,
+          billMonth: month,
+          billYear: year,
+        },
+      })) as { description?: string; billId?: string };
+      expect(updated.description).toBe(`NonCard expense updated ${stamp}`);
+      expect(updated.billId).toBeUndefined();
     } finally {
       await transport.close();
     }
@@ -228,7 +242,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
     }
   });
 
-  it('reassigns a transaction via update_transaction, updating both bills correctly', async () => {
+  it('reassigns a transaction via update_card_transaction, updating both bills correctly', async () => {
     const cardName = `Reassign Card ${stamp}`;
     const { client, transport } = makeClient();
 
@@ -260,7 +274,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       expect(beforeOld.total).toBe(75);
 
       const updated = (await callTool(client, {
-        name: 'update_transaction',
+        name: 'update_card_transaction',
         args: { id: created.transaction.id, billMonth: nextCycle.month, billYear: nextCycle.year },
       })) as { billId?: string };
       ensure(updated.billId, 'expected the reassigned transaction to report a billId');
@@ -346,7 +360,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
     }
   });
 
-  it('rejects update_transaction moving a transaction onto a paid bill', async () => {
+  it('rejects update_card_transaction moving a transaction onto a paid bill', async () => {
     const cardName = `OntoPaid Card ${stamp}`;
     const bankName = `OntoPaid Bank ${stamp}`;
     const { client, transport } = makeClient();
@@ -391,7 +405,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       ensure(openPurchase.transaction?.id, 'expected a created transaction');
 
       const err = (await callToolError(client, {
-        name: 'update_transaction',
+        name: 'update_card_transaction',
         args: { id: openPurchase.transaction.id, billMonth: month, billYear: year },
       })) as { error?: { code?: string; issues?: string[] } };
       expect(err.error?.code).toBe('validation');
@@ -434,7 +448,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
 
       // Move off the now-paid bill — rejected.
       const moveErr = (await callToolError(client, {
-        name: 'update_transaction',
+        name: 'update_card_transaction',
         args: { id: purchase.transaction.id, billMonth: nextCycle.month, billYear: nextCycle.year },
       })) as { error?: { code?: string; issues?: string[] } };
       expect(moveErr.error?.code).toBe('validation');
@@ -442,7 +456,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
 
       // Delete the (ordinary, non-payment-transfer) purchase — also rejected.
       const deleteErr = (await callToolError(client, {
-        name: 'delete_transaction',
+        name: 'delete_card_transaction',
         args: { id: purchase.transaction.id, confirm: true },
       })) as { error?: { code?: string; issues?: string[] } };
       expect(deleteErr.error?.code).toBe('validation');
@@ -492,7 +506,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
 
       // Blocked before revert.
       const blocked = (await callToolError(client, {
-        name: 'update_transaction',
+        name: 'update_card_transaction',
         args: { id: purchase.transaction.id, billMonth: nextCycle.month, billYear: nextCycle.year },
       })) as { error?: { code?: string } };
       expect(blocked.error?.code).toBe('validation');
@@ -505,7 +519,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
 
       // Now the reassignment succeeds.
       const reassigned = (await callTool(client, {
-        name: 'update_transaction',
+        name: 'update_card_transaction',
         args: { id: purchase.transaction.id, billMonth: nextCycle.month, billYear: nextCycle.year },
       })) as { billId?: string };
       ensure(reassigned.billId, 'expected the reassigned transaction to report a billId');
@@ -553,7 +567,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       const billIdBefore = purchase.transaction.billId;
 
       const err = (await callToolError(client, {
-        name: 'update_transaction',
+        name: 'update_card_transaction',
         args: { id: purchase.transaction.id, account: bankName },
       })) as { error?: { code?: string; issues?: string[] } };
       expect(err.error?.code).toBe('validation');

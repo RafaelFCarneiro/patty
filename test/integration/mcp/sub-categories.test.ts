@@ -218,7 +218,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('update_transaction replaces sub-category', async () => {
+  it('update_account_transaction replaces sub-category', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -249,7 +249,7 @@ describe('MCP integration > sub-categories', () => {
       createdTxIds.push(tx.id);
 
       const updated = (await callTool(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: tx.id, subCategory: `SubB-${stamp}` },
       })) as TransactionView;
 
@@ -329,7 +329,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('update_transaction clears the stale sub-category when switching to a plain category', async () => {
+  it('update_account_transaction clears the stale sub-category when switching to a plain category', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -356,7 +356,7 @@ describe('MCP integration > sub-categories', () => {
       expect(tx.subCategoryId).toBe(sc.id);
 
       const updated = (await callTool(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: tx.id, category: 'Transport' },
       })) as TransactionView;
 
@@ -367,7 +367,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('update_transaction keeps existing sub-category when category and subCategory are omitted', async () => {
+  it('update_account_transaction keeps existing sub-category when category and subCategory are omitted', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -394,7 +394,7 @@ describe('MCP integration > sub-categories', () => {
       expect(tx.subCategoryId).toBe(sc.id);
 
       const updated = (await callTool(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: tx.id, amount: 20 },
       })) as TransactionView & { amount?: number };
 
@@ -442,7 +442,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('update_transaction rejects setting a category on a transfer transaction', async () => {
+  it('update_account_transaction rejects setting a category on a transfer transaction', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -468,7 +468,7 @@ describe('MCP integration > sub-categories', () => {
       createdTxIds.push(tx.id);
 
       const result = (await callToolError(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: tx.id, category: 'Food' },
       })) as { error?: { code?: string } };
 
@@ -478,7 +478,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('update_transaction rejects kind mismatch when only category changes (no type provided)', async () => {
+  it('update_account_transaction rejects kind mismatch when only category changes (no type provided)', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -497,7 +497,7 @@ describe('MCP integration > sub-categories', () => {
       createdTxIds.push(tx.id);
 
       const result = (await callToolError(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: tx.id, category: 'Salary' },
       })) as { error?: { code?: string } };
 
@@ -507,7 +507,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('update_transaction rejects changing type of an existing transfer transaction', async () => {
+  it('update_account_transaction rejects changing type of an existing transfer transaction', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -533,7 +533,7 @@ describe('MCP integration > sub-categories', () => {
       createdTxIds.push(tx.id);
 
       const result = (await callToolError(client, {
-        name: 'update_transaction',
+        name: 'update_account_transaction',
         args: { id: tx.id, type: 'expense' },
       })) as { error?: { code?: string } };
 
@@ -586,7 +586,10 @@ describe('MCP integration > sub-categories', () => {
       expect(error.entity).toBe('sub_category');
       expect(error.references.transactions).toBeGreaterThanOrEqual(1);
 
-      await callTool(client, { name: 'delete_transaction', args: { id: txResult.transaction.id, confirm: true } });
+      await callTool(client, {
+        name: 'delete_account_transaction',
+        args: { id: txResult.transaction.id, confirm: true },
+      });
       createdTxIds.splice(createdTxIds.indexOf(txResult.transaction.id), 1);
 
       const result = (await callTool(client, { name: 'delete_sub_category', args: { name: sub.name! } })) as {
@@ -612,7 +615,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('update_transaction rejects type: transfer at the wire boundary', async () => {
+  it('update_account_transaction rejects type: transfer at the wire boundary', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -634,7 +637,7 @@ describe('MCP integration > sub-categories', () => {
       // type:'transfer' is not in MovementType (income|expense) — the MCP SDK rejects it
       // at the protocol level before the controller runs, so no JSON AppError is returned
       await expect(
-        callTool(client, { name: 'update_transaction', args: { id: tx.id, type: 'transfer' } }),
+        callTool(client, { name: 'update_account_transaction', args: { id: tx.id, type: 'transfer' } }),
       ).rejects.toThrow();
     } finally {
       await transport.close();

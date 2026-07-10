@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { updateTransaction } from '../../../../src/controllers/transaction/core.js';
+import { assertOwnership, updateTransaction } from '../../../../src/controllers/transaction/core.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
-import type { TransactionView } from '../../../../src/models/transaction.js';
+import { TransactionTool, type TransactionView } from '../../../../src/models/transaction.js';
 import { Locale } from '../../../../src/models/locale.js';
 
 const makeDeps = (): Deps => ({
@@ -45,5 +45,41 @@ describe('updateTransaction — account resolution is value-based, not truthy', 
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('unknown_account');
+  });
+});
+
+describe('assertOwnership (ADR-017 ownership guard)', () => {
+  it('passes when the transaction is card-owned and the caller wants card-owned', () => {
+    const result = assertOwnership(
+      { ...existingTransaction, cardId: 'card-1' },
+      true,
+      TransactionTool.updateAccountTransaction,
+    );
+    expect(result.isOk()).toBe(true);
+  });
+
+  it('passes when the transaction is account-owned and the caller wants account-owned', () => {
+    const result = assertOwnership(existingTransaction, false, TransactionTool.updateCardTransaction);
+    expect(result.isOk()).toBe(true);
+  });
+
+  it('rejects with a validation error naming the correct tool when card-owned but account-owned expected', () => {
+    const result = assertOwnership(
+      { ...existingTransaction, billId: 'bill-1' },
+      false,
+      TransactionTool.updateCardTransaction,
+    );
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe('validation');
+    expect(error.issues?.[0]).toContain('update_card_transaction');
+  });
+
+  it('rejects with a validation error naming the correct tool when account-owned but card-owned expected', () => {
+    const result = assertOwnership(existingTransaction, true, TransactionTool.updateAccountTransaction);
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe('validation');
+    expect(error.issues?.[0]).toContain('update_account_transaction');
   });
 });

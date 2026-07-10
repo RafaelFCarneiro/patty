@@ -34,7 +34,7 @@ Input: `description`, `amount` (positive), `type` (`expense|income`), `idempoten
 
 Returns `TransactionView` with `typeLabel`, `statusLabel`, and `billId` (the bill this transaction currently belongs to).
 
-**Bill assignment** (Design 012): omit `billMonth`/`billYear` for the default cycle-based auto-assignment (from `date` + the card's `closingDay`/`dueDay`). Provide both together to target a specific cycle instead — the bill is auto-created (`open`) if that cycle has none yet; providing only one of the two is a `validation` error. Whether auto-assigned or explicit, a request that would land the transaction on an already-`paid` bill is rejected with a `validation` error pointing at `revert_bill_payment` — a `paid` bill's transaction membership is frozen (see `update_transaction`/`delete_transaction` below). `create_transactions_bulk` routes each card line here too (see above).
+**Bill assignment** (Design 012): omit `billMonth`/`billYear` for the default cycle-based auto-assignment (from `date` + the card's `closingDay`/`dueDay`). Provide both together to target a specific cycle instead — the bill is auto-created (`open`) if that cycle has none yet; providing only one of the two is a `validation` error. Whether auto-assigned or explicit, a request that would land the transaction on an already-`paid` bill is rejected with a `validation` error pointing at `revert_bill_payment` — a `paid` bill's transaction membership is frozen (see `update_card_transaction`/`delete_card_transaction` below). `create_transactions_bulk` routes each card line here too (see above).
 
 REST mirror: `POST /api/credit-cards/purchases`.
 
@@ -90,25 +90,61 @@ REST mirror: `POST /api/transactions/:id/confirm`.
 
 Errors: `unknown_transaction`.
 
-## update_transaction
+## update_card_transaction / delete_card_transaction, update_account_transaction / delete_account_transaction
 
-Patch fields by `id`. Only provided fields change. Returns the updated transaction with `typeLabel`, `statusLabel`, and `billId` (the bill this card transaction currently belongs to — reflects a `billMonth`/`billYear` reassignment immediately; absent for account transactions). Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened (the system learns). Changing `account` also updates `currency` to match — **account transactions only**: a card transaction is always funded by the card's own internal liability account (ADR-010) and has no independent account to reassign, so `account` on a card transaction is rejected with a `validation` error rather than silently repointing it (which would desync the card's balance from its bill total).
+ADR-017: no god write flow for update/delete — each is a self-validating, caller-addressed tool owned by exactly one aggregate. **Ownership (union rule)**: a transaction is credit-card-aggregate-owned iff `cardId` **or** `billId` is set (card purchases, including the brief self-heal window before bill attachment, and the bill-payment transfer, which carries `billId` with no `cardId`); otherwise it is account-aggregate-owned (account expenses/income, ordinary transfers). `search_transactions`/`TransactionView` always return `cardId`/`accountId`/`billId`, so the natural read→act flow already carries the discriminator needed to pick the right tool.
 
-Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `billMonth` + `billYear` (optional — reassign to a different bill cycle; both required together), `category`, `subCategory`, `note` (free-form memo — empty string clears; omit to leave unchanged), `tags`.
+**Wrong-tool redirect**: calling a card tool on an account-owned transaction, or an account tool on a card-owned transaction, is rejected with a `validation` error naming the correct tool — a guard, not a dispatcher; nothing re-routes the call for you.
 
-**Kind validation on update**: if `category`/`subCategory` is provided without `type`, the existing transaction type is used for kind validation. On mismatch, the error includes an actionable `hint` field (e.g. `"Category \"Salário\" is income-only; use a matching category, or record this as income instead"` — phrased tool-agnostically since the same error is also raised by `add_card_purchase`, `add_account_expense`, and `add_account_income`, which don't all have a `type` field to set). Transfer transactions (`type: transfer`) cannot have a `category`/`subCategory` and cannot have their `type` changed — both are rejected with a `validation` error. Note: `type` on this endpoint accepts `expense|income` only; use `create_transfer` to create transfers.
+### update_card_transaction
 
-**Bill reassignment** (Design 012): `billMonth`/`billYear` moves the transaction to a different cycle's bill for its **own card** — there is no way to change which card a transaction belongs to, so this can never cross cards. Only valid on a transaction that already has a card (`validation` error otherwise). The target bill is auto-created (`open`) if that cycle has none yet. Rejected with a `validation` error, pointing at `revert_bill_payment`, if either the transaction's *current* bill or the *target* bill is `paid` — a `paid` bill's transaction membership is frozen.
+Patch fields of a card-owned transaction by `id` (from `search_transactions`). Only provided fields change. Returns the updated transaction with `typeLabel`, `statusLabel`, and `billId` (reflects a `billMonth`/`billYear` reassignment immediately). Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened. `account` cannot be changed — a card transaction is always funded by the card's own internal liability account (ADR-010) and has no independent account to reassign; sending it is rejected with a `validation` error rather than silently repointing the transaction (which would desync the card's balance from its bill total).
 
-Errors: `unknown_transaction`, resolution errors, `category_kind_mismatch`, `validation`.
+Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account` (rejected — see above), `billMonth` + `billYear` (optional — reassign to a different bill cycle; both required together), `category`, `subCategory`, `note` (free-form memo — empty string clears; omit to leave unchanged), `tags`.
 
-## delete_transaction
+**Bill reassignment** (Design 012): `billMonth`/`billYear` moves the transaction to a different cycle's bill for its **own card** — there is no way to change which card a transaction belongs to, so this can never cross cards. The target bill is auto-created (`open`) if that cycle has none yet. Rejected with a `validation` error, pointing at `revert_bill_payment`, if either the transaction's *current* bill or the *target* bill is `paid` — a `paid` bill's transaction membership is frozen.
 
-Two-step destructive action. Without `confirm: true` it is a **dry run**: returns `{ deleted: false, dryRun: true, wouldDelete: {...} }` — show it to the user and ask before calling again with `confirm: true`. The transaction includes `typeLabel` and `statusLabel`.
+**The bill-payment transfer cannot be edited at all** (ADR-017, closing a gap in the prior god `update_transaction`, which keyed its dispatch on `cardId` and so let this slip through unguarded): a transaction with `billId` set and no `cardId` is definitionally the transfer `pay_bill` created, so *any* update — reassignment or otherwise — is rejected with a `validation` error pointing at `revert_bill_payment`. It is created/removed only by `pay_bill`/`revert_bill_payment`.
+
+**Kind validation on update**: if `category`/`subCategory` is provided without `type`, the existing transaction type is used for kind validation. On mismatch, the error includes an actionable `hint` field (e.g. `"Category \"Salário\" is income-only; use a matching category, or record this as income instead"` — phrased tool-agnostically since the same error is also raised by `update_account_transaction`, `add_card_purchase`, `add_account_expense`, and `add_account_income`). Note: `type` accepts `expense|income` only; use `create_transfer` to create transfers.
+
+REST mirror: `PATCH /api/credit-cards/transactions/:id`.
+
+Errors: `unknown_transaction`, resolution errors, `category_kind_mismatch`, `validation` (wrong-tool redirect, `account` rejected, paid-bill immutability, bill-payment-transfer edit rejected).
+
+### delete_card_transaction
+
+Two-step destructive action on a card-owned transaction. Without `confirm: true` it is a **dry run**: returns `{ deleted: false, dryRun: true, wouldDelete: {...} }` — show it to the user and ask before calling again with `confirm: true`. The transaction includes `typeLabel` and `statusLabel`.
 
 Input: `id` (required), `confirm` (default false).
 
-**Any transaction on a `paid` bill cannot be deleted this way** (Design 012, broadened from Design 011's narrower payment-transfer-only rule): the id is rejected with a `validation` error before the dry-run flow, pointing at `revert_bill_payment` — this covers ordinary purchases on a paid bill as well as the payment transfer itself (whose own bill is always the one it paid). Transactions on a non-paid bill, and transactions with no bill at all (ordinary transfers, account transactions), delete normally.
+**Any transaction on a `paid` bill cannot be deleted this way** (Design 012, broadened from Design 011's narrower payment-transfer-only rule): the id is rejected with a `validation` error before the dry-run flow, pointing at `revert_bill_payment` — this covers ordinary purchases on a paid bill as well as the payment transfer itself (whose own bill is always the one it paid). Transactions on a non-paid bill delete normally.
+
+REST mirror: `DELETE /api/credit-cards/transactions/:id`.
+
+Errors: `unknown_transaction`, `validation` (wrong-tool redirect, paid-bill immutability).
+
+### update_account_transaction
+
+Patch fields of an account-owned transaction by `id` (from `search_transactions`). Only provided fields change. Returns the updated transaction with `typeLabel` and `statusLabel` (no `billId`; that field only ever appears on card transactions). Setting `category` is a **user correction**: confidence becomes 1 and the `merchant_category` weight is strengthened. Changing `account` also updates `currency` to match it.
+
+Input: `id` (required), optional `description`, `amount`, `type`, `date`, `account`, `category`, `subCategory`, `note` (free-form memo — empty string clears; omit to leave unchanged), `tags`. There is no `billMonth`/`billYear` field: bill assignment is card-only vocabulary that structurally doesn't apply here (mirrors `add_account_expense`/`add_account_income`'s create-side omission).
+
+**Kind validation on update**: same rule as `update_card_transaction` above. Transfer transactions (`type: transfer`) cannot have a `category`/`subCategory` and cannot have their `type` changed — both are rejected with a `validation` error. Note: `type` accepts `expense|income` only; use `create_transfer` to create transfers.
+
+REST mirror: `PATCH /api/accounts/transactions/:id`.
+
+Errors: `unknown_transaction`, resolution errors, `category_kind_mismatch`, `validation` (wrong-tool redirect, transfer immutability).
+
+### delete_account_transaction
+
+Two-step destructive action on an account-owned transaction. Without `confirm: true` it is a **dry run**: returns `{ deleted: false, dryRun: true, wouldDelete: {...} }` — show it to the user and ask before calling again with `confirm: true`. The transaction includes `typeLabel` and `statusLabel`.
+
+Input: `id` (required), `confirm` (default false).
+
+REST mirror: `DELETE /api/accounts/transactions/:id`.
+
+Errors: `unknown_transaction`, `validation` (wrong-tool redirect).
 
 ## search_transactions
 

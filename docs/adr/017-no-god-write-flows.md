@@ -1,9 +1,10 @@
 # ADR-017: No god write flows — bounded-context ownership for every transaction mutation
 
-**Status:** Proposed · **Date:** 2026-07-10 · **Deciders:** Rafael · Extends **ADR-016** (domain/context
-boundaries). ADR-016 split the create surface but left `update_transaction`, `delete_transaction`, and
-`create_transactions_bulk` as god tools whose ownership decision was pushed one layer down into
-composition-root routers. This ADR finishes the job: the boundary applies to **every** write.
+**Status:** Accepted (2026-07-10; step 1 — update/delete split — implemented; step 2 — bulk split — pending) ·
+**Date:** 2026-07-10 · **Deciders:** Rafael · Extends **ADR-016** (domain/context boundaries). ADR-016 split the
+create surface but left `update_transaction`, `delete_transaction`, and `create_transactions_bulk` as god tools
+whose ownership decision was pushed one layer down into composition-root routers. This ADR finishes the job: the
+boundary applies to **every** write.
 
 ## Context
 
@@ -176,6 +177,7 @@ Each step migrates its full acceptance coverage to the new tools before deleting
 
 ## Action Items
 
-1. [ ] Review/accept this ADR (decision review — no implementation in this PR).
-2. [ ] On acceptance: the invariant + dependency-table update in `docs/architecture.md`.
-3. [ ] Implement step 1 (update/delete split), then step 2 (bulk split) — one PR each, coverage-parity mapped.
+1. [x] Review/accept this ADR (decision review — no implementation in this PR).
+2. [x] On acceptance: the invariant + dependency-table update in `docs/architecture.md`.
+3. [x] Implement step 1 (update/delete split) — coverage-parity mapped.
+4. [ ] Implement step 2 (bulk split) — coverage-parity mapped.

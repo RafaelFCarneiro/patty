@@ -220,6 +220,10 @@ export const CreateTransactionsBulkSchema = z.object({
 });
 export type CreateTransactionsBulk = z.infer<typeof CreateTransactionsBulkSchema>;
 
+/** Shared base for the aggregate-specific update tools (ADR-017), mirroring how
+ *  CreateTransactionSchema is the shared base for add_card_purchase/add_account_expense/
+ *  add_account_income — `UpdateCardTransactionSchema` (models/creditCard.ts) and
+ *  `UpdateAccountTransactionSchema` (models/account.ts) derive from this one. */
 export const UpdateTransactionSchema = z.object({
   id: z.string().min(1).describe('Transaction id'),
   description: z.string().min(1).optional().describe('Updated description'),
@@ -255,6 +259,14 @@ export const UpdateTransactionSchema = z.object({
     .describe('Replaces the full tag set when provided; pass [] to remove all'),
 });
 export type UpdateTransaction = z.infer<typeof UpdateTransactionSchema>;
+
+/** Delete input shape (ADR-017): identical for update_card_transaction and update_account_transaction
+ *  — delete carries zero aggregate-specific data, so unlike update it has no per-aggregate variant. */
+export const DeleteTransactionSchema = z.object({
+  id: z.string().min(1).describe('Transaction id'),
+  confirm: z.boolean().default(false).describe('Must be true to actually delete'),
+});
+export type DeleteTransactionInput = z.infer<typeof DeleteTransactionSchema>;
 
 export const SearchTransactionsSchema = z.object({
   month: z.number().int().min(1).max(12).optional().describe('Filter by month (1-12)'),
@@ -317,6 +329,17 @@ export type DeleteTransactionResult =
   | { deleted: true; transaction: TransactionView }
   | { deleted: false; dryRun: true; wouldDelete: TransactionView; hint: string };
 
+/** MCP tool names for the aggregate-specific update/delete tools (ADR-017) — named once here and
+ *  reused both at tool registration (diplomat/mcp/server.ts) and in the ownership-guard redirect
+ *  hint (controllers/transaction/core.ts), rather than re-typed at each call site. */
+export const TransactionTool = {
+  updateCardTransaction: 'update_card_transaction',
+  deleteCardTransaction: 'delete_card_transaction',
+  updateAccountTransaction: 'update_account_transaction',
+  deleteAccountTransaction: 'delete_account_transaction',
+} as const;
+export type TransactionTool = (typeof TransactionTool)[keyof typeof TransactionTool];
+
 export type TransactionError =
   | { code: 'unknown_transaction'; id: string }
   | {
@@ -342,10 +365,11 @@ export const transactionErrors = {
     transactionType,
     categoryName,
     categoryKind,
-    // Phrased tool-agnostically: raised by update_transaction/add_card_purchase (both have a
-    // `type` field a hint could name directly) as well as add_account_expense/add_account_income
-    // (movement kind is the tool itself — no `type` field exists to "set"), so the hint names the
-    // remedy in terms every caller can act on, not just the ones with a settable field.
+    // Phrased tool-agnostically: raised by update_card_transaction/update_account_transaction/
+    // add_card_purchase (all have a `type` field a hint could name directly) as well as
+    // add_account_expense/add_account_income (movement kind is the tool itself — no `type` field
+    // exists to "set"), so the hint names the remedy in terms every caller can act on, not just the
+    // ones with a settable field.
     hint: `Category "${categoryName}" is ${categoryKind}-only; use a matching category, or record this as ${categoryKind === 'income' ? 'income' : 'an expense'} instead`,
   }),
   exclusiveAccountCard: {
@@ -387,4 +411,11 @@ export const transactionErrors = {
     code: 'validation',
     issues: ['cursor is malformed, stale, or does not match the requested sort/dir — start a fresh first page'],
   } satisfies TransactionError,
+  // ADR-017 ownership guard: raised by whichever of the four aggregate-specific update/delete tools
+  // was called on a transaction it does not own — a guard, not a dispatcher (the caller re-addresses
+  // the tool named in the hint; nothing here re-routes on their behalf).
+  wrongTool: (correctTool: TransactionTool): TransactionError => ({
+    code: 'validation',
+    issues: [`this transaction is not owned by this tool; call ${correctTool} instead`],
+  }),
 };
