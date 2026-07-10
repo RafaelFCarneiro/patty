@@ -113,7 +113,7 @@ export const updateTransaction = (
     // guard would start wrongly rejecting legitimate reassignments instead of no-op passing.
     yield* guard(input.billMonth === undefined, transactionErrors.billAssignmentRequiresCard);
 
-    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
+    const account = R.isNonNullish(input.account) ? yield* resolveAccountRef(deps, input.account) : null;
     const effectiveType = resolveEffectiveType(existing, input);
 
     const categorySelection = yield* resolveCategorySelection(deps, input, effectiveType);

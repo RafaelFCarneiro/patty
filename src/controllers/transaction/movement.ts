@@ -63,7 +63,7 @@ export const createTransaction = (
     yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
     yield* guard(assertBillAssignmentHasCard(input.billMonth, false), transactionErrors.billAssignmentRequiresCard);
 
-    const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
+    const account = R.isNonNullish(input.account) ? yield* resolveAccountRef(deps, input.account) : null;
     if (account) {
       yield* guard(assertNonCreditType(account.type), accountErrors.creditPostRejected);
     }
