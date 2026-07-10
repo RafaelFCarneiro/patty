@@ -17,13 +17,14 @@ describe('GET /api/bills', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/credit-cards/BillCard/purchases',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Bill charge',
         amount: 50,
         type: 'expense',
         date: '2026-06-05',
         idempotencyKey: 'bill-chg-1',
+        card: 'BillCard',
       },
     });
     const res = await inject({ method: 'GET', url: '/api/bills?card=BillCard&month=6&year=2026' });
@@ -45,12 +46,13 @@ describe('GET /api/bills', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/credit-cards/NoteBillCard/purchases',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Note bill tx',
         amount: 42,
         type: 'expense',
         date: '2026-06-05',
+        card: 'NoteBillCard',
         idempotencyKey: 'note-bill-1',
         note: 'warranty',
       },
@@ -72,12 +74,13 @@ describe('GET /api/bills', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/credit-cards/CoerceCard/purchases',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Coerce charge',
         amount: 25,
         type: 'expense',
         date: '2026-06-05',
+        card: 'CoerceCard',
         idempotencyKey: 'coerce-chg',
       },
     });
@@ -110,13 +113,14 @@ describe('POST /api/bills/pay', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/credit-cards/PayBillCard/purchases',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Charge',
         amount: 300,
         type: 'expense',
         date: '2026-06-05',
         idempotencyKey: 'pay-bill-chg',
+        card: 'PayBillCard',
       },
     });
     const res = await inject({
@@ -140,12 +144,13 @@ describe('POST /api/bills/pay', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/credit-cards/NoDefaultCard/purchases',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'No def charge',
         amount: 50,
         type: 'expense',
         date: '2026-06-05',
+        card: 'NoDefaultCard',
         idempotencyKey: 'nodef-chg',
       },
     });
@@ -170,12 +175,13 @@ describe('POST /api/bills/pay', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/credit-cards/USDMismatchCard/purchases',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Mismatch chg',
         amount: 25,
         type: 'expense',
         date: '2026-06-05',
+        card: 'USDMismatchCard',
         idempotencyKey: 'mismatch-chg',
       },
     });
@@ -211,13 +217,14 @@ describe('POST /api/bills/revert', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/credit-cards/RevertBillCard/purchases',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Revert charge',
         amount: 300,
         type: 'expense',
         date: '2026-06-05',
         idempotencyKey: 'revert-bill-chg',
+        card: 'RevertBillCard',
       },
     });
     const paid = await inject({
@@ -248,13 +255,14 @@ describe('POST /api/bills/revert', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/credit-cards/NoopRevertCard/purchases',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Noop revert charge',
         amount: 20,
         type: 'expense',
         date: '2026-06-05',
         idempotencyKey: 'noop-revert-chg',
+        card: 'NoopRevertCard',
       },
     });
     const res = await inject({

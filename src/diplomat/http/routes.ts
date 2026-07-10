@@ -377,13 +377,10 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
   },
   {
     method: 'post',
-    path: '/api/credit-cards/:name/purchases',
+    path: '/api/credit-cards/purchases',
     tags: [RouteTag.creditCards],
     summary: 'Add a credit-card purchase',
-    // `card` is always required (never optional, unlike an account movement's `account`) — the
-    // card resource is fully identified by the path, so the body omits it (mirrors PATCH
-    // /api/accounts/:name below) rather than repeating/risking a mismatched value in both places.
-    request: { params: nameParam, body: jsonBody(wireInCreditCards.AddCardPurchaseSchema.omit({ card: true })) },
+    request: { body: jsonBody(wireInCreditCards.AddCardPurchaseSchema) },
     responses: {
       200: okResponse('Existing purchase returned (idempotent replay)', CreateTransactionOut),
       201: okResponse('Purchase recorded', CreateTransactionOut),
@@ -392,8 +389,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
       422: validation422,
     },
     handler: async (req, reply) => {
-      const { name } = req.params as { name: string };
-      const wireIn = parse(wireInCreditCards.AddCardPurchaseSchema, { ...(req.body ?? {}), card: name }, reply);
+      const wireIn = parse(wireInCreditCards.AddCardPurchaseSchema, req.body, reply);
       if (!wireIn) return reply;
       const model = creditCardAdapters.addCardPurchaseWireInToModel(wireIn);
       const result = await addCardPurchase(deps, model, TransactionSource.enum.rest);
