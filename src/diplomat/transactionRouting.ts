@@ -31,7 +31,7 @@ import {
   addCardPurchase,
   deleteCardTransaction,
   updateCardTransaction,
-} from '../controllers/creditCard/creditCardTransaction.js';
+} from '../controllers/creditCard/transaction.js';
 import type { Deps } from '../controllers/deps.js';
 import { createTransactionsBulk } from '../controllers/transaction/bulk.js';
 import {

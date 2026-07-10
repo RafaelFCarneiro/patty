@@ -57,7 +57,7 @@ export const cardErrors = {
     code: 'validation',
     issues: [`currency mismatch: card is ${cardCurrency}, payment account is ${accountCurrency}`],
   }),
-  // Raised only by the credit-card aggregate (controllers/creditCard/creditCardTransaction.ts) —
+  // Raised only by the credit-card aggregate (controllers/creditCard/transaction.ts) —
   // never by the transaction core, which has no concept of a bill. Contrast
   // transactionErrors.billAssignmentRequiresCard (models/transaction.ts), which the core itself
   // also raises and so must stay there.

@@ -26,7 +26,7 @@ import {
   listSubCategories,
 } from '../../controllers/categories.js';
 import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCard/creditCard.js';
-import { addCardPurchase } from '../../controllers/creditCard/creditCardTransaction.js';
+import { addCardPurchase } from '../../controllers/creditCard/transaction.js';
 import type { Deps } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
