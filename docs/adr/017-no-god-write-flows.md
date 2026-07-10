@@ -9,7 +9,7 @@ composition-root routers. This ADR finishes the job: the boundary applies to **e
 
 ADR-016 established aggregate ownership over a shared transaction core and replaced the god `create_transaction`
 tool with intent-specific tools (`add_card_purchase`, `add_account_expense`, `add_account_income`). But three
-write flows survived as god entry points, their ownership decision relocated into `diplomat/transactionRouting.ts`
+write flows survived as god entry points, their ownership decision relocated into `src/diplomat/transactionRouting.ts`
 rather than removed:
 
 - `routeUpdateTransaction` re-loads the transaction and dispatches on `cardId` (card → `updateCardTransaction`,
