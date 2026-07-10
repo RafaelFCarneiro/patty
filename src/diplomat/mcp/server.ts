@@ -9,7 +9,7 @@ import {
   listAccounts,
   updateAccount,
 } from '../../controllers/account/account.js';
-import { addAccountExpense, addAccountIncome } from '../../controllers/account/accountTransaction.js';
+import { addAccountExpense, addAccountIncome } from '../../controllers/account/transaction.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
 import { listDashboards, saveDashboard } from '../../controllers/dashboards.js';

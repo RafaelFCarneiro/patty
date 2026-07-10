@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addAccountExpense, addAccountIncome } from '../../../../src/controllers/account/accountTransaction.js';
+import { addAccountExpense, addAccountIncome } from '../../../../src/controllers/account/transaction.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
 import type { Account } from '../../../../src/models/account.js';
 import { TransactionSource } from '../../../../src/models/transaction.js';

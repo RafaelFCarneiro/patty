@@ -26,7 +26,7 @@ import {
   type TransactionView,
   type UpdateTransaction,
 } from '../models/transaction.js';
-import { addAccountExpense, addAccountIncome } from '../controllers/account/accountTransaction.js';
+import { addAccountExpense, addAccountIncome } from '../controllers/account/transaction.js';
 import {
   addCardPurchase,
   deleteCardTransaction,
