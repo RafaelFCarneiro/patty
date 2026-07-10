@@ -174,8 +174,8 @@ for the concurrency question to even be answerable without leaking rules into th
 - **New invariant** (added to `docs/architecture.md` dependency table on acceptance): aggregates may depend on
   the transaction core; the transaction core (and its logic) must not import any aggregate's bill/card logic.
   The boundary is **context-wide** — an entity's structures live in its own context namespace at every layer
-  (`models/`, `logic/`, `adapters/`, `wire/*`, `controllers/`, `diplomat/db`), never nested under the transaction
-  core's equivalents; a card/bill type under `models/transaction.ts` is a boundary violation, not just a
+  (`src/models/`, `src/logic/`, `src/adapters/`, `src/wire/*`, `src/controllers/`, `src/diplomat/db`), never nested under the transaction
+  core's equivalents; a card/bill type under `src/models/transaction.ts` is a boundary violation, not just a
   controller one. Consider an ESLint import-boundary rule to enforce it.
 - **`src/logic/bill.ts` stops being imported by the transaction controller** (imported today as `../logic/bill.js`); bill policy is imported only within
   the credit-card aggregate.
