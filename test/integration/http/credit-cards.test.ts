@@ -133,6 +133,50 @@ describe('POST /api/credit-cards/purchases', () => {
     });
     expect(res.statusCode).toBe(422);
   });
+
+  it('rejects an explicitly empty category (422)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Empty Category Purchase Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'Empty category',
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-05',
+        card: 'Empty Category Purchase Card',
+        category: '',
+        idempotencyKey: 'rest-card-purchase-empty-category',
+      },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it('rejects an explicitly empty subCategory (422)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Empty SubCategory Purchase Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'Empty subCategory',
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-05',
+        card: 'Empty SubCategory Purchase Card',
+        subCategory: '',
+        idempotencyKey: 'rest-card-purchase-empty-subcategory',
+      },
+    });
+    expect(res.statusCode).toBe(422);
+  });
 });
 
 describe('DELETE /api/credit-cards/:name', () => {
@@ -149,7 +193,7 @@ describe('DELETE /api/credit-cards/:name', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/credit-cards/purchases',
       payload: {
         description: 'Del card purchase',
         amount: 100,

@@ -53,7 +53,7 @@ describe('MCP stdio transport', () => {
     const result = await client.request({ method: 'tools/list', params: {} }, ListToolsResultSchema);
     const names = result.tools.map((t) => t.name);
     expect(names).toContain('list_categories');
-    expect(names).toContain('create_transaction');
+    expect(names).toContain('add_account_expense');
     expect(names.length).toBeGreaterThan(10);
   });
 

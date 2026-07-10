@@ -111,11 +111,10 @@ describe('DELETE /api/sub-categories/:name', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Sub ref',
         amount: 5,
-        type: 'expense',
         date: '2026-06-01',
         subCategory: 'DelSubBlock',
         idempotencyKey: 'sub-ref-tx',

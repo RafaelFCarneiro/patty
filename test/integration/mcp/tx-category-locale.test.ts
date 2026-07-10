@@ -26,11 +26,10 @@ describe('MCP integration > transaction category locale', () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } });
     await callTool(client, { name: 'create_account', args: { name: 'Locale TX Test' } });
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Groceries',
         amount: 50,
-        type: 'expense',
         account: 'Locale TX Test',
         category: 'Food',
         idempotencyKey: 'tx-cat-locale-1',
@@ -59,14 +58,13 @@ describe('MCP integration > transaction category locale', () => {
     expect(tx!.categoryName).toBe('Food');
   });
 
-  it('create_transaction returns localized categoryName', async () => {
+  it('add_account_expense returns localized categoryName', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'es', source: 'explicit' } });
     const result = (await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Spanish food',
         amount: 30,
-        type: 'expense',
         account: 'Locale TX Test',
         category: 'Food',
         idempotencyKey: 'tx-cat-locale-es-1',
@@ -80,11 +78,10 @@ describe('MCP integration > transaction category locale', () => {
     await callTool(client, { name: 'create_category', args: { name: 'Custom Cat', kind: 'expense' } });
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } });
     const result = (await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Custom category tx',
         amount: 20,
-        type: 'expense',
         account: 'Locale TX Test',
         category: 'Custom Cat',
         idempotencyKey: 'tx-cat-locale-custom-1',
@@ -120,11 +117,10 @@ describe('MCP integration > transaction category locale', () => {
     })) as { id: string; name: string };
 
     await callTool(client, {
-      name: 'create_transaction',
+      name: 'add_account_expense',
       args: {
         description: 'Sub locale test',
         amount: 15,
-        type: 'expense',
         account: 'Locale TX Test',
         subCategory: 'Groceries',
         idempotencyKey: 'tx-subcat-locale-1',

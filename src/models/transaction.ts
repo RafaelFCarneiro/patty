@@ -29,7 +29,8 @@ export const transactionTypeLabels: LabelMap<TransactionType> = {
   transfer: { en: 'Transfer', pt: 'Transferência', es: 'Transferencia' },
 };
 
-/** Types accepted by create_transaction / bulk — transfers go through create_transfer. */
+/** Types accepted by add_card_purchase / add_account_expense / add_account_income / bulk —
+ *  transfers go through create_transfer. */
 export const MovementType = z.enum(['expense', 'income']);
 export type MovementType = z.infer<typeof MovementType>;
 
@@ -219,17 +220,6 @@ export const CreateTransactionsBulkSchema = z.object({
 });
 export type CreateTransactionsBulk = z.infer<typeof CreateTransactionsBulkSchema>;
 
-export const CreateTransferSchema = z.object({
-  from: z.string().min(1).describe('Source account name'),
-  to: z.string().min(1).describe('Destination account name'),
-  amount: Money.describe('Transfer amount in full units'),
-  status: TransactionStatus.optional().describe('pending | effective; omit for date-aware default'),
-  date: IsoDate.optional().describe('YYYY-MM-DD; defaults to today'),
-  description: z.string().optional().describe('e.g. "aporte mensal"'),
-  idempotencyKey: z.string().min(1).describe('Stable dedup key'),
-});
-export type CreateTransfer = z.infer<typeof CreateTransferSchema>;
-
 export const UpdateTransactionSchema = z.object({
   id: z.string().min(1).describe('Transaction id'),
   description: z.string().min(1).optional().describe('Updated description'),
@@ -352,7 +342,11 @@ export const transactionErrors = {
     transactionType,
     categoryName,
     categoryKind,
-    hint: `Category "${categoryName}" is ${categoryKind}-only; to use it, set type: "${categoryKind}"`,
+    // Phrased tool-agnostically: raised by update_transaction/add_card_purchase (both have a
+    // `type` field a hint could name directly) as well as add_account_expense/add_account_income
+    // (movement kind is the tool itself — no `type` field exists to "set"), so the hint names the
+    // remedy in terms every caller can act on, not just the ones with a settable field.
+    hint: `Category "${categoryName}" is ${categoryKind}-only; use a matching category, or record this as ${categoryKind === 'income' ? 'income' : 'an expense'} instead`,
   }),
   exclusiveAccountCard: {
     code: 'validation',

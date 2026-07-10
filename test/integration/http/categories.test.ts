@@ -56,11 +56,10 @@ describe('DELETE /api/categories/:name', () => {
     await inject({ method: 'POST', url: '/api/categories', payload: { name: 'InUseCat', kind: 'expense' } });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Cat ref',
         amount: 10,
-        type: 'expense',
         date: '2026-06-01',
         category: 'InUseCat',
         idempotencyKey: 'cat-ref-tx',

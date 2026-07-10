@@ -12,11 +12,10 @@ describe('GET /api/aggregate', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Agg food',
         amount: 200,
-        type: 'expense',
         date: '2025-03-15',
         account: 'AggCatAcct',
         category: 'Food',
@@ -25,11 +24,10 @@ describe('GET /api/aggregate', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Agg transport',
         amount: 50,
-        type: 'expense',
         date: '2025-03-15',
         account: 'AggCatAcct',
         category: 'Transport',
@@ -60,11 +58,10 @@ describe('GET /api/aggregate', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Excl food',
         amount: 200,
-        type: 'expense',
         date: '2025-03-15',
         account: 'AggExclAcct',
         category: 'Food',
@@ -73,11 +70,10 @@ describe('GET /api/aggregate', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Excl transport',
         amount: 50,
-        type: 'expense',
         date: '2025-03-15',
         account: 'AggExclAcct',
         category: 'Transport',
@@ -97,11 +93,10 @@ describe('GET /api/aggregate', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Excl pending',
         amount: 999,
-        type: 'expense',
         date: '2025-03-15',
         account: 'AggExclAcct',
         category: 'Food',
@@ -128,11 +123,10 @@ describe('GET /api/aggregate', () => {
     await inject({ method: 'POST', url: '/api/tags', payload: { name: 'agg-travel' } });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Multi tag',
         amount: 30,
-        type: 'expense',
         date: '2025-03-15',
         account: 'AggTagAcct',
         tags: ['agg-work', 'agg-travel'],
@@ -158,11 +152,10 @@ describe('GET /api/aggregate', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'USD exp1',
         amount: 100,
-        type: 'expense',
         date: '2025-03-15',
         account: 'AggLimitUSD',
         category: 'Food',
@@ -171,11 +164,10 @@ describe('GET /api/aggregate', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'USD exp2',
         amount: 50,
-        type: 'expense',
         date: '2025-03-15',
         account: 'AggLimitUSD',
         category: 'Transport',
@@ -184,11 +176,10 @@ describe('GET /api/aggregate', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'BRL exp1',
         amount: 10,
-        type: 'expense',
         date: '2025-03-15',
         account: 'AggLimitBRL',
         category: 'Food',
@@ -197,11 +188,10 @@ describe('GET /api/aggregate', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'BRL exp2',
         amount: 5,
-        type: 'expense',
         date: '2025-03-15',
         account: 'AggLimitBRL',
         category: 'Transport',
@@ -225,11 +215,10 @@ describe('GET /api/aggregate', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Feb exp',
         amount: 75,
-        type: 'expense',
         date: '2025-02-15',
         account: 'AggMonthAcct',
         category: 'Food',
@@ -238,11 +227,10 @@ describe('GET /api/aggregate', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Mar exp',
         amount: 100,
-        type: 'expense',
         date: '2025-03-15',
         account: 'AggMonthAcct',
         category: 'Food',

@@ -117,11 +117,10 @@ describe('PATCH /api/accounts/:name', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Lock type',
         amount: 5,
-        type: 'expense',
         date: '2026-06-01',
         account: 'TypeBlock',
         idempotencyKey: 'type-block-tx',
@@ -255,11 +254,10 @@ describe('DELETE /api/accounts/:name', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Block del',
         amount: 5,
-        type: 'expense',
         date: '2026-06-01',
         account: 'DelTxBlock',
         idempotencyKey: 'del-tx-block',
@@ -341,11 +339,10 @@ describe('GET /api/accounts/balances', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/income',
       payload: {
         description: 'Income',
         amount: 500,
-        type: 'income',
         date: '2026-06-01',
         account: 'BalanceAcct',
         idempotencyKey: 'bal-income',
@@ -353,11 +350,10 @@ describe('GET /api/accounts/balances', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Expense',
         amount: 200,
-        type: 'expense',
         date: '2026-06-01',
         account: 'BalanceAcct',
         idempotencyKey: 'bal-expense',
@@ -379,11 +375,10 @@ describe('GET /api/accounts/balances', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Pending exp',
         amount: 300,
-        type: 'expense',
         date: '2026-06-15',
         account: 'ProjAcct',
         status: 'pending',

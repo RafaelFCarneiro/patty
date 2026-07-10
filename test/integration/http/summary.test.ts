@@ -12,11 +12,10 @@ describe('GET /api/summary', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Sum exp',
         amount: 100,
-        type: 'expense',
         date: '2026-05-01',
         account: 'SumAcct',
         idempotencyKey: 'sum-exp',
@@ -24,11 +23,10 @@ describe('GET /api/summary', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/transactions',
+      url: '/api/accounts/expenses',
       payload: {
         description: 'Sum pending',
         amount: 999,
-        type: 'expense',
         date: '2026-05-01',
         account: 'SumAcct',
         status: 'pending',
