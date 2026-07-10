@@ -390,6 +390,10 @@ export const transactionErrors = {
       'this bill is paid; its transactions cannot be added, removed, or reassigned — call revert_bill_payment first',
     ],
   } satisfies TransactionError,
+  accountChangeRejectedForCard: {
+    code: 'validation',
+    issues: ["cannot change the account of a card transaction; it is always funded by the card's own internal account"],
+  } satisfies TransactionError,
   invalidCursor: {
     code: 'validation',
     issues: ['cursor is malformed, stale, or does not match the requested sort/dir — start a fresh first page'],

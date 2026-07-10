@@ -141,6 +141,12 @@ export const updateCardTransaction = (
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
     yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
     yield* guardTransferMutability(existing, input);
+    // A card purchase is always funded by the card's own internal liability account (ADR-010) — it
+    // has no independent `account` to reassign. Reject rather than silently forwarding `account` to
+    // the core patch, which would repoint `from_account_id` at an arbitrary account while leaving
+    // `cardId`/`billId` untouched: the card's own account balance would stop reflecting the purchase
+    // even though the bill total still counts it, and the new account would show a spurious expense.
+    yield* guard(!R.isNonNullish(input.account), transactionErrors.accountChangeRejectedForCard);
 
     // Reassignment (billMonth/billYear given): validate up front — never leave the current or target
     // bill in a half-changed state.
