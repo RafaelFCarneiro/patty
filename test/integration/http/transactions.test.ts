@@ -214,6 +214,7 @@ describe('POST /api/accounts/income', () => {
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().error.code).toBe('category_kind_mismatch');
+    expect(res.json().error.hint).toContain('record this as an expense instead');
   });
 });
 
