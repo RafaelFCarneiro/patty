@@ -31,9 +31,14 @@ work. The concurrency mechanism was treating a symptom of a boundary problem.
 
 Note what is **already correct** and should be preserved:
 
-- The `models/` layer is already per-entity (`models/creditCard.ts`, `models/bill.ts`, `models/account.ts`,
-  `models/transaction.ts`) with colocated errors (ADR-012). The entanglement is in **controllers/logic and the
-  create/update flows**, not the schemas.
+- The `models/` layer is already split per-entity (`src/models/creditCard.ts`, `src/models/bill.ts`,
+  `src/models/account.ts`, `src/models/transaction.ts`) with colocated errors (ADR-012). The *visible* entanglement is
+  in **controllers/logic and the create/update flows** — but this does not exempt the model (or adapter/wire)
+  layers from the boundary: the ownership rule below governs where **new** structures land too. A card- or
+  bill-shaped type (e.g. `AddCardPurchase`) belongs to the credit-card context's model namespace
+  (`src/models/creditCard.ts`), never nested under `src/models/transaction.ts`; the same holds for its adapter and wire
+  schema. (This is not hypothetical — a first cut of the credit-card purchase / bill-policy extraction created
+  card model structures under the transaction model and had to be corrected.)
 - `createTransfer` (in `transfers.ts`) already owns account-domain validation (non-credit legs, currency match,
   distinct accounts) and merely *uses* `transactions.create` to persist — this is exactly the target shape and
   becomes the template.
@@ -67,6 +72,15 @@ Three parts:
 the transaction core; **the transaction core must not depend on any aggregate** — no `logic/bill.js` or
 card/bill imports in the transaction core or its logic. Enforced in the dependency table and (ideally) an
 ESLint import-boundary rule.
+
+**The boundary is context-wide, not controller-only.** This is a semantic division of the domain into bounded
+contexts (credit-card, account, transaction core), and it runs through **every layer** — `models/`, `logic/`,
+`adapters/`, `wire/*`, `controllers/`, and `diplomat/db` repos alike. A structure that belongs to the
+credit-card context lives in that context's namespace at each layer (`models/creditCard.ts`,
+`adapters/creditCards.ts`, the card wire schemas, `controllers/creditCard/*`); it is never placed under, or
+nested inside, the transaction core's equivalents merely because a card movement is also a transaction. The
+module map below is illustrated with `controllers/` for brevity, but "aggregate ownership" means ownership of
+the entity's full vertical slice — schema, translation, validation, persistence — not just its controller.
 
 **Module structure** — split by aggregate, separating aggregate-specific files from the shared core, per the
 folder-over-monolith intent:
@@ -159,7 +173,10 @@ for the concurrency question to even be answerable without leaking rules into th
   the dashboards, and any client using it migrate in the same arc. Sequence the change so old and new don't half-exist.
 - **New invariant** (added to `docs/architecture.md` dependency table on acceptance): aggregates may depend on
   the transaction core; the transaction core (and its logic) must not import any aggregate's bill/card logic.
-  Consider an ESLint import-boundary rule to enforce it.
+  The boundary is **context-wide** — an entity's structures live in its own context namespace at every layer
+  (`src/models/`, `src/logic/`, `src/adapters/`, `src/wire/*`, `src/controllers/`, `src/diplomat/db`), never nested under the transaction
+  core's equivalents; a card/bill type under `src/models/transaction.ts` is a boundary violation, not just a
+  controller one. Consider an ESLint import-boundary rule to enforce it.
 - **`src/logic/bill.ts` stops being imported by the transaction controller** (imported today as `../logic/bill.js`); bill policy is imported only within
   the credit-card aggregate.
 - **Docs in the same change:** `docs/architecture.md` (boundaries section + dependency table), `docs/mcp-tools.md`
