@@ -1,103 +1,48 @@
-// Transaction core (ADR-016): bulk import routing. No bill/card knowledge — must never import
-// logic/bill.js or touch deps.bills. createTransactionsBulk receives the credit-card aggregate's
-// and account aggregate's movement primitives as injected callbacks from the diplomat composition
-// root (src/diplomat/transactionRouting.ts) instead of importing those aggregates directly, so the
-// one-way dependency (aggregate → core, never the reverse) holds even while bulk import still
-// routes each line to its owner from inside this module.
+// Transaction core (ADR-016): bulk import defaulting. No bill/card knowledge, and no card/account
+// routing decision either — must never import logic/bill.js, touch deps.bills, or re-implement the
+// account-vs-card dispatch. createTransactionsBulk receives the diplomat composition root's
+// single-item router (diplomat/transactionRouting.ts's routeCreateTransaction) as an injected
+// callback instead of importing any aggregate: it only defaults per-line fields (date, account/card
+// top-level fallback, idempotencyKey) and delegates the actual routing decision to that one
+// function — the same one create_transaction itself uses — so the decision lives in exactly one
+// place instead of being duplicated here.
 
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
-import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
-import { guard } from '../../common/result.js';
 import { toIsoDate } from '../../logic/period.js';
+import { deriveIdempotencyKey, summarizeBulkItems, toBulkItemResult } from '../../logic/transaction.js';
 import type { BulkItemResult, BulkResult } from '../../logic/transaction.js';
-import {
-  assertBillAssignmentHasCard,
-  assertBillPeriodPaired,
-  assertExclusiveAccountCard,
-  deriveIdempotencyKey,
-  summarizeBulkItems,
-  toBulkItemResult,
-} from '../../logic/transaction.js';
-import {
-  transactionErrors,
-  MovementType,
-  type BulkTransactionItem,
-  type CreateTransaction,
-  type CreateTransactionResult,
-  type CreateTransactionsBulk,
-  type TransactionSource,
+import type {
+  CreateTransaction,
+  CreateTransactionResult,
+  CreateTransactionsBulk,
+  TransactionSource,
 } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 
 /**
- * The credit-card aggregate's card-purchase entry point, injected by the diplomat composition root
- * rather than imported directly — see module header. Typed structurally against the core's own
- * `CreateTransaction` (not by importing `models/creditCard.ts`'s `AddCardPurchase`): the transaction
- * core must not reference the credit-card domain's model any more than its controllers, even for a
- * type-only import — the real `addCardPurchase` (whose parameter is the nominal `AddCardPurchase`
- * type) is structurally identical and satisfies this signature.
+ * The composition root's single-item routing decision (`diplomat/transactionRouting.ts`'s
+ * `routeCreateTransaction`), injected rather than imported — see module header. Typed purely
+ * against the core's own `CreateTransaction`/`CreateTransactionResult`, with no card- or
+ * account-shaped fields baked into the signature: the core doesn't need to know a card purchase
+ * carries a required `card` field or that an account movement doesn't — it just hands off a fully
+ * defaulted line and trusts the injected router to decide.
  */
-export type AddCardPurchaseFn = (
+export type RouteCreateTransactionFn = (
   deps: Deps,
-  input: Omit<CreateTransaction, 'account'> & { card: string },
+  input: CreateTransaction,
   source: TransactionSource,
 ) => ResultAsync<CreateTransactionResult, AppError>;
-
-/**
- * The account aggregate's expense/income entry points, injected by the diplomat composition root —
- * same structural-typing reasoning as `AddCardPurchaseFn` above, against `models/account.ts`'s
- * `AddAccountMovement`.
- */
-export type AddAccountMovementFn = (
-  deps: Deps,
-  input: Omit<CreateTransaction, 'card' | 'type' | 'billMonth' | 'billYear'>,
-  source: TransactionSource,
-) => ResultAsync<CreateTransactionResult, AppError>;
-
-/** One resolved bulk line, ready to route: item fields already defaulted (date, account/card
- *  top-level fallback, idempotencyKey). */
-type BulkLine = BulkTransactionItem & { date: string; idempotencyKey: string };
-
-/** Routes a single resolved bulk line to its owning aggregate — same exclusivity/pairing guards
- *  `create_transaction` itself enforces, since a line can resolve both `account` and `card` via
- *  top-level defaults. */
-const routeBulkLine = (
-  deps: Deps,
-  line: BulkLine,
-  rawInput: string | undefined,
-  source: TransactionSource,
-  addCardPurchase: AddCardPurchaseFn,
-  addAccountExpense: AddAccountMovementFn,
-  addAccountIncome: AddAccountMovementFn,
-): ResultAsync<CreateTransactionResult, AppError> =>
-  safeTry(async function* () {
-    yield* guard(assertExclusiveAccountCard(line), transactionErrors.exclusiveAccountCard);
-
-    if (R.isNonNullish(line.card)) {
-      return ok(yield* addCardPurchase(deps, { ...R.omit(line, ['account']), card: line.card, rawInput }, source));
-    }
-
-    yield* guard(assertBillPeriodPaired(line), transactionErrors.billPeriodIncomplete);
-    yield* guard(assertBillAssignmentHasCard(line.billMonth, false), transactionErrors.billAssignmentRequiresCard);
-
-    const addAccountMovement = line.type === MovementType.enum.expense ? addAccountExpense : addAccountIncome;
-    return ok(
-      yield* addAccountMovement(deps, { ...R.omit(line, ['card', 'type', 'billMonth', 'billYear']), rawInput }, source),
-    );
-  });
 
 /** Statement paste/import: each line idempotent, classified, flagged for review when uncertain.
- *  Routes card lines to the credit-card aggregate (`addCardPurchase`, injected), account lines to
- *  the account aggregate (`addAccountExpense`/`addAccountIncome`, injected, chosen by the line's
- *  `type`). */
+ *  Defaults per-line fields (date, account/card top-level fallback, idempotencyKey), then delegates
+ *  the whole line to the injected router — the same routing `create_transaction` itself uses, so
+ *  account-vs-card dispatch and its exclusivity/bill-assignment guards are decided in one place. */
 export const createTransactionsBulk = (
   deps: Deps,
   input: CreateTransactionsBulk,
   source: TransactionSource,
-  addCardPurchase: AddCardPurchaseFn,
-  addAccountExpense: AddAccountMovementFn,
-  addAccountIncome: AddAccountMovementFn,
+  routeCreateTransaction: RouteCreateTransactionFn,
 ): ResultAsync<BulkResult<AppError>, AppError> =>
   safeTry(async function* () {
     const locale = await deps.locale();
@@ -108,16 +53,11 @@ export const createTransactionsBulk = (
       const account = item.account ?? input.account;
       const card = item.card ?? input.card;
       const idempotencyKey = item.idempotencyKey ?? deriveIdempotencyKey({ ...item, date });
-      const line: BulkLine = { ...item, date, account, card, idempotencyKey };
 
-      const result = await routeBulkLine(
+      const result = await routeCreateTransaction(
         cachedDeps,
-        line,
-        input.rawInput,
+        { ...item, date, account, card, idempotencyKey, rawInput: input.rawInput },
         source,
-        addCardPurchase,
-        addAccountExpense,
-        addAccountIncome,
       );
 
       items.push(toBulkItemResult(result, item.description));

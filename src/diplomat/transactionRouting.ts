@@ -65,8 +65,7 @@ export const routeCreateTransactionsBulk = (
   deps: Deps,
   input: CreateTransactionsBulk,
   source: TransactionSource,
-): ResultAsync<BulkResult<AppError>, AppError> =>
-  createTransactionsBulk(deps, input, source, addCardPurchase, addAccountExpense, addAccountIncome);
+): ResultAsync<BulkResult<AppError>, AppError> => createTransactionsBulk(deps, input, source, routeCreateTransaction);
 
 export const routeUpdateTransaction = (deps: Deps, input: UpdateTransaction): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
