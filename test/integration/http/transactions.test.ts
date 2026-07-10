@@ -43,7 +43,7 @@ describe('POST /api/accounts/expenses', () => {
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().error.code).toBe('category_kind_mismatch');
-    expect(res.json().error.hint).toContain('set type: "income"');
+    expect(res.json().error.hint).toContain('record this as income instead');
   });
 
   it('rejects category + subCategory together (422)', async () => {

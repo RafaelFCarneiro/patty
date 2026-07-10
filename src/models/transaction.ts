@@ -342,7 +342,11 @@ export const transactionErrors = {
     transactionType,
     categoryName,
     categoryKind,
-    hint: `Category "${categoryName}" is ${categoryKind}-only; to use it, set type: "${categoryKind}"`,
+    // Phrased tool-agnostically: raised by update_transaction/add_card_purchase (both have a
+    // `type` field a hint could name directly) as well as add_account_expense/add_account_income
+    // (movement kind is the tool itself — no `type` field exists to "set"), so the hint names the
+    // remedy in terms every caller can act on, not just the ones with a settable field.
+    hint: `Category "${categoryName}" is ${categoryKind}-only; use a matching category, or record this as ${categoryKind === 'income' ? 'income' : 'an expense'} instead`,
   }),
   exclusiveAccountCard: {
     code: 'validation',

@@ -307,7 +307,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('category_kind_mismatch error includes a hint with the corrective type', async () => {
+  it('category_kind_mismatch error includes an actionable hint', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -323,7 +323,7 @@ describe('MCP integration > sub-categories', () => {
       })) as { error?: { code?: string; hint?: string } };
 
       expect(result.error?.code).toBe('category_kind_mismatch');
-      expect(result.error?.hint).toContain('set type: "income"');
+      expect(result.error?.hint).toContain('record this as income instead');
     } finally {
       await transport.close();
     }

@@ -14,7 +14,8 @@ export type CreateAccount = z.infer<typeof CreateAccountSchema>;
 export const UpdateAccountSchema = modelAccount.UpdateAccountSchema;
 export type UpdateAccount = z.infer<typeof UpdateAccountSchema>;
 
-// Pass-through — no boundary-only defaults needed beyond what add_card_purchase already has.
+// Pass-through — no boundary-only defaults needed; every field required by the domain schema is
+// already required here.
 export const AddAccountMovementSchema = modelAccount.AddAccountMovementSchema;
 export type AddAccountMovement = z.infer<typeof AddAccountMovementSchema>;
 

@@ -9,6 +9,7 @@ export const CreateCreditCardSchema = modelCreditCard.CreateCreditCardSchema.ext
 });
 export type CreateCreditCard = z.infer<typeof CreateCreditCardSchema>;
 
-// Pass-through — no boundary-only defaults needed beyond what add_account_expense/income already has.
+// Pass-through — no boundary-only defaults needed; every field required by the domain schema is
+// already required here.
 export const AddCardPurchaseSchema = modelCreditCard.AddCardPurchaseSchema;
 export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
