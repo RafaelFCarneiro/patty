@@ -1,6 +1,7 @@
 # ADR-016: Domain/context boundaries — aggregate ownership over a shared transaction core
 
-**Status:** Proposed · **Date:** 2026-07-09 · **Deciders:** Rafael · Supersedes **ADR-015** (rejected before
+**Status:** Accepted (2026-07-10; implemented — decomposition steps all merged) · **Date:** 2026-07-09 ·
+**Deciders:** Rafael · Supersedes **ADR-015** (rejected before
 implementation). Prerequisite for reopening the concurrency question ADR-015 raised: the multi-write surface is
 expected to shrink once ownership is corrected, so boundaries are decided first and any remaining atomicity
 need is scoped afterward.
@@ -45,7 +46,7 @@ Note what is **already correct** and should be preserved:
 - There is one physical `transactions` table, and balances/summary/aggregate/search legitimately read **across
   all** transactions regardless of origin. That shared read side is a feature, not leakage.
 
-## Decision (proposed)
+## Decision
 
 **Establish explicit aggregate ownership over a shared transaction core. The context that owns a money movement
 is its entry point and owns its validation; it *uses* the transaction core to persist. The transaction core owns
