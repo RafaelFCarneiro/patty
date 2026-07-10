@@ -57,7 +57,7 @@ describe('POST /api/credit-cards', () => {
   });
 });
 
-describe('POST /api/credit-cards/purchases', () => {
+describe('POST /api/credit-cards/:name/purchases', () => {
   it('records a purchase and joins the cycle bill (201)', async () => {
     await inject({
       method: 'POST',
@@ -66,13 +66,12 @@ describe('POST /api/credit-cards/purchases', () => {
     });
     const res = await inject({
       method: 'POST',
-      url: '/api/credit-cards/purchases',
+      url: `/api/credit-cards/${encodeURIComponent('Purchase Card')}/purchases`,
       payload: {
         description: 'REST card purchase',
         amount: 42,
         type: 'expense',
         date: '2026-06-05',
-        card: 'Purchase Card',
         idempotencyKey: 'rest-card-purchase',
       },
     });
@@ -87,24 +86,35 @@ describe('POST /api/credit-cards/purchases', () => {
       url: '/api/credit-cards',
       payload: { name: 'Idempotent Purchase Card', closingDay: 28, dueDay: 5, currency: 'USD' },
     });
+    const url = `/api/credit-cards/${encodeURIComponent('Idempotent Purchase Card')}/purchases`;
     const payload = {
       description: 'REST idempotent purchase',
       amount: 15,
       type: 'expense',
       date: '2026-06-05',
-      card: 'Idempotent Purchase Card',
       idempotencyKey: 'rest-idempotent-card-purchase',
     };
-    const first = await inject({ method: 'POST', url: '/api/credit-cards/purchases', payload });
+    const first = await inject({ method: 'POST', url, payload });
     expect(first.statusCode).toBe(201);
-    const replay = await inject({ method: 'POST', url: '/api/credit-cards/purchases', payload });
+    const replay = await inject({ method: 'POST', url, payload });
     expect(replay.statusCode).toBe(200);
     expect(replay.json().created).toBe(false);
   });
 
   it('rejects invalid body (422)', async () => {
-    const res = await inject({ method: 'POST', url: '/api/credit-cards/purchases', payload: {} });
+    // Body schema validation runs before the card is ever looked up, so a placeholder path
+    // segment is enough — this never needs a real card to fail with 422.
+    const res = await inject({ method: 'POST', url: '/api/credit-cards/placeholder/purchases', payload: {} });
     expect(res.statusCode).toBe(422);
+  });
+
+  it('returns 404 for an unknown card in the path', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/nonexistent-purchase-card-xyz/purchases',
+      payload: { description: 'Ghost card', amount: 10, type: 'expense', idempotencyKey: 'rest-ghost-card' },
+    });
+    expect(res.statusCode).toBe(404);
   });
 
   it('rejects an account field instead of silently ignoring it (422)', async () => {
@@ -120,13 +130,12 @@ describe('POST /api/credit-cards/purchases', () => {
     });
     const res = await inject({
       method: 'POST',
-      url: '/api/credit-cards/purchases',
+      url: `/api/credit-cards/${encodeURIComponent('Strict Purchase Card')}/purchases`,
       payload: {
         description: 'Should be rejected',
         amount: 10,
         type: 'expense',
         date: '2026-06-05',
-        card: 'Strict Purchase Card',
         account: 'Purchase Card Account Bank',
         idempotencyKey: 'rest-card-purchase-with-account',
       },
@@ -142,13 +151,12 @@ describe('POST /api/credit-cards/purchases', () => {
     });
     const res = await inject({
       method: 'POST',
-      url: '/api/credit-cards/purchases',
+      url: `/api/credit-cards/${encodeURIComponent('Empty Category Purchase Card')}/purchases`,
       payload: {
         description: 'Empty category',
         amount: 10,
         type: 'expense',
         date: '2026-06-05',
-        card: 'Empty Category Purchase Card',
         category: '',
         idempotencyKey: 'rest-card-purchase-empty-category',
       },
@@ -164,13 +172,12 @@ describe('POST /api/credit-cards/purchases', () => {
     });
     const res = await inject({
       method: 'POST',
-      url: '/api/credit-cards/purchases',
+      url: `/api/credit-cards/${encodeURIComponent('Empty SubCategory Purchase Card')}/purchases`,
       payload: {
         description: 'Empty subCategory',
         amount: 10,
         type: 'expense',
         date: '2026-06-05',
-        card: 'Empty SubCategory Purchase Card',
         subCategory: '',
         idempotencyKey: 'rest-card-purchase-empty-subcategory',
       },
@@ -193,13 +200,12 @@ describe('DELETE /api/credit-cards/:name', () => {
     });
     await inject({
       method: 'POST',
-      url: '/api/credit-cards/purchases',
+      url: '/api/credit-cards/FullDelCard/purchases',
       payload: {
         description: 'Del card purchase',
         amount: 100,
         type: 'expense',
         date: '2026-06-05',
-        card: 'FullDelCard',
         idempotencyKey: 'del-card-purchase',
       },
     });

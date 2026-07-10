@@ -36,7 +36,7 @@ Returns `TransactionView` with `typeLabel`, `statusLabel`, and `billId` (the bil
 
 **Bill assignment** (Design 012): omit `billMonth`/`billYear` for the default cycle-based auto-assignment (from `date` + the card's `closingDay`/`dueDay`). Provide both together to target a specific cycle instead — the bill is auto-created (`open`) if that cycle has none yet; providing only one of the two is a `validation` error. Whether auto-assigned or explicit, a request that would land the transaction on an already-`paid` bill is rejected with a `validation` error pointing at `revert_bill_payment` — a `paid` bill's transaction membership is frozen (see `update_transaction`/`delete_transaction` below). `create_transactions_bulk` routes each card line here too (see above).
 
-REST mirror: `POST /api/credit-cards/purchases`.
+REST mirror: `POST /api/credit-cards/:name/purchases` (`name` in the path identifies the card; the body carries everything else — same fields as the MCP tool minus `card`).
 
 Errors: resolution errors (`unknown_card`, `unknown_category`, …), `category_kind_mismatch`, `validation` (unpaired `billMonth`/`billYear`, landing on a `paid` bill).
 
