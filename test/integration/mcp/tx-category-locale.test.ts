@@ -58,7 +58,7 @@ describe('MCP integration > transaction category locale', () => {
     expect(tx!.categoryName).toBe('Food');
   });
 
-  it('create_transaction returns localized categoryName', async () => {
+  it('add_account_expense returns localized categoryName', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'es', source: 'explicit' } });
     const result = (await callTool(client, {
       name: 'add_account_expense',

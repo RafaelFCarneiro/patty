@@ -355,7 +355,8 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
       });
 
       // Top-level account default + an item-level card override — resolves both account and card
-      // for that item, which must be rejected the same way create_transaction rejects it directly.
+      // for that item, which must be rejected (the same exclusivity rule add_account_expense/
+      // add_card_purchase enforce structurally via their single-purpose schemas).
       const result = (await callTool(client, {
         name: 'create_transactions_bulk',
         args: {

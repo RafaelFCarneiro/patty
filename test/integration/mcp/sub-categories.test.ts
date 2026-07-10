@@ -119,7 +119,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('create_transaction with subCategory sets subCategoryId, subCategoryName, and parent categoryId', async () => {
+  it('add_account_expense with subCategory sets subCategoryId, subCategoryName, and parent categoryId', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -154,7 +154,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('create_transaction rejects expense transaction with income-only category', async () => {
+  it('add_account_expense rejects expense transaction with income-only category', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -175,7 +175,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('create_transaction rejects income transaction with expense-only category', async () => {
+  it('add_account_income rejects income transaction with expense-only category', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -196,7 +196,7 @@ describe('MCP integration > sub-categories', () => {
     }
   });
 
-  it('create_transaction rejects providing both category and subCategory', async () => {
+  it('add_account_expense rejects providing both category and subCategory', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {

@@ -123,7 +123,7 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
     }
   });
 
-  it('create_transaction rejects direct posting to a credit account via account param', async () => {
+  it('add_account_expense rejects direct posting to a credit account via account param', async () => {
     const localCard = `Direct Post Card ${stamp}`;
     const { client, transport } = makeClient();
 
