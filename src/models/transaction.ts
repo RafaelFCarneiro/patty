@@ -260,7 +260,7 @@ export const UpdateTransactionSchema = z.object({
 });
 export type UpdateTransaction = z.infer<typeof UpdateTransactionSchema>;
 
-/** Delete input shape (ADR-017): identical for update_card_transaction and update_account_transaction
+/** Delete input shape (ADR-017): identical for delete_card_transaction and delete_account_transaction
  *  — delete carries zero aggregate-specific data, so unlike update it has no per-aggregate variant. */
 export const DeleteTransactionSchema = z.object({
   id: z.string().min(1).describe('Transaction id'),
