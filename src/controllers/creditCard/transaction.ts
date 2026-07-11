@@ -20,7 +20,7 @@ import {
   resolveCurrency,
   withBillId,
 } from '../../logic/transaction.js';
-import { cardErrors, type AddCardPurchase } from '../../models/creditCard.js';
+import { cardErrors, type AddCardPurchase, type ImportCardStatement } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
 import {
   transactionErrors,
@@ -32,8 +32,10 @@ import {
   type TransactionView,
   type UpdateTransaction,
 } from '../../models/transaction.js';
+import type { BulkResult } from '../../logic/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveCardRef } from '../resolve.js';
+import { runStatementImport } from '../transaction/bulk.js';
 import {
   assertOwnership,
   deleteTransaction as coreDeleteTransaction,
@@ -128,6 +130,21 @@ export const addCardPurchase = (
     const locale = await deps.locale();
     return ok({ transaction: addLocalizedLabels(finalTransaction, locale), created, classification });
   });
+
+/**
+ * Import a credit-card statement (ADR-017 step 2): single-source — every item belongs to the ONE
+ * card named in `input.card`, so there is no per-line card to resolve or route. Binds `addCardPurchase`
+ * to that fixed card and delegates the generic import plumbing (defaulting, dedup, needs-review
+ * flagging) to the shared `runStatementImport` runner.
+ */
+export const importCardStatement = (
+  deps: Deps,
+  input: ImportCardStatement,
+  source: TransactionSource,
+): ResultAsync<BulkResult<AppError>, AppError> =>
+  runStatementImport(deps, input.items, input.rawInput, source, (d, line, src) =>
+    addCardPurchase(d, { ...line, card: input.card }, src),
+  );
 
 /**
  * Update a card transaction (ADR-017): asserts the target is card-owned (`cardId` or `billId`) —

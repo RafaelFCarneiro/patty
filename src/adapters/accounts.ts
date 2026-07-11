@@ -3,6 +3,7 @@ import type {
   AddAccountMovement,
   CreateAccount,
   CreateTransfer,
+  ImportAccountStatement,
   UpdateAccount,
   UpdateAccountTransaction,
 } from '../models/account.js';
@@ -25,3 +26,6 @@ export const transferWireInToModel = (input: wireIn.CreateTransfer): CreateTrans
 export const updateAccountTransactionWireInToModel = (
   input: wireIn.UpdateAccountTransaction,
 ): UpdateAccountTransaction => input;
+export const importAccountStatementWireInToModel = (
+  input: wireIn.ImportAccountStatement,
+): ImportAccountStatement => input;

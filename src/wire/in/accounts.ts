@@ -27,6 +27,10 @@ export type UpdateAccountTransaction = z.infer<typeof UpdateAccountTransactionSc
 export const CreateTransferSchema = modelAccount.CreateTransferSchema;
 export type CreateTransfer = z.infer<typeof CreateTransferSchema>;
 
+// Pass-through — no boundary-only defaults needed.
+export const ImportAccountStatementSchema = modelAccount.ImportAccountStatementSchema;
+export type ImportAccountStatement = z.infer<typeof ImportAccountStatementSchema>;
+
 export const AccountsQuerySchema = z.object({ type: modelAccount.AccountType.optional() });
 export type AccountsQuery = z.infer<typeof AccountsQuerySchema>;
 

@@ -8,6 +8,8 @@ import {
   UpdateTransactionSchema,
   type Transaction,
 } from '../../../src/models/transaction.js';
+import { ImportAccountStatementItemSchema } from '../../../src/models/account.js';
+import { ImportCardStatementItemSchema } from '../../../src/models/creditCard.js';
 import * as wireInTransactions from '../../../src/wire/in/transactions.js';
 import * as transactionAdapters from '../../../src/adapters/transactions.js';
 
@@ -295,22 +297,47 @@ describe('dbToModel', () => {
   });
 });
 
-describe('BulkTransactionItemSchema', () => {
-  it('strips subCategory and tags from bulk items', () => {
-    const input = {
+// Unlike the retired god CreateTransactionsBulkSchema's per-line BulkTransactionItemSchema (which
+// silently stripped subCategory/tags as unknown keys), the aggregate-specific statement item
+// schemas below are `.strict()` — same rationale as AddCardPurchaseSchema/AddAccountMovementSchema
+// (models/creditCard.ts, models/account.ts): a caller who mistakenly sends a field that doesn't
+// apply to a statement line should get a validation error, not have it silently dropped.
+describe('ImportAccountStatementItemSchema', () => {
+  it('rejects subCategory and tags on account statement items', () => {
+    const result = ImportAccountStatementItemSchema.safeParse({
       description: 'Uber',
       amount: 30,
       type: 'expense',
       subCategory: 'Ride',
       tags: ['work'],
-    };
-    const parsed = wireInTransactions.BulkTransactionItemSchema.parse(input);
-    expect(parsed).not.toHaveProperty('subCategory');
-    expect(parsed).not.toHaveProperty('tags');
+    });
+    expect(result.success).toBe(false);
   });
 
-  it('accepts bulk items without subCategory and tags', () => {
-    const result = wireInTransactions.BulkTransactionItemSchema.safeParse({
+  it('accepts account statement items without subCategory and tags', () => {
+    const result = ImportAccountStatementItemSchema.safeParse({
+      description: 'Groceries',
+      amount: 50,
+      type: 'expense',
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('ImportCardStatementItemSchema', () => {
+  it('rejects subCategory and tags on card statement items', () => {
+    const result = ImportCardStatementItemSchema.safeParse({
+      description: 'Uber',
+      amount: 30,
+      type: 'expense',
+      subCategory: 'Ride',
+      tags: ['work'],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts card statement items without subCategory and tags', () => {
+    const result = ImportCardStatementItemSchema.safeParse({
       description: 'Groceries',
       amount: 50,
       type: 'expense',
@@ -321,7 +348,8 @@ describe('BulkTransactionItemSchema', () => {
 
 // The transaction core's own CreateTransactionSchema (ADR-016) — note validation is core row
 // integrity, inherited unchanged by every aggregate schema derived from it (AddCardPurchaseSchema,
-// AddAccountMovementSchema, BulkTransactionItemSchema), so it's tested once here at the source.
+// AddAccountMovementSchema, ImportCardStatementItemSchema, ImportAccountStatementItemSchema), so
+// it's tested once here at the source.
 describe('note zod validation', () => {
   it('rejects a note longer than NOTE_MAX_LENGTH on create', () => {
     const result = CreateTransactionSchema.safeParse({

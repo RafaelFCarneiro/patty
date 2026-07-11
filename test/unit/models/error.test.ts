@@ -142,7 +142,6 @@ describe('per-model error builders', () => {
   });
 
   it('transactionErrors static payloads have the right code', () => {
-    expect(transactionErrors.exclusiveAccountCard.code).toBe('validation');
     expect(transactionErrors.exclusiveCategorySubCategory.code).toBe('validation');
     expect(transactionErrors.transferTypeImmutable.code).toBe('validation');
     expect(transactionErrors.transferCategoryRejected.code).toBe('validation');

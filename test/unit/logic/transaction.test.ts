@@ -13,9 +13,7 @@ import {
 import type { RawTransactionView } from '../../../src/models/transaction.js';
 import {
   addLocalizedLabels,
-  assertBillAssignmentHasCard,
   assertBillPeriodPaired,
-  assertExclusiveAccountCard,
   assertExclusiveCategorySubCategory,
   deriveIdempotencyKey,
   guardTransferMutability,
@@ -294,28 +292,6 @@ describe('isCategoryKindAllowed', () => {
   });
 });
 
-describe('assertExclusiveAccountCard', () => {
-  it('passes when only account is provided', () => {
-    expect(assertExclusiveAccountCard({ account: 'A' })).toBe(true);
-  });
-
-  it('passes when only card is provided', () => {
-    expect(assertExclusiveAccountCard({ card: 'C' })).toBe(true);
-  });
-
-  it('passes when neither is provided', () => {
-    expect(assertExclusiveAccountCard({})).toBe(true);
-  });
-
-  it('fails when both are provided', () => {
-    expect(assertExclusiveAccountCard({ account: 'A', card: 'C' })).toBe(false);
-  });
-
-  it('fails on value, not truthiness — a present-but-empty account still counts as provided', () => {
-    expect(assertExclusiveAccountCard({ account: '', card: 'C' })).toBe(false);
-  });
-});
-
 describe('assertExclusiveCategorySubCategory', () => {
   it('passes when only category is provided', () => {
     expect(assertExclusiveCategorySubCategory({ category: 'C' })).toBe(true);
@@ -384,28 +360,6 @@ describe('assertBillPeriodPaired', () => {
   });
 });
 
-describe('assertBillAssignmentHasCard', () => {
-  it('passes when billMonth is not provided, regardless of card', () => {
-    expect(assertBillAssignmentHasCard(undefined, false)).toBe(true);
-    expect(assertBillAssignmentHasCard(undefined, true)).toBe(true);
-  });
-
-  it('passes when billMonth is provided and a card is present', () => {
-    expect(assertBillAssignmentHasCard(6, true)).toBe(true);
-  });
-
-  it('fails when billMonth is provided but no card is present', () => {
-    expect(assertBillAssignmentHasCard(6, false)).toBe(false);
-  });
-
-  // billMonth: 0 is out of the schema's valid range (1-12) and never reaches this predicate through
-  // the real API — but the check must use explicit undefined, not truthiness, so a 0 is correctly
-  // treated as "provided" rather than silently passing as "not provided".
-  it('treats billMonth 0 as provided, not as absent', () => {
-    expect(assertBillAssignmentHasCard(0, false)).toBe(false);
-    expect(assertBillAssignmentHasCard(0, true)).toBe(true);
-  });
-});
 
 describe('resolveCursorKey', () => {
   const { date, amount } = TransactionSortField.enum;

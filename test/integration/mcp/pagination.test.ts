@@ -50,7 +50,7 @@ describe('MCP integration > search_transactions pagination (ADR-014)', () => {
     }
 
     const result = (await callTool(client, {
-      name: 'create_transactions_bulk',
+      name: 'import_account_statement',
       args: { account: accountName, items },
     })) as { items: Array<{ transaction?: { id?: string } }> };
     for (const item of result.items) {

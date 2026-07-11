@@ -46,9 +46,12 @@ describe('MCP integration > transactions', () => {
       // create_transaction (the god unified tool) is retired (ADR-016 step 4) — replaced by the
       // intent-specific tools below. update_transaction/delete_transaction (the god update/delete
       // tools) are retired too (ADR-017 step 1) — replaced by the four aggregate-specific tools.
+      // create_transactions_bulk (the god bulk tool) is retired too (ADR-017 step 2) — replaced by
+      // the two single-source statement importers, completing "no god write flows" (ADR-017).
       expect(toolNames.has('create_transaction')).toBe(false);
       expect(toolNames.has('update_transaction')).toBe(false);
       expect(toolNames.has('delete_transaction')).toBe(false);
+      expect(toolNames.has('create_transactions_bulk')).toBe(false);
       expect(toolNames.has('add_account_expense')).toBe(true);
       expect(toolNames.has('add_account_income')).toBe(true);
       expect(toolNames.has('add_card_purchase')).toBe(true);
@@ -57,6 +60,8 @@ describe('MCP integration > transactions', () => {
       expect(toolNames.has('delete_account_transaction')).toBe(true);
       expect(toolNames.has('update_card_transaction')).toBe(true);
       expect(toolNames.has('delete_card_transaction')).toBe(true);
+      expect(toolNames.has('import_card_statement')).toBe(true);
+      expect(toolNames.has('import_account_statement')).toBe(true);
 
       let accountName: string;
       if (preferredAccount) {
@@ -312,7 +317,7 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('create_transactions_bulk rejects an explicitly empty top-level account default', async () => {
+  it('import_account_statement rejects an explicitly empty top-level account', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -322,7 +327,7 @@ describe('MCP integration > transactions', () => {
         {
           method: 'tools/call',
           params: {
-            name: 'create_transactions_bulk',
+            name: 'import_account_statement',
             arguments: {
               account: '',
               items: [
@@ -346,7 +351,7 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('bulk import returns per-item status and treats re-imports as duplicates', async () => {
+  it('account statement import returns per-item status and treats re-imports as duplicates', async () => {
     const stamp = Date.now();
     const accountName = `Bulk Import ${stamp}`;
     const today = toIsoDate(new Date());
@@ -362,7 +367,7 @@ describe('MCP integration > transactions', () => {
       });
 
       const result = (await callTool(client, {
-        name: 'create_transactions_bulk',
+        name: 'import_account_statement',
         args: {
           account: accountName,
           items: [
@@ -404,7 +409,7 @@ describe('MCP integration > transactions', () => {
 
       // Re-importing the same items is idempotent — returns duplicates, not new transactions
       const reimport = (await callTool(client, {
-        name: 'create_transactions_bulk',
+        name: 'import_account_statement',
         args: {
           account: accountName,
           items: [
@@ -424,7 +429,7 @@ describe('MCP integration > transactions', () => {
     }
   });
 
-  it('bulk import persists and returns note per item', async () => {
+  it('account statement import persists and returns note per item', async () => {
     const stamp = Date.now();
     const accountName = `Bulk Note ${stamp}`;
     const today = toIsoDate(new Date());
@@ -439,7 +444,7 @@ describe('MCP integration > transactions', () => {
       });
 
       const result = (await callTool(client, {
-        name: 'create_transactions_bulk',
+        name: 'import_account_statement',
         args: {
           account: accountName,
           items: [

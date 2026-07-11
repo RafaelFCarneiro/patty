@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
 import { callTool, callToolError, ensure, makeClient, searchTransactions } from './helpers.js';
 
@@ -164,12 +165,18 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
     }
   });
 
-  // add_account_expense/add_account_income structurally omit billMonth/billYear (ADR-016) — an
-  // account movement can no longer even attempt to pass them at create time, so the
-  // "account + billMonth/billYear paired but no card" rejection this test covered directly via the
-  // retired create_transaction only survives where the fields still exist: a create_transactions_bulk
-  // line (whose schema still carries both, since a line can resolve either an account or a card).
-  it('rejects a bulk line pairing billMonth/billYear with an account (no card) (ADR-016)', async () => {
+  // add_account_expense/add_account_income structurally omit billMonth/billYear (ADR-016), and now
+  // ImportAccountStatementItemSchema (models/account.ts) does too (ADR-017 step 2) — a statement
+  // item belongs wholly to the ONE account named at the top level and structurally cannot carry
+  // bill-cycle vocabulary. The "account + billMonth/billYear paired but no card" and "unpaired
+  // billYear" rejections this test covered via the retired create_transaction, then via the retired
+  // create_transactions_bulk's shared per-line schema, are impossible by construction now — there is
+  // no field left anywhere in the account-import path to even attempt pairing billMonth/billYear
+  // with an account. `.strict()` on ImportAccountStatementItemSchema turns an item-level
+  // billMonth/billYear into a schema-validation error the MCP SDK rejects before the tool handler
+  // ever runs — a stronger guarantee than the old per-item runtime `validation` error, since the
+  // whole call is refused rather than one item coming back with status: 'error'.
+  it('import_account_statement rejects billMonth/billYear on an item — not part of the schema (ADR-017)', async () => {
     const bankName = `BulkAccountBillPair Bank ${stamp}`;
     const { client, transport } = makeClient();
 
@@ -181,62 +188,32 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
         args: { name: bankName, type: 'checking', currency: 'BRL', initialBalance: 100 },
       });
 
-      const bulkResult = (await callTool(client, {
-        name: 'create_transactions_bulk',
-        args: {
-          items: [
-            {
-              description: `Bulk account bill pair ${stamp}`,
-              amount: 10,
-              type: 'expense',
-              date: today,
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'import_account_statement',
+            arguments: {
               account: bankName,
-              billMonth: month,
-              billYear: year,
-              idempotencyKey: `bulk-account-billpair-${stamp}`,
+              items: [
+                {
+                  description: `Bulk account bill pair ${stamp}`,
+                  amount: 10,
+                  type: 'expense',
+                  date: today,
+                  billMonth: month,
+                  billYear: year,
+                  idempotencyKey: `bulk-account-billpair-${stamp}`,
+                },
+              ],
             },
-          ],
+          },
         },
-      })) as { items?: Array<{ status?: string; error?: string }> };
-      ensure(bulkResult.items?.length === 1, 'expected one bulk item result');
-      expect(bulkResult.items[0]?.status).toBe('error');
-      expect(bulkResult.items[0]?.error).toContain('validation');
-    } finally {
-      await transport.close();
-    }
-  });
-
-  it('rejects an unpaired billYear (no billMonth, no card) on bulk (ADR-016)', async () => {
-    const bankName = `UnpairedBillYear Bank ${stamp}`;
-    const { client, transport } = makeClient();
-
-    try {
-      await client.connect(transport);
-
-      await callTool(client, {
-        name: 'create_account',
-        args: { name: bankName, type: 'checking', currency: 'BRL', initialBalance: 100 },
-      });
-
-      const bulkResult = (await callTool(client, {
-        name: 'create_transactions_bulk',
-        args: {
-          items: [
-            {
-              description: `Bulk unpaired billYear ${stamp}`,
-              amount: 10,
-              type: 'expense',
-              date: today,
-              account: bankName,
-              billYear: year,
-              idempotencyKey: `bulk-unpaired-billyear-${stamp}`,
-            },
-          ],
-        },
-      })) as { items?: Array<{ status?: string; error?: string }> };
-      ensure(bulkResult.items?.length === 1, 'expected one bulk item result');
-      expect(bulkResult.items[0]?.status).toBe('error');
-      expect(bulkResult.items[0]?.error).toContain('validation');
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('unrecognized_keys');
     } finally {
       await transport.close();
     }
