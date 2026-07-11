@@ -491,7 +491,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
     }
   });
 
-  it('delete_transaction rejects a bill payment transfer, hinting at revert_bill_payment', async () => {
+  it('delete_card_transaction rejects a bill payment transfer, hinting at revert_bill_payment', async () => {
     const protectedCardName = `Protected Card ${stamp}`;
     const protectedBankName = `Protected Bank ${stamp}`;
     const { client, transport } = makeClient();
@@ -534,7 +534,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
       ensure(paymentTransactionId, 'expected a linked payment transaction');
 
       const err = (await callToolError(client, {
-        name: 'delete_transaction',
+        name: 'delete_card_transaction',
         args: { id: paymentTransactionId, confirm: true },
       })) as { error?: { code?: string; issues?: string[] } };
       expect(err.error?.code).toBe('validation');
@@ -551,7 +551,68 @@ describe('MCP integration > bill payment (Design 003)', () => {
     }
   });
 
-  it('delete_transaction still deletes an ordinary (non-bill) transfer', async () => {
+  // ADR-017 sub-decision 4: closes a gap the prior god update_transaction left open. That router
+  // keyed its dispatch on cardId, so a bill-payment transfer (billId set, no cardId) fell through to
+  // the generic core patch — completely unguarded, unlike delete_transaction above (which correctly
+  // keyed on billId). update_card_transaction now owns any billId-having transaction (union rule) and
+  // rejects editing the payment transfer outright, with no exception for fields that don't touch the
+  // bill (e.g. plain description/amount) — it's not just reassignment that's blocked.
+  it('update_card_transaction rejects any edit to a bill payment transfer, hinting at revert', async () => {
+    const editCardName = `EditProtected Card ${stamp}`;
+    const editBankName = `EditProtected Bank ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: editBankName, type: 'checking', currency: 'BRL', initialBalance: 500 },
+      });
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: {
+          name: editCardName,
+          closingDay: 28,
+          dueDay: 5,
+          currency: 'BRL',
+          paymentAccount: editBankName,
+        },
+      });
+      await callTool(client, {
+        name: 'add_card_purchase',
+        args: {
+          description: `EditProtected purchase ${stamp}`,
+          amount: 40,
+          type: 'expense',
+          date: today,
+          card: editCardName,
+          idempotencyKey: `editprotected-purchase-${stamp}`,
+        },
+      });
+      await callTool(client, { name: 'pay_bill', args: { card: editCardName, month, year } });
+
+      const bill = (await callTool(client, {
+        name: 'get_bill',
+        args: { card: editCardName, month, year },
+      })) as { bill?: { paymentTransactionId?: string } };
+      const paymentTransactionId = bill.bill?.paymentTransactionId;
+      ensure(paymentTransactionId, 'expected a linked payment transaction');
+
+      // Not a reassignment attempt — a plain field edit, previously unguarded via the god
+      // update_transaction (keyed dispatch on cardId, absent here).
+      const err = (await callToolError(client, {
+        name: 'update_card_transaction',
+        args: { id: paymentTransactionId, amount: 999 },
+      })) as { error?: { code?: string; issues?: string[] } };
+      expect(err.error?.code).toBe('validation');
+      expect(err.error?.issues?.[0]).toContain('revert_bill_payment');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('delete_account_transaction still deletes an ordinary (non-bill) transfer', async () => {
     const fromAcc = `Ordinary From ${stamp}`;
     const toAcc = `Ordinary To ${stamp}`;
     const { client, transport } = makeClient();
@@ -575,7 +636,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
       ensure(transfer.transaction?.id, 'expected a created transfer');
 
       const deleted = (await callTool(client, {
-        name: 'delete_transaction',
+        name: 'delete_account_transaction',
         args: { id: transfer.transaction.id, confirm: true },
       })) as { deleted?: boolean };
       expect(deleted.deleted).toBe(true);

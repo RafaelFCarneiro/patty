@@ -5,7 +5,7 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
-import { guard } from '../../common/result.js';
+import { guard, okOr } from '../../common/result.js';
 import { assertNonCreditType } from '../../logic/account.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
 import { normalizeMerchant } from '../../logic/merchant.js';
@@ -16,17 +16,25 @@ import {
   defaultStatusFor,
   resolveCurrency,
 } from '../../logic/transaction.js';
-import { accountErrors, type AddAccountMovement } from '../../models/account.js';
+import { accountErrors, type AddAccountMovement, type UpdateAccountTransaction } from '../../models/account.js';
 import {
   transactionErrors,
   MovementType,
+  TransactionTool,
   type ClassifyOutcome,
   type CreateTransactionResult,
+  type DeleteTransactionResult,
   type TransactionSource,
+  type TransactionView,
 } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef } from '../resolve.js';
-import { resolveCategorySelection } from '../transaction/core.js';
+import {
+  assertOwnership,
+  deleteTransaction as coreDeleteTransaction,
+  resolveCategorySelection,
+  updateTransaction as coreUpdateTransaction,
+} from '../transaction/core.js';
 
 /** Shared by addAccountExpense/addAccountIncome — everything but the fixed movement type. */
 const addAccountMovement = (
@@ -92,3 +100,32 @@ export const addAccountIncome = (
   input: AddAccountMovement,
   source: TransactionSource,
 ): ResultAsync<CreateTransactionResult, AppError> => addAccountMovement(deps, input, MovementType.enum.income, source);
+
+/**
+ * Update an account transaction (ADR-017): asserts the target is account-owned (neither `cardId`
+ * nor `billId`) — a card-owned id is rejected with a redirect to `update_card_transaction` — then
+ * delegates the generic patch to the transaction core.
+ */
+export const updateAccountTransaction = (
+  deps: Deps,
+  input: UpdateAccountTransaction,
+): ResultAsync<TransactionView, AppError> =>
+  safeTry(async function* () {
+    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
+    yield* assertOwnership(existing, false, TransactionTool.updateCardTransaction);
+    return ok(yield* coreUpdateTransaction(deps, input, existing));
+  });
+
+/**
+ * Delete an account transaction (ADR-017): same ownership guard as updateAccountTransaction, then
+ * the core's generic dry-run/delete.
+ */
+export const deleteAccountTransaction = (
+  deps: Deps,
+  input: { id: string; confirm: boolean },
+): ResultAsync<DeleteTransactionResult, AppError> =>
+  safeTry(async function* () {
+    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
+    yield* assertOwnership(existing, false, TransactionTool.deleteCardTransaction);
+    return ok(yield* coreDeleteTransaction(deps, input, existing));
+  });

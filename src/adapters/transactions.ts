@@ -10,7 +10,6 @@ import type {
   CreateTransactionsBulk,
   DeleteTransactionResult,
   SearchTransactions,
-  UpdateTransaction,
 } from '../models/transaction.js';
 import type { BulkItemResult } from '../logic/transaction.js';
 import type { AppError } from '../common/errors.js';
@@ -112,7 +111,6 @@ export const patchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> 
 // ─── wire/in→model ───────────────────────────────────────────────────────────
 
 export const bulkWireInToModel = (input: wireIn.CreateTransactionsBulkInput): CreateTransactionsBulk => input;
-export const updateWireInToModel = (input: wireIn.UpdateTransactionInput): UpdateTransaction => input;
 export const searchWireInToModel = (input: wireIn.SearchTransactionsInput): SearchTransactions => input;
 
 // ─── model→wire/out ──────────────────────────────────────────────────────────

@@ -70,20 +70,14 @@ describe('updateCardTransaction — reassignment attach runs before the main wri
     // Simulate ensureAndAttach's atomic re-check losing a race to a concurrent pay_bill — it must
     // reject before any other field in this same update request has been written.
     const racedDeps = { ...deps, bills: { ...deps.bills, ensureAndAttach: async () => null } };
-    const existing = await racedDeps.transactions.getById(transaction.id);
-    if (!existing) throw new Error('expected the transaction to exist');
 
-    const result = await updateCardTransaction(
-      racedDeps,
-      {
-        id: transaction.id,
-        description: 'Changed description',
-        amount: 999,
-        billMonth: period.month === 12 ? 1 : period.month + 1,
-        billYear: period.month === 12 ? period.year + 1 : period.year,
-      },
-      existing,
-    );
+    const result = await updateCardTransaction(racedDeps, {
+      id: transaction.id,
+      description: 'Changed description',
+      amount: 999,
+      billMonth: period.month === 12 ? 1 : period.month + 1,
+      billYear: period.month === 12 ? period.year + 1 : period.year,
+    });
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();

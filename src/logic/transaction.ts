@@ -82,6 +82,12 @@ export const hasSubCategory = (input: CategoryFields): input is CategoryFields &
 export const assertExclusiveCategorySubCategory = (input: CategoryFields): boolean =>
   !(hasCategory(input) && hasSubCategory(input));
 
+/** Card-owned iff cardId or billId is present (ADR-017 union rule) — a card purchase has cardId
+ *  (and billId once attached, self-heal window aside); the bill-payment transfer carries billId with
+ *  no cardId and is still governed by card/bill policy. Everything else is account-owned. */
+export const isCardOwned = (tx: Pick<TransactionView, 'cardId' | 'billId'>): boolean =>
+  R.isNonNullish(tx.cardId) || R.isNonNullish(tx.billId);
+
 /** billMonth/billYear (bill assignment) must be provided together, or not at all. */
 export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: number }): boolean =>
   (input.billMonth === undefined) === (input.billYear === undefined);

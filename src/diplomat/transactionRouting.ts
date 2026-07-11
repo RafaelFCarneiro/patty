@@ -1,19 +1,21 @@
-// Composition-root routing (ADR-016 steps 2-4): decides, for a transaction id or a
-// create_transactions_bulk line, whether the credit-card aggregate, the account aggregate, or the
-// transaction core owns it, and dispatches accordingly. Shared by diplomat/mcp and diplomat/http so
-// both surfaces route identically. This is delegation, not domain logic — the actual bill/card
-// policy lives in controllers/creditCard/*, and account-movement policy in controllers/account/*.
+// Composition-root routing (ADR-016 step 4, ADR-017): decides, for a create_transactions_bulk line,
+// whether the credit-card aggregate or the account aggregate owns it, and dispatches accordingly.
+// Shared by diplomat/mcp and diplomat/http so both surfaces route identically. This is delegation,
+// not domain logic — the actual bill/card policy lives in controllers/creditCard/*, and
+// account-movement policy in controllers/account/*.
 //
 // The god create_transaction tool/route (which used to expose this account-vs-card dispatch
-// directly) is retired (ADR-016 step 4): callers now reach add_card_purchase / add_account_expense /
-// add_account_income / create_transfer directly. The per-line dispatch decision below survives only
-// as a private helper for create_transactions_bulk — a statement paste/CSV import still needs to
-// route each line to its owning aggregate by presence of `account` vs `card`.
+// directly) is retired (ADR-016 step 4), and update/delete's former routers are retired too
+// (ADR-017 step 1: update_card_transaction/delete_card_transaction and
+// update_account_transaction/delete_account_transaction now self-validate ownership instead of
+// being dispatched to). The per-line dispatch decision below survives only as a private helper for
+// create_transactions_bulk — a statement paste/CSV import still needs to route each line to its
+// owning aggregate by presence of `account` vs `card` (ADR-017 step 2 retires this too).
 
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
-import { guard, okOr } from '../common/result.js';
+import { guard } from '../common/result.js';
 import {
   assertBillAssignmentHasCard,
   assertBillPeriodPaired,
@@ -27,23 +29,12 @@ import {
   type CreateTransaction,
   type CreateTransactionResult,
   type CreateTransactionsBulk,
-  type DeleteTransactionResult,
   type TransactionSource,
-  type TransactionView,
-  type UpdateTransaction,
 } from '../models/transaction.js';
 import { addAccountExpense, addAccountIncome } from '../controllers/account/transaction.js';
-import {
-  addCardPurchase,
-  deleteCardTransaction,
-  updateCardTransaction,
-} from '../controllers/creditCard/transaction.js';
+import { addCardPurchase } from '../controllers/creditCard/transaction.js';
 import type { Deps } from '../controllers/deps.js';
 import { createTransactionsBulk } from '../controllers/transaction/bulk.js';
-import {
-  deleteTransaction as coreDeleteTransaction,
-  updateTransaction as coreUpdateTransaction,
-} from '../controllers/transaction/core.js';
 
 /** Per-line dispatch used only by create_transactions_bulk (not exposed as its own MCP tool/REST
  *  route — see module header). Same exclusivity/bill-assignment guards the retired create_transaction
@@ -75,33 +66,3 @@ export const routeCreateTransactionsBulk = (
   input: CreateTransactionsBulk,
   source: TransactionSource,
 ): ResultAsync<BulkResult<AppError>, AppError> => createTransactionsBulk(deps, input, source, routeTransactionLine);
-
-export const routeUpdateTransaction = (deps: Deps, input: UpdateTransaction): ResultAsync<TransactionView, AppError> =>
-  safeTry(async function* () {
-    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
-    // Keyed on cardId, not billId (contrast routeDeleteTransaction): only a card-owned transaction
-    // can ever be reassigned to a different bill cycle, and a card purchase that hasn't attached to
-    // a bill yet (cardId set, billId still absent — the self-heal window) must still be able to
-    // reach the aggregate's reassignment/attach path.
-    return ok(
-      existing.cardId
-        ? yield* updateCardTransaction(deps, input, existing)
-        : yield* coreUpdateTransaction(deps, input, existing),
-    );
-  });
-
-export const routeDeleteTransaction = (
-  deps: Deps,
-  input: { id: string; confirm: boolean },
-): ResultAsync<DeleteTransactionResult, AppError> =>
-  safeTry(async function* () {
-    const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
-    // Keyed on billId, not cardId: a bill payment transfer carries a billId (the bill it paid) but
-    // no cardId (it's a transfer between accounts, not a card purchase) — it still needs the
-    // paid-bill immutability guard, so it must route to the aggregate too.
-    return ok(
-      existing.billId
-        ? yield* deleteCardTransaction(deps, input, existing)
-        : yield* coreDeleteTransaction(deps, input, existing),
-    );
-  });

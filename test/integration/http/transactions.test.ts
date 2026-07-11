@@ -302,7 +302,7 @@ describe('POST /api/transactions/bulk', () => {
   });
 });
 
-describe('PATCH /api/transactions/:id', () => {
+describe('PATCH /api/accounts/transactions/:id', () => {
   it('updates a transaction', async () => {
     const createRes = await inject({
       method: 'POST',
@@ -310,7 +310,7 @@ describe('PATCH /api/transactions/:id', () => {
       payload: { description: 'Updatable', amount: 7, date: '2026-06-01', idempotencyKey: 'upd-1' },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { description: 'Updated' } });
+    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { description: 'Updated' } });
     expect(res.statusCode).toBe(200);
   });
 
@@ -329,7 +329,7 @@ describe('PATCH /api/transactions/:id', () => {
       },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { tags: ['tag-b'] } });
+    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { tags: ['tag-b'] } });
     expect(res.statusCode).toBe(200);
     expect(res.json().tags).toContain('tag-b');
     expect(res.json().tags).not.toContain('tag-a');
@@ -349,7 +349,7 @@ describe('PATCH /api/transactions/:id', () => {
       },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { tags: [] } });
+    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { tags: [] } });
     expect(res.statusCode).toBe(200);
     expect(res.json().tags).toEqual([]);
   });
@@ -361,11 +361,11 @@ describe('PATCH /api/transactions/:id', () => {
       payload: { description: 'Note upd', amount: 5, date: '2026-06-01', idempotencyKey: 'note-upd-1' },
     });
     const id = createRes.json().transaction.id;
-    const set = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { note: 'added' } });
+    const set = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { note: 'added' } });
     expect(set.json().note).toBe('added');
-    const clear = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { note: '' } });
+    const clear = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { note: '' } });
     expect(clear.json().note).toBeUndefined();
-    const unchanged = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { amount: 10 } });
+    const unchanged = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { amount: 10 } });
     expect(unchanged.json().note).toBeUndefined();
   });
 
@@ -386,7 +386,7 @@ describe('PATCH /api/transactions/:id', () => {
       payload: { description: 'Sub clear', amount: 15, subCategory: 'Clear Sub', idempotencyKey: 'clear-sub-1' },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { category: 'Transport' } });
+    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { category: 'Transport' } });
     expect(res.statusCode).toBe(200);
     expect(res.json().categoryName).toBe('Transport');
     expect(res.json().subCategoryId).toBeUndefined();
@@ -409,7 +409,7 @@ describe('PATCH /api/transactions/:id', () => {
       payload: { description: 'Keep', amount: 15, subCategory: 'Keep Sub', idempotencyKey: 'keep-sub-1' },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { amount: 20 } });
+    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { amount: 20 } });
     expect(res.json().subCategoryName).toBe('Keep Sub');
   });
 
@@ -430,7 +430,7 @@ describe('PATCH /api/transactions/:id', () => {
       payload: { from: 'Xfer Cat Src', to: 'Xfer Cat Dst', amount: 50, idempotencyKey: 'xfer-cat-1' },
     });
     const id = xferRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { category: 'Food' } });
+    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { category: 'Food' } });
     expect(res.statusCode).toBe(422);
   });
 
@@ -451,7 +451,7 @@ describe('PATCH /api/transactions/:id', () => {
       payload: { from: 'Xfer Type Src', to: 'Xfer Type Dst', amount: 50, idempotencyKey: 'xfer-type-1' },
     });
     const id = xferRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { type: 'expense' } });
+    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { type: 'expense' } });
     expect(res.statusCode).toBe(422);
   });
 
@@ -462,7 +462,7 @@ describe('PATCH /api/transactions/:id', () => {
       payload: { description: 'Exp', amount: 50, idempotencyKey: 'kind-upd-1' },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { category: 'Salary' } });
+    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { category: 'Salary' } });
     expect(res.statusCode).toBe(422);
     expect(res.json().error.code).toBe('category_kind_mismatch');
   });
@@ -474,15 +474,195 @@ describe('PATCH /api/transactions/:id', () => {
       payload: { description: 'Wire type', amount: 20, idempotencyKey: 'wire-type-1' },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'PATCH', url: `/api/transactions/${id}`, payload: { type: 'transfer' } });
+    const res = await inject({ method: 'PATCH', url: `/api/accounts/transactions/${id}`, payload: { type: 'transfer' } });
     expect(res.statusCode).toBe(422);
   });
 
   it('returns 404 for unknown transaction', async () => {
     const res = await inject({
       method: 'PATCH',
-      url: '/api/transactions/00000000-0000-0000-0000-000000000000',
+      url: '/api/accounts/transactions/00000000-0000-0000-0000-000000000000',
       payload: { description: 'X' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  // Successor for the retired update_transaction's "billMonth without a card" rejection (ADR-016/017):
+  // UpdateAccountTransactionSchema structurally omits billMonth/billYear and is `.strict()` at the
+  // REST boundary, so an explicit billMonth here is a wire-schema validation error, not the old
+  // domain-level billAssignmentRequiresCard error (see the MCP-side comment in
+  // transaction-bill-assignment.test.ts for the same change on the MCP surface, where unknown fields
+  // are silently dropped instead of rejected).
+  it('rejects billMonth — not part of the account-transaction schema (422)', async () => {
+    const createRes = await inject({
+      method: 'POST',
+      url: '/api/accounts/expenses',
+      payload: { description: 'Strict bill fields', amount: 5, idempotencyKey: 'strict-billmonth-1' },
+    });
+    const id = createRes.json().transaction.id;
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/accounts/transactions/${id}`,
+      payload: { billMonth: 1, billYear: 2026 },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+
+  // ADR-017 ownership guard applies identically over REST — calling the account route on a
+  // card-owned transaction is rejected, not silently accepted.
+  it('rejects a card-owned transaction, redirecting to the credit-card route (422)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'REST Wrong Tool Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const createRes = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'REST wrong tool card purchase',
+        amount: 10,
+        type: 'expense',
+        card: 'REST Wrong Tool Card',
+        idempotencyKey: 'rest-wrong-tool-card-1',
+      },
+    });
+    const id = createRes.json().transaction.id;
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/accounts/transactions/${id}`,
+      payload: { description: 'nope' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.issues[0]).toContain('update_card_transaction');
+  });
+});
+
+describe('PATCH /api/credit-cards/transactions/:id', () => {
+  it('updates a card transaction', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'REST Card Update', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const createRes = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'Card purchase',
+        amount: 40,
+        type: 'expense',
+        card: 'REST Card Update',
+        idempotencyKey: 'card-upd-1',
+      },
+    });
+    const id = createRes.json().transaction.id;
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/credit-cards/transactions/${id}`,
+      payload: { description: 'Card purchase updated' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().description).toBe('Card purchase updated');
+  });
+
+  it('rejects changing account on a card transaction (422)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'REST Card Reject Payer', type: 'checking', currency: 'USD', initialBalance: 0 },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'REST Card Reject Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const createRes = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'Card reject purchase',
+        amount: 20,
+        type: 'expense',
+        card: 'REST Card Reject Card',
+        idempotencyKey: 'card-reject-1',
+      },
+    });
+    const id = createRes.json().transaction.id;
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/credit-cards/transactions/${id}`,
+      payload: { account: 'REST Card Reject Payer' },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it('rejects an account-owned transaction, redirecting to the account route (422)', async () => {
+    const createRes = await inject({
+      method: 'POST',
+      url: '/api/accounts/expenses',
+      payload: { description: 'REST wrong tool account', amount: 5, idempotencyKey: 'rest-wrong-tool-acct-1' },
+    });
+    const id = createRes.json().transaction.id;
+    const res = await inject({
+      method: 'PATCH',
+      url: `/api/credit-cards/transactions/${id}`,
+      payload: { description: 'nope' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.issues[0]).toContain('update_account_transaction');
+  });
+
+  it('returns 404 for unknown transaction', async () => {
+    const res = await inject({
+      method: 'PATCH',
+      url: '/api/credit-cards/transactions/00000000-0000-0000-0000-000000000000',
+      payload: { description: 'X' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('DELETE /api/credit-cards/transactions/:id', () => {
+  it('dry-run by default', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'REST Card Delete', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const createRes = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'Card delete target',
+        amount: 10,
+        type: 'expense',
+        card: 'REST Card Delete',
+        idempotencyKey: 'card-del-1',
+      },
+    });
+    const id = createRes.json().transaction.id;
+    const res = await inject({ method: 'DELETE', url: `/api/credit-cards/transactions/${id}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('dryRun', true);
+  });
+
+  it('rejects an account-owned transaction, redirecting to the account route (422)', async () => {
+    const createRes = await inject({
+      method: 'POST',
+      url: '/api/accounts/expenses',
+      payload: { description: 'REST wrong tool delete', amount: 5, idempotencyKey: 'rest-wrong-tool-del-1' },
+    });
+    const id = createRes.json().transaction.id;
+    const res = await inject({ method: 'DELETE', url: `/api/credit-cards/transactions/${id}?confirm=true` });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.issues[0]).toContain('delete_account_transaction');
+  });
+
+  it('returns 404 for unknown transaction', async () => {
+    const res = await inject({
+      method: 'DELETE',
+      url: '/api/credit-cards/transactions/00000000-0000-0000-0000-000000000000?confirm=true',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -520,7 +700,7 @@ describe('POST /api/transactions/:id/confirm', () => {
   });
 });
 
-describe('DELETE /api/transactions/:id', () => {
+describe('DELETE /api/accounts/transactions/:id', () => {
   it('dry-run by default', async () => {
     const createRes = await inject({
       method: 'POST',
@@ -528,7 +708,7 @@ describe('DELETE /api/transactions/:id', () => {
       payload: { description: 'Del Target', amount: 3, date: '2026-06-01', idempotencyKey: 'del-1' },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'DELETE', url: `/api/transactions/${id}` });
+    const res = await inject({ method: 'DELETE', url: `/api/accounts/transactions/${id}` });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toHaveProperty('dryRun', true);
   });
@@ -540,7 +720,7 @@ describe('DELETE /api/transactions/:id', () => {
       payload: { description: 'Del Confirm', amount: 3, date: '2026-06-01', idempotencyKey: 'del-2' },
     });
     const id = createRes.json().transaction.id;
-    const res = await inject({ method: 'DELETE', url: `/api/transactions/${id}?confirm=true` });
+    const res = await inject({ method: 'DELETE', url: `/api/accounts/transactions/${id}?confirm=true` });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toHaveProperty('deleted', true);
   });
@@ -548,9 +728,32 @@ describe('DELETE /api/transactions/:id', () => {
   it('returns 404 for unknown transaction', async () => {
     const res = await inject({
       method: 'DELETE',
-      url: '/api/transactions/00000000-0000-0000-0000-000000000000?confirm=true',
+      url: '/api/accounts/transactions/00000000-0000-0000-0000-000000000000?confirm=true',
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects a card-owned transaction, redirecting to the credit-card route (422)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'REST Wrong Tool Delete Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const createRes = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'REST wrong tool delete card purchase',
+        amount: 10,
+        type: 'expense',
+        card: 'REST Wrong Tool Delete Card',
+        idempotencyKey: 'rest-wrong-tool-delete-card-1',
+      },
+    });
+    const id = createRes.json().transaction.id;
+    const res = await inject({ method: 'DELETE', url: `/api/accounts/transactions/${id}?confirm=true` });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.issues[0]).toContain('delete_card_transaction');
   });
 });
 

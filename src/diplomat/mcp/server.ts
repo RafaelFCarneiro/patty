@@ -9,7 +9,12 @@ import {
   listAccounts,
   updateAccount,
 } from '../../controllers/account/account.js';
-import { addAccountExpense, addAccountIncome } from '../../controllers/account/transaction.js';
+import {
+  addAccountExpense,
+  addAccountIncome,
+  deleteAccountTransaction,
+  updateAccountTransaction,
+} from '../../controllers/account/transaction.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
 import { listDashboards, saveDashboard } from '../../controllers/dashboards.js';
@@ -24,7 +29,11 @@ import {
 import { getPreferences, setLocale } from '../../controllers/settings.js';
 import { getStatus } from '../../controllers/status.js';
 import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCard/creditCard.js';
-import { addCardPurchase } from '../../controllers/creditCard/transaction.js';
+import {
+  addCardPurchase,
+  deleteCardTransaction,
+  updateCardTransaction,
+} from '../../controllers/creditCard/transaction.js';
 import type { Deps } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
@@ -32,7 +41,7 @@ import { getSpendingSummary } from '../../controllers/summary.js';
 import { confirmTransaction } from '../../controllers/transaction/core.js';
 import { searchTransactions } from '../../controllers/transaction/read.js';
 import { createTransfer } from '../../controllers/account/transfer.js';
-import { routeCreateTransactionsBulk, routeDeleteTransaction, routeUpdateTransaction } from '../transactionRouting.js';
+import { routeCreateTransactionsBulk } from '../transactionRouting.js';
 import {
   AggregateMetric,
   AggregateSort,
@@ -42,8 +51,9 @@ import {
 import { SortDirection } from '../../models/page.js';
 import {
   TransactionSource,
+  TransactionTool,
   CreateTransactionsBulkSchema,
-  UpdateTransactionSchema,
+  DeleteTransactionSchema,
   SearchTransactionsSchema,
   TransactionSortField,
 } from '../../models/transaction.js';
@@ -53,14 +63,19 @@ import { AccountType } from '../../models/account.js';
 import { BillQuerySchema, PayBillSchema } from '../../models/bill.js';
 import { SaveDashboardSchema } from '../../models/dashboard.js';
 import { CreateRecurringSchema } from '../../wire/in/recurring.js';
-import { AddCardPurchaseSchema, CreateCreditCardSchema } from '../../wire/in/creditCards.js';
+import {
+  AddCardPurchaseSchema,
+  CreateCreditCardSchema,
+  UpdateCardTransactionSchema,
+} from '../../wire/in/creditCards.js';
 import { bulkResultToWireOut, createResultToWireOut, deleteResultToWireOut } from '../../adapters/transactions.js';
-import { addCardPurchaseWireInToModel } from '../../adapters/creditCards.js';
+import { addCardPurchaseWireInToModel, updateCardTransactionWireInToModel } from '../../adapters/creditCards.js';
 import {
   AddAccountMovementSchema,
   CreateAccountSchema,
   CreateTransferSchema,
   UpdateAccountSchema,
+  UpdateAccountTransactionSchema,
 } from '../../wire/in/accounts.js';
 import { CreateTagSchema } from '../../wire/in/tags.js';
 import * as accountAdapters from '../../adapters/accounts.js';
@@ -300,32 +315,80 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
   );
 
   server.registerTool(
-    'update_transaction',
+    TransactionTool.updateCardTransaction,
     {
-      title: 'Update transaction',
+      title: 'Update credit-card transaction',
       description:
-        'Update fields of an existing transaction by id (from search_transactions). Only provided fields ' +
-        'change. Setting category counts as a user correction (confidence 1) ' +
-        'and strengthens the merchant→category association. ' +
-        'Changing the account also updates the currency to match it.',
-      inputSchema: UpdateTransactionSchema.shape,
+        "Update a credit-card transaction by id (from search_transactions) — the credit-card aggregate's " +
+        'update entry point (ADR-017). Owns transactions with cardId or billId set: card purchases ' +
+        '(including the brief self-heal window before bill attachment) and the bill-payment transfer. ' +
+        'search_transactions/TransactionView return cardId/accountId/billId — use those to pick the right ' +
+        'tool; calling this on an account-owned transaction (neither field set) is rejected with a ' +
+        `validation error redirecting to ${TransactionTool.updateAccountTransaction}. Only provided fields ` +
+        'change. Setting category is a user correction (confidence 1, strengthens the merchant→category ' +
+        "association). account cannot be changed — a card purchase is always funded by the card's own " +
+        'internal liability account (ADR-010). billMonth+billYear reassigns to a different bill cycle ' +
+        '(both required together); rejected with a validation error pointing at revert_bill_payment if the ' +
+        'current or target bill is paid. The bill-payment transfer itself (billId set, no cardId) cannot ' +
+        'be edited at all — it is owned exclusively by pay_bill/revert_bill_payment.',
+      inputSchema: UpdateCardTransactionSchema.shape,
     },
-    async (args) => fromResult(await routeUpdateTransaction(deps, args)),
+    async (args) =>
+      fromResult(await updateCardTransaction(deps, updateCardTransactionWireInToModel(args))),
   );
 
   server.registerTool(
-    'delete_transaction',
+    TransactionTool.deleteCardTransaction,
     {
-      title: 'Delete transaction',
+      title: 'Delete credit-card transaction',
       description:
-        'Delete a transaction by id. Without confirm:true it is a DRY RUN returning what would be deleted — ' +
-        'show it to the user, get explicit confirmation, then call again with confirm: true.',
-      inputSchema: {
-        id: z.string().min(1).describe('Transaction id'),
-        confirm: z.boolean().default(false).describe('Must be true to actually delete'),
-      },
+        "Delete a credit-card transaction by id — the credit-card aggregate's delete entry point " +
+        '(ADR-017). Owns transactions with cardId or billId set (card purchases and the bill-payment ' +
+        'transfer); calling this on an account-owned transaction is rejected with a validation error ' +
+        `redirecting to ${TransactionTool.deleteAccountTransaction}. Without confirm:true it is a DRY RUN ` +
+        'returning what would be deleted — show it to the user and call again with confirm: true. Any ' +
+        'transaction on a paid bill (including the bill-payment transfer itself) cannot be deleted this ' +
+        'way — rejected with a validation error pointing at revert_bill_payment.',
+      inputSchema: DeleteTransactionSchema.shape,
     },
-    async (args) => fromResult((await routeDeleteTransaction(deps, args)).map(deleteResultToWireOut)),
+    async (args) => fromResult((await deleteCardTransaction(deps, args)).map(deleteResultToWireOut)),
+  );
+
+  server.registerTool(
+    TransactionTool.updateAccountTransaction,
+    {
+      title: 'Update account transaction',
+      description:
+        "Update an account transaction by id (from search_transactions) — the account aggregate's update " +
+        'entry point (ADR-017). Owns transactions with neither cardId nor billId set: account ' +
+        'expenses/income and ordinary transfers. search_transactions/TransactionView return ' +
+        'cardId/accountId/billId — use those to pick the right tool; calling this on a card-owned ' +
+        'transaction (cardId or billId set) is rejected with a validation error redirecting to ' +
+        `${TransactionTool.updateCardTransaction}. Only provided fields change. Setting category is a ` +
+        'user correction (confidence 1, strengthens the merchant→category association). Changing account ' +
+        'also updates currency to match it. Transfer transactions cannot have their type changed and ' +
+        'cannot receive a category/subCategory (both rejected with a validation error).',
+      inputSchema: UpdateAccountTransactionSchema.shape,
+    },
+    async (args) =>
+      fromResult(
+        await updateAccountTransaction(deps, accountAdapters.updateAccountTransactionWireInToModel(args)),
+      ),
+  );
+
+  server.registerTool(
+    TransactionTool.deleteAccountTransaction,
+    {
+      title: 'Delete account transaction',
+      description:
+        "Delete an account transaction by id — the account aggregate's delete entry point (ADR-017). Owns " +
+        'transactions with neither cardId nor billId set (account expenses/income, ordinary transfers); ' +
+        'calling this on a card-owned transaction is rejected with a validation error redirecting to ' +
+        `${TransactionTool.deleteCardTransaction}. Without confirm:true it is a DRY RUN returning what ` +
+        'would be deleted — show it to the user and call again with confirm: true.',
+      inputSchema: DeleteTransactionSchema.shape,
+    },
+    async (args) => fromResult((await deleteAccountTransaction(deps, args)).map(deleteResultToWireOut)),
   );
 
   server.registerTool(

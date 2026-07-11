@@ -5,7 +5,6 @@ import {
   CreateTransactionsBulkSchema,
   SearchTransactionsSchema,
   TransactionSortField,
-  UpdateTransactionSchema,
 } from '../../models/transaction.js';
 import type { SearchTransactions } from '../../models/transaction.js';
 import { BooleanQuerySchema } from './common.js';
@@ -19,9 +18,6 @@ export type BulkTransactionItem = z.infer<typeof BulkTransactionItemSchema>;
 
 export const CreateTransactionsBulkInputSchema = CreateTransactionsBulkSchema;
 export type CreateTransactionsBulkInput = z.infer<typeof CreateTransactionsBulkInputSchema>;
-
-export const UpdateTransactionInputSchema = UpdateTransactionSchema;
-export type UpdateTransactionInput = z.infer<typeof UpdateTransactionInputSchema>;
 
 // Pre-transform query shape — a plain ZodObject, so it can also serve as the route's
 // OpenAPI query schema (routes.ts), which needs a ZodObject rather than the ZodEffects
