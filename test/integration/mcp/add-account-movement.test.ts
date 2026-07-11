@@ -226,7 +226,7 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
     }
   });
 
-  it('create_transactions_bulk routes an income line to add_account_income', async () => {
+  it('import_account_statement dispatches an income line to addAccountIncome', async () => {
     const accountName = `AddIncome Bulk Account ${stamp}`;
     const { client, transport } = makeClient();
 
@@ -239,15 +239,15 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
       });
 
       const result = (await callTool(client, {
-        name: 'create_transactions_bulk',
+        name: 'import_account_statement',
         args: {
+          account: accountName,
           items: [
             {
               description: `Bulk income line ${stamp}`,
               amount: 500,
               type: 'income',
               date: today,
-              account: accountName,
               idempotencyKey: `bulk-income-${stamp}`,
             },
           ],

@@ -13,6 +13,7 @@ import {
   addAccountExpense,
   addAccountIncome,
   deleteAccountTransaction,
+  importAccountStatement,
   updateAccountTransaction,
 } from '../../controllers/account/transaction.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
@@ -32,6 +33,7 @@ import { createCreditCard, deleteCreditCard, listCreditCards } from '../../contr
 import {
   addCardPurchase,
   deleteCardTransaction,
+  importCardStatement,
   updateCardTransaction,
 } from '../../controllers/creditCard/transaction.js';
 import type { Deps } from '../../controllers/deps.js';
@@ -41,7 +43,6 @@ import { getSpendingSummary } from '../../controllers/summary.js';
 import { confirmTransaction } from '../../controllers/transaction/core.js';
 import { searchTransactions } from '../../controllers/transaction/read.js';
 import { createTransfer } from '../../controllers/account/transfer.js';
-import { routeCreateTransactionsBulk } from '../transactionRouting.js';
 import {
   AggregateMetric,
   AggregateSort,
@@ -52,7 +53,6 @@ import { SortDirection } from '../../models/page.js';
 import {
   TransactionSource,
   TransactionTool,
-  CreateTransactionsBulkSchema,
   DeleteTransactionSchema,
   SearchTransactionsSchema,
   TransactionSortField,
@@ -66,14 +66,20 @@ import { CreateRecurringSchema } from '../../wire/in/recurring.js';
 import {
   AddCardPurchaseSchema,
   CreateCreditCardSchema,
+  ImportCardStatementSchema,
   UpdateCardTransactionSchema,
 } from '../../wire/in/creditCards.js';
 import { bulkResultToWireOut, createResultToWireOut, deleteResultToWireOut } from '../../adapters/transactions.js';
-import { addCardPurchaseWireInToModel, updateCardTransactionWireInToModel } from '../../adapters/creditCards.js';
+import {
+  addCardPurchaseWireInToModel,
+  importCardStatementWireInToModel,
+  updateCardTransactionWireInToModel,
+} from '../../adapters/creditCards.js';
 import {
   AddAccountMovementSchema,
   CreateAccountSchema,
   CreateTransferSchema,
+  ImportAccountStatementSchema,
   UpdateAccountSchema,
   UpdateAccountTransactionSchema,
 } from '../../wire/in/accounts.js';
@@ -105,6 +111,13 @@ const addAccountMovementDescription = (movement: 'expense' | 'income'): string =
   'stable key like "<date>-<description>-<amount>". Currency comes from the account, or the currency field ' +
   `(default USD). Omitting account records an unattached ${movement === 'expense' ? '(e.g. cash) expense' : 'income'}.`;
 
+/** Shared by import_card_statement/import_account_statement (ADR-017 step 2) — the per-item
+ *  classification/idempotency/result-status contract is identical for both single-source importers. */
+const STATEMENT_IMPORT_RESULT_DESCRIPTION =
+  'Each item is auto-classified and idempotent (key derived from date+description+amount when absent — ' +
+  're-importing is safe). Returns a per-item status: created, needs_review (low confidence — confirm ' +
+  'categories with the user), duplicate, or error.';
+
 export const buildMcpServer = (deps: Deps, version: string): McpServer => {
   const server = new McpServer({ name: 'fintrack', version });
 
@@ -125,19 +138,21 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
   );
 
   server.registerTool(
-    'create_transactions_bulk',
+    'import_card_statement',
     {
-      title: 'Create transactions in bulk',
+      title: 'Import a credit-card statement',
       description:
-        'Import many transactions at once (pasted statement, CSV lines). Each item is auto-classified ' +
-        'and idempotent (key derived from date+description+amount — re-importing is safe). Returns a ' +
-        'per-item status: created, needs_review (low confidence — confirm categories with the user), ' +
-        'duplicate, or error. Top-level account/card apply to items that do not set their own.',
-      inputSchema: CreateTransactionsBulkSchema.shape,
+        'Import a credit-card statement (pasted text, CSV lines) — every item is a purchase on the ONE ' +
+        "card named at the top level, joining each item's cycle bill (fatura). Single-source: the " +
+        "credit-card aggregate's bulk entry point (ADR-017) — use import_account_statement instead for a " +
+        `bank/wallet statement. ${STATEMENT_IMPORT_RESULT_DESCRIPTION}`,
+      inputSchema: ImportCardStatementSchema.shape,
     },
     async (args) =>
       fromResult(
-        (await routeCreateTransactionsBulk(deps, args, TransactionSource.enum.import)).map(bulkResultToWireOut),
+        (
+          await importCardStatement(deps, importCardStatementWireInToModel(args), TransactionSource.enum.import)
+        ).map(bulkResultToWireOut),
       ),
   );
 
@@ -186,6 +201,25 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
     async (args) => {
       const model = accountAdapters.addAccountMovementWireInToModel(args);
       return fromResult((await addAccountIncome(deps, model, TransactionSource.enum.mcp)).map(createResultToWireOut));
+    },
+  );
+
+  server.registerTool(
+    'import_account_statement',
+    {
+      title: 'Import an account statement',
+      description:
+        'Import a bank/wallet statement (pasted text, CSV lines) — every item is an expense or income ' +
+        "(per item's `type`) on the ONE account named at the top level (omit to record unattached, e.g. " +
+        "cash, movements) — the account aggregate's bulk entry point (ADR-017) — use import_card_statement " +
+        `instead for a credit-card statement. ${STATEMENT_IMPORT_RESULT_DESCRIPTION}`,
+      inputSchema: ImportAccountStatementSchema.shape,
+    },
+    async (args) => {
+      const model = accountAdapters.importAccountStatementWireInToModel(args);
+      return fromResult(
+        (await importAccountStatement(deps, model, TransactionSource.enum.import)).map(bulkResultToWireOut),
+      );
     },
   );
 

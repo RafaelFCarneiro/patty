@@ -29,8 +29,8 @@ export const transactionTypeLabels: LabelMap<TransactionType> = {
   transfer: { en: 'Transfer', pt: 'Transferência', es: 'Transferencia' },
 };
 
-/** Types accepted by add_card_purchase / add_account_expense / add_account_income / bulk —
- *  transfers go through create_transfer. */
+/** Types accepted by add_card_purchase / add_account_expense / add_account_income /
+ *  import_card_statement / import_account_statement — transfers go through create_transfer. */
 export const MovementType = z.enum(['expense', 'income']);
 export type MovementType = z.infer<typeof MovementType>;
 
@@ -58,6 +58,15 @@ export const TransactionCursorSchema = cursorSchema(TransactionSortField);
 export type TransactionCursor = z.infer<typeof TransactionCursorSchema>;
 
 export const NOTE_MAX_LENGTH = 1000;
+
+// Shared statement-import field descriptions (ADR-017 step 2) — both ImportCardStatementItemSchema
+// (models/creditCard.ts) and ImportAccountStatementItemSchema/ImportCardStatementSchema/
+// ImportAccountStatementSchema reuse these verbatim; named once here so the two aggregate schemas
+// never copy-paste the same describe() text (code-quality.md "constants over literals").
+export const STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION =
+  'Stable dedup key; derived from date+description+amount when absent';
+export const STATEMENT_ITEMS_DESCRIPTION = 'Statement lines to import';
+export const STATEMENT_RAW_INPUT_DESCRIPTION = 'The original pasted statement text';
 
 // `.describe()` is domain information — it states what each field is and represents.
 // Defaults split by intent: integrity defaults (a value that must exist for the entity to be
@@ -199,26 +208,6 @@ export const CreateTransactionSchema = z.object({
   tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
 });
 export type CreateTransaction = z.infer<typeof CreateTransactionSchema>;
-
-/** Bulk item: idempotencyKey optional — derived from date+description+amount when absent.
- *  subCategory/tags omitted — bulk import classifies automatically. */
-export const BulkTransactionItemSchema = CreateTransactionSchema.omit({
-  idempotencyKey: true,
-  rawInput: true,
-  subCategory: true,
-  tags: true,
-}).extend({
-  idempotencyKey: z.string().min(1).optional(),
-});
-export type BulkTransactionItem = z.infer<typeof BulkTransactionItemSchema>;
-
-export const CreateTransactionsBulkSchema = z.object({
-  items: z.array(BulkTransactionItemSchema).min(1).max(200).describe('Transaction items to import'),
-  account: z.string().min(1).optional().describe('Default account for all items'),
-  card: z.string().min(1).optional().describe('Default credit card for all items'),
-  rawInput: z.string().optional().describe('The original pasted statement text'),
-});
-export type CreateTransactionsBulk = z.infer<typeof CreateTransactionsBulkSchema>;
 
 /** Shared base for the aggregate-specific update tools (ADR-017), mirroring how
  *  CreateTransactionSchema is the shared base for add_card_purchase/add_account_expense/
@@ -372,10 +361,6 @@ export const transactionErrors = {
     // ones with a settable field.
     hint: `Category "${categoryName}" is ${categoryKind}-only; use a matching category, or record this as ${categoryKind === 'income' ? 'income' : 'an expense'} instead`,
   }),
-  exclusiveAccountCard: {
-    code: 'validation',
-    issues: ['provide account OR card, not both'],
-  } satisfies TransactionError,
   exclusiveCategorySubCategory: {
     code: 'validation',
     issues: ['provide category OR subCategory, not both — subCategory implies its parent category'],
@@ -396,11 +381,11 @@ export const transactionErrors = {
     code: 'validation',
     issues: ['billMonth and billYear must be provided together'],
   } satisfies TransactionError,
-  // Raised by both the transaction core (transaction/{core,bulk}.ts, rejecting billMonth/
-  // billYear on a card-less transaction) and the credit-card aggregate (creditCard/transaction.ts,
-  // rejecting reassignment on a transaction whose card lookup came back stale) — stays here rather
-  // than moving to creditCard.ts's cardErrors, since the core itself must be able to raise it
-  // without depending on the credit-card domain.
+  // Raised by the transaction core's generic patch (transaction/core.ts's updateTransaction,
+  // rejecting billMonth/billYear reaching the core patch — an account-owned update structurally
+  // can't carry these fields, and a card-owned update strips them before delegating here) — stays
+  // here rather than moving to creditCard.ts's cardErrors, since the core itself must be able to
+  // raise it without depending on the credit-card domain.
   billAssignmentRequiresCard: {
     code: 'validation',
     issues: [

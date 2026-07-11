@@ -29,6 +29,7 @@ import { createCreditCard, deleteCreditCard, listCreditCards } from '../../contr
 import {
   addCardPurchase,
   deleteCardTransaction,
+  importCardStatement,
   updateCardTransaction,
 } from '../../controllers/creditCard/transaction.js';
 import type { Deps } from '../../controllers/deps.js';
@@ -42,10 +43,10 @@ import {
   addAccountExpense,
   addAccountIncome,
   deleteAccountTransaction,
+  importAccountStatement,
   updateAccountTransaction,
 } from '../../controllers/account/transaction.js';
 import { createTransfer } from '../../controllers/account/transfer.js';
-import { routeCreateTransactionsBulk } from '../transactionRouting.js';
 import { AccountBalanceSchema, AccountSchema } from '../../models/account.js';
 import { AggregateResultSchema } from '../../models/aggregate.js';
 import { BillSchema } from '../../models/bill.js';
@@ -371,16 +372,16 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
   },
   {
     method: 'post',
-    path: '/api/transactions/bulk',
-    tags: [RouteTag.transactions],
-    summary: 'Bulk-create transactions',
-    request: { body: jsonBody(wireInTransactions.CreateTransactionsBulkInputSchema) },
-    responses: { 201: okResponse('Bulk import result', BulkResultOut), 422: validation422 },
+    path: '/api/accounts/statement',
+    tags: [RouteTag.accounts],
+    summary: 'Import an account statement',
+    request: { body: jsonBody(wireInAccounts.ImportAccountStatementSchema) },
+    responses: { 201: okResponse('Import result', BulkResultOut), 422: validation422 },
     handler: async (req, reply) => {
-      const wireIn = parse(wireInTransactions.CreateTransactionsBulkInputSchema, req.body, reply);
+      const wireIn = parse(wireInAccounts.ImportAccountStatementSchema, req.body, reply);
       if (!wireIn) return reply;
-      const model = transactionAdapters.bulkWireInToModel(wireIn);
-      const result = await routeCreateTransactionsBulk(deps, model, TransactionSource.enum.import);
+      const model = accountAdapters.importAccountStatementWireInToModel(wireIn);
+      const result = await importAccountStatement(deps, model, TransactionSource.enum.import);
       return send(reply, result.map(transactionAdapters.bulkResultToWireOut), 201);
     },
   },
@@ -409,6 +410,21 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
         },
         (e) => reply.status(httpStatus(e)).send({ error: e }),
       );
+    },
+  },
+  {
+    method: 'post',
+    path: '/api/credit-cards/statement',
+    tags: [RouteTag.creditCards],
+    summary: 'Import a credit-card statement',
+    request: { body: jsonBody(wireInCreditCards.ImportCardStatementSchema) },
+    responses: { 201: okResponse('Import result', BulkResultOut), 422: validation422 },
+    handler: async (req, reply) => {
+      const wireIn = parse(wireInCreditCards.ImportCardStatementSchema, req.body, reply);
+      if (!wireIn) return reply;
+      const model = creditCardAdapters.importCardStatementWireInToModel(wireIn);
+      const result = await importCardStatement(deps, model, TransactionSource.enum.import);
+      return send(reply, result.map(transactionAdapters.bulkResultToWireOut), 201);
     },
   },
 

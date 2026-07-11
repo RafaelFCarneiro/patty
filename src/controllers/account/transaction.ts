@@ -16,7 +16,12 @@ import {
   defaultStatusFor,
   resolveCurrency,
 } from '../../logic/transaction.js';
-import { accountErrors, type AddAccountMovement, type UpdateAccountTransaction } from '../../models/account.js';
+import {
+  accountErrors,
+  type AddAccountMovement,
+  type ImportAccountStatement,
+  type UpdateAccountTransaction,
+} from '../../models/account.js';
 import {
   transactionErrors,
   MovementType,
@@ -27,8 +32,10 @@ import {
   type TransactionSource,
   type TransactionView,
 } from '../../models/transaction.js';
+import type { BulkResult } from '../../logic/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef } from '../resolve.js';
+import { runStatementImport } from '../transaction/bulk.js';
 import {
   assertOwnership,
   deleteTransaction as coreDeleteTransaction,
@@ -100,6 +107,26 @@ export const addAccountIncome = (
   input: AddAccountMovement,
   source: TransactionSource,
 ): ResultAsync<CreateTransactionResult, AppError> => addAccountMovement(deps, input, MovementType.enum.income, source);
+
+/**
+ * Import an account statement (ADR-017 step 2): single-source — every item belongs to the ONE
+ * account named in `input.account` (or unattached if omitted), so there is no per-line account to
+ * resolve or route. Each line's own `type` picks `addAccountExpense` or `addAccountIncome` (the
+ * movement kind is still a per-line discriminator here, unlike the single-movement tools, since a
+ * statement mixes expenses and income); both are bound to the fixed account and delegate the
+ * generic import plumbing (defaulting, dedup, needs-review flagging) to `runStatementImport`.
+ */
+export const importAccountStatement = (
+  deps: Deps,
+  input: ImportAccountStatement,
+  source: TransactionSource,
+): ResultAsync<BulkResult<AppError>, AppError> =>
+  runStatementImport(deps, input.items, input.rawInput, source, (d, line, src) => {
+    const movement = R.omit(line, ['type']);
+    return line.type === MovementType.enum.expense
+      ? addAccountExpense(d, { ...movement, account: input.account }, src)
+      : addAccountIncome(d, { ...movement, account: input.account }, src);
+  });
 
 /**
  * Update an account transaction (ADR-017): asserts the target is account-owned (neither `cardId`

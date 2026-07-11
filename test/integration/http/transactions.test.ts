@@ -218,11 +218,11 @@ describe('POST /api/accounts/income', () => {
   });
 });
 
-describe('POST /api/transactions/bulk', () => {
-  it('creates bulk transactions (201) with per-item results', async () => {
+describe('POST /api/accounts/statement', () => {
+  it('imports an account statement (201) with per-item results', async () => {
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions/bulk',
+      url: '/api/accounts/statement',
       payload: {
         items: [
           { description: 'Bulk 1', amount: 10, type: 'expense', date: '2026-06-01' },
@@ -240,8 +240,8 @@ describe('POST /api/transactions/bulk', () => {
     const items = [
       { description: 'Bulk Dup', amount: 10, type: 'expense', date: '2026-06-01', idempotencyKey: 'bulk-dup-1' },
     ];
-    await inject({ method: 'POST', url: '/api/transactions/bulk', payload: { items } });
-    const res = await inject({ method: 'POST', url: '/api/transactions/bulk', payload: { items } });
+    await inject({ method: 'POST', url: '/api/accounts/statement', payload: { items } });
+    const res = await inject({ method: 'POST', url: '/api/accounts/statement', payload: { items } });
     expect(res.statusCode).toBe(201);
     expect(res.json().items[0].status).toBe('duplicate');
   });
@@ -249,7 +249,7 @@ describe('POST /api/transactions/bulk', () => {
   it('persists note per item', async () => {
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions/bulk',
+      url: '/api/accounts/statement',
       payload: {
         items: [{ description: 'Bulk Note', amount: 10, type: 'expense', date: '2026-06-01', note: 'bulk memo' }],
       },
@@ -259,16 +259,28 @@ describe('POST /api/transactions/bulk', () => {
   });
 
   it('rejects empty items (422)', async () => {
-    const res = await inject({ method: 'POST', url: '/api/transactions/bulk', payload: { items: [] } });
+    const res = await inject({ method: 'POST', url: '/api/accounts/statement', payload: { items: [] } });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it('rejects an explicitly empty top-level account (422)', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/accounts/statement',
+      payload: { account: '', items: [{ description: 'Bulk', amount: 10, type: 'expense', date: '2026-06-01' }] },
+    });
     expect(res.statusCode).toBe(422);
   });
 
   // The retired unified POST /api/transactions used to reject a body resolving both account and
-  // card (422) directly. add_account_expense/add_account_income and the card-purchase route are
-  // now single-purpose (no `card` field on the former, no `account` field on the latter), so that
-  // exclusivity case is impossible-by-construction there — it survives here, since a bulk item's
-  // schema still carries both optional fields and can resolve both via top-level defaults.
-  it('rejects a bulk line resolving both account and card via top-level defaults (422)', async () => {
+  // card (422) directly; the retired POST /api/transactions/bulk kept that case alive since a bulk
+  // item's schema still carried both optional fields. ImportAccountStatementItemSchema (ADR-017 step
+  // 2, models/account.ts) has no `card` field at all — a statement belongs wholly to the ONE account
+  // named at the top level — so a mixed-source line is impossible to express, not merely rejected at
+  // runtime. `.strict()` at this REST boundary turns the now-foreign `card` field into a wire-schema
+  // validation error instead (mirrors "rejects billMonth — not part of the account-transaction
+  // schema (422)" below for update_account_transaction).
+  it('rejects a card field on an account-statement item — not part of the schema (422)', async () => {
     await inject({
       method: 'POST',
       url: '/api/accounts',
@@ -281,7 +293,7 @@ describe('POST /api/transactions/bulk', () => {
     });
     const res = await inject({
       method: 'POST',
-      url: '/api/transactions/bulk',
+      url: '/api/accounts/statement',
       payload: {
         account: 'Bulk Exclusive Bank',
         items: [
@@ -296,9 +308,51 @@ describe('POST /api/transactions/bulk', () => {
         ],
       },
     });
+    expect(res.statusCode).toBe(422);
+  });
+});
+
+describe('POST /api/credit-cards/statement', () => {
+  it('imports a card statement (201), attaching each line to its bill', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Statement Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/statement',
+      payload: {
+        card: 'Statement Card',
+        items: [{ description: 'Card Bulk 1', amount: 10, type: 'expense', date: '2026-06-01' }],
+      },
+    });
     expect(res.statusCode).toBe(201);
-    expect(res.json().items[0].status).toBe('error');
-    expect(res.json().items[0].error).toContain('validation');
+    expect(res.json().items).toHaveLength(1);
+    expect(res.json().items[0].transaction.billId).toBeDefined();
+  });
+
+  it('rejects empty items (422)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Statement Card Empty', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/statement',
+      payload: { card: 'Statement Card Empty', items: [] },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it('rejects a missing card (422)', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/credit-cards/statement',
+      payload: { items: [{ description: 'No card', amount: 10, type: 'expense', date: '2026-06-01' }] },
+    });
+    expect(res.statusCode).toBe(422);
   });
 });
 

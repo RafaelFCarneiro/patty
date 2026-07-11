@@ -1,7 +1,13 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
-import { CreateTransactionSchema, UpdateTransactionSchema } from './transaction.js';
+import {
+  CreateTransactionSchema,
+  STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION,
+  STATEMENT_ITEMS_DESCRIPTION,
+  STATEMENT_RAW_INPUT_DESCRIPTION,
+  UpdateTransactionSchema,
+} from './transaction.js';
 import type { Ambiguous, DuplicateName, NotFound, ValidationError } from './error.js';
 
 // `.describe()` is domain information — it states what each field is and represents.
@@ -49,6 +55,36 @@ export const AddCardPurchaseSchema = CreateTransactionSchema.omit({ account: tru
   })
   .strict();
 export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
+
+/** A single line of an `import_card_statement` request (ADR-017 step 2): same shape as
+ *  `AddCardPurchaseSchema` minus `card` (fixed once, at the statement's top level — single-source,
+ *  no per-line card) and minus `idempotencyKey`/`rawInput`/`subCategory`/`tags` (statement-level
+ *  concerns: a dedup key is derived from date+description+amount when absent, `rawInput` belongs to
+ *  the whole pasted statement, and bulk import classifies automatically rather than taking a
+ *  sub-category or tags per line — the same reduced shape the retired god bulk item carried). */
+export const ImportCardStatementItemSchema = AddCardPurchaseSchema.omit({
+  card: true,
+  idempotencyKey: true,
+  rawInput: true,
+  subCategory: true,
+  tags: true,
+}).extend({
+  idempotencyKey: AddCardPurchaseSchema.shape.idempotencyKey
+    .optional()
+    .describe(STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION),
+}).strict();
+export type ImportCardStatementItem = z.infer<typeof ImportCardStatementItemSchema>;
+
+/** Credit-card statement import (ADR-017 step 2): single-source — every item is a purchase on the
+ *  ONE card named here, joining each line's own cycle bill via `addCardPurchase`. Replaces the god
+ *  `create_transactions_bulk`'s per-line card routing entirely (a statement can't carry a
+ *  conflicting per-line owner by construction). */
+export const ImportCardStatementSchema = z.object({
+  card: z.string().min(1).describe('Credit card name — every item in this statement is a purchase on this one card'),
+  items: z.array(ImportCardStatementItemSchema).min(1).max(200).describe(STATEMENT_ITEMS_DESCRIPTION),
+  rawInput: z.string().optional().describe(STATEMENT_RAW_INPUT_DESCRIPTION),
+});
+export type ImportCardStatement = z.infer<typeof ImportCardStatementSchema>;
 
 /** Card-aggregate update schema (ADR-017): unlike AddCardPurchaseSchema, nothing is omitted —
  *  `account` must still reach the handler so it can be explicitly rejected with a helpful message

@@ -1,23 +1,12 @@
 import { z } from 'zod';
 import { INCLUDE_TOTAL_DESCRIPTION, SortDirection } from '../../models/page.js';
-import {
-  BulkTransactionItemSchema as ModelBulkTransactionItemSchema,
-  CreateTransactionsBulkSchema,
-  SearchTransactionsSchema,
-  TransactionSortField,
-} from '../../models/transaction.js';
+import { SearchTransactionsSchema, TransactionSortField } from '../../models/transaction.js';
 import type { SearchTransactions } from '../../models/transaction.js';
 import { BooleanQuerySchema } from './common.js';
 import { coerceToNumber } from './coerce.js';
 
 // Wire input schemas — derived from model schemas.
 // Boundary-only behavior (limit default) stays here; everything else is pass-through.
-
-export const BulkTransactionItemSchema = ModelBulkTransactionItemSchema;
-export type BulkTransactionItem = z.infer<typeof BulkTransactionItemSchema>;
-
-export const CreateTransactionsBulkInputSchema = CreateTransactionsBulkSchema;
-export type CreateTransactionsBulkInput = z.infer<typeof CreateTransactionsBulkInputSchema>;
 
 // Pre-transform query shape — a plain ZodObject, so it can also serve as the route's
 // OpenAPI query schema (routes.ts), which needs a ZodObject rather than the ZodEffects

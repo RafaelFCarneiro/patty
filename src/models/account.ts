@@ -2,7 +2,14 @@ import { z } from 'zod';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
-import { CreateTransactionSchema, TransactionStatus, UpdateTransactionSchema } from './transaction.js';
+import {
+  CreateTransactionSchema,
+  STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION,
+  STATEMENT_ITEMS_DESCRIPTION,
+  STATEMENT_RAW_INPUT_DESCRIPTION,
+  TransactionStatus,
+  UpdateTransactionSchema,
+} from './transaction.js';
 import type { Ambiguous, DuplicateName, InUse, NotFound, ValidationError } from './error.js';
 import type { LabelMap } from './locale.js';
 
@@ -67,6 +74,46 @@ export const AddAccountMovementSchema = CreateTransactionSchema.omit({
   billYear: true,
 }).strict();
 export type AddAccountMovement = z.infer<typeof AddAccountMovementSchema>;
+
+/** A single line of an `import_account_statement` request (ADR-017 step 2): the transaction core's
+ *  `CreateTransactionSchema` minus `account`/`card`/`billMonth`/`billYear` (the account is fixed
+ *  once, at the statement's top level — single-source, no per-line account; bill assignment is
+ *  card-only vocabulary) and minus `idempotencyKey`/`rawInput`/`subCategory`/`tags` (statement-level
+ *  concerns, same reduced shape the retired god bulk item carried). Unlike `AddAccountMovementSchema`,
+ *  `type` stays required — a statement line still needs its own expense-vs-income discriminator,
+ *  since (unlike `add_account_expense`/`add_account_income`) the movement kind isn't fixed by which
+ *  tool was called. */
+export const ImportAccountStatementItemSchema = CreateTransactionSchema.omit({
+  account: true,
+  card: true,
+  billMonth: true,
+  billYear: true,
+  idempotencyKey: true,
+  rawInput: true,
+  subCategory: true,
+  tags: true,
+}).extend({
+  idempotencyKey: CreateTransactionSchema.shape.idempotencyKey
+    .optional()
+    .describe(STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION),
+}).strict();
+export type ImportAccountStatementItem = z.infer<typeof ImportAccountStatementItemSchema>;
+
+/** Account statement import (ADR-017 step 2): single-source — every item is an expense or income
+ *  (per item's `type`) on the ONE account named here (omit for unattached, e.g. cash, movements),
+ *  via `addAccountExpense`/`addAccountIncome`. Replaces the god `create_transactions_bulk`'s
+ *  per-line account-vs-card routing entirely (a statement can't carry a conflicting per-line owner
+ *  by construction). */
+export const ImportAccountStatementSchema = z.object({
+  account: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Account name — every item in this statement belongs to this one account; omit for unattached (e.g. cash) movements'),
+  items: z.array(ImportAccountStatementItemSchema).min(1).max(200).describe(STATEMENT_ITEMS_DESCRIPTION),
+  rawInput: z.string().optional().describe(STATEMENT_RAW_INPUT_DESCRIPTION),
+});
+export type ImportAccountStatement = z.infer<typeof ImportAccountStatementSchema>;
 
 /** Account-aggregate update schema (ADR-017): the core's UpdateTransactionSchema minus billMonth/
  *  billYear — bill assignment is card-only vocabulary that structurally doesn't apply to an account

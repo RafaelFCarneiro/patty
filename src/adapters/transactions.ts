@@ -5,12 +5,7 @@ import {
   type TransactionPatch,
 } from '../models/transaction.js';
 import { LocalizedNamesSchema } from '../models/category.js';
-import type {
-  CreateTransactionResult,
-  CreateTransactionsBulk,
-  DeleteTransactionResult,
-  SearchTransactions,
-} from '../models/transaction.js';
+import type { CreateTransactionResult, DeleteTransactionResult, SearchTransactions } from '../models/transaction.js';
 import type { BulkItemResult } from '../logic/transaction.js';
 import type { AppError } from '../common/errors.js';
 import { TransactionRowSchema, type TransactionDbProps, type TransactionDbRefs } from '../wire/db/transactions.js';
@@ -110,7 +105,6 @@ export const patchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> 
 
 // ─── wire/in→model ───────────────────────────────────────────────────────────
 
-export const bulkWireInToModel = (input: wireIn.CreateTransactionsBulkInput): CreateTransactionsBulk => input;
 export const searchWireInToModel = (input: wireIn.SearchTransactionsInput): SearchTransactions => input;
 
 // ─── model→wire/out ──────────────────────────────────────────────────────────

@@ -285,59 +285,52 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
     }
   });
 
-  it('create_transactions_bulk routes a card line to add_card_purchase, attaching its bill', async () => {
+  it('import_card_statement dispatches each line to addCardPurchase, attaching its bill', async () => {
     const cardName = `AddPurchase Bulk Card ${stamp}`;
-    const bankName = `AddPurchase Bulk Bank ${stamp}`;
     const { client, transport } = makeClient();
 
     try {
       await client.connect(transport);
 
       await callTool(client, {
-        name: 'create_account',
-        args: { name: bankName, type: 'checking', currency: 'BRL', initialBalance: 1000 },
-      });
-      await callTool(client, {
         name: 'create_credit_card',
         args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
       });
 
       const result = (await callTool(client, {
-        name: 'create_transactions_bulk',
+        name: 'import_card_statement',
         args: {
+          card: cardName,
           items: [
-            {
-              description: `Bulk account line ${stamp}`,
-              amount: 10,
-              type: 'expense',
-              date: today,
-              account: bankName,
-              idempotencyKey: `bulk-account-${stamp}`,
-            },
             {
               description: `Bulk card line ${stamp}`,
               amount: 20,
               type: 'expense',
               date: today,
-              card: cardName,
               idempotencyKey: `bulk-card-${stamp}`,
             },
           ],
         },
       })) as { items?: Array<{ status?: string; transaction?: { billId?: string; cardId?: string } }> };
 
-      ensure(result.items?.length === 2, 'expected two bulk item results');
-      const [accountItem, cardItem] = result.items;
-      expect(accountItem?.status).not.toBe('error');
-      expect(accountItem?.transaction?.billId).toBeUndefined();
+      ensure(result.items?.length === 1, 'expected one statement item result');
+      const [cardItem] = result.items;
       expect(cardItem?.status).not.toBe('error');
-      ensure(cardItem?.transaction?.billId, 'expected the bulk card line to be attached to a bill');
+      ensure(cardItem?.transaction?.billId, 'expected the statement line to be attached to a bill');
     } finally {
       await transport.close();
     }
   });
 
-  it('create_transactions_bulk rejects a line resolving both account and card via top-level defaults', async () => {
+  // The retired create_transactions_bulk's "rejects a line resolving both account and card via
+  // top-level defaults" case is impossible by construction now (ADR-017 step 2): import_card_statement
+  // items structurally have no `account` field (mirroring add_card_purchase's own single-purpose
+  // schema) — a statement belongs wholly to the ONE card named at the top level. `.strict()` on
+  // ImportCardStatementItemSchema (models/creditCard.ts) turns an item-level `account` into a
+  // schema-validation error the MCP SDK rejects before the tool handler ever runs — a stronger
+  // guarantee than the old per-item runtime `validation` error, since the whole call is refused
+  // rather than one item coming back with status: 'error'.
+  it('import_card_statement rejects an account field on an item — not part of the schema', async () => {
     const cardName = `AddPurchase Bulk Exclusive Card ${stamp}`;
     const bankName = `AddPurchase Bulk Exclusive Bank ${stamp}`;
     const { client, transport } = makeClient();
@@ -354,29 +347,31 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
         args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
       });
 
-      // Top-level account default + an item-level card override — resolves both account and card
-      // for that item, which must be rejected (the same exclusivity rule add_account_expense/
-      // add_card_purchase enforce structurally via their single-purpose schemas).
-      const result = (await callTool(client, {
-        name: 'create_transactions_bulk',
-        args: {
-          account: bankName,
-          items: [
-            {
-              description: `Bulk exclusive line ${stamp}`,
-              amount: 10,
-              type: 'expense',
-              date: today,
+      const result = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'import_card_statement',
+            arguments: {
               card: cardName,
-              idempotencyKey: `bulk-exclusive-${stamp}`,
+              items: [
+                {
+                  description: `Bulk exclusive line ${stamp}`,
+                  amount: 10,
+                  type: 'expense',
+                  date: today,
+                  account: bankName,
+                  idempotencyKey: `bulk-exclusive-${stamp}`,
+                },
+              ],
             },
-          ],
+          },
         },
-      })) as { items?: Array<{ status?: string; error?: string }> };
-
-      ensure(result.items?.length === 1, 'expected one bulk item result');
-      expect(result.items[0]?.status).toBe('error');
-      expect(result.items[0]?.error).toContain('validation');
+        CallToolResultSchema,
+      );
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === 'text')?.text;
+      expect(text).toContain('unrecognized_keys');
     } finally {
       await transport.close();
     }

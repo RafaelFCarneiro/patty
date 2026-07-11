@@ -17,3 +17,7 @@ export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
 // Pass-through — no boundary-only defaults needed.
 export const UpdateCardTransactionSchema = modelCreditCard.UpdateCardTransactionSchema;
 export type UpdateCardTransaction = z.infer<typeof UpdateCardTransactionSchema>;
+
+// Pass-through — no boundary-only defaults needed.
+export const ImportCardStatementSchema = modelCreditCard.ImportCardStatementSchema;
+export type ImportCardStatement = z.infer<typeof ImportCardStatementSchema>;
