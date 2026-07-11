@@ -16,6 +16,7 @@ type Bill = { transactions: TxView[] };
 describe('MCP integration > transaction category locale', () => {
   let client: Client;
   let transport: StreamableHTTPClientTransport;
+  const account = 'Locale TX Test';
 
   beforeAll(async () => {
     const c = makeClient();
@@ -24,13 +25,13 @@ describe('MCP integration > transaction category locale', () => {
     await client.connect(transport);
 
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } });
-    await callTool(client, { name: 'create_account', args: { name: 'Locale TX Test' } });
+    await callTool(client, { name: 'create_account', args: { name: account } });
     await callTool(client, {
       name: 'add_account_expense',
       args: {
         description: 'Groceries',
         amount: 50,
-        account: 'Locale TX Test',
+        account,
         category: 'Food',
         idempotencyKey: 'tx-cat-locale-1',
       },
@@ -44,7 +45,7 @@ describe('MCP integration > transaction category locale', () => {
 
   it('search_transactions returns pt categoryName when locale is pt', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } });
-    const result = (await searchTransactions(client)) as SearchResult;
+    const result = (await searchTransactions(client, { account, limit: 200 })) as SearchResult;
     const tx = result.find((t) => t.categoryId === 'cat-food');
     expect(tx).toBeDefined();
     expect(tx!.categoryName).toBe('Alimentação');
@@ -52,7 +53,7 @@ describe('MCP integration > transaction category locale', () => {
 
   it('search_transactions returns en categoryName when locale is en', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } });
-    const result = (await searchTransactions(client)) as SearchResult;
+    const result = (await searchTransactions(client, { account, limit: 200 })) as SearchResult;
     const tx = result.find((t) => t.categoryId === 'cat-food');
     expect(tx).toBeDefined();
     expect(tx!.categoryName).toBe('Food');
@@ -65,7 +66,7 @@ describe('MCP integration > transaction category locale', () => {
       args: {
         description: 'Spanish food',
         amount: 30,
-        account: 'Locale TX Test',
+        account,
         category: 'Food',
         idempotencyKey: 'tx-cat-locale-es-1',
       },
@@ -82,7 +83,7 @@ describe('MCP integration > transaction category locale', () => {
       args: {
         description: 'Custom category tx',
         amount: 20,
-        account: 'Locale TX Test',
+        account,
         category: 'Custom Cat',
         idempotencyKey: 'tx-cat-locale-custom-1',
       },
@@ -92,7 +93,7 @@ describe('MCP integration > transaction category locale', () => {
 
   it('search_transactions returns es categoryName when locale is es', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'es', source: 'explicit' } });
-    const result = (await searchTransactions(client)) as SearchResult;
+    const result = (await searchTransactions(client, { account, limit: 200 })) as SearchResult;
     const tx = result.find((t) => t.categoryId === 'cat-food');
     expect(tx).toBeDefined();
     expect(tx!.categoryName).toBe('Alimentación');
@@ -100,9 +101,9 @@ describe('MCP integration > transaction category locale', () => {
 
   it('categoryId is stable across locale changes', async () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } });
-    const ptResult = (await searchTransactions(client)) as SearchResult;
+    const ptResult = (await searchTransactions(client, { account, limit: 200 })) as SearchResult;
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } });
-    const enResult = (await searchTransactions(client)) as SearchResult;
+    const enResult = (await searchTransactions(client, { account, limit: 200 })) as SearchResult;
 
     const ptTx = ptResult.find((t) => t.categoryId === 'cat-food');
     const enTx = enResult.find((t) => t.categoryId === 'cat-food');
@@ -121,7 +122,7 @@ describe('MCP integration > transaction category locale', () => {
       args: {
         description: 'Sub locale test',
         amount: 15,
-        account: 'Locale TX Test',
+        account,
         subCategory: 'Groceries',
         idempotencyKey: 'tx-subcat-locale-1',
       },
@@ -134,7 +135,7 @@ describe('MCP integration > transaction category locale', () => {
   });
 
   it('categoryNames map is not leaked to the client', async () => {
-    const result = (await searchTransactions(client)) as SearchResult;
+    const result = (await searchTransactions(client, { account, limit: 200 })) as SearchResult;
     const tx = result[0];
     expect(tx).not.toHaveProperty('categoryNames');
     expect(tx).not.toHaveProperty('subCategoryNames');
