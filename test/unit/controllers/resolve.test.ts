@@ -45,4 +45,21 @@ describe('resolveLegAccounts (ADR-020 — neutral leg resolution, no ownership j
     const legs = await resolveLegAccounts(deps, { accountId: 'missing', toAccountId: undefined });
     expect(legs).toEqual([]);
   });
+
+  it('dedupes a leg id shared by accountId and toAccountId, fetching and returning it once', async () => {
+    let callCount = 0;
+    const deps = {
+      accounts: {
+        findById: async (id: string) => {
+          callCount++;
+          return account({ id });
+        },
+      },
+    } as unknown as Deps;
+
+    const legs = await resolveLegAccounts(deps, { accountId: 'acc-1', toAccountId: 'acc-1' });
+
+    expect(callCount).toBe(1);
+    expect(legs).toEqual([account({ id: 'acc-1' })]);
+  });
 });

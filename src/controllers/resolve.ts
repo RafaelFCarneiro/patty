@@ -56,7 +56,7 @@ export const resolveLegAccounts = async (
   deps: Deps,
   tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
 ): Promise<Account[]> => {
-  const legIds = [tx.accountId, tx.toAccountId].filter(R.isNonNullish);
+  const legIds = R.unique([tx.accountId, tx.toAccountId].filter(R.isNonNullish));
   const legs = await Promise.all(legIds.map((id) => deps.accounts.findById(id)));
   return legs.filter(R.isNonNullish);
 };
