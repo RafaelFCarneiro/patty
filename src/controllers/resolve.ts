@@ -1,4 +1,4 @@
-import { err, ok, safeTry, type Result, ResultAsync } from 'neverthrow';
+import { err, ok, type Result, ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { okOr } from '../common/result.js';
@@ -65,11 +65,15 @@ export const resolveLegAccounts = (
   deps: Deps,
   tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
 ): ResultAsync<Account[], AppError> =>
-  safeTry(async function* () {
-    const legIds = R.unique([tx.accountId, tx.toAccountId].filter(R.isNonNullish));
-    const legs: Account[] = [];
-    for (const id of legIds) {
-      legs.push(yield* okOr(await deps.accounts.findById(id), notFound('account', id, [])));
-    }
-    return ok(legs);
-  });
+  ResultAsync.combine(
+    R.pipe(
+      [tx.accountId, tx.toAccountId],
+      R.filter(R.isNonNullish),
+      R.unique(),
+      R.map((id) =>
+        ResultAsync.fromSafePromise(deps.accounts.findById(id)).andThen((account) =>
+          okOr(account, notFound('account', id, [])),
+        ),
+      ),
+    ),
+  );
