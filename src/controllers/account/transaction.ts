@@ -44,13 +44,11 @@ import {
  * negation of the credit-card aggregate's test. The account domain doesn't ask "does the credit-card
  * aggregate own this instead"; it asks "is every leg mine", vacuously true for an unattached movement.
  */
-const assertAccountOwnedLegs = async (
+const assertAccountOwnedLegs = (
   deps: Deps,
   tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
-): Promise<boolean> => {
-  const legs = await resolveLegAccounts(deps, tx);
-  return legs.every((account) => isAccountOwnedType(account.type));
-};
+): ResultAsync<boolean, AppError> =>
+  resolveLegAccounts(deps, tx).map((legs) => legs.every((account) => isAccountOwnedType(account.type)));
 
 /** Shared by addAccountExpense/addAccountIncome — everything but the fixed movement type. */
 const addAccountMovement = (
@@ -150,10 +148,8 @@ export const updateAccountTransaction = (
 ): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
-    yield* guard(
-      await assertAccountOwnedLegs(deps, existing),
-      transactionErrors.wrongTool(TransactionTool.updateCardTransaction),
-    );
+    const isAccountOwned = yield* assertAccountOwnedLegs(deps, existing);
+    yield* guard(isAccountOwned, transactionErrors.wrongTool(TransactionTool.updateCardTransaction));
     yield* guardTransferMutability(existing, input);
     return ok(yield* coreUpdateTransaction(deps, input, existing));
   });
@@ -168,9 +164,7 @@ export const deleteAccountTransaction = (
 ): ResultAsync<DeleteTransactionResult, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
-    yield* guard(
-      await assertAccountOwnedLegs(deps, existing),
-      transactionErrors.wrongTool(TransactionTool.deleteCardTransaction),
-    );
+    const isAccountOwned = yield* assertAccountOwnedLegs(deps, existing);
+    yield* guard(isAccountOwned, transactionErrors.wrongTool(TransactionTool.deleteCardTransaction));
     return ok(yield* coreDeleteTransaction(deps, input, existing));
   });

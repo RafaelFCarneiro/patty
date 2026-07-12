@@ -1,6 +1,7 @@
-import { err, ok, type Result, ResultAsync } from 'neverthrow';
+import { err, ok, safeTry, type Result, ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
+import { okOr } from '../common/result.js';
 import { buildSynonyms, resolveAndSort } from '../logic/category.js';
 import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js';
 import type { Account } from '../models/account.js';
@@ -52,24 +53,23 @@ export const resolveCardRef = (deps: Deps, name: string): ResultAsync<CreditCard
  * owns (`controllers/creditCard/transaction.ts`'s `assertCreditAccountLeg`, `controllers/account/
  * transaction.ts`'s `assertAccountOwnedLegs`) rather than sharing one judgment between them.
  *
- * Fails loudly (throws) if a leg id doesn't resolve to an account. A transaction's `accountId`/
- * `toAccountId` is an FK to a row this code path assumes is intact (accounts referenced by a
- * transaction can't be deleted — `accountErrors`/`cardErrors` guard that on the delete path) — an
- * unresolvable leg is a data-integrity invariant violation, not an expected user-facing failure, so
- * this throws rather than silently dropping it: an ownership predicate that iterates a silently
- * shrunk array (`.every()` vacuously true on `[]`, `.some()` missing a leg it should have seen)
- * could otherwise route a card-owned transaction to the account tool, bypassing card invariants.
+ * Fails on the Result track (`unknown_account`) if a leg id doesn't resolve to an account — same
+ * treatment as the analogous stale-`cardId` case in `controllers/creditCard/transaction.ts`'s
+ * `updateCardTransaction` (`okOr(await deps.creditCards.findById(cardId), notFound('card', cardId,
+ * []))`): an internal FK inconsistency that accounts/cards referenced by a transaction can't
+ * normally produce (`accountErrors.inUse` blocks deleting a referenced account; `deleteCard`
+ * cascades every correlated transaction), but is still routed through `AppError` rather than a bare
+ * throw, for the same reason it is there — consistency with every other resolver in this module.
  */
-export const resolveLegAccounts = async (
+export const resolveLegAccounts = (
   deps: Deps,
   tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
-): Promise<Account[]> => {
-  const legIds = R.unique([tx.accountId, tx.toAccountId].filter(R.isNonNullish));
-  return Promise.all(
-    legIds.map(async (id) => {
-      const account = await deps.accounts.findById(id);
-      if (!account) throw new Error(`resolveLegAccounts: account ${id}, referenced by a transaction leg, not found`);
-      return account;
-    }),
-  );
-};
+): ResultAsync<Account[], AppError> =>
+  safeTry(async function* () {
+    const legIds = R.unique([tx.accountId, tx.toAccountId].filter(R.isNonNullish));
+    const legs: Account[] = [];
+    for (const id of legIds) {
+      legs.push(yield* okOr(await deps.accounts.findById(id), notFound('account', id, [])));
+    }
+    return ok(legs);
+  });

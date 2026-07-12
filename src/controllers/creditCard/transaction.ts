@@ -66,13 +66,11 @@ const assertBillNotPaid = async (deps: Deps, billId: string | undefined): Promis
  * transfer's `toAccountId`, is the card's internal account). The account aggregate does not share
  * this predicate; it asks its own, different question (`assertAccountOwnedLegs`).
  */
-const assertCreditAccountLeg = async (
+const assertCreditAccountLeg = (
   deps: Deps,
   tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
-): Promise<boolean> => {
-  const legs = await resolveLegAccounts(deps, tx);
-  return legs.some((account) => account.type === AccountType.enum.credit);
-};
+): ResultAsync<boolean, AppError> =>
+  resolveLegAccounts(deps, tx).map((legs) => legs.some((account) => account.type === AccountType.enum.credit));
 
 export const addCardPurchase = (
   deps: Deps,
@@ -179,10 +177,8 @@ export const updateCardTransaction = (
 ): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
-    yield* guard(
-      await assertCreditAccountLeg(deps, existing),
-      transactionErrors.wrongTool(TransactionTool.updateAccountTransaction),
-    );
+    const isCreditOwned = yield* assertCreditAccountLeg(deps, existing);
+    yield* guard(isCreditOwned, transactionErrors.wrongTool(TransactionTool.updateAccountTransaction));
 
     // A card-owned transaction with no cardId is definitionally the bill-payment transfer
     // (pay_bill's own row: billId set, no cardId — nothing else in the domain has billId without
@@ -238,10 +234,8 @@ export const deleteCardTransaction = (
 ): ResultAsync<DeleteTransactionResult, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
-    yield* guard(
-      await assertCreditAccountLeg(deps, existing),
-      transactionErrors.wrongTool(TransactionTool.deleteAccountTransaction),
-    );
+    const isCreditOwned = yield* assertCreditAccountLeg(deps, existing);
+    yield* guard(isCreditOwned, transactionErrors.wrongTool(TransactionTool.deleteAccountTransaction));
     yield* guard(await assertBillNotPaid(deps, existing.billId), cardErrors.paidBillImmutable);
     return ok(yield* coreDeleteTransaction(deps, input, existing));
   });
