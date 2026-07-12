@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { deleteCardTransaction, updateCardTransaction } from '../../../../src/controllers/creditCard/transaction.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
-import type { Account } from '../../../../src/models/account.js';
+import { AccountType, type Account } from '../../../../src/models/account.js';
+import { CurrencyCode } from '../../../../src/models/money.js';
 import { Locale } from '../../../../src/models/locale.js';
 import { BillStatus } from '../../../../src/models/bill.js';
 import type { TransactionView } from '../../../../src/models/transaction.js';
@@ -9,8 +10,8 @@ import type { TransactionView } from '../../../../src/models/transaction.js';
 const account = (overrides: Partial<Account> = {}): Account => ({
   id: 'acc-checking',
   name: 'Checking',
-  type: 'checking',
-  currency: 'USD',
+  type: AccountType.enum.checking,
+  currency: CurrencyCode.enum.USD,
   initialBalance: 0,
   ...overrides,
 });
@@ -49,7 +50,7 @@ const baseTx: TransactionView = {
   tags: [],
 };
 
-const checkingAccountsById = { findById: async () => account({ type: 'checking' }) };
+const checkingAccountsById = { findById: async () => account({ type: AccountType.enum.checking }) };
 
 describe('updateCardTransaction / deleteCardTransaction — ownership by account type (ADR-020)', () => {
   it('updateCardTransaction rejects a tx with no credit leg, redirecting to update_account_transaction', async () => {
@@ -95,7 +96,7 @@ describe('updateCardTransaction — account field (ADR-019 compose-up watchpoint
         getById: async () => ({ ...baseTx, accountId: 'acc-card-internal', cardId: 'card-1' }),
       } as unknown as Deps['transactions'],
       accounts: {
-        findById: async () => account({ id: 'acc-card-internal', type: 'credit' }),
+        findById: async () => account({ id: 'acc-card-internal', type: AccountType.enum.credit }),
       } as unknown as Deps['accounts'],
     });
 
@@ -120,8 +121,8 @@ describe('updateCardTransaction / deleteCardTransaction — bill-payment transfe
     toAccountId: 'acc-card-internal',
   };
   const accountsById: Record<string, Account> = {
-    'acc-payer': account({ id: 'acc-payer', type: 'checking' }),
-    'acc-card-internal': account({ id: 'acc-card-internal', type: 'credit' }),
+    'acc-payer': account({ id: 'acc-payer', type: AccountType.enum.checking }),
+    'acc-card-internal': account({ id: 'acc-card-internal', type: AccountType.enum.credit }),
   };
   const findById = async (id: string) => accountsById[id] ?? null;
 

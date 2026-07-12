@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { resolveLegAccounts } from '../../../src/controllers/resolve.js';
 import type { Deps } from '../../../src/controllers/deps.js';
-import type { Account } from '../../../src/models/account.js';
+import { AccountType, type Account } from '../../../src/models/account.js';
+import { CurrencyCode } from '../../../src/models/money.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({
   id: 'acc-1',
   name: 'Nubank',
-  type: 'checking',
-  currency: 'BRL',
+  type: AccountType.enum.checking,
+  currency: CurrencyCode.enum.BRL,
   initialBalance: 0,
   ...overrides,
 });
@@ -26,8 +27,8 @@ describe('resolveLegAccounts (ADR-020 — neutral leg resolution, no ownership j
 
   it('resolves both legs when accountId and toAccountId are both set (a transfer)', async () => {
     const deps = makeDeps({
-      'acc-bank': account({ id: 'acc-bank', type: 'checking' }),
-      'acc-card': account({ id: 'acc-card', type: 'credit' }),
+      'acc-bank': account({ id: 'acc-bank', type: AccountType.enum.checking }),
+      'acc-card': account({ id: 'acc-card', type: AccountType.enum.credit }),
     });
     const legs = await resolveLegAccounts(deps, { accountId: 'acc-bank', toAccountId: 'acc-card' });
     expect(legs.map((a) => a.id)).toEqual(['acc-bank', 'acc-card']);
