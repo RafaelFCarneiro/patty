@@ -139,12 +139,13 @@ describe('per-model error builders', () => {
     expect(accountErrors.creditPostRejected.code).toBe('validation');
     expect(accountErrors.creditPaymentRejected.code).toBe('validation');
     expect(accountErrors.sameAccount.code).toBe('validation');
+    // Transfer mutation policy (ADR-020 §4) — moved here from transactionErrors.
+    expect(accountErrors.transferTypeImmutable.code).toBe('validation');
+    expect(accountErrors.transferCategoryRejected.code).toBe('validation');
   });
 
   it('transactionErrors static payloads have the right code', () => {
     expect(transactionErrors.exclusiveCategorySubCategory.code).toBe('validation');
-    expect(transactionErrors.transferTypeImmutable.code).toBe('validation');
-    expect(transactionErrors.transferCategoryRejected.code).toBe('validation');
   });
 
   it('billErrors.noPayingAccount is a validation error', () => {

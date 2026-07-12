@@ -4,9 +4,11 @@ import {
   assertCurrencyMatch,
   assertNonCreditType,
   filterByType,
+  guardTransferMutability,
   hasNoCards,
   hasNoRecurring,
   hasNoTransactions,
+  isAccountOwnedType,
   isUnreferenced,
   withTypeLabel,
 } from '../../../src/logic/account.js';
@@ -76,6 +78,24 @@ describe('assertNonCreditType', () => {
   });
 });
 
+describe('isAccountOwnedType (ADR-020 — positive scope, not a negation of credit)', () => {
+  it('is true for every type the account aggregate owns', () => {
+    const owned = [
+      AccountType.enum.checking,
+      AccountType.enum.savings,
+      AccountType.enum.wallet,
+      AccountType.enum.investment,
+    ];
+    for (const type of owned) {
+      expect(isAccountOwnedType(type)).toBe(true);
+    }
+  });
+
+  it('is false for credit (owned by the credit-card aggregate instead)', () => {
+    expect(isAccountOwnedType(AccountType.enum.credit)).toBe(false);
+  });
+});
+
 describe('reference predicates', () => {
   const refs = (over: Partial<AccountReferences> = {}): AccountReferences => ({
     transactions: 0,
@@ -116,5 +136,33 @@ describe('assertCurrencyMatch', () => {
 
   it('returns false when currencies differ', () => {
     expect(assertCurrencyMatch({ currency: 'BRL' }, { currency: 'USD' })).toBe(false);
+  });
+});
+
+describe('guardTransferMutability (ADR-020 §4 — account context only)', () => {
+  const transfer = { type: 'transfer' as const };
+  const expense = { type: 'expense' as const };
+
+  it('rejects changing type on a transfer', () => {
+    const result = guardTransferMutability(transfer, { type: 'expense' });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('rejects setting category on a transfer', () => {
+    const result = guardTransferMutability(transfer, { category: 'Alimentação' });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('rejects setting subCategory on a transfer', () => {
+    const result = guardTransferMutability(transfer, { subCategory: 'Restaurante' });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('allows non-transfer updates on expense transactions', () => {
+    expect(guardTransferMutability(expense, { type: 'income' }).isOk()).toBe(true);
+    expect(guardTransferMutability(expense, { category: 'Alimentação' }).isOk()).toBe(true);
   });
 });

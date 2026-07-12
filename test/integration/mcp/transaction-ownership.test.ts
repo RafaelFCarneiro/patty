@@ -4,8 +4,9 @@ import { callTool, callToolError, deleteTransactions, ensure, makeClient } from 
 // ADR-017: every update/delete tool self-validates ownership instead of being dispatched to by a
 // composition-root router. Calling the wrong tool for a transaction's owning aggregate is rejected
 // with a validation error naming the correct tool — a guard, not a redirect the server performs for
-// the caller.
-describe('MCP integration > transaction ownership guard (ADR-017)', () => {
+// the caller. Ownership is now resolved by account type (ADR-020) rather than cardId/billId
+// field-presence; these outcomes are unchanged end-to-end, which this test exercises for real.
+describe('MCP integration > transaction ownership guard (ADR-017/ADR-020)', () => {
   let createdTxIds: string[] = [];
 
   afterEach(async () => {

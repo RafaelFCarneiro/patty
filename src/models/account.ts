@@ -212,4 +212,15 @@ export const accountErrors = {
       `cross-currency transfer not supported yet: ${from.name} is ${from.currency}, ${to.name} is ${to.currency}`,
     ],
   }),
+  // Transfer mutation policy (ADR-020 §4) — moved from transactionErrors: only the account
+  // aggregate's update ever reaches a mutable transfer (the credit-card aggregate's only transfer,
+  // the bill-payment transfer, is blocked outright by its own bill-process guard, never by these).
+  transferTypeImmutable: {
+    code: 'validation',
+    issues: ['cannot change the type of a transfer transaction'],
+  } satisfies AccountError,
+  transferCategoryRejected: {
+    code: 'validation',
+    issues: ['transfer transactions cannot have a category or sub-category'],
+  } satisfies AccountError,
 };

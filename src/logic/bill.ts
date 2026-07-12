@@ -5,7 +5,7 @@ import * as R from 'remeda';
 import { localizeBillStatus } from './localize.js';
 import { BillStatus, type Bill } from '../models/bill.js';
 import type { Locale } from '../models/locale.js';
-import { TransactionType, type TransactionView } from '../models/transaction.js';
+import { TransactionType, type RawTransactionView, type TransactionView } from '../models/transaction.js';
 
 const _withStatusLabel = (bill: Bill, locale: Locale): Bill => ({
   ...bill,
@@ -19,6 +19,13 @@ export function withStatusLabel(...args: readonly unknown[]) {
 }
 
 export const isBillPaid = (bill: Pick<Bill, 'status'>): boolean => bill.status === BillStatus.enum.paid;
+
+/** billMonth/billYear (bill assignment) must be provided together, or not at all (ADR-019 PR-2). */
+export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: number }): boolean =>
+  (input.billMonth === undefined) === (input.billYear === undefined);
+
+/** Reports a transaction's (new) bill assignment — used after create/update attaches or reassigns it. */
+export const withBillId = (tx: RawTransactionView, billId: string): RawTransactionView => ({ ...tx, billId });
 
 export type BillPeriod = { month: number; year: number; closeDate: string; dueDate: string };
 

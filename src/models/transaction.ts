@@ -353,14 +353,6 @@ export const transactionErrors = {
     code: 'validation',
     issues: ['provide category OR subCategory, not both'],
   } satisfies TransactionError,
-  transferTypeImmutable: {
-    code: 'validation',
-    issues: ['cannot change the type of a transfer transaction'],
-  } satisfies TransactionError,
-  transferCategoryRejected: {
-    code: 'validation',
-    issues: ['transfer transactions cannot have a category or sub-category'],
-  } satisfies TransactionError,
   invalidCursor: {
     code: 'validation',
     issues: ['cursor is malformed, stale, or does not match the requested sort/dir — start a fresh first page'],

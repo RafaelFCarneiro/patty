@@ -60,7 +60,10 @@ describe('updateCardTransaction — reassignment attach runs before the main wri
         source: TransactionSource.enum.mcp,
         idempotencyKey: 'reassign-atomicity-purchase',
         classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-        refs: { cardId: card.id },
+        // A real card purchase (addCardPurchase) always sets accountId to the card's own internal
+        // account (ADR-010) alongside cardId — accountId is what ownership-by-account-type (ADR-020)
+        // resolves against, so this fixture must mirror that shape, not just cardId.
+        refs: { accountId: card.accountId, cardId: card.id },
       },
       [],
     );

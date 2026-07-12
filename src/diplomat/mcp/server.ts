@@ -354,11 +354,14 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       title: 'Update credit-card transaction',
       description:
         "Update a credit-card transaction by id (from search_transactions) — the credit-card aggregate's " +
-        'update entry point (ADR-017). Owns transactions with cardId or billId set: card purchases ' +
-        '(including the brief self-heal window before bill attachment) and the bill-payment transfer. ' +
-        'search_transactions/TransactionView return cardId/accountId/billId — use those to pick the right ' +
-        'tool; calling this on an account-owned transaction (neither field set) is rejected with a ' +
-        `validation error redirecting to ${TransactionTool.updateAccountTransaction}. Only provided fields ` +
+        'update entry point (ADR-017/ADR-020). Owns transactions that involve a credit account: card ' +
+        'purchases (including the brief self-heal window before bill attachment) and the bill-payment ' +
+        'transfer. cardId/billId (returned by search_transactions/TransactionView) are reliable proxies ' +
+        'for picking this tool — only these two cases ever have a credit-account leg — but TransactionView ' +
+        'does not expose account types, and the authoritative check is the leg account type; if unsure ' +
+        "(e.g. a transfer's toAccountId), call the tool and follow the wrong-tool redirect. Calling this " +
+        'on a transaction with no credit-account leg is rejected with a validation error redirecting to ' +
+        `${TransactionTool.updateAccountTransaction}. Only provided fields ` +
         'change. Setting category is a user correction (confidence 1, strengthens the merchant→category ' +
         "association). account cannot be changed — a card purchase is always funded by the card's own " +
         'internal liability account (ADR-010). billMonth+billYear reassigns to a different bill cycle ' +
@@ -377,12 +380,12 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       title: 'Delete credit-card transaction',
       description:
         "Delete a credit-card transaction by id — the credit-card aggregate's delete entry point " +
-        '(ADR-017). Owns transactions with cardId or billId set (card purchases and the bill-payment ' +
-        'transfer); calling this on an account-owned transaction is rejected with a validation error ' +
-        `redirecting to ${TransactionTool.deleteAccountTransaction}. Without confirm:true it is a DRY RUN ` +
-        'returning what would be deleted — show it to the user and call again with confirm: true. Any ' +
-        'transaction on a paid bill (including the bill-payment transfer itself) cannot be deleted this ' +
-        'way — rejected with a validation error pointing at revert_bill_payment.',
+        '(ADR-017/ADR-020). Owns transactions that involve a credit account (card purchases and the ' +
+        'bill-payment transfer); calling this on a transaction with no credit-account leg is rejected with ' +
+        `a validation error redirecting to ${TransactionTool.deleteAccountTransaction}. Without confirm:true ` +
+        'it is a DRY RUN returning what would be deleted — show it to the user and call again with ' +
+        'confirm: true. Any transaction on a paid bill (including the bill-payment transfer itself) cannot ' +
+        'be deleted this way — rejected with a validation error pointing at revert_bill_payment.',
       inputSchema: DeleteTransactionSchema.shape,
     },
     async (args) => fromResult((await deleteCardTransaction(deps, args)).map(deleteResultToWireOut)),
@@ -394,10 +397,12 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       title: 'Update account transaction',
       description:
         "Update an account transaction by id (from search_transactions) — the account aggregate's update " +
-        'entry point (ADR-017). Owns transactions with neither cardId nor billId set: account ' +
-        'expenses/income and ordinary transfers. search_transactions/TransactionView return ' +
-        'cardId/accountId/billId — use those to pick the right tool; calling this on a card-owned ' +
-        'transaction (cardId or billId set) is rejected with a validation error redirecting to ' +
+        'entry point (ADR-017/ADR-020). Owns transactions that involve no credit account: account ' +
+        'expenses/income and ordinary transfers. Absent cardId/billId (returned by search_transactions/ ' +
+        'TransactionView) is a reliable proxy for picking this tool, but TransactionView does not expose ' +
+        'account types and the authoritative check is the leg account type; if unsure (e.g. an ordinary ' +
+        "transfer's toAccountId), call the tool and follow the wrong-tool redirect. Calling this on a " +
+        'transaction that involves a credit account is rejected with a validation error redirecting to ' +
         `${TransactionTool.updateCardTransaction}. Only provided fields change. Setting category is a ` +
         'user correction (confidence 1, strengthens the merchant→category association). Changing account ' +
         'also updates currency to match it. Transfer transactions cannot have their type changed and ' +
@@ -415,11 +420,12 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
     {
       title: 'Delete account transaction',
       description:
-        "Delete an account transaction by id — the account aggregate's delete entry point (ADR-017). Owns " +
-        'transactions with neither cardId nor billId set (account expenses/income, ordinary transfers); ' +
-        'calling this on a card-owned transaction is rejected with a validation error redirecting to ' +
-        `${TransactionTool.deleteCardTransaction}. Without confirm:true it is a DRY RUN returning what ` +
-        'would be deleted — show it to the user and call again with confirm: true.',
+        "Delete an account transaction by id — the account aggregate's delete entry point " +
+        '(ADR-017/ADR-020). Owns transactions that involve no credit account (account expenses/income, ' +
+        'ordinary transfers); calling this on a transaction that involves a credit account is rejected ' +
+        `with a validation error redirecting to ${TransactionTool.deleteCardTransaction}. Without ` +
+        'confirm:true it is a DRY RUN returning what would be deleted — show it to the user and call ' +
+        'again with confirm: true.',
       inputSchema: DeleteTransactionSchema.shape,
     },
     async (args) => fromResult((await deleteAccountTransaction(deps, args)).map(deleteResultToWireOut)),

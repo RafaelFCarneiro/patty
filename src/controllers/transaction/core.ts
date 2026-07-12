@@ -2,17 +2,15 @@
 // primitives. No bill/card knowledge — must never import logic/bill.js or touch deps.bills.
 // Aggregates (credit-card, account) depend on this module; it never depends on them.
 
-import { ok, okAsync, safeTry, type Result, type ResultAsync } from 'neverthrow';
+import { ok, okAsync, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
-  guardTransferMutability,
   hasCategory,
   hasSubCategory,
-  isCardOwned,
   isCategoryKindAllowed,
   resolveEffectiveType,
 } from '../../logic/transaction.js';
@@ -24,7 +22,6 @@ import {
   type CategorySelection,
   type DeleteTransactionResult,
   type MovementType,
-  type TransactionTool,
   type TransactionView,
   type UpdateTransaction,
 } from '../../models/transaction.js';
@@ -80,17 +77,6 @@ export const resolveCategorySelection = (
     () => okAsync(null),
   );
 
-/**
- * ADR-017 ownership guard, shared by the four aggregate-specific update/delete tools: asserts the
- * fetched transaction's ownership matches what this tool expects, or fails with a `validation` error
- * naming the correct tool. A guard, not a dispatcher — it never re-routes the call itself.
- */
-export const assertOwnership = (
-  existing: TransactionView,
-  wantCardOwned: boolean,
-  correctTool: TransactionTool,
-): Result<void, AppError> => guard(isCardOwned(existing) === wantCardOwned, transactionErrors.wrongTool(correctTool));
-
 /** Flip a pending transaction to effective. No-op (returns existing) if already effective. */
 export const confirmTransaction = (deps: Deps, input: { id: string }): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
@@ -125,7 +111,6 @@ export const updateTransaction = (
 ): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
-    yield* guardTransferMutability(existing, input);
 
     const account = R.isNonNullish(input.account) ? yield* resolveAccountRef(deps, input.account) : null;
     const effectiveType = resolveEffectiveType(existing, input);

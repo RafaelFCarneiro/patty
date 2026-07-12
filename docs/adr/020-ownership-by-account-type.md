@@ -1,6 +1,6 @@
 # ADR-020: Transaction ownership by account type, not structural field-presence
 
-**Status:** Proposed · **Date:** 2026-07-12 · **Deciders:** Rafael · Revises **ADR-017**'s ownership
+**Status:** Accepted (2026-07-12; implemented as part of ADR-019 PR-2) · **Date:** 2026-07-12 · **Deciders:** Rafael · Revises **ADR-017**'s ownership
 discriminator and refines **ADR-019**'s PR-2 logic re-homing. Surfaced while grounding ADR-019 PR-2: the
 functions it planned to move (`isCardOwned`, `guardTransferMutability`) are cross-consumed, and the reason is
 that the ownership rule itself sits in the wrong place.
@@ -49,10 +49,20 @@ aggregate; the credit-card aggregate never reasons about transfer invariants.**
 1. **Per-aggregate ownership guards (replacing core `assertOwnership`):**
    - `update_card_transaction` / `delete_card_transaction`: resolve the transaction's account(s) and assert **a
      leg is a `credit` account**; otherwise reject with a redirect to the account tool.
-   - `update_account_transaction` / `delete_account_transaction`: assert **no leg is a `credit` account**;
-     otherwise redirect to the card tool.
+   - `update_account_transaction` / `delete_account_transaction`: assert **every leg is one of the account
+     aggregate's own types**; otherwise redirect to the card tool.
    - The check reads the authoritative `AccountType` (ADR-010), not `cardId`/`billId`. `isCardOwned` and
      `assertOwnership` are deleted from the transaction core.
+   - **Implementation detail (each aggregate asks its own question — neither shares or negates the other's
+     judgment):** `controllers/resolve.ts`'s `resolveLegAccounts(deps, tx)` is a neutral I/O helper — it resolves
+     the accounts referenced by a transaction's leg(s), making no ownership judgment itself. The credit-card
+     aggregate's own `assertCreditAccountLeg` (`controllers/creditCard/transaction.ts`) asks "is a leg `credit`".
+     The account aggregate's own `assertAccountOwnedLegs` (`controllers/account/transaction.ts`) asks the
+     different, positive question "is every leg one of *my* types", tested against `logic/account.ts`'s
+     `isAccountOwnedType` — an explicit enumeration of `checking`/`savings`/`wallet`/`investment`, not the
+     negation of `credit`. The account domain shouldn't need to name the credit-card domain's type to describe
+     its own scope, and a future new `AccountType` defaults to *not* being account-owned until deliberately added
+     to the enumeration, rather than silently falling into "not credit" by omission.
 
 2. **Ownership outcomes are unchanged from ADR-017's union rule** — this is a mechanism/placement change, not a
    routing change:
@@ -146,7 +156,7 @@ Fold into ADR-019 PR-2 (the logic re-homing PR), since they touch the same files
 
 ## Action Items
 
-1. [ ] Review/accept this ADR (decision review — no implementation in this PR).
-2. [ ] On acceptance: add this ADR to the `docs/architecture.md` index, rewrite invariant #17 to account-type
+1. [x] Review/accept this ADR (decision review — no implementation in this PR).
+2. [x] On acceptance: add this ADR to the `docs/architecture.md` index, rewrite invariant #17 to account-type
    ownership, and add the amendment note to ADR-017.
-3. [ ] Implement as part of ADR-019 PR-2 (per Migration above) — behavior-preserving, coverage-parity mapped.
+3. [x] Implement as part of ADR-019 PR-2 (per Migration above) — behavior-preserving, coverage-parity mapped.

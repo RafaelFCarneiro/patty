@@ -11,10 +11,12 @@ import {
 } from '../../../src/models/transaction.js';
 import type { TransactionView } from '../../../src/models/transaction.js';
 import {
+  assertBillPeriodPaired,
   billPeriodFor,
   billPeriodForCycle,
   computeBillTotal,
   isBillPaid,
+  withBillId,
   withStatusLabel,
 } from '../../../src/logic/bill.js';
 
@@ -173,5 +175,35 @@ describe('withStatusLabel', () => {
   it('labels paid status', () => {
     const paid: Bill = { ...bill, status: BillStatus.enum.paid };
     expect(withStatusLabel(paid, Locale.enum.en).statusLabel).toBe('Paid');
+  });
+});
+
+describe('assertBillPeriodPaired', () => {
+  it('passes when neither billMonth nor billYear is provided', () => {
+    expect(assertBillPeriodPaired({})).toBe(true);
+  });
+
+  it('passes when both are provided', () => {
+    expect(assertBillPeriodPaired({ billMonth: 6, billYear: 2026 })).toBe(true);
+  });
+
+  it('fails when only billMonth is provided', () => {
+    expect(assertBillPeriodPaired({ billMonth: 6 })).toBe(false);
+  });
+
+  it('fails when only billYear is provided', () => {
+    expect(assertBillPeriodPaired({ billYear: 2026 })).toBe(false);
+  });
+});
+
+describe('withBillId', () => {
+  it('reports the transaction with its new bill assignment', () => {
+    expect(withBillId(tx('expense', 100), 'bill-9').billId).toBe('bill-9');
+  });
+
+  it('preserves the rest of the transaction unchanged', () => {
+    const original = tx('income', 50);
+    const updated = withBillId(original, 'bill-9');
+    expect(updated).toMatchObject({ ...original, billId: 'bill-9' });
   });
 });
