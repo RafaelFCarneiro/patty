@@ -100,7 +100,11 @@ export type ImportCardStatement = z.infer<typeof ImportCardStatementSchema>;
  *  vocabulary. `.strict()` still rejects truly foreign fields at the REST boundary (MCP tool args
  *  are reconstructed as a non-strict shape by the SDK). */
 export const UpdateCardTransactionSchema = UpdateTransactionSchema.extend({
-  account: z.string().min(1).optional().describe('New account name'),
+  account: z.string().min(1).optional().describe(
+    "Rejected: a card transaction is always funded by the card's own internal account. Sending this " +
+      'field returns a validation error rather than reassigning it — present only so that error can be ' +
+      'raised, not because the account is changeable',
+  ),
   billMonth: BillQuerySchema.shape.month
     .optional()
     .describe(
