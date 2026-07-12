@@ -6,7 +6,8 @@ import {
   updateAccountTransaction,
 } from '../../../../src/controllers/account/transaction.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
-import type { Account } from '../../../../src/models/account.js';
+import { AccountType, type Account } from '../../../../src/models/account.js';
+import { CurrencyCode } from '../../../../src/models/money.js';
 import { TransactionSource, type TransactionView } from '../../../../src/models/transaction.js';
 import { Locale } from '../../../../src/models/locale.js';
 
@@ -38,8 +39,8 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
 const account = (overrides: Partial<Account> = {}): Account => ({
   id: 'acc-1',
   name: 'Nubank',
-  type: 'checking',
-  currency: 'BRL',
+  type: AccountType.enum.checking,
+  currency: CurrencyCode.enum.BRL,
   initialBalance: 0,
   ...overrides,
 });
@@ -62,7 +63,7 @@ describe('addAccountExpense — account resolution is value-based, not truthy', 
 describe('addAccountExpense / addAccountIncome — credit account rejection', () => {
   it('rejects posting directly to a credit account', async () => {
     const deps = makeDeps({
-      accounts: { list: async () => [account({ type: 'credit' })] } as unknown as Deps['accounts'],
+      accounts: { list: async () => [account({ type: AccountType.enum.credit })] } as unknown as Deps['accounts'],
     });
 
     const result = await addAccountExpense(
@@ -185,7 +186,9 @@ const baseTx: TransactionView = {
   tags: [],
 };
 
-const creditAccountsById = { findById: async () => account({ id: 'acc-card-internal', type: 'credit' }) };
+const creditAccountsById = {
+  findById: async () => account({ id: 'acc-card-internal', type: AccountType.enum.credit }),
+};
 
 describe('updateAccountTransaction / deleteAccountTransaction — ownership by account type (ADR-020)', () => {
   it('updateAccountTransaction rejects a tx with a credit leg, redirecting to update_card_transaction', async () => {
