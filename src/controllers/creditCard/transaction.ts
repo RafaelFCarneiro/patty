@@ -20,6 +20,7 @@ import { resolveCurrency } from '../../logic/money.js';
 import { normalizeMerchant } from '../../logic/merchant.js';
 import { toIsoDate } from '../../logic/period.js';
 import { addLocalizedLabels, assertExclusiveCategorySubCategory, defaultStatusFor } from '../../logic/transaction.js';
+import { AccountType } from '../../models/account.js';
 import {
   cardErrors,
   type AddCardPurchase,
@@ -38,7 +39,7 @@ import {
 } from '../../models/transaction.js';
 import type { BulkResult } from '../../logic/transaction.js';
 import type { Deps } from '../deps.js';
-import { involvesCreditAccount, resolveCardRef } from '../resolve.js';
+import { resolveCardRef, resolveLegAccounts } from '../resolve.js';
 import { runStatementImport } from '../transaction/bulk.js';
 import {
   deleteTransaction as coreDeleteTransaction,
@@ -57,6 +58,20 @@ const assertBillNotPaid = async (deps: Deps, billId: string | undefined): Promis
   if (!billId) return true;
   const bill = await deps.bills.findById(billId);
   return !bill || !isBillPaid(bill);
+};
+
+/**
+ * Repo-touching precondition (ADR-020): true when a leg of the transaction is a `credit` account —
+ * this aggregate's own positive ownership test (a card purchase's `accountId`, or the bill-payment
+ * transfer's `toAccountId`, is the card's internal account). The account aggregate does not share
+ * this predicate; it asks its own, different question (`assertAccountOwnedLegs`).
+ */
+const assertCreditAccountLeg = async (
+  deps: Deps,
+  tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
+): Promise<boolean> => {
+  const legs = await resolveLegAccounts(deps, tx);
+  return legs.some((account) => account.type === AccountType.enum.credit);
 };
 
 export const addCardPurchase = (
@@ -165,7 +180,7 @@ export const updateCardTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     yield* guard(
-      await involvesCreditAccount(deps, existing),
+      await assertCreditAccountLeg(deps, existing),
       transactionErrors.wrongTool(TransactionTool.updateAccountTransaction),
     );
 
@@ -224,7 +239,7 @@ export const deleteCardTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     yield* guard(
-      await involvesCreditAccount(deps, existing),
+      await assertCreditAccountLeg(deps, existing),
       transactionErrors.wrongTool(TransactionTool.deleteAccountTransaction),
     );
     yield* guard(await assertBillNotPaid(deps, existing.billId), cardErrors.paidBillImmutable);

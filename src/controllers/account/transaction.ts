@@ -6,7 +6,7 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
-import { assertNonCreditType, guardTransferMutability } from '../../logic/account.js';
+import { assertNonCreditType, guardTransferMutability, isAccountOwnedType } from '../../logic/account.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
 import { resolveCurrency } from '../../logic/money.js';
 import { normalizeMerchant } from '../../logic/merchant.js';
@@ -30,13 +30,27 @@ import {
 } from '../../models/transaction.js';
 import type { BulkResult } from '../../logic/transaction.js';
 import type { Deps } from '../deps.js';
-import { involvesCreditAccount, resolveAccountRef } from '../resolve.js';
+import { resolveAccountRef, resolveLegAccounts } from '../resolve.js';
 import { runStatementImport } from '../transaction/bulk.js';
 import {
   deleteTransaction as coreDeleteTransaction,
   resolveCategorySelection,
   updateTransaction as coreUpdateTransaction,
 } from '../transaction/core.js';
+
+/**
+ * Repo-touching precondition (ADR-020): true when every leg the transaction has resolves to one of
+ * *this* aggregate's own account types — a positive scope test (`isAccountOwnedType`), not the
+ * negation of the credit-card aggregate's test. The account domain doesn't ask "does the credit-card
+ * aggregate own this instead"; it asks "is every leg mine", vacuously true for an unattached movement.
+ */
+const assertAccountOwnedLegs = async (
+  deps: Deps,
+  tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
+): Promise<boolean> => {
+  const legs = await resolveLegAccounts(deps, tx);
+  return legs.every((account) => isAccountOwnedType(account.type));
+};
 
 /** Shared by addAccountExpense/addAccountIncome — everything but the fixed movement type. */
 const addAccountMovement = (
@@ -124,10 +138,11 @@ export const importAccountStatement = (
   });
 
 /**
- * Update an account transaction (ADR-020): asserts the target involves no `credit` account — a
- * transaction with a `credit` leg is rejected with a redirect to `update_card_transaction` — then
- * enforces transfer mutability (the only place a regular, mutable transfer is ever reached) before
- * delegating the generic patch to the transaction core.
+ * Update an account transaction (ADR-020): asserts every leg the target has is one of this
+ * aggregate's own account types (`assertAccountOwnedLegs`) — a transaction with a leg outside that
+ * scope is rejected with a redirect to `update_card_transaction` — then enforces transfer mutability
+ * (the only place a regular, mutable transfer is ever reached) before delegating the generic patch
+ * to the transaction core.
  */
 export const updateAccountTransaction = (
   deps: Deps,
@@ -136,7 +151,7 @@ export const updateAccountTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     yield* guard(
-      !(await involvesCreditAccount(deps, existing)),
+      await assertAccountOwnedLegs(deps, existing),
       transactionErrors.wrongTool(TransactionTool.updateCardTransaction),
     );
     yield* guardTransferMutability(existing, input);
@@ -154,7 +169,7 @@ export const deleteAccountTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     yield* guard(
-      !(await involvesCreditAccount(deps, existing)),
+      await assertAccountOwnedLegs(deps, existing),
       transactionErrors.wrongTool(TransactionTool.deleteCardTransaction),
     );
     return ok(yield* coreDeleteTransaction(deps, input, existing));

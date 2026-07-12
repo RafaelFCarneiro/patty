@@ -49,10 +49,20 @@ aggregate; the credit-card aggregate never reasons about transfer invariants.**
 1. **Per-aggregate ownership guards (replacing core `assertOwnership`):**
    - `update_card_transaction` / `delete_card_transaction`: resolve the transaction's account(s) and assert **a
      leg is a `credit` account**; otherwise reject with a redirect to the account tool.
-   - `update_account_transaction` / `delete_account_transaction`: assert **no leg is a `credit` account**;
-     otherwise redirect to the card tool.
+   - `update_account_transaction` / `delete_account_transaction`: assert **every leg is one of the account
+     aggregate's own types**; otherwise redirect to the card tool.
    - The check reads the authoritative `AccountType` (ADR-010), not `cardId`/`billId`. `isCardOwned` and
      `assertOwnership` are deleted from the transaction core.
+   - **Implementation detail (each aggregate asks its own question — neither shares or negates the other's
+     judgment):** `controllers/resolve.ts`'s `resolveLegAccounts(deps, tx)` is a neutral I/O helper — it resolves
+     the accounts referenced by a transaction's leg(s), making no ownership judgment itself. The credit-card
+     aggregate's own `assertCreditAccountLeg` (`controllers/creditCard/transaction.ts`) asks "is a leg `credit`".
+     The account aggregate's own `assertAccountOwnedLegs` (`controllers/account/transaction.ts`) asks the
+     different, positive question "is every leg one of *my* types", tested against `logic/account.ts`'s
+     `isAccountOwnedType` — an explicit enumeration of `checking`/`savings`/`wallet`/`investment`, not the
+     negation of `credit`. The account domain shouldn't need to name the credit-card domain's type to describe
+     its own scope, and a future new `AccountType` defaults to *not* being account-owned until deliberately added
+     to the enumeration, rather than silently falling into "not credit" by omission.
 
 2. **Ownership outcomes are unchanged from ADR-017's union rule** — this is a mechanism/placement change, not a
    routing change:

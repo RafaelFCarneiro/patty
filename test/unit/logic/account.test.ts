@@ -8,6 +8,7 @@ import {
   hasNoCards,
   hasNoRecurring,
   hasNoTransactions,
+  isAccountOwnedType,
   isUnreferenced,
   withTypeLabel,
 } from '../../../src/logic/account.js';
@@ -74,6 +75,24 @@ describe('assertNonCreditType', () => {
 
   it('passes for undefined (an omitted type is not a credit assignment)', () => {
     expect(assertNonCreditType(undefined)).toBe(true);
+  });
+});
+
+describe('isAccountOwnedType (ADR-020 — positive scope, not a negation of credit)', () => {
+  it('is true for every type the account aggregate owns', () => {
+    const owned = [
+      AccountType.enum.checking,
+      AccountType.enum.savings,
+      AccountType.enum.wallet,
+      AccountType.enum.investment,
+    ];
+    for (const type of owned) {
+      expect(isAccountOwnedType(type)).toBe(true);
+    }
+  });
+
+  it('is false for credit (owned by the credit-card aggregate instead)', () => {
+    expect(isAccountOwnedType(AccountType.enum.credit)).toBe(false);
   });
 });
 

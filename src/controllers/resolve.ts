@@ -3,7 +3,7 @@ import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { buildSynonyms, resolveAndSort } from '../logic/category.js';
 import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js';
-import { AccountType, type Account } from '../models/account.js';
+import type { Account } from '../models/account.js';
 import type { Category, SubCategory } from '../models/category.js';
 import type { CreditCard } from '../models/creditCard.js';
 import { ambiguous, notFound } from '../models/error.js';
@@ -45,17 +45,18 @@ export const resolveCardRef = (deps: Deps, name: string): ResultAsync<CreditCard
   );
 
 /**
- * Ownership by account type (ADR-020): true when either leg of the transaction resolves to a
- * `credit` account — the authoritative test for "this belongs to the credit-card aggregate",
- * replacing the retired `cardId`/`billId` field-presence heuristic (`isCardOwned`). A card
- * purchase's `accountId` is the card's own internal account; the bill-payment transfer's
- * `toAccountId` is that same account — both are covered by checking either leg.
+ * Resolves the account(s) referenced by a transaction's leg(s) (`accountId`/`toAccountId`) —
+ * a neutral I/O helper (ADR-020) making no ownership judgment of its own: a card purchase's
+ * `accountId` is the card's own internal account; the bill-payment transfer's `toAccountId` is
+ * that same account. Each aggregate interprets the result against its own definition of what it
+ * owns (`controllers/creditCard/transaction.ts`'s `assertCreditAccountLeg`, `controllers/account/
+ * transaction.ts`'s `assertAccountOwnedLegs`) rather than sharing one judgment between them.
  */
-export const involvesCreditAccount = async (
+export const resolveLegAccounts = async (
   deps: Deps,
   tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
-): Promise<boolean> => {
+): Promise<Account[]> => {
   const legIds = [tx.accountId, tx.toAccountId].filter(R.isNonNullish);
   const legs = await Promise.all(legIds.map((id) => deps.accounts.findById(id)));
-  return legs.some((account) => account?.type === AccountType.enum.credit);
+  return legs.filter(R.isNonNullish);
 };

@@ -32,6 +32,23 @@ export const areDifferentAccounts = (a: Pick<Account, 'id'>, b: Pick<Account, 'i
 export const assertCurrencyMatch = (a: Pick<Account, 'currency'>, b: Pick<Account, 'currency'>): boolean =>
   a.currency === b.currency;
 
+/**
+ * The account aggregate's own types (ADR-020) — a positive enumeration of what it owns, not the
+ * negation of what it doesn't (`assertNonCreditType` above answers a different question: "is this
+ * one specific type disallowed", asked by create/update/payment/transfer-leg guards). Ownership
+ * resolution wants "is this among the types I own", so it's defined here directly rather than by
+ * excluding `credit` — the account domain shouldn't have to name the credit-card domain's type to
+ * describe its own scope.
+ */
+const ACCOUNT_OWNED_TYPES: ReadonlySet<AccountType> = new Set([
+  AccountType.enum.checking,
+  AccountType.enum.savings,
+  AccountType.enum.wallet,
+  AccountType.enum.investment,
+]);
+
+export const isAccountOwnedType = (type: AccountType): boolean => ACCOUNT_OWNED_TYPES.has(type);
+
 // ─── Transfer mutability guard (ADR-020 §4) ──────────────────────────────────
 // Only the account aggregate ever mutates a regular transfer — the credit-card aggregate's one
 // transfer (the bill-payment transfer) is blocked outright by its own bill-process guard and never
