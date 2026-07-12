@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { accountErrors, CreateAccountSchema, UpdateAccountSchema } from '../../../src/models/account.js';
+import {
+  AddAccountMovementSchema,
+  UpdateAccountTransactionSchema,
+  accountErrors,
+  CreateAccountSchema,
+  UpdateAccountSchema,
+} from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 
 describe('accountErrors (colocated domain error payloads)', () => {
@@ -42,5 +48,32 @@ describe('account schemas (domain integrity vs. boundary convenience)', () => {
   it('UpdateAccountSchema makes type/currency/initialBalance optional but keeps name', () => {
     expect(UpdateAccountSchema.safeParse({ name: 'A' }).success).toBe(true);
     expect(UpdateAccountSchema.safeParse({ newName: 'B' }).success).toBe(false);
+  });
+});
+
+// ADR-019 step 1: AddAccountMovementSchema/UpdateAccountTransactionSchema compose UP from the
+// minimal transaction core (`.extend`) rather than the core carrying account/card/bill fields for
+// these to `.omit`.
+describe('AddAccountMovementSchema / UpdateAccountTransactionSchema — compose up (ADR-019)', () => {
+  const base = { description: 'Lunch', amount: 10, idempotencyKey: 'k-1' };
+
+  it('AddAccountMovementSchema accepts an optional account name', () => {
+    expect(AddAccountMovementSchema.safeParse({ ...base, account: 'Nubank' }).success).toBe(true);
+    expect(AddAccountMovementSchema.safeParse(base).success).toBe(true);
+  });
+
+  it('AddAccountMovementSchema rejects card/type/billMonth/billYear — foreign vocabulary (.strict())', () => {
+    expect(AddAccountMovementSchema.safeParse({ ...base, card: 'Nubank' }).success).toBe(false);
+    expect(AddAccountMovementSchema.safeParse({ ...base, type: 'expense' }).success).toBe(false);
+    expect(AddAccountMovementSchema.safeParse({ ...base, billMonth: 6, billYear: 2026 }).success).toBe(false);
+  });
+
+  it('UpdateAccountTransactionSchema accepts account (its own context field)', () => {
+    expect(UpdateAccountTransactionSchema.safeParse({ id: 'tx-1', account: 'Nubank' }).success).toBe(true);
+  });
+
+  it('UpdateAccountTransactionSchema structurally rejects billMonth/billYear (.strict())', () => {
+    const result = UpdateAccountTransactionSchema.safeParse({ id: 'tx-1', billMonth: 6, billYear: 2026 });
+    expect(result.success).toBe(false);
   });
 });

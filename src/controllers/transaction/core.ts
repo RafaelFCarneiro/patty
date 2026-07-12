@@ -9,7 +9,6 @@ import { guard, okOr } from '../../common/result.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
-  assertBillPeriodPaired,
   guardTransferMutability,
   hasCategory,
   hasSubCategory,
@@ -105,6 +104,15 @@ export const confirmTransaction = (deps: Deps, input: { id: string }): ResultAsy
     return ok(addLocalizedLabels(confirmed, locale));
   });
 
+/** Generic patch input: the core's minimal `UpdateTransaction` (ADR-019) plus `account` — the one
+ *  context field the shared persistence side still resolves/patches generically (the account
+ *  aggregate's `UpdateAccountTransactionSchema` carries it; the credit-card aggregate's own schema
+ *  carries it too, but only so `updateCardTransaction` can reject it with a dedicated error before
+ *  ever delegating here — it always reaches this patch as `undefined` on that path). Declared
+ *  locally rather than importing an aggregate's model type, so the core still names no sibling
+ *  context's schema. */
+type UpdateTransactionPatch = UpdateTransaction & { account?: string };
+
 /**
  * Generic patch: category/currency/description/amount resolution, persistence, and merchant
  * learning. No bill/card concern — callers that own a bill relationship (the credit-card
@@ -112,20 +120,12 @@ export const confirmTransaction = (deps: Deps, input: { id: string }): ResultAsy
  */
 export const updateTransaction = (
   deps: Deps,
-  input: UpdateTransaction,
+  input: UpdateTransactionPatch,
   existing: TransactionView,
 ): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
-    yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
     yield* guardTransferMutability(existing, input);
-    // billMonth/billYear must never reach this generic patch: for an account-owned transaction
-    // (updateAccountTransaction delegates here directly; UpdateAccountTransactionSchema structurally
-    // omits these fields, ADR-017) it's simply invalid; for a card transaction (updateCardTransaction
-    // delegates here after settling reassignment itself) the aggregate has already stripped these
-    // fields before delegating — if that stripping is ever removed, this guard would start wrongly
-    // rejecting legitimate reassignments instead of no-op passing.
-    yield* guard(input.billMonth === undefined, transactionErrors.billAssignmentRequiresCard);
 
     const account = R.isNonNullish(input.account) ? yield* resolveAccountRef(deps, input.account) : null;
     const effectiveType = resolveEffectiveType(existing, input);

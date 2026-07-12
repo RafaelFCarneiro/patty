@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BillQuerySchema } from './bill.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
 import {
@@ -40,20 +41,26 @@ export const CreateCreditCardSchema = CreditCardSchema.omit({
 });
 export type CreateCreditCard = z.infer<typeof CreateCreditCardSchema>;
 
-/** Natural input for a credit-card purchase (ADR-016): same shape as the transaction core's
- *  `CreateTransactionSchema` minus `account` (the card's own internal liability account is always
- *  the destination) with `card` required instead of optional. Depends on the transaction core's
- *  schema (aggregate → core, the allowed direction) — never the reverse. `.strict()`: `account` is
- *  a meaningful field on the sibling aggregate schema (`AddAccountMovementSchema`), not a
+/** Natural input for a credit-card purchase (ADR-016): the transaction core's minimal
+ *  `CreateTransactionSchema` (ADR-019) plus `card` (required — the card's own internal liability
+ *  account is always the destination) and bill-assignment (`billMonth`/`billYear`) — both are
+ *  credit-card-only vocabulary the core no longer carries. Depends on the transaction core's schema
+ *  (aggregate → core, the allowed direction) — never the reverse. `.strict()`: `account` is a
+ *  meaningful field on the sibling aggregate schema (`AddAccountMovementSchema`), not a
  *  server-managed one — a caller who mistakenly sends it here should get a validation error, not
  *  have it silently stripped by zod's default unknown-key behavior (REST boundary only; the MCP
  *  tool's inputSchema is a raw shape, which the MCP SDK reconstructs into its own non-strict object
  *  internally). */
-export const AddCardPurchaseSchema = CreateTransactionSchema.omit({ account: true })
-  .extend({
-    card: z.string().min(1).describe('Credit card name — joins the cycle bill'),
-  })
-  .strict();
+export const AddCardPurchaseSchema = CreateTransactionSchema.extend({
+  card: z.string().min(1).describe('Credit card name — joins the cycle bill'),
+  billMonth: BillQuerySchema.shape.month
+    .optional()
+    .describe(
+      'Explicit target bill cycle month (1-12) for a card transaction; overrides cycle-based auto-assignment. ' +
+        'Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet',
+    ),
+  billYear: BillQuerySchema.shape.year.optional().describe('Explicit target bill cycle year; provide with billMonth'),
+}).strict();
 export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
 
 /** A single line of an `import_card_statement` request (ADR-017 step 2): same shape as
@@ -86,12 +93,26 @@ export const ImportCardStatementSchema = z.object({
 });
 export type ImportCardStatement = z.infer<typeof ImportCardStatementSchema>;
 
-/** Card-aggregate update schema (ADR-017): unlike AddCardPurchaseSchema, nothing is omitted —
- *  `account` must still reach the handler so it can be explicitly rejected with a helpful message
- *  (cardErrors.accountChangeRejectedForCard) rather than silently dropped, and `billMonth`/`billYear`
- *  are genuine card-only reassignment vocabulary. `.strict()` still rejects truly foreign fields at
- *  the REST boundary (MCP tool args are reconstructed as a non-strict shape by the SDK). */
-export const UpdateCardTransactionSchema = UpdateTransactionSchema.strict();
+/** Card-aggregate update schema (ADR-017/ADR-019): `.extend`s the core's minimal
+ *  `UpdateTransactionSchema` with `account` — kept reachable (not omitted) so it can be explicitly
+ *  rejected with a helpful message (`cardErrors.accountChangeRejectedForCard`) rather than a generic
+ *  `.strict()` unrecognized-key error — and `billMonth`/`billYear`, genuine card-only reassignment
+ *  vocabulary. `.strict()` still rejects truly foreign fields at the REST boundary (MCP tool args
+ *  are reconstructed as a non-strict shape by the SDK). */
+export const UpdateCardTransactionSchema = UpdateTransactionSchema.extend({
+  account: z.string().min(1).optional().describe('New account name'),
+  billMonth: BillQuerySchema.shape.month
+    .optional()
+    .describe(
+      'Reassign to this bill cycle month (1-12) — the transaction must already be a card transaction. ' +
+        'Provide with billYear together. Rejected if the current or target bill is paid; auto-creates the ' +
+        'target bill if that cycle has none yet',
+    ),
+  billYear: BillQuerySchema.shape.year
+    .optional()
+    .describe('Reassignment target bill cycle year; provide with billMonth'),
+}).strict();
+export type UpdateCardTransaction = z.infer<typeof UpdateCardTransactionSchema>;
 
 export type CardError = NotFound<'card'> | Ambiguous<'card'> | DuplicateName<'credit_card'> | ValidationError;
 
@@ -101,10 +122,19 @@ export const cardErrors = {
     code: 'validation',
     issues: [`currency mismatch: card is ${cardCurrency}, payment account is ${accountCurrency}`],
   }),
-  // Raised only by the credit-card aggregate (controllers/creditCard/transaction.ts) —
-  // never by the transaction core, which has no concept of a bill. Contrast
-  // transactionErrors.billAssignmentRequiresCard (models/transaction.ts), which the core itself
-  // also raises and so must stay there.
+  // Field-tied to billMonth/billYear (ADR-019 step 1: moved from models/transaction.ts's
+  // transactionErrors, where the core used to raise them itself — the core no longer carries these
+  // fields at all, so only the credit-card aggregate, which owns them, can raise these now).
+  billPeriodIncomplete: {
+    code: 'validation',
+    issues: ['billMonth and billYear must be provided together'],
+  } satisfies CardError,
+  billAssignmentRequiresCard: {
+    code: 'validation',
+    issues: [
+      'billMonth/billYear require a credit-card transaction; provide `card` (create) or the transaction must already have one (update)',
+    ],
+  } satisfies CardError,
   paidBillImmutable: {
     code: 'validation',
     issues: [

@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { BillQuerySchema } from './bill.js';
 import { LocalizedNamesSchema } from './category.js';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
@@ -172,7 +171,10 @@ export const CategoryFieldsSchema = z.object({
 });
 export type CategoryFields = z.infer<typeof CategoryFieldsSchema>;
 
-/** Natural input accepted by controllers: names instead of ids. */
+/** Minimal shared movement vocabulary (ADR-019) — the transaction core's create input. Names no
+ *  context field (`account`, `card`, `billMonth`/`billYear`): each aggregate `.extend`s this schema
+ *  with its own vocabulary (`models/creditCard.ts`, `models/account.ts`) rather than the core
+ *  carrying the union and aggregates `.omit`-ing what isn't theirs. */
 export const CreateTransactionSchema = z.object({
   description: z.string().min(1).describe('What was paid/received, e.g. "Uber para o aeroporto"'),
   amount: Money.describe('Positive amount in full units (reais/dollars)'),
@@ -183,15 +185,6 @@ export const CreateTransactionSchema = z.object({
       '"pending" = expected, excluded until confirmed.',
   ),
   date: IsoDate.optional().describe('YYYY-MM-DD; defaults to today'),
-  account: z.string().min(1).optional().describe('Account name, e.g. "Nubank"'),
-  card: z.string().min(1).optional().describe('Credit card name — joins the cycle bill. Use account OR card, not both'),
-  billMonth: BillQuerySchema.shape.month
-    .optional()
-    .describe(
-      'Explicit target bill cycle month (1-12) for a card transaction; overrides cycle-based auto-assignment. ' +
-        'Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet',
-    ),
-  billYear: BillQuerySchema.shape.year.optional().describe('Explicit target bill cycle year; provide with billMonth'),
   // Spread first so a future CategoryFieldsSchema field is picked up here automatically; the
   // explicit category/subCategory below override just the .describe() for this create context.
   ...CategoryFieldsSchema.shape,
@@ -210,26 +203,17 @@ export const CreateTransactionSchema = z.object({
 export type CreateTransaction = z.infer<typeof CreateTransactionSchema>;
 
 /** Shared base for the aggregate-specific update tools (ADR-017), mirroring how
- *  CreateTransactionSchema is the shared base for add_card_purchase/add_account_expense/
- *  add_account_income — `UpdateCardTransactionSchema` (models/creditCard.ts) and
- *  `UpdateAccountTransactionSchema` (models/account.ts) derive from this one. */
+ *  CreateTransactionSchema is the minimal shared base for add_card_purchase/add_account_expense/
+ *  add_account_income (ADR-019) — `UpdateCardTransactionSchema` (models/creditCard.ts) and
+ *  `UpdateAccountTransactionSchema` (models/account.ts) `.extend` this one with their own context
+ *  fields (`billMonth`/`billYear`, `account`), rather than this schema carrying them for the
+ *  aggregates to `.omit`. */
 export const UpdateTransactionSchema = z.object({
   id: z.string().min(1).describe('Transaction id'),
   description: z.string().min(1).optional().describe('Updated description'),
   amount: Money.optional().describe('Updated amount in full units'),
   type: MovementType.optional().describe('Updated movement type'),
   date: IsoDate.optional().describe('Updated date (YYYY-MM-DD)'),
-  account: z.string().min(1).optional().describe('New account name'),
-  billMonth: BillQuerySchema.shape.month
-    .optional()
-    .describe(
-      'Reassign to this bill cycle month (1-12) — the transaction must already be a card transaction. ' +
-        'Provide with billYear together. Rejected if the current or target bill is paid; auto-creates the ' +
-        'target bill if that cycle has none yet',
-    ),
-  billYear: BillQuerySchema.shape.year
-    .optional()
-    .describe('Reassignment target bill cycle year; provide with billMonth'),
   ...CategoryFieldsSchema.shape,
   category: CategoryFieldsSchema.shape.category.describe(
     'New category name (user correction). Do not set with subCategory',
@@ -376,21 +360,6 @@ export const transactionErrors = {
   transferCategoryRejected: {
     code: 'validation',
     issues: ['transfer transactions cannot have a category or sub-category'],
-  } satisfies TransactionError,
-  billPeriodIncomplete: {
-    code: 'validation',
-    issues: ['billMonth and billYear must be provided together'],
-  } satisfies TransactionError,
-  // Raised by the transaction core's generic patch (transaction/core.ts's updateTransaction,
-  // rejecting billMonth/billYear reaching the core patch — an account-owned update structurally
-  // can't carry these fields, and a card-owned update strips them before delegating here) — stays
-  // here rather than moving to creditCard.ts's cardErrors, since the core itself must be able to
-  // raise it without depending on the credit-card domain.
-  billAssignmentRequiresCard: {
-    code: 'validation',
-    issues: [
-      'billMonth/billYear require a credit-card transaction; provide `card` (create) or the transaction must already have one (update)',
-    ],
   } satisfies TransactionError,
   invalidCursor: {
     code: 'validation',

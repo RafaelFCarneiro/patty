@@ -20,7 +20,12 @@ import {
   resolveCurrency,
   withBillId,
 } from '../../logic/transaction.js';
-import { cardErrors, type AddCardPurchase, type ImportCardStatement } from '../../models/creditCard.js';
+import {
+  cardErrors,
+  type AddCardPurchase,
+  type ImportCardStatement,
+  type UpdateCardTransaction,
+} from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
 import {
   transactionErrors,
@@ -30,7 +35,6 @@ import {
   type DeleteTransactionResult,
   type TransactionSource,
   type TransactionView,
-  type UpdateTransaction,
 } from '../../models/transaction.js';
 import type { BulkResult } from '../../logic/transaction.js';
 import type { Deps } from '../deps.js';
@@ -63,7 +67,7 @@ export const addCardPurchase = (
 ): ResultAsync<CreateTransactionResult, AppError> =>
   safeTry(async function* () {
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory);
-    yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
+    yield* guard(assertBillPeriodPaired(input), cardErrors.billPeriodIncomplete);
 
     const card = yield* resolveCardRef(deps, input.card);
 
@@ -153,7 +157,10 @@ export const importCardStatement = (
  * (category, description, amount, …) to the transaction core — with the bill fields stripped, since
  * this aggregate already owns and settled them.
  */
-export const updateCardTransaction = (deps: Deps, input: UpdateTransaction): ResultAsync<TransactionView, AppError> =>
+export const updateCardTransaction = (
+  deps: Deps,
+  input: UpdateCardTransaction,
+): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     yield* assertOwnership(existing, true, TransactionTool.updateAccountTransaction);
@@ -167,7 +174,7 @@ export const updateCardTransaction = (deps: Deps, input: UpdateTransaction): Res
     const cardId = yield* okOr(existing.cardId, cardErrors.paidBillImmutable);
 
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
-    yield* guard(assertBillPeriodPaired(input), transactionErrors.billPeriodIncomplete);
+    yield* guard(assertBillPeriodPaired(input), cardErrors.billPeriodIncomplete);
     yield* guardTransferMutability(existing, input);
     // A card purchase is always funded by the card's own internal liability account (ADR-010) — it
     // has no independent `account` to reassign. Reject rather than silently forwarding `account` to

@@ -116,6 +116,31 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 - Distinguish input schemas (`CreateTransactionInput` — names, optional fields) from entity
   schemas (`Transaction` — ids, resolved). Inputs use `MovementType`; only entities carry
   `TransactionType` (which includes `'transfer'`).
+- **A shared core schema composes UP (`.extend`), never carries the union for aggregates to carve
+  DOWN (`.omit`) (ADR-019).** A field/rule/error belongs on the shared core schema only if the
+  shared read/balance/persistence side is genuinely defined over it; anything a single aggregate
+  introduces is defined in that aggregate's own model file and layered onto the core with
+  `.extend`, never named on the core for the aggregate to `.omit` away:
+
+  ```ts
+  // models/transaction.ts (core) — minimal, shared movement vocabulary only
+  export const CreateTransactionSchema = z.object({ description, amount, type, status, date, ... })
+  // no account, no card, no billMonth/billYear — those are a single aggregate's vocabulary
+
+  // models/creditCard.ts — composes UP: adds card-only fields the core never carries
+  export const AddCardPurchaseSchema = CreateTransactionSchema.extend({ card, billMonth, billYear }).strict()
+
+  // models/account.ts — composes UP: adds its own field, omits the create-only type discriminator
+  export const AddAccountMovementSchema = CreateTransactionSchema.extend({ account }).omit({ type: true }).strict()
+  ```
+
+  Field-tied errors move with their field to the aggregate that owns it (e.g. `billPeriodIncomplete`
+  lives in `creditCard.ts`'s `cardErrors`, not the core's `transactionErrors`, since only a
+  card-context schema can carry `billMonth`/`billYear` at all). The one carve-out: a read/balance/
+  summary concern that's *structurally* defined over a value common to every aggregate (e.g. the
+  transfer row kind, `TransactionView`'s discriminator fields) stays on the core even though a
+  single aggregate owns the *policy* around it — the test is "does the shared read/persistence side
+  need this," not "does only one caller set it."
 - **`.describe()` is domain info — put it on the model field**, not re-authored at the edge. It says
   what the field *is*; the MCP/REST edge derives its schema (`Schema.shape`) so the same text surfaces.
 - **Defaults by intent:** integrity defaults (a value that must exist for validity, e.g.

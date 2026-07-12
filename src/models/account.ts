@@ -56,38 +56,33 @@ export const AccountBalanceSchema = AccountSchema.extend({
 });
 export type AccountBalance = z.infer<typeof AccountBalanceSchema>;
 
-/** Natural input for an account expense/income (ADR-016): same shape as the transaction core's
- *  `CreateTransactionSchema` minus `card`/`type`/`billMonth`/`billYear` (bill assignment is
- *  card-only vocabulary; the movement kind is the tool itself — `add_account_expense` vs.
- *  `add_account_income` — not a field). `account` stays optional: an omitted account records an
- *  unattached (e.g. cash) movement. Depends on the transaction core's schema (aggregate → core, the
- *  allowed direction) — never the reverse. `.strict()`: `card`/`type`/`billMonth`/`billYear` are
- *  meaningful fields on sibling aggregate schemas (`AddCardPurchaseSchema`), not server-managed
- *  ones — a caller who mistakenly sends them here should get a validation error, not have them
- *  silently stripped by zod's default unknown-key behavior (REST boundary only; the MCP tool's
- *  inputSchema is a raw shape, which the MCP SDK reconstructs into its own non-strict object
- *  internally). */
-export const AddAccountMovementSchema = CreateTransactionSchema.omit({
-  card: true,
-  type: true,
-  billMonth: true,
-  billYear: true,
-}).strict();
+/** Natural input for an account expense/income (ADR-016): the transaction core's minimal
+ *  `CreateTransactionSchema` (ADR-019) plus `account`, minus `type` (the movement kind is the tool
+ *  itself — `add_account_expense` vs. `add_account_income` — not a field; card/bill-assignment
+ *  vocabulary never reaches this schema at all, since the core no longer carries it). `account`
+ *  stays optional: an omitted account records an unattached (e.g. cash) movement. Depends on the
+ *  transaction core's schema (aggregate → core, the allowed direction) — never the reverse.
+ *  `.strict()`: `card`/`type`/`billMonth`/`billYear` are meaningful fields on the sibling aggregate
+ *  schema (`AddCardPurchaseSchema`), not server-managed ones — a caller who mistakenly sends them
+ *  here should get a validation error, not have them silently stripped by zod's default unknown-key
+ *  behavior (REST boundary only; the MCP tool's inputSchema is a raw shape, which the MCP SDK
+ *  reconstructs into its own non-strict object internally). */
+export const AddAccountMovementSchema = CreateTransactionSchema.extend({
+  account: z.string().min(1).optional().describe('Account name, e.g. "Nubank"'),
+})
+  .omit({ type: true })
+  .strict();
 export type AddAccountMovement = z.infer<typeof AddAccountMovementSchema>;
 
 /** A single line of an `import_account_statement` request (ADR-017 step 2): the transaction core's
- *  `CreateTransactionSchema` minus `account`/`card`/`billMonth`/`billYear` (the account is fixed
- *  once, at the statement's top level — single-source, no per-line account; bill assignment is
- *  card-only vocabulary) and minus `idempotencyKey`/`rawInput`/`subCategory`/`tags` (statement-level
- *  concerns, same reduced shape the retired god bulk item carried). Unlike `AddAccountMovementSchema`,
- *  `type` stays required — a statement line still needs its own expense-vs-income discriminator,
- *  since (unlike `add_account_expense`/`add_account_income`) the movement kind isn't fixed by which
- *  tool was called. */
+ *  minimal `CreateTransactionSchema` (ADR-019) minus `idempotencyKey`/`rawInput`/`subCategory`/`tags`
+ *  (statement-level concerns, same reduced shape the retired god bulk item carried) — no `account`
+ *  (fixed once, at the statement's top level — single-source, no per-line account) and no
+ *  `card`/`billMonth`/`billYear` (card/bill-assignment vocabulary the core never carries). Unlike
+ *  `AddAccountMovementSchema`, `type` stays required — a statement line still needs its own
+ *  expense-vs-income discriminator, since (unlike `add_account_expense`/`add_account_income`) the
+ *  movement kind isn't fixed by which tool was called. */
 export const ImportAccountStatementItemSchema = CreateTransactionSchema.omit({
-  account: true,
-  card: true,
-  billMonth: true,
-  billYear: true,
   idempotencyKey: true,
   rawInput: true,
   subCategory: true,
@@ -115,13 +110,13 @@ export const ImportAccountStatementSchema = z.object({
 });
 export type ImportAccountStatement = z.infer<typeof ImportAccountStatementSchema>;
 
-/** Account-aggregate update schema (ADR-017): the core's UpdateTransactionSchema minus billMonth/
- *  billYear — bill assignment is card-only vocabulary that structurally doesn't apply to an account
- *  movement (mirrors AddAccountMovementSchema's create-side omission). `.strict()`: same REST-boundary-
- *  only reasoning as AddAccountMovementSchema above. */
-export const UpdateAccountTransactionSchema = UpdateTransactionSchema.omit({
-  billMonth: true,
-  billYear: true,
+/** Account-aggregate update schema (ADR-017/ADR-019): `.extend`s the core's minimal
+ *  `UpdateTransactionSchema` with `account` — the core no longer carries bill-assignment
+ *  (`billMonth`/`billYear`) at all, so unlike before there is nothing left to omit; it structurally
+ *  can't reach this schema (mirrors `AddAccountMovementSchema`'s create-side shape). `.strict()`:
+ *  same REST-boundary-only reasoning as `AddAccountMovementSchema` above. */
+export const UpdateAccountTransactionSchema = UpdateTransactionSchema.extend({
+  account: z.string().min(1).optional().describe('New account name'),
 }).strict();
 export type UpdateAccountTransaction = z.infer<typeof UpdateAccountTransactionSchema>;
 
