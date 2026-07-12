@@ -1,6 +1,6 @@
 # ADR-018: Atomic bill payment — the last within-aggregate multi-write, closed locally
 
-**Status:** Proposed · **Date:** 2026-07-11 · **Deciders:** Rafael · Closes the concurrency thread parked when
+**Status:** Accepted (implemented) · **Date:** 2026-07-11 · **Deciders:** Rafael · Closes the concurrency thread parked when
 **ADR-015** (cross-cutting unit-of-work + optimistic versioning) was rejected in favor of the ADR-016/017
 boundary work. That work shrank the multi-write surface exactly as predicted; this ADR resolves the single
 residue.
@@ -33,7 +33,7 @@ only invariant to enforce is the *bill's own* status ("don't pay an already-paid
 cross-domain reach, so none of ADR-015's machinery (typed cross-flow deltas, generic row versioning,
 controller-side retry) is warranted.
 
-## Decision (proposed)
+## Decision
 
 **Close the gap with a single within-aggregate unit of work: one transactional bill-repo method that inserts the
 payment transfer and flips the bill to `paid` in one `db.transaction`, with the flip conditioned on the bill's
@@ -101,8 +101,8 @@ cross-context race to justify it.
 
 ## Action Items
 
-1. [ ] Review/accept this ADR (decision review — no implementation in this PR).
-2. [ ] On acceptance: add this ADR to the `docs/architecture.md` index (the index lists accepted/rejected ADRs
+1. [x] Review/accept this ADR (decision review — no implementation in this PR).
+2. [x] On acceptance: add this ADR to the `docs/architecture.md` index (the index lists accepted/rejected ADRs
    only, not proposed ones).
-3. [ ] Implement `bills.pay` (single `db.transaction`, status-conditioned) + rewire `payBill`; add the
+3. [x] Implement `bills.pay` (single `db.transaction`, status-conditioned) + rewire `payBill`; add the
    concurrency-shaped test; update the `docs/architecture.md` invariant note.

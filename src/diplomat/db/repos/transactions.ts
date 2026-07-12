@@ -18,7 +18,7 @@ import type { SummaryRow } from '../../../models/summary.js';
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js';
 import { ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
-import type { Db } from '../driver.js';
+import type { Db, Executor } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
 import { merchants, tags, transactionTags, transactions } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
@@ -30,24 +30,85 @@ import { fullTxSelect } from '../transactionSelect.js';
 // being exported as a wire/db "storage contract" with no second consumer.
 const SearchCountRowSchema = z.object({ count: z.number().int() });
 
-const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
-  const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`));
+const fetchTx = async (executor: Executor, id: string): Promise<RawTransactionView | null> => {
+  const [row] = await executor.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`));
   return row ? transactionAdapters.dbToModel(row) : null;
 };
 
-const attachTags = async (db: Db, txId: string, tagNames: string[]): Promise<void> => {
+const attachTags = async (executor: Executor, txId: string, tagNames: string[]): Promise<void> => {
   if (tagNames.length === 0) return;
-  const matches = await db.select({ id: tags.id }).from(tags).where(inArray(tags.name, tagNames));
+  const matches = await executor.select({ id: tags.id }).from(tags).where(inArray(tags.name, tagNames));
   if (matches.length === 0) return;
-  await db
+  await executor
     .insert(transactionTags)
     .values(matches.map((tag) => ({ transactionId: txId, tagId: tag.id })))
     .onConflictDoNothing({ target: [transactionTags.transactionId, transactionTags.tagId] });
 };
 
-const replaceTags = async (db: Db, txId: string, tagNames: string[]): Promise<void> => {
-  await db.delete(transactionTags).where(eq(transactionTags.transactionId, txId));
-  await attachTags(db, txId, tagNames);
+const replaceTags = async (executor: Executor, txId: string, tagNames: string[]): Promise<void> => {
+  await executor.delete(transactionTags).where(eq(transactionTags.transactionId, txId));
+  await attachTags(executor, txId, tagNames);
+};
+
+/**
+ * Idempotent transaction insert (INSERT OR IGNORE on idempotency_key), the shared core primitive
+ * behind both `transactionsRepo(db).create` and any aggregate repo composing it into its own
+ * `db.transaction` (e.g. `bills.pay`, ADR-018) — takes an `Executor` so it runs against either the
+ * top-level `db` or a caller's `tx` handle without duplicating the insert logic.
+ */
+export const insertTransactionRow = async (
+  executor: Executor,
+  entity: Transaction,
+  tagNames: string[],
+): Promise<CreateTxResult> => {
+  const { props, refs } = transactionAdapters.modelToDb(entity);
+
+  // Ensure merchant row exists before FK reference
+  if (refs.merchantKey) {
+    await executor.insert(merchants).values({ key: refs.merchantKey }).onConflictDoNothing();
+  }
+
+  const result = await executor
+    .insert(transactions)
+    .values({
+      id: props.id,
+      description: props.description,
+      amount: props.amount,
+      type: props.type,
+      status: props.status,
+      date: props.date,
+      currency: props.currency,
+      source: props.source,
+      idempotencyKey: props.idempotencyKey,
+      classificationMethod: props.classificationMethod,
+      confidence: props.confidence,
+      rawInput: props.rawInput ?? null,
+      note: props.note ?? null,
+      fromAccountId: refs.accountId,
+      toAccountId: refs.toAccountId,
+      creditCardId: refs.cardId,
+      billId: refs.billId,
+      categoryId: refs.categoryId,
+      subcategoryId: refs.subCategoryId,
+      merchantKey: refs.merchantKey,
+    })
+    .onConflictDoNothing({ target: transactions.idempotencyKey });
+
+  const created = (result.rowsAffected ?? 0) > 0;
+
+  let transaction: RawTransactionView | null;
+  if (created) {
+    if (tagNames.length > 0) await attachTags(executor, entity.id, tagNames);
+    transaction = await fetchTx(executor, entity.id);
+  } else {
+    // Duplicate: the new entity.id was never inserted; find the existing row by idempotency key.
+    const [existing] = await executor.all<Record<string, unknown>>(
+      fullTxSelect(sql`t.idempotency_key = ${props.idempotencyKey}`),
+    );
+    transaction = existing ? transactionAdapters.dbToModel(existing) : null;
+  }
+
+  return { transaction: expectPresent(transaction, rowNotFoundAfterWrite('transactions', 'write')), created };
 };
 
 /** Tiebreaker (t.id) follows `dir` — one uniform direction across the composite key, which is
@@ -111,57 +172,7 @@ export type TransactionsRepo = {
 };
 
 export const transactionsRepo = (db: Db): TransactionsRepo => ({
-  /** Idempotent create: INSERT OR IGNORE on idempotency_key. */
-  create: async (entity, tagNames) => {
-    const { props, refs } = transactionAdapters.modelToDb(entity);
-
-    // Ensure merchant row exists before FK reference
-    if (refs.merchantKey) {
-      await db.insert(merchants).values({ key: refs.merchantKey }).onConflictDoNothing();
-    }
-
-    const result = await db
-      .insert(transactions)
-      .values({
-        id: props.id,
-        description: props.description,
-        amount: props.amount,
-        type: props.type,
-        status: props.status,
-        date: props.date,
-        currency: props.currency,
-        source: props.source,
-        idempotencyKey: props.idempotencyKey,
-        classificationMethod: props.classificationMethod,
-        confidence: props.confidence,
-        rawInput: props.rawInput ?? null,
-        note: props.note ?? null,
-        fromAccountId: refs.accountId,
-        toAccountId: refs.toAccountId,
-        creditCardId: refs.cardId,
-        billId: refs.billId,
-        categoryId: refs.categoryId,
-        subcategoryId: refs.subCategoryId,
-        merchantKey: refs.merchantKey,
-      })
-      .onConflictDoNothing({ target: transactions.idempotencyKey });
-
-    const created = (result.rowsAffected ?? 0) > 0;
-
-    let transaction: RawTransactionView | null;
-    if (created) {
-      if (tagNames.length > 0) await attachTags(db, entity.id, tagNames);
-      transaction = await fetchTx(db, entity.id);
-    } else {
-      // Duplicate: the new entity.id was never inserted; find the existing row by idempotency key.
-      const [existing] = await db.all<Record<string, unknown>>(
-        fullTxSelect(sql`t.idempotency_key = ${props.idempotencyKey}`),
-      );
-      transaction = existing ? transactionAdapters.dbToModel(existing) : null;
-    }
-
-    return { transaction: expectPresent(transaction, rowNotFoundAfterWrite('transactions', 'write')), created };
-  },
+  create: (entity, tagNames) => insertTransactionRow(db, entity, tagNames),
 
   getById: (id) => fetchTx(db, id),
 

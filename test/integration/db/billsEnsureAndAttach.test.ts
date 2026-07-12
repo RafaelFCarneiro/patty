@@ -97,25 +97,20 @@ describe('bills.ensureAndAttach — atomic paid-bill guard', () => {
     const bill = await bills.ensureAndAttach(card.id, purchaseId, period, randomUUID());
     expect(bill).not.toBeNull();
 
-    // Pay it (a real payment transfer, linked via markPaid — mirrors payBill's own writes).
-    const transferId = randomUUID();
-    await transactions.create(
-      {
-        id: transferId,
-        description: 'payment',
-        amount: 100,
-        type: TransactionType.enum.transfer,
-        status: TransactionStatus.enum.effective,
-        date: '2026-06-20',
-        currency: CurrencyCode.enum.BRL,
-        source: TransactionSource.enum.mcp,
-        idempotencyKey: 'ensure-attach-payment',
-        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-        refs: { accountId: bank.id, toAccountId: cardAccountId, billId: bill!.id },
-      },
-      [],
-    );
-    await bills.markPaid(bill!.id, transferId);
+    // Pay it (a real payment transfer via bills.pay — mirrors payBill's own atomic write, ADR-018).
+    await bills.pay(bill!.id, {
+      id: randomUUID(),
+      description: 'payment',
+      amount: 100,
+      type: TransactionType.enum.transfer,
+      status: TransactionStatus.enum.effective,
+      date: '2026-06-20',
+      currency: CurrencyCode.enum.BRL,
+      source: TransactionSource.enum.mcp,
+      idempotencyKey: 'ensure-attach-payment',
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+      refs: { accountId: bank.id, toAccountId: cardAccountId, billId: bill!.id },
+    });
 
     // A second, late-arriving purchase tries to attach to the now-paid cycle directly at the repo
     // level (bypassing the controller's own pre-check) — this is the atomic guard's job to refuse.
@@ -209,24 +204,19 @@ describe('bills.ensureAndAttach — atomic paid-bill guard', () => {
     const billA = await bills.ensureAndAttach(card.id, purchaseId, periodA, randomUUID());
     expect(billA).not.toBeNull();
 
-    const transferId = randomUUID();
-    await transactions.create(
-      {
-        id: transferId,
-        description: 'payment',
-        amount: 100,
-        type: TransactionType.enum.transfer,
-        status: TransactionStatus.enum.effective,
-        date: '2026-06-20',
-        currency: CurrencyCode.enum.BRL,
-        source: TransactionSource.enum.mcp,
-        idempotencyKey: 'ensure-attach-reassign-payment',
-        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-        refs: { accountId: bank.id, toAccountId: cardAccountId, billId: billA!.id },
-      },
-      [],
-    );
-    await bills.markPaid(billA!.id, transferId);
+    await bills.pay(billA!.id, {
+      id: randomUUID(),
+      description: 'payment',
+      amount: 100,
+      type: TransactionType.enum.transfer,
+      status: TransactionStatus.enum.effective,
+      date: '2026-06-20',
+      currency: CurrencyCode.enum.BRL,
+      source: TransactionSource.enum.mcp,
+      idempotencyKey: 'ensure-attach-reassign-payment',
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+      refs: { accountId: bank.id, toAccountId: cardAccountId, billId: billA!.id },
+    });
 
     // Cycle A (the purchase's current bill) is paid; cycle B is a perfectly open target on its
     // own. Trying to move the purchase from A to B must still be refused, atomically, because the

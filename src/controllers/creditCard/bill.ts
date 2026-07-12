@@ -69,28 +69,20 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<Bill, AppE
 
     const today = toIsoDate(deps.clock());
 
-    const { transaction } = await deps.transactions.create(
-      {
-        id: deps.newId(),
-        description: `Bill payment: ${card.name} ${String(input.month).padStart(2, '0')}/${input.year}`,
-        amount: total,
-        type: TransactionType.enum.transfer,
-        status: defaultStatusFor(today, today),
-        date: today,
-        currency: card.currency,
-        source: input.source,
-        idempotencyKey: `billpay-${existing.bill.id}`,
-        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-        refs: { accountId: payer.id, toAccountId: card.accountId, billId: existing.bill.id },
-      },
-      [],
-    );
-
-    const paid = yield* okOr(
-      await deps.bills.markPaid(existing.bill.id, transaction.id),
-      billErrors.notFound(card.name, input.month, input.year),
-    );
-    return ok(paid);
+    const outcome = await deps.bills.pay(existing.bill.id, {
+      id: deps.newId(),
+      description: `Bill payment: ${card.name} ${String(input.month).padStart(2, '0')}/${input.year}`,
+      amount: total,
+      type: TransactionType.enum.transfer,
+      status: defaultStatusFor(today, today),
+      date: today,
+      currency: card.currency,
+      source: input.source,
+      idempotencyKey: `billpay-${existing.bill.id}`,
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+      refs: { accountId: payer.id, toAccountId: card.accountId, billId: existing.bill.id },
+    });
+    return ok(outcome.bill);
   });
 
 /**

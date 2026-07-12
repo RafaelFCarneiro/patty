@@ -3,13 +3,21 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Entry } from '@napi-rs/keyring';
-import { createClient } from '@libsql/client';
+import { createClient, type ResultSet } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
+import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
 import type { Config } from '../../config.js';
 import * as schema from './schema.js';
 
 export type Db = LibSQLDatabase<typeof schema>;
+
+/**
+ * Structural supertype of both `Db` and the `tx` handle `Db.transaction()` hands its callback —
+ * repo helpers that need to run inside either a top-level write or a caller's `db.transaction`
+ * (e.g. `bills.pay` composing the shared transaction-insert path) take this instead of `Db`.
+ */
+export type Executor = BaseSQLiteDatabase<'async', ResultSet, typeof schema>;
 
 const KEYCHAIN_SERVICE = 'fintrack';
 const KEYCHAIN_ACCOUNT = 'db-encryption-key';
