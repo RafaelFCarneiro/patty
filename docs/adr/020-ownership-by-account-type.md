@@ -1,6 +1,6 @@
 # ADR-020: Transaction ownership by account type, not structural field-presence
 
-**Status:** Proposed · **Date:** 2026-07-12 · **Deciders:** Rafael · Revises **ADR-017**'s ownership
+**Status:** Accepted (2026-07-12; implemented as part of ADR-019 PR-2) · **Date:** 2026-07-12 · **Deciders:** Rafael · Revises **ADR-017**'s ownership
 discriminator and refines **ADR-019**'s PR-2 logic re-homing. Surfaced while grounding ADR-019 PR-2: the
 functions it planned to move (`isCardOwned`, `guardTransferMutability`) are cross-consumed, and the reason is
 that the ownership rule itself sits in the wrong place.
@@ -146,7 +146,7 @@ Fold into ADR-019 PR-2 (the logic re-homing PR), since they touch the same files
 
 ## Action Items
 
-1. [ ] Review/accept this ADR (decision review — no implementation in this PR).
-2. [ ] On acceptance: add this ADR to the `docs/architecture.md` index, rewrite invariant #17 to account-type
+1. [x] Review/accept this ADR (decision review — no implementation in this PR).
+2. [x] On acceptance: add this ADR to the `docs/architecture.md` index, rewrite invariant #17 to account-type
    ownership, and add the amendment note to ADR-017.
-3. [ ] Implement as part of ADR-019 PR-2 (per Migration above) — behavior-preserving, coverage-parity mapped.
+3. [x] Implement as part of ADR-019 PR-2 (per Migration above) — behavior-preserving, coverage-parity mapped.

@@ -7,19 +7,19 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
-import { billPeriodFor, billPeriodForCycle, isBillPaid, type BillPeriod } from '../../logic/bill.js';
+import {
+  assertBillPeriodPaired,
+  billPeriodFor,
+  billPeriodForCycle,
+  isBillPaid,
+  withBillId,
+  type BillPeriod,
+} from '../../logic/bill.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
+import { resolveCurrency } from '../../logic/money.js';
 import { normalizeMerchant } from '../../logic/merchant.js';
 import { toIsoDate } from '../../logic/period.js';
-import {
-  addLocalizedLabels,
-  assertBillPeriodPaired,
-  assertExclusiveCategorySubCategory,
-  defaultStatusFor,
-  guardTransferMutability,
-  resolveCurrency,
-  withBillId,
-} from '../../logic/transaction.js';
+import { addLocalizedLabels, assertExclusiveCategorySubCategory, defaultStatusFor } from '../../logic/transaction.js';
 import {
   cardErrors,
   type AddCardPurchase,
@@ -38,10 +38,9 @@ import {
 } from '../../models/transaction.js';
 import type { BulkResult } from '../../logic/transaction.js';
 import type { Deps } from '../deps.js';
-import { resolveCardRef } from '../resolve.js';
+import { involvesCreditAccount, resolveCardRef } from '../resolve.js';
 import { runStatementImport } from '../transaction/bulk.js';
 import {
-  assertOwnership,
   deleteTransaction as coreDeleteTransaction,
   resolveCategorySelection,
   updateTransaction as coreUpdateTransaction,
@@ -99,7 +98,7 @@ export const addCardPurchase = (
         type: input.type,
         status,
         date,
-        currency: resolveCurrency(null, card, input),
+        currency: resolveCurrency(card, input),
         source,
         idempotencyKey: input.idempotencyKey,
         classification,
@@ -151,11 +150,13 @@ export const importCardStatement = (
   );
 
 /**
- * Update a card transaction (ADR-017): asserts the target is card-owned (`cardId` or `billId`) —
- * an account-owned id is rejected with a redirect to `update_account_transaction`. Validates and
- * settles any bill reassignment (billMonth/billYear), then delegates the remaining generic patch
- * (category, description, amount, …) to the transaction core — with the bill fields stripped, since
- * this aggregate already owns and settled them.
+ * Update a card transaction (ADR-020): asserts the target involves a `credit` account — a
+ * transaction with no `credit` leg is rejected with a redirect to `update_account_transaction`.
+ * Validates and settles any bill reassignment (billMonth/billYear), then delegates the remaining
+ * generic patch (category, description, amount, …) to the transaction core — with the bill fields
+ * stripped, since this aggregate already owns and settled them. Never reasons about transfer
+ * mutability — the only transfer this aggregate ever sees (the bill-payment transfer) is blocked
+ * outright below, by bill-process policy, not by transfer-immutability policy.
  */
 export const updateCardTransaction = (
   deps: Deps,
@@ -163,7 +164,10 @@ export const updateCardTransaction = (
 ): ResultAsync<TransactionView, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
-    yield* assertOwnership(existing, true, TransactionTool.updateAccountTransaction);
+    yield* guard(
+      await involvesCreditAccount(deps, existing),
+      transactionErrors.wrongTool(TransactionTool.updateAccountTransaction),
+    );
 
     // A card-owned transaction with no cardId is definitionally the bill-payment transfer
     // (pay_bill's own row: billId set, no cardId — nothing else in the domain has billId without
@@ -175,7 +179,6 @@ export const updateCardTransaction = (
 
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
     yield* guard(assertBillPeriodPaired(input), cardErrors.billPeriodIncomplete);
-    yield* guardTransferMutability(existing, input);
     // A card purchase is always funded by the card's own internal liability account (ADR-010) — it
     // has no independent `account` to reassign. Reject rather than silently forwarding `account` to
     // the core patch, which would repoint `from_account_id` at an arbitrary account while leaving
@@ -210,9 +213,9 @@ export const updateCardTransaction = (
   });
 
 /**
- * Delete a card transaction (ADR-017): asserts card-ownership, then paid-bill immutability
- * (which also covers the bill-payment transfer — its own billId is always the bill it paid), then
- * the core's generic delete.
+ * Delete a card transaction (ADR-020): asserts the target involves a `credit` account, then
+ * paid-bill immutability (which also covers the bill-payment transfer — its own billId is always
+ * the bill it paid), then the core's generic delete.
  */
 export const deleteCardTransaction = (
   deps: Deps,
@@ -220,7 +223,10 @@ export const deleteCardTransaction = (
 ): ResultAsync<DeleteTransactionResult, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
-    yield* assertOwnership(existing, true, TransactionTool.deleteAccountTransaction);
+    yield* guard(
+      await involvesCreditAccount(deps, existing),
+      transactionErrors.wrongTool(TransactionTool.deleteAccountTransaction),
+    );
     yield* guard(await assertBillNotPaid(deps, existing.billId), cardErrors.paidBillImmutable);
     return ok(yield* coreDeleteTransaction(deps, input, existing));
   });

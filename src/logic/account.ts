@@ -1,8 +1,11 @@
+import { err, ok, type Result } from 'neverthrow';
 import { purry } from 'remeda';
 import { localizeAccountType } from './localize.js';
-import { AccountType } from '../models/account.js';
-import type { Account, AccountReferences } from '../models/account.js';
+import { accountErrors, AccountType } from '../models/account.js';
+import type { Account, AccountError, AccountReferences } from '../models/account.js';
 import type { Locale } from '../models/locale.js';
+import { TransactionType } from '../models/transaction.js';
+import type { TransactionView, UpdateTransaction } from '../models/transaction.js';
 
 export const filterByType =
   (type?: AccountType) =>
@@ -28,6 +31,31 @@ export const areDifferentAccounts = (a: Pick<Account, 'id'>, b: Pick<Account, 'i
 
 export const assertCurrencyMatch = (a: Pick<Account, 'currency'>, b: Pick<Account, 'currency'>): boolean =>
   a.currency === b.currency;
+
+// ─── Transfer mutability guard (ADR-020 §4) ──────────────────────────────────
+// Only the account aggregate ever mutates a regular transfer — the credit-card aggregate's one
+// transfer (the bill-payment transfer) is blocked outright by its own bill-process guard and never
+// reaches this check.
+
+const isTransfer = (t: Pick<TransactionView, 'type'>) => t.type === TransactionType.enum.transfer;
+const wouldBeTransfer = (existing: Pick<TransactionView, 'type'>, input: Pick<UpdateTransaction, 'type'>) =>
+  (input.type ?? existing.type) === TransactionType.enum.transfer;
+const hasCategoryInput = (input: Pick<UpdateTransaction, 'category' | 'subCategory'>) =>
+  !!(input.category || input.subCategory);
+
+/**
+ * Enforce transfer invariants on update:
+ * - A transfer's type cannot be changed.
+ * - A transfer cannot receive a category or sub-category.
+ */
+export const guardTransferMutability = (
+  existing: Pick<TransactionView, 'type'>,
+  input: Pick<UpdateTransaction, 'type' | 'category' | 'subCategory'>,
+): Result<void, AccountError> => {
+  if (isTransfer(existing) && input.type) return err(accountErrors.transferTypeImmutable);
+  if (wouldBeTransfer(existing, input) && hasCategoryInput(input)) return err(accountErrors.transferCategoryRejected);
+  return ok(undefined);
+};
 
 const _withTypeLabel = <T extends Account>(account: T, locale: Locale): T => ({
   ...account,

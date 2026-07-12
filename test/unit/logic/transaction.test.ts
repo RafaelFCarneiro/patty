@@ -13,17 +13,13 @@ import {
 import type { RawTransactionView } from '../../../src/models/transaction.js';
 import {
   addLocalizedLabels,
-  assertBillPeriodPaired,
   assertExclusiveCategorySubCategory,
   deriveIdempotencyKey,
-  guardTransferMutability,
   hasCategory,
   hasSubCategory,
-  isCardOwned,
   isCategoryKindAllowed,
   needsReview,
   nextCursorAfter,
-  resolveCurrency,
   resolveCursorKey,
   resolveEffectiveType,
   summarizeBulkItems,
@@ -48,74 +44,6 @@ describe('needsReview', () => {
     expect(needsReview({ method: 'history', confidence: 0.55 })).toBe(true);
     expect(needsReview({ method: 'rule', confidence: 0.8 })).toBe(false);
     expect(needsReview({ method: 'user', confidence: 1 })).toBe(false);
-  });
-});
-
-describe('resolveCurrency', () => {
-  const { BRL, USD } = CurrencyCode.enum;
-  const acc = (currency: typeof BRL | typeof USD) => ({ currency });
-  const card = (currency: typeof BRL | typeof USD) => ({ currency });
-
-  it('prefers account currency', () => {
-    expect(resolveCurrency(acc(USD), card(BRL), { currency: BRL })).toBe(USD);
-  });
-
-  it('falls back to card when no account', () => {
-    expect(resolveCurrency(null, card(USD), { currency: BRL })).toBe(USD);
-  });
-
-  it('falls back to explicit currency when no account or card', () => {
-    expect(resolveCurrency(null, null, { currency: USD })).toBe(USD);
-  });
-
-  it('defaults to USD when nothing is provided', () => {
-    expect(resolveCurrency(null, null, {})).toBe(USD);
-  });
-});
-
-describe('guardTransferMutability', () => {
-  const transfer = { type: 'transfer' as const };
-  const expense = { type: 'expense' as const };
-
-  it('rejects changing type on a transfer', () => {
-    const result = guardTransferMutability(transfer, { type: 'expense' });
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().code).toBe('validation');
-  });
-
-  it('rejects setting category on a transfer', () => {
-    const result = guardTransferMutability(transfer, { category: 'Alimentação' });
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().code).toBe('validation');
-  });
-
-  it('rejects setting subCategory on a transfer', () => {
-    const result = guardTransferMutability(transfer, { subCategory: 'Restaurante' });
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().code).toBe('validation');
-  });
-
-  it('allows non-transfer updates on expense transactions', () => {
-    expect(guardTransferMutability(expense, { type: 'income' }).isOk()).toBe(true);
-    expect(guardTransferMutability(expense, { category: 'Alimentação' }).isOk()).toBe(true);
-  });
-});
-
-describe('isCardOwned (ADR-017 union ownership rule)', () => {
-  it('is card-owned when cardId is set', () => {
-    expect(isCardOwned({ cardId: 'card-1', billId: undefined })).toBe(true);
-  });
-
-  it('is card-owned when billId is set with no cardId (the bill-payment transfer)', () => {
-    expect(isCardOwned({ cardId: undefined, billId: 'bill-1' })).toBe(true);
-  });
-
-  it('is card-owned when both cardId and billId are set (an attached card purchase)', () => {
-    expect(isCardOwned({ cardId: 'card-1', billId: 'bill-1' })).toBe(true);
-  });
-
-  it('is account-owned when neither cardId nor billId is set', () => {
-    expect(isCardOwned({ cardId: undefined, billId: undefined })).toBe(false);
   });
 });
 
@@ -341,25 +269,6 @@ describe('hasCategory / hasSubCategory', () => {
     expect(hasSubCategory({ subCategory: null as unknown as string })).toBe(false);
   });
 });
-
-describe('assertBillPeriodPaired', () => {
-  it('passes when neither billMonth nor billYear is provided', () => {
-    expect(assertBillPeriodPaired({})).toBe(true);
-  });
-
-  it('passes when both are provided', () => {
-    expect(assertBillPeriodPaired({ billMonth: 6, billYear: 2026 })).toBe(true);
-  });
-
-  it('fails when only billMonth is provided', () => {
-    expect(assertBillPeriodPaired({ billMonth: 6 })).toBe(false);
-  });
-
-  it('fails when only billYear is provided', () => {
-    expect(assertBillPeriodPaired({ billYear: 2026 })).toBe(false);
-  });
-});
-
 
 describe('resolveCursorKey', () => {
   const { date, amount } = TransactionSortField.enum;

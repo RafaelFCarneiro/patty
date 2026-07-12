@@ -11,7 +11,7 @@ import { TransactionSource, type TransactionView } from '../../../../src/models/
 import { Locale } from '../../../../src/models/locale.js';
 
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
-  accounts: { list: async () => [] } as unknown as Deps['accounts'],
+  accounts: { list: async () => [], findById: async () => null } as unknown as Deps['accounts'],
   bills: {} as Deps['bills'],
   categories: {} as Deps['categories'],
   subCategories: {} as Deps['subCategories'],
@@ -185,12 +185,15 @@ const baseTx: TransactionView = {
   tags: [],
 };
 
-describe('updateAccountTransaction / deleteAccountTransaction — ownership guard (ADR-017)', () => {
-  it('updateAccountTransaction rejects a card-owned transaction, redirecting to update_card_transaction', async () => {
+const creditAccountsById = { findById: async () => account({ id: 'acc-card-internal', type: 'credit' }) };
+
+describe('updateAccountTransaction / deleteAccountTransaction — ownership by account type (ADR-020)', () => {
+  it('updateAccountTransaction rejects a tx with a credit leg, redirecting to update_card_transaction', async () => {
     const deps = makeDeps({
       transactions: {
-        getById: async () => ({ ...baseTx, cardId: 'card-1' }),
+        getById: async () => ({ ...baseTx, accountId: 'acc-card-internal' }),
       } as unknown as Deps['transactions'],
+      accounts: creditAccountsById as unknown as Deps['accounts'],
     });
 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', description: 'Changed' });
@@ -201,11 +204,12 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership guar
     expect(error.issues?.[0]).toContain('update_card_transaction');
   });
 
-  it('deleteAccountTransaction rejects a card-owned transaction, redirecting to delete_card_transaction', async () => {
+  it('deleteAccountTransaction rejects a tx with a credit leg, redirecting to delete_card_transaction', async () => {
     const deps = makeDeps({
       transactions: {
-        getById: async () => ({ ...baseTx, billId: 'bill-1' }),
+        getById: async () => ({ ...baseTx, toAccountId: 'acc-card-internal', billId: 'bill-1' }),
       } as unknown as Deps['transactions'],
+      accounts: creditAccountsById as unknown as Deps['accounts'],
     });
 
     const result = await deleteAccountTransaction(deps, { id: 'tx-1', confirm: true });
@@ -216,7 +220,7 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership guar
     expect(error.issues?.[0]).toContain('delete_card_transaction');
   });
 
-  it('updateAccountTransaction delegates to the core patch for an account-owned transaction', async () => {
+  it('updateAccountTransaction delegates to the core patch for a transaction with no credit leg', async () => {
     const deps = makeDeps({
       transactions: {
         getById: async () => baseTx,
@@ -229,7 +233,7 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership guar
     expect(result.isOk()).toBe(true);
   });
 
-  it('deleteAccountTransaction returns a dry run for an account-owned transaction without confirm', async () => {
+  it('deleteAccountTransaction returns a dry run for a transaction with no credit leg, without confirm', async () => {
     const deps = makeDeps({
       transactions: { getById: async () => baseTx } as unknown as Deps['transactions'],
     });
@@ -238,5 +242,48 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership guar
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toMatchObject({ deleted: false, dryRun: true });
+  });
+});
+
+describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved from the core)', () => {
+  const transferTx: TransactionView = { ...baseTx, type: 'transfer', accountId: 'acc-bank', toAccountId: 'acc-other' };
+
+  it('rejects changing the type of a transfer', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => transferTx } as unknown as Deps['transactions'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', type: 'expense' });
+
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe('validation');
+    expect(error.issues?.[0]).toContain('cannot change the type of a transfer');
+  });
+
+  it('rejects setting a category on a transfer', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => transferTx } as unknown as Deps['transactions'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', category: 'Transporte' });
+
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe('validation');
+    expect(error.issues?.[0]).toContain('cannot have a category');
+  });
+
+  it('allows a non-category, non-type update on a transfer (e.g. amount)', async () => {
+    const deps = makeDeps({
+      transactions: {
+        getById: async () => transferTx,
+        update: async () => transferTx,
+      } as unknown as Deps['transactions'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', amount: 50 });
+
+    expect(result.isOk()).toBe(true);
   });
 });

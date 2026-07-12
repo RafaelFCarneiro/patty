@@ -77,6 +77,11 @@ are **removed** (breaking).
    and ordinary transfers are owned by the account tools. (This rationalizes today's split, where update keys on
    `cardId` and delete keys on `billId`.)
 
+   > **Amendment (ADR-020, 2026-07-12):** the `cardId`/`billId` union-rule *discriminator* described above is
+   > superseded by ownership resolved from the canonical `AccountType` (does the transaction involve a `credit`
+   > account, as either leg) — routing outcomes are unchanged, only the mechanism moved off the core's structural
+   > field-presence heuristic. See ADR-020.
+
 ## Options Considered
 
 ### Option A — Status quo: composition-root routers dispatch by inspection (rejected)

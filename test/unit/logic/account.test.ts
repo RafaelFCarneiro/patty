@@ -4,6 +4,7 @@ import {
   assertCurrencyMatch,
   assertNonCreditType,
   filterByType,
+  guardTransferMutability,
   hasNoCards,
   hasNoRecurring,
   hasNoTransactions,
@@ -116,5 +117,33 @@ describe('assertCurrencyMatch', () => {
 
   it('returns false when currencies differ', () => {
     expect(assertCurrencyMatch({ currency: 'BRL' }, { currency: 'USD' })).toBe(false);
+  });
+});
+
+describe('guardTransferMutability (ADR-020 §4 — account context only)', () => {
+  const transfer = { type: 'transfer' as const };
+  const expense = { type: 'expense' as const };
+
+  it('rejects changing type on a transfer', () => {
+    const result = guardTransferMutability(transfer, { type: 'expense' });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('rejects setting category on a transfer', () => {
+    const result = guardTransferMutability(transfer, { category: 'Alimentação' });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('rejects setting subCategory on a transfer', () => {
+    const result = guardTransferMutability(transfer, { subCategory: 'Restaurante' });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('allows non-transfer updates on expense transactions', () => {
+    expect(guardTransferMutability(expense, { type: 'income' }).isOk()).toBe(true);
+    expect(guardTransferMutability(expense, { category: 'Alimentação' }).isOk()).toBe(true);
   });
 });

@@ -1,8 +1,4 @@
 import { purry } from 'remeda';
-import type { ValidationError } from '../models/error.js';
-import type { Account } from '../models/account.js';
-import type { CreditCard } from '../models/creditCard.js';
-import { CurrencyCode } from '../models/money.js';
 import { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
 import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDirection } from '../models/page.js';
@@ -10,7 +6,6 @@ import type {
   CategoryFields,
   Classification,
   ClassifyOutcome,
-  CreateTransaction,
   CreateTransactionResult,
   SearchTransactions,
   TransactionError,
@@ -43,15 +38,6 @@ import { normalizeMerchant } from './merchant.js';
 export const defaultStatusFor = (date: IsoDate, today: IsoDate): TransactionStatus =>
   date > today ? TransactionStatus.enum.pending : TransactionStatus.enum.effective;
 
-// ─── Currency ────────────────────────────────────────────────────────────────
-
-/** Resolve transaction currency: account > card > explicit > USD default. */
-export const resolveCurrency = (
-  account: Pick<Account, 'currency'> | null,
-  card: Pick<CreditCard, 'currency'> | null,
-  input: Pick<CreateTransaction, 'currency'>,
-): CurrencyCode => account?.currency ?? card?.currency ?? input.currency ?? CurrencyCode.enum.USD;
-
 /**
  * True when a category name was provided — a type guard, narrowing `category` to `string`. The
  * schema rejects empty strings (`.min(1)`), so this only needs to rule out null/undefined; using
@@ -68,19 +54,6 @@ export const hasSubCategory = (input: CategoryFields): input is CategoryFields &
 // { category: undefined, subCategory: 'S' } is judged consistently with resolveCategorySelection.
 export const assertExclusiveCategorySubCategory = (input: CategoryFields): boolean =>
   !(hasCategory(input) && hasSubCategory(input));
-
-/** Card-owned iff cardId or billId is present (ADR-017 union rule) — a card purchase has cardId
- *  (and billId once attached, self-heal window aside); the bill-payment transfer carries billId with
- *  no cardId and is still governed by card/bill policy. Everything else is account-owned. */
-export const isCardOwned = (tx: Pick<TransactionView, 'cardId' | 'billId'>): boolean =>
-  R.isNonNullish(tx.cardId) || R.isNonNullish(tx.billId);
-
-/** billMonth/billYear (bill assignment) must be provided together, or not at all. */
-export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: number }): boolean =>
-  (input.billMonth === undefined) === (input.billYear === undefined);
-
-/** Reports a transaction's (new) bill assignment — used after create/update attaches or reassigns it. */
-export const withBillId = (tx: RawTransactionView, billId: string): RawTransactionView => ({ ...tx, billId });
 
 export const isCategoryKindAllowed = (txType: MovementType, categoryKind: CategoryKind): boolean =>
   categoryKind === CategoryKind.enum.both || categoryKind === txType;
@@ -136,28 +109,7 @@ export const nextCursorAfter = (
     key: { value: CURSOR_VALUE_OF[sort](lastRow), id: lastRow.id },
   });
 
-// ─── Transfer mutability guards ───────────────────────────────────────────────
-
-const isTransfer = (t: Pick<TransactionView, 'type'>) => t.type === TransactionType.enum.transfer;
-const wouldBeTransfer = (existing: Pick<TransactionView, 'type'>, input: Pick<UpdateTransaction, 'type'>) =>
-  (input.type ?? existing.type) === TransactionType.enum.transfer;
-const hasCategoryInput = (input: Pick<UpdateTransaction, 'category' | 'subCategory'>) =>
-  !!(input.category || input.subCategory);
-
-/**
- * Enforce transfer invariants on update:
- * - A transfer's type cannot be changed.
- * - A transfer cannot receive a category or sub-category.
- */
-export const guardTransferMutability = (
-  existing: Pick<TransactionView, 'type'>,
-  input: Pick<UpdateTransaction, 'type' | 'category' | 'subCategory'>,
-): Result<void, ValidationError> => {
-  if (isTransfer(existing) && input.type) return err(transactionErrors.transferTypeImmutable);
-  if (wouldBeTransfer(existing, input) && hasCategoryInput(input))
-    return err(transactionErrors.transferCategoryRejected);
-  return ok(undefined);
-};
+// ─── Transfer row kind (ADR-019/ADR-020: policy lives in the account context; the row kind stays core) ───
 
 /** The effective movement type after applying an update, or undefined for transfers. */
 export const resolveEffectiveType = (
