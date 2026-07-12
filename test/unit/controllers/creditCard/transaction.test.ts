@@ -67,6 +67,24 @@ describe('updateCardTransaction / deleteCardTransaction — ownership guard (ADR
   });
 });
 
+describe('updateCardTransaction — account field (ADR-019 compose-up watchpoint)', () => {
+  // UpdateCardTransactionSchema still accepts `account` (extended onto the minimal core, not
+  // omitted) precisely so this dedicated, friendly error fires — a `.strict()` rejection of an
+  // unrecognized key would replace it with a generic schema-validation error instead.
+  it('rejects a present account with the dedicated accountChangeRejectedForCard message', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => ({ ...baseTx, cardId: 'card-1' }) } as unknown as Deps['transactions'],
+    });
+
+    const result = await updateCardTransaction(deps, { id: 'tx-1', account: 'Nubank' });
+
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe('validation');
+    expect(error.issues?.[0]).toContain('cannot change the account of a card transaction');
+  });
+});
+
 describe('updateCardTransaction / deleteCardTransaction — bill-payment transfer immutability (ADR-017.4)', () => {
   // billId set, no cardId: definitionally the transfer pay_bill created — nothing else in the domain
   // has billId without cardId.

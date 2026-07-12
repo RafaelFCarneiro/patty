@@ -1,9 +1,12 @@
 # ADR-019: Minimal transaction core — aggregates compose the movement schema up, not derive it down
 
-**Status:** Proposed · **Date:** 2026-07-11 · **Deciders:** Rafael · Completes the context-wide boundary of
+**Status:** Accepted (2026-07-12; step 1 — schema compose-up — implemented; step 2 — logic re-homing — pending) ·
+**Date:** 2026-07-11 · **Deciders:** Rafael · Completes the context-wide boundary of
 **ADR-016** at the schema/logic/error layer. ADR-016/017 moved controllers, tools, and the aggregate-specific
-schemas to their contexts, but the shared *base* schema and the logic/errors it drags along still carry the
-union of every context's vocabulary. This ADR finishes the boundary where it was left half-applied.
+schemas to their contexts, but the shared *base* schema and the logic/errors it drags along still carried the
+union of every context's vocabulary. This ADR finishes the boundary where it was left half-applied — step 1
+below (schema compose-up) has now closed that gap at the schema/error layer; step 2 (logic re-homing) is still
+pending, so the *logic* half of "logic/errors it drags along" is not yet resolved.
 
 ## Context
 
@@ -166,7 +169,7 @@ same assertions pass from their new homes.
 
 ## Action Items
 
-1. [ ] Review/accept this ADR (decision review — no implementation in this PR).
-2. [ ] On acceptance: add this ADR to the `docs/architecture.md` index (accepted/rejected only), plus the
+1. [x] Review/accept this ADR (decision review — no implementation in this PR).
+2. [x] On acceptance: add this ADR to the `docs/architecture.md` index (accepted/rejected only), plus the
    dependency-table invariant + compose-up rule in `docs/architecture.md` / `docs/code-style.md`.
-3. [ ] Implement steps 1–2 (schema compose-up, then logic re-homing) — one PR each, behavior-preserving.
+3. [x] Implement step 1 (schema compose-up). [ ] Implement step 2 (logic re-homing) — separate PR.
