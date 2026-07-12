@@ -40,10 +40,9 @@ describe('resolveLegAccounts (ADR-020 — neutral leg resolution, no ownership j
     expect(legs).toEqual([]);
   });
 
-  it('skips a leg id that no longer resolves to an account', async () => {
+  it('fails loudly (throws) when a leg account no longer exists, rather than silently dropping it', async () => {
     const deps = makeDeps({});
-    const legs = await resolveLegAccounts(deps, { accountId: 'missing', toAccountId: undefined });
-    expect(legs).toEqual([]);
+    await expect(resolveLegAccounts(deps, { accountId: 'missing', toAccountId: undefined })).rejects.toThrow();
   });
 
   it('dedupes a leg id shared by accountId and toAccountId, fetching and returning it once', async () => {

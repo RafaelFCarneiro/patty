@@ -51,12 +51,25 @@ export const resolveCardRef = (deps: Deps, name: string): ResultAsync<CreditCard
  * that same account. Each aggregate interprets the result against its own definition of what it
  * owns (`controllers/creditCard/transaction.ts`'s `assertCreditAccountLeg`, `controllers/account/
  * transaction.ts`'s `assertAccountOwnedLegs`) rather than sharing one judgment between them.
+ *
+ * Fails loudly (throws) if a leg id doesn't resolve to an account. A transaction's `accountId`/
+ * `toAccountId` is an FK to a row this code path assumes is intact (accounts referenced by a
+ * transaction can't be deleted — `accountErrors`/`cardErrors` guard that on the delete path) — an
+ * unresolvable leg is a data-integrity invariant violation, not an expected user-facing failure, so
+ * this throws rather than silently dropping it: an ownership predicate that iterates a silently
+ * shrunk array (`.every()` vacuously true on `[]`, `.some()` missing a leg it should have seen)
+ * could otherwise route a card-owned transaction to the account tool, bypassing card invariants.
  */
 export const resolveLegAccounts = async (
   deps: Deps,
   tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
 ): Promise<Account[]> => {
   const legIds = R.unique([tx.accountId, tx.toAccountId].filter(R.isNonNullish));
-  const legs = await Promise.all(legIds.map((id) => deps.accounts.findById(id)));
-  return legs.filter(R.isNonNullish);
+  return Promise.all(
+    legIds.map(async (id) => {
+      const account = await deps.accounts.findById(id);
+      if (!account) throw new Error(`resolveLegAccounts: account ${id}, referenced by a transaction leg, not found`);
+      return account;
+    }),
+  );
 };

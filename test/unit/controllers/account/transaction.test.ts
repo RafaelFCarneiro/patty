@@ -250,10 +250,16 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
 
 describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved from the core)', () => {
   const transferTx: TransactionView = { ...baseTx, type: 'transfer', accountId: 'acc-bank', toAccountId: 'acc-other' };
+  const transferLegAccountsById: Record<string, Account> = {
+    'acc-bank': account({ id: 'acc-bank' }),
+    'acc-other': account({ id: 'acc-other' }),
+  };
+  const transferLegAccounts = { findById: async (id: string) => transferLegAccountsById[id] ?? null };
 
   it('rejects changing the type of a transfer', async () => {
     const deps = makeDeps({
       transactions: { getById: async () => transferTx } as unknown as Deps['transactions'],
+      accounts: transferLegAccounts as unknown as Deps['accounts'],
     });
 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', type: 'expense' });
@@ -267,6 +273,7 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
   it('rejects setting a category on a transfer', async () => {
     const deps = makeDeps({
       transactions: { getById: async () => transferTx } as unknown as Deps['transactions'],
+      accounts: transferLegAccounts as unknown as Deps['accounts'],
     });
 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', category: 'Transporte' });
@@ -283,6 +290,7 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
         getById: async () => transferTx,
         update: async () => transferTx,
       } as unknown as Deps['transactions'],
+      accounts: transferLegAccounts as unknown as Deps['accounts'],
     });
 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', amount: 50 });
