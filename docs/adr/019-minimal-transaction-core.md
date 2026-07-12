@@ -3,8 +3,10 @@
 **Status:** Accepted (2026-07-12; step 1 — schema compose-up — implemented; step 2 — logic re-homing — pending) ·
 **Date:** 2026-07-11 · **Deciders:** Rafael · Completes the context-wide boundary of
 **ADR-016** at the schema/logic/error layer. ADR-016/017 moved controllers, tools, and the aggregate-specific
-schemas to their contexts, but the shared *base* schema and the logic/errors it drags along still carry the
-union of every context's vocabulary. This ADR finishes the boundary where it was left half-applied.
+schemas to their contexts, but the shared *base* schema and the logic/errors it drags along still carried the
+union of every context's vocabulary. This ADR finishes the boundary where it was left half-applied — step 1
+below (schema compose-up) has now closed that gap at the schema/error layer; step 2 (logic re-homing) is still
+pending, so the *logic* half of "logic/errors it drags along" is not yet resolved.
 
 ## Context
 
