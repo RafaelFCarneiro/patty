@@ -41,8 +41,10 @@ export type Account = z.infer<typeof AccountSchema>;
 // The persistence-side entity (ADR-021 / functional-core-imperative-shell.md): `Account` plus
 // the optimistic-concurrency `version` token. Never sent over the wire — kept off `AccountSchema`
 // itself so every existing account-returning flow (which reuses `AccountSchema` as its wire/out
-// shape) stays unchanged; only the unit-of-work applier and flows that build `Persistable`s speak
-// `AccountEntity`.
+// shape) stays unchanged. Only flows that build `Persistable`s and `adapters/accounts.ts`'s
+// model→row adaptation (`modelToDb`/`persistableToDb`) speak `AccountEntity` — the unit-of-work
+// applier itself doesn't: by the time a batch reaches `diplomat/db`, it's already been adapted to
+// a plain row (`versionedTableApplier` in `diplomat/db/unitOfWork.ts` is entity-agnostic).
 export const AccountEntitySchema = AccountSchema.extend({
   version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
 });
@@ -51,7 +53,8 @@ export type AccountEntity = z.infer<typeof AccountEntitySchema>;
 // The account aggregate owns its own entity tag (ADR-021) — `models/persistable.ts` is generic
 // over any entity's tag/model and never lists this constant itself, so adding a new converted
 // aggregate never means editing that shared file. `logic/persistence.ts`'s `Persistable` builders
-// and `diplomat/db/repos/accounts.ts`'s `accountApplier` both key off this same constant.
+// take it as a plain field value; `main.ts` keys the `ApplierRegistry` by it when registering
+// `diplomat/db/repos/accounts.ts`'s `accountApplier`.
 export const ACCOUNT_ENTITY_TAG = 'account';
 
 export const CreateAccountSchema = AccountSchema.omit({ id: true, typeLabel: true });

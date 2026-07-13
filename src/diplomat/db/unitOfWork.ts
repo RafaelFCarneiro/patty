@@ -142,7 +142,7 @@ const attempt = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>, attemptsLe
  * The generic versioned unit of work (ADR-021 / docs/functional-core-imperative-shell.md): runs
  * `flow`, applies the `persist` batch it returns in one `db.transaction` by dispatching each
  * `Persistable` to the `registry`'s applier for its entity, and returns `flow`'s `response`. This
- * file has no knowledge of any specific entity — no `EntityTag.enum.*` switch, no entity's
+ * file has no knowledge of any specific entity — no per-entity switch statement, no entity's
  * `modelToDb`/table import — only the `registry` (built once at the composition root) does. A
  * version-guarded op that affects zero rows rolls back the whole batch and re-invokes `flow` — a
  * fresh read, a fresh decision — up to `MAX_UNIT_OF_WORK_ATTEMPTS` times, then surfaces the

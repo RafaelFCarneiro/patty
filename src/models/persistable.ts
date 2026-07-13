@@ -24,8 +24,9 @@ export const INITIAL_VERSION = 0;
  * `insert` carries a full new entity (id minted by the core) as the plain domain model — no `version`: a
  * brand-new row always starts at the same structural constant (`INITIAL_VERSION`, above), which is nothing
  * the core decides, so it's not part of what the core hands over. `update` carries the full desired end-state
- * as the versioned entity — `model.version` is the version the core read; the entity's own applier (`diplomat/
- * db`, e.g. `accountApplier`) computes the persisted version from it (`model.version + 1`) and applies
+ * as the versioned entity — `model.version` is the version the core read; the entity's `EntityApplier`
+ * (`diplomat/db`, most entities via the shared `versionedTableApplier` — see `accountApplier`) computes the
+ * persisted version from it (`model.version + 1`) and applies
  * `... SET ..., version = ? WHERE id = ? AND version = ?`. `delete` carries just the id + the version read,
  * for the same versioned guard.
  */
