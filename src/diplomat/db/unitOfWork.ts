@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { conflict } from '../../models/error.js';
 import { PersistOp, type Persistable } from '../../models/persistable.js';
@@ -68,11 +69,12 @@ export const versionedTableApplier = <T extends VersionedTable>(table: T): Entit
   },
 
   update: async (tx, model) => {
-    const { id, version, ...values } = model as Record<string, unknown> & { id: string; version: number };
+    const row = model as Record<string, unknown> & { id: string; version: number };
+    const values = R.omit(row, ['id', 'version']);
     const result = await tx
       .update(table)
-      .set({ ...values, version: version + 1 } as never)
-      .where(and(eq(table.id, id), eq(table.version, version)));
+      .set({ ...values, version: row.version + 1 } as never)
+      .where(and(eq(table.id, row.id), eq(table.version, row.version)));
     return (result.rowsAffected ?? 0) > 0;
   },
 
