@@ -32,7 +32,7 @@ import {
   importCardStatement,
   updateCardTransaction,
 } from '../../controllers/creditCard/transaction.js';
-import type { Deps } from '../../controllers/deps.js';
+import type { Deps, UnitOfWork } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
 import { getStatus } from '../../controllers/status.js';
@@ -140,7 +140,7 @@ const RouteTag = {
  * `/api/openapi.json`; the MCP resource `fintrack://openapi` documents the same list without
  * ever mounting it — so there is nowhere for the two surfaces to drift apart (ADR-013 Phase A).
  */
-export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinition[] => [
+export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: UnitOfWork): RouteDefinition[] => [
   {
     method: 'get',
     path: '/api/health',
@@ -199,7 +199,11 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
     handler: async (req, reply) => {
       const wireIn = parse(wireInAccounts.CreateAccountSchema, req.body, reply);
       if (!wireIn) return reply;
-      return send(reply, await createAccount(deps, accountAdapters.createWireInToModel(wireIn)), 201);
+      // accountAdapters.outcomeToDb adapts createAccount's result (model → db row) here, explicitly,
+      // before unitOfWork ever sees the batch — diplomat/db only ever writes rows, never adapts them.
+      const flow = () =>
+        createAccount(deps, accountAdapters.createWireInToModel(wireIn)).map(accountAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow), 201);
     },
   },
   {
@@ -811,8 +815,8 @@ export const buildRouteDefinitions = (deps: Deps, version: string): RouteDefinit
   },
 ];
 
-export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string): void => {
-  const definitions = buildRouteDefinitions(deps, version);
+export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string, unitOfWork: UnitOfWork): void => {
+  const definitions = buildRouteDefinitions(deps, version, unitOfWork);
   mountRoutes(app, definitions);
 
   // Browser-facing HTML surface (ADR-013 Phase A item 2), not a JSON API contract — kept out of

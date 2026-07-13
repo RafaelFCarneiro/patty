@@ -38,6 +38,10 @@ const InUseErrorOut = z.object({
 // `code: 'validation'` errors (accounts, categories, credit cards, transfers, ...).
 const GenericValidationErrorOut = z.object({ code: z.literal('validation'), issues: z.array(z.string()) });
 
+// conflict (models/error.ts's Conflict) — the versioned unit of work's generic optimistic-
+// concurrency failure (ADR-021); no business payload, by design.
+const VersionConflictErrorOut = z.object({ code: z.literal('conflict') });
+
 // category_kind_mismatch has its own shape (models/transaction.ts) — only reachable from
 // create/update transaction.
 const CategoryKindMismatchErrorOut = z.object({
@@ -54,7 +58,7 @@ export const NotFoundErrorOut = z.object({
 export type NotFoundErrorOut = z.infer<typeof NotFoundErrorOut>;
 
 export const ConflictErrorOut = z.object({
-  error: z.union([ResolutionErrorOut, DuplicateNameErrorOut, InUseErrorOut]),
+  error: z.union([ResolutionErrorOut, DuplicateNameErrorOut, InUseErrorOut, VersionConflictErrorOut]),
 });
 export type ConflictErrorOut = z.infer<typeof ConflictErrorOut>;
 

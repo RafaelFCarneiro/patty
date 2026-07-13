@@ -1,6 +1,7 @@
 # ADR-021: Functional Core / Imperative Shell for the write path — the domain returns effects, the shell applies them
 
-**Status:** Proposed · **Date:** 2026-07-12 · **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill
+**Status:** Accepted (2026-07-13; phase 1 — groundwork + `createAccount` first mover — implemented; phases 2–3
+pending) · **Date:** 2026-07-12 · **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill
 payment) and finally resolves the thread ADR-015 opened. Adopts the principle documented in
 `docs/functional-core-imperative-shell.md` for every write flow.
 
@@ -131,10 +132,30 @@ gets its own generic atomicity/conflict/idempotency suite.
 
 ## Action Items
 
-1. [ ] Review/accept this ADR (decision review — no implementation in this PR).
-2. [ ] On acceptance: add this ADR to the `docs/architecture.md` index; reference
+1. [x] Review/accept this ADR (decision review — no implementation in this PR).
+2. [x] On acceptance: add this ADR to the `docs/architecture.md` index; reference
    `docs/functional-core-imperative-shell.md` as mandatory in `docs/architecture.md` + `CLAUDE.md` (alongside
    `docs/diplomatic-architecture.md`); flip that doc's status note to adopted.
-3. [ ] Do NOT merge `feat/atomic-bill-payment` (ADR-018) — it is superseded by this decision.
+3. [x] Do NOT merge `feat/atomic-bill-payment` (ADR-018) — it is superseded by this decision (PR #111 closed).
 4. [ ] Implement phases 1–3 (groundwork → transaction/bill flows → remaining), behavior-preserving where the
    surface allows, coverage moved to core-level effect assertions + the generic UoW suite.
+   - [x] Phase 1 (groundwork): `version` migration on all mutable entity tables; `Persistable`/`PersistOp`
+     (`models/persistable.ts`) — generic over the entity's own tag/model, not a closed union, so the shared
+     file never lists an entity itself; each entity owns its own tag constant on its own model file (e.g.
+     `models/account.ts`'s `ACCOUNT_ENTITY_TAG`); the generic versioned applier + `withUnitOfWork`
+     (`diplomat/db/unitOfWork.ts`) dispatches via an `ApplierRegistry` (entity tag → `EntityApplier`) assembled
+     once at the composition root, so the engine itself never names a specific entity either — with its own
+     atomicity/conflict/retry/idempotent-insert/agnostic-dispatch suite; `createAccount` converted end to end
+     (MCP + REST) as the first mover — proves the shape. Refined further: the `modelToDb` adaptation moved out
+     of `diplomat/db` entirely — the MCP/REST handler now adapts model → row explicitly (`adapters/
+     accounts.ts`'s `outcomeToDb`) before ever calling `unitOfWork`, so both the generic engine *and* each
+     entity's `EntityApplier` only ever write rows they're handed, never adapt one themselves. Refined once
+     more: with adaptation gone, an `EntityApplier`'s `insert`/`update`/`delete` are now identical mechanics
+     for any table keyed by `id` with a `version` column (8 of the 9 mutable tables — `dashboards` keys on
+     `name` instead), so `diplomat/db/unitOfWork.ts` exports `versionedTableApplier(table)` to build one from
+     just the table reference; `accountApplier` is `versionedTableApplier(accounts)`, no hand-written
+     insert/update/delete left at all.
+   - [ ] Phase 2 (transaction + bill flows): convert `add_*`/`update_*`/`delete_*`, `payBill`/
+     `revertBillPayment`; delete `bills.pay`/`ensureAndAttach`/self-heal and their atomicity tests.
+   - [ ] Phase 3 (remaining flows): bulk import, recurring, card/category/tag CRUD; remove write methods
+     from `deps`; delete the now-dead transactional repo methods; update `docs/architecture.md` accordingly.

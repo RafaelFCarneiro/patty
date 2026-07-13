@@ -36,7 +36,7 @@ import {
   importCardStatement,
   updateCardTransaction,
 } from '../../controllers/creditCard/transaction.js';
-import type { Deps } from '../../controllers/deps.js';
+import type { Deps, UnitOfWork } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
 import { getSpendingSummary } from '../../controllers/summary.js';
@@ -118,10 +118,10 @@ const STATEMENT_IMPORT_RESULT_DESCRIPTION =
   're-importing is safe). Returns a per-item status: created, needs_review (low confidence — confirm ' +
   'categories with the user), duplicate, or error.';
 
-export const buildMcpServer = (deps: Deps, version: string): McpServer => {
+export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWork): McpServer => {
   const server = new McpServer({ name: 'fintrack', version });
 
-  const openApiDocument = buildOpenApiDocument(buildRouteDefinitions(deps, version), version);
+  const openApiDocument = buildOpenApiDocument(buildRouteDefinitions(deps, version, unitOfWork), version);
   server.registerResource(
     'openapi',
     'fintrack://openapi',
@@ -150,9 +150,9 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
     },
     async (args) =>
       fromResult(
-        (
-          await importCardStatement(deps, importCardStatementWireInToModel(args), TransactionSource.enum.import)
-        ).map(bulkResultToWireOut),
+        (await importCardStatement(deps, importCardStatementWireInToModel(args), TransactionSource.enum.import)).map(
+          bulkResultToWireOut,
+        ),
       ),
   );
 
@@ -370,8 +370,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'be edited at all — it is owned exclusively by pay_bill/revert_bill_payment.',
       inputSchema: UpdateCardTransactionSchema.shape,
     },
-    async (args) =>
-      fromResult(await updateCardTransaction(deps, updateCardTransactionWireInToModel(args))),
+    async (args) => fromResult(await updateCardTransaction(deps, updateCardTransactionWireInToModel(args))),
   );
 
   server.registerTool(
@@ -410,9 +409,7 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
       inputSchema: UpdateAccountTransactionSchema.shape,
     },
     async (args) =>
-      fromResult(
-        await updateAccountTransaction(deps, accountAdapters.updateAccountTransactionWireInToModel(args)),
-      ),
+      fromResult(await updateAccountTransaction(deps, accountAdapters.updateAccountTransactionWireInToModel(args))),
   );
 
   server.registerTool(
@@ -495,7 +492,13 @@ export const buildMcpServer = (deps: Deps, version: string): McpServer => {
         'Note: credit accounts are created automatically with a credit card (create_credit_card).',
       inputSchema: CreateAccountSchema.shape,
     },
-    async (args) => fromResult(await createAccount(deps, accountAdapters.createWireInToModel(args))),
+    async (args) => {
+      // accountAdapters.outcomeToDb adapts createAccount's result (model → db row) here, explicitly,
+      // before unitOfWork ever sees the batch — diplomat/db only ever writes rows, never adapts them.
+      const flow = () =>
+        createAccount(deps, accountAdapters.createWireInToModel(args)).map(accountAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(

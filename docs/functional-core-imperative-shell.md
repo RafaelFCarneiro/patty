@@ -5,6 +5,11 @@
 > says *where* the layers are; this says
 > *what crosses the boundary between them* — **decisions flow out of the core as data; effects are executed by
 > the shell.**
+>
+> **Status: Adopted** (ADR-021). Phase 1 (groundwork + `createAccount` as the first converted flow) is
+> implemented; the remaining write flows still drive their own persistence via injected repo write methods
+> until phases 2–3 convert them — this principle is the target shape for every one of them, not yet the as-built
+> state of the whole write path.
 
 ## The principle
 
@@ -50,27 +55,48 @@ database, a different transport) without the domain noticing.
    What leaves the core is the **write intent**, as `Persistable[]`. `deps` therefore exposes **queries and
    pure helpers** (`newId`, `clock`, `locale`) — never write methods.
 
-3. **A `Persistable` is a tagged domain model, not an operation script.** It is a discriminated union over the
-   entity, carrying a domain model and an intent:
+3. **A `Persistable` is a tagged domain model, not an operation script — and the tagging scaffolding is itself
+   entity-agnostic.** It is a discriminated union over the entity, carrying a domain model and an intent:
 
    ```ts
-   type Persistable =
-     | { op: 'insert'; entity: EntityTag; model: <DomainModel> }   // full new entity (id minted by the core)
-     | { op: 'update'; entity: EntityTag; model: <DomainModel> }   // full desired end-state; model carries `version`
-     | { op: 'delete'; entity: EntityTag; id: string; version: number }
+   type Persistable<Tag extends string = string, Model = unknown> =
+     | { op: 'insert'; entity: Tag; model: Model }                       // full new entity (id minted by the core)
+     | { op: 'update'; entity: Tag; model: Model & { version: number } } // full desired end-state; model carries `version`
+     | { op: 'delete'; entity: Tag; id: string; version: number }
    ```
 
-   The core speaks in **models** (its own vocabulary); the shell runs each through the existing `modelToDb`
-   adapter and the matching table op. `EntityTag` is a named enum (constants over literals) so the dispatch is
-   exhaustively typed — never a stringly god-changeset.
+   `Persistable` is generic, never a closed union enumerating every entity — the shared type never imports a
+   specific entity's model. Each entity owns its own tag as a plain constant on its own model file (e.g.
+   `ACCOUNT_ENTITY_TAG`), so converting a new flow never means editing the shared `Persistable`/`PersistOp`
+   file. The write intent itself (`PersistOp`: `insert`/`update`/`delete`) is a named enum (constants over
+   literals), shared across every entity since the three operations themselves are truly generic.
+
+   The core speaks in **models** (its own vocabulary); by the time a `Persistable` reaches the shell's generic
+   engine (`withUnitOfWork`), it must already speak **rows**. The `modelToDb` adaptation is **not** the
+   engine's job, and not the entity's applier's job either — it happens once, explicitly, at the MCP/REST
+   handler that calls `unitOfWork`, immediately after the controller returns and before the batch is handed
+   over (e.g. `adapters/accounts.ts`'s `persistableToDb`, mapped over the whole batch via `outcomeToDb`). The
+   engine dispatches each already-row-shaped `Persistable` to the entity's own applier — an object exposing
+   generic `insert`/`update`/`delete` methods that do only the matching table op, nothing else. Because the
+   adaptation already happened, those methods are pure mechanics — cast the row, write it, guard on `version`
+   — identical for any table keyed by `id` with a `version` column, which most tables are; such an entity
+   never hand-writes its own applier at all, it builds one from a single shared factory
+   (`versionedTableApplier(itsTable)`) parameterized only by the table reference. The shell's generic engine
+   never names a specific entity: it looks the applier up in a registry keyed by `entity`, assembled once at
+   the composition root from every converted entity's own applier. Adding a new converted entity (that fits
+   the `id`/`version` convention) means one line at the composition root — never a new `case` inside the
+   engine itself, and never a `modelToDb` call inside `diplomat/db`.
 
 4. **Concurrency rides on the model as `version`.** Every mutable entity carries a `version`. An `update`
    persistable carries the version the core read; the shell applies it as
-   `UPDATE … SET …, version = version + 1 WHERE id = ? AND version = ?`. A `rowsAffected === 0` is a stale
-   read → the shell rolls back the whole unit of work and **re-runs the core** (fresh reads, fresh decision),
-   bounded, then surfaces a generic `conflict` error. Optimistic concurrency, expressed as one ordinary field
-   the core returns and enforced **generically by the shell** — no CAS predicates, and **zero business
-   knowledge in the repo**.
+   `UPDATE … SET …, version = <read version + 1> WHERE id = ? AND version = ?` — the new version is computed
+   in application code from the persistable's own `version` field (`model.version + 1`), never as an opaque
+   `version + 1` expression left for the database engine to evaluate; the database never owns version
+   bookkeeping on its own, it only ever writes the exact value the shell hands it. A `rowsAffected === 0` is a
+   stale read → the shell rolls back the whole unit of work and **re-runs the core** (fresh reads, fresh
+   decision), bounded, then surfaces a generic `conflict` error. Optimistic concurrency, expressed as one
+   ordinary field the core returns and enforced **generically by the shell** — no CAS predicates, and **zero
+   business knowledge in the repo**.
 
 5. **Composition is concatenation.** When a flow orchestrates other controllers, it calls them, takes their
    `persist` batches, and **merges** them with its own; the merged batch applies atomically in one unit of work.

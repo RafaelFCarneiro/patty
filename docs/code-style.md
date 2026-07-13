@@ -77,6 +77,91 @@ export const getStatus = async (deps: Deps, version: string): Promise<StatusOut>
 }
 ```
 
+### Write-path controllers — return effects, don't perform them (ADR-021)
+
+**In progress — not every controller is converted yet.** `docs/functional-core-imperative-shell.md` is the
+canonical doc; read it before touching a write flow. The shape below is the target for the whole write path,
+proven so far on `createAccount` (`controllers/account/account.ts`) as the first mover. An unconverted flow
+still calls its `deps.<x>.create/update/...` write method exactly as documented above — don't convert a flow
+that isn't in scope for your change just because you're touching the file.
+
+A converted controller still composes with `safeTry`/`guard`/`okOr` exactly as before — only the last step
+changes: instead of `await`ing a repo write and returning the written row, it builds the write as a typed
+`Persistable` (`models/persistable.ts`) via the `logic/persistence.ts` builders, and returns it alongside the
+response, for the diplomat shell's `withUnitOfWork` (`diplomat/db/unitOfWork.ts`) to apply:
+
+```ts
+// ✅ DO — the core decides and returns the write as data; it never calls a repo write method
+export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
+  safeTry(async function* () {
+    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)
+    yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name))
+
+    const account: Account = { id: deps.newId(), ...input }  // no version — a new row's is the shell's constant
+    const persist: Persistable[] = [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: account })]
+    return ok({ persist, response: account })
+  })
+
+// the diplomat handler (MCP tool / REST route) adapts model → row explicitly, right here, before
+// unitOfWork ever sees the batch — this is the shell applying the effect
+async (args) => {
+  const flow = () => createAccount(deps, accountAdapters.createWireInToModel(args)).map(accountAdapters.outcomeToDb)
+  return fromResult(await unitOfWork(flow))
+}
+
+// ❌ DON'T — the core performing its own write (the pre-ADR-021 shape; fine for an unconverted flow, but
+// don't reintroduce it on a flow you're converting)
+export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Account, AppError> =>
+  safeTry(async function* () {
+    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)
+    yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name))
+    return ok(await deps.accounts.create({ id: deps.newId(), ...input }))
+  })
+```
+
+- Build the `Persistable` via `logic/persistence.ts`'s `insert`/`update`/`remove` — one place every converted
+  controller constructs the tagged shape from, instead of hand-writing an `{ op, entity, model }` literal at
+  each call site. These builders are generic over the entity's tag/model (not hardcoded to any one entity), so
+  they never need a new case as more flows convert. The write intent (`op`) they set is a named enum
+  (`PersistOp`), not a bare `'insert'`/`'update'`/`'delete'` string — "constants over literals" applies to the
+  op the same as any other domain value.
+- **The entity tag is owned by the entity's own model file, not by `models/persistable.ts`.** `Persistable` is
+  generic (`Persistable<Tag, Model>`) — it never imports or lists a specific entity. `models/account.ts` owns
+  `ACCOUNT_ENTITY_TAG = 'account'`; a category flow would add `CATEGORY_ENTITY_TAG` to `models/category.ts`,
+  never touching `persistable.ts`. This is the same "constants over literals" instinct pointed at the shared
+  scaffolding itself: a god enum every entity has to be registered in is its own kind of magic-value coupling.
+- An `insert` `Persistable`'s model is the plain, wire-shaped domain model (`Account`) — **no `version`**. A
+  brand-new row's version is always the same structural constant (`INITIAL_VERSION`, exported from
+  `models/persistable.ts`); that's not a decision the core makes, so it never appears in what the core builds
+  or returns. `update`/`delete` are different: `version` is the value the core actually read, so it's real
+  data the model carries (`AccountEntity` — `Account` + `version`).
+- **The `modelToDb` adaptation happens once, explicitly, at the diplomat handler — never inside `diplomat/db`.**
+  The handler that calls `unitOfWork` maps the controller's `FlowOutcome` through the entity's own
+  `outcomeToDb` (`adapters/accounts.ts`) *before* handing it to `unitOfWork`, converting every `Persistable`'s
+  domain-shaped `model` into a db row (baking in `INITIAL_VERSION` for an insert). By the time `withUnitOfWork`
+  or the entity's `EntityApplier` (`diplomat/db/repos/accounts.ts`'s `accountApplier`) sees a `Persistable`, its
+  `model` is already a row — the applier only ever writes it, never adapts it. This is the boundary-adaptation
+  rule from earlier in this doc ("diplomats adapt `wire/in -> model` before controller calls and `model ->
+  wire/out` after") extended one step further: the same handler also adapts `model -> db row` between the
+  controller and the shell.
+- **The shell's generic engine (`diplomat/db/unitOfWork.ts`) never names a specific entity.** It dispatches
+  each already-row-shaped `Persistable` to `registry[p.entity]` — an `EntityApplier` (just the drizzle table
+  op, e.g. `tx.insert(accounts).values(row)`) that lives beside that entity's other persistence code. The
+  `ApplierRegistry` is assembled once at the composition root (`main.ts`); `withUnitOfWork` itself only ever
+  calls generic `applier.insert/update/delete` — never an `if (entity === 'account')`, and never a call into
+  `modelToDb`.
+- **Don't hand-write an `EntityApplier` for a table that already fits the `id`/`version` convention** — call
+  `versionedTableApplier(table)` (`diplomat/db/unitOfWork.ts`) instead. `accountApplier` is
+  `versionedTableApplier(accounts)`, nothing more: once the model→row adaptation moved to the handler (above),
+  an applier's `insert`/`update`/`delete` became identical mechanics for every table shaped that way (cast the
+  row, write it, guard on `version`). Only hand-write a custom `EntityApplier` for a table that doesn't fit —
+  `dashboards` keys on `name` rather than `id`, so it will need one when converted.
+- Composition (a flow that orchestrates another controller) **merges** `persist` arrays — take the called
+  controller's `persist`, add your own, return the merged batch; don't apply either separately.
+- A converted controller's `deps` still exposes reads (`deps.<x>.list/find/...`) — the purity boundary is
+  writes, not all I/O. Only the write call moves from `await deps.<x>.create(...)` to
+  `persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: account })`.
+
 ## logic/ — pure and declarative
 
 - No I/O, no `Date.now()`/`new Date()` (clock comes from deps), no imports from `controllers/` or `diplomat/`.
@@ -97,13 +182,13 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
   predicate (e.g. `assertNonCreditType(type)`) instead of inlining `x !== Enum.value` at the `guard` call.
   Predicates are trivially unit-tested and reused across create/update/delete. (Repo-dependent conditions
   can't be pure — keep those as small async helpers in the controller.)
-- Every logic function gets a colocated `*.test.ts` (vitest) — pure functions, no mocks.
+- Every logic function gets a mirrored `test/unit/logic/*.test.ts` (vitest) — pure functions, no mocks.
 
 ## Testing requirements
 
 - Behavior changes MUST include unit tests in the same change.
-- New logic functions MUST ship with colocated tests; controller/repo/adapter changes MUST update or add
-  focused unit tests that cover success and expected-failure paths.
+- New logic functions MUST ship with a matching test under `test/unit/logic/`; controller/repo/adapter changes
+  MUST update or add focused unit tests that cover success and expected-failure paths.
 - Prefer small, deterministic tests; avoid network/db side effects in unit tests.
 
 ## models/ — zod single source of truth
@@ -204,7 +289,10 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 
 ## Naming & misc
 
-- Files: camelCase matching the domain (`creditCards.ts`); tests colocated (`bill.test.ts`).
+- Files: camelCase matching the domain (`creditCards.ts`); tests live under `test/unit/`/`test/integration/`
+  in a mirrored path, not colocated (`test/unit/logic/bill.test.ts`, never `src/logic/bill.test.ts` — see
+  `CLAUDE.md`'s Commands section; the vitest config only scans `test/unit/**`/`test/integration/**`, so a
+  colocated `src/**/*.test.ts` file silently never runs).
 - IDs `crypto.randomUUID()` via `deps.newId()`; seeds use stable slugs (`cat-transporte`).
 - Dates are `YYYY-MM-DD` strings end-to-end; month math in pure logic (`period.ts`, `recurring.ts`),
   never via timezone-prone `Date` arithmetic on day-of-month.

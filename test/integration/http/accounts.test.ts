@@ -35,7 +35,7 @@ describe('GET /api/accounts', () => {
 });
 
 describe('POST /api/accounts', () => {
-  it('creates an account (201)', async () => {
+  it('creates an account (201) — via the functional-core-imperative-shell write path (ADR-021)', async () => {
     const res = await inject({
       method: 'POST',
       url: '/api/accounts',
@@ -43,6 +43,8 @@ describe('POST /api/accounts', () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.json()).toHaveProperty('id');
+    // `version` is the applier's internal optimistic-concurrency token — never on the wire.
+    expect(res.json()).not.toHaveProperty('version');
   });
 
   it('rejects duplicate name (409)', async () => {

@@ -13,9 +13,11 @@ import {
   withTypeLabel,
 } from '../../logic/account.js';
 import { computeBalance, computeProjectedBalance } from '../../logic/balance.js';
+import * as persistence from '../../logic/persistence.js';
 import { resolveByName } from '../../logic/resolve.js';
-import { accountErrors } from '../../models/account.js';
+import { accountErrors, ACCOUNT_ENTITY_TAG } from '../../models/account.js';
 import type { Account, AccountBalance, AccountType, CreateAccount, UpdateAccount } from '../../models/account.js';
+import type { FlowOutcome, Persistable } from '../../models/persistable.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 
@@ -28,11 +30,20 @@ export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Acco
   return R.pipe(all, R.filter(filterByType(type)), R.map(withTypeLabel(locale)));
 };
 
-export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Account, AppError> =>
+/** First mover for ADR-021 / docs/functional-core-imperative-shell.md: a functional-core flow —
+ *  it decides and returns the write as data (`persist`) instead of performing it. The imperative
+ *  shell (the MCP/REST handler's `outcomeToDb` + `withUnitOfWork`) adapts and applies the batch
+ *  and returns `response`. A new account has no `version` to decide (that's the shell's own
+ *  structural constant, `INITIAL_VERSION` in `models/persistable.ts`) — the model built here, and
+ *  the response, are both the plain wire-shaped `Account`. */
+export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
   safeTry(async function* () {
     yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected);
     yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name));
-    return ok(await deps.accounts.create({ id: deps.newId(), ...input }));
+
+    const account: Account = { id: deps.newId(), ...input };
+    const persist: Persistable[] = [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: account })];
+    return ok({ persist, response: account });
   });
 
 /** Balances are derived: initialBalance + income − expenses + transfers in − transfers out. */

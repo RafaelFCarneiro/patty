@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
-import type { Deps } from './controllers/deps.js';
+import type { Deps, UnitOfWork } from './controllers/deps.js';
 import { registerRoutes } from './diplomat/http/routes.js';
 import { registerMcpRoute } from './diplomat/mcp/route.js';
 
@@ -11,10 +11,15 @@ import { registerMcpRoute } from './diplomat/mcp/route.js';
  * so neither edge depends on the other (docs/architecture.md dependency table) — only the
  * composition root is allowed to know about both.
  */
-export const buildHttpApp = (deps: Deps, version: string, opts?: { logger?: boolean }): FastifyInstance => {
+export const buildHttpApp = (
+  deps: Deps,
+  version: string,
+  unitOfWork: UnitOfWork,
+  opts?: { logger?: boolean },
+): FastifyInstance => {
   const app = Fastify({ logger: opts?.logger ?? true });
-  registerRoutes(app, deps, version);
-  registerMcpRoute(app, deps, version);
+  registerRoutes(app, deps, version, unitOfWork);
+  registerMcpRoute(app, deps, version, unitOfWork);
   return app;
 };
 
@@ -27,8 +32,13 @@ export type HttpSidecar = { app: FastifyInstance; listening: boolean };
  * stderr — stdout carries the MCP protocol in stdio mode (ADR-007) — and the Fastify
  * request logger is disabled for the same reason.
  */
-export const startHttpSidecar = async (deps: Deps, version: string, port: number): Promise<HttpSidecar> => {
-  const app = buildHttpApp(deps, version, { logger: false });
+export const startHttpSidecar = async (
+  deps: Deps,
+  version: string,
+  unitOfWork: UnitOfWork,
+  port: number,
+): Promise<HttpSidecar> => {
+  const app = buildHttpApp(deps, version, unitOfWork, { logger: false });
   try {
     await app.listen({ port, host: LOOPBACK_HOST });
     // `port` may be 0 (OS-assigned); read back the address actually bound for the banner.

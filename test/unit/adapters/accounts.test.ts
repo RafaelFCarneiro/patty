@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { AccountType } from '../../../src/models/account.js';
+import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
+import { INITIAL_VERSION, PersistOp, type Persistable } from '../../../src/models/persistable.js';
 import * as wireInAccounts from '../../../src/wire/in/accounts.js';
 import * as accountAdapters from '../../../src/adapters/accounts.js';
 import type { AccountRow } from '../../../src/wire/db/accounts.js';
@@ -12,6 +13,7 @@ const sqlRow = (overrides: Partial<AccountRow> = {}): AccountRow => ({
   type: AccountType.enum.checking,
   initialBalance: 0,
   currency: CurrencyCode.enum.BRL,
+  version: 0,
   ...overrides,
 });
 
@@ -106,5 +108,89 @@ describe('updateWireInToModel', () => {
   it('passes through a minimal update (name only) unchanged', () => {
     const parsed = wireInAccounts.UpdateAccountSchema.parse({ name: 'Nubank' });
     expect(accountAdapters.updateWireInToModel(parsed)).toEqual({ name: 'Nubank' });
+  });
+});
+
+const account: Account = {
+  id: 'acc-1',
+  name: 'Nubank',
+  type: AccountType.enum.checking,
+  currency: CurrencyCode.enum.BRL,
+  initialBalance: 0,
+};
+
+const accountEntity: AccountEntity = { ...account, version: 3 };
+
+describe('modelToDb', () => {
+  it('carries every field, including version, onto the row', () => {
+    expect(accountAdapters.modelToDb(accountEntity)).toEqual({ ...account, version: 3 });
+  });
+});
+
+describe('persistableToDb — ADR-021 follow-up: model→row adaptation lives at the diplomat edge', () => {
+  it('insert: bakes in INITIAL_VERSION — the model never carries one', () => {
+    const p: Persistable = { op: PersistOp.enum.insert, entity: ACCOUNT_ENTITY_TAG, model: account };
+    expect(accountAdapters.persistableToDb(p)).toEqual({
+      op: PersistOp.enum.insert,
+      entity: ACCOUNT_ENTITY_TAG,
+      model: { ...account, version: INITIAL_VERSION },
+    });
+  });
+
+  it('update: adapts the versioned model to a row, keeping the version the core read', () => {
+    const p: Persistable = { op: PersistOp.enum.update, entity: ACCOUNT_ENTITY_TAG, model: accountEntity };
+    expect(accountAdapters.persistableToDb(p)).toEqual({
+      op: PersistOp.enum.update,
+      entity: ACCOUNT_ENTITY_TAG,
+      model: { ...account, version: 3 },
+    });
+  });
+
+  it('delete: passes through unchanged — there is no model to adapt', () => {
+    const p: Persistable = { op: PersistOp.enum.delete, entity: ACCOUNT_ENTITY_TAG, id: 'acc-1', version: 3 };
+    expect(accountAdapters.persistableToDb(p)).toEqual(p);
+  });
+
+  it('no-ops on a persistable tagged for a different entity — never casts a foreign model as Account', () => {
+    // A composed flow's batch can carry other entities' persistables too (ADR-021 rule 5,
+    // "composition is concatenation"). persistableToDb must leave those alone rather than run
+    // them through Account's modelToDb.
+    const foreign: Persistable = {
+      op: PersistOp.enum.insert,
+      entity: 'transaction',
+      model: { totallyNotAnAccount: true },
+    };
+    expect(accountAdapters.persistableToDb(foreign)).toEqual(foreign);
+  });
+});
+
+describe('outcomeToDb', () => {
+  it('maps every persistable in the batch through persistableToDb, leaving response untouched', () => {
+    const outcome = {
+      persist: [{ op: PersistOp.enum.insert, entity: ACCOUNT_ENTITY_TAG, model: account } as Persistable],
+      response: account,
+    };
+    expect(accountAdapters.outcomeToDb(outcome)).toEqual({
+      persist: [
+        { op: PersistOp.enum.insert, entity: ACCOUNT_ENTITY_TAG, model: { ...account, version: INITIAL_VERSION } },
+      ],
+      response: account,
+    });
+  });
+
+  it('on a mixed-entity batch, adapts only the account persistables and passes the rest through', () => {
+    const foreign: Persistable = { op: PersistOp.enum.insert, entity: 'transaction', model: { id: 'tx-1' } };
+    const outcome = {
+      persist: [foreign, { op: PersistOp.enum.insert, entity: ACCOUNT_ENTITY_TAG, model: account } as Persistable],
+      response: account,
+    };
+
+    expect(accountAdapters.outcomeToDb(outcome)).toEqual({
+      persist: [
+        foreign,
+        { op: PersistOp.enum.insert, entity: ACCOUNT_ENTITY_TAG, model: { ...account, version: INITIAL_VERSION } },
+      ],
+      response: account,
+    });
   });
 });

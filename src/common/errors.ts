@@ -3,13 +3,22 @@ import type { BillError } from '../models/bill.js';
 import type { CategoryError } from '../models/category.js';
 import type { CardError } from '../models/creditCard.js';
 import type { DashboardError } from '../models/dashboard.js';
+import type { Conflict } from '../models/error.js';
 import type { LocaleError } from '../models/locale.js';
 import type { TagError } from '../models/tag.js';
 import type { TransactionError } from '../models/transaction.js';
 
 /** Expected domain failures, returned as `err(AppError)` from controllers. */
 export type AppError =
-  AccountError | CategoryError | CardError | TransactionError | BillError | TagError | LocaleError | DashboardError;
+  | AccountError
+  | CategoryError
+  | CardError
+  | TransactionError
+  | BillError
+  | TagError
+  | LocaleError
+  | DashboardError
+  | Conflict;
 
 export const formatAppError = (e: AppError): string => {
   switch (e.code) {
@@ -37,6 +46,8 @@ export const formatAppError = (e: AppError): string => {
       return `${e.code}: ${e.id}`;
     case 'unknown_bill':
       return `${e.code}: ${e.card} ${e.year}-${String(e.month).padStart(2, '0')}`;
+    case 'conflict':
+      return `${e.code}: concurrent update, please retry`;
     default: {
       const _exhaustive: never = e;
       throw new Error(`unmapped error code: ${JSON.stringify(_exhaustive)}`);
@@ -60,6 +71,7 @@ export const httpStatus = (e: AppError): number => {
     case 'ambiguous_card':
     case 'duplicate_name':
     case 'in_use':
+    case 'conflict':
       return 409;
     case 'category_kind_mismatch':
       return 422;

@@ -7,6 +7,7 @@ import { TransactionStatus, TransactionType } from '../../../models/transaction.
 import { BalancePartsRow } from '../../../wire/db/accounts.js';
 import type { Db } from '../driver.js';
 import { accounts, creditCards, recurringRules, transactions } from '../schema.js';
+import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
 export type AccountPatch = {
   name?: string;
@@ -132,3 +133,15 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
     return accountAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('accounts', 'update')));
   },
 });
+
+/**
+ * The account entity's `EntityApplier` (ADR-021) — how the generic `withUnitOfWork` (`diplomat/db/
+ * unitOfWork.ts`) applies an account `Persistable` without that file ever naming "account" itself.
+ * Registered under `models/account.ts`'s `ACCOUNT_ENTITY_TAG` at the composition root (`main.ts`).
+ * `accounts` follows the `id`/`version` convention every mutable table but `dashboards` does, so
+ * this is `versionedTableApplier(accounts)` rather than a hand-written insert/update/delete —
+ * there's no account-specific mechanics left to write: the model→row adaptation happens upstream
+ * (`adapters/accounts.ts`'s `outcomeToDb`, run by the MCP/REST handler before `unitOfWork` ever
+ * sees the batch), so this applier only ever writes the row it's handed.
+ */
+export const accountApplier: EntityApplier = versionedTableApplier(accounts);

@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { inject } from 'vitest';
 import { bootstrap } from '../../src/diplomat/db/bootstrap.js';
 import { openDatabase } from '../../src/diplomat/db/driver.js';
-import { accountsRepo } from '../../src/diplomat/db/repos/accounts.js';
+import { accountApplier, accountsRepo } from '../../src/diplomat/db/repos/accounts.js';
 import { billsRepo } from '../../src/diplomat/db/repos/bills.js';
 import { categoriesRepo } from '../../src/diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from '../../src/diplomat/db/repos/subCategories.js';
@@ -17,13 +17,15 @@ import { tagsRepo } from '../../src/diplomat/db/repos/tags.js';
 import { transactionsRepo } from '../../src/diplomat/db/repos/transactions.js';
 import { healthRepo } from '../../src/diplomat/db/repos/health.js';
 import { McpTransport } from '../../src/config.js';
+import { ACCOUNT_ENTITY_TAG } from '../../src/models/account.js';
 import { Locale } from '../../src/models/locale.js';
 import { buildHttpApp } from '../../src/server.js';
-import type { Deps } from '../../src/controllers/deps.js';
+import { withUnitOfWork, type ApplierRegistry } from '../../src/diplomat/db/unitOfWork.js';
+import type { Deps, UnitOfWork } from '../../src/controllers/deps.js';
 
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64);
 
-export type AppContext = { app: FastifyInstance; deps: Deps; version: string };
+export type AppContext = { app: FastifyInstance; deps: Deps; version: string; unitOfWork: UnitOfWork };
 
 export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promise<AppContext> => {
   const db = openDatabase({
@@ -62,7 +64,9 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
   const require = createRequire(import.meta.url);
   const { version } = require('../../package.json') as { version: string };
 
-  const app = buildHttpApp(deps, version, { logger: false });
+  const applierRegistry: ApplierRegistry = { [ACCOUNT_ENTITY_TAG]: accountApplier };
+  const unitOfWork: UnitOfWork = (flow) => withUnitOfWork(db, applierRegistry, flow);
+  const app = buildHttpApp(deps, version, unitOfWork, { logger: false });
 
-  return { app, deps, version };
+  return { app, deps, version, unitOfWork };
 };

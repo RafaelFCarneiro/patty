@@ -2,6 +2,9 @@
 
 > **This file describes the system as it IS.** Update it in the same change that alters architecture.
 > Roadmap and vision: `docs/PLAN.md`. Decisions + rationale: `docs/adr/`. Agent instructions: `CLAUDE.md`.
+> Layer concepts: `docs/diplomatic-architecture.md` (where the layers are) and
+> `docs/functional-core-imperative-shell.md` (what crosses the write-path boundary between them — ADR-021,
+> mandatory reading alongside the Diplomat doc for any write-flow change).
 
 ## Stack
 
@@ -76,22 +79,99 @@ These three live with the domain entity in `models/`, not scattered across contr
   - `dbToModel`
 - In call sites, prefer namespace imports for clarity, e.g. `import * as transactionAdapters from '../adapters/transactions.js'` then `transactionAdapters.modelToDb(...)`.
 
+## Write path: functional core / imperative shell (ADR-021)
+
+**In progress — `createAccount` is the only flow converted so far (phase 1 of 3); every other write flow
+still drives its own persistence via injected repo write methods (`deps.<x>.create/update/...`), as described
+elsewhere in this doc.** The target shape, adopted for the whole write path and applied flow-by-flow across
+phases 2–3, is `docs/functional-core-imperative-shell.md`: a controller **decides** and returns the write as
+data instead of performing it; the diplomat shell **applies** it.
+
+- **`Persistable` / `PersistOp`** (`src/models/persistable.ts`): **entity-agnostic.** `Persistable<Tag extends
+  string = string, Model = unknown>` is generic over the entity's own tag + model rather than a closed union
+  enumerating every entity — this file never imports a specific entity's model, and never needs editing as
+  more flows are converted. `PersistOp` is a named enum (`insert`/`update`/`delete` — constants over literals)
+  shared across every entity. Each entity module owns its own tag: `models/account.ts`'s
+  `ACCOUNT_ENTITY_TAG = 'account'`. A converted controller returns
+  `ResultAsync<{ persist: Persistable[]; response: T }, AppError>` instead of `ResultAsync<T, AppError>` —
+  composed with `safeTry` exactly as before, it just stops calling `deps.<x>.create` and instead builds a
+  `Persistable` from the model it already holds, via the generic builders in `logic/persistence.ts`
+  (`insert`/`update`/`remove` — also entity-agnostic; one place every converted controller constructs the
+  tagged shape from, and, being generic over `Tag`/`Model`, never needs a new case as more entities convert).
+- **`version`**: every mutable entity table carries `version INTEGER NOT NULL DEFAULT 0` (see § Relational
+  schema) — an optimistic-concurrency token, internal to the persistence side only, never exposed on the
+  entity's public model/wire shape (`Account`/`AccountSchema`). It is **not** part of an `insert`
+  `Persistable`'s model either: a brand-new row's version is always the same structural constant
+  (`INITIAL_VERSION`, exported from `models/persistable.ts`) — nothing the core decides, so the core never
+  states it, and the entity's own diplomat-edge adapter supplies it once, at the handler, right where it
+  shapes the insert row (see below). Only `update`/`delete` carry a real, varying `version` (the value the
+  core read), via the persistence-side type (`AccountEntity`/`AccountEntitySchema` in `models/account.ts`,
+  `Account` + `version`). Because an insert's model is already the plain `Account`, a converted create flow's
+  response is that same model — no stripping needed.
+- **The model→row adaptation happens once, explicitly, at the diplomat handler — never inside `diplomat/db`.**
+  A converted controller's `Persistable`s carry domain models (`Account`/`AccountEntity`); by the time
+  `withUnitOfWork` applies them, they must already be db rows. The MCP/REST handler that calls `unitOfWork`
+  does that conversion itself, mapping the controller's `FlowOutcome` through the entity's own `outcomeToDb`
+  (`adapters/accounts.ts`, built from `modelToDb` + `persistableToDb`) *before* handing the flow to
+  `unitOfWork` — e.g. `createAccount(deps, model).map(accountAdapters.outcomeToDb)`. `unitOfWork(flow)` itself
+  is still called with one argument, exactly as before; only what `flow` produces changed. This keeps
+  `modelToDb` calls where the rest of the codebase already expects adapter calls to live — at the boundary,
+  explicit at the call site — rather than hidden inside `diplomat/db`.
+- **`EntityApplier` / `ApplierRegistry`** (`src/diplomat/db/unitOfWork.ts`): **entity-agnostic** — the generic
+  engine dispatches an already row-shaped `Persistable` to `registry[p.entity]` and calls that applier's
+  `insert`/`update`/`delete`; it never names a specific entity, never imports a specific entity's `modelToDb`
+  adapter or drizzle table, and — critically — never needs a new `case` as more entities convert. The
+  `ApplierRegistry` (`Record<string, EntityApplier>`) is assembled once, at the composition root (`main.ts`,
+  `test/integration/app-builder.ts`), from each entity's applier keyed by its own tag constant, and bound into
+  the `UnitOfWork` closure alongside `Db`.
+- **`versionedTableApplier`** (`src/diplomat/db/unitOfWork.ts`): once the model→row adaptation moved to the
+  handler (above), an `EntityApplier`'s `insert`/`update`/`delete` became pure mechanics — cast the row, run
+  `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?` (the new version computed in
+  application code from the row's own `version` field — never a SQL-side `version + 1` expression; same rule
+  as `withUnitOfWork` below) — identical for any table keyed by an `id` column with a `version` column, which
+  is 8 of the 9 mutable tables (`dashboards` keys on `name` instead). Rather than hand-write that per entity,
+  `versionedTableApplier(table)` builds a complete `EntityApplier` from just the drizzle table reference —
+  `diplomat/db/repos/accounts.ts`'s `accountApplier` is `versionedTableApplier(accounts)`, a one-liner. An
+  entity whose table doesn't fit the convention (e.g. `dashboards`) still hand-writes its own `EntityApplier`
+  against this same interface.
+- **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
+  converted flow): `withUnitOfWork(db, registry, flow)` invokes `flow`, applies the returned `persist` batch in
+  one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry` (insert
+  honors `onConflictDoNothing`, left to each applier's own discretion; `update`/`delete` apply
+  `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?`, with the new version computed in
+  application code from the row's `version` — never an opaque `version + 1` SQL expression the database
+  evaluates on its own), and returns `flow`'s `response`. A version-guarded op that affects zero rows rolls
+  back the whole batch and re-invokes `flow` — a fresh read, a fresh decision — up to a bounded number of
+  attempts, then surfaces the generic `conflict` `AppError` (`models/error.ts`; no business payload by design).
+- **Wiring**: `controllers/deps.ts` exports the `UnitOfWork` function type (`(flow) => ResultAsync<T, AppError>`)
+  — the shape the shell's edges depend on — but it is **not** a field on `Deps`; `Deps` is handed to
+  controllers, and a `UnitOfWork` runner is shell-only (only `diplomat/mcp`/`diplomat/http` handlers call it,
+  wrapping a controller invocation), so a controller can never reach for it and apply its own writes.
+  `main.ts` (and `test/integration/app-builder.ts`) construct the one `UnitOfWork` bound to the real `Db` and
+  the `ApplierRegistry`, and thread it alongside `deps` through `connectStdio`/`buildMcpServer`/
+  `buildHttpApp`/`registerRoutes`/`registerMcpRoute` to the handlers that call a converted controller.
+
 ## Relational schema (as built)
 
 Database: encrypted libSQL file (`fintrack.db`) opened via `@libsql/client` (async) with `drizzle-orm/libsql`. Schema defined in `src/diplomat/db/schema.ts`; migrations generated by `drizzle-kit` and applied at startup via `migrate()`. Key `from @napi-rs/keyring` (ADR-005); `FINTRACK_DB_KEY` env var overrides for CI/headless.
 
+Every mutable entity table below also carries `version INTEGER NOT NULL DEFAULT 0` (not shown per-line) —
+the optimistic-concurrency token for the generic versioned unit of work (ADR-021 § Write path below).
+`currencies`, `merchants`, `merchant_category`, and `transaction_tags` do not — they are reference/join tables,
+not aggregates a flow returns as a `Persistable`.
+
 ```
 currencies          (code PK, symbol, name)
 accounts            (id PK, name, type: checking|savings|wallet|investment|credit,
-                     initial_balance, currency FK→currencies)
+                     initial_balance, currency FK→currencies, version)
 credit_cards        (id PK, name, currency FK, closing_day, due_day, limit_amount?,
-                     account_id FK→accounts, payment_account_id FK→accounts)
-categories          (id PK, name, kind: expense|income|both, parent_id FK→self, names JSON?)
+                     account_id FK→accounts, payment_account_id FK→accounts, version)
+categories          (id PK, name, kind: expense|income|both, parent_id FK→self, names JSON?, version)
 merchants           (key PK)
 merchant_category   (merchant_key FK, category_id FK — composite PK; weight, origin: rule|history)
-tags                (id PK, name UNIQUE)
+tags                (id PK, name UNIQUE, version)
 bills               (id PK, credit_card_id FK, month, year, close_date, due_date,
-                     status: open|closed|paid, payment_transaction_id FK→transactions? —
+                     status: open|closed|paid, payment_transaction_id FK→transactions?, version —
                      UNIQUE(credit_card_id, month, year))
 transactions        (id PK, description, amount, type: expense|income|transfer,
                      status: pending|effective DEFAULT effective,
@@ -99,15 +179,15 @@ transactions        (id PK, description, amount, type: expense|income|transfer,
                      classification_method, confidence, raw_input?, note?,
                      from_account_id FK, to_account_id FK,   ← transfer uses both (ADR-002)
                      credit_card_id FK, bill_id FK, category_id FK, subcategory_id FK,
-                     merchant_key FK,
+                     merchant_key FK, version,
                      INDEX: (status, date) — supports scheduling queries)
 transaction_tags    (transaction_id FK, tag_id FK — composite PK)
 recurring_rules     (id PK, description, amount, type, period, next_due, currency,
-                     account_id FK, category_id FK)
+                     account_id FK, category_id FK, version)
 
 settings            (id PK DEFAULT 'singleton', locale: en|es|pt DEFAULT en,
-                     locale_source: default|inferred|explicit DEFAULT default)
-dashboards          (name PK, html, updated_at — ADR-013 Phase A; see § Dashboards / `/ui` surface)
+                     locale_source: default|inferred|explicit DEFAULT default, version)
+dashboards          (name PK, html, updated_at, version — ADR-013 Phase A; see § Dashboards / `/ui` surface)
 
 transactions_fts    VIRTUAL TABLE fts5(description, content='transactions')
                     — kept in sync via INSERT/UPDATE/DELETE triggers
@@ -140,6 +220,12 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 16. **Unbounded collections page by keyset cursor with the paginated envelope (ADR-014).** `search_transactions` (first mover) returns `{ items, nextCursor?, total? }`; `ORDER BY` is composed only from a whitelisted enum-keyed column map (`ORDER_BY_COLUMN` in `wire/db/transactions.ts`, turned into SQL only in `diplomat/db/repos/transactions.ts`), the same mechanism as invariant 11 applied to ordering — caller text never reaches `ORDER BY`. Cursors are opaque, zod-validated at the boundary, and bound to the `sort`/`dir` that produced them (a mismatch is a `validation` error). `total` is opt-in (`includeTotal`) — an extra same-WHERE `COUNT(*)`, never paid by sequential "walk until no `nextCursor`" consumers. Small, cycle-bounded `list_*` endpoints stay plain arrays; the envelope is the signal a collection can page.
 17. **No god write flows for any transaction mutation (ADR-017, complete; ownership mechanism revised by ADR-020).** The only cross-cutting transaction surface is the read side (`search_transactions`, `get_spending_summary`, `aggregate_spending`, account balances); every write is an aggregate-specific entry point that validates ownership itself and never dispatches by inspection — there is no composition-root router left (`diplomat/transactionRouting.ts` is deleted). Update/delete: `update_card_transaction`/`delete_card_transaction`, `update_account_transaction`/`delete_account_transaction` (step 1). **Ownership is resolved by account type, not by a core structural discriminator (ADR-020), and each aggregate asks its own question rather than sharing one judgment:** `controllers/resolve.ts`'s `resolveLegAccounts` is a neutral I/O helper (resolves the accounts referenced by a transaction's leg(s) — `accountId`/`toAccountId` — via `deps.accounts.findById`; makes no ownership judgment of its own). The credit-card aggregate's own `assertCreditAccountLeg` (`controllers/creditCard/transaction.ts`) asks "is a leg `credit`" (ADR-010) — true for a card purchase (`accountId` **is** the card's own internal account) and the bill-payment transfer (`toAccountId` **is** that same account). The account aggregate's own `assertAccountOwnedLegs` (`controllers/account/transaction.ts`) asks the different, positive question "is every leg one of *my* types" against `logic/account.ts`'s `isAccountOwnedType` (an enumeration of `checking`/`savings`/`wallet`/`investment` — the account domain's own scope, not the negation of `credit`; vacuously true for an unattached movement with no legs at all). Neither aggregate reuses or negates the other's predicate. This replaces the retired `cardId`/`billId` field-presence heuristic (`isCardOwned`) and the shared core `assertOwnership` (both deleted from `controllers/transaction/core.ts`/`logic/transaction.ts` — the core owns no ownership discriminator at all). A wrong-tool call is rejected with a `validation` error naming the correct tool (`transactionErrors.wrongTool`, raised by each aggregate's own guard) — a guard, not a redirect the server performs on the caller's behalf. Routing outcomes are unchanged from the union rule (card purchases and the bill-payment transfer → card; regular movements/transfers → account); only the mechanism moved. Transfer *mutation* policy (`guardTransferMutability`, the `transferTypeImmutable`/`transferCategoryRejected` errors) lives wholly in the account context (`logic/account.ts`, `models/account.ts`) — the credit-card aggregate never reasons about transfer invariants; its one transfer (the bill-payment transfer) is blocked outright by its own bill-process guard (redirect to `revert_bill_payment`), not by transfer-immutability. Bulk (step 2): `create_transactions_bulk` and its per-line ownership router (`routeTransactionLine`) are removed, replaced by single-source `import_card_statement`/`import_account_statement` — a statement belongs wholly to the ONE card/account the caller named, so there is no per-line owner left to decide; the shared `controllers/transaction/bulk.ts` runner (`runStatementImport`) only defaults per-line fields and makes no ownership decision.
 18. **The transaction core's movement schema is minimal (ADR-019 step 1).** `CreateTransactionSchema`/`UpdateTransactionSchema` (`models/transaction.ts`) carry only genuinely-shared ledger vocabulary (description, amount, type, status, date, category/subCategory, currency, idempotencyKey, rawInput, note, tags) — they name no sibling context's field. Each aggregate `.extend`s the core up with its own vocabulary rather than the core carrying the union for aggregates to `.omit` down: `AddCardPurchaseSchema` (`models/creditCard.ts`) adds `card`/`billMonth`/`billYear`; `UpdateCardTransactionSchema` adds `billMonth`/`billYear` (bill reassignment — no `card` field, since a transaction's card can't change on update); `AddAccountMovementSchema`/`UpdateAccountTransactionSchema` (`models/account.ts`) add `account`. The field-tied bill errors (`billPeriodIncomplete`, `billAssignmentRequiresCard`) moved with the fields to `cardErrors`. One documented exception: `UpdateCardTransactionSchema` also `.extend`s `account` (rather than leaving it out) purely so `controllers/creditCard/transaction.ts`'s `updateCardTransaction` can keep rejecting it with its dedicated `cardErrors.accountChangeRejectedForCard` message — omitting the field would replace that message with a generic `.strict()` unrecognized-key error, a worse-not-better outcome. Transfer is the boundary case: the transfer *row kind* (`TransactionType.enum.transfer`, balance/summary math, `TransactionView.toAccountId`) stays core because the shared read/balance side is structurally defined over it (`resolveEffectiveType` stays in `logic/transaction.ts`); transfer *policy* (`guardTransferMutability`, the `transferTypeImmutable`/`transferCategoryRejected` errors) moved to the account context at step 2 (ADR-019 PR-2 / ADR-020). Step 2 (implemented) also moved: `isCardOwned` **deleted** (not relocated — superseded by ADR-020's account-type ownership, see invariant #17) and `resolveCurrency` → `logic/money.ts` (context-neutral signature: a `{ currency } | null` funding source plus the input override, replacing the old `(account, card, input)` shape); `assertBillPeriodPaired`/`withBillId` → `logic/bill.ts` (credit-card context).
+19. **A converted write flow returns its writes as data; it never performs them (ADR-021, phase 1 —
+    `createAccount` only so far).** See § Write path above. A converted controller's `deps` never receives a
+    write method it calls directly for that flow — it builds a `Persistable` and returns it in `persist`; only
+    `withUnitOfWork` (`diplomat/db`, invoked from the MCP/REST handler) touches `Db`. Unconverted flows are
+    unaffected and keep calling their `deps.<x>.create/update/...` write method exactly as before — this
+    invariant applies per-flow, not repo-wide, until phases 2–3 finish the migration.
 
 ## Tool surface
 
@@ -209,3 +295,4 @@ available alongside the server.
 - ADR-017: no god write flows — bounded-context ownership for every transaction mutation (extends ADR-016; step 1 [update/delete split] and step 2 [bulk split] both implemented — complete; ownership discriminator revised by ADR-020)
 - ADR-019: minimal transaction core — aggregates `.extend` the shared movement schema up, never `.omit` it down (step 1 [schema compose-up] and step 2 [logic re-homing] both implemented — complete)
 - ADR-020: transaction ownership by account type, not structural field-presence (revises ADR-017's union rule; refines ADR-019 PR-2 — implemented)
+- ADR-021: functional core / imperative shell for the write path — controllers return a `persist` batch instead of writing, a generic versioned unit of work applies it (supersedes ADR-018; phase 1 [groundwork + `createAccount` first mover] implemented, phases 2–3 pending)
