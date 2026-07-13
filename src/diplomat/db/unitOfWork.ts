@@ -6,9 +6,10 @@ import { conflict } from '../../models/error.js';
 import { PersistOp, type Persistable } from '../../models/persistable.js';
 import type { Db } from './driver.js';
 
-// First-attempt call to `flow` plus this many retries on a version conflict, each re-invoking
-// `flow` for a fresh read → fresh decision (docs/functional-core-imperative-shell.md rule 4).
-// Exported so tests assert against the real policy instead of duplicating the literal.
+// Total calls to `flow` across the whole unit of work — the first attempt plus up to
+// (MAX_UNIT_OF_WORK_ATTEMPTS - 1) retries on a version conflict, each re-invoking `flow` for a
+// fresh read → fresh decision (docs/functional-core-imperative-shell.md rule 4). Exported so
+// tests assert against the real policy instead of duplicating the literal.
 export const MAX_UNIT_OF_WORK_ATTEMPTS = 3;
 
 /** The transaction handle `db.transaction` hands its callback — inferred from `Db` itself so this
@@ -49,11 +50,14 @@ type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteCol
 
 /**
  * Builds an `EntityApplier` for any table that follows the `id`/`version` convention — the
- * mechanics (insert with `onConflictDoNothing`, `... SET ..., version = version + 1 WHERE id = ?
- * AND version = ?`, delete under the same guard) are identical for every such table, so an entity
- * whose table fits this shape (most of them) never hand-writes its own applier; it just calls
- * `versionedTableApplier(itsTable)`. `model` still arrives already db-row-shaped (`diplomat/db`
- * never adapts — see `EntityApplier` above), so this only ever destructures and writes it.
+ * mechanics (insert with `onConflictDoNothing`, `... SET ..., version = <read version + 1>
+ * WHERE id = ? AND version = ?` — the new version computed right below in application code from
+ * the row's own `version` field, never a SQL-side `version + 1` expression the database engine
+ * evaluates on its own — delete under the same guard) are identical for every such table, so an
+ * entity whose table fits this shape (most of them) never hand-writes its own applier; it just
+ * calls `versionedTableApplier(itsTable)`. `model` still arrives already db-row-shaped
+ * (`diplomat/db` never adapts — see `EntityApplier` above), so this only ever destructures and
+ * writes it.
  */
 export const versionedTableApplier = <T extends VersionedTable>(table: T): EntityApplier => ({
   insert: async (tx, model) => {

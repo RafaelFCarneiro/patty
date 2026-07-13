@@ -75,6 +75,7 @@ describe('createAccount — functional core (ADR-021 phase 1)', () => {
       initialBalance: 100,
     });
 
+    expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
     expect(outcome.response).toEqual({
       id: 'account-id-1',
