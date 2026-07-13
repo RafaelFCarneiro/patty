@@ -255,4 +255,29 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
     );
     expect(row).toEqual({ name: 'Renamed', version: 1 });
   });
+
+  it('does not swallow a violation of a different unique column (tags.name) as an idempotent id-retry', async () => {
+    // onConflictDoNothing is scoped to the `id` target so only a same-id retry is a no-op; a
+    // genuine uniqueness violation on some other column must still surface as a real error.
+    const tagApplier = versionedTableApplier(tags);
+    const tagRegistry: ApplierRegistry = { tag: tagApplier };
+    const name = `Tag ${randomUUID()}`;
+
+    const first = await withUnitOfWork(db, tagRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: 'tag', model: { id: randomUUID(), name, version: 0 } }],
+        response: null,
+      }),
+    );
+    expect(first.isOk()).toBe(true);
+
+    const outcome = withUnitOfWork(db, tagRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: 'tag', model: { id: randomUUID(), name, version: 0 } }],
+        response: null,
+      }),
+    );
+
+    await expect(outcome).rejects.toThrow();
+  });
 });

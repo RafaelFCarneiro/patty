@@ -51,9 +51,12 @@ type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteCol
 
 /**
  * Builds an `EntityApplier` for any table that follows the `id`/`version` convention — the
- * mechanics (insert with `onConflictDoNothing`, `... SET ..., version = <read version + 1>
- * WHERE id = ? AND version = ?` — the new version computed right below in application code from
- * the row's own `version` field, never a SQL-side `version + 1` expression the database engine
+ * mechanics (insert with `onConflictDoNothing` scoped to the `id` conflict target only — so a
+ * genuine violation of some other unique column on the table, e.g. `tags.name` or
+ * `transactions.idempotencyKey`, surfaces as a real error instead of being silently swallowed as
+ * if it were the same-id idempotent-retry case — `... SET ..., version = <read version + 1> WHERE
+ * id = ? AND version = ?` — the new version computed right below in application code from the
+ * row's own `version` field, never a SQL-side `version + 1` expression the database engine
  * evaluates on its own — delete under the same guard) are identical for every such table, so an
  * entity whose table fits this shape (most of them) never hand-writes its own applier; it just
  * calls `versionedTableApplier(itsTable)`. `model` still arrives already db-row-shaped
@@ -65,7 +68,7 @@ export const versionedTableApplier = <T extends VersionedTable>(table: T): Entit
     await tx
       .insert(table)
       .values(model as never)
-      .onConflictDoNothing();
+      .onConflictDoNothing({ target: table.id });
   },
 
   update: async (tx, model) => {
