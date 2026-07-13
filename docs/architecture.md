@@ -87,18 +87,25 @@ elsewhere in this doc.** The target shape, adopted for the whole write path and 
 phases 2–3, is `docs/functional-core-imperative-shell.md`: a controller **decides** and returns the write as
 data instead of performing it; the diplomat shell **applies** it.
 
-- **`Persistable` / `EntityTag`** (`src/models/persistable.ts`): a discriminated union over a named
-  `EntityTag` enum (`account` so far — grows one member per converted flow), wrapping a domain model + intent
-  — `{ op: 'insert' | 'update', entity, model }` / `{ op: 'delete', entity, id, version }`. A converted
-  controller returns `ResultAsync<{ persist: Persistable[]; response: T }, AppError>` instead of
-  `ResultAsync<T, AppError>` — composed with `safeTry` exactly as before, it just stops calling `deps.<x>.create`
-  and instead builds a `Persistable` from the model it already holds.
+- **`Persistable` / `EntityTag` / `PersistOp`** (`src/models/persistable.ts`): a discriminated union over a
+  named `EntityTag` enum (`account` so far — grows one member per converted flow) and a named `PersistOp`
+  enum (`insert`/`update`/`delete` — constants over literals, same as `EntityTag`), wrapping a domain model +
+  intent — `{ op: 'insert', entity, model: Account }` / `{ op: 'update', entity, model: AccountEntity }` /
+  `{ op: 'delete', entity, id, version }`. A converted controller returns
+  `ResultAsync<{ persist: Persistable[]; response: T }, AppError>` instead of `ResultAsync<T, AppError>` —
+  composed with `safeTry` exactly as before, it just stops calling `deps.<x>.create` and instead builds a
+  `Persistable` from the model it already holds, via the builders in `logic/persistence.ts`
+  (`insert`/`update`/`remove` — one place every converted controller constructs the tagged shape from,
+  instead of hand-writing the object literal at each call site).
 - **`version`**: every mutable entity table carries `version INTEGER NOT NULL DEFAULT 0` (see § Relational
-  schema) — an optimistic-concurrency token, internal to the persistence side only. It is **not** exposed on
-  the entity's public model/wire shape (`Account`/`AccountSchema`); the persistence-side type
-  (`AccountEntity`/`AccountEntitySchema` in `models/account.ts`, `Account` + `version`) is what a converted
-  flow builds and what `Persistable.model` carries. Converted-flow responses are the plain public model
-  (`R.omit(entity, ['version'])`), so the wire contract is unchanged.
+  schema) — an optimistic-concurrency token, internal to the persistence side only, never exposed on the
+  entity's public model/wire shape (`Account`/`AccountSchema`). It is **not** part of an `insert`
+  `Persistable`'s model either: a brand-new row's version is always the same structural constant
+  (`INITIAL_VERSION` in `diplomat/db/unitOfWork.ts`) — nothing the core decides, so the core never states it,
+  and the shell supplies it once, right where it shapes the insert row. Only `update`/`delete` carry a real,
+  varying `version` (the value the core read), via the persistence-side type (`AccountEntity`/
+  `AccountEntitySchema` in `models/account.ts`, `Account` + `version`). Because an insert's model is already
+  the plain `Account`, a converted create flow's response is that same model — no stripping needed.
 - **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
   converted flow): `withUnitOfWork(db, flow)` invokes `flow`, applies the returned `persist` batch in one
   `db.transaction` via the entity's `modelToDb` adapter (insert honors `onConflictDoNothing`; `update`/`delete`

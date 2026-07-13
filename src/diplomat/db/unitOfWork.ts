@@ -11,6 +11,12 @@ import { accounts } from './schema.js';
 // `flow` for a fresh read → fresh decision (docs/functional-core-imperative-shell.md rule 4).
 const MAX_UNIT_OF_WORK_ATTEMPTS = 3;
 
+// Every entity starts at this version — a structural fact of the versioning scheme itself, not a
+// business decision, so the core's `insert` model never carries it (models/persistable.ts); the
+// shell supplies it here, once, when it shapes the row to write. Never the database's own
+// `.default(0)` supplying it implicitly — the shell always writes an explicit value.
+const INITIAL_VERSION = 0;
+
 /** The transaction handle `db.transaction` hands its callback — inferred from `Db` itself so this
  *  file never names a drizzle-internal type directly. */
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -23,8 +29,13 @@ const applyInsert = async (tx: Tx, p: Extract<Persistable, { op: typeof PersistO
   switch (p.entity) {
     case EntityTag.enum.account:
       // onConflictDoNothing: a PK collision (e.g. a retried insert after an apply that actually
-      // committed) is an idempotent no-op, not a version conflict — inserts never retry.
-      await tx.insert(accounts).values(accountAdapters.modelToDb(p.model)).onConflictDoNothing();
+      // committed) is an idempotent no-op, not a version conflict — inserts never retry. `p.model`
+      // carries no `version` (the core never decides it); the shell adds `INITIAL_VERSION` here,
+      // right where it shapes the row, so `modelToDb` still sees a complete `AccountEntity`.
+      await tx
+        .insert(accounts)
+        .values(accountAdapters.modelToDb({ ...p.model, version: INITIAL_VERSION }))
+        .onConflictDoNothing();
       return;
     default: {
       const _exhaustive: never = p.entity;

@@ -13,17 +13,11 @@ import {
   withTypeLabel,
 } from '../../logic/account.js';
 import { computeBalance, computeProjectedBalance } from '../../logic/balance.js';
+import * as persistence from '../../logic/persistence.js';
 import { resolveByName } from '../../logic/resolve.js';
 import { accountErrors } from '../../models/account.js';
-import type {
-  Account,
-  AccountBalance,
-  AccountEntity,
-  AccountType,
-  CreateAccount,
-  UpdateAccount,
-} from '../../models/account.js';
-import { EntityTag, PersistOp, type FlowOutcome, type Persistable } from '../../models/persistable.js';
+import type { Account, AccountBalance, AccountType, CreateAccount, UpdateAccount } from '../../models/account.js';
+import { EntityTag, type FlowOutcome, type Persistable } from '../../models/persistable.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 
@@ -39,16 +33,17 @@ export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Acco
 /** First mover for ADR-021 / docs/functional-core-imperative-shell.md: a functional-core flow —
  *  it decides and returns the write as data (`persist`) instead of performing it. The imperative
  *  shell (`withUnitOfWork`, called from the MCP/REST handlers) applies the batch and returns
- *  `response`. `version: 0` is the entity's initial optimistic-concurrency token; internal only —
- *  stripped from `response`, which stays the plain wire-shaped `Account`. */
+ *  `response`. A new account has no `version` to decide (that's the shell's own structural
+ *  constant, `INITIAL_VERSION` in `diplomat/db/unitOfWork.ts`) — the model built here, and the
+ *  response, are both the plain wire-shaped `Account`. */
 export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
   safeTry(async function* () {
     yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected);
     yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name));
 
-    const account: AccountEntity = { id: deps.newId(), version: 0, ...input };
-    const persist: Persistable[] = [{ op: PersistOp.enum.insert, entity: EntityTag.enum.account, model: account }];
-    return ok({ persist, response: R.omit(account, ['version']) });
+    const account: Account = { id: deps.newId(), ...input };
+    const persist: Persistable[] = [persistence.insert({ entity: EntityTag.enum.account, model: account })];
+    return ok({ persist, response: account });
   });
 
 /** Balances are derived: initialBalance + income − expenses + transfers in − transfers out. */

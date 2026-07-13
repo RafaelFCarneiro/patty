@@ -36,7 +36,7 @@ const account = (overrides: Partial<Account> = {}): Account => ({
 });
 
 describe('createAccount — functional core (ADR-021 phase 1)', () => {
-  it('returns an insert Persistable for the account, versioned at 0, instead of writing', async () => {
+  it("returns an insert Persistable for the account — no version, that is the shell's to decide", async () => {
     const deps = makeDeps();
 
     const result = await createAccount(deps, {
@@ -55,7 +55,6 @@ describe('createAccount — functional core (ADR-021 phase 1)', () => {
         entity: EntityTag.enum.account,
         model: {
           id: 'account-id-1',
-          version: 0,
           name: 'Nubank',
           type: AccountType.enum.checking,
           currency: CurrencyCode.enum.BRL,
@@ -63,9 +62,10 @@ describe('createAccount — functional core (ADR-021 phase 1)', () => {
         },
       },
     ]);
+    expect(outcome.persist[0]).not.toHaveProperty('model.version');
   });
 
-  it('strips `version` from the response — the wire-shaped Account only', async () => {
+  it('the response is the same plain Account the persist batch already carries', async () => {
     const deps = makeDeps();
 
     const result = await createAccount(deps, {
@@ -75,15 +75,15 @@ describe('createAccount — functional core (ADR-021 phase 1)', () => {
       initialBalance: 100,
     });
 
-    const { response } = result._unsafeUnwrap();
-    expect(response).toEqual({
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.response).toEqual({
       id: 'account-id-1',
       name: 'Nubank',
       type: AccountType.enum.checking,
       currency: CurrencyCode.enum.BRL,
       initialBalance: 100,
     });
-    expect(response).not.toHaveProperty('version');
+    expect(outcome.response).not.toHaveProperty('version');
   });
 
   it('rejects a credit-type account without touching persist/newId', async () => {

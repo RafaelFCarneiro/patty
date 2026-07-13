@@ -87,8 +87,8 @@ that isn't in scope for your change just because you're touching the file.
 
 A converted controller still composes with `safeTry`/`guard`/`okOr` exactly as before — only the last step
 changes: instead of `await`ing a repo write and returning the written row, it builds the write as a typed
-`Persistable` (`models/persistable.ts`) and returns it alongside the response, for the diplomat shell's
-`withUnitOfWork` (`diplomat/db/unitOfWork.ts`) to apply:
+`Persistable` (`models/persistable.ts`) via the `logic/persistence.ts` builders, and returns it alongside the
+response, for the diplomat shell's `withUnitOfWork` (`diplomat/db/unitOfWork.ts`) to apply:
 
 ```ts
 // ✅ DO — the core decides and returns the write as data; it never calls a repo write method
@@ -97,9 +97,9 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
     yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)
     yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name))
 
-    const account: AccountEntity = { id: deps.newId(), version: 0, ...input }  // version: internal, never wire/out
-    const persist: Persistable[] = [{ op: PersistOp.enum.insert, entity: EntityTag.enum.account, model: account }]
-    return ok({ persist, response: R.omit(account, ['version']) })
+    const account: Account = { id: deps.newId(), ...input }  // no version — a new row's is the shell's constant
+    const persist: Persistable[] = [persistence.insert({ entity: EntityTag.enum.account, model: account })]
+    return ok({ persist, response: account })
   })
 
 // the diplomat handler (MCP tool / REST route) wraps the call — this is the shell applying the effect
@@ -115,19 +115,23 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   })
 ```
 
-- `Persistable`'s `model` carries the entity's `version` (the applier's optimistic-concurrency token); the
-  controller's `response` never does — strip it (`R.omit(entity, ['version'])`) so the wire contract is
-  unchanged.
+- Build the `Persistable` via `logic/persistence.ts`'s `insert`/`update`/`remove` — one place every converted
+  controller constructs the tagged shape from, instead of hand-writing an `{ op, entity, model }` literal at
+  each call site. The write intent (`op`) these set is a named enum (`PersistOp`), not a bare
+  `'insert'`/`'update'`/`'delete'` string — same "constants over literals" rule as `EntityTag`.
+- An `insert` `Persistable`'s model is the plain, wire-shaped domain model (`Account`) — **no `version`**. A
+  brand-new row's version is always the same structural constant (`INITIAL_VERSION`, `diplomat/db/
+  unitOfWork.ts`); that's not a decision the core makes, so it never appears in what the core builds or
+  returns. The response is that same model — nothing to strip. `update`/`delete` are different: `version` is
+  the value the core actually read, so it's real data the model carries (`AccountEntity` — `Account` +
+  `version`). The shell computes the *persisted* version from it (`model.version + 1`, in application code) —
+  never as an opaque `version + 1` SQL expression left for the database engine to evaluate; the database never
+  owns version bookkeeping on its own.
 - Composition (a flow that orchestrates another controller) **merges** `persist` arrays — take the called
   controller's `persist`, add your own, return the merged batch; don't apply either separately.
 - A converted controller's `deps` still exposes reads (`deps.<x>.list/find/...`) — the purity boundary is
   writes, not all I/O. Only the write call moves from `await deps.<x>.create(...)` to
-  `{ op: PersistOp.enum.insert, ... }`.
-- The write intent (`op`) is a named enum (`PersistOp`), not a bare `'insert'`/`'update'`/`'delete'` string —
-  same "constants over literals" rule as `EntityTag`. The shell computes a new `version` (e.g. on an `update`)
-  from the value the core's model already carries (`model.version + 1`, in application code) — never as an
-  opaque `version + 1` SQL expression left for the database engine to evaluate; the database never owns
-  version bookkeeping on its own.
+  `persistence.insert({ entity: EntityTag.enum.account, model: account })`.
 
 ## logic/ — pure and declarative
 
@@ -149,13 +153,13 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
   predicate (e.g. `assertNonCreditType(type)`) instead of inlining `x !== Enum.value` at the `guard` call.
   Predicates are trivially unit-tested and reused across create/update/delete. (Repo-dependent conditions
   can't be pure — keep those as small async helpers in the controller.)
-- Every logic function gets a colocated `*.test.ts` (vitest) — pure functions, no mocks.
+- Every logic function gets a mirrored `test/unit/logic/*.test.ts` (vitest) — pure functions, no mocks.
 
 ## Testing requirements
 
 - Behavior changes MUST include unit tests in the same change.
-- New logic functions MUST ship with colocated tests; controller/repo/adapter changes MUST update or add
-  focused unit tests that cover success and expected-failure paths.
+- New logic functions MUST ship with a matching test under `test/unit/logic/`; controller/repo/adapter changes
+  MUST update or add focused unit tests that cover success and expected-failure paths.
 - Prefer small, deterministic tests; avoid network/db side effects in unit tests.
 
 ## models/ — zod single source of truth
@@ -256,7 +260,10 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 
 ## Naming & misc
 
-- Files: camelCase matching the domain (`creditCards.ts`); tests colocated (`bill.test.ts`).
+- Files: camelCase matching the domain (`creditCards.ts`); tests live under `test/unit/`/`test/integration/`
+  in a mirrored path, not colocated (`test/unit/logic/bill.test.ts`, never `src/logic/bill.test.ts` — see
+  `CLAUDE.md`'s Commands section; the vitest config only scans `test/unit/**`/`test/integration/**`, so a
+  colocated `src/**/*.test.ts` file silently never runs).
 - IDs `crypto.randomUUID()` via `deps.newId()`; seeds use stable slugs (`cat-transporte`).
 - Dates are `YYYY-MM-DD` strings end-to-end; month math in pure logic (`period.ts`, `recurring.ts`),
   never via timezone-prone `Date` arithmetic on day-of-month.

@@ -66,8 +66,9 @@ database, a different transport) without the domain noticing.
    ```
 
    The core speaks in **models** (its own vocabulary); the shell runs each through the existing `modelToDb`
-   adapter and the matching table op. `EntityTag` is a named enum (constants over literals) so the dispatch is
-   exhaustively typed — never a stringly god-changeset.
+   adapter and the matching table op. `EntityTag` and the write intent itself (`PersistOp`: `insert`/`update`/
+   `delete`) are both named enums (constants over literals) so the dispatch is exhaustively typed — never a
+   stringly god-changeset.
 
 4. **Concurrency rides on the model as `version`.** Every mutable entity carries a `version`. An `update`
    persistable carries the version the core read; the shell applies it as

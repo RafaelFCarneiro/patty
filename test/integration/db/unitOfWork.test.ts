@@ -10,9 +10,10 @@ import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { withUnitOfWork } from '../../../src/diplomat/db/unitOfWork.js';
+import * as persistence from '../../../src/logic/persistence.js';
 import { AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { EntityTag, PersistOp, type Persistable } from '../../../src/models/persistable.js';
+import { EntityTag, type Persistable } from '../../../src/models/persistable.js';
 
 const TEST_KEY = 'e'.repeat(64);
 // Matches withUnitOfWork's private MAX_UNIT_OF_WORK_ATTEMPTS (diplomat/db/unitOfWork.ts) — not
@@ -37,6 +38,9 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
+// Carries `version` even though a fresh insert never sends it (Persistable's insert model is the
+// plain `Account` — see models/persistable.ts): the same factory doubles as the seed for the
+// update/delete cases below, which do need a real version to key their guard off.
 const newAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
   id: randomUUID(),
   name: `UoW Account ${randomUUID()}`,
@@ -48,7 +52,7 @@ const newAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
 });
 
 const insertOne = (model: AccountEntity) => () =>
-  okAsync({ persist: [{ op: PersistOp.enum.insert, entity: EntityTag.enum.account, model }], response: model });
+  okAsync({ persist: [persistence.insert({ entity: EntityTag.enum.account, model })], response: model });
 
 const readVersion = async (id: string): Promise<number | undefined> => {
   const [row] = await db.all<{ version: number }>(sql`SELECT version FROM accounts WHERE id = ${id}`);
@@ -63,12 +67,11 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
     await withUnitOfWork(db, insertOne(seed));
 
     const sibling = newAccount();
-    const staleUpdate: Persistable = {
-      op: PersistOp.enum.update,
+    const staleUpdate: Persistable = persistence.update({
       entity: EntityTag.enum.account,
       model: { ...seed, name: 'renamed', version: seed.version + 41 }, // never matches
-    };
-    const insertSibling: Persistable = { op: PersistOp.enum.insert, entity: EntityTag.enum.account, model: sibling };
+    });
+    const insertSibling: Persistable = persistence.insert({ entity: EntityTag.enum.account, model: sibling });
 
     const result = await withUnitOfWork(db, () => okAsync({ persist: [insertSibling, staleUpdate], response: null }));
 
@@ -90,7 +93,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
       const version = calls === 1 ? seed.version + 1 : seed.version;
       const model: AccountEntity = { ...seed, name: 'Renamed', version };
       return okAsync({
-        persist: [{ op: PersistOp.enum.update, entity: EntityTag.enum.account, model }],
+        persist: [persistence.update({ entity: EntityTag.enum.account, model })],
         response: calls,
       });
     };
@@ -111,7 +114,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
       calls += 1;
       const model: AccountEntity = { ...seed, name: 'Renamed', version: seed.version + 999 };
       return okAsync({
-        persist: [{ op: PersistOp.enum.update, entity: EntityTag.enum.account, model }],
+        persist: [persistence.update({ entity: EntityTag.enum.account, model })],
         response: null,
       });
     };
@@ -130,7 +133,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
     const result = await withUnitOfWork(db, () =>
       okAsync({
-        persist: [{ op: PersistOp.enum.delete, entity: EntityTag.enum.account, id: seed.id, version: seed.version }],
+        persist: [persistence.remove({ entity: EntityTag.enum.account, id: seed.id, version: seed.version })],
         response: null,
       }),
     );
@@ -145,9 +148,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
     const result = await withUnitOfWork(db, () =>
       okAsync({
-        persist: [
-          { op: PersistOp.enum.delete, entity: EntityTag.enum.account, id: seed.id, version: seed.version + 1 },
-        ],
+        persist: [persistence.remove({ entity: EntityTag.enum.account, id: seed.id, version: seed.version + 1 })],
         response: null,
       }),
     );
@@ -162,8 +163,8 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
     const result = await withUnitOfWork(db, () =>
       okAsync({
         persist: [
-          { op: PersistOp.enum.insert, entity: EntityTag.enum.account, model },
-          { op: PersistOp.enum.insert, entity: EntityTag.enum.account, model },
+          persistence.insert({ entity: EntityTag.enum.account, model }),
+          persistence.insert({ entity: EntityTag.enum.account, model }),
         ],
         response: null,
       }),
@@ -171,5 +172,16 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
     expect(result.isOk()).toBe(true);
     expect(await readIds(model.id)).toHaveLength(1);
+  });
+
+  it('a fresh insert always starts at version 0 — the shell decides it, never a value the model carries', async () => {
+    // `Persistable`'s insert model is the plain `Account` (no `version` field) — `newAccount()`'s
+    // `version: 99` here only exists because the same factory also seeds the update/delete cases
+    // above; it structurally passes through `insertOne` but must never reach the row.
+    const seed = newAccount({ version: 99 });
+
+    await withUnitOfWork(db, insertOne(seed));
+
+    expect(await readVersion(seed.id)).toBe(0);
   });
 });
