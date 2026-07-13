@@ -10,7 +10,13 @@ import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { accountApplier } from '../../../src/diplomat/db/repos/accounts.js';
-import { withUnitOfWork, type ApplierRegistry, type EntityApplier } from '../../../src/diplomat/db/unitOfWork.js';
+import { tags } from '../../../src/diplomat/db/schema.js';
+import {
+  versionedTableApplier,
+  withUnitOfWork,
+  type ApplierRegistry,
+  type EntityApplier,
+} from '../../../src/diplomat/db/unitOfWork.js';
 import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
@@ -221,5 +227,34 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
     );
 
     await expect(outcome).rejects.toThrow('no applier registered for entity "unregistered"');
+  });
+});
+
+describe('versionedTableApplier — reusable for any id/version-shaped table, not just accounts', () => {
+  it('applies insert then a versioned update against a completely unrelated table (tags)', async () => {
+    const tagApplier = versionedTableApplier(tags);
+    const tagRegistry: ApplierRegistry = { tag: tagApplier };
+    const tagId = randomUUID();
+
+    const inserted = await withUnitOfWork(db, tagRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: 'tag', model: { id: tagId, name: `Tag ${tagId}`, version: 0 } }],
+        response: null,
+      }),
+    );
+    expect(inserted.isOk()).toBe(true);
+
+    const updated = await withUnitOfWork(db, tagRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.update, entity: 'tag', model: { id: tagId, name: 'Renamed', version: 0 } }],
+        response: null,
+      }),
+    );
+    expect(updated.isOk()).toBe(true);
+
+    const [row] = await db.all<{ name: string; version: number }>(
+      sql`SELECT name, version FROM tags WHERE id = ${tagId}`,
+    );
+    expect(row).toEqual({ name: 'Renamed', version: 1 });
   });
 });

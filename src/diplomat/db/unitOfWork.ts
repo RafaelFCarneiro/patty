@@ -1,3 +1,5 @@
+import { and, eq } from 'drizzle-orm';
+import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import type { AppError } from '../../common/errors.js';
 import { conflict } from '../../models/error.js';
@@ -37,6 +39,43 @@ export type EntityApplier = {
  *  one. Assembled once at the composition root (`main.ts`) from each entity's own applier — this
  *  file only ever looks values up in it, never lists an entity itself. */
 export type ApplierRegistry = Record<string, EntityApplier>;
+
+/** A table shaped for `versionedTableApplier` below: an `id` + `version` column, by the exact
+ *  property names every mutable table's row already uses (schema.ts). True for 8 of the 9
+ *  mutable tables — `dashboards` keys on `name` instead, so it needs its own hand-written
+ *  `EntityApplier` rather than this factory. */
+type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteColumn };
+
+/**
+ * Builds an `EntityApplier` for any table that follows the `id`/`version` convention — the
+ * mechanics (insert with `onConflictDoNothing`, `... SET ..., version = version + 1 WHERE id = ?
+ * AND version = ?`, delete under the same guard) are identical for every such table, so an entity
+ * whose table fits this shape (most of them) never hand-writes its own applier; it just calls
+ * `versionedTableApplier(itsTable)`. `model` still arrives already db-row-shaped (`diplomat/db`
+ * never adapts — see `EntityApplier` above), so this only ever destructures and writes it.
+ */
+export const versionedTableApplier = <T extends VersionedTable>(table: T): EntityApplier => ({
+  insert: async (tx, model) => {
+    await tx
+      .insert(table)
+      .values(model as never)
+      .onConflictDoNothing();
+  },
+
+  update: async (tx, model) => {
+    const { id, version, ...values } = model as Record<string, unknown> & { id: string; version: number };
+    const result = await tx
+      .update(table)
+      .set({ ...values, version: version + 1 } as never)
+      .where(and(eq(table.id, id), eq(table.version, version)));
+    return (result.rowsAffected ?? 0) > 0;
+  },
+
+  delete: async (tx, id, version) => {
+    const result = await tx.delete(table).where(and(eq(table.id, id), eq(table.version, version)));
+    return (result.rowsAffected ?? 0) > 0;
+  },
+});
 
 /** Marks "a versioned op affected zero rows" up through `db.transaction`'s promise rejection so
  *  the whole batch rolls back; caught by `applyBatch`, never leaks past this file. */

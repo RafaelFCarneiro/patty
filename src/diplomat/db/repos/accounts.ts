@@ -1,13 +1,13 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import * as accountAdapters from '../../../adapters/accounts.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Account, AccountReferences, AccountType } from '../../../models/account.js';
 import type { CurrencyCode } from '../../../models/money.js';
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
-import { BalancePartsRow, type AccountRow } from '../../../wire/db/accounts.js';
+import { BalancePartsRow } from '../../../wire/db/accounts.js';
 import type { Db } from '../driver.js';
 import { accounts, creditCards, recurringRules, transactions } from '../schema.js';
-import type { EntityApplier } from '../unitOfWork.js';
+import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
 export type AccountPatch = {
   name?: string;
@@ -138,35 +138,10 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
  * The account entity's `EntityApplier` (ADR-021) — how the generic `withUnitOfWork` (`diplomat/db/
  * unitOfWork.ts`) applies an account `Persistable` without that file ever naming "account" itself.
  * Registered under `models/account.ts`'s `ACCOUNT_ENTITY_TAG` at the composition root (`main.ts`).
- * `insert`/`update` receive an already db-row-shaped `model` — the MCP/REST handler calls
- * `adapters/accounts.ts`'s `persistableToDb` (via `outcomeToDb`) before the batch ever reaches
- * `unitOfWork`, so this applier only ever writes the row it's handed; it never calls `modelToDb`
- * itself. Needs no `db` (every method runs against the `tx` the shell hands it), so it's a plain
- * constant, not a factory.
+ * `accounts` follows the `id`/`version` convention every mutable table but `dashboards` does, so
+ * this is `versionedTableApplier(accounts)` rather than a hand-written insert/update/delete —
+ * there's no account-specific mechanics left to write: the model→row adaptation happens upstream
+ * (`adapters/accounts.ts`'s `outcomeToDb`, run by the MCP/REST handler before `unitOfWork` ever
+ * sees the batch), so this applier only ever writes the row it's handed.
  */
-export const accountApplier: EntityApplier = {
-  insert: async (tx, model) => {
-    await tx
-      .insert(accounts)
-      .values(model as AccountRow)
-      .onConflictDoNothing();
-  },
-
-  update: async (tx, model) => {
-    // The new version is computed here, in application code, from the version the core read
-    // (`row.version`) — never an opaque `version + 1` SQL expression left for the database engine
-    // to evaluate.
-    const row = model as AccountRow;
-    const { id, version, ...values } = row;
-    const result = await tx
-      .update(accounts)
-      .set({ ...values, version: version + 1 })
-      .where(and(eq(accounts.id, id), eq(accounts.version, version)));
-    return (result.rowsAffected ?? 0) > 0;
-  },
-
-  delete: async (tx, id, version) => {
-    const result = await tx.delete(accounts).where(and(eq(accounts.id, id), eq(accounts.version, version)));
-    return (result.rowsAffected ?? 0) > 0;
-  },
-};
+export const accountApplier: EntityApplier = versionedTableApplier(accounts);

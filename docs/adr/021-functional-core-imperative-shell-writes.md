@@ -149,7 +149,12 @@ gets its own generic atomicity/conflict/idempotency suite.
      (MCP + REST) as the first mover — proves the shape. Refined further: the `modelToDb` adaptation moved out
      of `diplomat/db` entirely — the MCP/REST handler now adapts model → row explicitly (`adapters/
      accounts.ts`'s `outcomeToDb`) before ever calling `unitOfWork`, so both the generic engine *and* each
-     entity's `EntityApplier` only ever write rows they're handed, never adapt one themselves.
+     entity's `EntityApplier` only ever write rows they're handed, never adapt one themselves. Refined once
+     more: with adaptation gone, an `EntityApplier`'s `insert`/`update`/`delete` are now identical mechanics
+     for any table keyed by `id` with a `version` column (8 of the 9 mutable tables — `dashboards` keys on
+     `name` instead), so `diplomat/db/unitOfWork.ts` exports `versionedTableApplier(table)` to build one from
+     just the table reference; `accountApplier` is `versionedTableApplier(accounts)`, no hand-written
+     insert/update/delete left at all.
    - [ ] Phase 2 (transaction + bill flows): convert `add_*`/`update_*`/`delete_*`, `payBill`/
      `revertBillPayment`; delete `bills.pay`/`ensureAndAttach`/self-heal and their atomicity tests.
    - [ ] Phase 3 (remaining flows): bulk import, recurring, card/category/tag CRUD; remove write methods

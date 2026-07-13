@@ -120,12 +120,18 @@ data instead of performing it; the diplomat shell **applies** it.
 - **`EntityApplier` / `ApplierRegistry`** (`src/diplomat/db/unitOfWork.ts`): **entity-agnostic** — the generic
   engine dispatches an already row-shaped `Persistable` to `registry[p.entity]` and calls that applier's
   `insert`/`update`/`delete`; it never names a specific entity, never imports a specific entity's `modelToDb`
-  adapter or drizzle table, and — critically — never needs a new `case` as more entities convert. Each
-  entity's own `EntityApplier` (just the drizzle table op — e.g. `diplomat/db/repos/accounts.ts`'s
-  `accountApplier`, which only ever writes the row it's handed, never adapts one) lives beside that entity's
-  other persistence code, not inside the generic engine. The `ApplierRegistry` (`Record<string, EntityApplier>`)
-  is assembled once, at the composition root (`main.ts`, `test/integration/app-builder.ts`), from each entity's
-  applier keyed by its own tag constant, and bound into the `UnitOfWork` closure alongside `Db`.
+  adapter or drizzle table, and — critically — never needs a new `case` as more entities convert. The
+  `ApplierRegistry` (`Record<string, EntityApplier>`) is assembled once, at the composition root (`main.ts`,
+  `test/integration/app-builder.ts`), from each entity's applier keyed by its own tag constant, and bound into
+  the `UnitOfWork` closure alongside `Db`.
+- **`versionedTableApplier`** (`src/diplomat/db/unitOfWork.ts`): once the model→row adaptation moved to the
+  handler (above), an `EntityApplier`'s `insert`/`update`/`delete` became pure mechanics — cast the row, run
+  `... SET ..., version = version + 1 WHERE id = ? AND version = ?` — identical for any table keyed by an
+  `id` column with a `version` column, which is 8 of the 9 mutable tables (`dashboards` keys on `name`
+  instead). Rather than hand-write that per entity, `versionedTableApplier(table)` builds a complete
+  `EntityApplier` from just the drizzle table reference — `diplomat/db/repos/accounts.ts`'s `accountApplier`
+  is `versionedTableApplier(accounts)`, a one-liner. An entity whose table doesn't fit the convention (e.g.
+  `dashboards`) still hand-writes its own `EntityApplier` against this same interface.
 - **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
   converted flow): `withUnitOfWork(db, registry, flow)` invokes `flow`, applies the returned `persist` batch in
   one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry` (insert

@@ -150,6 +150,12 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   `ApplierRegistry` is assembled once at the composition root (`main.ts`); `withUnitOfWork` itself only ever
   calls generic `applier.insert/update/delete` — never an `if (entity === 'account')`, and never a call into
   `modelToDb`.
+- **Don't hand-write an `EntityApplier` for a table that already fits the `id`/`version` convention** — call
+  `versionedTableApplier(table)` (`diplomat/db/unitOfWork.ts`) instead. `accountApplier` is
+  `versionedTableApplier(accounts)`, nothing more: once the model→row adaptation moved to the handler (above),
+  an applier's `insert`/`update`/`delete` became identical mechanics for every table shaped that way (cast the
+  row, write it, guard on `version`). Only hand-write a custom `EntityApplier` for a table that doesn't fit —
+  `dashboards` keys on `name` rather than `id`, so it will need one when converted.
 - Composition (a flow that orchestrates another controller) **merges** `persist` arrays — take the called
   controller's `persist`, add your own, return the merged batch; don't apply either separately.
 - A converted controller's `deps` still exposes reads (`deps.<x>.list/find/...`) — the purity boundary is
