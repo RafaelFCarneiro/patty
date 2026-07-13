@@ -1,4 +1,4 @@
-import { type Account, type AccountEntity, AccountSchema } from '../models/account.js';
+import { ACCOUNT_ENTITY_TAG, type Account, type AccountEntity, AccountSchema } from '../models/account.js';
 import type {
   AddAccountMovement,
   CreateAccount,
@@ -35,12 +35,16 @@ export const modelToDb = (entity: AccountEntity): AccountRow => ({
  * Adapts one account `Persistable`'s `model` from domain shape to db-row shape (ADR-021 follow-up):
  * called explicitly by the MCP/REST handler, via `outcomeToDb` below, before the batch ever reaches
  * `withUnitOfWork` — so `diplomat/db` (the applier registered under `models/account.ts`'s
- * `ACCOUNT_ENTITY_TAG`) never calls `modelToDb` itself, only writes the row it's handed. `insert`
- * has no `version` on its model (nothing the core decides — see `models/persistable.ts`); it's
- * added here, at the one place model→row shaping happens for this entity. `delete` carries no
- * model to adapt.
+ * `ACCOUNT_ENTITY_TAG`) never calls `modelToDb` itself, only writes the row it's handed. No-ops on
+ * a `Persistable` tagged for a different entity — `outcomeToDb` maps this over the *whole* batch, and
+ * per docs/functional-core-imperative-shell.md rule 5 ("composition is concatenation"), a composed
+ * flow's batch can carry other entities' persistables too; only `ACCOUNT_ENTITY_TAG`-tagged ones are
+ * this adapter's to shape. `insert` has no `version` on its model (nothing the core decides — see
+ * `models/persistable.ts`); it's added here, at the one place model→row shaping happens for this
+ * entity. `delete` carries no model to adapt.
  */
 export const persistableToDb = (p: Persistable): Persistable => {
+  if (p.entity !== ACCOUNT_ENTITY_TAG) return p;
   switch (p.op) {
     case PersistOp.enum.insert:
       return { ...p, model: modelToDb({ ...(p.model as Account), version: INITIAL_VERSION }) };
@@ -56,7 +60,9 @@ export const persistableToDb = (p: Persistable): Persistable => {
 };
 
 /** Maps every `Persistable` in a flow's outcome through `persistableToDb` — the one call an
- *  account-producing MCP/REST handler makes between the controller and `unitOfWork`. */
+ *  account-producing MCP/REST handler makes between the controller and `unitOfWork`. Safe to run
+ *  over a mixed-entity batch (composed flows, ADR-021 rule 5) — `persistableToDb` no-ops on
+ *  anything not tagged `ACCOUNT_ENTITY_TAG`. */
 export const outcomeToDb = <T>(outcome: FlowOutcome<T>): FlowOutcome<T> => ({
   ...outcome,
   persist: outcome.persist.map(persistableToDb),

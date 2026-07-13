@@ -8,7 +8,8 @@ import type { Db } from './driver.js';
 
 // First-attempt call to `flow` plus this many retries on a version conflict, each re-invoking
 // `flow` for a fresh read → fresh decision (docs/functional-core-imperative-shell.md rule 4).
-const MAX_UNIT_OF_WORK_ATTEMPTS = 3;
+// Exported so tests assert against the real policy instead of duplicating the literal.
+export const MAX_UNIT_OF_WORK_ATTEMPTS = 3;
 
 /** The transaction handle `db.transaction` hands its callback — inferred from `Db` itself so this
  *  file never names a drizzle-internal type directly. Exported so each entity's `EntityApplier`

@@ -150,6 +150,18 @@ describe('persistableToDb — ADR-021 follow-up: model→row adaptation lives at
     const p: Persistable = { op: PersistOp.enum.delete, entity: ACCOUNT_ENTITY_TAG, id: 'acc-1', version: 3 };
     expect(accountAdapters.persistableToDb(p)).toEqual(p);
   });
+
+  it('no-ops on a persistable tagged for a different entity — never casts a foreign model as Account', () => {
+    // A composed flow's batch can carry other entities' persistables too (ADR-021 rule 5,
+    // "composition is concatenation"). persistableToDb must leave those alone rather than run
+    // them through Account's modelToDb.
+    const foreign: Persistable = {
+      op: PersistOp.enum.insert,
+      entity: 'transaction',
+      model: { totallyNotAnAccount: true },
+    };
+    expect(accountAdapters.persistableToDb(foreign)).toEqual(foreign);
+  });
 });
 
 describe('outcomeToDb', () => {
@@ -160,6 +172,22 @@ describe('outcomeToDb', () => {
     };
     expect(accountAdapters.outcomeToDb(outcome)).toEqual({
       persist: [
+        { op: PersistOp.enum.insert, entity: ACCOUNT_ENTITY_TAG, model: { ...account, version: INITIAL_VERSION } },
+      ],
+      response: account,
+    });
+  });
+
+  it('on a mixed-entity batch, adapts only the account persistables and passes the rest through', () => {
+    const foreign: Persistable = { op: PersistOp.enum.insert, entity: 'transaction', model: { id: 'tx-1' } };
+    const outcome = {
+      persist: [foreign, { op: PersistOp.enum.insert, entity: ACCOUNT_ENTITY_TAG, model: account } as Persistable],
+      response: account,
+    };
+
+    expect(accountAdapters.outcomeToDb(outcome)).toEqual({
+      persist: [
+        foreign,
         { op: PersistOp.enum.insert, entity: ACCOUNT_ENTITY_TAG, model: { ...account, version: INITIAL_VERSION } },
       ],
       response: account,

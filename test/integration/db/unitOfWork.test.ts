@@ -12,6 +12,7 @@ import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { accountApplier } from '../../../src/diplomat/db/repos/accounts.js';
 import { tags } from '../../../src/diplomat/db/schema.js';
 import {
+  MAX_UNIT_OF_WORK_ATTEMPTS,
   versionedTableApplier,
   withUnitOfWork,
   type ApplierRegistry,
@@ -23,9 +24,6 @@ import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp, type Persistable } from '../../../src/models/persistable.js';
 
 const TEST_KEY = 'e'.repeat(64);
-// Matches withUnitOfWork's private MAX_UNIT_OF_WORK_ATTEMPTS (diplomat/db/unitOfWork.ts) — not
-// exported, since retry count is the shell's own concern; asserted here as a black-box constant.
-const MAX_ATTEMPTS = 3;
 
 let tmpDir: string;
 let db: Db;
@@ -134,7 +132,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
-    expect(calls).toBe(MAX_ATTEMPTS);
+    expect(calls).toBe(MAX_UNIT_OF_WORK_ATTEMPTS);
     expect(await readVersion(seed.id)).toBe(seed.version); // never bumped by a rolled-back attempt
   });
 

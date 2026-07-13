@@ -126,12 +126,14 @@ data instead of performing it; the diplomat shell **applies** it.
   the `UnitOfWork` closure alongside `Db`.
 - **`versionedTableApplier`** (`src/diplomat/db/unitOfWork.ts`): once the model→row adaptation moved to the
   handler (above), an `EntityApplier`'s `insert`/`update`/`delete` became pure mechanics — cast the row, run
-  `... SET ..., version = version + 1 WHERE id = ? AND version = ?` — identical for any table keyed by an
-  `id` column with a `version` column, which is 8 of the 9 mutable tables (`dashboards` keys on `name`
-  instead). Rather than hand-write that per entity, `versionedTableApplier(table)` builds a complete
-  `EntityApplier` from just the drizzle table reference — `diplomat/db/repos/accounts.ts`'s `accountApplier`
-  is `versionedTableApplier(accounts)`, a one-liner. An entity whose table doesn't fit the convention (e.g.
-  `dashboards`) still hand-writes its own `EntityApplier` against this same interface.
+  `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?` (the new version computed in
+  application code from the row's own `version` field — never a SQL-side `version + 1` expression; same rule
+  as `withUnitOfWork` below) — identical for any table keyed by an `id` column with a `version` column, which
+  is 8 of the 9 mutable tables (`dashboards` keys on `name` instead). Rather than hand-write that per entity,
+  `versionedTableApplier(table)` builds a complete `EntityApplier` from just the drizzle table reference —
+  `diplomat/db/repos/accounts.ts`'s `accountApplier` is `versionedTableApplier(accounts)`, a one-liner. An
+  entity whose table doesn't fit the convention (e.g. `dashboards`) still hand-writes its own `EntityApplier`
+  against this same interface.
 - **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
   converted flow): `withUnitOfWork(db, registry, flow)` invokes `flow`, applies the returned `persist` batch in
   one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry` (insert
