@@ -19,11 +19,12 @@ import { healthRepo } from '../../src/diplomat/db/repos/health.js';
 import { McpTransport } from '../../src/config.js';
 import { Locale } from '../../src/models/locale.js';
 import { buildHttpApp } from '../../src/server.js';
-import type { Deps } from '../../src/controllers/deps.js';
+import { withUnitOfWork } from '../../src/diplomat/db/unitOfWork.js';
+import type { Deps, UnitOfWork } from '../../src/controllers/deps.js';
 
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64);
 
-export type AppContext = { app: FastifyInstance; deps: Deps; version: string };
+export type AppContext = { app: FastifyInstance; deps: Deps; version: string; unitOfWork: UnitOfWork };
 
 export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promise<AppContext> => {
   const db = openDatabase({
@@ -62,7 +63,8 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
   const require = createRequire(import.meta.url);
   const { version } = require('../../package.json') as { version: string };
 
-  const app = buildHttpApp(deps, version, { logger: false });
+  const unitOfWork: UnitOfWork = (flow) => withUnitOfWork(db, flow);
+  const app = buildHttpApp(deps, version, unitOfWork, { logger: false });
 
-  return { app, deps, version };
+  return { app, deps, version, unitOfWork };
 };

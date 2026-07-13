@@ -5,6 +5,11 @@
 > says *where* the layers are; this says
 > *what crosses the boundary between them* — **decisions flow out of the core as data; effects are executed by
 > the shell.**
+>
+> **Status: Adopted** (ADR-021). Phase 1 (groundwork + `createAccount` as the first converted flow) is
+> implemented; the remaining write flows still drive their own persistence via injected repo write methods
+> until phases 2–3 convert them — this principle is the target shape for every one of them, not yet the as-built
+> state of the whole write path.
 
 ## The principle
 

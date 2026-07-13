@@ -10,6 +10,37 @@ describe('MCP integration > accounts', () => {
     createdTxIds = [];
   });
 
+  it('creates an account via the functional-core-imperative-shell write path (ADR-021)', async () => {
+    const stamp = Date.now();
+    const accountName = `UoW MCP Account ${stamp}`;
+
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const created = (await callTool(client, {
+        name: 'create_account',
+        args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 250 },
+      })) as { id?: string; name?: string; initialBalance?: number };
+
+      expect(created.id).toBeTruthy();
+      expect(created.name).toBe(accountName);
+      expect(created.initialBalance).toBe(250);
+      // `version` is the applier's internal optimistic-concurrency token — never on the wire.
+      expect(created).not.toHaveProperty('version');
+
+      const balances = (await callTool(client, {
+        name: 'get_account_balances',
+        args: { account: accountName },
+      })) as Array<{ name?: string; balance?: number }>;
+      const bal = balances.find((b) => b.name === accountName);
+      ensure(bal, `Balance for "${accountName}" not found`);
+      expect(bal.balance).toBe(250);
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('reflects income and expense transactions in the derived account balance', async () => {
     const stamp = Date.now();
     const accountName = `Balance Test ${stamp}`;

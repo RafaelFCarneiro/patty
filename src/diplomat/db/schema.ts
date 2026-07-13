@@ -29,6 +29,9 @@ export const accounts = sqliteTable('accounts', {
   currency: text('currency')
     .notNull()
     .references(() => currencies.code),
+  // Optimistic-concurrency token for the generic versioned unit of work (ADR-021); unread/unbumped
+  // by any flow not yet converted off its own repo write method.
+  version: integer('version').notNull().default(0),
 });
 
 export const creditCards = sqliteTable('credit_cards', {
@@ -44,6 +47,7 @@ export const creditCards = sqliteTable('credit_cards', {
     .notNull()
     .references(() => accounts.id),
   paymentAccountId: text('payment_account_id').references(() => accounts.id),
+  version: integer('version').notNull().default(0),
 });
 
 export const categories = sqliteTable(
@@ -54,6 +58,7 @@ export const categories = sqliteTable(
     kind: text('kind', { enum: ['expense', 'income', 'both'] }).notNull(),
     parentId: text('parent_id'),
     names: text('names'),
+    version: integer('version').notNull().default(0),
   },
   (t) => [foreignKey({ columns: [t.parentId], foreignColumns: [t.id] })],
 );
@@ -81,6 +86,7 @@ export const merchantCategory = sqliteTable(
 export const tags = sqliteTable('tags', {
   id: text('id').primaryKey(),
   name: text('name').notNull().unique(),
+  version: integer('version').notNull().default(0),
 });
 
 export const bills = sqliteTable(
@@ -96,6 +102,7 @@ export const bills = sqliteTable(
     dueDate: text('due_date').notNull(),
     status: text('status', { enum: ['open', 'closed', 'paid'] }).notNull(),
     paymentTransactionId: text('payment_transaction_id').references((): AnySQLiteColumn => transactions.id),
+    version: integer('version').notNull().default(0),
   },
   (t) => [uniqueIndex('bills_card_month_year').on(t.creditCardId, t.month, t.year)],
 );
@@ -125,6 +132,7 @@ export const transactions = sqliteTable(
     merchantKey: text('merchant_key').references(() => merchants.key),
     note: text('note'),
     billId: text('bill_id').references(() => bills.id),
+    version: integer('version').notNull().default(0),
   },
   (t) => [
     index('idx_transactions_date').on(t.date),
@@ -162,16 +170,19 @@ export const recurringRules = sqliteTable('recurring_rules', {
     .references(() => currencies.code),
   accountId: text('account_id').references(() => accounts.id),
   categoryId: text('category_id').references(() => categories.id),
+  version: integer('version').notNull().default(0),
 });
 
 export const dashboards = sqliteTable('dashboards', {
   name: text('name').primaryKey(),
   html: text('html').notNull(),
   updatedAt: text('updated_at').notNull(),
+  version: integer('version').notNull().default(0),
 });
 
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
   locale: text('locale', { enum: Locale.options }).notNull().default(Locale.enum.en),
   localeSource: text('locale_source', { enum: LocaleSource.options }).notNull().default(LocaleSource.enum.default),
+  version: integer('version').notNull().default(0),
 });

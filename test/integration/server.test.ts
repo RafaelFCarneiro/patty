@@ -4,19 +4,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { LOOPBACK_HOST } from '../../src/common/net.js';
-import type { Deps } from '../../src/controllers/deps.js';
+import type { Deps, UnitOfWork } from '../../src/controllers/deps.js';
 import { startHttpSidecar, type HttpSidecar } from '../../src/server.js';
 import { buildApp } from './app-builder.js';
 
 let tmpDir: string;
 let deps: Deps;
 let version: string;
+let unitOfWork: UnitOfWork;
 
 beforeAll(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-sidecar-test-'));
   const ctx = await buildApp({ dbPath: join(tmpDir, 'test.db') });
   deps = ctx.deps;
   version = ctx.version;
+  unitOfWork = ctx.unitOfWork;
 });
 
 afterAll(() => {
@@ -39,7 +41,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
 
     const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    sidecar = await startHttpSidecar(deps, version, port);
+    sidecar = await startHttpSidecar(deps, version, unitOfWork, port);
 
     expect(sidecar.listening).toBe(false);
     const logged = stderr.mock.calls.flat().join(' ');
@@ -50,7 +52,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
   });
 
   it('comes up and serves /api routes when the port is free', async () => {
-    sidecar = await startHttpSidecar(deps, version, 0);
+    sidecar = await startHttpSidecar(deps, version, unitOfWork, 0);
     expect(sidecar.listening).toBe(true);
 
     const port = (sidecar.app.server.address() as AddressInfo).port;
@@ -60,7 +62,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
   });
 
   it('binds loopback-only, not the LAN-reachable wildcard address', async () => {
-    sidecar = await startHttpSidecar(deps, version, 0);
+    sidecar = await startHttpSidecar(deps, version, unitOfWork, 0);
     expect(sidecar.listening).toBe(true);
 
     const address = sidecar.app.server.address() as AddressInfo;
@@ -68,7 +70,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
   });
 
   it('drains cleanly on shutdown — the port is released', async () => {
-    sidecar = await startHttpSidecar(deps, version, 0);
+    sidecar = await startHttpSidecar(deps, version, unitOfWork, 0);
     expect(sidecar.listening).toBe(true);
     const port = (sidecar.app.server.address() as AddressInfo).port;
 

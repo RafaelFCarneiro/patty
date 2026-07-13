@@ -38,6 +38,16 @@ export const AccountSchema = z.object({
 });
 export type Account = z.infer<typeof AccountSchema>;
 
+// The persistence-side entity (ADR-021 / functional-core-imperative-shell.md): `Account` plus
+// the optimistic-concurrency `version` token. Never sent over the wire — kept off `AccountSchema`
+// itself so every existing account-returning flow (which reuses `AccountSchema` as its wire/out
+// shape) stays unchanged; only the unit-of-work applier and flows that build `Persistable`s speak
+// `AccountEntity`.
+export const AccountEntitySchema = AccountSchema.extend({
+  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
+});
+export type AccountEntity = z.infer<typeof AccountEntitySchema>;
+
 export const CreateAccountSchema = AccountSchema.omit({ id: true, typeLabel: true });
 export type CreateAccount = z.infer<typeof CreateAccountSchema>;
 
@@ -87,11 +97,13 @@ export const ImportAccountStatementItemSchema = CreateTransactionSchema.omit({
   rawInput: true,
   subCategory: true,
   tags: true,
-}).extend({
-  idempotencyKey: CreateTransactionSchema.shape.idempotencyKey
-    .optional()
-    .describe(STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION),
-}).strict();
+})
+  .extend({
+    idempotencyKey: CreateTransactionSchema.shape.idempotencyKey
+      .optional()
+      .describe(STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION),
+  })
+  .strict();
 export type ImportAccountStatementItem = z.infer<typeof ImportAccountStatementItemSchema>;
 
 /** Account statement import (ADR-017 step 2): single-source — every item is an expense or income
@@ -104,7 +116,9 @@ export const ImportAccountStatementSchema = z.object({
     .string()
     .min(1)
     .optional()
-    .describe('Account name — every item in this statement belongs to this one account; omit for unattached (e.g. cash) movements'),
+    .describe(
+      'Account name — every item in this statement belongs to this one account; omit for unattached (e.g. cash) movements',
+    ),
   items: z.array(ImportAccountStatementItemSchema).min(1).max(200).describe(STATEMENT_ITEMS_DESCRIPTION),
   rawInput: z.string().optional().describe(STATEMENT_RAW_INPUT_DESCRIPTION),
 });

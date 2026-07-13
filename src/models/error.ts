@@ -14,6 +14,13 @@ export type ValidationError = { code: 'validation'; issues: string[] };
 
 export const validation = (issues: string[]): ValidationError => ({ code: 'validation', issues });
 
+/** Generic optimistic-concurrency failure (ADR-021): the versioned unit of work exhausted its
+ *  retries because a concurrent write kept changing the entity's `version` out from under it.
+ *  Carries no business payload by design — the shell that raises it has zero knowledge of which
+ *  business process the retried flow represents. */
+export type Conflict = { code: 'conflict' };
+export const conflict: Conflict = { code: 'conflict' };
+
 export const notFound = <E extends string>(entity: E, query: string, candidates: string[]) =>
   ({ code: `unknown_${entity}` as const, query, candidates }) as NotFound<E>;
 

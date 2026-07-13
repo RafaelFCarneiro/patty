@@ -1,3 +1,6 @@
+import type { ResultAsync } from 'neverthrow';
+import type { AppError } from '../common/errors.js';
+import type { FlowOutcome } from '../models/persistable.js';
 import type { Locale } from '../models/locale.js';
 import type { AccountsRepo } from '../diplomat/db/repos/accounts.js';
 import type { BillsRepo } from '../diplomat/db/repos/bills.js';
@@ -31,3 +34,15 @@ export type Deps = {
   locale: () => Promise<Locale>;
   resetLocale: () => void;
 };
+
+/**
+ * The imperative shell's capability to run a functional-core flow (ADR-021 /
+ * docs/functional-core-imperative-shell.md): invoke `flow`, apply the `persist` batch it returns
+ * in one versioned unit of work, and yield the flow's `response`. Not a field on `Deps` — `Deps`
+ * is handed to controllers, and a `UnitOfWork` runner is a shell-only concern (only diplomat
+ * handlers call it, wrapping a controller invocation); keeping the two separate means a
+ * controller can never reach for it and apply its own writes. The concrete implementation
+ * (`withUnitOfWork`, bound to a `Db`) lives in `diplomat/db` — this is just the shape the shell's
+ * edges (`diplomat/mcp`, `diplomat/http`) depend on.
+ */
+export type UnitOfWork = <T>(flow: () => ResultAsync<FlowOutcome<T>, AppError>) => ResultAsync<T, AppError>;

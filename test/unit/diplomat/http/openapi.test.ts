@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { Deps } from '../../../../src/controllers/deps.js';
+import type { Deps, UnitOfWork } from '../../../../src/controllers/deps.js';
 import { buildOpenApiDocument, mountRoutes } from '../../../../src/diplomat/http/openapi.js';
 import { buildRouteDefinitions } from '../../../../src/diplomat/http/routes.js';
 
-// Route handlers are never invoked in this test — buildRouteDefinitions only needs `deps` to
-// close over it inside handler bodies (routes.ts still imports controllers at module load,
-// same as always; this stub just never calls them). The point being proved is that building
-// the array and the OpenAPI document from it requires no I/O and no live Fastify instance.
+// Route handlers are never invoked in this test — buildRouteDefinitions only needs `deps`/
+// `unitOfWork` to close over them inside handler bodies (routes.ts still imports controllers at
+// module load, same as always; these stubs just never get called). The point being proved is
+// that building the array and the OpenAPI document from it requires no I/O and no live Fastify
+// instance.
 const stubDeps = {} as unknown as Deps;
+const stubUnitOfWork = {} as unknown as UnitOfWork;
 
 const HTTP_METHODS = ['get', 'post', 'patch', 'delete'] as const;
 
@@ -15,7 +17,7 @@ const toOpenApiPath = (path: string) => path.replace(/:([A-Za-z]+)/g, '{$1}');
 
 describe('buildRouteDefinitions + buildOpenApiDocument + mountRoutes', () => {
   it('documents every route in the single shared definitions array (parity is now structural)', () => {
-    const definitions = buildRouteDefinitions(stubDeps, '0.0.0-test');
+    const definitions = buildRouteDefinitions(stubDeps, '0.0.0-test', stubUnitOfWork);
     expect(definitions.length).toBeGreaterThan(0);
 
     const doc = buildOpenApiDocument(definitions, '0.0.0-test');
@@ -30,13 +32,13 @@ describe('buildRouteDefinitions + buildOpenApiDocument + mountRoutes', () => {
   });
 
   it('has no duplicate method+path across the definitions array', () => {
-    const definitions = buildRouteDefinitions(stubDeps, '0.0.0-test');
+    const definitions = buildRouteDefinitions(stubDeps, '0.0.0-test', stubUnitOfWork);
     const keys = definitions.map((d) => `${d.method} ${d.path}`);
     expect(new Set(keys).size).toBe(keys.length);
   });
 
   it('mounts every definition on the Fastify instance via the matching HTTP verb', () => {
-    const definitions = buildRouteDefinitions(stubDeps, '0.0.0-test');
+    const definitions = buildRouteDefinitions(stubDeps, '0.0.0-test', stubUnitOfWork);
     const mounted: Array<{ method: string; path: string }> = [];
     const fakeApp = Object.fromEntries(
       HTTP_METHODS.map((method) => [method, (path: string) => mounted.push({ method, path })]),

@@ -77,6 +77,52 @@ export const getStatus = async (deps: Deps, version: string): Promise<StatusOut>
 }
 ```
 
+### Write-path controllers — return effects, don't perform them (ADR-021)
+
+**In progress — not every controller is converted yet.** `docs/functional-core-imperative-shell.md` is the
+canonical doc; read it before touching a write flow. The shape below is the target for the whole write path,
+proven so far on `createAccount` (`controllers/account/account.ts`) as the first mover. An unconverted flow
+still calls its `deps.<x>.create/update/...` write method exactly as documented above — don't convert a flow
+that isn't in scope for your change just because you're touching the file.
+
+A converted controller still composes with `safeTry`/`guard`/`okOr` exactly as before — only the last step
+changes: instead of `await`ing a repo write and returning the written row, it builds the write as a typed
+`Persistable` (`models/persistable.ts`) and returns it alongside the response, for the diplomat shell's
+`withUnitOfWork` (`diplomat/db/unitOfWork.ts`) to apply:
+
+```ts
+// ✅ DO — the core decides and returns the write as data; it never calls a repo write method
+export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
+  safeTry(async function* () {
+    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)
+    yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name))
+
+    const account: AccountEntity = { id: deps.newId(), version: 0, ...input }  // version: internal, never wire/out
+    const persist: Persistable[] = [{ op: 'insert', entity: EntityTag.enum.account, model: account }]
+    return ok({ persist, response: R.omit(account, ['version']) })
+  })
+
+// the diplomat handler (MCP tool / REST route) wraps the call — this is the shell applying the effect
+async (args) => fromResult(await unitOfWork(() => createAccount(deps, accountAdapters.createWireInToModel(args))))
+
+// ❌ DON'T — the core performing its own write (the pre-ADR-021 shape; fine for an unconverted flow, but
+// don't reintroduce it on a flow you're converting)
+export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Account, AppError> =>
+  safeTry(async function* () {
+    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected)
+    yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name))
+    return ok(await deps.accounts.create({ id: deps.newId(), ...input }))
+  })
+```
+
+- `Persistable`'s `model` carries the entity's `version` (the applier's optimistic-concurrency token); the
+  controller's `response` never does — strip it (`R.omit(entity, ['version'])`) so the wire contract is
+  unchanged.
+- Composition (a flow that orchestrates another controller) **merges** `persist` arrays — take the called
+  controller's `persist`, add your own, return the merged batch; don't apply either separately.
+- A converted controller's `deps` still exposes reads (`deps.<x>.list/find/...`) — the purity boundary is
+  writes, not all I/O. Only the write call moves from `await deps.<x>.create(...)` to `{ op: 'insert', ... }`.
+
 ## logic/ — pure and declarative
 
 - No I/O, no `Date.now()`/`new Date()` (clock comes from deps), no imports from `controllers/` or `diplomat/`.
