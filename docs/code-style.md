@@ -98,7 +98,7 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
     yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name))
 
     const account: AccountEntity = { id: deps.newId(), version: 0, ...input }  // version: internal, never wire/out
-    const persist: Persistable[] = [{ op: 'insert', entity: EntityTag.enum.account, model: account }]
+    const persist: Persistable[] = [{ op: PersistOp.enum.insert, entity: EntityTag.enum.account, model: account }]
     return ok({ persist, response: R.omit(account, ['version']) })
   })
 
@@ -121,7 +121,13 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
 - Composition (a flow that orchestrates another controller) **merges** `persist` arrays — take the called
   controller's `persist`, add your own, return the merged batch; don't apply either separately.
 - A converted controller's `deps` still exposes reads (`deps.<x>.list/find/...`) — the purity boundary is
-  writes, not all I/O. Only the write call moves from `await deps.<x>.create(...)` to `{ op: 'insert', ... }`.
+  writes, not all I/O. Only the write call moves from `await deps.<x>.create(...)` to
+  `{ op: PersistOp.enum.insert, ... }`.
+- The write intent (`op`) is a named enum (`PersistOp`), not a bare `'insert'`/`'update'`/`'delete'` string —
+  same "constants over literals" rule as `EntityTag`. The shell computes a new `version` (e.g. on an `update`)
+  from the value the core's model already carries (`model.version + 1`, in application code) — never as an
+  opaque `version + 1` SQL expression left for the database engine to evaluate; the database never owns
+  version bookkeeping on its own.
 
 ## logic/ — pure and declarative
 

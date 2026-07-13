@@ -12,7 +12,7 @@ import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { withUnitOfWork } from '../../../src/diplomat/db/unitOfWork.js';
 import { AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { EntityTag, type Persistable } from '../../../src/models/persistable.js';
+import { EntityTag, PersistOp, type Persistable } from '../../../src/models/persistable.js';
 
 const TEST_KEY = 'e'.repeat(64);
 // Matches withUnitOfWork's private MAX_UNIT_OF_WORK_ATTEMPTS (diplomat/db/unitOfWork.ts) — not
@@ -48,7 +48,7 @@ const newAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
 });
 
 const insertOne = (model: AccountEntity) => () =>
-  okAsync({ persist: [{ op: 'insert' as const, entity: EntityTag.enum.account, model }], response: model });
+  okAsync({ persist: [{ op: PersistOp.enum.insert, entity: EntityTag.enum.account, model }], response: model });
 
 const readVersion = async (id: string): Promise<number | undefined> => {
   const [row] = await db.all<{ version: number }>(sql`SELECT version FROM accounts WHERE id = ${id}`);
@@ -64,11 +64,11 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
     const sibling = newAccount();
     const staleUpdate: Persistable = {
-      op: 'update',
+      op: PersistOp.enum.update,
       entity: EntityTag.enum.account,
       model: { ...seed, name: 'renamed', version: seed.version + 41 }, // never matches
     };
-    const insertSibling: Persistable = { op: 'insert', entity: EntityTag.enum.account, model: sibling };
+    const insertSibling: Persistable = { op: PersistOp.enum.insert, entity: EntityTag.enum.account, model: sibling };
 
     const result = await withUnitOfWork(db, () => okAsync({ persist: [insertSibling, staleUpdate], response: null }));
 
@@ -89,7 +89,10 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
       // version); every subsequent call uses the real version, as a fresh read would.
       const version = calls === 1 ? seed.version + 1 : seed.version;
       const model: AccountEntity = { ...seed, name: 'Renamed', version };
-      return okAsync({ persist: [{ op: 'update' as const, entity: EntityTag.enum.account, model }], response: calls });
+      return okAsync({
+        persist: [{ op: PersistOp.enum.update, entity: EntityTag.enum.account, model }],
+        response: calls,
+      });
     };
 
     const result = await withUnitOfWork(db, flow);
@@ -107,7 +110,10 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
     const flow = () => {
       calls += 1;
       const model: AccountEntity = { ...seed, name: 'Renamed', version: seed.version + 999 };
-      return okAsync({ persist: [{ op: 'update' as const, entity: EntityTag.enum.account, model }], response: null });
+      return okAsync({
+        persist: [{ op: PersistOp.enum.update, entity: EntityTag.enum.account, model }],
+        response: null,
+      });
     };
 
     const result = await withUnitOfWork(db, flow);
@@ -124,7 +130,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
     const result = await withUnitOfWork(db, () =>
       okAsync({
-        persist: [{ op: 'delete' as const, entity: EntityTag.enum.account, id: seed.id, version: seed.version }],
+        persist: [{ op: PersistOp.enum.delete, entity: EntityTag.enum.account, id: seed.id, version: seed.version }],
         response: null,
       }),
     );
@@ -139,7 +145,9 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
     const result = await withUnitOfWork(db, () =>
       okAsync({
-        persist: [{ op: 'delete' as const, entity: EntityTag.enum.account, id: seed.id, version: seed.version + 1 }],
+        persist: [
+          { op: PersistOp.enum.delete, entity: EntityTag.enum.account, id: seed.id, version: seed.version + 1 },
+        ],
         response: null,
       }),
     );
@@ -154,8 +162,8 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
     const result = await withUnitOfWork(db, () =>
       okAsync({
         persist: [
-          { op: 'insert' as const, entity: EntityTag.enum.account, model },
-          { op: 'insert' as const, entity: EntityTag.enum.account, model },
+          { op: PersistOp.enum.insert, entity: EntityTag.enum.account, model },
+          { op: PersistOp.enum.insert, entity: EntityTag.enum.account, model },
         ],
         response: null,
       }),

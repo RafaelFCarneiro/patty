@@ -71,11 +71,14 @@ database, a different transport) without the domain noticing.
 
 4. **Concurrency rides on the model as `version`.** Every mutable entity carries a `version`. An `update`
    persistable carries the version the core read; the shell applies it as
-   `UPDATE … SET …, version = version + 1 WHERE id = ? AND version = ?`. A `rowsAffected === 0` is a stale
-   read → the shell rolls back the whole unit of work and **re-runs the core** (fresh reads, fresh decision),
-   bounded, then surfaces a generic `conflict` error. Optimistic concurrency, expressed as one ordinary field
-   the core returns and enforced **generically by the shell** — no CAS predicates, and **zero business
-   knowledge in the repo**.
+   `UPDATE … SET …, version = <read version + 1> WHERE id = ? AND version = ?` — the new version is computed
+   in application code from the persistable's own `version` field (`model.version + 1`), never as an opaque
+   `version + 1` expression left for the database engine to evaluate; the database never owns version
+   bookkeeping on its own, it only ever writes the exact value the shell hands it. A `rowsAffected === 0` is a
+   stale read → the shell rolls back the whole unit of work and **re-runs the core** (fresh reads, fresh
+   decision), bounded, then surfaces a generic `conflict` error. Optimistic concurrency, expressed as one
+   ordinary field the core returns and enforced **generically by the shell** — no CAS predicates, and **zero
+   business knowledge in the repo**.
 
 5. **Composition is concatenation.** When a flow orchestrates other controllers, it calls them, takes their
    `persist` batches, and **merges** them with its own; the merged batch applies atomically in one unit of work.

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createAccount } from '../../../../src/controllers/account/account.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
-import { EntityTag } from '../../../../src/models/persistable.js';
+import { EntityTag, PersistOp } from '../../../../src/models/persistable.js';
 import { AccountType, type Account } from '../../../../src/models/account.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
 import { Locale } from '../../../../src/models/locale.js';
@@ -51,7 +51,7 @@ describe('createAccount — functional core (ADR-021 phase 1)', () => {
 
     expect(outcome.persist).toEqual([
       {
-        op: 'insert',
+        op: PersistOp.enum.insert,
         entity: EntityTag.enum.account,
         model: {
           id: 'account-id-1',

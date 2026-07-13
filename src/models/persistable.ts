@@ -7,6 +7,11 @@ import type { AccountEntity } from './account.js';
 export const EntityTag = z.enum(['account']);
 export type EntityTag = z.infer<typeof EntityTag>;
 
+/** The write intent a `Persistable` carries — named so call sites construct one via `.enum.*`,
+ *  never a bare `'insert'`/`'update'`/`'delete'` string (constants over literals). */
+export const PersistOp = z.enum(['insert', 'update', 'delete']);
+export type PersistOp = z.infer<typeof PersistOp>;
+
 /**
  * A write intent the functional core hands to the imperative shell (docs/functional-core-imperative-shell.md).
  * Entity-tagged and typed against the project's own models — never a stringly god-changeset. `insert`
@@ -15,9 +20,9 @@ export type EntityTag = z.infer<typeof EntityTag>;
  * `delete` carries just the id + the version read, for the same versioned guard.
  */
 export type Persistable =
-  | { op: 'insert'; entity: typeof EntityTag.enum.account; model: AccountEntity }
-  | { op: 'update'; entity: typeof EntityTag.enum.account; model: AccountEntity }
-  | { op: 'delete'; entity: typeof EntityTag.enum.account; id: string; version: number };
+  | { op: typeof PersistOp.enum.insert; entity: typeof EntityTag.enum.account; model: AccountEntity }
+  | { op: typeof PersistOp.enum.update; entity: typeof EntityTag.enum.account; model: AccountEntity }
+  | { op: typeof PersistOp.enum.delete; entity: typeof EntityTag.enum.account; id: string; version: number };
 
 /** What a functional-core flow returns instead of performing its writes: the write batch plus the
  *  response the caller gets back once the shell has applied it. */

@@ -102,10 +102,11 @@ data instead of performing it; the diplomat shell **applies** it.
 - **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
   converted flow): `withUnitOfWork(db, flow)` invokes `flow`, applies the returned `persist` batch in one
   `db.transaction` via the entity's `modelToDb` adapter (insert honors `onConflictDoNothing`; `update`/`delete`
-  apply `... SET ..., version = version + 1 WHERE id = ? AND version = ?`), and returns `flow`'s `response`. A
-  version-guarded op that affects zero rows rolls back the whole batch and re-invokes `flow` — a fresh read, a
-  fresh decision — up to a bounded number of attempts, then surfaces the generic `conflict` `AppError`
-  (`models/error.ts`; no business payload by design).
+  apply `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?`, with the new version computed
+  in application code from `model.version` — never an opaque `version + 1` SQL expression the database
+  evaluates on its own), and returns `flow`'s `response`. A version-guarded op that affects zero rows rolls
+  back the whole batch and re-invokes `flow` — a fresh read, a fresh decision — up to a bounded number of
+  attempts, then surfaces the generic `conflict` `AppError` (`models/error.ts`; no business payload by design).
 - **Wiring**: `controllers/deps.ts` exports the `UnitOfWork` function type (`(flow) => ResultAsync<T, AppError>`)
   — the shape the shell's edges depend on — but it is **not** a field on `Deps`; `Deps` is handed to
   controllers, and a `UnitOfWork` runner is shell-only (only `diplomat/mcp`/`diplomat/http` handlers call it,

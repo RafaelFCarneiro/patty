@@ -23,7 +23,7 @@ import type {
   CreateAccount,
   UpdateAccount,
 } from '../../models/account.js';
-import { EntityTag, type FlowOutcome, type Persistable } from '../../models/persistable.js';
+import { EntityTag, PersistOp, type FlowOutcome, type Persistable } from '../../models/persistable.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 
@@ -47,7 +47,7 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
     yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name));
 
     const account: AccountEntity = { id: deps.newId(), version: 0, ...input };
-    const persist: Persistable[] = [{ op: 'insert', entity: EntityTag.enum.account, model: account }];
+    const persist: Persistable[] = [{ op: PersistOp.enum.insert, entity: EntityTag.enum.account, model: account }];
     return ok({ persist, response: R.omit(account, ['version']) });
   });
 

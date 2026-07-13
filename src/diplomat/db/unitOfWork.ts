@@ -1,8 +1,8 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import type { AppError } from '../../common/errors.js';
 import { conflict } from '../../models/error.js';
-import { EntityTag, type Persistable } from '../../models/persistable.js';
+import { EntityTag, PersistOp, type Persistable } from '../../models/persistable.js';
 import * as accountAdapters from '../../adapters/accounts.js';
 import type { Db } from './driver.js';
 import { accounts } from './schema.js';
@@ -19,7 +19,7 @@ type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
  *  the whole batch rolls back; caught by `applyBatch`, never leaks past this file. */
 class VersionConflict extends Error {}
 
-const applyInsert = async (tx: Tx, p: Extract<Persistable, { op: 'insert' }>): Promise<void> => {
+const applyInsert = async (tx: Tx, p: Extract<Persistable, { op: typeof PersistOp.enum.insert }>): Promise<void> => {
   switch (p.entity) {
     case EntityTag.enum.account:
       // onConflictDoNothing: a PK collision (e.g. a retried insert after an apply that actually
@@ -33,16 +33,19 @@ const applyInsert = async (tx: Tx, p: Extract<Persistable, { op: 'insert' }>): P
   }
 };
 
-const applyUpdate = async (tx: Tx, p: Extract<Persistable, { op: 'update' }>): Promise<void> => {
+const applyUpdate = async (tx: Tx, p: Extract<Persistable, { op: typeof PersistOp.enum.update }>): Promise<void> => {
   switch (p.entity) {
     case EntityTag.enum.account: {
-      // Destructure off `id`/`version` rather than the WHERE-clause values themselves: drizzle's
+      // Drop `id`/`version` from the row and key off `p.model` directly instead: drizzle's
       // insert-row type marks a `.default(...)` column optional, but `p.model` (an `AccountEntity`)
-      // guarantees both are present, so comparisons key off the model directly.
-      const { id: _id, version: _version, ...values } = accountAdapters.modelToDb(p.model);
+      // guarantees both are present. The new version is computed here, in application code, from
+      // the version the core read (`p.model.version`) — never as an opaque `version + 1` expression
+      // left for the database engine to evaluate; the shell only ever writes a value the model
+      // handed it.
+      const { id: _id, version: _readVersion, ...values } = accountAdapters.modelToDb(p.model);
       const result = await tx
         .update(accounts)
-        .set({ ...values, version: sql`${accounts.version} + 1` })
+        .set({ ...values, version: p.model.version + 1 })
         .where(and(eq(accounts.id, p.model.id), eq(accounts.version, p.model.version)));
       if ((result.rowsAffected ?? 0) === 0) throw new VersionConflict();
       return;
@@ -54,7 +57,7 @@ const applyUpdate = async (tx: Tx, p: Extract<Persistable, { op: 'update' }>): P
   }
 };
 
-const applyDelete = async (tx: Tx, p: Extract<Persistable, { op: 'delete' }>): Promise<void> => {
+const applyDelete = async (tx: Tx, p: Extract<Persistable, { op: typeof PersistOp.enum.delete }>): Promise<void> => {
   switch (p.entity) {
     case EntityTag.enum.account: {
       const result = await tx.delete(accounts).where(and(eq(accounts.id, p.id), eq(accounts.version, p.version)));
@@ -70,11 +73,11 @@ const applyDelete = async (tx: Tx, p: Extract<Persistable, { op: 'delete' }>): P
 
 const applyPersistable = (tx: Tx, p: Persistable): Promise<void> => {
   switch (p.op) {
-    case 'insert':
+    case PersistOp.enum.insert:
       return applyInsert(tx, p);
-    case 'update':
+    case PersistOp.enum.update:
       return applyUpdate(tx, p);
-    case 'delete':
+    case PersistOp.enum.delete:
       return applyDelete(tx, p);
     default: {
       const _exhaustive: never = p;
