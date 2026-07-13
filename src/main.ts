@@ -7,8 +7,8 @@ import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps, UnitOfWork } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
 import { openDatabase } from './diplomat/db/driver.js';
-import { withUnitOfWork } from './diplomat/db/unitOfWork.js';
-import { accountsRepo } from './diplomat/db/repos/accounts.js';
+import { withUnitOfWork, type ApplierRegistry } from './diplomat/db/unitOfWork.js';
+import { accountApplier, accountsRepo } from './diplomat/db/repos/accounts.js';
 import { billsRepo } from './diplomat/db/repos/bills.js';
 import { categoriesRepo } from './diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js';
@@ -22,6 +22,7 @@ import { transactionsRepo } from './diplomat/db/repos/transactions.js';
 import { healthRepo } from './diplomat/db/repos/health.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { Locale } from './models/locale.js';
+import { ACCOUNT_ENTITY_TAG } from './models/account.js';
 import type { HttpSidecar } from './server.js';
 
 const require = createRequire(import.meta.url);
@@ -93,7 +94,10 @@ const main = async (): Promise<void> => {
     resetLocale,
   };
 
-  const runUnitOfWork: UnitOfWork = (flow) => withUnitOfWork(db, flow);
+  // Every converted entity's applier, keyed by its own tag (ADR-021) — assembled once here, the
+  // composition root, so `diplomat/db/unitOfWork.ts` itself never names a specific entity.
+  const applierRegistry: ApplierRegistry = { [ACCOUNT_ENTITY_TAG]: accountApplier };
+  const runUnitOfWork: UnitOfWork = (flow) => withUnitOfWork(db, applierRegistry, flow);
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
     const server = await connectStdio(deps, version, runUnitOfWork);

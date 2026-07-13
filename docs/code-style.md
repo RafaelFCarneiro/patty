@@ -98,7 +98,7 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
     yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name))
 
     const account: Account = { id: deps.newId(), ...input }  // no version — a new row's is the shell's constant
-    const persist: Persistable[] = [persistence.insert({ entity: EntityTag.enum.account, model: account })]
+    const persist: Persistable[] = [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: account })]
     return ok({ persist, response: account })
   })
 
@@ -117,21 +117,34 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
 
 - Build the `Persistable` via `logic/persistence.ts`'s `insert`/`update`/`remove` — one place every converted
   controller constructs the tagged shape from, instead of hand-writing an `{ op, entity, model }` literal at
-  each call site. The write intent (`op`) these set is a named enum (`PersistOp`), not a bare
-  `'insert'`/`'update'`/`'delete'` string — same "constants over literals" rule as `EntityTag`.
+  each call site. These builders are generic over the entity's tag/model (not hardcoded to any one entity), so
+  they never need a new case as more flows convert. The write intent (`op`) they set is a named enum
+  (`PersistOp`), not a bare `'insert'`/`'update'`/`'delete'` string — "constants over literals" applies to the
+  op the same as any other domain value.
+- **The entity tag is owned by the entity's own model file, not by `models/persistable.ts`.** `Persistable` is
+  generic (`Persistable<Tag, Model>`) — it never imports or lists a specific entity. `models/account.ts` owns
+  `ACCOUNT_ENTITY_TAG = 'account'`; a category flow would add `CATEGORY_ENTITY_TAG` to `models/category.ts`,
+  never touching `persistable.ts`. This is the same "constants over literals" instinct pointed at the shared
+  scaffolding itself: a god enum every entity has to be registered in is its own kind of magic-value coupling.
 - An `insert` `Persistable`'s model is the plain, wire-shaped domain model (`Account`) — **no `version`**. A
-  brand-new row's version is always the same structural constant (`INITIAL_VERSION`, `diplomat/db/
-  unitOfWork.ts`); that's not a decision the core makes, so it never appears in what the core builds or
-  returns. The response is that same model — nothing to strip. `update`/`delete` are different: `version` is
-  the value the core actually read, so it's real data the model carries (`AccountEntity` — `Account` +
-  `version`). The shell computes the *persisted* version from it (`model.version + 1`, in application code) —
-  never as an opaque `version + 1` SQL expression left for the database engine to evaluate; the database never
-  owns version bookkeeping on its own.
+  brand-new row's version is always the same structural constant (`INITIAL_VERSION`, exported from
+  `diplomat/db/unitOfWork.ts`); that's not a decision the core makes, so it never appears in what the core
+  builds or returns. The response is that same model — nothing to strip. `update`/`delete` are different:
+  `version` is the value the core actually read, so it's real data the model carries (`AccountEntity` —
+  `Account` + `version`). The shell computes the *persisted* version from it (`model.version + 1`, in
+  application code) — never as an opaque `version + 1` SQL expression left for the database engine to
+  evaluate; the database never owns version bookkeeping on its own.
+- **The shell's generic engine (`diplomat/db/unitOfWork.ts`) never names a specific entity either.** It
+  dispatches each `Persistable` to `registry[p.entity]` — an `EntityApplier` (the `modelToDb` adaptation +
+  drizzle table op) that lives beside that entity's other persistence code (e.g. `diplomat/db/repos/
+  accounts.ts`'s `accountApplier`), not inside the engine. The `ApplierRegistry` is assembled once at the
+  composition root (`main.ts`); `withUnitOfWork` itself only ever calls generic `applier.insert/update/delete`
+  — never an `if (entity === 'account')`.
 - Composition (a flow that orchestrates another controller) **merges** `persist` arrays — take the called
   controller's `persist`, add your own, return the merged batch; don't apply either separately.
 - A converted controller's `deps` still exposes reads (`deps.<x>.list/find/...`) — the purity boundary is
   writes, not all I/O. Only the write call moves from `await deps.<x>.create(...)` to
-  `persistence.insert({ entity: EntityTag.enum.account, model: account })`.
+  `persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: account })`.
 
 ## logic/ — pure and declarative
 

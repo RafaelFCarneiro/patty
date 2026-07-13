@@ -139,9 +139,13 @@ gets its own generic atomicity/conflict/idempotency suite.
 3. [x] Do NOT merge `feat/atomic-bill-payment` (ADR-018) — it is superseded by this decision (PR #111 closed).
 4. [ ] Implement phases 1–3 (groundwork → transaction/bill flows → remaining), behavior-preserving where the
    surface allows, coverage moved to core-level effect assertions + the generic UoW suite.
-   - [x] Phase 1 (groundwork): `version` migration on all mutable entity tables; `EntityTag`/`Persistable`
-     (`models/persistable.ts`); the generic versioned applier + `withUnitOfWork` (`diplomat/db/unitOfWork.ts`),
-     with its own atomicity/conflict/retry/idempotent-insert suite; `createAccount` converted end to end
+   - [x] Phase 1 (groundwork): `version` migration on all mutable entity tables; `Persistable`/`PersistOp`
+     (`models/persistable.ts`) — generic over the entity's own tag/model, not a closed union, so the shared
+     file never lists an entity itself; each entity owns its own tag constant on its own model file (e.g.
+     `models/account.ts`'s `ACCOUNT_ENTITY_TAG`); the generic versioned applier + `withUnitOfWork`
+     (`diplomat/db/unitOfWork.ts`) dispatches via an `ApplierRegistry` (entity tag → `EntityApplier`) assembled
+     once at the composition root, so the engine itself never names a specific entity either — with its own
+     atomicity/conflict/retry/idempotent-insert/agnostic-dispatch suite; `createAccount` converted end to end
      (MCP + REST) as the first mover — proves the shape.
    - [ ] Phase 2 (transaction + bill flows): convert `add_*`/`update_*`/`delete_*`, `payBill`/
      `revertBillPayment`; delete `bills.pay`/`ensureAndAttach`/self-heal and their atomicity tests.

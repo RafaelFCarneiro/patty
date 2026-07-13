@@ -48,6 +48,12 @@ export const AccountEntitySchema = AccountSchema.extend({
 });
 export type AccountEntity = z.infer<typeof AccountEntitySchema>;
 
+// The account aggregate owns its own entity tag (ADR-021) — `models/persistable.ts` is generic
+// over any entity's tag/model and never lists this constant itself, so adding a new converted
+// aggregate never means editing that shared file. `logic/persistence.ts`'s `Persistable` builders
+// and `diplomat/db/repos/accounts.ts`'s `accountApplier` both key off this same constant.
+export const ACCOUNT_ENTITY_TAG = 'account';
+
 export const CreateAccountSchema = AccountSchema.omit({ id: true, typeLabel: true });
 export type CreateAccount = z.infer<typeof CreateAccountSchema>;
 

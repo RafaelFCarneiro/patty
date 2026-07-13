@@ -55,20 +55,28 @@ database, a different transport) without the domain noticing.
    What leaves the core is the **write intent**, as `Persistable[]`. `deps` therefore exposes **queries and
    pure helpers** (`newId`, `clock`, `locale`) — never write methods.
 
-3. **A `Persistable` is a tagged domain model, not an operation script.** It is a discriminated union over the
-   entity, carrying a domain model and an intent:
+3. **A `Persistable` is a tagged domain model, not an operation script — and the tagging scaffolding is itself
+   entity-agnostic.** It is a discriminated union over the entity, carrying a domain model and an intent:
 
    ```ts
-   type Persistable =
-     | { op: 'insert'; entity: EntityTag; model: <DomainModel> }   // full new entity (id minted by the core)
-     | { op: 'update'; entity: EntityTag; model: <DomainModel> }   // full desired end-state; model carries `version`
-     | { op: 'delete'; entity: EntityTag; id: string; version: number }
+   type Persistable<Tag extends string = string, Model = unknown> =
+     | { op: 'insert'; entity: Tag; model: Model }                       // full new entity (id minted by the core)
+     | { op: 'update'; entity: Tag; model: Model & { version: number } } // full desired end-state; model carries `version`
+     | { op: 'delete'; entity: Tag; id: string; version: number }
    ```
 
-   The core speaks in **models** (its own vocabulary); the shell runs each through the existing `modelToDb`
-   adapter and the matching table op. `EntityTag` and the write intent itself (`PersistOp`: `insert`/`update`/
-   `delete`) are both named enums (constants over literals) so the dispatch is exhaustively typed — never a
-   stringly god-changeset.
+   `Persistable` is generic, never a closed union enumerating every entity — the shared type never imports a
+   specific entity's model. Each entity owns its own tag as a plain constant on its own model file (e.g.
+   `ACCOUNT_ENTITY_TAG`), so converting a new flow never means editing the shared `Persistable`/`PersistOp`
+   file. The write intent itself (`PersistOp`: `insert`/`update`/`delete`) is a named enum (constants over
+   literals), shared across every entity since the three operations themselves are truly generic.
+
+   The core speaks in **models** (its own vocabulary); the shell dispatches each `Persistable` to the entity's
+   own applier — an object (built once, beside that entity's other persistence code) exposing generic
+   `insert`/`update`/`delete` methods that do the `modelToDb` adaptation and the matching table op. The shell's
+   generic engine (`withUnitOfWork`) never names a specific entity: it looks the applier up in a registry keyed
+   by `entity`, assembled once at the composition root from every converted entity's own applier. Adding a new
+   converted entity means adding its applier to that registry — never a new `case` inside the engine itself.
 
 4. **Concurrency rides on the model as `version`.** Every mutable entity carries a `version`. An `update`
    persistable carries the version the core read; the shell applies it as

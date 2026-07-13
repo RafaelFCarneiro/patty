@@ -1,30 +1,26 @@
 import { PersistOp, type Persistable } from '../models/persistable.js';
 
-type InsertPersistable = Extract<Persistable, { op: typeof PersistOp.enum.insert }>;
-type UpdatePersistable = Extract<Persistable, { op: typeof PersistOp.enum.update }>;
-type DeletePersistable = Extract<Persistable, { op: typeof PersistOp.enum.delete }>;
-
 /**
  * Builders for each `Persistable` write intent (ADR-021 / docs/functional-core-imperative-shell.md) — one
  * place every converted controller constructs the same tagged shape from, instead of hand-writing an
- * `{ op, entity, model }` object literal at each call site. Pure (no I/O); reused across every domain.
- *
- * NOTE for later phases: `Omit<X, 'op'>` below relies on `EntityTag`/`Persistable` currently having exactly
- * one member per op. `Omit` does not distribute correctly over a union, so once a second entity is added,
- * these signatures need revisiting (e.g. per-entity overloads) rather than assuming they still narrow
- * `entity`/`model` together.
+ * `{ op, entity, model }` object literal at each call site. Generic over the entity's own tag + model (each
+ * entity module owns those — e.g. `models/account.ts`'s `ACCOUNT_ENTITY_TAG`) — this file is agnostic of any
+ * specific entity and never needs a new case as more entities are converted. Pure (no I/O).
  */
-export const insert = (fields: Omit<InsertPersistable, 'op'>): Persistable => ({
+export const insert = <Tag extends string, Model>(fields: { entity: Tag; model: Model }): Persistable<Tag, Model> => ({
   op: PersistOp.enum.insert,
   ...fields,
 });
 
-export const update = (fields: Omit<UpdatePersistable, 'op'>): Persistable => ({
+export const update = <Tag extends string, Model extends { version: number }>(fields: {
+  entity: Tag;
+  model: Model;
+}): Persistable<Tag, Model> => ({
   op: PersistOp.enum.update,
   ...fields,
 });
 
-export const remove = (fields: Omit<DeletePersistable, 'op'>): Persistable => ({
+export const remove = <Tag extends string>(fields: { entity: Tag; id: string; version: number }): Persistable<Tag> => ({
   op: PersistOp.enum.delete,
   ...fields,
 });

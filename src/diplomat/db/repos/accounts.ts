@@ -1,12 +1,13 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import * as accountAdapters from '../../../adapters/accounts.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
-import type { Account, AccountReferences, AccountType } from '../../../models/account.js';
+import type { Account, AccountEntity, AccountReferences, AccountType } from '../../../models/account.js';
 import type { CurrencyCode } from '../../../models/money.js';
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
 import { BalancePartsRow } from '../../../wire/db/accounts.js';
 import type { Db } from '../driver.js';
 import { accounts, creditCards, recurringRules, transactions } from '../schema.js';
+import { INITIAL_VERSION, type EntityApplier } from '../unitOfWork.js';
 
 export type AccountPatch = {
   name?: string;
@@ -132,3 +133,42 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
     return accountAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('accounts', 'update')));
   },
 });
+
+/**
+ * The account entity's `EntityApplier` (ADR-021) — how the generic `withUnitOfWork` (`diplomat/db/
+ * unitOfWork.ts`) applies an account `Persistable` without that file ever naming "account" itself.
+ * Registered under `models/account.ts`'s `ACCOUNT_ENTITY_TAG` at the composition root (`main.ts`).
+ * Needs no `db` (every method runs against the `tx` the shell hands it), so it's a plain constant,
+ * not a factory.
+ */
+export const accountApplier: EntityApplier = {
+  insert: async (tx, model) => {
+    // `model` carries no `version` (models/persistable.ts's insert Persistable is the plain
+    // `Account`) — every new row starts at the same structural constant, supplied here.
+    const account = model as Account;
+    await tx
+      .insert(accounts)
+      .values(accountAdapters.modelToDb({ ...account, version: INITIAL_VERSION }))
+      .onConflictDoNothing();
+  },
+
+  update: async (tx, model) => {
+    // Drop `id`/`version` from the row and key off `entity` directly instead: drizzle's insert-row
+    // type marks a `.default(...)` column optional, but `entity` (an `AccountEntity`) guarantees
+    // both are present. The new version is computed here, in application code, from the version
+    // the core read (`entity.version`) — never an opaque `version + 1` SQL expression left for the
+    // database engine to evaluate.
+    const entity = model as AccountEntity;
+    const { id: _id, version: _readVersion, ...values } = accountAdapters.modelToDb(entity);
+    const result = await tx
+      .update(accounts)
+      .set({ ...values, version: entity.version + 1 })
+      .where(and(eq(accounts.id, entity.id), eq(accounts.version, entity.version)));
+    return (result.rowsAffected ?? 0) > 0;
+  },
+
+  delete: async (tx, id, version) => {
+    const result = await tx.delete(accounts).where(and(eq(accounts.id, id), eq(accounts.version, version)));
+    return (result.rowsAffected ?? 0) > 0;
+  },
+};

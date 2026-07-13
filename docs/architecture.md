@@ -87,40 +87,54 @@ elsewhere in this doc.** The target shape, adopted for the whole write path and 
 phases 2–3, is `docs/functional-core-imperative-shell.md`: a controller **decides** and returns the write as
 data instead of performing it; the diplomat shell **applies** it.
 
-- **`Persistable` / `EntityTag` / `PersistOp`** (`src/models/persistable.ts`): a discriminated union over a
-  named `EntityTag` enum (`account` so far — grows one member per converted flow) and a named `PersistOp`
-  enum (`insert`/`update`/`delete` — constants over literals, same as `EntityTag`), wrapping a domain model +
-  intent — `{ op: 'insert', entity, model: Account }` / `{ op: 'update', entity, model: AccountEntity }` /
-  `{ op: 'delete', entity, id, version }`. A converted controller returns
+- **`Persistable` / `PersistOp`** (`src/models/persistable.ts`): **entity-agnostic.** `Persistable<Tag extends
+  string = string, Model = unknown>` is generic over the entity's own tag + model rather than a closed union
+  enumerating every entity — this file never imports a specific entity's model, and never needs editing as
+  more flows are converted. `PersistOp` is a named enum (`insert`/`update`/`delete` — constants over literals)
+  shared across every entity. Each entity module owns its own tag: `models/account.ts`'s
+  `ACCOUNT_ENTITY_TAG = 'account'`. A converted controller returns
   `ResultAsync<{ persist: Persistable[]; response: T }, AppError>` instead of `ResultAsync<T, AppError>` —
   composed with `safeTry` exactly as before, it just stops calling `deps.<x>.create` and instead builds a
-  `Persistable` from the model it already holds, via the builders in `logic/persistence.ts`
-  (`insert`/`update`/`remove` — one place every converted controller constructs the tagged shape from,
-  instead of hand-writing the object literal at each call site).
+  `Persistable` from the model it already holds, via the generic builders in `logic/persistence.ts`
+  (`insert`/`update`/`remove` — also entity-agnostic; one place every converted controller constructs the
+  tagged shape from, and, being generic over `Tag`/`Model`, never needs a new case as more entities convert).
 - **`version`**: every mutable entity table carries `version INTEGER NOT NULL DEFAULT 0` (see § Relational
   schema) — an optimistic-concurrency token, internal to the persistence side only, never exposed on the
   entity's public model/wire shape (`Account`/`AccountSchema`). It is **not** part of an `insert`
   `Persistable`'s model either: a brand-new row's version is always the same structural constant
-  (`INITIAL_VERSION` in `diplomat/db/unitOfWork.ts`) — nothing the core decides, so the core never states it,
-  and the shell supplies it once, right where it shapes the insert row. Only `update`/`delete` carry a real,
-  varying `version` (the value the core read), via the persistence-side type (`AccountEntity`/
-  `AccountEntitySchema` in `models/account.ts`, `Account` + `version`). Because an insert's model is already
-  the plain `Account`, a converted create flow's response is that same model — no stripping needed.
+  (`INITIAL_VERSION`, exported from `diplomat/db/unitOfWork.ts`) — nothing the core decides, so the core never
+  states it, and the entity's own applier (below) supplies it once, right where it shapes the insert row.
+  Only `update`/`delete` carry a real, varying `version` (the value the core read), via the persistence-side
+  type (`AccountEntity`/`AccountEntitySchema` in `models/account.ts`, `Account` + `version`). Because an
+  insert's model is already the plain `Account`, a converted create flow's response is that same model — no
+  stripping needed.
+- **`EntityApplier` / `ApplierRegistry`** (`src/diplomat/db/unitOfWork.ts`): **also entity-agnostic** — the
+  generic engine dispatches a `Persistable` to `registry[p.entity]` and calls that applier's
+  `insert`/`update`/`delete`; it never names a specific entity, never imports a specific entity's `modelToDb`
+  adapter or drizzle table, and — critically — never needs a new `case` as more entities convert. Each
+  entity's own `EntityApplier` (the actual `modelToDb` adaptation + drizzle table op — e.g. `diplomat/db/
+  repos/accounts.ts`'s `accountApplier`) lives beside that entity's other persistence code, not inside the
+  generic engine. The `ApplierRegistry` (`Record<string, EntityApplier>`) is assembled once, at the
+  composition root (`main.ts`, `test/integration/app-builder.ts`), from each entity's applier keyed by its own
+  tag constant, and bound into the `UnitOfWork` closure alongside `Db` — so every `diplomat/mcp`/`diplomat/http`
+  handler keeps calling `unitOfWork(flow)` exactly as before; only the composition root knows the registry
+  exists.
 - **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
-  converted flow): `withUnitOfWork(db, flow)` invokes `flow`, applies the returned `persist` batch in one
-  `db.transaction` via the entity's `modelToDb` adapter (insert honors `onConflictDoNothing`; `update`/`delete`
-  apply `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?`, with the new version computed
-  in application code from `model.version` — never an opaque `version + 1` SQL expression the database
-  evaluates on its own), and returns `flow`'s `response`. A version-guarded op that affects zero rows rolls
-  back the whole batch and re-invokes `flow` — a fresh read, a fresh decision — up to a bounded number of
-  attempts, then surfaces the generic `conflict` `AppError` (`models/error.ts`; no business payload by design).
+  converted flow): `withUnitOfWork(db, registry, flow)` invokes `flow`, applies the returned `persist` batch in
+  one `db.transaction` by dispatching each `Persistable` through the `registry` (insert honors
+  `onConflictDoNothing`, left to each applier's own discretion; `update`/`delete` apply
+  `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?`, with the new version computed in
+  application code from `model.version` — never an opaque `version + 1` SQL expression the database evaluates
+  on its own), and returns `flow`'s `response`. A version-guarded op that affects zero rows rolls back the
+  whole batch and re-invokes `flow` — a fresh read, a fresh decision — up to a bounded number of attempts,
+  then surfaces the generic `conflict` `AppError` (`models/error.ts`; no business payload by design).
 - **Wiring**: `controllers/deps.ts` exports the `UnitOfWork` function type (`(flow) => ResultAsync<T, AppError>`)
   — the shape the shell's edges depend on — but it is **not** a field on `Deps`; `Deps` is handed to
   controllers, and a `UnitOfWork` runner is shell-only (only `diplomat/mcp`/`diplomat/http` handlers call it,
   wrapping a controller invocation), so a controller can never reach for it and apply its own writes.
   `main.ts` (and `test/integration/app-builder.ts`) construct the one `UnitOfWork` bound to the real `Db` and
-  thread it alongside `deps` through `connectStdio`/`buildMcpServer`/`buildHttpApp`/`registerRoutes`/
-  `registerMcpRoute` to the handlers that call a converted controller.
+  the `ApplierRegistry`, and thread it alongside `deps` through `connectStdio`/`buildMcpServer`/
+  `buildHttpApp`/`registerRoutes`/`registerMcpRoute` to the handlers that call a converted controller.
 
 ## Relational schema (as built)
 

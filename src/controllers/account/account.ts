@@ -15,9 +15,9 @@ import {
 import { computeBalance, computeProjectedBalance } from '../../logic/balance.js';
 import * as persistence from '../../logic/persistence.js';
 import { resolveByName } from '../../logic/resolve.js';
-import { accountErrors } from '../../models/account.js';
+import { accountErrors, ACCOUNT_ENTITY_TAG } from '../../models/account.js';
 import type { Account, AccountBalance, AccountType, CreateAccount, UpdateAccount } from '../../models/account.js';
-import { EntityTag, type FlowOutcome, type Persistable } from '../../models/persistable.js';
+import type { FlowOutcome, Persistable } from '../../models/persistable.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 
@@ -42,7 +42,7 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
     yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name));
 
     const account: Account = { id: deps.newId(), ...input };
-    const persist: Persistable[] = [persistence.insert({ entity: EntityTag.enum.account, model: account })];
+    const persist: Persistable[] = [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: account })];
     return ok({ persist, response: account });
   });
 
