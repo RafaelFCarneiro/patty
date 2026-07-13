@@ -492,7 +492,13 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'Note: credit accounts are created automatically with a credit card (create_credit_card).',
       inputSchema: CreateAccountSchema.shape,
     },
-    async (args) => fromResult(await unitOfWork(() => createAccount(deps, accountAdapters.createWireInToModel(args)))),
+    async (args) => {
+      // accountAdapters.outcomeToDb adapts createAccount's result (model → db row) here, explicitly,
+      // before unitOfWork ever sees the batch — diplomat/db only ever writes rows, never adapts them.
+      const flow = () =>
+        createAccount(deps, accountAdapters.createWireInToModel(args)).map(accountAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(

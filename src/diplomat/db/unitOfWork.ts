@@ -8,13 +8,6 @@ import type { Db } from './driver.js';
 // `flow` for a fresh read → fresh decision (docs/functional-core-imperative-shell.md rule 4).
 const MAX_UNIT_OF_WORK_ATTEMPTS = 3;
 
-// Every entity starts at this version — a structural fact of the versioning scheme itself, not a
-// business decision, so the core's `insert` model never carries it (models/persistable.ts).
-// Exported so each entity's own `EntityApplier` (built where that entity's table/adapter live,
-// e.g. `diplomat/db/repos/accounts.ts`) supplies it when it shapes an insert row — never the
-// database's own `.default(0)` supplying it implicitly; the shell always writes an explicit value.
-export const INITIAL_VERSION = 0;
-
 /** The transaction handle `db.transaction` hands its callback — inferred from `Db` itself so this
  *  file never names a drizzle-internal type directly. Exported so each entity's `EntityApplier`
  *  (which runs inside that same transaction) can type its methods against it. */
@@ -22,11 +15,15 @@ export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 /**
  * What an entity module supplies so this generic shell can apply a `Persistable` tagged with its
- * entity, without this file ever naming that entity: the `modelToDb`-style adaptation and the
- * actual drizzle table op. Built once per entity (e.g. `diplomat/db/repos/accounts.ts`'s
- * `accountApplier`) and registered under that entity's own tag — see `ApplierRegistry`.
- * `insert`/`update` take `unknown` because this file has no entity-specific model type to name;
- * the applier that receives it is the one place that knows how to interpret it.
+ * entity, without this file ever naming that entity: the actual drizzle table op. `insert`/`update`
+ * receive an already db-row-shaped `model` — the model→row adaptation (`modelToDb`) happens
+ * upstream, at the MCP/REST handler that calls `unitOfWork` (e.g. `adapters/accounts.ts`'s
+ * `persistableToDb`, run via `outcomeToDb` before the batch ever reaches here), not inside this
+ * file or inside the applier: `diplomat/db` only ever writes the row it's handed, never adapts
+ * one. Built once per entity (e.g. `diplomat/db/repos/accounts.ts`'s `accountApplier`) and
+ * registered under that entity's own tag — see `ApplierRegistry`. `insert`/`update` take `unknown`
+ * because this file has no entity-specific row type to name; the applier that receives it is the
+ * one place that knows how to interpret it.
  */
 export type EntityApplier = {
   insert: (tx: Tx, model: unknown) => Promise<void>;

@@ -102,32 +102,39 @@ data instead of performing it; the diplomat shell **applies** it.
   schema) — an optimistic-concurrency token, internal to the persistence side only, never exposed on the
   entity's public model/wire shape (`Account`/`AccountSchema`). It is **not** part of an `insert`
   `Persistable`'s model either: a brand-new row's version is always the same structural constant
-  (`INITIAL_VERSION`, exported from `diplomat/db/unitOfWork.ts`) — nothing the core decides, so the core never
-  states it, and the entity's own applier (below) supplies it once, right where it shapes the insert row.
-  Only `update`/`delete` carry a real, varying `version` (the value the core read), via the persistence-side
-  type (`AccountEntity`/`AccountEntitySchema` in `models/account.ts`, `Account` + `version`). Because an
-  insert's model is already the plain `Account`, a converted create flow's response is that same model — no
-  stripping needed.
-- **`EntityApplier` / `ApplierRegistry`** (`src/diplomat/db/unitOfWork.ts`): **also entity-agnostic** — the
-  generic engine dispatches a `Persistable` to `registry[p.entity]` and calls that applier's
+  (`INITIAL_VERSION`, exported from `models/persistable.ts`) — nothing the core decides, so the core never
+  states it, and the entity's own diplomat-edge adapter supplies it once, at the handler, right where it
+  shapes the insert row (see below). Only `update`/`delete` carry a real, varying `version` (the value the
+  core read), via the persistence-side type (`AccountEntity`/`AccountEntitySchema` in `models/account.ts`,
+  `Account` + `version`). Because an insert's model is already the plain `Account`, a converted create flow's
+  response is that same model — no stripping needed.
+- **The model→row adaptation happens once, explicitly, at the diplomat handler — never inside `diplomat/db`.**
+  A converted controller's `Persistable`s carry domain models (`Account`/`AccountEntity`); by the time
+  `withUnitOfWork` applies them, they must already be db rows. The MCP/REST handler that calls `unitOfWork`
+  does that conversion itself, mapping the controller's `FlowOutcome` through the entity's own `outcomeToDb`
+  (`adapters/accounts.ts`, built from `modelToDb` + `persistableToDb`) *before* handing the flow to
+  `unitOfWork` — e.g. `createAccount(deps, model).map(accountAdapters.outcomeToDb)`. `unitOfWork(flow)` itself
+  is still called with one argument, exactly as before; only what `flow` produces changed. This keeps
+  `modelToDb` calls where the rest of the codebase already expects adapter calls to live — at the boundary,
+  explicit at the call site — rather than hidden inside `diplomat/db`.
+- **`EntityApplier` / `ApplierRegistry`** (`src/diplomat/db/unitOfWork.ts`): **entity-agnostic** — the generic
+  engine dispatches an already row-shaped `Persistable` to `registry[p.entity]` and calls that applier's
   `insert`/`update`/`delete`; it never names a specific entity, never imports a specific entity's `modelToDb`
   adapter or drizzle table, and — critically — never needs a new `case` as more entities convert. Each
-  entity's own `EntityApplier` (the actual `modelToDb` adaptation + drizzle table op — e.g. `diplomat/db/
-  repos/accounts.ts`'s `accountApplier`) lives beside that entity's other persistence code, not inside the
-  generic engine. The `ApplierRegistry` (`Record<string, EntityApplier>`) is assembled once, at the
-  composition root (`main.ts`, `test/integration/app-builder.ts`), from each entity's applier keyed by its own
-  tag constant, and bound into the `UnitOfWork` closure alongside `Db` — so every `diplomat/mcp`/`diplomat/http`
-  handler keeps calling `unitOfWork(flow)` exactly as before; only the composition root knows the registry
-  exists.
+  entity's own `EntityApplier` (just the drizzle table op — e.g. `diplomat/db/repos/accounts.ts`'s
+  `accountApplier`, which only ever writes the row it's handed, never adapts one) lives beside that entity's
+  other persistence code, not inside the generic engine. The `ApplierRegistry` (`Record<string, EntityApplier>`)
+  is assembled once, at the composition root (`main.ts`, `test/integration/app-builder.ts`), from each entity's
+  applier keyed by its own tag constant, and bound into the `UnitOfWork` closure alongside `Db`.
 - **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
   converted flow): `withUnitOfWork(db, registry, flow)` invokes `flow`, applies the returned `persist` batch in
-  one `db.transaction` by dispatching each `Persistable` through the `registry` (insert honors
-  `onConflictDoNothing`, left to each applier's own discretion; `update`/`delete` apply
+  one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry` (insert
+  honors `onConflictDoNothing`, left to each applier's own discretion; `update`/`delete` apply
   `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?`, with the new version computed in
-  application code from `model.version` — never an opaque `version + 1` SQL expression the database evaluates
-  on its own), and returns `flow`'s `response`. A version-guarded op that affects zero rows rolls back the
-  whole batch and re-invokes `flow` — a fresh read, a fresh decision — up to a bounded number of attempts,
-  then surfaces the generic `conflict` `AppError` (`models/error.ts`; no business payload by design).
+  application code from the row's `version` — never an opaque `version + 1` SQL expression the database
+  evaluates on its own), and returns `flow`'s `response`. A version-guarded op that affects zero rows rolls
+  back the whole batch and re-invokes `flow` — a fresh read, a fresh decision — up to a bounded number of
+  attempts, then surfaces the generic `conflict` `AppError` (`models/error.ts`; no business payload by design).
 - **Wiring**: `controllers/deps.ts` exports the `UnitOfWork` function type (`(flow) => ResultAsync<T, AppError>`)
   — the shape the shell's edges depend on — but it is **not** a field on `Deps`; `Deps` is handed to
   controllers, and a `UnitOfWork` runner is shell-only (only `diplomat/mcp`/`diplomat/http` handlers call it,

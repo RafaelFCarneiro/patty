@@ -102,8 +102,12 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
     return ok({ persist, response: account })
   })
 
-// the diplomat handler (MCP tool / REST route) wraps the call — this is the shell applying the effect
-async (args) => fromResult(await unitOfWork(() => createAccount(deps, accountAdapters.createWireInToModel(args))))
+// the diplomat handler (MCP tool / REST route) adapts model → row explicitly, right here, before
+// unitOfWork ever sees the batch — this is the shell applying the effect
+async (args) => {
+  const flow = () => createAccount(deps, accountAdapters.createWireInToModel(args)).map(accountAdapters.outcomeToDb)
+  return fromResult(await unitOfWork(flow))
+}
 
 // ❌ DON'T — the core performing its own write (the pre-ADR-021 shape; fine for an unconverted flow, but
 // don't reintroduce it on a flow you're converting)
@@ -128,18 +132,24 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   scaffolding itself: a god enum every entity has to be registered in is its own kind of magic-value coupling.
 - An `insert` `Persistable`'s model is the plain, wire-shaped domain model (`Account`) — **no `version`**. A
   brand-new row's version is always the same structural constant (`INITIAL_VERSION`, exported from
-  `diplomat/db/unitOfWork.ts`); that's not a decision the core makes, so it never appears in what the core
-  builds or returns. The response is that same model — nothing to strip. `update`/`delete` are different:
-  `version` is the value the core actually read, so it's real data the model carries (`AccountEntity` —
-  `Account` + `version`). The shell computes the *persisted* version from it (`model.version + 1`, in
-  application code) — never as an opaque `version + 1` SQL expression left for the database engine to
-  evaluate; the database never owns version bookkeeping on its own.
-- **The shell's generic engine (`diplomat/db/unitOfWork.ts`) never names a specific entity either.** It
-  dispatches each `Persistable` to `registry[p.entity]` — an `EntityApplier` (the `modelToDb` adaptation +
-  drizzle table op) that lives beside that entity's other persistence code (e.g. `diplomat/db/repos/
-  accounts.ts`'s `accountApplier`), not inside the engine. The `ApplierRegistry` is assembled once at the
-  composition root (`main.ts`); `withUnitOfWork` itself only ever calls generic `applier.insert/update/delete`
-  — never an `if (entity === 'account')`.
+  `models/persistable.ts`); that's not a decision the core makes, so it never appears in what the core builds
+  or returns. `update`/`delete` are different: `version` is the value the core actually read, so it's real
+  data the model carries (`AccountEntity` — `Account` + `version`).
+- **The `modelToDb` adaptation happens once, explicitly, at the diplomat handler — never inside `diplomat/db`.**
+  The handler that calls `unitOfWork` maps the controller's `FlowOutcome` through the entity's own
+  `outcomeToDb` (`adapters/accounts.ts`) *before* handing it to `unitOfWork`, converting every `Persistable`'s
+  domain-shaped `model` into a db row (baking in `INITIAL_VERSION` for an insert). By the time `withUnitOfWork`
+  or the entity's `EntityApplier` (`diplomat/db/repos/accounts.ts`'s `accountApplier`) sees a `Persistable`, its
+  `model` is already a row — the applier only ever writes it, never adapts it. This is the boundary-adaptation
+  rule from earlier in this doc ("diplomats adapt `wire/in -> model` before controller calls and `model ->
+  wire/out` after") extended one step further: the same handler also adapts `model -> db row` between the
+  controller and the shell.
+- **The shell's generic engine (`diplomat/db/unitOfWork.ts`) never names a specific entity.** It dispatches
+  each already-row-shaped `Persistable` to `registry[p.entity]` — an `EntityApplier` (just the drizzle table
+  op, e.g. `tx.insert(accounts).values(row)`) that lives beside that entity's other persistence code. The
+  `ApplierRegistry` is assembled once at the composition root (`main.ts`); `withUnitOfWork` itself only ever
+  calls generic `applier.insert/update/delete` — never an `if (entity === 'account')`, and never a call into
+  `modelToDb`.
 - Composition (a flow that orchestrates another controller) **merges** `persist` arrays — take the called
   controller's `persist`, add your own, return the merged batch; don't apply either separately.
 - A converted controller's `deps` still exposes reads (`deps.<x>.list/find/...`) — the purity boundary is

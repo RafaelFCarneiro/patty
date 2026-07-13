@@ -7,7 +7,8 @@ import type {
   UpdateAccount,
   UpdateAccountTransaction,
 } from '../models/account.js';
-import type { AccountInsertRow, AccountRow } from '../wire/db/accounts.js';
+import { INITIAL_VERSION, PersistOp, type FlowOutcome, type Persistable } from '../models/persistable.js';
+import type { AccountRow } from '../wire/db/accounts.js';
 import type * as wireIn from '../wire/in/accounts.js';
 
 export const dbToModel = (row: AccountRow): Account =>
@@ -19,15 +20,46 @@ export const dbToModel = (row: AccountRow): Account =>
     currency: row.currency,
   });
 
-/** Entity → row for the versioned unit of work applier (ADR-021) — the only account write path
- *  that needs `version` on the wire-db row. */
-export const modelToDb = (entity: AccountEntity): AccountInsertRow => ({
+/** Entity → row for the versioned unit of work (ADR-021) — the only account write path that
+ *  needs `version` on the wire-db row. */
+export const modelToDb = (entity: AccountEntity): AccountRow => ({
   id: entity.id,
   name: entity.name,
   type: entity.type,
   initialBalance: entity.initialBalance,
   currency: entity.currency,
   version: entity.version,
+});
+
+/**
+ * Adapts one account `Persistable`'s `model` from domain shape to db-row shape (ADR-021 follow-up):
+ * called explicitly by the MCP/REST handler, via `outcomeToDb` below, before the batch ever reaches
+ * `withUnitOfWork` — so `diplomat/db` (the applier registered under `models/account.ts`'s
+ * `ACCOUNT_ENTITY_TAG`) never calls `modelToDb` itself, only writes the row it's handed. `insert`
+ * has no `version` on its model (nothing the core decides — see `models/persistable.ts`); it's
+ * added here, at the one place model→row shaping happens for this entity. `delete` carries no
+ * model to adapt.
+ */
+export const persistableToDb = (p: Persistable): Persistable => {
+  switch (p.op) {
+    case PersistOp.enum.insert:
+      return { ...p, model: modelToDb({ ...(p.model as Account), version: INITIAL_VERSION }) };
+    case PersistOp.enum.update:
+      return { ...p, model: modelToDb(p.model as AccountEntity) };
+    case PersistOp.enum.delete:
+      return p;
+    default: {
+      const _exhaustive: never = p;
+      throw new Error(`accountAdapters.persistableToDb: unhandled persistable op ${JSON.stringify(_exhaustive)}`);
+    }
+  }
+};
+
+/** Maps every `Persistable` in a flow's outcome through `persistableToDb` — the one call an
+ *  account-producing MCP/REST handler makes between the controller and `unitOfWork`. */
+export const outcomeToDb = <T>(outcome: FlowOutcome<T>): FlowOutcome<T> => ({
+  ...outcome,
+  persist: outcome.persist.map(persistableToDb),
 });
 
 export const createWireInToModel = (input: wireIn.CreateAccount): CreateAccount => input;

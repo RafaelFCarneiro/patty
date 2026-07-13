@@ -199,7 +199,11 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const wireIn = parse(wireInAccounts.CreateAccountSchema, req.body, reply);
       if (!wireIn) return reply;
-      return send(reply, await unitOfWork(() => createAccount(deps, accountAdapters.createWireInToModel(wireIn))), 201);
+      // accountAdapters.outcomeToDb adapts createAccount's result (model → db row) here, explicitly,
+      // before unitOfWork ever sees the batch — diplomat/db only ever writes rows, never adapts them.
+      const flow = () =>
+        createAccount(deps, accountAdapters.createWireInToModel(wireIn)).map(accountAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow), 201);
     },
   },
   {

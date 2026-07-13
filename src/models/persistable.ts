@@ -5,6 +5,14 @@ import { z } from 'zod';
 export const PersistOp = z.enum(['insert', 'update', 'delete']);
 export type PersistOp = z.infer<typeof PersistOp>;
 
+/** Every entity starts at this version — a structural fact of the versioning scheme itself, not a
+ *  business decision, so a core's `insert` model never carries it. Each entity's own diplomat-edge
+ *  adapter (e.g. `adapters/accounts.ts`'s `persistableToDb`, called explicitly by the MCP/REST
+ *  handler before `withUnitOfWork` ever sees the batch) supplies it when it shapes the insert row
+ *  — never the database's own `.default(0)` supplying it implicitly, and never `diplomat/db`
+ *  either: the entity's own adapter is the one place model→row shaping happens. */
+export const INITIAL_VERSION = 0;
+
 /**
  * A write intent the functional core hands to the imperative shell (docs/functional-core-imperative-shell.md).
  * Generic over the entity's own tag + model, never a closed union enumerating every entity — this file stays
@@ -14,10 +22,10 @@ export type PersistOp = z.infer<typeof PersistOp>;
  * `models/persistable.ts` never imports a specific entity's model.
  *
  * `insert` carries a full new entity (id minted by the core) as the plain domain model — no `version`: a
- * brand-new row always starts at the same structural constant (the shell's own `INITIAL_VERSION`, `diplomat/db/
- * unitOfWork.ts`), which is nothing the core decides, so it's not part of what the core hands over. `update`
- * carries the full desired end-state as the versioned entity — `model.version` is the version the core read;
- * the shell computes the persisted version from it (`model.version + 1`) and applies
+ * brand-new row always starts at the same structural constant (`INITIAL_VERSION`, above), which is nothing
+ * the core decides, so it's not part of what the core hands over. `update` carries the full desired end-state
+ * as the versioned entity — `model.version` is the version the core read; the entity's own applier (`diplomat/
+ * db`, e.g. `accountApplier`) computes the persisted version from it (`model.version + 1`) and applies
  * `... SET ..., version = ? WHERE id = ? AND version = ?`. `delete` carries just the id + the version read,
  * for the same versioned guard.
  */

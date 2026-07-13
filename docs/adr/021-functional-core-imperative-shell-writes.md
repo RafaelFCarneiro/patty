@@ -146,7 +146,10 @@ gets its own generic atomicity/conflict/idempotency suite.
      (`diplomat/db/unitOfWork.ts`) dispatches via an `ApplierRegistry` (entity tag → `EntityApplier`) assembled
      once at the composition root, so the engine itself never names a specific entity either — with its own
      atomicity/conflict/retry/idempotent-insert/agnostic-dispatch suite; `createAccount` converted end to end
-     (MCP + REST) as the first mover — proves the shape.
+     (MCP + REST) as the first mover — proves the shape. Refined further: the `modelToDb` adaptation moved out
+     of `diplomat/db` entirely — the MCP/REST handler now adapts model → row explicitly (`adapters/
+     accounts.ts`'s `outcomeToDb`) before ever calling `unitOfWork`, so both the generic engine *and* each
+     entity's `EntityApplier` only ever write rows they're handed, never adapt one themselves.
    - [ ] Phase 2 (transaction + bill flows): convert `add_*`/`update_*`/`delete_*`, `payBill`/
      `revertBillPayment`; delete `bills.pay`/`ensureAndAttach`/self-heal and their atomicity tests.
    - [ ] Phase 3 (remaining flows): bulk import, recurring, card/category/tag CRUD; remove write methods

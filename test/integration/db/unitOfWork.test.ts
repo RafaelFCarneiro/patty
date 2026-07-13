@@ -179,15 +179,18 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
     expect(await readIds(model.id)).toHaveLength(1);
   });
 
-  it('a fresh insert always starts at version 0 — the shell decides it, never a value the model carries', async () => {
-    // `Persistable`'s insert model is the plain `Account` (no `version` field) — `newAccount()`'s
-    // `version: 99` here only exists because the same factory also seeds the update/delete cases
-    // above; it structurally passes through `insertOne` but must never reach the row.
+  it('the applier is purely mechanical — it writes exactly the row it is handed, never adapts it', async () => {
+    // ADR-021 follow-up: model→row adaptation (including baking in `INITIAL_VERSION` for a fresh
+    // insert) happens once, explicitly, at the diplomat handler (`accountAdapters.outcomeToDb`,
+    // called before `unitOfWork` ever sees the batch) — never inside `diplomat/db`. This suite
+    // calls `withUnitOfWork` directly, bypassing that handler-level step, so whatever `version` the
+    // test seeds here is exactly what lands in the row — proving `accountApplier` trusts its input
+    // rather than re-deriving it.
     const seed = newAccount({ version: 99 });
 
     await withUnitOfWork(db, registry, insertOne(seed));
 
-    expect(await readVersion(seed.id)).toBe(0);
+    expect(await readVersion(seed.id)).toBe(99);
   });
 
   it('is agnostic of the entity — dispatches by tag alone to any registered applier, account or not', async () => {

@@ -71,12 +71,18 @@ database, a different transport) without the domain noticing.
    file. The write intent itself (`PersistOp`: `insert`/`update`/`delete`) is a named enum (constants over
    literals), shared across every entity since the three operations themselves are truly generic.
 
-   The core speaks in **models** (its own vocabulary); the shell dispatches each `Persistable` to the entity's
-   own applier — an object (built once, beside that entity's other persistence code) exposing generic
-   `insert`/`update`/`delete` methods that do the `modelToDb` adaptation and the matching table op. The shell's
-   generic engine (`withUnitOfWork`) never names a specific entity: it looks the applier up in a registry keyed
-   by `entity`, assembled once at the composition root from every converted entity's own applier. Adding a new
-   converted entity means adding its applier to that registry — never a new `case` inside the engine itself.
+   The core speaks in **models** (its own vocabulary); by the time a `Persistable` reaches the shell's generic
+   engine (`withUnitOfWork`), it must already speak **rows**. The `modelToDb` adaptation is **not** the
+   engine's job, and not the entity's applier's job either — it happens once, explicitly, at the MCP/REST
+   handler that calls `unitOfWork`, immediately after the controller returns and before the batch is handed
+   over (e.g. `adapters/accounts.ts`'s `persistableToDb`, mapped over the whole batch via `outcomeToDb`). The
+   engine dispatches each already-row-shaped `Persistable` to the entity's own applier — an object (built once,
+   beside that entity's other persistence code) exposing generic `insert`/`update`/`delete` methods that do
+   only the matching table op, nothing else. The shell's generic engine never names a specific entity: it looks
+   the applier up in a registry keyed by `entity`, assembled once at the composition root from every converted
+   entity's own applier. Adding a new converted entity means adding its applier to that registry and its own
+   `modelToDb`-style adapter at its handler — never a new `case` inside the engine itself, and never a
+   `modelToDb` call inside `diplomat/db`.
 
 4. **Concurrency rides on the model as `version`.** Every mutable entity carries a `version`. An `update`
    persistable carries the version the core read; the shell applies it as
