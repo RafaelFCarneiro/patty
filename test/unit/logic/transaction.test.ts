@@ -14,7 +14,8 @@ import type { RawTransactionView } from '../../../src/models/transaction.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
-  buildTransactionView,
+  createTransactionResponse,
+  createTransferResponse,
   deriveIdempotencyKey,
   hasCategory,
   hasSubCategory,
@@ -23,8 +24,8 @@ import {
   nextCursorAfter,
   resolveCursorKey,
   resolveEffectiveType,
-  resolveTransactionOutcome,
   summarizeBulkItems,
+  updateTransactionResponse,
 } from '../../../src/logic/transaction.js';
 
 describe('deriveIdempotencyKey', () => {
@@ -204,19 +205,21 @@ describe('addLocalizedLabels', () => {
   });
 });
 
-describe('resolveTransactionOutcome (ADR-021 rule 6)', () => {
+describe('createTransactionResponse (ADR-021 rule 6)', () => {
+  const classification = { method: ClassificationMethod.enum.rule, confidence: 0.8 } as const;
+
   it('reports created:true and the localized view when the shell actually inserted the row', () => {
     const view = { ...baseTx, description: 'Groceries' };
-    const result = resolveTransactionOutcome([{ applied: true, read: view }], Locale.enum.en);
+    const result = createTransactionResponse([{ applied: true, read: view }], classification, Locale.enum.en);
 
     expect(result.created).toBe(true);
+    expect(result.classification).toBe(classification);
     expect(result.transaction.description).toBe('Groceries');
-    expect(result).not.toHaveProperty('classification');
   });
 
   it("reports created:false and the EXISTING row's data on an idempotent duplicate replay", () => {
     const existing = { ...baseTx, description: 'Original replay target' };
-    const result = resolveTransactionOutcome([{ applied: false, read: existing }], Locale.enum.en);
+    const result = createTransactionResponse([{ applied: false, read: existing }], classification, Locale.enum.en);
 
     expect(result.created).toBe(false);
     expect(result.transaction.description).toBe('Original replay target');
@@ -224,31 +227,38 @@ describe('resolveTransactionOutcome (ADR-021 rule 6)', () => {
 
   it('curries data-last into exactly the FlowOutcome.response shape a flow hands the shell', () => {
     const view = { ...baseTx, description: 'Groceries' };
-    const response = resolveTransactionOutcome(Locale.enum.en);
+    const response = createTransactionResponse(classification, Locale.enum.en);
 
     expect(typeof response).toBe('function');
     expect(response([{ applied: true, read: view }])).toEqual(
-      resolveTransactionOutcome([{ applied: true, read: view }], Locale.enum.en),
+      createTransactionResponse([{ applied: true, read: view }], classification, Locale.enum.en),
     );
-  });
-
-  it('is what a create-shaped flow (e.g. add_account_expense) spreads to add its own classification', () => {
-    const classification = { method: ClassificationMethod.enum.rule, confidence: 0.8 } as const;
-    const view = { ...baseTx, description: 'Groceries' };
-    const result = { ...resolveTransactionOutcome([{ applied: true, read: view }], Locale.enum.en), classification };
-
-    expect(result).toEqual({
-      transaction: addLocalizedLabels(view, Locale.enum.en),
-      created: true,
-      classification,
-    });
   });
 });
 
-describe('buildTransactionView (ADR-021 rule 6)', () => {
-  it('returns the localized view of the row the shell actually wrote — no created/classification envelope', () => {
+describe('createTransferResponse (ADR-021 rule 6)', () => {
+  it('reports created and the localized view from the first (and only) outcome', () => {
+    const view = { ...baseTx, description: 'Transferência: Checking → Savings' };
+    const result = createTransferResponse([{ applied: true, read: view }], Locale.enum.en);
+
+    expect(result.created).toBe(true);
+    expect(result.transaction.description).toBe('Transferência: Checking → Savings');
+  });
+
+  it('curries data-last into exactly the FlowOutcome.response shape a flow hands the shell', () => {
+    const view = { ...baseTx, description: 'Transfer' };
+    const response = createTransferResponse(Locale.enum.en);
+
+    expect(response([{ applied: false, read: view }])).toEqual(
+      createTransferResponse([{ applied: false, read: view }], Locale.enum.en),
+    );
+  });
+});
+
+describe('updateTransactionResponse (ADR-021 rule 6)', () => {
+  it('returns the localized view of the row the shell actually wrote, with no created flag', () => {
     const view = { ...baseTx, description: 'Updated' };
-    const result = buildTransactionView([{ applied: true, read: view }], Locale.enum.pt);
+    const result = updateTransactionResponse([{ applied: true, read: view }], Locale.enum.pt);
 
     expect(result.description).toBe('Updated');
     expect(result.typeLabel).toBe('Despesa');
@@ -257,10 +267,10 @@ describe('buildTransactionView (ADR-021 rule 6)', () => {
 
   it('curries data-last into exactly the FlowOutcome.response shape a flow hands the shell', () => {
     const view = { ...baseTx, description: 'Updated' };
-    const response = buildTransactionView(Locale.enum.pt);
+    const response = updateTransactionResponse(Locale.enum.pt);
 
     expect(response([{ applied: true, read: view }])).toEqual(
-      buildTransactionView([{ applied: true, read: view }], Locale.enum.pt),
+      updateTransactionResponse([{ applied: true, read: view }], Locale.enum.pt),
     );
   });
 });
