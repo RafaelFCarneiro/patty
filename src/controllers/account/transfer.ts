@@ -13,7 +13,7 @@ import { toIsoDate } from '../../logic/period.js';
 import { createTransferResponse, defaultStatusFor } from '../../logic/transaction.js';
 import { accountErrors } from '../../models/account.js';
 import type { Account, CreateTransfer } from '../../models/account.js';
-import type { FlowOutcome, PersistOutcome } from '../../models/persistable.js';
+import type { FlowOutcome } from '../../models/persistable.js';
 import {
   ClassificationMethod,
   TRANSACTION_ENTITY_TAG,
@@ -69,6 +69,6 @@ export const createTransfer = (
 
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
-    const response = (outcomes: PersistOutcome[]) => createTransferResponse(outcomes, locale);
+    const response = createTransferResponse(locale);
     return ok({ persist, response });
   });

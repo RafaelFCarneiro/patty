@@ -224,6 +224,16 @@ describe('createTransactionResponse (ADR-021 rule 6)', () => {
     expect(result.created).toBe(false);
     expect(result.transaction.description).toBe('Original replay target');
   });
+
+  it('curries data-last into exactly the FlowOutcome.response shape a flow hands the shell', () => {
+    const view = { ...baseTx, description: 'Groceries' };
+    const response = createTransactionResponse(classification, Locale.enum.en);
+
+    expect(typeof response).toBe('function');
+    expect(response([{ applied: true, read: view }])).toEqual(
+      createTransactionResponse([{ applied: true, read: view }], classification, Locale.enum.en),
+    );
+  });
 });
 
 describe('createTransferResponse (ADR-021 rule 6)', () => {
@@ -233,6 +243,15 @@ describe('createTransferResponse (ADR-021 rule 6)', () => {
 
     expect(result.created).toBe(true);
     expect(result.transaction.description).toBe('Transferência: Checking → Savings');
+  });
+
+  it('curries data-last into exactly the FlowOutcome.response shape a flow hands the shell', () => {
+    const view = { ...baseTx, description: 'Transfer' };
+    const response = createTransferResponse(Locale.enum.en);
+
+    expect(response([{ applied: false, read: view }])).toEqual(
+      createTransferResponse([{ applied: false, read: view }], Locale.enum.en),
+    );
   });
 });
 
@@ -244,6 +263,15 @@ describe('updateTransactionResponse (ADR-021 rule 6)', () => {
     expect(result.description).toBe('Updated');
     expect(result.typeLabel).toBe('Despesa');
     expect(result).not.toHaveProperty('created');
+  });
+
+  it('curries data-last into exactly the FlowOutcome.response shape a flow hands the shell', () => {
+    const view = { ...baseTx, description: 'Updated' };
+    const response = updateTransactionResponse(Locale.enum.pt);
+
+    expect(response([{ applied: true, read: view }])).toEqual(
+      updateTransactionResponse([{ applied: true, read: view }], Locale.enum.pt),
+    );
   });
 });
 

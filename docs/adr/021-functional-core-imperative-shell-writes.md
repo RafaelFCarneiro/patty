@@ -175,8 +175,12 @@ gets its own generic atomicity/conflict/idempotency suite.
      on a version-conflict attempt that gets rolled back and retried. Since `response` is now genuinely pure in
      every converted flow, moved the response-shaping itself out of each controller and into named, unit-tested
      functions in `logic/transaction.ts` (`createTransactionResponse`, `createTransferResponse`,
-     `updateTransactionResponse` — one per response shape) — a controller's own `response` closure is a one-line
-     call into one of these, not inline `firstOutcome` + cast + `addLocalizedLabels` repeated at each call site.
+     `updateTransactionResponse` — one per response shape), not inline `firstOutcome` + cast +
+     `addLocalizedLabels` repeated at each call site. Each is `purry`'d data-last on the non-`outcomes` args (the
+     dual-calling convention `docs/code-quality.md` already established for `addLocalizedLabels`/`withTypeLabel`),
+     so e.g. `createTransactionResponse(classification, locale)` *is* the `(outcomes) => T` function
+     `FlowOutcome.response` wants — a converted flow assigns it directly (`const response =
+     createTransactionResponse(classification, locale)`), no wrapping arrow at the call site.
      Normalized the merchants repo alongside this: the old `strengthenFromTransaction(transactionId, categoryId)`
      re-queried `transactions` to resolve a merchant key itself — a business-shaped repo method name and behavior
      (`docs/diplomatic-architecture.md`: repos "should contain no business logic"). Replaced with

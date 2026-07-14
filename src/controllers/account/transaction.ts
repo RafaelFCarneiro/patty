@@ -27,7 +27,7 @@ import {
   type UpdateAccountTransaction,
 } from '../../models/account.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../models/merchant.js';
-import { type FlowOutcome, type PersistOutcome, type Persistable } from '../../models/persistable.js';
+import { type FlowOutcome, type Persistable } from '../../models/persistable.js';
 import {
   ClassificationMethod,
   DELETE_TRANSACTION_CONFIRM_HINT,
@@ -130,8 +130,7 @@ const addAccountMovement = (
 
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
-    const response = (outcomes: PersistOutcome[]): CreateTransactionResult =>
-      createTransactionResponse(outcomes, classification, locale);
+    const response = createTransactionResponse(classification, locale);
     return ok({ persist, response });
   });
 
@@ -251,7 +250,7 @@ export const updateAccountTransaction = (
     if (merchantCorrection) {
       persist.push(persistence.insert({ entity: MERCHANT_CATEGORY_ENTITY_TAG, model: merchantCorrection }));
     }
-    const response = (outcomes: PersistOutcome[]): TransactionView => updateTransactionResponse(outcomes, locale);
+    const response = updateTransactionResponse(locale);
     return ok({ persist, response });
   });
 

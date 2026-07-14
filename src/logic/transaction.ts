@@ -204,7 +204,7 @@ const viewFromOutcome = (outcome: PersistOutcome, locale: Locale): TransactionVi
  *  shell's insert actually landed. `created` is never faked by the domain — always read off the
  *  real apply outcome; on an idempotent duplicate replay, `outcome.read` (and so `transaction`) is
  *  the EXISTING row, not this attempt's own values. */
-export const createTransactionResponse = (
+const _createTransactionResponse = (
   outcomes: PersistOutcome[],
   classification: ClassifyOutcome,
   locale: Locale,
@@ -213,9 +213,25 @@ export const createTransactionResponse = (
   return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied, classification };
 };
 
+// Data-last (curried on classification/locale) is the shape a flow actually wants: `FlowOutcome.response`
+// takes `(outcomes) => T` directly — `createTransactionResponse(classification, locale)` *is* that
+// function, no wrapping arrow needed at the call site.
+export function createTransactionResponse(
+  outcomes: PersistOutcome[],
+  classification: ClassifyOutcome,
+  locale: Locale,
+): CreateTransactionResult;
+export function createTransactionResponse(
+  classification: ClassifyOutcome,
+  locale: Locale,
+): (outcomes: PersistOutcome[]) => CreateTransactionResult;
+export function createTransactionResponse(...args: readonly unknown[]) {
+  return purry(_createTransactionResponse, args);
+}
+
 /** Builds a create_transfer-shaped response — same shape as `createTransactionResponse` minus
  *  `classification` (transfers are never classified). */
-export const createTransferResponse = (
+const _createTransferResponse = (
   outcomes: PersistOutcome[],
   locale: Locale,
 ): { transaction: TransactionView; created: boolean } => {
@@ -223,10 +239,27 @@ export const createTransferResponse = (
   return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied };
 };
 
+export function createTransferResponse(
+  outcomes: PersistOutcome[],
+  locale: Locale,
+): { transaction: TransactionView; created: boolean };
+export function createTransferResponse(
+  locale: Locale,
+): (outcomes: PersistOutcome[]) => { transaction: TransactionView; created: boolean };
+export function createTransferResponse(...args: readonly unknown[]) {
+  return purry(_createTransferResponse, args);
+}
+
 /** Builds an update_account_transaction-shaped response (also the shape update_card_transaction
  *  will need once converted — phase 2b): just the localized view of the row the shell actually
  *  wrote. No `created` flag to derive — an update either lands or the whole unit of work fails as
  *  a `conflict` before any outcome is ever reported (rule 4), so there is no duplicate-replay case
  *  to distinguish here the way there is for an insert. */
-export const updateTransactionResponse = (outcomes: PersistOutcome[], locale: Locale): TransactionView =>
+const _updateTransactionResponse = (outcomes: PersistOutcome[], locale: Locale): TransactionView =>
   viewFromOutcome(firstOutcome(outcomes), locale);
+
+export function updateTransactionResponse(outcomes: PersistOutcome[], locale: Locale): TransactionView;
+export function updateTransactionResponse(locale: Locale): (outcomes: PersistOutcome[]) => TransactionView;
+export function updateTransactionResponse(...args: readonly unknown[]) {
+  return purry(_updateTransactionResponse, args);
+}

@@ -156,8 +156,11 @@ controller **decides** and returns the write as data instead of performing it; t
   (a function of `PersistOutcome[]` plus whatever plain values the flow closes over — `locale`, `classification`),
   the actual response-shaping logic lives in `logic/transaction.ts` as named, independently unit-tested functions
   (`createTransactionResponse`, `createTransferResponse`, `updateTransactionResponse` — one per response shape,
-  reused across aggregates once phase 2b converts the credit-card flows), not inlined in the controller; a
-  converted flow's own `response` closure is a one-line call into one of these.
+  reused across aggregates once phase 2b converts the credit-card flows), not inlined in the controller. Each is
+  `purry`'d (data-last curried on the non-`outcomes` args — `docs/code-quality.md`'s dual-calling convention,
+  same as `addLocalizedLabels`), so `createTransactionResponse(classification, locale)` **is** the
+  `(outcomes) => T` function `FlowOutcome.response` wants — a converted flow assigns it directly, no wrapping
+  arrow at the call site.
 - **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
   converted flow): `withUnitOfWork(db, registry, flow)` invokes `flow`, applies the returned `persist` batch in
   one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry` (insert
