@@ -192,46 +192,43 @@ export function addLocalizedLabels(...args: readonly unknown[]) {
   return purry(_addLocalizedLabels, args);
 }
 
-// ─── ADR-021: idempotency-aware response building (rule 6) ─────────────────────
+// ─── ADR-021: building a TransactionView from the shell's apply outcome (rule 6) ────────────────
 
 /** Resolves the entity's persisted, joined view from the shell's apply outcome and localizes it —
- *  the common last step of every transaction-producing flow's `response` function below. */
-const viewFromOutcome = (outcome: PersistOutcome, locale: Locale): TransactionView =>
+ *  the one place `PersistOutcome.read` gets cast back to `RawTransactionView` (trusting the entity
+ *  contract) and turned into wire-ready shape. Pure model-building — no `created`/`classification`
+ *  envelope here; that's each flow's own result shape to assemble, not this function's job. */
+const _viewFromOutcome = (outcome: PersistOutcome, locale: Locale): TransactionView =>
   addLocalizedLabels(outcome.read as RawTransactionView, locale);
 
-/** Builds an add_account_expense/add_account_income-shaped response (also the shape
- *  add_card_purchase will need once converted — phase 2b): the localized view, plus whether the
- *  shell's insert actually landed. `created` is never faked by the domain — always read off the
- *  real apply outcome; on an idempotent duplicate replay, `outcome.read` (and so `transaction`) is
- *  the EXISTING row, not this attempt's own values. */
-const _createTransactionResponse = (
-  outcomes: PersistOutcome[],
-  classification: ClassifyOutcome,
-  locale: Locale,
-): CreateTransactionResult => {
-  const outcome = firstOutcome(outcomes);
-  return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied, classification };
-};
-
-// Data-last (curried on classification/locale) is the shape a flow actually wants: `FlowOutcome.response`
-// takes `(outcomes) => T` directly — `createTransactionResponse(classification, locale)` *is* that
-// function, no wrapping arrow needed at the call site.
-export function createTransactionResponse(
-  outcomes: PersistOutcome[],
-  classification: ClassifyOutcome,
-  locale: Locale,
-): CreateTransactionResult;
-export function createTransactionResponse(
-  classification: ClassifyOutcome,
-  locale: Locale,
-): (outcomes: PersistOutcome[]) => CreateTransactionResult;
-export function createTransactionResponse(...args: readonly unknown[]) {
-  return purry(_createTransactionResponse, args);
+export function viewFromOutcome(outcome: PersistOutcome, locale: Locale): TransactionView;
+export function viewFromOutcome(locale: Locale): (outcome: PersistOutcome) => TransactionView;
+export function viewFromOutcome(...args: readonly unknown[]) {
+  return purry(_viewFromOutcome, args);
 }
 
-/** Builds a create_transfer-shaped response — same shape as `createTransactionResponse` minus
- *  `classification` (transfers are never classified). */
-const _createTransferResponse = (
+/** `viewFromOutcome`, but for a flow that only ever has one persistable and so only ever cares
+ *  about the first (and only) outcome — e.g. update_account_transaction, which has no `created`
+ *  flag to derive (an update either lands or the whole unit of work fails as a `conflict` before
+ *  any outcome is ever reported — rule 4 — so there's no duplicate-replay case to distinguish the
+ *  way there is for an insert). Also the shape update_card_transaction will need once converted —
+ *  phase 2b. */
+const _buildTransactionView = (outcomes: PersistOutcome[], locale: Locale): TransactionView =>
+  viewFromOutcome(firstOutcome(outcomes), locale);
+
+export function buildTransactionView(outcomes: PersistOutcome[], locale: Locale): TransactionView;
+export function buildTransactionView(locale: Locale): (outcomes: PersistOutcome[]) => TransactionView;
+export function buildTransactionView(...args: readonly unknown[]) {
+  return purry(_buildTransactionView, args);
+}
+
+/** Resolves the localized view plus whether the shell's insert actually landed — `create_transfer`'s
+ *  own result shape, and the shared piece every other create-shaped flow's result builds on
+ *  (`add_account_expense`/`add_account_income` spread this and add `classification`; `add_card_purchase`
+ *  will too, once converted — phase 2b). `created` is never faked by the domain — always read off
+ *  the real apply outcome; on an idempotent duplicate replay, `outcome.read` (and so `transaction`)
+ *  is the EXISTING row, not this attempt's own values. */
+const _resolveTransactionOutcome = (
   outcomes: PersistOutcome[],
   locale: Locale,
 ): { transaction: TransactionView; created: boolean } => {
@@ -239,27 +236,13 @@ const _createTransferResponse = (
   return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied };
 };
 
-export function createTransferResponse(
+export function resolveTransactionOutcome(
   outcomes: PersistOutcome[],
   locale: Locale,
 ): { transaction: TransactionView; created: boolean };
-export function createTransferResponse(
+export function resolveTransactionOutcome(
   locale: Locale,
 ): (outcomes: PersistOutcome[]) => { transaction: TransactionView; created: boolean };
-export function createTransferResponse(...args: readonly unknown[]) {
-  return purry(_createTransferResponse, args);
-}
-
-/** Builds an update_account_transaction-shaped response (also the shape update_card_transaction
- *  will need once converted — phase 2b): just the localized view of the row the shell actually
- *  wrote. No `created` flag to derive — an update either lands or the whole unit of work fails as
- *  a `conflict` before any outcome is ever reported (rule 4), so there is no duplicate-replay case
- *  to distinguish here the way there is for an insert. */
-const _updateTransactionResponse = (outcomes: PersistOutcome[], locale: Locale): TransactionView =>
-  viewFromOutcome(firstOutcome(outcomes), locale);
-
-export function updateTransactionResponse(outcomes: PersistOutcome[], locale: Locale): TransactionView;
-export function updateTransactionResponse(locale: Locale): (outcomes: PersistOutcome[]) => TransactionView;
-export function updateTransactionResponse(...args: readonly unknown[]) {
-  return purry(_updateTransactionResponse, args);
+export function resolveTransactionOutcome(...args: readonly unknown[]) {
+  return purry(_resolveTransactionOutcome, args);
 }

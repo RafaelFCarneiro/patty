@@ -10,7 +10,7 @@ import { guard } from '../../common/result.js';
 import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
-import { createTransferResponse, defaultStatusFor } from '../../logic/transaction.js';
+import { defaultStatusFor, resolveTransactionOutcome } from '../../logic/transaction.js';
 import { accountErrors } from '../../models/account.js';
 import type { Account, CreateTransfer } from '../../models/account.js';
 import type { FlowOutcome } from '../../models/persistable.js';
@@ -69,6 +69,6 @@ export const createTransfer = (
 
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
-    const response = createTransferResponse(locale);
+    const response = resolveTransactionOutcome(locale);
     return ok({ persist, response });
   });

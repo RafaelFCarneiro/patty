@@ -154,13 +154,22 @@ controller **decides** and returns the write as data instead of performing it; t
   (`models/merchant.ts`'s `MERCHANT_CATEGORY_ENTITY_TAG` / `diplomat/db/repos/merchants.ts`'s
   `merchantCategoryApplier`) — rather than reaching for a side effect in `response`. Because `response` is pure
   (a function of `PersistOutcome[]` plus whatever plain values the flow closes over — `locale`, `classification`),
-  the actual response-shaping logic lives in `logic/transaction.ts` as named, independently unit-tested functions
-  (`createTransactionResponse`, `createTransferResponse`, `updateTransactionResponse` — one per response shape,
-  reused across aggregates once phase 2b converts the credit-card flows), not inlined in the controller. Each is
-  `purry`'d (data-last curried on the non-`outcomes` args — `docs/code-quality.md`'s dual-calling convention,
-  same as `addLocalizedLabels`), so `createTransactionResponse(classification, locale)` **is** the
-  `(outcomes) => T` function `FlowOutcome.response` wants — a converted flow assigns it directly, no wrapping
-  arrow at the call site.
+  the mechanical part — cast `PersistOutcome.read` back to `RawTransactionView`, localize it — lives in
+  `logic/transaction.ts` as named, independently unit-tested functions: `viewFromOutcome`/`buildTransactionView`
+  build a bare `TransactionView` (the model — no `created`/`classification` envelope; reused across aggregates
+  once phase 2b converts the credit-card flows), and `resolveTransactionOutcome` additionally resolves
+  `created` — `create_transfer`'s own result shape (`{ transaction, created }`) and the shared piece every
+  create-shaped flow's result builds on. Naming deliberately avoids "response" — these build/format a
+  `TransactionView`, not an HTTP/MCP response; that composition (e.g. `add_account_expense` spreading
+  `resolveTransactionOutcome`'s `{ transaction, created }` and adding its own `classification`) is the
+  *controller's* job — genuine orchestration (assembling the specific result shape a flow declares), not
+  something to push into `logic/` or into an adapter (an adapter can't do it: `created` only exists inside the
+  `PersistOutcome` the flow's own `response` closure sees, never after `unitOfWork` resolves, which is the only
+  point an adapter could run). Each of these is `purry`'d (data-last curried on the non-`outcomes` args —
+  `docs/code-quality.md`'s dual-calling convention, same as `addLocalizedLabels`), so e.g.
+  `resolveTransactionOutcome(locale)` **is** the `(outcomes) => T` function `FlowOutcome.response` wants — a
+  converted flow assigns it directly, no wrapping arrow at the call site, except where a flow's own shape needs
+  one extra field composed in (`add_account_expense`'s `classification`).
 - **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
   converted flow): `withUnitOfWork(db, registry, flow)` invokes `flow`, applies the returned `persist` batch in
   one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry` (insert
