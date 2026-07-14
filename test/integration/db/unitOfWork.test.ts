@@ -10,8 +10,9 @@ import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { accountApplier } from '../../../src/diplomat/db/repos/accounts.js';
+import { merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchants.js';
 import { transactionApplier } from '../../../src/diplomat/db/repos/transactions.js';
-import { tags } from '../../../src/diplomat/db/schema.js';
+import { categories, tags } from '../../../src/diplomat/db/schema.js';
 import {
   MAX_UNIT_OF_WORK_ATTEMPTS,
   versionedTableApplier,
@@ -21,6 +22,7 @@ import {
 } from '../../../src/diplomat/db/unitOfWork.js';
 import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
+import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp, type Persistable, type PersistOutcome } from '../../../src/models/persistable.js';
 import {
@@ -265,20 +267,6 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ created: false });
   });
-
-  it('awaits an async idempotency-aware response function before returning', async () => {
-    const model = newAccount();
-
-    const result = await withUnitOfWork(db, registry, () =>
-      okAsync({
-        persist: [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model })],
-        response: async (outcomes: PersistOutcome[]) => Promise.resolve(outcomes[0]?.applied),
-      }),
-    );
-
-    expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toBe(true);
-  });
 });
 
 describe('versionedTableApplier — reusable for any id/version-shaped table, not just accounts', () => {
@@ -480,5 +468,115 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
 
     expect(result.isOk()).toBe(true);
     expect(await db.all(sql`SELECT id FROM transactions WHERE id = ${row.id}`)).toHaveLength(0);
+  });
+});
+
+describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 2a)', () => {
+  const merchantRegistry: ApplierRegistry = {
+    [TRANSACTION_ENTITY_TAG]: transactionApplier,
+    [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
+  };
+
+  const seedCategory = async (): Promise<string> => {
+    const categoryId = randomUUID();
+    await db.insert(categories).values({ id: categoryId, name: `Category ${categoryId}`, kind: 'both', version: 0 });
+    return categoryId;
+  };
+
+  it('insert creates the edge at weight 1 on a first correction', async () => {
+    const categoryId = await seedCategory();
+    const merchantKey = `merchant-${randomUUID()}`;
+
+    const result = await withUnitOfWork(db, merchantRegistry, () =>
+      okAsync({
+        persist: [
+          { op: PersistOp.enum.insert, entity: MERCHANT_CATEGORY_ENTITY_TAG, model: { merchantKey, categoryId } },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    const [edge] = await db.all<{ weight: number }>(
+      sql`SELECT weight FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
+    );
+    expect(edge?.weight).toBe(1);
+  });
+
+  it('a repeat correction increments weight instead of failing on the composite-key conflict', async () => {
+    const categoryId = await seedCategory();
+    const merchantKey = `merchant-${randomUUID()}`;
+    const insertEdge = () =>
+      withUnitOfWork(db, merchantRegistry, () =>
+        okAsync({
+          persist: [
+            { op: PersistOp.enum.insert, entity: MERCHANT_CATEGORY_ENTITY_TAG, model: { merchantKey, categoryId } },
+          ] as Persistable[],
+          response: null,
+        }),
+      );
+
+    await insertEdge();
+    const second = await insertEdge();
+
+    expect(second.isOk()).toBe(true);
+    const [edge] = await db.all<{ weight: number }>(
+      sql`SELECT weight FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
+    );
+    expect(edge?.weight).toBe(2);
+  });
+
+  it('composes atomically with its transaction update: both roll back together on a stale version', async () => {
+    const categoryId = await seedCategory();
+    const merchantKey = `merchant-${randomUUID()}`;
+    const row: TransactionRowEntity = {
+      id: randomUUID(),
+      description: 'Coffee',
+      amount: 5,
+      type: TransactionType.enum.expense,
+      status: TransactionStatus.enum.effective,
+      date: '2026-06-01',
+      currency: CurrencyCode.enum.BRL,
+      source: TransactionSource.enum.mcp,
+      idempotencyKey: `idem-${randomUUID()}`,
+      classificationMethod: ClassificationMethod.enum.none,
+      confidence: 0,
+      rawInput: null,
+      note: null,
+      fromAccountId: null,
+      toAccountId: null,
+      creditCardId: null,
+      billId: null,
+      categoryId: null,
+      subcategoryId: null,
+      merchantKey,
+      version: 0,
+      tagNames: [],
+    };
+    await withUnitOfWork(db, merchantRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model: row }] as Persistable[],
+        response: null,
+      }),
+    );
+
+    const staleUpdate: TransactionRowEntity = { ...row, categoryId, version: row.version + 5 }; // never matches
+    const result = await withUnitOfWork(db, merchantRegistry, () =>
+      okAsync({
+        persist: [
+          { op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: staleUpdate },
+          { op: PersistOp.enum.insert, entity: MERCHANT_CATEGORY_ENTITY_TAG, model: { merchantKey, categoryId } },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    // The merchant-learning insert was in the same failed transaction on every attempt — never committed.
+    const edges = await db.all(
+      sql`SELECT 1 FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
+    );
+    expect(edges).toHaveLength(0);
   });
 });

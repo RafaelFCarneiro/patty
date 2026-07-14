@@ -1,9 +1,11 @@
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { MerchantMatch } from '../../../logic/classify.js';
+import type { MerchantCategoryEdge } from '../../../models/merchant.js';
 import { ClassificationMethod } from '../../../models/transaction.js';
 import type { Db } from '../driver.js';
 import { merchantCategory, merchants } from '../schema.js';
+import type { EntityApplier } from '../unitOfWork.js';
 
 const MatchRow = z.object({
   merchantKey: z.string(),
@@ -54,3 +56,31 @@ export const merchantsRepo = (db: Db): MerchantsRepo => ({
       });
   },
 });
+
+/**
+ * The merchant-category edge's `EntityApplier` (ADR-021), registered under `models/merchant.ts`'s
+ * `MERCHANT_CATEGORY_ENTITY_TAG` — the same upsert-increment mechanics as `strengthenFromTransaction`
+ * above, just driven by a `Persistable` (merchantKey/categoryId already known to the caller) instead
+ * of re-reading the transaction row to find them. Always an `insert` (no `id`/`version` — see
+ * `models/merchant.ts`) — `update`/`delete` are structurally unreachable for this entity.
+ */
+export const merchantCategoryApplier: EntityApplier = {
+  insert: async (tx, model) => {
+    const { merchantKey, categoryId } = model as MerchantCategoryEdge;
+    await tx.insert(merchants).values({ key: merchantKey }).onConflictDoNothing();
+    await tx
+      .insert(merchantCategory)
+      .values({ merchantKey, categoryId, weight: 1, origin: ClassificationMethod.enum.history })
+      .onConflictDoUpdate({
+        target: [merchantCategory.merchantKey, merchantCategory.categoryId],
+        set: { weight: sql`${merchantCategory.weight} + 1` },
+      });
+    return { applied: true };
+  },
+  update: async () => {
+    throw new Error('merchantCategoryApplier: update is unsupported — every write is an insert (upsert-increment)');
+  },
+  delete: async () => {
+    throw new Error('merchantCategoryApplier: delete is unsupported — merchant-category edges are never removed');
+  },
+};

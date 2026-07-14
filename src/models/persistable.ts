@@ -53,14 +53,15 @@ export type PersistOutcome = { applied: boolean; read?: unknown };
 
 /** What a functional-core flow returns instead of performing its writes: the write batch plus the
  *  response the caller gets back once the shell has applied it. `response` is usually just the
- *  plain, core-derived value — the common case (rule 6). The exception is an idempotency-aware
- *  flow whose response depends on what the shell's apply actually did (e.g. a create's `created`
- *  flag, only knowable post-apply, or a duplicate replay's persisted field values): it hands the
- *  shell a function of the per-persistable `PersistOutcome`s instead, called once the batch has
- *  committed. Async so a flow may do a further (write-adjacent but non-transactional) read/side
- *  effect — e.g. merchant-learning — after the batch commits, mirroring where that used to run
- *  when the domain applied its own writes. */
+ *  plain, core-derived value — the common case (rule 6). The exception is an idempotency-aware flow
+ *  whose response depends on what the shell's apply actually did (e.g. a create's `created` flag,
+ *  only knowable post-apply, or a duplicate replay's persisted field values): it hands the shell a
+ *  pure function of the per-persistable `PersistOutcome`s instead, called once the batch has
+ *  committed. Sync only, deliberately: a flow that needs a further write of its own (e.g.
+ *  merchant-learning off a category correction) puts that write in `persist` too — composed
+ *  atomically into the same batch (rule 5) — rather than reaching for a side effect here; `response`
+ *  stays pure data-shaping, never a place a flow performs I/O. */
 export type FlowOutcome<T> = {
   persist: Persistable[];
-  response: T | ((outcomes: PersistOutcome[]) => T | Promise<T>);
+  response: T | ((outcomes: PersistOutcome[]) => T);
 };

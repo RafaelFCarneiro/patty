@@ -144,12 +144,15 @@ controller **decides** and returns the write as data instead of performing it; t
   what actually happened when it applied each `Persistable` — chiefly, for `insert`, whether the row actually
   landed (`applied`) or was skipped as an idempotent duplicate, plus the entity's own already-decoded `read` of
   what is now actually persisted (e.g. the existing row on a duplicate). A `FlowOutcome.response` is normally
-  just the plain, core-derived value; an idempotency-aware flow instead hands back a function of the batch's
-  `PersistOutcome[]` (sync or async — async lets a flow run a write-adjacent, non-transactional side effect,
-  e.g. merchant-learning, only after the batch has actually committed), which `withUnitOfWork` calls once
-  applied. `add_account_expense`/`add_account_income`/`create_transfer`'s `created` flag and
-  `update_account_transaction`'s post-commit merchant-learning (`controllers/account/transaction.ts`) are the
-  first users; this is the mechanism bulk import (phase 3) reuses for its own per-item created/duplicate outcomes.
+  just the plain, core-derived value; an idempotency-aware flow instead hands back a **pure, sync** function of
+  the batch's `PersistOutcome[]`, which `withUnitOfWork` calls once applied — `response` stays data-shaping
+  only, deliberately never a place a flow performs I/O of its own (rule 1). `add_account_expense`/
+  `add_account_income`/`create_transfer`'s `created` flag is the first user; this is the mechanism bulk import
+  (phase 3) reuses for its own per-item created/duplicate outcomes. A flow that needs a *further* write (e.g.
+  `update_account_transaction`'s merchant-learning off a category correction) puts that write in `persist` too
+  — composed into the same atomic batch (rule 5) via its own minimal entity
+  (`models/merchant.ts`'s `MERCHANT_CATEGORY_ENTITY_TAG` / `diplomat/db/repos/merchants.ts`'s
+  `merchantCategoryApplier`) — rather than reaching for a side effect in `response`.
 - **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
   converted flow): `withUnitOfWork(db, registry, flow)` invokes `flow`, applies the returned `persist` batch in
   one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry` (insert

@@ -316,18 +316,52 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
     expect(persisted.model.amount).toBe(42);
   });
 
-  it("response() strengthens the merchant association only when the category actually changed", async () => {
-    const strengthenFromTransaction = vi.fn();
+  const newCategory = { id: 'cat-new', name: 'Transporte', kind: 'both', names: null };
+
+  it('does not append a merchant-learning Persistable when no category correction was given', async () => {
     const deps = makeDeps({
-      transactions: { getById: async () => ({ ...baseTx, categoryId: 'cat-old' }) } as unknown as Deps['transactions'],
-      merchants: { strengthenFromTransaction } as unknown as Deps['merchants'],
+      transactions: {
+        getById: async () => ({ ...baseTx, categoryId: 'cat-old', merchant: 'uber' }),
+      } as unknown as Deps['transactions'],
     });
 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', description: 'No category change' });
-    const outcome = result._unsafeUnwrap();
-    await resolveResponse(outcome, [{ applied: true, read: rawViewFor({ ...baseTx, id: baseTx.id }) }]);
 
-    expect(strengthenFromTransaction).not.toHaveBeenCalled();
+    expect(result._unsafeUnwrap().persist).toHaveLength(1);
+  });
+
+  it('composes a merchant-learning insert into the same atomic batch on a category correction (rule 5)', async () => {
+    const deps = makeDeps({
+      transactions: {
+        getById: async () => ({ ...baseTx, categoryId: 'cat-old', merchant: 'uber' }),
+      } as unknown as Deps['transactions'],
+      categories: { list: async () => [newCategory] } as unknown as Deps['categories'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', category: 'Transporte' });
+
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toHaveLength(2);
+    expect(outcome.persist[1]).toEqual({
+      op: PersistOp.enum.insert,
+      entity: 'merchantCategory',
+      model: { merchantKey: 'uber', categoryId: 'cat-new' },
+    });
+    // response() is pure data-shaping — it must not itself perform any write.
+    expect(typeof outcome.response).not.toBe('undefined');
+  });
+
+  it('does not append a merchant-learning Persistable when the transaction has no classified merchant', async () => {
+    const deps = makeDeps({
+      transactions: {
+        getById: async () => ({ ...baseTx, categoryId: 'cat-old', merchant: undefined }),
+      } as unknown as Deps['transactions'],
+      categories: { list: async () => [newCategory] } as unknown as Deps['categories'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', category: 'Transporte' });
+
+    expect(result._unsafeUnwrap().persist).toHaveLength(1);
   });
 
   it('deleteAccountTransaction returns an empty persist batch (no writes) for a dry run without confirm', async () => {

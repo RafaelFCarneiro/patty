@@ -25,13 +25,15 @@ export const remove = <Tag extends string>(fields: { entity: Tag; id: string; ve
   ...fields,
 });
 
-/** Extracts the one outcome from a flow whose `persist` batch is always exactly one item — the
- *  common shape for a single-entity insert/update (`docs/functional-core-imperative-shell.md`
- *  rule 6's idempotency-aware `response` function). Throws rather than silently defaulting: an
- *  empty `outcomes` here would mean the flow's own `persist` batch and its `response` function
- *  have drifted out of sync — an internal invariant violation, not a domain outcome. */
-export const soleOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
+/** Extracts the primary outcome — `persist[0]`'s — from a flow's idempotency-aware `response`
+ *  function (`docs/functional-core-imperative-shell.md` rule 6): the entity the flow itself is
+ *  about always leads the batch, even when composed with another entity's persistable afterward
+ *  (rule 5 — e.g. `updateAccountTransaction` appending a merchant-learning edge). Throws rather
+ *  than silently defaulting: an empty `outcomes` here would mean the flow's own `persist` batch and
+ *  its `response` function have drifted out of sync — an internal invariant violation, not a
+ *  domain outcome. */
+export const firstOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
   const [outcome] = outcomes;
-  if (!outcome) throw new Error('soleOutcome: expected exactly one persist outcome, got none');
+  if (!outcome) throw new Error('firstOutcome: expected at least one persist outcome, got none');
   return outcome;
 };

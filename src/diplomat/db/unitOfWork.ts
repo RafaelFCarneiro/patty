@@ -149,19 +149,14 @@ type Flow<T> = () => ResultAsync<FlowOutcome<T>, AppError>;
 
 /** Resolves a `FlowOutcome`'s `response` against the batch's apply outcomes — the plain value for
  *  the common case, or the result of calling the function an idempotency-aware flow handed back
- *  instead (rule 6). `Promise.resolve` uniformly covers a sync or async response function. */
-const resolveResponse = <T>(
-  response: T | ((outcomes: PersistOutcome[]) => T | Promise<T>),
-  outcomes: PersistOutcome[],
-): Promise<T> => {
-  const resolved = typeof response === 'function' ? (response as (o: PersistOutcome[]) => T)(outcomes) : response;
-  return Promise.resolve(resolved);
-};
+ *  instead (rule 6). Sync — see `models/persistable.ts`'s `FlowOutcome` doc for why. */
+const resolveResponse = <T>(response: T | ((outcomes: PersistOutcome[]) => T), outcomes: PersistOutcome[]): T =>
+  typeof response === 'function' ? (response as (o: PersistOutcome[]) => T)(outcomes) : response;
 
 const attempt = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>, attemptsLeft: number): ResultAsync<T, AppError> =>
   flow().andThen(({ persist, response }) =>
     ResultAsync.fromSafePromise(applyBatch(db, registry, persist)).andThen(({ applied, outcomes }) => {
-      if (applied) return ResultAsync.fromSafePromise(resolveResponse(response, outcomes));
+      if (applied) return okAsync(resolveResponse(response, outcomes));
       if (attemptsLeft <= 1) return errAsync<T, AppError>(conflict);
       return attempt(db, registry, flow, attemptsLeft - 1);
     }),

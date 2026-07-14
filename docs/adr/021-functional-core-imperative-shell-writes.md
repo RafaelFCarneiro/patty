@@ -164,15 +164,21 @@ gets its own generic atomicity/conflict/idempotency suite.
      under `models/transaction.ts`'s `TRANSACTION_ENTITY_TAG`. Added the UoW idempotency-outcome contract
      rule 6 describes: `PersistOutcome` (`models/persistable.ts`) — `applied` + an entity-decoded `read` of
      what's now actually persisted — reported per-persistable by `withUnitOfWork`; `FlowOutcome.response` may
-     be the plain value (unchanged for `createAccount`) or a (sync or async) function of the batch's
-     `PersistOutcome[]`, which is how `created` is derived (never faked) and how
-     `updateAccountTransaction` runs merchant-learning strictly after the shell's commit. Behavior-preserving:
+     be the plain value (unchanged for `createAccount`) or a pure, sync function of the batch's
+     `PersistOutcome[]`, which is how `created` is derived (never faked). `response` stays data-shaping only —
+     `updateAccountTransaction`'s merchant-learning (a category correction strengthens the merchant→category
+     edge) is a *further write*, not response-shaping, so it rides in the same `persist` batch as the
+     transaction update instead (rule 5), via its own minimal entity (`models/merchant.ts`'s
+     `MERCHANT_CATEGORY_ENTITY_TAG`, `diplomat/db/repos/merchants.ts`'s `merchantCategoryApplier` — an
+     upsert-increment `insert`-only applier, since `merchant_category` has no `id`/`version` and is never
+     `update`d/`delete`d in the versioned-entity sense) — atomic with the update it came from, and never fired
+     on a version-conflict attempt that gets rolled back and retried. Behavior-preserving:
      `controllers/account/transaction.ts`'s `addAccountMovementViaRepo` keeps the old `deps.transactions.create`
      path for `importAccountStatement` (bulk import isn't converted until phase 3) and
      `controllers/transaction/core.ts`'s `updateTransaction`/`deleteTransaction` are unchanged (still used by
-     the not-yet-converted credit-card aggregate) — both share their read/decision logic with the converted
-     account-side flows via extracted pure planners (`planAccountMovement`, `decideTransactionUpdate`) rather
-     than duplicating it outright.
+     the not-yet-converted credit-card aggregate, including its own `deps.merchants.strengthenFromTransaction`
+     call) — both share their read/decision logic with the converted account-side flows via extracted pure
+     planners (`planAccountMovement`, `decideTransactionUpdate`) rather than duplicating it outright.
    - [ ] Phase 2b/2c (credit-card + bill flows): convert `add_card_purchase`/`update_card_transaction`/
      `delete_card_transaction`, `payBill`/`revertBillPayment`; delete `bills.pay`/`ensureAndAttach`/self-heal
      and their atomicity tests.

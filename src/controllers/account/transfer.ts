@@ -71,7 +71,7 @@ export const createTransfer = (
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
     const response = (outcomes: PersistOutcome[]): { transaction: TransactionView; created: boolean } => {
-      const outcome = persistence.soleOutcome(outcomes);
+      const outcome = persistence.firstOutcome(outcomes);
       const view = outcome.read as RawTransactionView;
       return { transaction: addLocalizedLabels(view, locale), created: outcome.applied };
     };

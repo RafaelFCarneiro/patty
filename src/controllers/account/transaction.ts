@@ -20,7 +20,8 @@ import {
   type ImportAccountStatement,
   type UpdateAccountTransaction,
 } from '../../models/account.js';
-import { type FlowOutcome, type PersistOutcome } from '../../models/persistable.js';
+import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../models/merchant.js';
+import { type FlowOutcome, type PersistOutcome, type Persistable } from '../../models/persistable.js';
 import {
   ClassificationMethod,
   DELETE_TRANSACTION_CONFIRM_HINT,
@@ -125,7 +126,7 @@ const addAccountMovement = (
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
     const response = (outcomes: PersistOutcome[]): CreateTransactionResult => {
-      const outcome = persistence.soleOutcome(outcomes);
+      const outcome = persistence.firstOutcome(outcomes);
       const view = outcome.read as RawTransactionView;
       return { transaction: addLocalizedLabels(view, locale), created: outcome.applied, classification };
     };
@@ -193,8 +194,10 @@ export const importAccountStatement = (
  * mutability, shares `decideTransactionUpdate`'s reads with the (still repo-driven) credit-card
  * aggregate, and merges the result onto `existing` to build the full desired end-state entity the
  * shell applies as a version-guarded update. Merchant learning (a correction strengthens the
- * merchant→category association) runs from the `response` function, after the shell has actually
- * committed the update — never before, and never faked if the version guard has to retry.
+ * merchant→category association) is composed into the SAME `persist` batch as a
+ * `MERCHANT_CATEGORY_ENTITY_TAG` insert (rule 5) — not a side effect performed from `response` —
+ * so it applies atomically with the transaction update: it commits only when the update does, and
+ * never fires on a version-conflict attempt that gets rolled back and retried.
  */
 export const updateAccountTransaction = (
   deps: Deps,
@@ -239,14 +242,21 @@ export const updateAccountTransaction = (
     };
 
     const locale = await deps.locale();
-    const persist = [
+    const persist: Persistable[] = [
       persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } }),
     ];
-    const response = async (outcomes: PersistOutcome[]): Promise<TransactionView> => {
-      const view = persistence.soleOutcome(outcomes).read as RawTransactionView;
-      if (categoryId && categoryId !== existing.categoryId) {
-        await deps.merchants.strengthenFromTransaction(input.id, categoryId);
-      }
+    // A correction (category actually changed) strengthens the merchant→category association —
+    // only possible when the transaction has a classified merchant at all.
+    if (categoryId && categoryId !== existing.categoryId && existing.merchant) {
+      persist.push(
+        persistence.insert({
+          entity: MERCHANT_CATEGORY_ENTITY_TAG,
+          model: { merchantKey: existing.merchant, categoryId },
+        }),
+      );
+    }
+    const response = (outcomes: PersistOutcome[]): TransactionView => {
+      const view = persistence.firstOutcome(outcomes).read as RawTransactionView;
       return addLocalizedLabels(view, locale);
     };
     return ok({ persist, response });
