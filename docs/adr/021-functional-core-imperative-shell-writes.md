@@ -174,20 +174,22 @@ gets its own generic atomicity/conflict/idempotency suite.
      `update`d/`delete`d in the versioned-entity sense) — atomic with the update it came from, and never fired
      on a version-conflict attempt that gets rolled back and retried. Since `response` is now genuinely pure in
      every converted flow, moved the mechanical part out of each controller and into named, unit-tested functions
-     in `logic/transaction.ts`, deliberately not named "response" (they build/format a `TransactionView`, not an
-     HTTP/MCP response): `viewFromOutcome`/`buildTransactionView` resolve a bare `TransactionView` (the model —
-     no `created`/`classification` envelope), and `resolveTransactionOutcome` additionally resolves `created` —
-     `create_transfer`'s own result shape and the shared piece `add_account_expense`/`add_account_income` build
-     on. Composing a flow-specific envelope on top (e.g. `add_account_expense` spreading
-     `resolveTransactionOutcome`'s `{ transaction, created }` and adding its own `classification`) stays the
-     *controller's* job, not `logic/`'s and not an adapter's — an adapter can't do it, since `created` only
-     exists inside the `PersistOutcome` the flow's own `response` closure sees, never after `unitOfWork`
-     resolves (the only point an adapter could run). Each `logic/transaction.ts` function is `purry`'d
-     data-last on the non-`outcomes` args (the dual-calling convention `docs/code-quality.md` already
-     established for `addLocalizedLabels`/`withTypeLabel`), so e.g. `resolveTransactionOutcome(locale)` *is* the
-     `(outcomes) => T` function `FlowOutcome.response` wants — `create_transfer` assigns it directly
-     (`const response = resolveTransactionOutcome(locale)`), no wrapping arrow; `add_account_expense`'s own
-     `response` is a two-line spread, not mechanical duplication.
+     in `logic/transaction.ts`, deliberately not named "response" (they build/format a model, not an HTTP/MCP
+     response): `viewFromOutcome`/`buildTransactionView` resolve a bare `TransactionView` (no `created`/
+     `classification` envelope — `update_account_transaction`'s shape), and `buildUpsertResult` resolves
+     `models/transaction.ts`'s new `UpsertTransactionResult` (`{ transaction, created, classification? }` —
+     replaces the old `CreateTransactionResult`, `classification` now optional) directly: `create_transfer`
+     calls it with `classification: undefined`, `add_account_expense`/`add_account_income` with a real one —
+     `ClassifiedUpsertResult` names the narrowing (`classification` required) those two, `add_card_purchase`,
+     and bulk import actually return, used for `addCardPurchase`'s/`addAccountMovementViaRepo`'s/
+     `StatementLineCreateFn`'s/`toBulkItemResult`'s declared types so the classification-always-present
+     guarantee those flows already had doesn't silently erode. One shared result shape, not a bespoke envelope
+     assembled per flow — `add_account_expense` no longer needs to compose `{ transaction, created }` plus its
+     own `classification` at the call site at all. Each `logic/transaction.ts` function is `purry`'d data-last
+     on the non-`outcomes` args (the dual-calling convention `docs/code-quality.md` already established for
+     `addLocalizedLabels`/`withTypeLabel`), so e.g. `buildUpsertResult(classification, locale)` *is* the
+     `(outcomes) => T` function `FlowOutcome.response` wants — every converted flow assigns it directly
+     (`const response = buildUpsertResult(classification, locale)`), no wrapping arrow at any call site.
      Normalized the merchants repo alongside this: the old `strengthenFromTransaction(transactionId, categoryId)`
      re-queried `transactions` to resolve a merchant key itself — a business-shaped repo method name and behavior
      (`docs/diplomatic-architecture.md`: repos "should contain no business logic"). Replaced with

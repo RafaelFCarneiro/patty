@@ -309,11 +309,24 @@ export type ClassifyOutcome = Classification & {
 
 export type CreateTxResult = { transaction: RawTransactionView; created: boolean };
 
-export type CreateTransactionResult = {
+/** The shared shape of "did this write land, and what does the caller need to know about it" —
+ *  every insert-shaped account/credit-card flow's result. `classification` is optional: present
+ *  for a movement (`add_account_expense`/`add_account_income`/`add_card_purchase` — auto/user
+ *  classification is meaningful there), absent for a transfer (`create_transfer` — transfers are
+ *  never classified). Named "Upsert" because from the caller's perspective, an idempotency-keyed
+ *  create call means "ensure this transaction exists" — `created` distinguishes a fresh insert from
+ *  a replay that found it already there. */
+export type UpsertTransactionResult = {
   transaction: TransactionView;
   created: boolean;
-  classification: ClassifyOutcome;
+  classification?: ClassifyOutcome;
 };
+
+/** `UpsertTransactionResult` with `classification` guaranteed present — every movement/card-purchase
+ *  flow's actual return shape (`add_account_expense`/`add_account_income`/`add_card_purchase`,
+ *  and bulk import, which is always one of those, never a transfer). Named once so the intersection
+ *  isn't repeated at every one of those call sites. */
+export type ClassifiedUpsertResult = UpsertTransactionResult & { classification: ClassifyOutcome };
 
 export type DeleteTransactionResult =
   | { deleted: true; transaction: TransactionView }

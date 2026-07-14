@@ -10,7 +10,7 @@ import { guard } from '../../common/result.js';
 import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
-import { defaultStatusFor, resolveTransactionOutcome } from '../../logic/transaction.js';
+import { buildUpsertResult, defaultStatusFor } from '../../logic/transaction.js';
 import { accountErrors } from '../../models/account.js';
 import type { Account, CreateTransfer } from '../../models/account.js';
 import type { FlowOutcome } from '../../models/persistable.js';
@@ -19,8 +19,9 @@ import {
   TRANSACTION_ENTITY_TAG,
   TransactionType,
   type TransactionEntity,
+  type UpsertTransactionResult,
 } from '../../models/transaction.js';
-import type { TransactionView, TransactionSource } from '../../models/transaction.js';
+import type { TransactionSource } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef } from '../resolve.js';
 
@@ -43,7 +44,7 @@ export const createTransfer = (
   deps: Deps,
   input: CreateTransfer,
   source: TransactionSource,
-): ResultAsync<FlowOutcome<{ transaction: TransactionView; created: boolean }>, AppError> =>
+): ResultAsync<FlowOutcome<UpsertTransactionResult>, AppError> =>
   safeTry(async function* () {
     const from = yield* resolveAccountRef(deps, input.from);
     const to = yield* resolveAccountRef(deps, input.to);
@@ -69,6 +70,8 @@ export const createTransfer = (
 
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
-    const response = resolveTransactionOutcome(locale);
+    // Transfers are never classified — explicit `undefined` (purry needs the arity to match
+    // `buildUpsertResult`'s 2-arg curry: `classification`, `locale`).
+    const response = buildUpsertResult(undefined, locale);
     return ok({ persist, response });
   });

@@ -17,8 +17,8 @@ import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
   buildTransactionView,
+  buildUpsertResult,
   defaultStatusFor,
-  resolveTransactionOutcome,
 } from '../../logic/transaction.js';
 import {
   accountErrors,
@@ -27,7 +27,7 @@ import {
   type UpdateAccountTransaction,
 } from '../../models/account.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../models/merchant.js';
-import { type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
+import { type FlowOutcome, type Persistable } from '../../models/persistable.js';
 import {
   ClassificationMethod,
   DELETE_TRANSACTION_CONFIRM_HINT,
@@ -35,8 +35,8 @@ import {
   transactionErrors,
   MovementType,
   TransactionTool,
+  type ClassifiedUpsertResult,
   type ClassifyOutcome,
-  type CreateTransactionResult,
   type DeleteTransactionResult,
   type TransactionEntity,
   type TransactionSource,
@@ -124,19 +124,13 @@ const addAccountMovement = (
   input: AddAccountMovement,
   type: MovementType,
   source: TransactionSource,
-): ResultAsync<FlowOutcome<CreateTransactionResult>, AppError> =>
+): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> =>
   safeTry(async function* () {
     const { entity, classification } = yield* planAccountMovement(deps, input, type, source);
 
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
-    // { transaction, created } is the shared, shell-outcome-derived piece (resolveTransactionOutcome);
-    // classification is this flow's own addition, known before the write even happens — assembling
-    // that combination is this controller's own orchestration, not something to push into `logic/`.
-    const response = (outcomes: PersistOutcome[]): CreateTransactionResult => ({
-      ...resolveTransactionOutcome(outcomes, locale),
-      classification,
-    });
+    const response = buildUpsertResult(classification, locale);
     return ok({ persist, response });
   });
 
@@ -144,20 +138,20 @@ export const addAccountExpense = (
   deps: Deps,
   input: AddAccountMovement,
   source: TransactionSource,
-): ResultAsync<FlowOutcome<CreateTransactionResult>, AppError> =>
+): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> =>
   addAccountMovement(deps, input, MovementType.enum.expense, source);
 
 export const addAccountIncome = (
   deps: Deps,
   input: AddAccountMovement,
   source: TransactionSource,
-): ResultAsync<FlowOutcome<CreateTransactionResult>, AppError> =>
+): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> =>
   addAccountMovement(deps, input, MovementType.enum.income, source);
 
 /**
  * Legacy repo-write path — used only by `importAccountStatement` below. `runStatementImport`
  * (controllers/transaction/bulk.ts) applies each statement line's write immediately and expects an
- * already-applied `CreateTransactionResult` back, not a `FlowOutcome`; folding N lines into one
+ * already-applied `UpsertTransactionResult` back, not a `FlowOutcome`; folding N lines into one
  * atomic `Persistable` batch (and giving the whole import idempotency-aware, per-item outcome
  * semantics) is bulk import's own conversion, deliberately deferred to ADR-021 phase 3. Shares
  * `planAccountMovement`'s decision with the FC/IS `addAccountMovement` above; only the write
@@ -168,7 +162,7 @@ const addAccountMovementViaRepo = (
   input: AddAccountMovement,
   type: MovementType,
   source: TransactionSource,
-): ResultAsync<CreateTransactionResult, AppError> =>
+): ResultAsync<ClassifiedUpsertResult, AppError> =>
   safeTry(async function* () {
     const { entity, classification } = yield* planAccountMovement(deps, input, type, source);
     const { transaction, created } = await deps.transactions.create(entity, entity.tagNames);

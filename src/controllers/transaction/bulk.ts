@@ -12,7 +12,7 @@ import type { AppError } from '../../common/errors.js';
 import { toIsoDate } from '../../logic/period.js';
 import { deriveIdempotencyKey, summarizeBulkItems, toBulkItemResult } from '../../logic/transaction.js';
 import type { BulkItemResult, BulkResult } from '../../logic/transaction.js';
-import type { CreateTransactionResult, TransactionSource } from '../../models/transaction.js';
+import type { ClassifiedUpsertResult, TransactionSource } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 
 /** Minimal shape every statement line carries, regardless of aggregate — what the runner needs to
@@ -23,12 +23,15 @@ export type StatementLine = { date?: string; description: string; amount: number
  *  the account aggregate's own legacy repo-write path bound to a fixed account — ADR-021 phase 3
  *  still owes bulk import its own FC/IS + idempotency-aware-outcome conversion, so this runner
  *  keeps expecting an already-applied result rather than a `Persistable` batch) — injected so this
- *  module never imports an aggregate. Receives the line with the runner's defaults already applied. */
+ *  module never imports an aggregate. Receives the line with the runner's defaults already applied.
+ *  `classification` is required (narrower than `UpsertTransactionResult`'s general optional field):
+ *  a statement line is always a movement or card purchase, never a transfer — single-source imports
+ *  make routing to a transfer-shaped create function impossible by construction (ADR-017 step 2). */
 export type StatementLineCreateFn<Line extends StatementLine> = (
   deps: Deps,
   line: Line & { date: string; idempotencyKey: string; rawInput?: string },
   source: TransactionSource,
-) => ResultAsync<CreateTransactionResult, AppError>;
+) => ResultAsync<ClassifiedUpsertResult, AppError>;
 
 /** Statement paste/import shared by every aggregate importer: each line idempotent, classified,
  *  flagged for review when uncertain. Defaults per-line fields (date, idempotencyKey), then

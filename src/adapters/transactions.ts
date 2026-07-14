@@ -7,7 +7,7 @@ import {
   type TransactionPatch,
 } from '../models/transaction.js';
 import { LocalizedNamesSchema } from '../models/category.js';
-import type { CreateTransactionResult, DeleteTransactionResult, SearchTransactions } from '../models/transaction.js';
+import type { ClassifiedUpsertResult, DeleteTransactionResult, SearchTransactions } from '../models/transaction.js';
 import type { BulkItemResult } from '../logic/transaction.js';
 import type { AppError } from '../common/errors.js';
 import { INITIAL_VERSION, PersistOp, type FlowOutcome, type Persistable } from '../models/persistable.js';
@@ -183,8 +183,12 @@ export const searchWireInToModel = (input: wireIn.SearchTransactionsInput): Sear
 
 // ─── model→wire/out ──────────────────────────────────────────────────────────
 
-export const createResultToWireOut = (result: CreateTransactionResult): CreateTransactionOut =>
-  CreateTransactionOut.parse(result);
+// `classification` required (narrower than `UpsertTransactionResult`'s general optional field):
+// this adapter is only ever reached from add_account_expense/add_account_income/add_card_purchase,
+// never create_transfer (transfers are never classified — TransferResultOut has no such field).
+export const createResultToWireOut = (
+  result: ClassifiedUpsertResult,
+): CreateTransactionOut => CreateTransactionOut.parse(result);
 
 const bulkItemToWireOut = (item: BulkItemResult<AppError>): BulkItemOut =>
   item.status === 'error'

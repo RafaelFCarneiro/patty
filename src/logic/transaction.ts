@@ -5,8 +5,9 @@ import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDi
 import type {
   CategoryFields,
   Classification,
+  ClassifiedUpsertResult,
   ClassifyOutcome,
-  CreateTransactionResult,
+  UpsertTransactionResult,
   SearchTransactions,
   TransactionError,
   TransactionView,
@@ -140,7 +141,10 @@ export type BulkItemResult<E = unknown> =
   | { status: 'error'; description: string; error: E };
 
 export const toBulkItemResult = <E>(
-  result: Result<CreateTransactionResult, E>,
+  // Bulk import never represents a transfer (single-source: every line is a movement/card
+  // purchase — ADR-017 step 2), so `classification` is always present here — narrower than the
+  // general `UpsertTransactionResult` (`create_transfer` is the one flow that omits it).
+  result: Result<ClassifiedUpsertResult, E>,
   description: string,
 ): BulkItemResult<E> =>
   result.match(
@@ -222,27 +226,47 @@ export function buildTransactionView(...args: readonly unknown[]) {
   return purry(_buildTransactionView, args);
 }
 
-/** Resolves the localized view plus whether the shell's insert actually landed — `create_transfer`'s
- *  own result shape, and the shared piece every other create-shaped flow's result builds on
- *  (`add_account_expense`/`add_account_income` spread this and add `classification`; `add_card_purchase`
- *  will too, once converted — phase 2b). `created` is never faked by the domain — always read off
- *  the real apply outcome; on an idempotent duplicate replay, `outcome.read` (and so `transaction`)
- *  is the EXISTING row, not this attempt's own values. */
-const _resolveTransactionOutcome = (
+/**
+ * Builds every insert-shaped flow's result (`UpsertTransactionResult` — `models/transaction.ts`):
+ * the localized view, plus whether the shell's insert actually landed. `created` is never faked by
+ * the domain — always read off the real apply outcome; on an idempotent duplicate replay,
+ * `outcome.read` (and so `transaction`) is the EXISTING row, not this attempt's own values.
+ * `classification` is the one field that genuinely varies per flow (present for a movement,
+ * `undefined` for a transfer — transfers are never classified) — passed through as-is rather than
+ * each flow assembling its own envelope around a shared `{ transaction, created }` core, since
+ * `UpsertTransactionResult` is that one shape every insert-shaped flow already returns.
+ */
+const _buildUpsertResult = (
   outcomes: PersistOutcome[],
+  classification: ClassifyOutcome | undefined,
   locale: Locale,
-): { transaction: TransactionView; created: boolean } => {
+): UpsertTransactionResult => {
   const outcome = firstOutcome(outcomes);
-  return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied };
+  return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied, classification };
 };
 
-export function resolveTransactionOutcome(
+// Two overload pairs (data-first / data-last), each split on whether `classification` is a real
+// value or `undefined` — so a caller with a `ClassifyOutcome` in hand gets back
+// `ClassifiedUpsertResult` (no re-narrowing needed), and `create_transfer`'s explicit `undefined`
+// still gets the general `UpsertTransactionResult`.
+export function buildUpsertResult(
   outcomes: PersistOutcome[],
+  classification: ClassifyOutcome,
   locale: Locale,
-): { transaction: TransactionView; created: boolean };
-export function resolveTransactionOutcome(
+): ClassifiedUpsertResult;
+export function buildUpsertResult(
+  outcomes: PersistOutcome[],
+  classification: undefined,
   locale: Locale,
-): (outcomes: PersistOutcome[]) => { transaction: TransactionView; created: boolean };
-export function resolveTransactionOutcome(...args: readonly unknown[]) {
-  return purry(_resolveTransactionOutcome, args);
+): UpsertTransactionResult;
+export function buildUpsertResult(
+  classification: ClassifyOutcome,
+  locale: Locale,
+): (outcomes: PersistOutcome[]) => ClassifiedUpsertResult;
+export function buildUpsertResult(
+  classification: undefined,
+  locale: Locale,
+): (outcomes: PersistOutcome[]) => UpsertTransactionResult;
+export function buildUpsertResult(...args: readonly unknown[]) {
+  return purry(_buildUpsertResult, args);
 }
