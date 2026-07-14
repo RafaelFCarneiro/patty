@@ -178,6 +178,52 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
     expect(model.refs.categoryId).toBe('cat-transport');
   });
 
+  it('on a match, stores the matched (possibly partial) merchant key, not the full description', async () => {
+    const deps = makeDeps({
+      merchants: {
+        matchCandidates: async () => [
+          { merchantKey: 'uber', categoryId: 'cat-transport', categoryName: 'Transport', weight: 3, origin: 'rule' },
+        ],
+      } as unknown as Deps['merchants'],
+    });
+
+    const result = await addAccountExpense(
+      deps,
+      { description: 'Uber ride 42', amount: 15, idempotencyKey: 'classify-merchant-key-matched' },
+      TransactionSource.enum.mcp,
+    );
+
+    const { model } = result._unsafeUnwrap().persist[0] as { model: { refs: { merchantKey?: string } } };
+    expect(model.refs.merchantKey).toBe('uber');
+  });
+
+  it('on no match, falls back to the full normalized description as the merchant key', async () => {
+    const deps = makeDeps();
+
+    const result = await addAccountExpense(
+      deps,
+      { description: 'Ze Padaria #123', amount: 15, idempotencyKey: 'classify-merchant-key-unmatched' },
+      TransactionSource.enum.mcp,
+    );
+
+    expect(result._unsafeUnwrap().persist[0]).toMatchObject({
+      model: { refs: { merchantKey: 'ze padaria' } },
+    });
+  });
+
+  it('on a description that normalizes to nothing, leaves merchantKey undefined, not empty', async () => {
+    const deps = makeDeps();
+
+    const result = await addAccountExpense(
+      deps,
+      { description: '#123456', amount: 15, idempotencyKey: 'classify-merchant-key-empty' },
+      TransactionSource.enum.mcp,
+    );
+
+    const { model } = result._unsafeUnwrap().persist[0] as { model: { refs: { merchantKey?: string } } };
+    expect(model.refs.merchantKey).toBeUndefined();
+  });
+
   it('sets type to income for addAccountIncome and expense for addAccountExpense', async () => {
     const deps = makeDeps();
 

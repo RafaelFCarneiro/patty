@@ -170,6 +170,19 @@ controller **decides** and returns the write as data instead of performing it; t
   dual-calling convention, same as `addLocalizedLabels`), so e.g. `buildUpsertResult(classification, locale)`
   **is** the `(outcomes) => T` function `FlowOutcome.response` wants — every converted flow assigns it directly,
   no wrapping arrow at any call site.
+- **Merchant key is always stored, matched or not** (`controllers/account/transaction.ts`'s `planAccountMovement`):
+  `pickClassification` (`logic/classify.ts`) only returns a `merchantKey` when it found a match, since a matched
+  key is the (possibly partial) `merchant_category` key substring-matched against, not the transaction's own
+  description — reusing it keeps a later correction reinforcing that same generalized key rather than
+  fragmenting it. On no match there is nothing to reuse, but the transaction still needs *some* merchant key
+  stored on its row, or a later category correction (`resolveMerchantCorrection`) has nothing to attach to — it
+  can only ever strengthen a merchant the transaction is already linked to. `planAccountMovement` falls back to
+  the full `normalizeMerchant(description)` in that case (empty-string guarded, since that can't back a
+  `merchants` FK row). This closes a real gap: before this fallback existed (true on `main` too, not introduced
+  by this phase), a brand-new merchant's first correction was silently dropped — `merchant_key` stayed `null` on
+  the row, so `resolveMerchantCorrection`/the old `strengthenFromTransaction` had nothing to key off. The
+  identical gap still exists in `add_card_purchase` (phase 2b, not yet converted) — tracked as
+  [#115](https://github.com/RafaelFCarneiro/fintrack/issues/115).
 - **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
   converted flow): `withUnitOfWork(db, registry, flow)` invokes `flow`, applies the returned `persist` batch in
   one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry` (insert

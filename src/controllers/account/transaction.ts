@@ -89,6 +89,12 @@ const planAccountMovement = (
       ? userClassification({ id: categorySelection.categoryId, name: categorySelection.categoryName })
       : pickClassification(await deps.merchants.matchCandidates(normalizeMerchant(input.description)));
     const subCategoryId = categorySelection?.subCategoryId;
+    // A match reuses the (possibly partial) key merchant_category already learned under — reusing
+    // it keeps future corrections reinforcing that same generalized key. Unmatched still needs a
+    // key stored on the row, or a later correction has nothing to attach to (it can only ever
+    // strengthen a merchant this transaction is already linked to) — falls back to the full
+    // normalized description, empty-string guarded since that can't back a merchants FK row.
+    const merchantKey = classification.merchantKey ?? (normalizeMerchant(input.description) || undefined);
 
     const entity: TransactionEntity = {
       id: deps.newId(),
@@ -107,7 +113,7 @@ const planAccountMovement = (
         accountId: account?.id,
         categoryId: classification.categoryId,
         subCategoryId,
-        merchantKey: classification.merchantKey,
+        merchantKey,
       },
       tagNames: input.tags ?? [],
     };

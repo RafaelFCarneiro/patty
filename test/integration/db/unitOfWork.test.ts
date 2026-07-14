@@ -579,4 +579,37 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
     );
     expect(edges).toHaveLength(0);
   });
+
+  it('update throws — every write to this entity is an insert (upsert-increment), never an update', async () => {
+    const categoryId = await seedCategory();
+    const merchantKey = `merchant-${randomUUID()}`;
+
+    await expect(
+      withUnitOfWork(db, merchantRegistry, () =>
+        okAsync({
+          persist: [
+            {
+              op: PersistOp.enum.update,
+              entity: MERCHANT_CATEGORY_ENTITY_TAG,
+              model: { merchantKey, categoryId, version: 0 },
+            },
+          ] as Persistable[],
+          response: null,
+        }),
+      ),
+    ).rejects.toThrow('merchantCategoryApplier: update is unsupported');
+  });
+
+  it('delete throws — merchant-category edges are never removed', async () => {
+    await expect(
+      withUnitOfWork(db, merchantRegistry, () =>
+        okAsync({
+          persist: [
+            { op: PersistOp.enum.delete, entity: MERCHANT_CATEGORY_ENTITY_TAG, id: 'unused', version: 0 },
+          ] as Persistable[],
+          response: null,
+        }),
+      ),
+    ).rejects.toThrow('merchantCategoryApplier: delete is unsupported');
+  });
 });
