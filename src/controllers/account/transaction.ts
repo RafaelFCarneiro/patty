@@ -16,9 +16,9 @@ import { toIsoDate } from '../../logic/period.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
-  createTransactionResponse,
+  buildTransactionView,
   defaultStatusFor,
-  updateTransactionResponse,
+  resolveTransactionOutcome,
 } from '../../logic/transaction.js';
 import {
   accountErrors,
@@ -27,7 +27,7 @@ import {
   type UpdateAccountTransaction,
 } from '../../models/account.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../models/merchant.js';
-import { type FlowOutcome, type Persistable } from '../../models/persistable.js';
+import { type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import {
   ClassificationMethod,
   DELETE_TRANSACTION_CONFIRM_HINT,
@@ -130,7 +130,13 @@ const addAccountMovement = (
 
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
-    const response = createTransactionResponse(classification, locale);
+    // { transaction, created } is the shared, shell-outcome-derived piece (resolveTransactionOutcome);
+    // classification is this flow's own addition, known before the write even happens — assembling
+    // that combination is this controller's own orchestration, not something to push into `logic/`.
+    const response = (outcomes: PersistOutcome[]): CreateTransactionResult => ({
+      ...resolveTransactionOutcome(outcomes, locale),
+      classification,
+    });
     return ok({ persist, response });
   });
 
@@ -250,7 +256,7 @@ export const updateAccountTransaction = (
     if (merchantCorrection) {
       persist.push(persistence.insert({ entity: MERCHANT_CATEGORY_ENTITY_TAG, model: merchantCorrection }));
     }
-    const response = updateTransactionResponse(locale);
+    const response = buildTransactionView(locale);
     return ok({ persist, response });
   });
 

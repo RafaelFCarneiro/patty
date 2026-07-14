@@ -173,14 +173,21 @@ gets its own generic atomicity/conflict/idempotency suite.
      upsert-increment `insert`-only applier, since `merchant_category` has no `id`/`version` and is never
      `update`d/`delete`d in the versioned-entity sense) — atomic with the update it came from, and never fired
      on a version-conflict attempt that gets rolled back and retried. Since `response` is now genuinely pure in
-     every converted flow, moved the response-shaping itself out of each controller and into named, unit-tested
-     functions in `logic/transaction.ts` (`createTransactionResponse`, `createTransferResponse`,
-     `updateTransactionResponse` — one per response shape), not inline `firstOutcome` + cast +
-     `addLocalizedLabels` repeated at each call site. Each is `purry`'d data-last on the non-`outcomes` args (the
-     dual-calling convention `docs/code-quality.md` already established for `addLocalizedLabels`/`withTypeLabel`),
-     so e.g. `createTransactionResponse(classification, locale)` *is* the `(outcomes) => T` function
-     `FlowOutcome.response` wants — a converted flow assigns it directly (`const response =
-     createTransactionResponse(classification, locale)`), no wrapping arrow at the call site.
+     every converted flow, moved the mechanical part out of each controller and into named, unit-tested functions
+     in `logic/transaction.ts`, deliberately not named "response" (they build/format a `TransactionView`, not an
+     HTTP/MCP response): `viewFromOutcome`/`buildTransactionView` resolve a bare `TransactionView` (the model —
+     no `created`/`classification` envelope), and `resolveTransactionOutcome` additionally resolves `created` —
+     `create_transfer`'s own result shape and the shared piece `add_account_expense`/`add_account_income` build
+     on. Composing a flow-specific envelope on top (e.g. `add_account_expense` spreading
+     `resolveTransactionOutcome`'s `{ transaction, created }` and adding its own `classification`) stays the
+     *controller's* job, not `logic/`'s and not an adapter's — an adapter can't do it, since `created` only
+     exists inside the `PersistOutcome` the flow's own `response` closure sees, never after `unitOfWork`
+     resolves (the only point an adapter could run). Each `logic/transaction.ts` function is `purry`'d
+     data-last on the non-`outcomes` args (the dual-calling convention `docs/code-quality.md` already
+     established for `addLocalizedLabels`/`withTypeLabel`), so e.g. `resolveTransactionOutcome(locale)` *is* the
+     `(outcomes) => T` function `FlowOutcome.response` wants — `create_transfer` assigns it directly
+     (`const response = resolveTransactionOutcome(locale)`), no wrapping arrow; `add_account_expense`'s own
+     `response` is a two-line spread, not mechanical duplication.
      Normalized the merchants repo alongside this: the old `strengthenFromTransaction(transactionId, categoryId)`
      re-queried `transactions` to resolve a merchant key itself — a business-shaped repo method name and behavior
      (`docs/diplomatic-architecture.md`: repos "should contain no business logic"). Replaced with
