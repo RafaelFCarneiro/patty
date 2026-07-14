@@ -69,7 +69,12 @@ import {
   ImportCardStatementSchema,
   UpdateCardTransactionSchema,
 } from '../../wire/in/creditCards.js';
-import { bulkResultToWireOut, createResultToWireOut, deleteResultToWireOut } from '../../adapters/transactions.js';
+import {
+  bulkResultToWireOut,
+  createResultToWireOut,
+  deleteResultToWireOut,
+  outcomeToDb,
+} from '../../adapters/transactions.js';
 import {
   addCardPurchaseWireInToModel,
   importCardStatementWireInToModel,
@@ -187,7 +192,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const model = accountAdapters.addAccountMovementWireInToModel(args);
-      return fromResult((await addAccountExpense(deps, model, TransactionSource.enum.mcp)).map(createResultToWireOut));
+      // transactionAdapters.outcomeToDb adapts addAccountExpense's result (model → db row) here,
+      // explicitly, before unitOfWork ever sees the batch — diplomat/db only ever writes rows.
+      const flow = () => addAccountExpense(deps, model, TransactionSource.enum.mcp).map(outcomeToDb);
+      return fromResult((await unitOfWork(flow)).map(createResultToWireOut));
     },
   );
 
@@ -200,7 +208,8 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const model = accountAdapters.addAccountMovementWireInToModel(args);
-      return fromResult((await addAccountIncome(deps, model, TransactionSource.enum.mcp)).map(createResultToWireOut));
+      const flow = () => addAccountIncome(deps, model, TransactionSource.enum.mcp).map(outcomeToDb);
+      return fromResult((await unitOfWork(flow)).map(createResultToWireOut));
     },
   );
 
@@ -408,8 +417,11 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'cannot receive a category/subCategory (both rejected with a validation error).',
       inputSchema: UpdateAccountTransactionSchema.shape,
     },
-    async (args) =>
-      fromResult(await updateAccountTransaction(deps, accountAdapters.updateAccountTransactionWireInToModel(args))),
+    async (args) => {
+      const flow = () =>
+        updateAccountTransaction(deps, accountAdapters.updateAccountTransactionWireInToModel(args)).map(outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -425,7 +437,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'again with confirm: true.',
       inputSchema: DeleteTransactionSchema.shape,
     },
-    async (args) => fromResult((await deleteAccountTransaction(deps, args)).map(deleteResultToWireOut)),
+    async (args) => {
+      const flow = () => deleteAccountTransaction(deps, args).map(outcomeToDb);
+      return fromResult((await unitOfWork(flow)).map(deleteResultToWireOut));
+    },
   );
 
   server.registerTool(
@@ -578,7 +593,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'must share the same currency (FX not available yet). Idempotent via idempotencyKey.',
       inputSchema: CreateTransferSchema.shape,
     },
-    async (args) => fromResult(await createTransfer(deps, args, TransactionSource.enum.mcp)),
+    async (args) => {
+      const flow = () => createTransfer(deps, args, TransactionSource.enum.mcp).map(outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(

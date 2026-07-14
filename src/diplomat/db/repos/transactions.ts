@@ -1,6 +1,7 @@
-import { eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import * as transactionAdapters from '../../../adapters/transactions.js';
+import type { TransactionRowEntity } from '../../../adapters/transactions.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import { SortDirection, type CursorKey } from '../../../models/page.js';
 import {
@@ -22,6 +23,7 @@ import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
 import { merchants, tags, transactionTags, transactions } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
+import type { EntityApplier, Tx } from '../unitOfWork.js';
 
 // search_transactions' includeTotal COUNT(*) row — decoded like every other SQL row (ADR
 // "decode at the boundary" invariant), not trusted on the strength of a type parameter alone.
@@ -30,12 +32,22 @@ import { fullTxSelect } from '../transactionSelect.js';
 // being exported as a wire/db "storage contract" with no second consumer.
 const SearchCountRowSchema = z.object({ count: z.number().int() });
 
-const fetchTx = async (db: Db, id: string): Promise<RawTransactionView | null> => {
+// `Db | Tx`: every helper below also runs inside `transactionApplier`'s unit-of-work transaction
+// (ADR-021), so each accepts either the top-level `Db` handle or the `Tx` a `db.transaction`
+// callback receives — the same query-builder surface (select/insert/update/delete/all) either way.
+type Executor = Db | Tx;
+
+const fetchTx = async (db: Executor, id: string): Promise<RawTransactionView | null> => {
   const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.id = ${id}`));
   return row ? transactionAdapters.dbToModel(row) : null;
 };
 
-const attachTags = async (db: Db, txId: string, tagNames: string[]): Promise<void> => {
+const fetchTxByIdempotencyKey = async (db: Executor, idempotencyKey: string): Promise<RawTransactionView | null> => {
+  const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.idempotency_key = ${idempotencyKey}`));
+  return row ? transactionAdapters.dbToModel(row) : null;
+};
+
+const attachTags = async (db: Executor, txId: string, tagNames: string[]): Promise<void> => {
   if (tagNames.length === 0) return;
   const matches = await db.select({ id: tags.id }).from(tags).where(inArray(tags.name, tagNames));
   if (matches.length === 0) return;
@@ -45,7 +57,7 @@ const attachTags = async (db: Db, txId: string, tagNames: string[]): Promise<voi
     .onConflictDoNothing({ target: [transactionTags.transactionId, transactionTags.tagId] });
 };
 
-const replaceTags = async (db: Db, txId: string, tagNames: string[]): Promise<void> => {
+const replaceTags = async (db: Executor, txId: string, tagNames: string[]): Promise<void> => {
   await db.delete(transactionTags).where(eq(transactionTags.transactionId, txId));
   await attachTags(db, txId, tagNames);
 };
@@ -305,3 +317,115 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     };
   },
 });
+
+/**
+ * The transaction entity's `EntityApplier` (ADR-021) — hand-written rather than
+ * `versionedTableApplier` (unlike `accounts.ts`'s `accountApplier`) because a transaction row's
+ * storage shape has genuine extra mechanics beyond a plain `id`/`version` table: `insert` conflicts
+ * on `idempotency_key` (not `id`); both `insert` and `update` upsert the referenced merchant — the
+ * applier never assumes an update's merchant key already has a satisfying `merchants` row, even
+ * though no current caller actually changes it on update — and attach/replace the row's
+ * `transaction_tags`. This is still *persistence structure*, not business
+ * logic — no bill/paid reasoning, exactly the repo's own former `create`/`update` mechanics,
+ * relocated here so the domain (`controllers/account/transaction.ts`,
+ * `controllers/account/transfer.ts`) can describe a transaction write as a `Persistable` instead of
+ * calling this repo directly. Registered under `models/transaction.ts`'s `TRANSACTION_ENTITY_TAG`
+ * at the composition root (`main.ts`). `model` arrives already row-shaped
+ * (`adapters/transactions.ts`'s `entityToDb`, run via `outcomeToDb` before `unitOfWork` ever sees
+ * the batch) — this applier only ever writes the row it's handed, never adapts one.
+ *
+ * Both `insert` and `update` read the row back after writing (`fetchTx`/`fetchTxByIdempotencyKey`)
+ * so a flow's idempotency-aware `response` can reflect the actually-persisted, display-joined view
+ * (account/category names, the tag rows that actually matched by name) without a second read of
+ * its own — mirroring exactly what the pre-ADR-021 repo's own `create`/`update` returned.
+ */
+export const transactionApplier: EntityApplier = {
+  insert: async (tx, model) => {
+    const entity = model as TransactionRowEntity;
+
+    if (entity.merchantKey) {
+      await tx.insert(merchants).values({ key: entity.merchantKey }).onConflictDoNothing();
+    }
+
+    const result = await tx
+      .insert(transactions)
+      .values({
+        id: entity.id,
+        description: entity.description,
+        amount: entity.amount,
+        type: entity.type,
+        status: entity.status,
+        date: entity.date,
+        currency: entity.currency,
+        source: entity.source,
+        idempotencyKey: entity.idempotencyKey,
+        classificationMethod: entity.classificationMethod,
+        confidence: entity.confidence,
+        rawInput: entity.rawInput,
+        note: entity.note,
+        fromAccountId: entity.fromAccountId,
+        toAccountId: entity.toAccountId,
+        creditCardId: entity.creditCardId,
+        billId: entity.billId,
+        categoryId: entity.categoryId,
+        subcategoryId: entity.subcategoryId,
+        merchantKey: entity.merchantKey,
+        version: entity.version,
+      })
+      .onConflictDoNothing({ target: transactions.idempotencyKey });
+
+    const applied = (result.rowsAffected ?? 0) > 0;
+    if (applied && entity.tagNames.length > 0) await attachTags(tx, entity.id, entity.tagNames);
+
+    // Duplicate: this entity.id was never inserted — the existing row (by idempotency key) is
+    // what's actually persisted, and what an idempotency-aware flow's response must reflect.
+    const view = applied ? await fetchTx(tx, entity.id) : await fetchTxByIdempotencyKey(tx, entity.idempotencyKey);
+    return { applied, read: expectPresent(view, rowNotFoundAfterWrite('transactions', 'write')) };
+  },
+
+  update: async (tx, model) => {
+    const entity = model as TransactionRowEntity & { id: string; version: number };
+
+    if (entity.merchantKey) {
+      await tx.insert(merchants).values({ key: entity.merchantKey }).onConflictDoNothing();
+    }
+
+    const result = await tx
+      .update(transactions)
+      .set({
+        description: entity.description,
+        amount: entity.amount,
+        type: entity.type,
+        status: entity.status,
+        date: entity.date,
+        currency: entity.currency,
+        classificationMethod: entity.classificationMethod,
+        confidence: entity.confidence,
+        rawInput: entity.rawInput,
+        note: entity.note,
+        fromAccountId: entity.fromAccountId,
+        toAccountId: entity.toAccountId,
+        creditCardId: entity.creditCardId,
+        billId: entity.billId,
+        categoryId: entity.categoryId,
+        subcategoryId: entity.subcategoryId,
+        merchantKey: entity.merchantKey,
+        version: entity.version + 1,
+      })
+      .where(and(eq(transactions.id, entity.id), eq(transactions.version, entity.version)));
+
+    const applied = (result.rowsAffected ?? 0) > 0;
+    if (!applied) return { applied: false };
+
+    await replaceTags(tx, entity.id, entity.tagNames);
+    const view = await fetchTx(tx, entity.id);
+    return { applied: true, read: expectPresent(view, rowNotFoundAfterWrite('transactions', 'update')) };
+  },
+
+  // transaction_tags rows cascade on delete (schema.ts: onDelete: 'cascade') — no explicit tag
+  // cleanup needed here, unlike insert/update.
+  delete: async (tx, id, version) => {
+    const result = await tx.delete(transactions).where(and(eq(transactions.id, id), eq(transactions.version, version)));
+    return { applied: (result.rowsAffected ?? 0) > 0 };
+  },
+};

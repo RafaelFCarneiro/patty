@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
@@ -927,6 +928,74 @@ describe('MCP integration > transactions', () => {
         args: { id: txId, note: '' },
       })) as { note?: string };
       expect(cleared.note).toBeUndefined();
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('correcting a category via update_account_transaction teaches future auto-classification', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const account = `Merchant Learn ${stamp}`;
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 },
+      });
+
+      const category = `Merchant Learn Category ${stamp}`;
+      await callTool(client, { name: 'create_category', args: { name: category, kind: 'expense' } });
+
+      // Letters-only so `normalizeMerchant` (which strips digits) still keys on something unique
+      // per test run — a stamp alone would collide across runs once its digits are stripped.
+      // Mapping digits to letters (rather than stripping them) keeps all 32 hex characters, so the
+      // result is always non-empty and always letter-only — stripping digits could (rarely) yield
+      // an empty or short token and risk a cross-run merchant-key collision.
+      const merchant = randomUUID()
+        .replace(/-/g, '')
+        .replace(/\d/g, (digit) => String.fromCharCode(97 + Number(digit)));
+      const merchantDescription = (n: number) => `${merchant} purchase ${n}`;
+
+      // First occurrence: nothing has taught this merchant anything yet — auto-classifies to none.
+      const first = (await callTool(client, {
+        name: 'add_account_expense',
+        args: {
+          description: merchantDescription(1),
+          amount: 10,
+          account,
+          idempotencyKey: `merchant-learn-1-${stamp}`,
+        },
+      })) as { transaction?: { id?: string }; classification?: { method?: string } };
+      const firstId = first.transaction?.id;
+      ensure(firstId, 'First transaction id missing');
+      createdTxIds.push(firstId);
+      expect(first.classification?.method).toBe('none');
+
+      // Correct its category — this is the "user teaches the merchant" moment.
+      await callTool(client, {
+        name: 'update_account_transaction',
+        args: { id: firstId, category },
+      });
+
+      // Second occurrence of the SAME merchant, again with no category given: auto-classification
+      // should now pick up what the correction taught it, via merchant_category (not user input).
+      const second = (await callTool(client, {
+        name: 'add_account_expense',
+        args: {
+          description: merchantDescription(2),
+          amount: 12,
+          account,
+          idempotencyKey: `merchant-learn-2-${stamp}`,
+        },
+      })) as { transaction?: { id?: string; categoryName?: string }; classification?: { method?: string } };
+      const secondId = second.transaction?.id;
+      ensure(secondId, 'Second transaction id missing');
+      createdTxIds.push(secondId);
+
+      expect(second.classification?.method).toBe('history');
+      expect(second.transaction?.categoryName).toBe(category);
     } finally {
       await transport.close();
     }

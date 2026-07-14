@@ -103,6 +103,20 @@ export const TransactionSchema = z.object({
 });
 export type Transaction = z.infer<typeof TransactionSchema>;
 
+// The transaction aggregate owns its own entity tag (ADR-021), mirroring `models/account.ts`'s
+// `ACCOUNT_ENTITY_TAG` — `models/persistable.ts` is generic over any entity's tag/model and never
+// lists this constant itself.
+export const TRANSACTION_ENTITY_TAG = 'transaction';
+
+/** The transaction `Persistable`'s model vocabulary (ADR-021): the domain entity plus the one
+ *  extra field its `EntityApplier` (`diplomat/db/repos/transactions.ts`'s `transactionApplier`)
+ *  needs to shape the write — the full desired tag-name set. `tagNames` is persistence structure
+ *  (which rows the applier attaches/replaces in `transaction_tags`), not a business decision, so
+ *  it lives on the entity rather than as a second argument threaded alongside it. No `version`
+ *  here — a `Persistable`'s `insert` model never carries one (`models/persistable.ts`); `update`'s
+ *  gains it automatically via the shared `Model & { version: number }` intersection. */
+export type TransactionEntity = Transaction & { tagNames: string[] };
+
 /** Read projection: Transaction with joined reference names (account, category, merchant, …). */
 export const TransactionViewSchema = z.object({
   id: Id,
@@ -137,11 +151,14 @@ export const TransactionViewSchema = z.object({
 });
 export type TransactionView = z.infer<typeof TransactionViewSchema>;
 
-/** Internal projection carrying the raw localized-names maps from the DB.
- *  Used only in the adapter→controller pipeline; stripped before serialization. */
+/** Internal projection carrying the raw localized-names maps from the DB, plus the optimistic-
+ *  concurrency `version` token (ADR-021) an account-context update/delete reads before deciding
+ *  its `Persistable`. Used only in the adapter→controller pipeline; stripped before serialization
+ *  (`logic/transaction.ts`'s `addLocalizedLabels` drops both `*Names` and `version`). */
 export const RawTransactionViewSchema = TransactionViewSchema.extend({
   categoryNames: LocalizedNamesSchema.optional(),
   subCategoryNames: LocalizedNamesSchema.optional(),
+  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
 });
 export type RawTransactionView = z.infer<typeof RawTransactionViewSchema>;
 
@@ -292,15 +309,35 @@ export type ClassifyOutcome = Classification & {
 
 export type CreateTxResult = { transaction: RawTransactionView; created: boolean };
 
-export type CreateTransactionResult = {
+/** The shared shape of "did this write land, and what does the caller need to know about it" —
+ *  every insert-shaped account/credit-card flow's result. `classification` is optional: present
+ *  for a movement (`add_account_expense`/`add_account_income`/`add_card_purchase` — auto/user
+ *  classification is meaningful there), absent for a transfer (`create_transfer` — transfers are
+ *  never classified). Named "Upsert" because from the caller's perspective, an idempotency-keyed
+ *  create call means "ensure this transaction exists" — `created` distinguishes a fresh insert from
+ *  a replay that found it already there. */
+export type UpsertTransactionResult = {
   transaction: TransactionView;
   created: boolean;
-  classification: ClassifyOutcome;
+  classification?: ClassifyOutcome;
 };
+
+/** `UpsertTransactionResult` with `classification` guaranteed present — every movement/card-purchase
+ *  flow's actual return shape (`add_account_expense`/`add_account_income`/`add_card_purchase`,
+ *  and bulk import, which is always one of those, never a transfer). Named once so the intersection
+ *  isn't repeated at every one of those call sites. */
+export type ClassifiedUpsertResult = UpsertTransactionResult & { classification: ClassifyOutcome };
 
 export type DeleteTransactionResult =
   | { deleted: true; transaction: TransactionView }
   | { deleted: false; dryRun: true; wouldDelete: TransactionView; hint: string };
+
+/** Shared by every aggregate's delete dry-run response (`controllers/transaction/core.ts`'s
+ *  `deleteTransaction`, used by the credit-card aggregate; the account aggregate's own FC/IS
+ *  `deleteAccountTransaction`, `controllers/account/transaction.ts`) — named once so the two never
+ *  copy-paste the same literal (code-quality.md "constants over literals"). */
+export const DELETE_TRANSACTION_CONFIRM_HINT =
+  'Destructive action: show the transaction to the user and call again with confirm: true.';
 
 /** MCP tool names for the aggregate-specific update/delete tools (ADR-017) — named once here and
  *  reused both at tool registration (diplomat/mcp/server.ts) and in the ownership-guard redirect

@@ -1,7 +1,8 @@
 # ADR-021: Functional Core / Imperative Shell for the write path — the domain returns effects, the shell applies them
 
-**Status:** Accepted (2026-07-13; phase 1 — groundwork + `createAccount` first mover — implemented; phases 2–3
-pending) · **Date:** 2026-07-12 · **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill
+**Status:** Accepted (2026-07-13; phase 1 — groundwork + `createAccount` first mover — implemented; phase 2a —
+account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing — implemented 2026-07-13;
+phases 2b–3 pending) · **Date:** 2026-07-12 · **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill
 payment) and finally resolves the thread ADR-015 opened. Adopts the principle documented in
 `docs/functional-core-imperative-shell.md` for every write flow.
 
@@ -155,7 +156,63 @@ gets its own generic atomicity/conflict/idempotency suite.
      `name` instead), so `diplomat/db/unitOfWork.ts` exports `versionedTableApplier(table)` to build one from
      just the table reference; `accountApplier` is `versionedTableApplier(accounts)`, no hand-written
      insert/update/delete left at all.
-   - [ ] Phase 2 (transaction + bill flows): convert `add_*`/`update_*`/`delete_*`, `payBill`/
-     `revertBillPayment`; delete `bills.pay`/`ensureAndAttach`/self-heal and their atomicity tests.
-   - [ ] Phase 3 (remaining flows): bulk import, recurring, card/category/tag CRUD; remove write methods
-     from `deps`; delete the now-dead transactional repo methods; update `docs/architecture.md` accordingly.
+   - [x] Phase 2a (account-context transaction flows): `add_account_expense`/`add_account_income`/
+     `create_transfer`/`update_account_transaction`/`delete_account_transaction` converted end to end (MCP +
+     REST). A custom `transactionApplier` (`diplomat/db/repos/transactions.ts`) — not
+     `versionedTableApplier`, since a transaction row has genuine extra mechanics beyond `id`/`version`
+     (`insert` conflicts on `idempotency_key`, not `id`; merchant upsert; tag attach/replace) — registered
+     under `models/transaction.ts`'s `TRANSACTION_ENTITY_TAG`. Added the UoW idempotency-outcome contract
+     rule 6 describes: `PersistOutcome` (`models/persistable.ts`) — `applied` + an entity-decoded `read` of
+     what's now actually persisted — reported per-persistable by `withUnitOfWork`; `FlowOutcome.response` may
+     be the plain value (unchanged for `createAccount`) or a pure, sync function of the batch's
+     `PersistOutcome[]`, which is how `created` is derived (never faked). `response` stays data-shaping only —
+     `updateAccountTransaction`'s merchant-learning (a category correction strengthens the merchant→category
+     edge) is a *further write*, not response-shaping, so it rides in the same `persist` batch as the
+     transaction update instead (rule 5), via its own minimal entity (`models/merchant.ts`'s
+     `MERCHANT_CATEGORY_ENTITY_TAG`, `diplomat/db/repos/merchants.ts`'s `merchantCategoryApplier` — an
+     upsert-increment `insert`-only applier, since `merchant_category` has no `id`/`version` and is never
+     `update`d/`delete`d in the versioned-entity sense) — atomic with the update it came from, and never fired
+     on a version-conflict attempt that gets rolled back and retried. Since `response` is now genuinely pure in
+     every converted flow, moved the mechanical part out of each controller and into named, unit-tested functions
+     in `logic/transaction.ts`, deliberately not named "response" (they build/format a model, not an HTTP/MCP
+     response): `viewFromOutcome`/`buildTransactionView` resolve a bare `TransactionView` (no `created`/
+     `classification` envelope — `update_account_transaction`'s shape), and `buildUpsertResult` resolves
+     `models/transaction.ts`'s new `UpsertTransactionResult` (`{ transaction, created, classification? }` —
+     replaces the old `CreateTransactionResult`, `classification` now optional) directly: `create_transfer`
+     calls it with `classification: undefined`, `add_account_expense`/`add_account_income` with a real one —
+     `ClassifiedUpsertResult` names the narrowing (`classification` required) those two, `add_card_purchase`,
+     and bulk import actually return, used for `addCardPurchase`'s/`addAccountMovementViaRepo`'s/
+     `StatementLineCreateFn`'s/`toBulkItemResult`'s declared types so the classification-always-present
+     guarantee those flows already had doesn't silently erode. One shared result shape, not a bespoke envelope
+     assembled per flow — `add_account_expense` no longer needs to compose `{ transaction, created }` plus its
+     own `classification` at the call site at all. Each `logic/transaction.ts` function is `purry`'d data-last
+     on the non-`outcomes` args (the dual-calling convention `docs/code-quality.md` already established for
+     `addLocalizedLabels`/`withTypeLabel`), so e.g. `buildUpsertResult(classification, locale)` *is* the
+     `(outcomes) => T` function `FlowOutcome.response` wants — every converted flow assigns it directly
+     (`const response = buildUpsertResult(classification, locale)`), no wrapping arrow at any call site.
+     Normalized the merchants repo alongside this: the old `strengthenFromTransaction(transactionId, categoryId)`
+     re-queried `transactions` to resolve a merchant key itself — a business-shaped repo method name and behavior
+     (`docs/diplomatic-architecture.md`: repos "should contain no business logic"). Replaced with
+     `incrementCategoryWeight(merchantKey, categoryId)`, pure upsert-increment mechanics shared (one function,
+     `upsertCategoryWeight`) by both the repo method and `merchantCategoryApplier`; the "is this actually a
+     correction worth learning from" decision moved to a named resolver, `logic/merchant.ts`'s
+     `resolveMerchantCorrection(existing, newCategoryId)` — returns the `{merchantKey, categoryId}` edge to
+     write or `null`, a single check rather than a caller-side emptiness guard plus a same-ness comparison —
+     used by both the old `updateTransaction` (still repo-driven, calls
+     `deps.merchants.incrementCategoryWeight` directly — a real write from a controller is expected and
+     correct for an unconverted flow) and the new `updateAccountTransaction` (composes the resolved edge into
+     `persist` as a `MERCHANT_CATEGORY_ENTITY_TAG` insert instead) — one rule, decided once, applied through
+     each flow's own write mechanism. Behavior-preserving otherwise:
+     `controllers/account/transaction.ts`'s `addAccountMovementViaRepo` keeps the old `deps.transactions.create`
+     path for `importAccountStatement` (bulk import isn't converted until phase 3) and
+     `controllers/transaction/core.ts`'s `updateTransaction`/`deleteTransaction` are unchanged (still used by
+     the not-yet-converted credit-card aggregate) — both share their read/decision logic with the converted
+     account-side flows via extracted pure planners (`planAccountMovement`, `decideTransactionUpdate`) rather
+     than duplicating it outright.
+   - [ ] Phase 2b/2c (credit-card + bill flows): convert `add_card_purchase`/`update_card_transaction`/
+     `delete_card_transaction`, `payBill`/`revertBillPayment`; delete `bills.pay`/`ensureAndAttach`/self-heal
+     and their atomicity tests.
+   - [ ] Phase 3 (remaining flows): bulk import (reusing phase 2a's `PersistOutcome` idempotency-outcome
+     contract for per-item created/duplicate/needs-review status), recurring, card/category/tag CRUD; remove
+     write methods from `deps`; delete the now-dead transactional repo methods (incl. the phase 2a transitional
+     `addAccountMovementViaRepo`); update `docs/architecture.md` accordingly.

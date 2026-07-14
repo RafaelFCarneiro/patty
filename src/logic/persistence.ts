@@ -1,4 +1,4 @@
-import { PersistOp, type Persistable } from '../models/persistable.js';
+import { PersistOp, type Persistable, type PersistOutcome } from '../models/persistable.js';
 
 /**
  * Builders for each `Persistable` write intent (ADR-021 / docs/functional-core-imperative-shell.md) — one
@@ -24,3 +24,16 @@ export const remove = <Tag extends string>(fields: { entity: Tag; id: string; ve
   op: PersistOp.enum.delete,
   ...fields,
 });
+
+/** Extracts the primary outcome — `persist[0]`'s — from a flow's idempotency-aware `response`
+ *  function (`docs/functional-core-imperative-shell.md` rule 6): the entity the flow itself is
+ *  about always leads the batch, even when composed with another entity's persistable afterward
+ *  (rule 5 — e.g. `updateAccountTransaction` appending a merchant-learning edge). Throws rather
+ *  than silently defaulting: an empty `outcomes` here would mean the flow's own `persist` batch and
+ *  its `response` function have drifted out of sync — an internal invariant violation, not a
+ *  domain outcome. */
+export const firstOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
+  const [outcome] = outcomes;
+  if (!outcome) throw new Error('firstOutcome: expected at least one persist outcome, got none');
+  return outcome;
+};

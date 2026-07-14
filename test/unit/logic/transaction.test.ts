@@ -14,6 +14,8 @@ import type { RawTransactionView } from '../../../src/models/transaction.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
+  buildTransactionView,
+  buildUpsertResult,
   deriveIdempotencyKey,
   hasCategory,
   hasSubCategory,
@@ -91,20 +93,22 @@ describe('summarizeBulkItems', () => {
   });
 });
 
+const baseTx: RawTransactionView = {
+  id: 'tx-1',
+  description: 'Test',
+  amount: 100,
+  type: TransactionType.enum.expense,
+  status: TransactionStatus.enum.effective,
+  date: '2026-01-01',
+  currency: CurrencyCode.enum.BRL,
+  source: TransactionSource.enum.mcp,
+  idempotencyKey: 'test-1',
+  classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+  tags: [],
+  version: 0,
+};
+
 describe('addLocalizedLabels', () => {
-  const baseTx: RawTransactionView = {
-    id: 'tx-1',
-    description: 'Test',
-    amount: 100,
-    type: TransactionType.enum.expense,
-    status: TransactionStatus.enum.effective,
-    date: '2026-01-01',
-    currency: CurrencyCode.enum.BRL,
-    source: TransactionSource.enum.mcp,
-    idempotencyKey: 'test-1',
-    classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-    tags: [],
-  };
 
   it('adds typeLabel and statusLabel for the given locale', () => {
     const labeled = addLocalizedLabels(baseTx, Locale.enum.pt);
@@ -197,6 +201,77 @@ describe('addLocalizedLabels', () => {
     const labeled = mapper(tx);
     expect(labeled.categoryName).toBe('Alimentação');
     expect(labeled.categoryNames).toBeUndefined();
+  });
+});
+
+describe('buildUpsertResult (ADR-021 rule 6)', () => {
+  it('reports created:true and the localized view when the shell actually inserted the row (no classification)', () => {
+    const view = { ...baseTx, description: 'Groceries' };
+    const result = buildUpsertResult([{ applied: true, read: view }], undefined, Locale.enum.en);
+
+    expect(result.created).toBe(true);
+    expect(result.transaction.description).toBe('Groceries');
+    expect(result.classification).toBeUndefined();
+  });
+
+  it("reports created:false and the EXISTING row's data on an idempotent duplicate replay", () => {
+    const existing = { ...baseTx, description: 'Original replay target' };
+    const result = buildUpsertResult([{ applied: false, read: existing }], undefined, Locale.enum.en);
+
+    expect(result.created).toBe(false);
+    expect(result.transaction.description).toBe('Original replay target');
+  });
+
+  it('includes classification when a create-shaped flow (e.g. add_account_expense) supplies one', () => {
+    const classification = { method: ClassificationMethod.enum.rule, confidence: 0.8 } as const;
+    const view = { ...baseTx, description: 'Groceries' };
+    const result = buildUpsertResult([{ applied: true, read: view }], classification, Locale.enum.en);
+
+    expect(result).toEqual({
+      transaction: addLocalizedLabels(view, Locale.enum.en),
+      created: true,
+      classification,
+    });
+  });
+
+  it('curries data-last (no classification) into the shape create_transfer hands the shell', () => {
+    const view = { ...baseTx, description: 'Transfer' };
+    const response = buildUpsertResult(undefined, Locale.enum.en);
+
+    expect(typeof response).toBe('function');
+    expect(response([{ applied: true, read: view }])).toEqual(
+      buildUpsertResult([{ applied: true, read: view }], undefined, Locale.enum.en),
+    );
+  });
+
+  it('curries data-last (with classification) into the shape add_account_expense hands the shell', () => {
+    const classification = { method: ClassificationMethod.enum.rule, confidence: 0.8 } as const;
+    const view = { ...baseTx, description: 'Groceries' };
+    const response = buildUpsertResult(classification, Locale.enum.en);
+
+    expect(response([{ applied: true, read: view }])).toEqual(
+      buildUpsertResult([{ applied: true, read: view }], classification, Locale.enum.en),
+    );
+  });
+});
+
+describe('buildTransactionView (ADR-021 rule 6)', () => {
+  it('returns the localized view of the row the shell actually wrote — no created/classification envelope', () => {
+    const view = { ...baseTx, description: 'Updated' };
+    const result = buildTransactionView([{ applied: true, read: view }], Locale.enum.pt);
+
+    expect(result.description).toBe('Updated');
+    expect(result.typeLabel).toBe('Despesa');
+    expect(result).not.toHaveProperty('created');
+  });
+
+  it('curries data-last into exactly the FlowOutcome.response shape a flow hands the shell', () => {
+    const view = { ...baseTx, description: 'Updated' };
+    const response = buildTransactionView(Locale.enum.pt);
+
+    expect(response([{ applied: true, read: view }])).toEqual(
+      buildTransactionView([{ applied: true, read: view }], Locale.enum.pt),
+    );
   });
 });
 

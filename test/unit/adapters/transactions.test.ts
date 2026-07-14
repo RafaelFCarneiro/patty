@@ -136,6 +136,7 @@ const sqlRow = (overrides: Record<string, unknown> = {}): Record<string, unknown
   subcategory_name: null,
   merchant_key: null,
   tags: null,
+  version: 0,
   ...overrides,
 });
 

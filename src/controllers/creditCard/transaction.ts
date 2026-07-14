@@ -31,8 +31,8 @@ import { notFound } from '../../models/error.js';
 import {
   transactionErrors,
   TransactionTool,
+  type ClassifiedUpsertResult,
   type ClassifyOutcome,
-  type CreateTransactionResult,
   type DeleteTransactionResult,
   type TransactionSource,
   type TransactionView,
@@ -76,7 +76,7 @@ export const addCardPurchase = (
   deps: Deps,
   input: AddCardPurchase,
   source: TransactionSource,
-): ResultAsync<CreateTransactionResult, AppError> =>
+): ResultAsync<ClassifiedUpsertResult, AppError> =>
   safeTry(async function* () {
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory);
     yield* guard(assertBillPeriodPaired(input), cardErrors.billPeriodIncomplete);

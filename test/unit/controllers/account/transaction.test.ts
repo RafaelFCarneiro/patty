@@ -8,7 +8,9 @@ import {
 import type { Deps } from '../../../../src/controllers/deps.js';
 import { AccountType, type Account } from '../../../../src/models/account.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
-import { TransactionSource, type TransactionView } from '../../../../src/models/transaction.js';
+import type { FlowOutcome, PersistOutcome } from '../../../../src/models/persistable.js';
+import { PersistOp } from '../../../../src/models/persistable.js';
+import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
 import { Locale } from '../../../../src/models/locale.js';
 
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
@@ -19,16 +21,11 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   creditCards: {} as Deps['creditCards'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
-  merchants: { matchCandidates: async () => [] } as unknown as Deps['merchants'],
+  merchants: { matchCandidates: async () => [], incrementCategoryWeight: vi.fn() } as unknown as Deps['merchants'],
   recurring: {} as Deps['recurring'],
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],
-  transactions: {
-    create: async (entity) => ({
-      transaction: { ...entity, accountId: entity.refs.accountId, categoryId: entity.refs.categoryId },
-      created: true,
-    }),
-  } as unknown as Deps['transactions'],
+  transactions: {} as unknown as Deps['transactions'],
   clock: () => new Date('2026-06-01'),
   newId: () => 'test-id',
   locale: async () => Locale.enum.en,
@@ -44,6 +41,36 @@ const account = (overrides: Partial<Account> = {}): Account => ({
   initialBalance: 0,
   ...overrides,
 });
+
+/** Resolves a `FlowOutcome`'s `response` against synthesized apply outcomes — mirrors what
+ *  `withUnitOfWork` does post-commit, without a real database (docs/functional-core-imperative-
+ *  shell.md: "Flow (core) tests assert on the returned { persist, response } — pure, no database").
+ *  Deliberately sync, matching `FlowOutcome.response`'s own (sync-only) contract and
+ *  `unitOfWork.ts`'s real `resolveResponse` — `withUnitOfWork` never awaits it, so a test helper
+ *  that did would mask a flow accidentally returning an async response instead of failing on it. */
+const resolveResponse = <T>(outcome: FlowOutcome<T>, outcomes: PersistOutcome[]): T => {
+  const { response } = outcome;
+  return typeof response === 'function' ? response(outcomes) : response;
+};
+
+/** A fake persisted-and-joined view — what `transactionApplier` would hand back as a
+ *  `PersistOutcome.read` after insert/update, for a given entity the flow decided to persist. */
+type MinimalEntity = { id: string; description: string; amount: number; type: string; currency: string };
+const rawViewFor = (entity: MinimalEntity): RawTransactionView =>
+  ({
+    id: entity.id,
+    description: entity.description,
+    amount: entity.amount,
+    type: entity.type,
+    status: 'effective',
+    date: '2026-06-01',
+    currency: entity.currency,
+    source: 'mcp',
+    idempotencyKey: 'k',
+    classification: { method: 'none', confidence: 0 },
+    tags: [],
+    version: 0,
+  }) as RawTransactionView;
 
 describe('addAccountExpense — account resolution is value-based, not truthy', () => {
   it('rejects a present-but-empty account with unknown_account, not silently ignoring it', async () => {
@@ -101,8 +128,8 @@ describe('addAccountExpense / addAccountIncome — category/sub-category exclusi
   });
 });
 
-describe('addAccountExpense — currency resolution', () => {
-  it('uses the account currency, ignoring the input currency field', async () => {
+describe('addAccountExpense — the write is returned as data, not performed (ADR-021)', () => {
+  it('returns a single insert Persistable carrying the account currency, ignoring input currency', async () => {
     const deps = makeDeps({
       accounts: { list: async () => [account({ currency: 'BRL' })] } as unknown as Deps['accounts'],
     });
@@ -114,7 +141,10 @@ describe('addAccountExpense — currency resolution', () => {
     );
 
     expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap().transaction.currency).toBe('BRL');
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toHaveLength(1);
+    expect(outcome.persist[0]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });
+    expect((outcome.persist[0] as { model: { currency: string } }).model.currency).toBe('BRL');
   });
 
   it('falls back to the input currency (default USD) when no account is given', async () => {
@@ -127,11 +157,10 @@ describe('addAccountExpense — currency resolution', () => {
     );
 
     expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap().transaction.currency).toBe('USD');
+    const { model } = result._unsafeUnwrap().persist[0] as { model: { currency: string } };
+    expect(model.currency).toBe('USD');
   });
-});
 
-describe('addAccountExpense — classification', () => {
   it('auto-classifies via merchant matches when no category is given', async () => {
     const deps = makeDeps({
       merchants: {
@@ -148,9 +177,54 @@ describe('addAccountExpense — classification', () => {
     );
 
     expect(result.isOk()).toBe(true);
-    const { classification } = result._unsafeUnwrap();
-    expect(classification.method).toBe('rule');
-    expect(classification.categoryId).toBe('cat-transport');
+    const { model } = result._unsafeUnwrap().persist[0] as { model: { refs: { categoryId?: string } } };
+    expect(model.refs.categoryId).toBe('cat-transport');
+  });
+
+  it('on a match, stores the matched (possibly partial) merchant key, not the full description', async () => {
+    const deps = makeDeps({
+      merchants: {
+        matchCandidates: async () => [
+          { merchantKey: 'uber', categoryId: 'cat-transport', categoryName: 'Transport', weight: 3, origin: 'rule' },
+        ],
+      } as unknown as Deps['merchants'],
+    });
+
+    const result = await addAccountExpense(
+      deps,
+      { description: 'Uber ride 42', amount: 15, idempotencyKey: 'classify-merchant-key-matched' },
+      TransactionSource.enum.mcp,
+    );
+
+    const { model } = result._unsafeUnwrap().persist[0] as { model: { refs: { merchantKey?: string } } };
+    expect(model.refs.merchantKey).toBe('uber');
+  });
+
+  it('on no match, falls back to the full normalized description as the merchant key', async () => {
+    const deps = makeDeps();
+
+    const result = await addAccountExpense(
+      deps,
+      { description: 'Ze Padaria #123', amount: 15, idempotencyKey: 'classify-merchant-key-unmatched' },
+      TransactionSource.enum.mcp,
+    );
+
+    expect(result._unsafeUnwrap().persist[0]).toMatchObject({
+      model: { refs: { merchantKey: 'ze padaria' } },
+    });
+  });
+
+  it('on a description that normalizes to nothing, leaves merchantKey undefined, not empty', async () => {
+    const deps = makeDeps();
+
+    const result = await addAccountExpense(
+      deps,
+      { description: '#123456', amount: 15, idempotencyKey: 'classify-merchant-key-empty' },
+      TransactionSource.enum.mcp,
+    );
+
+    const { model } = result._unsafeUnwrap().persist[0] as { model: { refs: { merchantKey?: string } } };
+    expect(model.refs.merchantKey).toBeUndefined();
   });
 
   it('sets type to income for addAccountIncome and expense for addAccountExpense', async () => {
@@ -167,12 +241,52 @@ describe('addAccountExpense — classification', () => {
       TransactionSource.enum.mcp,
     );
 
-    expect(expenseResult._unsafeUnwrap().transaction.type).toBe('expense');
-    expect(incomeResult._unsafeUnwrap().transaction.type).toBe('income');
+    const expenseModel = expenseResult._unsafeUnwrap().persist[0] as { model: { type: string } };
+    const incomeModel = incomeResult._unsafeUnwrap().persist[0] as { model: { type: string } };
+    expect(expenseModel.model.type).toBe('expense');
+    expect(incomeModel.model.type).toBe('income');
+  });
+
+  it('response() reports created:true and the persisted view when the shell actually inserted the row', async () => {
+    const deps = makeDeps();
+
+    const result = await addAccountExpense(
+      deps,
+      { description: 'Groceries', amount: 30, idempotencyKey: 'created-true' },
+      TransactionSource.enum.mcp,
+    );
+    const outcome = result._unsafeUnwrap();
+    const { model: entity } = outcome.persist[0] as { model: MinimalEntity };
+
+    const response = resolveResponse(outcome, [{ applied: true, read: rawViewFor(entity) }]);
+    expect(response.created).toBe(true);
+    expect(response.transaction.description).toBe('Groceries');
+  });
+
+  it("response() reports created:false and the EXISTING row's data on an idempotent duplicate replay", async () => {
+    const deps = makeDeps();
+
+    const result = await addAccountExpense(
+      deps,
+      { description: 'Groceries', amount: 30, idempotencyKey: 'created-false' },
+      TransactionSource.enum.mcp,
+    );
+    const outcome = result._unsafeUnwrap();
+    const existing = rawViewFor({
+      id: 'existing-id',
+      description: 'Original replay target',
+      amount: 5,
+      type: 'expense',
+      currency: 'USD',
+    });
+
+    const response = resolveResponse(outcome, [{ applied: false, read: existing }]);
+    expect(response.created).toBe(false);
+    expect(response.transaction.description).toBe('Original replay target');
   });
 });
 
-const baseTx: TransactionView = {
+const baseTx: RawTransactionView = {
   id: 'tx-1',
   description: 'Original',
   amount: 10,
@@ -184,6 +298,7 @@ const baseTx: TransactionView = {
   idempotencyKey: 'existing-key',
   classification: { method: 'none', confidence: 0 },
   tags: [],
+  version: 3,
 };
 
 const creditAccountsById = {
@@ -223,20 +338,82 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
     expect(error.issues?.[0]).toContain('delete_card_transaction');
   });
 
-  it('updateAccountTransaction delegates to the core patch for a transaction with no credit leg', async () => {
+  it('updateAccountTransaction returns a version-guarded update Persistable carrying the merged patch', async () => {
     const deps = makeDeps({
-      transactions: {
-        getById: async () => baseTx,
-        update: async () => baseTx,
-      } as unknown as Deps['transactions'],
+      transactions: { getById: async () => baseTx } as unknown as Deps['transactions'],
     });
 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', description: 'Updated' });
 
     expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toHaveLength(1);
+    const persisted = outcome.persist[0] as { op: string; model: { id: string; description: string; version: number } };
+    expect(persisted.op).toBe(PersistOp.enum.update);
+    expect(persisted.model).toMatchObject({ id: 'tx-1', description: 'Updated', version: baseTx.version });
   });
 
-  it('deleteAccountTransaction returns a dry run for a transaction with no credit leg, without confirm', async () => {
+  it('updateAccountTransaction leaves fields untouched when omitted, merging onto the existing row', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => baseTx } as unknown as Deps['transactions'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', amount: 42 });
+
+    const persisted = result._unsafeUnwrap().persist[0] as { model: { description: string; amount: number } };
+    expect(persisted.model.description).toBe(baseTx.description);
+    expect(persisted.model.amount).toBe(42);
+  });
+
+  const newCategory = { id: 'cat-new', name: 'Transporte', kind: 'both', names: null };
+
+  it('does not append a merchant-learning Persistable when no category correction was given', async () => {
+    const deps = makeDeps({
+      transactions: {
+        getById: async () => ({ ...baseTx, categoryId: 'cat-old', merchant: 'uber' }),
+      } as unknown as Deps['transactions'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', description: 'No category change' });
+
+    expect(result._unsafeUnwrap().persist).toHaveLength(1);
+  });
+
+  it('composes a merchant-learning insert into the same atomic batch on a category correction (rule 5)', async () => {
+    const deps = makeDeps({
+      transactions: {
+        getById: async () => ({ ...baseTx, categoryId: 'cat-old', merchant: 'uber' }),
+      } as unknown as Deps['transactions'],
+      categories: { list: async () => [newCategory] } as unknown as Deps['categories'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', category: 'Transporte' });
+
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toHaveLength(2);
+    expect(outcome.persist[1]).toEqual({
+      op: PersistOp.enum.insert,
+      entity: 'merchantCategory',
+      model: { merchantKey: 'uber', categoryId: 'cat-new' },
+    });
+    // response() is pure data-shaping — it must not itself perform any write.
+    expect(typeof outcome.response).not.toBe('undefined');
+  });
+
+  it('does not append a merchant-learning Persistable when the transaction has no classified merchant', async () => {
+    const deps = makeDeps({
+      transactions: {
+        getById: async () => ({ ...baseTx, categoryId: 'cat-old', merchant: undefined }),
+      } as unknown as Deps['transactions'],
+      categories: { list: async () => [newCategory] } as unknown as Deps['categories'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', category: 'Transporte' });
+
+    expect(result._unsafeUnwrap().persist).toHaveLength(1);
+  });
+
+  it('deleteAccountTransaction returns an empty persist batch (no writes) for a dry run without confirm', async () => {
     const deps = makeDeps({
       transactions: { getById: async () => baseTx } as unknown as Deps['transactions'],
     });
@@ -244,12 +421,34 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
     const result = await deleteAccountTransaction(deps, { id: 'tx-1', confirm: false });
 
     expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toMatchObject({ deleted: false, dryRun: true });
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([]);
+    expect(outcome.response).toMatchObject({ deleted: false, dryRun: true });
+  });
+
+  it('deleteAccountTransaction returns a version-guarded remove Persistable when confirmed', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => baseTx } as unknown as Deps['transactions'],
+    });
+
+    const result = await deleteAccountTransaction(deps, { id: 'tx-1', confirm: true });
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([
+      { op: PersistOp.enum.delete, entity: 'transaction', id: 'tx-1', version: baseTx.version },
+    ]);
+    expect(outcome.response).toMatchObject({ deleted: true });
   });
 });
 
 describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved from the core)', () => {
-  const transferTx: TransactionView = { ...baseTx, type: 'transfer', accountId: 'acc-bank', toAccountId: 'acc-other' };
+  const transferTx: RawTransactionView = {
+    ...baseTx,
+    type: 'transfer',
+    accountId: 'acc-bank',
+    toAccountId: 'acc-other',
+  };
   const transferLegAccountsById: Record<string, Account> = {
     'acc-bank': account({ id: 'acc-bank' }),
     'acc-other': account({ id: 'acc-other' }),
@@ -284,17 +483,17 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
     expect(error.issues?.[0]).toContain('cannot have a category');
   });
 
-  it('allows a non-category, non-type update on a transfer (e.g. amount)', async () => {
+  it('allows a non-category, non-type update on a transfer (e.g. amount), preserving its type', async () => {
     const deps = makeDeps({
-      transactions: {
-        getById: async () => transferTx,
-        update: async () => transferTx,
-      } as unknown as Deps['transactions'],
+      transactions: { getById: async () => transferTx } as unknown as Deps['transactions'],
       accounts: transferLegAccounts as unknown as Deps['accounts'],
     });
 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', amount: 50 });
 
     expect(result.isOk()).toBe(true);
+    const persisted = result._unsafeUnwrap().persist[0] as { model: { type: string; amount: number } };
+    expect(persisted.model.type).toBe('transfer');
+    expect(persisted.model.amount).toBe(50);
   });
 });

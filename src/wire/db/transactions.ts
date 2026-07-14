@@ -39,6 +39,7 @@ export const TransactionRowSchema = z.object({
   subcategory_names: z.string().nullable().default(null),
   merchant_key: z.string().nullable(),
   tags: z.string().nullable(), // JSON array from json_group_array
+  version: z.number().int().nonnegative(),
 });
 
 // Flat node properties handed to the INSERT. `type` is derived from the Drizzle schema

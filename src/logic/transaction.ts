@@ -5,14 +5,17 @@ import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDi
 import type {
   CategoryFields,
   Classification,
+  ClassifiedUpsertResult,
   ClassifyOutcome,
-  CreateTransactionResult,
+  UpsertTransactionResult,
   SearchTransactions,
   TransactionError,
   TransactionView,
   UpdateTransaction,
 } from '../models/transaction.js';
 import type { RawTransactionView } from '../models/transaction.js';
+import type { PersistOutcome } from '../models/persistable.js';
+import { firstOutcome } from './persistence.js';
 import {
   transactionErrors,
   TransactionCursorSchema,
@@ -138,7 +141,10 @@ export type BulkItemResult<E = unknown> =
   | { status: 'error'; description: string; error: E };
 
 export const toBulkItemResult = <E>(
-  result: Result<CreateTransactionResult, E>,
+  // Bulk import never represents a transfer (single-source: every line is a movement/card
+  // purchase — ADR-017 step 2), so `classification` is always present here — narrower than the
+  // general `UpsertTransactionResult` (`create_transfer` is the one flow that omits it).
+  result: Result<ClassifiedUpsertResult, E>,
   description: string,
 ): BulkItemResult<E> =>
   result.match(
@@ -173,7 +179,8 @@ export const summarizeBulkItems = (
 // ─── Localized labels ───────────────────────────────────────────────────────
 
 const _addLocalizedLabels = (tx: RawTransactionView, locale: Locale): TransactionView => {
-  const { categoryNames, subCategoryNames, ...base } = tx;
+  // version: internal concurrency token (ADR-021) — dropped here, never reaches wire/out.
+  const { categoryNames, subCategoryNames, version, ...base } = tx;
   return {
     ...base,
     typeLabel: localizeTransactionType(tx.type, locale),
@@ -187,4 +194,79 @@ export function addLocalizedLabels(tx: RawTransactionView, locale: Locale): Tran
 export function addLocalizedLabels(locale: Locale): (tx: RawTransactionView) => TransactionView;
 export function addLocalizedLabels(...args: readonly unknown[]) {
   return purry(_addLocalizedLabels, args);
+}
+
+// ─── ADR-021: building a TransactionView from the shell's apply outcome (rule 6) ────────────────
+
+/** Resolves the entity's persisted, joined view from the shell's apply outcome and localizes it —
+ *  the one place `PersistOutcome.read` gets cast back to `RawTransactionView` (trusting the entity
+ *  contract) and turned into wire-ready shape. Pure model-building — no `created`/`classification`
+ *  envelope here; that's each flow's own result shape to assemble, not this function's job. */
+const _viewFromOutcome = (outcome: PersistOutcome, locale: Locale): TransactionView =>
+  addLocalizedLabels(outcome.read as RawTransactionView, locale);
+
+export function viewFromOutcome(outcome: PersistOutcome, locale: Locale): TransactionView;
+export function viewFromOutcome(locale: Locale): (outcome: PersistOutcome) => TransactionView;
+export function viewFromOutcome(...args: readonly unknown[]) {
+  return purry(_viewFromOutcome, args);
+}
+
+/** `viewFromOutcome`, but for a flow that only ever has one persistable and so only ever cares
+ *  about the first (and only) outcome — e.g. update_account_transaction, which has no `created`
+ *  flag to derive (an update either lands or the whole unit of work fails as a `conflict` before
+ *  any outcome is ever reported — rule 4 — so there's no duplicate-replay case to distinguish the
+ *  way there is for an insert). Also the shape update_card_transaction will need once converted —
+ *  phase 2b. */
+const _buildTransactionView = (outcomes: PersistOutcome[], locale: Locale): TransactionView =>
+  viewFromOutcome(firstOutcome(outcomes), locale);
+
+export function buildTransactionView(outcomes: PersistOutcome[], locale: Locale): TransactionView;
+export function buildTransactionView(locale: Locale): (outcomes: PersistOutcome[]) => TransactionView;
+export function buildTransactionView(...args: readonly unknown[]) {
+  return purry(_buildTransactionView, args);
+}
+
+/**
+ * Builds every insert-shaped flow's result (`UpsertTransactionResult` — `models/transaction.ts`):
+ * the localized view, plus whether the shell's insert actually landed. `created` is never faked by
+ * the domain — always read off the real apply outcome; on an idempotent duplicate replay,
+ * `outcome.read` (and so `transaction`) is the EXISTING row, not this attempt's own values.
+ * `classification` is the one field that genuinely varies per flow (present for a movement,
+ * `undefined` for a transfer — transfers are never classified) — passed through as-is rather than
+ * each flow assembling its own envelope around a shared `{ transaction, created }` core, since
+ * `UpsertTransactionResult` is that one shape every insert-shaped flow already returns.
+ */
+const _buildUpsertResult = (
+  outcomes: PersistOutcome[],
+  classification: ClassifyOutcome | undefined,
+  locale: Locale,
+): UpsertTransactionResult => {
+  const outcome = firstOutcome(outcomes);
+  return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied, classification };
+};
+
+// Two overload pairs (data-first / data-last), each split on whether `classification` is a real
+// value or `undefined` — so a caller with a `ClassifyOutcome` in hand gets back
+// `ClassifiedUpsertResult` (no re-narrowing needed), and `create_transfer`'s explicit `undefined`
+// still gets the general `UpsertTransactionResult`.
+export function buildUpsertResult(
+  outcomes: PersistOutcome[],
+  classification: ClassifyOutcome,
+  locale: Locale,
+): ClassifiedUpsertResult;
+export function buildUpsertResult(
+  outcomes: PersistOutcome[],
+  classification: undefined,
+  locale: Locale,
+): UpsertTransactionResult;
+export function buildUpsertResult(
+  classification: ClassifyOutcome,
+  locale: Locale,
+): (outcomes: PersistOutcome[]) => ClassifiedUpsertResult;
+export function buildUpsertResult(
+  classification: undefined,
+  locale: Locale,
+): (outcomes: PersistOutcome[]) => UpsertTransactionResult;
+export function buildUpsertResult(...args: readonly unknown[]) {
+  return purry(_buildUpsertResult, args);
 }

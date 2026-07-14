@@ -1,0 +1,164 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createTransfer } from '../../../../src/controllers/account/transfer.js';
+import type { Deps } from '../../../../src/controllers/deps.js';
+import { AccountType, type Account } from '../../../../src/models/account.js';
+import { CurrencyCode } from '../../../../src/models/money.js';
+import type { FlowOutcome, PersistOutcome } from '../../../../src/models/persistable.js';
+import { PersistOp } from '../../../../src/models/persistable.js';
+import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
+import { Locale } from '../../../../src/models/locale.js';
+
+const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
+  accounts: { list: async () => [] } as unknown as Deps['accounts'],
+  bills: {} as Deps['bills'],
+  categories: {} as Deps['categories'],
+  subCategories: {} as Deps['subCategories'],
+  creditCards: {} as Deps['creditCards'],
+  dashboards: {} as Deps['dashboards'],
+  health: {} as Deps['health'],
+  merchants: {} as Deps['merchants'],
+  recurring: {} as Deps['recurring'],
+  settings: {} as Deps['settings'],
+  tags: {} as Deps['tags'],
+  transactions: {} as unknown as Deps['transactions'],
+  clock: () => new Date('2026-06-01'),
+  newId: () => 'transfer-id',
+  locale: async () => Locale.enum.en,
+  resetLocale: vi.fn(),
+  ...overrides,
+});
+
+const account = (overrides: Partial<Account> = {}): Account => ({
+  id: 'acc-1',
+  name: 'Checking',
+  type: AccountType.enum.checking,
+  currency: CurrencyCode.enum.BRL,
+  initialBalance: 0,
+  ...overrides,
+});
+
+/** Deliberately sync, matching `FlowOutcome.response`'s own (sync-only) contract and
+ *  `unitOfWork.ts`'s real `resolveResponse` — `withUnitOfWork` never awaits it, so a test helper
+ *  that did would mask a flow accidentally returning an async response instead of failing on it. */
+const resolveResponse = <T>(outcome: FlowOutcome<T>, outcomes: PersistOutcome[]): T => {
+  const { response } = outcome;
+  return typeof response === 'function' ? response(outcomes) : response;
+};
+
+type MinimalEntity = { id: string; description: string; amount: number; currency: string };
+const rawViewFor = (entity: MinimalEntity): RawTransactionView =>
+  ({
+    id: entity.id,
+    description: entity.description,
+    amount: entity.amount,
+    type: 'transfer',
+    status: 'effective',
+    date: '2026-06-01',
+    currency: entity.currency,
+    source: 'mcp',
+    idempotencyKey: 'k',
+    classification: { method: 'none', confidence: 0 },
+    tags: [],
+    version: 0,
+  }) as RawTransactionView;
+
+const from = account({ id: 'acc-from', name: 'Checking' });
+const to = account({ id: 'acc-to', name: 'Savings' });
+
+describe('createTransfer — validation', () => {
+  it('rejects transferring from a credit account', async () => {
+    const deps = makeDeps({
+      accounts: { list: async () => [{ ...from, type: AccountType.enum.credit }, to] } as unknown as Deps['accounts'],
+    });
+
+    const result = await createTransfer(
+      deps,
+      { from: from.name, to: to.name, amount: 10, idempotencyKey: 'credit-from' },
+      TransactionSource.enum.mcp,
+    );
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('rejects a cross-currency transfer', async () => {
+    const deps = makeDeps({
+      accounts: {
+        list: async () => [from, { ...to, currency: CurrencyCode.enum.USD }],
+      } as unknown as Deps['accounts'],
+    });
+
+    const result = await createTransfer(
+      deps,
+      { from: from.name, to: to.name, amount: 10, idempotencyKey: 'cross-currency' },
+      TransactionSource.enum.mcp,
+    );
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+});
+
+describe('createTransfer — the write is returned as data, not performed (ADR-021)', () => {
+  it('returns a single insert Persistable for a transfer transaction between the resolved accounts', async () => {
+    const deps = makeDeps({ accounts: { list: async () => [from, to] } as unknown as Deps['accounts'] });
+
+    const result = await createTransfer(
+      deps,
+      { from: from.name, to: to.name, amount: 25, idempotencyKey: 'transfer-1' },
+      TransactionSource.enum.mcp,
+    );
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toHaveLength(1);
+    const persisted = outcome.persist[0] as {
+      op: string;
+      model: { type: string; amount: number; currency: string; refs: { accountId: string; toAccountId: string } };
+    };
+    expect(persisted.op).toBe(PersistOp.enum.insert);
+    expect(persisted.model).toMatchObject({
+      type: 'transfer',
+      amount: 25,
+      currency: from.currency,
+      refs: { accountId: from.id, toAccountId: to.id },
+    });
+  });
+
+  it('response() reports created:true when the shell actually inserted the transfer', async () => {
+    const deps = makeDeps({ accounts: { list: async () => [from, to] } as unknown as Deps['accounts'] });
+
+    const result = await createTransfer(
+      deps,
+      { from: from.name, to: to.name, amount: 25, idempotencyKey: 'transfer-created' },
+      TransactionSource.enum.mcp,
+    );
+    const outcome = result._unsafeUnwrap();
+    const { model: entity } = outcome.persist[0] as { model: MinimalEntity };
+
+    const response = resolveResponse(outcome, [{ applied: true, read: rawViewFor(entity) }]);
+    expect(response.created).toBe(true);
+    expect(response.transaction.amount).toBe(25);
+  });
+
+  it('response() reports created:false and the EXISTING data on an idempotent duplicate replay', async () => {
+    const deps = makeDeps({ accounts: { list: async () => [from, to] } as unknown as Deps['accounts'] });
+
+    const result = await createTransfer(
+      deps,
+      { from: from.name, to: to.name, amount: 25, idempotencyKey: 'transfer-duplicate' },
+      TransactionSource.enum.mcp,
+    );
+    const outcome = result._unsafeUnwrap();
+    const existing = rawViewFor({
+      id: 'existing-transfer',
+      description: 'Original transfer',
+      amount: 99,
+      currency: 'BRL',
+    });
+
+    const response = resolveResponse(outcome, [{ applied: false, read: existing }]);
+    expect(response.created).toBe(false);
+    expect(response.transaction.amount).toBe(99);
+  });
+});

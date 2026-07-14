@@ -35,6 +35,33 @@ export type Persistable<Tag extends string = string, Model = unknown> =
   | { op: typeof PersistOp.enum.update; entity: Tag; model: Model & { version: number } }
   | { op: typeof PersistOp.enum.delete; entity: Tag; id: string; version: number };
 
+/**
+ * What happened when the shell applied one `Persistable` from a flow's batch
+ * (docs/functional-core-imperative-shell.md rule 6) — generic and entity-agnostic, like
+ * `Persistable` itself. Meaningful chiefly for `insert`: `applied: false` means the write was
+ * skipped as an idempotent duplicate (its unique/idempotency column already had a row); `read` is
+ * then the entity's own already-decoded model reflecting what is now actually persisted (the
+ * existing row), so a flow whose response depends on it doesn't have to re-read the database
+ * itself. `update`/`delete` are always `applied: true` here — a stale `version` already fails the
+ * whole unit of work as a `conflict` before any outcome is ever reported (rule 4); an entity whose
+ * applier still finds a post-apply read useful (e.g. to reflect a persistence-only detail like
+ * replaced tag rows) may populate `read` there too. `read` is `unknown` here since this file names
+ * no entity; the flow that built the matching `Persistable` is the one place that knows how to
+ * interpret it. Positional: outcomes[i] describes persist[i].
+ */
+export type PersistOutcome = { applied: boolean; read?: unknown };
+
 /** What a functional-core flow returns instead of performing its writes: the write batch plus the
- *  response the caller gets back once the shell has applied it. */
-export type FlowOutcome<T> = { persist: Persistable[]; response: T };
+ *  response the caller gets back once the shell has applied it. `response` is usually just the
+ *  plain, core-derived value — the common case (rule 6). The exception is an idempotency-aware flow
+ *  whose response depends on what the shell's apply actually did (e.g. a create's `created` flag,
+ *  only knowable post-apply, or a duplicate replay's persisted field values): it hands the shell a
+ *  pure function of the per-persistable `PersistOutcome`s instead, called once the batch has
+ *  committed. Sync only, deliberately: a flow that needs a further write of its own (e.g.
+ *  merchant-learning off a category correction) puts that write in `persist` too — composed
+ *  atomically into the same batch (rule 5) — rather than reaching for a side effect here; `response`
+ *  stays pure data-shaping, never a place a flow performs I/O. */
+export type FlowOutcome<T> = {
+  persist: Persistable[];
+  response: T | ((outcomes: PersistOutcome[]) => T);
+};

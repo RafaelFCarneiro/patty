@@ -5,7 +5,12 @@ import { toIsoDate } from '../logic/period.js';
 import { resolveCurrency } from '../logic/money.js';
 import type { CreateRecurring, RecurringRuleView } from '../models/recurring.js';
 import { addLocalizedLabels, defaultStatusFor } from '../logic/transaction.js';
-import { ClassificationMethod, TransactionSource, type TransactionView } from '../models/transaction.js';
+import {
+  ClassificationMethod,
+  TransactionSource,
+  type RawTransactionView,
+  type TransactionView,
+} from '../models/transaction.js';
 import type { Deps } from './deps.js';
 import { resolveAccountRef, resolveCategoryRef } from './resolve.js';
 
@@ -48,7 +53,8 @@ export type ApplyDueResult = {
 export const applyDueRecurring = async (deps: Deps, options?: { through?: string }): Promise<ApplyDueResult> => {
   const today = toIsoDate(deps.clock());
   const through = options?.through ?? today;
-  const applied: ApplyDueResult['applied'] = [];
+  // Raw (pre-label) until the loop below maps it to `ApplyDueResult`'s wire-shaped `TransactionView`.
+  const applied: Array<{ rule: string; date: string; transaction: RawTransactionView }> = [];
 
   for (const rule of await deps.recurring.due(through)) {
     let due = rule.nextDue;

@@ -4,7 +4,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { conflict } from '../../models/error.js';
-import { PersistOp, type Persistable } from '../../models/persistable.js';
+import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import type { Db } from './driver.js';
 
 // Total calls to `flow` across the whole unit of work — the first attempt plus up to
@@ -28,14 +28,14 @@ export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
  * one. Built once per entity (e.g. `diplomat/db/repos/accounts.ts`'s `accountApplier`) and
  * registered under that entity's own tag — see `ApplierRegistry`. `insert`/`update` take `unknown`
  * because this file has no entity-specific row type to name; the applier that receives it is the
- * one place that knows how to interpret it.
+ * one place that knows how to interpret it. Each method returns a `PersistOutcome` (models/
+ * persistable.ts) — `applied` drives this file's own retry/conflict decision (rule 4); an applier
+ * that has nothing else to report just returns `{ applied }`, e.g. `versionedTableApplier` below.
  */
 export type EntityApplier = {
-  insert: (tx: Tx, model: unknown) => Promise<void>;
-  /** Returns whether the versioned WHERE guard matched (`rowsAffected > 0`). */
-  update: (tx: Tx, model: unknown) => Promise<boolean>;
-  /** Returns whether the versioned WHERE guard matched (`rowsAffected > 0`). */
-  delete: (tx: Tx, id: string, version: number) => Promise<boolean>;
+  insert: (tx: Tx, model: unknown) => Promise<PersistOutcome>;
+  update: (tx: Tx, model: unknown) => Promise<PersistOutcome>;
+  delete: (tx: Tx, id: string, version: number) => Promise<PersistOutcome>;
 };
 
 /** Every entity tag a converted flow might produce a `Persistable` for, mapped to how to apply
@@ -65,10 +65,11 @@ type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteCol
  */
 export const versionedTableApplier = <T extends VersionedTable>(table: T): EntityApplier => ({
   insert: async (tx, model) => {
-    await tx
+    const result = await tx
       .insert(table)
       .values(model as never)
       .onConflictDoNothing({ target: table.id });
+    return { applied: (result.rowsAffected ?? 0) > 0 };
   },
 
   update: async (tx, model) => {
@@ -78,12 +79,12 @@ export const versionedTableApplier = <T extends VersionedTable>(table: T): Entit
       .update(table)
       .set({ ...values, version: row.version + 1 } as never)
       .where(and(eq(table.id, row.id), eq(table.version, row.version)));
-    return (result.rowsAffected ?? 0) > 0;
+    return { applied: (result.rowsAffected ?? 0) > 0 };
   },
 
   delete: async (tx, id, version) => {
     const result = await tx.delete(table).where(and(eq(table.id, id), eq(table.version, version)));
-    return (result.rowsAffected ?? 0) > 0;
+    return { applied: (result.rowsAffected ?? 0) > 0 };
   },
 });
 
@@ -97,24 +98,24 @@ const resolveApplier = (registry: ApplierRegistry, entity: string): EntityApplie
   return applier;
 };
 
-const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistable): Promise<void> => {
+const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistable): Promise<PersistOutcome> => {
   const applier = resolveApplier(registry, p.entity);
   switch (p.op) {
     case PersistOp.enum.insert:
       // onConflictDoNothing is the applier's own concern (e.g. a retried insert after an apply
       // that actually committed is an idempotent no-op, not a version conflict) — inserts never
-      // retry here regardless of what an applier does internally.
-      await applier.insert(tx, p.model);
-      return;
+      // retry here regardless of what an applier does internally; its outcome is only ever
+      // reported onward, never itself a reason to throw.
+      return applier.insert(tx, p.model);
     case PersistOp.enum.update: {
-      const matched = await applier.update(tx, p.model);
-      if (!matched) throw new VersionConflict();
-      return;
+      const outcome = await applier.update(tx, p.model);
+      if (!outcome.applied) throw new VersionConflict();
+      return outcome;
     }
     case PersistOp.enum.delete: {
-      const matched = await applier.delete(tx, p.id, p.version);
-      if (!matched) throw new VersionConflict();
-      return;
+      const outcome = await applier.delete(tx, p.id, p.version);
+      if (!outcome.applied) throw new VersionConflict();
+      return outcome;
     }
     default: {
       const _exhaustive: never = p;
@@ -123,26 +124,39 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
   }
 };
 
-/** Applies the whole batch in one transaction; `true` on success, `false` on a version conflict
- *  (the transaction has already rolled back in that case). Any other failure propagates. */
-const applyBatch = async (db: Db, registry: ApplierRegistry, persist: Persistable[]): Promise<boolean> => {
+/** Applies the whole batch in one transaction, returning each persistable's own outcome
+ *  (positional, parallel to `persist`) on success — empty on a version conflict, since the
+ *  transaction has already rolled back and there is nothing to report. Any other failure
+ *  propagates. */
+const applyBatch = async (
+  db: Db,
+  registry: ApplierRegistry,
+  persist: Persistable[],
+): Promise<{ applied: boolean; outcomes: PersistOutcome[] }> => {
+  const outcomes: PersistOutcome[] = [];
   try {
     await db.transaction(async (tx) => {
-      for (const p of persist) await applyPersistable(tx, registry, p);
+      for (const p of persist) outcomes.push(await applyPersistable(tx, registry, p));
     });
-    return true;
+    return { applied: true, outcomes };
   } catch (cause) {
-    if (cause instanceof VersionConflict) return false;
+    if (cause instanceof VersionConflict) return { applied: false, outcomes: [] };
     throw cause;
   }
 };
 
-type Flow<T> = () => ResultAsync<{ persist: Persistable[]; response: T }, AppError>;
+type Flow<T> = () => ResultAsync<FlowOutcome<T>, AppError>;
+
+/** Resolves a `FlowOutcome`'s `response` against the batch's apply outcomes — the plain value for
+ *  the common case, or the result of calling the function an idempotency-aware flow handed back
+ *  instead (rule 6). Sync — see `models/persistable.ts`'s `FlowOutcome` doc for why. */
+const resolveResponse = <T>(response: T | ((outcomes: PersistOutcome[]) => T), outcomes: PersistOutcome[]): T =>
+  typeof response === 'function' ? (response as (o: PersistOutcome[]) => T)(outcomes) : response;
 
 const attempt = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>, attemptsLeft: number): ResultAsync<T, AppError> =>
   flow().andThen(({ persist, response }) =>
-    ResultAsync.fromSafePromise(applyBatch(db, registry, persist)).andThen((applied) => {
-      if (applied) return okAsync(response);
+    ResultAsync.fromSafePromise(applyBatch(db, registry, persist)).andThen(({ applied, outcomes }) => {
+      if (applied) return okAsync(resolveResponse(response, outcomes));
       if (attemptsLeft <= 1) return errAsync<T, AppError>(conflict);
       return attempt(db, registry, flow, attemptsLeft - 1);
     }),
