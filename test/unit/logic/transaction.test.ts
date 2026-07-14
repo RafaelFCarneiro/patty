@@ -14,6 +14,8 @@ import type { RawTransactionView } from '../../../src/models/transaction.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
+  createTransactionResponse,
+  createTransferResponse,
   deriveIdempotencyKey,
   hasCategory,
   hasSubCategory,
@@ -23,6 +25,7 @@ import {
   resolveCursorKey,
   resolveEffectiveType,
   summarizeBulkItems,
+  updateTransactionResponse,
 } from '../../../src/logic/transaction.js';
 
 describe('deriveIdempotencyKey', () => {
@@ -91,20 +94,22 @@ describe('summarizeBulkItems', () => {
   });
 });
 
+const baseTx: RawTransactionView = {
+  id: 'tx-1',
+  description: 'Test',
+  amount: 100,
+  type: TransactionType.enum.expense,
+  status: TransactionStatus.enum.effective,
+  date: '2026-01-01',
+  currency: CurrencyCode.enum.BRL,
+  source: TransactionSource.enum.mcp,
+  idempotencyKey: 'test-1',
+  classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+  tags: [],
+  version: 0,
+};
+
 describe('addLocalizedLabels', () => {
-  const baseTx: RawTransactionView = {
-    id: 'tx-1',
-    description: 'Test',
-    amount: 100,
-    type: TransactionType.enum.expense,
-    status: TransactionStatus.enum.effective,
-    date: '2026-01-01',
-    currency: CurrencyCode.enum.BRL,
-    source: TransactionSource.enum.mcp,
-    idempotencyKey: 'test-1',
-    classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-    tags: [],
-  };
 
   it('adds typeLabel and statusLabel for the given locale', () => {
     const labeled = addLocalizedLabels(baseTx, Locale.enum.pt);
@@ -197,6 +202,48 @@ describe('addLocalizedLabels', () => {
     const labeled = mapper(tx);
     expect(labeled.categoryName).toBe('Alimentação');
     expect(labeled.categoryNames).toBeUndefined();
+  });
+});
+
+describe('createTransactionResponse (ADR-021 rule 6)', () => {
+  const classification = { method: ClassificationMethod.enum.rule, confidence: 0.8 } as const;
+
+  it('reports created:true and the localized view when the shell actually inserted the row', () => {
+    const view = { ...baseTx, description: 'Groceries' };
+    const result = createTransactionResponse([{ applied: true, read: view }], classification, Locale.enum.en);
+
+    expect(result.created).toBe(true);
+    expect(result.classification).toBe(classification);
+    expect(result.transaction.description).toBe('Groceries');
+  });
+
+  it("reports created:false and the EXISTING row's data on an idempotent duplicate replay", () => {
+    const existing = { ...baseTx, description: 'Original replay target' };
+    const result = createTransactionResponse([{ applied: false, read: existing }], classification, Locale.enum.en);
+
+    expect(result.created).toBe(false);
+    expect(result.transaction.description).toBe('Original replay target');
+  });
+});
+
+describe('createTransferResponse (ADR-021 rule 6)', () => {
+  it('reports created and the localized view from the first (and only) outcome', () => {
+    const view = { ...baseTx, description: 'Transferência: Checking → Savings' };
+    const result = createTransferResponse([{ applied: true, read: view }], Locale.enum.en);
+
+    expect(result.created).toBe(true);
+    expect(result.transaction.description).toBe('Transferência: Checking → Savings');
+  });
+});
+
+describe('updateTransactionResponse (ADR-021 rule 6)', () => {
+  it('returns the localized view of the row the shell actually wrote, with no created flag', () => {
+    const view = { ...baseTx, description: 'Updated' };
+    const result = updateTransactionResponse([{ applied: true, read: view }], Locale.enum.pt);
+
+    expect(result.description).toBe('Updated');
+    expect(result.typeLabel).toBe('Despesa');
+    expect(result).not.toHaveProperty('created');
   });
 });
 

@@ -172,9 +172,13 @@ gets its own generic atomicity/conflict/idempotency suite.
      `MERCHANT_CATEGORY_ENTITY_TAG`, `diplomat/db/repos/merchants.ts`'s `merchantCategoryApplier` — an
      upsert-increment `insert`-only applier, since `merchant_category` has no `id`/`version` and is never
      `update`d/`delete`d in the versioned-entity sense) — atomic with the update it came from, and never fired
-     on a version-conflict attempt that gets rolled back and retried. Normalized the merchants repo alongside
-     this: the old `strengthenFromTransaction(transactionId, categoryId)` re-queried `transactions` to resolve
-     a merchant key itself — a business-shaped repo method name and behavior
+     on a version-conflict attempt that gets rolled back and retried. Since `response` is now genuinely pure in
+     every converted flow, moved the response-shaping itself out of each controller and into named, unit-tested
+     functions in `logic/transaction.ts` (`createTransactionResponse`, `createTransferResponse`,
+     `updateTransactionResponse` — one per response shape) — a controller's own `response` closure is a one-line
+     call into one of these, not inline `firstOutcome` + cast + `addLocalizedLabels` repeated at each call site.
+     Normalized the merchants repo alongside this: the old `strengthenFromTransaction(transactionId, categoryId)`
+     re-queried `transactions` to resolve a merchant key itself — a business-shaped repo method name and behavior
      (`docs/diplomatic-architecture.md`: repos "should contain no business logic"). Replaced with
      `incrementCategoryWeight(merchantKey, categoryId)`, pure upsert-increment mechanics shared (one function,
      `upsertCategoryWeight`) by both the repo method and `merchantCategoryApplier`; the "is this actually a

@@ -13,7 +13,13 @@ import { resolveCurrency } from '../../logic/money.js';
 import { normalizeMerchant, resolveMerchantCorrection } from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
-import { addLocalizedLabels, assertExclusiveCategorySubCategory, defaultStatusFor } from '../../logic/transaction.js';
+import {
+  addLocalizedLabels,
+  assertExclusiveCategorySubCategory,
+  createTransactionResponse,
+  defaultStatusFor,
+  updateTransactionResponse,
+} from '../../logic/transaction.js';
 import {
   accountErrors,
   type AddAccountMovement,
@@ -32,7 +38,6 @@ import {
   type ClassifyOutcome,
   type CreateTransactionResult,
   type DeleteTransactionResult,
-  type RawTransactionView,
   type TransactionEntity,
   type TransactionSource,
   type TransactionView,
@@ -125,11 +130,8 @@ const addAccountMovement = (
 
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
-    const response = (outcomes: PersistOutcome[]): CreateTransactionResult => {
-      const outcome = persistence.firstOutcome(outcomes);
-      const view = outcome.read as RawTransactionView;
-      return { transaction: addLocalizedLabels(view, locale), created: outcome.applied, classification };
-    };
+    const response = (outcomes: PersistOutcome[]): CreateTransactionResult =>
+      createTransactionResponse(outcomes, classification, locale);
     return ok({ persist, response });
   });
 
@@ -249,10 +251,7 @@ export const updateAccountTransaction = (
     if (merchantCorrection) {
       persist.push(persistence.insert({ entity: MERCHANT_CATEGORY_ENTITY_TAG, model: merchantCorrection }));
     }
-    const response = (outcomes: PersistOutcome[]): TransactionView => {
-      const view = persistence.firstOutcome(outcomes).read as RawTransactionView;
-      return addLocalizedLabels(view, locale);
-    };
+    const response = (outcomes: PersistOutcome[]): TransactionView => updateTransactionResponse(outcomes, locale);
     return ok({ persist, response });
   });
 

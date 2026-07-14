@@ -152,7 +152,12 @@ controller **decides** and returns the write as data instead of performing it; t
   `update_account_transaction`'s merchant-learning off a category correction) puts that write in `persist` too
   — composed into the same atomic batch (rule 5) via its own minimal entity
   (`models/merchant.ts`'s `MERCHANT_CATEGORY_ENTITY_TAG` / `diplomat/db/repos/merchants.ts`'s
-  `merchantCategoryApplier`) — rather than reaching for a side effect in `response`.
+  `merchantCategoryApplier`) — rather than reaching for a side effect in `response`. Because `response` is pure
+  (a function of `PersistOutcome[]` plus whatever plain values the flow closes over — `locale`, `classification`),
+  the actual response-shaping logic lives in `logic/transaction.ts` as named, independently unit-tested functions
+  (`createTransactionResponse`, `createTransferResponse`, `updateTransactionResponse` — one per response shape,
+  reused across aggregates once phase 2b converts the credit-card flows), not inlined in the controller; a
+  converted flow's own `response` closure is a one-line call into one of these.
 - **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
   converted flow): `withUnitOfWork(db, registry, flow)` invokes `flow`, applies the returned `persist` batch in
   one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry` (insert

@@ -13,6 +13,8 @@ import type {
   UpdateTransaction,
 } from '../models/transaction.js';
 import type { RawTransactionView } from '../models/transaction.js';
+import type { PersistOutcome } from '../models/persistable.js';
+import { firstOutcome } from './persistence.js';
 import {
   transactionErrors,
   TransactionCursorSchema,
@@ -189,3 +191,42 @@ export function addLocalizedLabels(locale: Locale): (tx: RawTransactionView) => 
 export function addLocalizedLabels(...args: readonly unknown[]) {
   return purry(_addLocalizedLabels, args);
 }
+
+// ─── ADR-021: idempotency-aware response building (rule 6) ─────────────────────
+
+/** Resolves the entity's persisted, joined view from the shell's apply outcome and localizes it —
+ *  the common last step of every transaction-producing flow's `response` function below. */
+const viewFromOutcome = (outcome: PersistOutcome, locale: Locale): TransactionView =>
+  addLocalizedLabels(outcome.read as RawTransactionView, locale);
+
+/** Builds an add_account_expense/add_account_income-shaped response (also the shape
+ *  add_card_purchase will need once converted — phase 2b): the localized view, plus whether the
+ *  shell's insert actually landed. `created` is never faked by the domain — always read off the
+ *  real apply outcome; on an idempotent duplicate replay, `outcome.read` (and so `transaction`) is
+ *  the EXISTING row, not this attempt's own values. */
+export const createTransactionResponse = (
+  outcomes: PersistOutcome[],
+  classification: ClassifyOutcome,
+  locale: Locale,
+): CreateTransactionResult => {
+  const outcome = firstOutcome(outcomes);
+  return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied, classification };
+};
+
+/** Builds a create_transfer-shaped response — same shape as `createTransactionResponse` minus
+ *  `classification` (transfers are never classified). */
+export const createTransferResponse = (
+  outcomes: PersistOutcome[],
+  locale: Locale,
+): { transaction: TransactionView; created: boolean } => {
+  const outcome = firstOutcome(outcomes);
+  return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied };
+};
+
+/** Builds an update_account_transaction-shaped response (also the shape update_card_transaction
+ *  will need once converted — phase 2b): just the localized view of the row the shell actually
+ *  wrote. No `created` flag to derive — an update either lands or the whole unit of work fails as
+ *  a `conflict` before any outcome is ever reported (rule 4), so there is no duplicate-replay case
+ *  to distinguish here the way there is for an insert. */
+export const updateTransactionResponse = (outcomes: PersistOutcome[], locale: Locale): TransactionView =>
+  viewFromOutcome(firstOutcome(outcomes), locale);

@@ -10,7 +10,7 @@ import { guard } from '../../common/result.js';
 import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
-import { addLocalizedLabels, defaultStatusFor } from '../../logic/transaction.js';
+import { createTransferResponse, defaultStatusFor } from '../../logic/transaction.js';
 import { accountErrors } from '../../models/account.js';
 import type { Account, CreateTransfer } from '../../models/account.js';
 import type { FlowOutcome, PersistOutcome } from '../../models/persistable.js';
@@ -18,7 +18,6 @@ import {
   ClassificationMethod,
   TRANSACTION_ENTITY_TAG,
   TransactionType,
-  type RawTransactionView,
   type TransactionEntity,
 } from '../../models/transaction.js';
 import type { TransactionView, TransactionSource } from '../../models/transaction.js';
@@ -70,10 +69,6 @@ export const createTransfer = (
 
     const locale = await deps.locale();
     const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
-    const response = (outcomes: PersistOutcome[]): { transaction: TransactionView; created: boolean } => {
-      const outcome = persistence.firstOutcome(outcomes);
-      const view = outcome.read as RawTransactionView;
-      return { transaction: addLocalizedLabels(view, locale), created: outcome.applied };
-    };
+    const response = (outcomes: PersistOutcome[]) => createTransferResponse(outcomes, locale);
     return ok({ persist, response });
   });
