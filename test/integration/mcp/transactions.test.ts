@@ -950,7 +950,12 @@ describe('MCP integration > transactions', () => {
 
       // Letters-only so `normalizeMerchant` (which strips digits) still keys on something unique
       // per test run — a stamp alone would collide across runs once its digits are stripped.
-      const merchant = randomUUID().replace(/[^a-f]/g, '').slice(0, 16);
+      // Mapping digits to letters (rather than stripping them) keeps all 32 hex characters, so the
+      // result is always non-empty and always letter-only — stripping digits could (rarely) yield
+      // an empty or short token and risk a cross-run merchant-key collision.
+      const merchant = randomUUID()
+        .replace(/-/g, '')
+        .replace(/\d/g, (digit) => String.fromCharCode(97 + Number(digit)));
       const merchantDescription = (n: number) => `${merchant} purchase ${n}`;
 
       // First occurrence: nothing has taught this merchant anything yet — auto-classifies to none.

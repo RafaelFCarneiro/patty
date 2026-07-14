@@ -37,9 +37,12 @@ const account = (overrides: Partial<Account> = {}): Account => ({
   ...overrides,
 });
 
-const resolveResponse = async <T>(outcome: FlowOutcome<T>, outcomes: PersistOutcome[]): Promise<T> => {
+/** Deliberately sync, matching `FlowOutcome.response`'s own (sync-only) contract and
+ *  `unitOfWork.ts`'s real `resolveResponse` — `withUnitOfWork` never awaits it, so a test helper
+ *  that did would mask a flow accidentally returning an async response instead of failing on it. */
+const resolveResponse = <T>(outcome: FlowOutcome<T>, outcomes: PersistOutcome[]): T => {
   const { response } = outcome;
-  return typeof response === 'function' ? await response(outcomes) : response;
+  return typeof response === 'function' ? response(outcomes) : response;
 };
 
 type MinimalEntity = { id: string; description: string; amount: number; currency: string };
@@ -133,7 +136,7 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
     const outcome = result._unsafeUnwrap();
     const { model: entity } = outcome.persist[0] as { model: MinimalEntity };
 
-    const response = await resolveResponse(outcome, [{ applied: true, read: rawViewFor(entity) }]);
+    const response = resolveResponse(outcome, [{ applied: true, read: rawViewFor(entity) }]);
     expect(response.created).toBe(true);
     expect(response.transaction.amount).toBe(25);
   });
@@ -154,7 +157,7 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
       currency: 'BRL',
     });
 
-    const response = await resolveResponse(outcome, [{ applied: false, read: existing }]);
+    const response = resolveResponse(outcome, [{ applied: false, read: existing }]);
     expect(response.created).toBe(false);
     expect(response.transaction.amount).toBe(99);
   });
