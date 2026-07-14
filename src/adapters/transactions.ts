@@ -1,13 +1,16 @@
 import {
   RawTransactionViewSchema,
+  TRANSACTION_ENTITY_TAG,
   type RawTransactionView,
   type Transaction,
+  type TransactionEntity,
   type TransactionPatch,
 } from '../models/transaction.js';
 import { LocalizedNamesSchema } from '../models/category.js';
 import type { CreateTransactionResult, DeleteTransactionResult, SearchTransactions } from '../models/transaction.js';
 import type { BulkItemResult } from '../logic/transaction.js';
 import type { AppError } from '../common/errors.js';
+import { INITIAL_VERSION, PersistOp, type FlowOutcome, type Persistable } from '../models/persistable.js';
 import { TransactionRowSchema, type TransactionDbProps, type TransactionDbRefs } from '../wire/db/transactions.js';
 import type * as wireIn from '../wire/in/transactions.js';
 import type { BulkItemOut } from '../wire/out/transactions.js';
@@ -57,6 +60,7 @@ export const dbToModel = (record: Record<string, unknown>): RawTransactionView =
     subCategoryNames,
     merchant: row.merchant_key ?? undefined,
     tags,
+    version: row.version,
   });
 };
 
@@ -86,6 +90,76 @@ export const modelToDb = (entity: Transaction): { props: TransactionDbProps; ref
     subCategoryId: entity.refs.subCategoryId ?? null,
     merchantKey: entity.refs.merchantKey ?? null,
   },
+});
+
+/** The row shape `transactionApplier` (`diplomat/db/repos/transactions.ts`) writes — `modelToDb`'s
+ *  flat props/refs merged onto the actual `transactions` table column names (drizzle's
+ *  `fromAccountId`/`creditCardId`/`subcategoryId`, not the entity's own `refs.accountId`/`cardId`/
+ *  `subCategoryId`), plus `version` and the full desired `tagNames` set (ADR-021). */
+export type TransactionRowEntity = TransactionDbProps & {
+  fromAccountId: string | null;
+  toAccountId: string | null;
+  creditCardId: string | null;
+  billId: string | null;
+  categoryId: string | null;
+  subcategoryId: string | null;
+  merchantKey: string | null;
+  version: number;
+  tagNames: string[];
+};
+
+/** entity→row for the versioned unit of work (ADR-021) — the only transaction write path that
+ *  needs `version`/`tagNames` on the wire-db row. Reuses `modelToDb` for the shared node
+ *  properties/edge refs, then renames the refs onto their actual drizzle column names. */
+export const entityToDb = (entity: TransactionEntity & { version: number }): TransactionRowEntity => {
+  const { props, refs } = modelToDb(entity);
+  return {
+    ...props,
+    fromAccountId: refs.accountId,
+    toAccountId: refs.toAccountId,
+    creditCardId: refs.cardId,
+    billId: refs.billId,
+    categoryId: refs.categoryId,
+    subcategoryId: refs.subCategoryId,
+    merchantKey: refs.merchantKey,
+    version: entity.version,
+    tagNames: entity.tagNames,
+  };
+};
+
+/**
+ * Adapts one transaction `Persistable`'s `model` from domain shape to db-row shape (ADR-021),
+ * mirroring `adapters/accounts.ts`'s `persistableToDb` — called explicitly by the MCP/REST handler,
+ * via `outcomeToDb` below, before the batch ever reaches `withUnitOfWork`, so `diplomat/db` (the
+ * `transactionApplier`, registered under `TRANSACTION_ENTITY_TAG`) never adapts a model itself, only
+ * writes the row it's handed. No-ops on a `Persistable` tagged for a different entity (rule 5:
+ * composed flows may carry other entities' persistables too). `insert` has no `version` on its
+ * model (nothing the core decides — see `models/persistable.ts`); it's added here. `delete` carries
+ * no model to adapt.
+ */
+export const persistableToDb = (p: Persistable): Persistable => {
+  if (p.entity !== TRANSACTION_ENTITY_TAG) return p;
+  switch (p.op) {
+    case PersistOp.enum.insert:
+      return { ...p, model: entityToDb({ ...(p.model as TransactionEntity), version: INITIAL_VERSION }) };
+    case PersistOp.enum.update:
+      return { ...p, model: entityToDb(p.model as TransactionEntity & { version: number }) };
+    case PersistOp.enum.delete:
+      return p;
+    default: {
+      const _exhaustive: never = p;
+      throw new Error(`transactionAdapters.persistableToDb: unhandled persistable op ${JSON.stringify(_exhaustive)}`);
+    }
+  }
+};
+
+/** Maps every `Persistable` in a flow's outcome through `persistableToDb` — the one call an
+ *  account-producing MCP/REST handler makes between the controller and `unitOfWork`. Safe over a
+ *  mixed-entity batch (composed flows, ADR-021 rule 5) — `persistableToDb` no-ops on anything not
+ *  tagged `TRANSACTION_ENTITY_TAG`. */
+export const outcomeToDb = <T>(outcome: FlowOutcome<T>): FlowOutcome<T> => ({
+  ...outcome,
+  persist: outcome.persist.map(persistableToDb),
 });
 
 /** model→db: flatten a domain patch into SQL-settable properties. */

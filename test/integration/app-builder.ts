@@ -14,10 +14,11 @@ import { merchantsRepo } from '../../src/diplomat/db/repos/merchants.js';
 import { recurringRepo } from '../../src/diplomat/db/repos/recurring.js';
 import { settingsRepo } from '../../src/diplomat/db/repos/settings.js';
 import { tagsRepo } from '../../src/diplomat/db/repos/tags.js';
-import { transactionsRepo } from '../../src/diplomat/db/repos/transactions.js';
+import { transactionApplier, transactionsRepo } from '../../src/diplomat/db/repos/transactions.js';
 import { healthRepo } from '../../src/diplomat/db/repos/health.js';
 import { McpTransport } from '../../src/config.js';
 import { ACCOUNT_ENTITY_TAG } from '../../src/models/account.js';
+import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
 import { Locale } from '../../src/models/locale.js';
 import { buildHttpApp } from '../../src/server.js';
 import { withUnitOfWork, type ApplierRegistry } from '../../src/diplomat/db/unitOfWork.js';
@@ -64,7 +65,10 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
   const require = createRequire(import.meta.url);
   const { version } = require('../../package.json') as { version: string };
 
-  const applierRegistry: ApplierRegistry = { [ACCOUNT_ENTITY_TAG]: accountApplier };
+  const applierRegistry: ApplierRegistry = {
+    [ACCOUNT_ENTITY_TAG]: accountApplier,
+    [TRANSACTION_ENTITY_TAG]: transactionApplier,
+  };
   const unitOfWork: UnitOfWork = (flow) => withUnitOfWork(db, applierRegistry, flow);
   const app = buildHttpApp(deps, version, unitOfWork, { logger: false });
 

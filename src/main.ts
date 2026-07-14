@@ -18,11 +18,12 @@ import { merchantsRepo } from './diplomat/db/repos/merchants.js';
 import { recurringRepo } from './diplomat/db/repos/recurring.js';
 import { settingsRepo } from './diplomat/db/repos/settings.js';
 import { tagsRepo } from './diplomat/db/repos/tags.js';
-import { transactionsRepo } from './diplomat/db/repos/transactions.js';
+import { transactionApplier, transactionsRepo } from './diplomat/db/repos/transactions.js';
 import { healthRepo } from './diplomat/db/repos/health.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { Locale } from './models/locale.js';
 import { ACCOUNT_ENTITY_TAG } from './models/account.js';
+import { TRANSACTION_ENTITY_TAG } from './models/transaction.js';
 import type { HttpSidecar } from './server.js';
 
 const require = createRequire(import.meta.url);
@@ -96,7 +97,10 @@ const main = async (): Promise<void> => {
 
   // Every converted entity's applier, keyed by its own tag (ADR-021) — assembled once here, the
   // composition root, so `diplomat/db/unitOfWork.ts` itself never names a specific entity.
-  const applierRegistry: ApplierRegistry = { [ACCOUNT_ENTITY_TAG]: accountApplier };
+  const applierRegistry: ApplierRegistry = {
+    [ACCOUNT_ENTITY_TAG]: accountApplier,
+    [TRANSACTION_ENTITY_TAG]: transactionApplier,
+  };
   const runUnitOfWork: UnitOfWork = (flow) => withUnitOfWork(db, applierRegistry, flow);
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {

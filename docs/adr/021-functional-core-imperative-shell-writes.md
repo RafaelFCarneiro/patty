@@ -1,7 +1,8 @@
 # ADR-021: Functional Core / Imperative Shell for the write path — the domain returns effects, the shell applies them
 
-**Status:** Accepted (2026-07-13; phase 1 — groundwork + `createAccount` first mover — implemented; phases 2–3
-pending) · **Date:** 2026-07-12 · **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill
+**Status:** Accepted (2026-07-13; phase 1 — groundwork + `createAccount` first mover — implemented; phase 2a —
+account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing — implemented 2026-07-13;
+phases 2b–3 pending) · **Date:** 2026-07-12 · **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill
 payment) and finally resolves the thread ADR-015 opened. Adopts the principle documented in
 `docs/functional-core-imperative-shell.md` for every write flow.
 
@@ -155,7 +156,27 @@ gets its own generic atomicity/conflict/idempotency suite.
      `name` instead), so `diplomat/db/unitOfWork.ts` exports `versionedTableApplier(table)` to build one from
      just the table reference; `accountApplier` is `versionedTableApplier(accounts)`, no hand-written
      insert/update/delete left at all.
-   - [ ] Phase 2 (transaction + bill flows): convert `add_*`/`update_*`/`delete_*`, `payBill`/
-     `revertBillPayment`; delete `bills.pay`/`ensureAndAttach`/self-heal and their atomicity tests.
-   - [ ] Phase 3 (remaining flows): bulk import, recurring, card/category/tag CRUD; remove write methods
-     from `deps`; delete the now-dead transactional repo methods; update `docs/architecture.md` accordingly.
+   - [x] Phase 2a (account-context transaction flows): `add_account_expense`/`add_account_income`/
+     `create_transfer`/`update_account_transaction`/`delete_account_transaction` converted end to end (MCP +
+     REST). A custom `transactionApplier` (`diplomat/db/repos/transactions.ts`) — not
+     `versionedTableApplier`, since a transaction row has genuine extra mechanics beyond `id`/`version`
+     (`insert` conflicts on `idempotency_key`, not `id`; merchant upsert; tag attach/replace) — registered
+     under `models/transaction.ts`'s `TRANSACTION_ENTITY_TAG`. Added the UoW idempotency-outcome contract
+     rule 6 describes: `PersistOutcome` (`models/persistable.ts`) — `applied` + an entity-decoded `read` of
+     what's now actually persisted — reported per-persistable by `withUnitOfWork`; `FlowOutcome.response` may
+     be the plain value (unchanged for `createAccount`) or a (sync or async) function of the batch's
+     `PersistOutcome[]`, which is how `created` is derived (never faked) and how
+     `updateAccountTransaction` runs merchant-learning strictly after the shell's commit. Behavior-preserving:
+     `controllers/account/transaction.ts`'s `addAccountMovementViaRepo` keeps the old `deps.transactions.create`
+     path for `importAccountStatement` (bulk import isn't converted until phase 3) and
+     `controllers/transaction/core.ts`'s `updateTransaction`/`deleteTransaction` are unchanged (still used by
+     the not-yet-converted credit-card aggregate) — both share their read/decision logic with the converted
+     account-side flows via extracted pure planners (`planAccountMovement`, `decideTransactionUpdate`) rather
+     than duplicating it outright.
+   - [ ] Phase 2b/2c (credit-card + bill flows): convert `add_card_purchase`/`update_card_transaction`/
+     `delete_card_transaction`, `payBill`/`revertBillPayment`; delete `bills.pay`/`ensureAndAttach`/self-heal
+     and their atomicity tests.
+   - [ ] Phase 3 (remaining flows): bulk import (reusing phase 2a's `PersistOutcome` idempotency-outcome
+     contract for per-item created/duplicate/needs-review status), recurring, card/category/tag CRUD; remove
+     write methods from `deps`; delete the now-dead transactional repo methods (incl. the phase 2a transitional
+     `addAccountMovementViaRepo`); update `docs/architecture.md` accordingly.

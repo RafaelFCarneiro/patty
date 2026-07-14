@@ -1,4 +1,4 @@
-import { PersistOp, type Persistable } from '../models/persistable.js';
+import { PersistOp, type Persistable, type PersistOutcome } from '../models/persistable.js';
 
 /**
  * Builders for each `Persistable` write intent (ADR-021 / docs/functional-core-imperative-shell.md) — one
@@ -24,3 +24,14 @@ export const remove = <Tag extends string>(fields: { entity: Tag; id: string; ve
   op: PersistOp.enum.delete,
   ...fields,
 });
+
+/** Extracts the one outcome from a flow whose `persist` batch is always exactly one item — the
+ *  common shape for a single-entity insert/update (`docs/functional-core-imperative-shell.md`
+ *  rule 6's idempotency-aware `response` function). Throws rather than silently defaulting: an
+ *  empty `outcomes` here would mean the flow's own `persist` batch and its `response` function
+ *  have drifted out of sync — an internal invariant violation, not a domain outcome. */
+export const soleOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
+  const [outcome] = outcomes;
+  if (!outcome) throw new Error('soleOutcome: expected exactly one persist outcome, got none');
+  return outcome;
+};

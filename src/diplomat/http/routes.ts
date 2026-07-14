@@ -337,7 +337,11 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const wireIn = parse(wireInAccounts.AddAccountMovementSchema, req.body, reply);
       if (!wireIn) return reply;
       const model = accountAdapters.addAccountMovementWireInToModel(wireIn);
-      const result = await addAccountExpense(deps, model, TransactionSource.enum.rest);
+      // transactionAdapters.outcomeToDb adapts addAccountExpense's result (model → db row) here,
+      // explicitly, before unitOfWork ever sees the batch — diplomat/db only ever writes rows.
+      const flow = () =>
+        addAccountExpense(deps, model, TransactionSource.enum.rest).map(transactionAdapters.outcomeToDb);
+      const result = await unitOfWork(flow);
       return result.match(
         (value) => {
           const out = transactionAdapters.createResultToWireOut(value);
@@ -364,7 +368,9 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const wireIn = parse(wireInAccounts.AddAccountMovementSchema, req.body, reply);
       if (!wireIn) return reply;
       const model = accountAdapters.addAccountMovementWireInToModel(wireIn);
-      const result = await addAccountIncome(deps, model, TransactionSource.enum.rest);
+      const flow = () =>
+        addAccountIncome(deps, model, TransactionSource.enum.rest).map(transactionAdapters.outcomeToDb);
+      const result = await unitOfWork(flow);
       return result.match(
         (value) => {
           const out = transactionAdapters.createResultToWireOut(value);
@@ -543,7 +549,8 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const wireIn = parse(wireInAccounts.CreateTransferSchema, req.body, reply);
       if (!wireIn) return reply;
       const model = accountAdapters.transferWireInToModel(wireIn);
-      const result = await createTransfer(deps, model, TransactionSource.enum.rest);
+      const flow = () => createTransfer(deps, model, TransactionSource.enum.rest).map(transactionAdapters.outcomeToDb);
+      const result = await unitOfWork(flow);
       return result.match(
         (value) => reply.status(value.created ? 201 : 200).send(value),
         (e) => reply.status(httpStatus(e)).send({ error: e }),
@@ -611,10 +618,11 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const { id } = req.params as { id: string };
       const wireIn = parse(wireInAccounts.UpdateAccountTransactionSchema, { ...(req.body as object), id }, reply);
       if (!wireIn) return reply;
-      return send(
-        reply,
-        await updateAccountTransaction(deps, accountAdapters.updateAccountTransactionWireInToModel(wireIn)),
-      );
+      const flow = () =>
+        updateAccountTransaction(deps, accountAdapters.updateAccountTransactionWireInToModel(wireIn)).map(
+          transactionAdapters.outcomeToDb,
+        );
+      return send(reply, await unitOfWork(flow));
     },
   },
   {
@@ -631,10 +639,9 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const { id } = req.params as { id: string };
       const confirm = (req.query as { confirm?: string }).confirm === 'true';
-      return send(
-        reply,
-        (await deleteAccountTransaction(deps, { id, confirm })).map(transactionAdapters.deleteResultToWireOut),
-      );
+      const flow = () => deleteAccountTransaction(deps, { id, confirm }).map(transactionAdapters.outcomeToDb);
+      const result = (await unitOfWork(flow)).map(transactionAdapters.deleteResultToWireOut);
+      return send(reply, result);
     },
   },
   {

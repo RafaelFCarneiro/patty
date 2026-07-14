@@ -10,13 +10,17 @@ import { billErrors, BillStatus, type Bill, type BillQuery, type PayBill } from 
 import {
   ClassificationMethod,
   type TransactionSource as TransactionSourceType,
+  type TransactionView,
   TransactionType,
 } from '../../models/transaction.js';
 import type { BillWithItems } from '../../diplomat/db/repos/bills.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCardRef } from '../resolve.js';
 
-export type BillView = BillWithItems & { total: number };
+// `transactions` is `TransactionView[]` here (not `BillWithItems`'s own raw, pre-label
+// `RawTransactionView[]`) — `getBill` below always returns the `addLocalizedLabels`-mapped, wire-
+// ready view.
+export type BillView = Omit<BillWithItems, 'transactions'> & { transactions: TransactionView[]; total: number };
 
 export const getBill = (deps: Deps, input: BillQuery): ResultAsync<BillView, AppError> =>
   safeTry(async function* () {

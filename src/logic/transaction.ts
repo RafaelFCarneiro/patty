@@ -173,7 +173,8 @@ export const summarizeBulkItems = (
 // ─── Localized labels ───────────────────────────────────────────────────────
 
 const _addLocalizedLabels = (tx: RawTransactionView, locale: Locale): TransactionView => {
-  const { categoryNames, subCategoryNames, ...base } = tx;
+  // version: internal concurrency token (ADR-021) — dropped here, never reaches wire/out.
+  const { categoryNames, subCategoryNames, version, ...base } = tx;
   return {
     ...base,
     typeLabel: localizeTransactionType(tx.type, locale),

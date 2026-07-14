@@ -19,9 +19,11 @@ import type { Deps } from '../deps.js';
  *  default (date, idempotencyKey) before handing the line to the aggregate's own create function. */
 export type StatementLine = { date?: string; description: string; amount: number; idempotencyKey?: string };
 
-/** The aggregate's own per-line create function (e.g. addCardPurchase bound to a fixed card,
- *  addAccountExpense/addAccountIncome bound to a fixed account) — injected so this module never
- *  imports an aggregate. Receives the line with the runner's defaults already applied. */
+/** The aggregate's own per-line create function (e.g. addCardPurchase bound to a fixed card, or
+ *  the account aggregate's own legacy repo-write path bound to a fixed account — ADR-021 phase 3
+ *  still owes bulk import its own FC/IS + idempotency-aware-outcome conversion, so this runner
+ *  keeps expecting an already-applied result rather than a `Persistable` batch) — injected so this
+ *  module never imports an aggregate. Receives the line with the runner's defaults already applied. */
 export type StatementLineCreateFn<Line extends StatementLine> = (
   deps: Deps,
   line: Line & { date: string; idempotencyKey: string; rawInput?: string },

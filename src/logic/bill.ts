@@ -5,7 +5,7 @@ import * as R from 'remeda';
 import { localizeBillStatus } from './localize.js';
 import { BillStatus, type Bill } from '../models/bill.js';
 import type { Locale } from '../models/locale.js';
-import { TransactionType, type RawTransactionView, type TransactionView } from '../models/transaction.js';
+import { TransactionType, type TransactionView } from '../models/transaction.js';
 
 const _withStatusLabel = (bill: Bill, locale: Locale): Bill => ({
   ...bill,
@@ -24,8 +24,10 @@ export const isBillPaid = (bill: Pick<Bill, 'status'>): boolean => bill.status =
 export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: number }): boolean =>
   (input.billMonth === undefined) === (input.billYear === undefined);
 
-/** Reports a transaction's (new) bill assignment — used after create/update attaches or reassigns it. */
-export const withBillId = (tx: RawTransactionView, billId: string): RawTransactionView => ({ ...tx, billId });
+/** Reports a transaction's (new) bill assignment — used after create/update attaches or reassigns
+ *  it, on either the raw (pre-`addLocalizedLabels`) or already-localized view, hence generic over
+ *  either `TransactionView` shape rather than fixed to one. */
+export const withBillId = <T extends TransactionView>(tx: T, billId: string): T => ({ ...tx, billId });
 
 export type BillPeriod = { month: number; year: number; closeDate: string; dueDate: string };
 
