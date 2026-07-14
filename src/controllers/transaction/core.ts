@@ -6,7 +6,7 @@ import { ok, okAsync, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
-import { isMerchantCorrection } from '../../logic/merchant.js';
+import { resolveMerchantCorrection } from '../../logic/merchant.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
@@ -169,8 +169,10 @@ export const updateTransaction = (
     );
 
     // Learning loop: correcting the category strengthens the merchant→category association
-    if (categoryId && isMerchantCorrection(existing, categoryId))
-      await deps.merchants.incrementCategoryWeight(existing.merchant, categoryId);
+    const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
+    if (merchantCorrection) {
+      await deps.merchants.incrementCategoryWeight(merchantCorrection.merchantKey, merchantCorrection.categoryId);
+    }
 
     const locale = await deps.locale();
     return ok(addLocalizedLabels(updated, locale));

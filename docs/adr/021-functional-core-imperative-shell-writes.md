@@ -178,11 +178,13 @@ gets its own generic atomicity/conflict/idempotency suite.
      (`docs/diplomatic-architecture.md`: repos "should contain no business logic"). Replaced with
      `incrementCategoryWeight(merchantKey, categoryId)`, pure upsert-increment mechanics shared (one function,
      `upsertCategoryWeight`) by both the repo method and `merchantCategoryApplier`; the "is this actually a
-     correction worth learning from" decision moved to a named predicate,
-     `logic/merchant.ts`'s `isMerchantCorrection`, used by both the old `updateTransaction` (still repo-driven,
-     calls `deps.merchants.incrementCategoryWeight` directly — a real write from a controller is expected and
-     correct for an unconverted flow) and the new `updateAccountTransaction` (composes a
-     `MERCHANT_CATEGORY_ENTITY_TAG` insert into `persist` instead) — one rule, decided once, applied through
+     correction worth learning from" decision moved to a named resolver, `logic/merchant.ts`'s
+     `resolveMerchantCorrection(existing, newCategoryId)` — returns the `{merchantKey, categoryId}` edge to
+     write or `null`, a single check rather than a caller-side emptiness guard plus a same-ness comparison —
+     used by both the old `updateTransaction` (still repo-driven, calls
+     `deps.merchants.incrementCategoryWeight` directly — a real write from a controller is expected and
+     correct for an unconverted flow) and the new `updateAccountTransaction` (composes the resolved edge into
+     `persist` as a `MERCHANT_CATEGORY_ENTITY_TAG` insert instead) — one rule, decided once, applied through
      each flow's own write mechanism. Behavior-preserving otherwise:
      `controllers/account/transaction.ts`'s `addAccountMovementViaRepo` keeps the old `deps.transactions.create`
      path for `importAccountStatement` (bulk import isn't converted until phase 3) and

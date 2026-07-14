@@ -10,7 +10,7 @@ import { guard, okOr } from '../../common/result.js';
 import { assertNonCreditType, guardTransferMutability, isAccountOwnedType } from '../../logic/account.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
 import { resolveCurrency } from '../../logic/money.js';
-import { isMerchantCorrection, normalizeMerchant } from '../../logic/merchant.js';
+import { normalizeMerchant, resolveMerchantCorrection } from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { addLocalizedLabels, assertExclusiveCategorySubCategory, defaultStatusFor } from '../../logic/transaction.js';
@@ -245,13 +245,9 @@ export const updateAccountTransaction = (
     const persist: Persistable[] = [
       persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } }),
     ];
-    if (categoryId && isMerchantCorrection(existing, categoryId)) {
-      persist.push(
-        persistence.insert({
-          entity: MERCHANT_CATEGORY_ENTITY_TAG,
-          model: { merchantKey: existing.merchant, categoryId },
-        }),
-      );
+    const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
+    if (merchantCorrection) {
+      persist.push(persistence.insert({ entity: MERCHANT_CATEGORY_ENTITY_TAG, model: merchantCorrection }));
     }
     const response = (outcomes: PersistOutcome[]): TransactionView => {
       const view = persistence.firstOutcome(outcomes).read as RawTransactionView;
