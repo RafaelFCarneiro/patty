@@ -128,7 +128,7 @@ describe('MCP integration > categories', () => {
     })) as { transaction: { id: string } };
     createdTxIds.push(txResult.transaction.id);
 
-    // Correct the category → strengthenFromTransaction writes a merchant_category row
+    // Correct the category → the merchant-learning correction writes a merchant_category row
     await callTool(client, {
       name: 'update_account_transaction',
       args: { id: txResult.transaction.id, category: cat.name },

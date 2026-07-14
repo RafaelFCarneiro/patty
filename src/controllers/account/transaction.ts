@@ -10,7 +10,7 @@ import { guard, okOr } from '../../common/result.js';
 import { assertNonCreditType, guardTransferMutability, isAccountOwnedType } from '../../logic/account.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
 import { resolveCurrency } from '../../logic/money.js';
-import { normalizeMerchant } from '../../logic/merchant.js';
+import { isMerchantCorrection, normalizeMerchant } from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { addLocalizedLabels, assertExclusiveCategorySubCategory, defaultStatusFor } from '../../logic/transaction.js';
@@ -245,9 +245,7 @@ export const updateAccountTransaction = (
     const persist: Persistable[] = [
       persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } }),
     ];
-    // A correction (category actually changed) strengthens the merchant→category association —
-    // only possible when the transaction has a classified merchant at all.
-    if (categoryId && categoryId !== existing.categoryId && existing.merchant) {
+    if (categoryId && isMerchantCorrection(existing, categoryId)) {
       persist.push(
         persistence.insert({
           entity: MERCHANT_CATEGORY_ENTITY_TAG,

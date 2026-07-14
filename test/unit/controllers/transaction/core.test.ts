@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { updateTransaction } from '../../../../src/controllers/transaction/core.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
-import type { TransactionView } from '../../../../src/models/transaction.js';
+import type { RawTransactionView } from '../../../../src/models/transaction.js';
 import { Locale } from '../../../../src/models/locale.js';
 
 const makeDeps = (): Deps => ({
@@ -23,7 +23,7 @@ const makeDeps = (): Deps => ({
   resetLocale: vi.fn(),
 });
 
-const existingTransaction: TransactionView = {
+const existingTransaction: RawTransactionView = {
   id: 'tx-1',
   description: 'Original',
   amount: 40,
@@ -35,6 +35,7 @@ const existingTransaction: TransactionView = {
   idempotencyKey: 'existing-key',
   classification: { method: 'none', confidence: 0 },
   tags: [],
+  version: 0,
 };
 
 describe('updateTransaction — account resolution is value-based, not truthy', () => {
@@ -45,5 +46,38 @@ describe('updateTransaction — account resolution is value-based, not truthy', 
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('unknown_account');
+  });
+});
+
+describe('updateTransaction — merchant-learning write-back (still repo-driven, phase 2b)', () => {
+  it('strengthens the merchant association via incrementCategoryWeight on a category correction', async () => {
+    const incrementCategoryWeight = vi.fn(async () => {});
+    const deps = makeDeps();
+    deps.merchants = { matchCandidates: async () => [], incrementCategoryWeight } as unknown as Deps['merchants'];
+    deps.transactions = {
+      update: async () => ({ ...existingTransaction, categoryId: 'cat-new' }),
+    } as unknown as Deps['transactions'];
+    deps.categories = {
+      list: async () => [{ id: 'cat-new', name: 'Transporte', kind: 'both', names: null }],
+    } as unknown as Deps['categories'];
+
+    const existingWithMerchant = { ...existingTransaction, categoryId: 'cat-old', merchant: 'uber' };
+    const result = await updateTransaction(deps, { id: 'tx-1', category: 'Transporte' }, existingWithMerchant);
+
+    expect(result.isOk()).toBe(true);
+    expect(incrementCategoryWeight).toHaveBeenCalledWith('uber', 'cat-new');
+  });
+
+  it('does not call incrementCategoryWeight when no category correction is given', async () => {
+    const incrementCategoryWeight = vi.fn(async () => {});
+    const deps = makeDeps();
+    deps.merchants = { matchCandidates: async () => [], incrementCategoryWeight } as unknown as Deps['merchants'];
+    deps.transactions = { update: async () => existingTransaction } as unknown as Deps['transactions'];
+
+    const existingWithMerchant = { ...existingTransaction, merchant: 'uber' };
+    const result = await updateTransaction(deps, { id: 'tx-1', description: 'Renamed' }, existingWithMerchant);
+
+    expect(result.isOk()).toBe(true);
+    expect(incrementCategoryWeight).not.toHaveBeenCalled();
   });
 });

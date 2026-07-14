@@ -21,7 +21,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   creditCards: {} as Deps['creditCards'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
-  merchants: { matchCandidates: async () => [], strengthenFromTransaction: vi.fn() } as unknown as Deps['merchants'],
+  merchants: { matchCandidates: async () => [], incrementCategoryWeight: vi.fn() } as unknown as Deps['merchants'],
   recurring: {} as Deps['recurring'],
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],

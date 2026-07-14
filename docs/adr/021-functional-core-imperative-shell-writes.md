@@ -172,13 +172,24 @@ gets its own generic atomicity/conflict/idempotency suite.
      `MERCHANT_CATEGORY_ENTITY_TAG`, `diplomat/db/repos/merchants.ts`'s `merchantCategoryApplier` — an
      upsert-increment `insert`-only applier, since `merchant_category` has no `id`/`version` and is never
      `update`d/`delete`d in the versioned-entity sense) — atomic with the update it came from, and never fired
-     on a version-conflict attempt that gets rolled back and retried. Behavior-preserving:
+     on a version-conflict attempt that gets rolled back and retried. Normalized the merchants repo alongside
+     this: the old `strengthenFromTransaction(transactionId, categoryId)` re-queried `transactions` to resolve
+     a merchant key itself — a business-shaped repo method name and behavior
+     (`docs/diplomatic-architecture.md`: repos "should contain no business logic"). Replaced with
+     `incrementCategoryWeight(merchantKey, categoryId)`, pure upsert-increment mechanics shared (one function,
+     `upsertCategoryWeight`) by both the repo method and `merchantCategoryApplier`; the "is this actually a
+     correction worth learning from" decision moved to a named predicate,
+     `logic/merchant.ts`'s `isMerchantCorrection`, used by both the old `updateTransaction` (still repo-driven,
+     calls `deps.merchants.incrementCategoryWeight` directly — a real write from a controller is expected and
+     correct for an unconverted flow) and the new `updateAccountTransaction` (composes a
+     `MERCHANT_CATEGORY_ENTITY_TAG` insert into `persist` instead) — one rule, decided once, applied through
+     each flow's own write mechanism. Behavior-preserving otherwise:
      `controllers/account/transaction.ts`'s `addAccountMovementViaRepo` keeps the old `deps.transactions.create`
      path for `importAccountStatement` (bulk import isn't converted until phase 3) and
      `controllers/transaction/core.ts`'s `updateTransaction`/`deleteTransaction` are unchanged (still used by
-     the not-yet-converted credit-card aggregate, including its own `deps.merchants.strengthenFromTransaction`
-     call) — both share their read/decision logic with the converted account-side flows via extracted pure
-     planners (`planAccountMovement`, `decideTransactionUpdate`) rather than duplicating it outright.
+     the not-yet-converted credit-card aggregate) — both share their read/decision logic with the converted
+     account-side flows via extracted pure planners (`planAccountMovement`, `decideTransactionUpdate`) rather
+     than duplicating it outright.
    - [ ] Phase 2b/2c (credit-card + bill flows): convert `add_card_purchase`/`update_card_transaction`/
      `delete_card_transaction`, `payBill`/`revertBillPayment`; delete `bills.pay`/`ensureAndAttach`/self-heal
      and their atomicity tests.
