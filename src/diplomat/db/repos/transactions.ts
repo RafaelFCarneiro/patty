@@ -322,8 +322,10 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
  * The transaction entity's `EntityApplier` (ADR-021) — hand-written rather than
  * `versionedTableApplier` (unlike `accounts.ts`'s `accountApplier`) because a transaction row's
  * storage shape has genuine extra mechanics beyond a plain `id`/`version` table: `insert` conflicts
- * on `idempotency_key` (not `id`) and upserts the referenced merchant; both `insert` and `update`
- * attach/replace the row's `transaction_tags`. This is still *persistence structure*, not business
+ * on `idempotency_key` (not `id`); both `insert` and `update` upsert the referenced merchant — the
+ * applier never assumes an update's merchant key already has a satisfying `merchants` row, even
+ * though no current caller actually changes it on update — and attach/replace the row's
+ * `transaction_tags`. This is still *persistence structure*, not business
  * logic — no bill/paid reasoning, exactly the repo's own former `create`/`update` mechanics,
  * relocated here so the domain (`controllers/account/transaction.ts`,
  * `controllers/account/transfer.ts`) can describe a transaction write as a `Persistable` instead of
@@ -383,6 +385,11 @@ export const transactionApplier: EntityApplier = {
 
   update: async (tx, model) => {
     const entity = model as TransactionRowEntity & { id: string; version: number };
+
+    if (entity.merchantKey) {
+      await tx.insert(merchants).values({ key: entity.merchantKey }).onConflictDoNothing();
+    }
+
     const result = await tx
       .update(transactions)
       .set({

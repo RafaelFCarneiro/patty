@@ -20,7 +20,7 @@ export type MerchantsRepo = {
   matchCandidates: (normalizedDescription: string) => Promise<MerchantMatch[]>;
   /** Learning write-back: strengthens (or creates, at weight 1) a merchant→category edge. Pure
    *  mechanics — which edge to strengthen, and whether to at all, is the caller's own decision
-   *  (`logic/merchant.ts`'s `isMerchantCorrection`), never resolved here. */
+   *  (`logic/merchant.ts`'s `resolveMerchantCorrection`), never resolved here. */
   incrementCategoryWeight: (merchantKey: string, categoryId: string) => Promise<void>;
 };
 

@@ -28,7 +28,7 @@ import {
   type TransactionView,
   type UpdateTransaction,
 } from '../../models/transaction.js';
-import type { Account } from '../../models/account.js';
+import type { CurrencyCode } from '../../models/money.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCategoryRef, resolveSubCategoryRef } from '../resolve.js';
 
@@ -108,9 +108,13 @@ type UpdateTransactionPatch = UpdateTransaction & { account?: string };
  *  needs decided via injected reads, before either shapes its own write: the resolved new account
  *  (if any), the movement type a category-kind check should validate against, and the category/
  *  sub-category selection (if any field was provided). Extracted once here so the two callers
- *  share the same reads/validation and never re-derive them differently. */
+ *  share the same reads/validation and never re-derive them differently. `account` is a minimal
+ *  structural type (id + currency, the only fields either caller reads off it) rather than the
+ *  full `Account` — this module must never import `models/account.ts` (dependency table). The
+ *  real `Account` that `resolveAccountRef` (`controllers/resolve.ts`) resolves to structurally
+ *  satisfies this narrower type, so neither side has to name the other's model. */
 type TransactionUpdateDecision = {
-  account: Account | null;
+  account: { id: string; currency: CurrencyCode } | null;
   effectiveType: MovementType | undefined;
   categorySelection: CategorySelection | null;
 };

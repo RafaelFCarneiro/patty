@@ -397,6 +397,28 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
     expect(merchantRow?.key).toBe(row.merchantKey);
   });
 
+  it('update upserts the referenced merchant row too, so a key introduced on update satisfies the FK', async () => {
+    const row = newTransactionRow();
+    await withUnitOfWork(db, transactionRegistry, insertRow(row));
+
+    const newMerchantKey = `merchant-${randomUUID()}`;
+    const updated: TransactionRowEntity = { ...row, merchantKey: newMerchantKey };
+    const result = await withUnitOfWork(db, transactionRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: updated }] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    const [merchantRow] = await db.all<{ key: string }>(sql`SELECT key FROM merchants WHERE key = ${newMerchantKey}`);
+    expect(merchantRow?.key).toBe(newMerchantKey);
+    const [dbRow] = await db.all<{ merchant_key: string }>(
+      sql`SELECT merchant_key FROM transactions WHERE id = ${row.id}`,
+    );
+    expect(dbRow?.merchant_key).toBe(newMerchantKey);
+  });
+
   it('insert attaches only the tag names that already exist as rows, silently dropping the rest', async () => {
     const existingTagId = randomUUID();
     const existingTagName = `Tag ${existingTagId}`;
