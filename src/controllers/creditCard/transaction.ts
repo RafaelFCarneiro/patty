@@ -134,7 +134,7 @@ const planCardPurchase = (
     const date = input.date ?? today;
     const status = input.status ?? defaultStatusFor(date, today);
 
-    const billPeriod = resolveBillPeriod(input, date, card.closingDay, card.dueDay);
+    const billPeriod = resolveBillPeriod(input.billMonth, input.billYear, date, card.closingDay, card.dueDay);
     const existingBill = await deps.bills.findByCycle(card.id, billPeriod.month, billPeriod.year);
     yield* guard(!existingBill || !isBillPaid(existingBill), cardErrors.paidBillImmutable);
 

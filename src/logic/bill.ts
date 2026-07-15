@@ -94,11 +94,12 @@ export const billPeriodForCycle = (month: number, year: number, closingDay: numb
 /** Target bill cycle for a card purchase: an explicit `billMonth`/`billYear` override when given
  *  (assumed already paired — see `assertBillPeriodPaired`), else derived from the transaction date. */
 export const resolveBillPeriod = (
-  input: { billMonth?: number; billYear?: number },
+  billMonth: number | undefined,
+  billYear: number | undefined,
   date: string,
   closingDay: number,
   dueDay: number,
 ): BillPeriod =>
-  input.billMonth !== undefined && input.billYear !== undefined
-    ? billPeriodForCycle(input.billMonth, input.billYear, closingDay, dueDay)
+  billMonth !== undefined && billYear !== undefined
+    ? billPeriodForCycle(billMonth, billYear, closingDay, dueDay)
     : billPeriodFor(date, closingDay, dueDay);
