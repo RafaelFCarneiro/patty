@@ -620,7 +620,7 @@ describe('updateCardTransaction — merchant learning (ADR-021 rule 5)', () => {
 });
 
 describe('deleteCardTransaction — guards + is returned as data (ADR-021 phase 2b)', () => {
-  it('dry run (no confirm) returns an empty persist batch — no bill read needed', async () => {
+  it('dry run (no confirm) still reads the bill for the paid-bill guard, but persists nothing', async () => {
     const deps = makeDeps({
       transactions: { getById: async () => cardOwnedTx } as unknown as Deps['transactions'],
       accounts: creditAccountsById as unknown as Deps['accounts'],
