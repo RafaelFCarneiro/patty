@@ -16,6 +16,7 @@ import {
   billPeriodForCycle,
   computeBillTotal,
   isBillPaid,
+  resolveBillPeriod,
   withBillId,
   withStatusLabel,
 } from '../../../src/logic/bill.js';
@@ -136,6 +137,18 @@ describe('billPeriodForCycle', () => {
       closeDate: '2026-12-20',
       dueDate: '2027-01-05',
     });
+  });
+});
+
+describe('resolveBillPeriod', () => {
+  it('derives the cycle from the date when no explicit billMonth/billYear is given', () => {
+    expect(resolveBillPeriod({}, '2026-06-15', 20, 5)).toEqual(billPeriodFor('2026-06-15', 20, 5));
+  });
+
+  it('uses the explicit cycle override when both billMonth and billYear are given', () => {
+    expect(resolveBillPeriod({ billMonth: 8, billYear: 2026 }, '2026-06-15', 20, 5)).toEqual(
+      billPeriodForCycle(8, 2026, 20, 5),
+    );
   });
 });
 

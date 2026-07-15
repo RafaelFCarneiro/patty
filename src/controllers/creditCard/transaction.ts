@@ -9,9 +9,9 @@ import { guard, okOr } from '../../common/result.js';
 import {
   assertBillPeriodPaired,
   billEntityFrom,
-  billPeriodFor,
   billPeriodForCycle,
   isBillPaid,
+  resolveBillPeriod,
   type BillPeriod,
 } from '../../logic/bill.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
@@ -134,10 +134,7 @@ const planCardPurchase = (
     const date = input.date ?? today;
     const status = input.status ?? defaultStatusFor(date, today);
 
-    const billPeriod: BillPeriod =
-      input.billMonth !== undefined && input.billYear !== undefined
-        ? billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay)
-        : billPeriodFor(date, card.closingDay, card.dueDay);
+    const billPeriod = resolveBillPeriod(input, date, card.closingDay, card.dueDay);
     const existingBill = await deps.bills.findByCycle(card.id, billPeriod.month, billPeriod.year);
     yield* guard(!existingBill || !isBillPaid(existingBill), cardErrors.paidBillImmutable);
 
