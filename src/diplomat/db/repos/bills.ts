@@ -1,3 +1,4 @@
+import { LibsqlError } from '@libsql/client';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import * as transactionAdapters from '../../../adapters/transactions.js';
@@ -133,13 +134,14 @@ export const billsRepo = (db: Db): BillsRepo => ({
   },
 });
 
-// `schema.ts`'s `bills_card_month_year` unique index — its own violation message names these
-// columns, which is how we recognize a cycle race below rather than any other DB error.
-const BILL_CYCLE_UNIQUE_CONSTRAINT = 'bills.credit_card_id, bills.month, bills.year';
+// A UNIQUE-constraint error on a bill insert can only be `bills_card_month_year`, the table's one
+// other unique constraint — an `id` collision is already absorbed by `onConflictDoNothing` below
+// and never throws.
+const SQLITE_UNIQUE_CONSTRAINT_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
 
 const isBillCycleUniqueConflict = (cause: unknown): boolean => {
   const driverCause = cause instanceof Error ? cause.cause : undefined;
-  return driverCause instanceof Error && driverCause.message.includes(BILL_CYCLE_UNIQUE_CONSTRAINT);
+  return driverCause instanceof LibsqlError && driverCause.extendedCode === SQLITE_UNIQUE_CONSTRAINT_CODE;
 };
 
 const versionedBillApplier = versionedTableApplier(bills);
