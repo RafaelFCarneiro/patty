@@ -3,6 +3,7 @@ import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import type { ValidationError } from './error.js';
 import type { LabelMap } from './locale.js';
+import type { TransactionView } from './transaction.js';
 
 export const BillStatus = z.enum(['open', 'closed', 'paid']);
 export type BillStatus = z.infer<typeof BillStatus>;
@@ -29,6 +30,8 @@ export const BillSchema = z.object({
 });
 export type Bill = z.infer<typeof BillSchema>;
 
+export type BillView = { bill: Bill; cardName: string; transactions: TransactionView[]; total: number };
+
 // Internal persistence-side entity: `Bill` plus `version` and the credit-card FK (neither on the
 // wire — mirrors `models/account.ts`'s `AccountEntitySchema` split).
 export const RawBillSchema = BillSchema.extend({
@@ -40,9 +43,8 @@ export type RawBill = z.infer<typeof RawBillSchema>;
 // Mirrors `models/account.ts`'s `ACCOUNT_ENTITY_TAG`.
 export const BILL_ENTITY_TAG = 'bill';
 
-/** The bill entity's `Persistable` model — field names already match the `bills` table's drizzle
- *  column properties one-for-one, so only `INITIAL_VERSION` injection is needed on insert
- *  (`adapters/bills.ts`), no renaming. */
+// paymentTransactionId: undefined leaves the column unchanged (drizzle's .set() drops
+// undefined-valued keys); null explicitly clears it.
 export type BillEntity = {
   id: string;
   creditCardId: string;
@@ -51,7 +53,7 @@ export type BillEntity = {
   closeDate: string;
   dueDate: string;
   status: BillStatus;
-  paymentTransactionId?: string;
+  paymentTransactionId?: string | null;
 };
 
 export const BillQuerySchema = z.object({

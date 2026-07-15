@@ -2,25 +2,32 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import { assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
-import { computeBillTotal, withStatusLabel } from '../../logic/bill.js';
+import { billEntityFrom, computeBillTotal, toBillView, withStatusLabel } from '../../logic/bill.js';
+import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { addLocalizedLabels, defaultStatusFor } from '../../logic/transaction.js';
 import { accountErrors } from '../../models/account.js';
-import { billErrors, BillStatus, type Bill, type BillQuery, type PayBill } from '../../models/bill.js';
+import {
+  billErrors,
+  BILL_ENTITY_TAG,
+  BillStatus,
+  type Bill,
+  type BillQuery,
+  type BillView,
+  type PayBill,
+  type RawBill,
+} from '../../models/bill.js';
+import type { FlowOutcome, Persistable } from '../../models/persistable.js';
 import {
   ClassificationMethod,
+  TRANSACTION_ENTITY_TAG,
+  type RawTransactionView,
+  type TransactionEntity,
   type TransactionSource as TransactionSourceType,
-  type TransactionView,
   TransactionType,
 } from '../../models/transaction.js';
-import type { BillWithItems } from '../../diplomat/db/repos/bills.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCardRef } from '../resolve.js';
-
-// `transactions` is `TransactionView[]` here (not `BillWithItems`'s own raw, pre-label
-// `RawTransactionView[]`) — `getBill` below always returns the `addLocalizedLabels`-mapped, wire-
-// ready view.
-export type BillView = Omit<BillWithItems, 'transactions'> & { transactions: TransactionView[]; total: number };
 
 export const getBill = (deps: Deps, input: BillQuery): ResultAsync<BillView, AppError> =>
   safeTry(async function* () {
@@ -40,7 +47,21 @@ export const getBill = (deps: Deps, input: BillQuery): ResultAsync<BillView, App
 
 export type PayBillInput = PayBill & { source: TransactionSourceType };
 
-export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<Bill, AppError> =>
+const buildPaidBillWrite = (
+  rawBill: RawBill,
+  paymentTransactionId?: string,
+): { persistable: Persistable; response: Bill } => {
+  const status = BillStatus.enum.paid;
+  return {
+    persistable: persistence.update({
+      entity: BILL_ENTITY_TAG,
+      model: { ...billEntityFrom(rawBill), status, paymentTransactionId },
+    }),
+    response: { ...toBillView(rawBill), status, paymentTransactionId },
+  };
+};
+
+export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcome<Bill>, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card);
     const existing = yield* okOr(
@@ -48,16 +69,19 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<Bill, AppE
       billErrors.notFound(card.name, input.month, input.year),
     );
 
-    if (existing.bill.status === BillStatus.enum.paid) return ok(existing.bill);
+    if (existing.bill.status === BillStatus.enum.paid) {
+      return ok({ persist: [], response: existing.bill });
+    }
 
     const total = computeBillTotal(existing.transactions);
+    const rawBill = yield* okOr(
+      await deps.bills.findById(existing.bill.id),
+      billErrors.notFound(card.name, input.month, input.year),
+    );
 
     if (total <= 0) {
-      const paid = yield* okOr(
-        await deps.bills.setStatus(existing.bill.id, BillStatus.enum.paid),
-        billErrors.notFound(card.name, input.month, input.year),
-      );
-      return ok(paid);
+      const { persistable, response } = buildPaidBillWrite(rawBill);
+      return ok({ persist: [persistable], response });
     }
 
     // Resolve the paying account: explicit > card default > error
@@ -72,36 +96,44 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<Bill, AppE
     yield* guard(assertCurrencyMatch(payer, card), accountErrors.currencyMismatch(card.currency, payer.currency));
 
     const today = toIsoDate(deps.clock());
+    const txId = deps.newId();
+    const transferEntity: TransactionEntity = {
+      id: txId,
+      description: `Bill payment: ${card.name} ${String(input.month).padStart(2, '0')}/${input.year}`,
+      amount: total,
+      type: TransactionType.enum.transfer,
+      status: defaultStatusFor(today, today),
+      date: today,
+      currency: card.currency,
+      source: input.source,
+      idempotencyKey: `billpay-${rawBill.id}`,
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+      refs: { accountId: payer.id, toAccountId: card.accountId, billId: rawBill.id },
+      tagNames: [],
+    };
 
-    const { transaction } = await deps.transactions.create(
-      {
-        id: deps.newId(),
-        description: `Bill payment: ${card.name} ${String(input.month).padStart(2, '0')}/${input.year}`,
-        amount: total,
-        type: TransactionType.enum.transfer,
-        status: defaultStatusFor(today, today),
-        date: today,
-        currency: card.currency,
-        source: input.source,
-        idempotencyKey: `billpay-${existing.bill.id}`,
-        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-        refs: { accountId: payer.id, toAccountId: card.accountId, billId: existing.bill.id },
-      },
-      [],
-    );
-
-    const paid = yield* okOr(
-      await deps.bills.markPaid(existing.bill.id, transaction.id),
-      billErrors.notFound(card.name, input.month, input.year),
-    );
-    return ok(paid);
+    // Transfer must be inserted before the bill update that points paymentTransactionId at its id.
+    const { persistable: billUpdate, response } = buildPaidBillWrite(rawBill, txId);
+    const persist: Persistable[] = [
+      persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: transferEntity }),
+      billUpdate,
+    ];
+    return ok({ persist, response });
   });
 
-/**
- * Undo a bill payment: deletes its payment transfer and flips paid → closed.
- * Not-paid bills are a no-op (idempotent, mirrors payBill's own idempotency).
- */
-export const revertBillPayment = (deps: Deps, input: BillQuery): ResultAsync<Bill, AppError> =>
+// paymentTransactionId: null, not undefined — undefined would leave the column unchanged.
+const buildClosedBillWrite = (rawBill: RawBill): { persistable: Persistable; response: Bill } => ({
+  persistable: persistence.update({
+    entity: BILL_ENTITY_TAG,
+    model: { ...billEntityFrom(rawBill), status: BillStatus.enum.closed, paymentTransactionId: null },
+  }),
+  response: { ...toBillView(rawBill), status: BillStatus.enum.closed, paymentTransactionId: undefined },
+});
+
+const tryFindPaymentTransaction = (deps: Deps, rawBill: RawBill): Promise<RawTransactionView | null> =>
+  rawBill.paymentTransactionId ? deps.transactions.getById(rawBill.paymentTransactionId) : Promise.resolve(null);
+
+export const revertBillPayment = (deps: Deps, input: BillQuery): ResultAsync<FlowOutcome<Bill>, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card);
     const existing = yield* okOr(
@@ -109,19 +141,23 @@ export const revertBillPayment = (deps: Deps, input: BillQuery): ResultAsync<Bil
       billErrors.notFound(card.name, input.month, input.year),
     );
 
-    if (existing.bill.status !== BillStatus.enum.paid) return ok(existing.bill);
-
-    if (!existing.bill.paymentTransactionId) {
-      const reverted = yield* okOr(
-        await deps.bills.setStatus(existing.bill.id, BillStatus.enum.closed),
-        billErrors.notFound(card.name, input.month, input.year),
-      );
-      return ok(reverted);
+    if (existing.bill.status !== BillStatus.enum.paid) {
+      return ok({ persist: [], response: existing.bill });
     }
 
-    const reverted = yield* okOr(
-      await deps.bills.revertPayment(existing.bill.id, existing.bill.paymentTransactionId),
+    const rawBill = yield* okOr(
+      await deps.bills.findById(existing.bill.id),
       billErrors.notFound(card.name, input.month, input.year),
     );
-    return ok(reverted);
+
+    const { persistable: billUpdate, response } = buildClosedBillWrite(rawBill);
+    const persist: Persistable[] = [billUpdate];
+
+    const paymentTx = await tryFindPaymentTransaction(deps, rawBill);
+    if (paymentTx) {
+      persist.push(
+        persistence.remove({ entity: TRANSACTION_ENTITY_TAG, id: paymentTx.id, version: paymentTx.version }),
+      );
+    }
+    return ok({ persist, response });
   });

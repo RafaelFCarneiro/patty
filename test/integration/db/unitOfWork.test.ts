@@ -6,14 +6,18 @@ import { sql } from 'drizzle-orm';
 import { okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { McpTransport } from '../../../src/config.js';
+import * as billAdapters from '../../../src/adapters/bills.js';
+import * as transactionAdapters from '../../../src/adapters/transactions.js';
+import { payBill } from '../../../src/controllers/creditCard/bill.js';
+import type { Deps } from '../../../src/controllers/deps.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
-import { accountApplier } from '../../../src/diplomat/db/repos/accounts.js';
-import { billApplier } from '../../../src/diplomat/db/repos/bills.js';
+import { accountApplier, accountsRepo } from '../../../src/diplomat/db/repos/accounts.js';
+import { billApplier, billsRepo } from '../../../src/diplomat/db/repos/bills.js';
 import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
 import { merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchants.js';
-import { transactionApplier } from '../../../src/diplomat/db/repos/transactions.js';
+import { transactionApplier, transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
 import { bills, categories, tags } from '../../../src/diplomat/db/schema.js';
 import {
   MAX_UNIT_OF_WORK_ATTEMPTS,
@@ -25,6 +29,7 @@ import {
 import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus } from '../../../src/models/bill.js';
+import { Locale } from '../../../src/models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp, type Persistable, type PersistOutcome } from '../../../src/models/persistable.js';
@@ -808,5 +813,157 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
     );
 
     await expect(outcome).rejects.toThrow();
+  });
+});
+
+describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes the ADR-018 atomicity test)', () => {
+  const fullRegistry: ApplierRegistry = {
+    [BILL_ENTITY_TAG]: billApplier,
+    [TRANSACTION_ENTITY_TAG]: transactionApplier,
+  };
+
+  const seedCardWithOpenBill = async (): Promise<{ deps: Deps; cardName: string }> => {
+    const accountsR = accountsRepo(db);
+    const creditCardsR = creditCardsRepo(db);
+    const billsR = billsRepo(db);
+    const transactionsR = transactionsRepo(db);
+
+    const payerAccountId = randomUUID();
+    await accountsR.create({
+      id: payerAccountId,
+      name: `Payer ${payerAccountId}`,
+      type: AccountType.enum.checking,
+      currency: CurrencyCode.enum.BRL,
+      initialBalance: 1000,
+    });
+
+    const cardId = randomUUID();
+    const cardAccountId = randomUUID();
+    const cardName = `Card ${cardId}`;
+    await creditCardsR.createWithAccount(
+      {
+        id: cardId,
+        name: cardName,
+        currency: CurrencyCode.enum.BRL,
+        closingDay: 28,
+        dueDay: 5,
+        accountId: cardAccountId,
+        paymentAccountId: payerAccountId,
+      },
+      {
+        id: cardAccountId,
+        name: 'Card account',
+        type: AccountType.enum.credit,
+        currency: CurrencyCode.enum.BRL,
+        initialBalance: 0,
+      },
+    );
+
+    const bill = await billsR.ensureOpen(
+      cardId,
+      { month: 6, year: 2026, closeDate: '2026-06-28', dueDate: '2026-07-05' },
+      randomUUID(),
+    );
+
+    await transactionsR.create(
+      {
+        id: randomUUID(),
+        description: 'Purchase',
+        amount: 100,
+        type: TransactionType.enum.expense,
+        status: TransactionStatus.enum.effective,
+        date: '2026-06-01',
+        currency: CurrencyCode.enum.BRL,
+        source: TransactionSource.enum.mcp,
+        idempotencyKey: `idem-${randomUUID()}`,
+        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+        refs: { accountId: cardAccountId, cardId, billId: bill.id },
+      },
+      [],
+    );
+
+    const deps: Deps = {
+      accounts: accountsR,
+      bills: billsR,
+      categories: {} as Deps['categories'],
+      subCategories: {} as Deps['subCategories'],
+      creditCards: creditCardsR,
+      dashboards: {} as Deps['dashboards'],
+      health: {} as Deps['health'],
+      merchants: {} as Deps['merchants'],
+      recurring: {} as Deps['recurring'],
+      settings: {} as Deps['settings'],
+      tags: {} as Deps['tags'],
+      transactions: transactionsR,
+      clock: () => new Date('2026-06-15'),
+      newId: () => randomUUID(),
+      locale: async () => Locale.enum.en,
+      resetLocale: () => {},
+    };
+
+    return { deps, cardName };
+  };
+
+  // Mirrors the diplomat handler's own composition (diplomat/mcp/server.ts's pay_bill tool) — a
+  // test calling withUnitOfWork directly must adapt payBill's mixed transaction+bill batch itself,
+  // the same way the real handler does before the batch ever reaches the shell.
+  const payBillFlow = (deps: Deps, cardName: string) => () =>
+    payBill(deps, { card: cardName, month: 6, year: 2026, source: TransactionSource.enum.mcp })
+      .map(billAdapters.outcomeToDb)
+      .map(transactionAdapters.outcomeToDb);
+
+  const countPaymentTransfers = async (): Promise<number> => {
+    const rows = await db.all<{ id: string }>(sql`SELECT id FROM transactions WHERE idempotency_key LIKE 'billpay-%'`);
+    return rows.length;
+  };
+
+  it('two sequential pay_bill calls: exactly one transfer, one paid flip, second is idempotent', async () => {
+    const { deps, cardName } = await seedCardWithOpenBill();
+
+    const first = await withUnitOfWork(db, fullRegistry, payBillFlow(deps, cardName));
+    expect(first.isOk()).toBe(true);
+    expect(first._unsafeUnwrap().status).toBe(BillStatus.enum.paid);
+
+    const second = await withUnitOfWork(db, fullRegistry, payBillFlow(deps, cardName));
+    expect(second.isOk()).toBe(true);
+    expect(second._unsafeUnwrap().status).toBe(BillStatus.enum.paid);
+    expect(second._unsafeUnwrap().paymentTransactionId).toBe(first._unsafeUnwrap().paymentTransactionId);
+
+    expect(await countPaymentTransfers()).toBe(1);
+  });
+
+  it('a concurrent bill mutation conflicts, rolls back the whole batch, and a retry lands cleanly', async () => {
+    const { deps, cardName } = await seedCardWithOpenBill();
+
+    let reads = 0;
+    // Wraps the real findById read: on the FIRST call (payBill's own read-before-write), simulates
+    // a concurrent bill mutation (e.g. another add_card_purchase's bill touch) landing between
+    // payBill's read and the shell's apply — bumping the bill's version out-of-band right after
+    // payBill has already captured the now-stale version it read, so its own version-guarded update
+    // fails, rolling the whole batch (including the transfer insert) back for a retry.
+    const racingBills: Deps['bills'] = {
+      ...deps.bills,
+      findById: async (billId) => {
+        reads += 1;
+        const rawBill = await deps.bills.findById(billId);
+        if (reads === 1 && rawBill) {
+          await db
+            .update(bills)
+            .set({ version: rawBill.version + 1 })
+            .where(sql`${bills.id} = ${billId}`);
+        }
+        return rawBill;
+      },
+    };
+    const racingDeps: Deps = { ...deps, bills: racingBills };
+
+    const result = await withUnitOfWork(db, fullRegistry, payBillFlow(racingDeps, cardName));
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().status).toBe(BillStatus.enum.paid);
+    expect(reads).toBe(2); // the first attempt's stale-version write conflicted; the retry's read succeeded
+
+    // No partial write survived the rolled-back first attempt — exactly one payment transfer exists.
+    expect(await countPaymentTransfers()).toBe(1);
   });
 });

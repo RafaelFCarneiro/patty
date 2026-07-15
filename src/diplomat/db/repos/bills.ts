@@ -1,5 +1,5 @@
 import { LibsqlError } from '@libsql/client';
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import * as R from 'remeda';
 import { z } from 'zod';
 import * as transactionAdapters from '../../../adapters/transactions.js';
@@ -9,7 +9,7 @@ import type { RawTransactionView } from '../../../models/transaction.js';
 import type { BillPeriod } from '../../../logic/bill.js';
 import { BillRowSchema } from '../../../wire/db/bills.js';
 import type { Db } from '../driver.js';
-import { bills, transactionTags, transactions } from '../schema.js';
+import { bills } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
 import { VersionConflict, versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
@@ -39,11 +39,6 @@ const fetchBillRow = async (db: Db, billId: string): Promise<Record<string, unkn
   return row;
 };
 
-const fetchBillById = async (db: Db, billId: string): Promise<Bill | null> => {
-  const row = await fetchBillRow(db, billId);
-  return row ? toBill(row) : null;
-};
-
 // The bill-with-card SELECT also returns the joined card name.
 const cardNameOf = (record: Record<string, unknown>): string =>
   z.object({ card_name: z.string() }).parse(record).card_name;
@@ -59,11 +54,6 @@ export type BillsRepo = {
    *  the existing one. Used only by the still-repo-driven bulk-import path; the FC/IS
    *  `addCardPurchase` expresses the same decision as a `Persistable` via `billApplier` instead. */
   ensureOpen: (cardId: string, period: BillPeriod, newId: string) => Promise<Bill>;
-  setStatus: (billId: string, status: BillStatus) => Promise<Bill | null>;
-  /** Marks the bill paid and links its payment transfer, in one write. */
-  markPaid: (billId: string, transactionId: string) => Promise<Bill | null>;
-  /** Atomically deletes the payment transfer and flips the bill paid → closed. */
-  revertPayment: (billId: string, transactionId: string) => Promise<Bill | null>;
 };
 
 export const billsRepo = (db: Db): BillsRepo => ({
@@ -119,33 +109,6 @@ export const billsRepo = (db: Db): BillsRepo => ({
   findById: async (billId) => {
     const row = await fetchBillRow(db, billId);
     return row ? toRawBill(row) : null;
-  },
-
-  setStatus: async (billId, status) => {
-    await db.update(bills).set({ status }).where(eq(bills.id, billId));
-    return fetchBillById(db, billId);
-  },
-
-  markPaid: async (billId, transactionId) => {
-    await db
-      .update(bills)
-      .set({ status: BillStatus.enum.paid, paymentTransactionId: transactionId })
-      .where(eq(bills.id, billId));
-    return fetchBillById(db, billId);
-  },
-
-  revertPayment: async (billId, transactionId) => {
-    await db.transaction(async (tx) => {
-      // FK-safe order: clear the bill's reference to the transaction first (bills.payment_transaction_id
-      // → transactions.id would otherwise block deleting the row it still points to), then tags → transaction.
-      await tx
-        .update(bills)
-        .set({ status: BillStatus.enum.closed, paymentTransactionId: null })
-        .where(eq(bills.id, billId));
-      await tx.delete(transactionTags).where(eq(transactionTags.transactionId, transactionId));
-      await tx.delete(transactions).where(eq(transactions.id, transactionId));
-    });
-    return fetchBillById(db, billId);
   },
 });
 

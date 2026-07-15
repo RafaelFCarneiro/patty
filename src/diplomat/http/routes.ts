@@ -518,7 +518,14 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const input = parse(PayBill, req.body, reply) as PayBillType;
       if (!input) return reply;
-      return send(reply, await payBill(deps, { ...input, source: TransactionSource.enum.rest }));
+      // billAdapters.outcomeToDb + transactionAdapters.outcomeToDb adapt payBill's mixed
+      // transaction+bill batch (model → db row) here, explicitly, before unitOfWork ever sees it —
+      // diplomat/db only ever writes rows, never adapts them.
+      const flow = () =>
+        payBill(deps, { ...input, source: TransactionSource.enum.rest })
+          .map(billAdapters.outcomeToDb)
+          .map(transactionAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow));
     },
   },
   {
@@ -536,7 +543,9 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const input = parse(BillQuery, req.body, reply) as BillQueryType;
       if (!input) return reply;
-      return send(reply, await revertBillPayment(deps, input));
+      const flow = () =>
+        revertBillPayment(deps, input).map(billAdapters.outcomeToDb).map(transactionAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow));
     },
   },
 

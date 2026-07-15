@@ -43,6 +43,8 @@ export const billEntityFrom = (bill: RawBill): BillEntity & { version: number } 
   version: bill.version,
 });
 
+export const toBillView = (bill: RawBill): Bill => R.omit(bill, ['creditCardId', 'version']);
+
 export type BillPeriod = { month: number; year: number; closeDate: string; dueDate: string };
 
 const pad = (n: number): string => String(n).padStart(2, '0');
