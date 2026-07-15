@@ -150,15 +150,13 @@ export const revertBillPayment = (deps: Deps, input: BillQuery): ResultAsync<Flo
     );
     const { persistable: billUpdate, response } = buildClosedBillWrite(rawBill);
 
-    if (!rawBill.paymentTransactionId) {
-      return ok({ persist: [billUpdate], response });
-    }
-
-    const paymentTx = await deps.transactions.getById(rawBill.paymentTransactionId);
+    // No id, or the id no longer resolves (e.g. a concurrent delete_credit_card already removed
+    // it) — nothing to delete; the bill update alone still closes it, version-guarded either way.
+    const paymentTx = rawBill.paymentTransactionId
+      ? await deps.transactions.getById(rawBill.paymentTransactionId)
+      : null;
     if (!paymentTx) {
-      throw new Error(
-        `revertBillPayment: dangling paymentTransactionId ${rawBill.paymentTransactionId} on bill ${rawBill.id}`,
-      );
+      return ok({ persist: [billUpdate], response });
     }
 
     const persist: Persistable[] = [

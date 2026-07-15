@@ -253,6 +253,32 @@ describe('revertBillPayment — the write is returned as data, not performed (AD
     expect((response as { paymentTransactionId?: string }).paymentTransactionId).toBeUndefined();
   });
 
+  it('a paymentTransactionId that no longer resolves is treated as nothing to delete', async () => {
+    const paidBill = rawBill({ status: BillStatus.enum.paid, paymentTransactionId: 'tx-payment' });
+    const deps = makeDeps({
+      bills: {
+        get: async () =>
+          billWithItems({
+            bill: { ...billWithItems().bill, status: BillStatus.enum.paid, paymentTransactionId: 'tx-payment' },
+          }),
+        findById: async () => paidBill,
+      } as unknown as Deps['bills'],
+      transactions: { getById: async () => null } as unknown as Deps['transactions'],
+    });
+
+    const result = await revertBillPayment(deps, { card: 'Test Card', month: 6, year: 2026 });
+
+    expect(result.isOk()).toBe(true);
+    const { persist, response } = result._unsafeUnwrap();
+    expect(persist).toHaveLength(1);
+    expect(persist[0]).toMatchObject({
+      op: PersistOp.enum.update,
+      entity: 'bill',
+      model: { id: 'bill-1', status: BillStatus.enum.closed },
+    });
+    expect(response).toMatchObject({ status: BillStatus.enum.closed });
+  });
+
   it('a paid bill with no payment transfer (non-positive-total pay) emits only the bill update', async () => {
     const paidBill = rawBill({ status: BillStatus.enum.paid, paymentTransactionId: undefined });
     const deps = makeDeps({
