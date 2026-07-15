@@ -154,9 +154,14 @@ export const billsRepo = (db: Db): BillsRepo => ({
 // and never throws.
 const SQLITE_UNIQUE_CONSTRAINT_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
 
+// Walks the `.cause` chain rather than assuming exactly one level of wrapping (today: drizzle's
+// `DrizzleQueryError` wrapping the driver's own `LibsqlError`) — robust to the driver ever
+// throwing `LibsqlError` directly, or to an extra wrapping layer.
 const isBillCycleUniqueConflict = (cause: unknown): boolean => {
-  const driverCause = cause instanceof Error ? cause.cause : undefined;
-  return driverCause instanceof LibsqlError && driverCause.extendedCode === SQLITE_UNIQUE_CONSTRAINT_CODE;
+  for (let current = cause; current instanceof Error; current = current.cause) {
+    if (current instanceof LibsqlError) return current.extendedCode === SQLITE_UNIQUE_CONSTRAINT_CODE;
+  }
+  return false;
 };
 
 const versionedBillApplier = versionedTableApplier(bills);
