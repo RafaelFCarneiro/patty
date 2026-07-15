@@ -9,7 +9,7 @@ import { bootstrap } from './diplomat/db/bootstrap.js';
 import { openDatabase } from './diplomat/db/driver.js';
 import { withUnitOfWork, type ApplierRegistry } from './diplomat/db/unitOfWork.js';
 import { accountApplier, accountsRepo } from './diplomat/db/repos/accounts.js';
-import { billsRepo } from './diplomat/db/repos/bills.js';
+import { billApplier, billsRepo } from './diplomat/db/repos/bills.js';
 import { categoriesRepo } from './diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js';
 import { creditCardsRepo } from './diplomat/db/repos/creditCards.js';
@@ -23,6 +23,7 @@ import { healthRepo } from './diplomat/db/repos/health.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { Locale } from './models/locale.js';
 import { ACCOUNT_ENTITY_TAG } from './models/account.js';
+import { BILL_ENTITY_TAG } from './models/bill.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from './models/merchant.js';
 import { TRANSACTION_ENTITY_TAG } from './models/transaction.js';
 import type { HttpSidecar } from './server.js';
@@ -102,6 +103,7 @@ const main = async (): Promise<void> => {
     [ACCOUNT_ENTITY_TAG]: accountApplier,
     [TRANSACTION_ENTITY_TAG]: transactionApplier,
     [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
+    [BILL_ENTITY_TAG]: billApplier,
   };
   const runUnitOfWork: UnitOfWork = (flow) => withUnitOfWork(db, applierRegistry, flow);
 

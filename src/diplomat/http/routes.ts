@@ -3,6 +3,7 @@ import type { Result } from 'neverthrow';
 import { z } from 'zod';
 import { httpStatus, type AppError } from '../../common/errors.js';
 import * as accountAdapters from '../../adapters/accounts.js';
+import * as billAdapters from '../../adapters/bills.js';
 import * as categoryAdapters from '../../adapters/categories.js';
 import * as creditCardAdapters from '../../adapters/creditCards.js';
 import * as recurringAdapters from '../../adapters/recurring.js';
@@ -412,7 +413,14 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const wireIn = parse(wireInCreditCards.AddCardPurchaseSchema, req.body, reply);
       if (!wireIn) return reply;
       const model = creditCardAdapters.addCardPurchaseWireInToModel(wireIn);
-      const result = await addCardPurchase(deps, model, TransactionSource.enum.rest);
+      // billAdapters.outcomeToDb + transactionAdapters.outcomeToDb adapt addCardPurchase's mixed
+      // bill+transaction batch (model → db row) here, explicitly, before unitOfWork ever sees it —
+      // diplomat/db only ever writes rows, never adapts them.
+      const flow = () =>
+        addCardPurchase(deps, model, TransactionSource.enum.rest)
+          .map(billAdapters.outcomeToDb)
+          .map(transactionAdapters.outcomeToDb);
+      const result = await unitOfWork(flow);
       return result.match(
         (value) => {
           const out = transactionAdapters.createResultToWireOut(value);
@@ -663,10 +671,10 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const { id } = req.params as { id: string };
       const wireIn = parse(wireInCreditCards.UpdateCardTransactionSchema, { ...(req.body as object), id }, reply);
       if (!wireIn) return reply;
-      return send(
-        reply,
-        await updateCardTransaction(deps, creditCardAdapters.updateCardTransactionWireInToModel(wireIn)),
-      );
+      const model = creditCardAdapters.updateCardTransactionWireInToModel(wireIn);
+      const flow = () =>
+        updateCardTransaction(deps, model).map(billAdapters.outcomeToDb).map(transactionAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow));
     },
   },
   {
@@ -683,10 +691,10 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const { id } = req.params as { id: string };
       const confirm = (req.query as { confirm?: string }).confirm === 'true';
-      return send(
-        reply,
-        (await deleteCardTransaction(deps, { id, confirm })).map(transactionAdapters.deleteResultToWireOut),
-      );
+      const flow = () =>
+        deleteCardTransaction(deps, { id, confirm }).map(billAdapters.outcomeToDb).map(transactionAdapters.outcomeToDb);
+      const result = (await unitOfWork(flow)).map(transactionAdapters.deleteResultToWireOut);
+      return send(reply, result);
     },
   },
   {

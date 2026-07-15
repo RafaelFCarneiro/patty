@@ -37,3 +37,16 @@ export const firstOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
   if (!outcome) throw new Error('firstOutcome: expected at least one persist outcome, got none');
   return outcome;
 };
+
+/** `firstOutcome`'s counterpart for a flow whose own entity trails the batch instead of leading it
+ *  (ADR-021 phase 2b: `addCardPurchase`/`updateCardTransaction`) — the credit-card aggregate's
+ *  transaction row references its bill via a foreign key, so the bill `Persistable`(s) must apply
+ *  *before* the transaction one within the same unit-of-work transaction (a fresh bill insert must
+ *  exist before a row can reference its id), even though the transaction is still the entity the
+ *  flow's response is actually about. Same "drift is a bug, not a domain outcome" reasoning as
+ *  `firstOutcome`. */
+export const lastOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
+  const outcome = outcomes[outcomes.length - 1];
+  if (!outcome) throw new Error('lastOutcome: expected at least one persist outcome, got none');
+  return outcome;
+};

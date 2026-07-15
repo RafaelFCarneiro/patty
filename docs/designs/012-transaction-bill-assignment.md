@@ -9,6 +9,14 @@ ADR-010 (credit cards as liability accounts) and ADR-012 (per-model errors).
 > **Implementation status** tracks delivery, distinct from the design's acceptance. Values:
 > `Not started` · `In progress` · `Done` · `Blocked`. The implementing PR updates this line (→ `In progress`
 > when work starts, → `Done` on merge); use `Blocked` with a one-line reason if stuck.
+>
+> **Mechanism note (2026-07-15):** the feature contract below (auto-assignment, explicit cycle override,
+> paid-bill immutability) is unchanged, but the implementation mechanism this doc describes —
+> `billsRepo.ensureAndAttach` and its self-heal-on-replay compensation — was replaced by ADR-021 phase 2b
+> (`docs/functional-core-imperative-shell.md`): the target bill and the transaction are now decided by the
+> domain and applied atomically by the generic unit of work as a `Persistable` batch, so there is no separate
+> attach step and no self-heal case left to guard. See `docs/architecture.md`'s invariant 8 and § Write path for
+> the current mechanism.
 
 ## Context
 

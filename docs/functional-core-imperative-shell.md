@@ -6,10 +6,12 @@
 > *what crosses the boundary between them* — **decisions flow out of the core as data; effects are executed by
 > the shell.**
 >
-> **Status: Adopted** (ADR-021). Phase 1 (groundwork + `createAccount` as the first converted flow) and phase 2a
+> **Status: Adopted** (ADR-021). Phase 1 (groundwork + `createAccount` as the first converted flow), phase 2a
 > (the account-context transaction flows — `add_account_expense`/`add_account_income`/`create_transfer`/
 > `update_account_transaction`/`delete_account_transaction` — plus the `PersistOutcome` idempotency-outcome
-> plumbing rule 6 describes) are implemented; credit-card/bill flows (phase 2b/2c) and the remaining flows
+> plumbing rule 6 describes), and phase 2b (the credit-card transaction flows — `add_card_purchase`/
+> `update_card_transaction`/`delete_card_transaction`, including `billApplier`'s cycle-uniqueness-race-as-retry
+> handling) are implemented; bill flows (`pay_bill`/`revert_bill_payment` — phase 2c) and the remaining flows
 > (bulk import, recurring, CRUD — phase 3) still drive their own persistence via injected repo write methods
 > until those phases convert them — this principle is the target shape for every one of them, not yet the
 > as-built state of the whole write path.

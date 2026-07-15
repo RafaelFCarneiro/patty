@@ -88,9 +88,17 @@ export const versionedTableApplier = <T extends VersionedTable>(table: T): Entit
   },
 });
 
-/** Marks "a versioned op affected zero rows" up through `db.transaction`'s promise rejection so
- *  the whole batch rolls back; caught by `applyBatch`, never leaks past this file. */
-class VersionConflict extends Error {}
+/** Marks "the whole batch must roll back and the flow must be re-invoked for a fresh read/decision"
+ *  up through `db.transaction`'s promise rejection; caught by `applyBatch`, never leaks past
+ *  `withUnitOfWork`. Thrown implicitly here for a versioned `update`/`delete` that affected zero
+ *  rows (rule 4). Exported so an entity whose own write mechanics can detect a *different* kind of
+ *  "this attempt can't proceed, retry from a fresh read" condition — e.g. a bill's insert racing
+ *  another writer's fresh cycle creation on `UNIQUE(creditCardId, month, year)`, a conflict that
+ *  isn't expressible as a plain version mismatch since neither writer has a stale version to guard
+ *  against — can signal the same generic retry, entirely from its own `EntityApplier` (see
+ *  `diplomat/db/repos/bills.ts`'s `billApplier`), without this file ever learning that entity's
+ *  business shape. */
+export class VersionConflict extends Error {}
 
 const resolveApplier = (registry: ApplierRegistry, entity: string): EntityApplier => {
   const applier = registry[entity];

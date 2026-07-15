@@ -3,7 +3,7 @@
 import { purry } from 'remeda';
 import * as R from 'remeda';
 import { localizeBillStatus } from './localize.js';
-import { BillStatus, type Bill } from '../models/bill.js';
+import { BillStatus, type Bill, type BillEntity, type RawBill } from '../models/bill.js';
 import type { Locale } from '../models/locale.js';
 import { TransactionType, type TransactionView } from '../models/transaction.js';
 
@@ -28,6 +28,22 @@ export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: n
  *  it, on either the raw (pre-`addLocalizedLabels`) or already-localized view, hence generic over
  *  either `TransactionView` shape rather than fixed to one. */
 export const withBillId = <T extends TransactionView>(tx: T, billId: string): T => ({ ...tx, billId });
+
+/** Builds the bill entity's `Persistable` model (ADR-021 phase 2b) from an already-read `RawBill`
+ *  — used to build a version-guarded "touch" (same field values, guarding only on `version`) that
+ *  participates in a flow's atomic batch, e.g. to guard a bill's paid status wasn't read stale. A
+ *  fresh cycle's own insert model is built directly (no existing `RawBill` to read from). */
+export const billEntityFrom = (bill: RawBill): BillEntity & { version: number } => ({
+  id: bill.id,
+  creditCardId: bill.creditCardId,
+  month: bill.month,
+  year: bill.year,
+  closeDate: bill.closeDate,
+  dueDate: bill.dueDate,
+  status: bill.status,
+  paymentTransactionId: bill.paymentTransactionId,
+  version: bill.version,
+});
 
 export type BillPeriod = { month: number; year: number; closeDate: string; dueDate: string };
 
