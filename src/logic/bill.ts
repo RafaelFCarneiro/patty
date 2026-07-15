@@ -100,6 +100,6 @@ export const resolveBillPeriod = (
   closingDay: number,
   dueDay: number,
 ): BillPeriod =>
-  billMonth !== undefined && billYear !== undefined
+  R.isNonNullish(billMonth) && R.isNonNullish(billYear)
     ? billPeriodForCycle(billMonth, billYear, closingDay, dueDay)
     : billPeriodFor(date, closingDay, dueDay);

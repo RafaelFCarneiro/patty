@@ -236,7 +236,7 @@ const resolveBillReassignment = (
   input: Pick<UpdateCardTransaction, 'billMonth' | 'billYear'>,
 ): ResultAsync<BillReassignment, AppError> =>
   safeTry(async function* () {
-    if (input.billMonth === undefined || input.billYear === undefined) {
+    if (!R.isNonNullish(input.billMonth) || !R.isNonNullish(input.billYear)) {
       return ok({ reassignedBillId: undefined, billPersistables: [] });
     }
 
