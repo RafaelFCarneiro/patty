@@ -29,31 +29,20 @@ export const BillSchema = z.object({
 });
 export type Bill = z.infer<typeof BillSchema>;
 
-// The persistence-side entity (ADR-021 phase 2b / functional-core-imperative-shell.md): `Bill`
-// plus the optimistic-concurrency `version` token and the credit-card FK, which the read-side
-// `Bill`/`BillSchema` doesn't carry (reads return a bill nested under its already-resolved card,
-// e.g. `BillWithItems`) but a version-guarded "touch" `Persistable` needs, so it can be built from
-// an already-read `RawBill` alone, without the caller separately threading a card id through. Never
-// sent over the wire — kept off `BillSchema` itself (mirrors `models/account.ts`'s
-// `AccountEntitySchema`/`AccountEntity` split) so `BillViewOut` (which embeds `BillSchema` directly)
-// never leaks either field.
+// Internal persistence-side entity: `Bill` plus `version` and the credit-card FK (neither on the
+// wire — mirrors `models/account.ts`'s `AccountEntitySchema` split).
 export const RawBillSchema = BillSchema.extend({
   creditCardId: Id.describe('Owning credit card id; internal, never on wire/out'),
   version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
 });
 export type RawBill = z.infer<typeof RawBillSchema>;
 
-// The credit-card aggregate owns its own entity tag (ADR-021 phase 2b), mirroring
-// `models/account.ts`'s `ACCOUNT_ENTITY_TAG` — `models/persistable.ts` is generic over any
-// entity's tag/model and never lists this constant itself.
+// Mirrors `models/account.ts`'s `ACCOUNT_ENTITY_TAG`.
 export const BILL_ENTITY_TAG = 'bill';
 
-/** The bill entity's `Persistable` model vocabulary (ADR-021 phase 2b): a bill's persistable
- *  fields plus the credit-card FK, which the read-side `Bill`/`BillSchema` doesn't carry (reads
- *  return a bill nested under its already-resolved card, e.g. `BillWithItems`). Domain-only —
- *  never sent over the wire; field names already match `diplomat/db/schema.ts`'s `bills` table
- *  (drizzle) column properties one-for-one, so no `modelToDb` renaming is needed, only the
- *  `INITIAL_VERSION` injection on insert (`adapters/bills.ts`). */
+/** The bill entity's `Persistable` model — field names already match the `bills` table's drizzle
+ *  column properties one-for-one, so only `INITIAL_VERSION` injection is needed on insert
+ *  (`adapters/bills.ts`), no renaming. */
 export type BillEntity = {
   id: string;
   creditCardId: string;

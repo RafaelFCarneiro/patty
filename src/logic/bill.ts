@@ -29,10 +29,8 @@ export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: n
  *  either `TransactionView` shape rather than fixed to one. */
 export const withBillId = <T extends TransactionView>(tx: T, billId: string): T => ({ ...tx, billId });
 
-/** Builds the bill entity's `Persistable` model (ADR-021 phase 2b) from an already-read `RawBill`
- *  — used to build a version-guarded "touch" (same field values, guarding only on `version`) that
- *  participates in a flow's atomic batch, e.g. to guard a bill's paid status wasn't read stale. A
- *  fresh cycle's own insert model is built directly (no existing `RawBill` to read from). */
+/** Builds a bill `Persistable` model from an already-read `RawBill` — used for a version-guarded
+ *  "touch" (same fields, guarding only `version`). */
 export const billEntityFrom = (bill: RawBill): BillEntity & { version: number } => ({
   id: bill.id,
   creditCardId: bill.creditCardId,

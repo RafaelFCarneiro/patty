@@ -39,20 +39,12 @@ export type BillWithItems = { bill: Bill; cardName: string; transactions: RawTra
 
 export type BillsRepo = {
   get: (cardId: string, month: number, year: number) => Promise<BillWithItems | null>;
-  /** Lightweight cycle lookup (no card-name join, no transaction items) — for status checks and
-   *  for the credit-card aggregate's own FC/IS read-decide step (ADR-021 phase 2b), hence the
-   *  `version`-carrying `RawBill` (needed to build a version-guarded `Persistable`). */
+  /** Lightweight cycle lookup (no card-name join, no transaction items). */
   findByCycle: (cardId: string, month: number, year: number) => Promise<RawBill | null>;
   findById: (billId: string) => Promise<RawBill | null>;
-  /**
-   * Idempotent upsert-by-cycle: creates the cycle's bill `open` if none exists yet, or returns the
-   * existing one — pure persistence mechanics only (no paid-guard, no transaction attach; those are
-   * the caller's own decision, never the repo's). Used only by the still-repo-driven bulk-import
-   * legacy path (`addCardPurchaseViaRepo` in `controllers/creditCard/transaction.ts`, pending its
-   * own ADR-021 phase 3 conversion) — the FC/IS `addCardPurchase` expresses the same
-   * create-or-reference decision as a `Persistable` instead (`billApplier`, below), never through
-   * this method.
-   */
+  /** Idempotent upsert-by-cycle: creates the cycle's bill `open` if none exists yet, else returns
+   *  the existing one. Used only by the still-repo-driven bulk-import path; the FC/IS
+   *  `addCardPurchase` expresses the same decision as a `Persistable` via `billApplier` instead. */
   ensureOpen: (cardId: string, period: BillPeriod, newId: string) => Promise<Bill>;
   setStatus: (billId: string, status: BillStatus) => Promise<Bill | null>;
   /** Marks the bill paid and links its payment transfer, in one write. */
@@ -77,8 +69,6 @@ export const billsRepo = (db: Db): BillsRepo => ({
         })
         .onConflictDoNothing({ target: [bills.creditCardId, bills.month, bills.year] });
 
-      // Resolve the bill id (may have been the pre-existing one) — same transaction as the insert
-      // above, so a concurrent insert of the same cycle can't produce two rows.
       const [rawBill] = await tx.all<Record<string, unknown>>(sql`
         SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${period.month} AND year = ${period.year}
       `);
@@ -143,9 +133,8 @@ export const billsRepo = (db: Db): BillsRepo => ({
   },
 });
 
-// bills' one non-`id` uniqueness rule (`schema.ts`'s `bills_card_month_year` index) — the substring
-// SQLite's own constraint-violation message names the offending columns with, used below to
-// recognize a concurrent bill-creation race on the same cycle (not just any DB error).
+// `schema.ts`'s `bills_card_month_year` unique index — its own violation message names these
+// columns, which is how we recognize a cycle race below rather than any other DB error.
 const BILL_CYCLE_UNIQUE_CONSTRAINT = 'bills.credit_card_id, bills.month, bills.year';
 
 const isBillCycleUniqueConflict = (cause: unknown): boolean => {
@@ -155,22 +144,12 @@ const isBillCycleUniqueConflict = (cause: unknown): boolean => {
 
 const versionedBillApplier = versionedTableApplier(bills);
 
-/**
- * The bill entity's `EntityApplier` (ADR-021 phase 2b): `update`/`delete` follow the plain
- * `id`/`version` convention verbatim (`versionedTableApplier`) — but `insert` doesn't, because a
- * bill isn't created by `id`, it's upserted by cycle (`UNIQUE(creditCardId, month, year)`,
- * `schema.ts`). The domain (`addCardPurchase`) mints a speculative id for what it believes is a
- * brand-new cycle, but a concurrent first purchase on the same cycle can race it — two inserts,
- * different ids, same cycle. `versionedTableApplier`'s own `onConflictDoNothing` is scoped to the
- * `id` target only, so it does NOT swallow that race; the DB raises a genuine unique-constraint
- * error instead. Rather than letting that surface as an opaque 500, or silently no-op-ing it as if
- * it were an id-scoped idempotent retry (which would leave the loser's speculative bill id
- * referenced by nothing), this applier recognizes exactly that one violation and rethrows it as the
- * shell's own `VersionConflict` — the whole unit-of-work batch rolls back and `withUnitOfWork`
- * re-invokes the domain flow (rule 4): a fresh read of `findByCycle` now sees the winner's row and
- * the domain emits a version-guarded *touch* of it instead of an insert. Any other error (a genuine
- * failure) still propagates unchanged. Never a paid/bill-policy decision — that stays the domain's.
- */
+/** A bill is created by cycle (`UNIQUE(creditCardId, month, year)`), not by `id`, so a concurrent
+ *  first purchase on the same cycle can raise a genuine unique-constraint error that
+ *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow. Recognizing that one
+ *  violation and rethrowing it as `VersionConflict` rolls the batch back and retries the flow (rule
+ *  4) instead of surfacing a raw 500 or a wrong-id no-op. `update`/`delete` are plain
+ *  `versionedTableApplier`. */
 export const billApplier: EntityApplier = {
   ...versionedBillApplier,
   insert: async (tx, model) => {
