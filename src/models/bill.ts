@@ -3,6 +3,7 @@ import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import type { ValidationError } from './error.js';
 import type { LabelMap } from './locale.js';
+import type { TransactionView } from './transaction.js';
 
 export const BillStatus = z.enum(['open', 'closed', 'paid']);
 export type BillStatus = z.infer<typeof BillStatus>;
@@ -28,6 +29,14 @@ export const BillSchema = z.object({
   ),
 });
 export type Bill = z.infer<typeof BillSchema>;
+
+/** `get_bill`'s response shape (`controllers/creditCard/bill.ts`'s `getBill`) — a read-side
+ *  composite of already-validated model pieces (`Bill`, `TransactionView`) plus one computed field
+ *  (`total`), not new data of its own to decode; hand-written like `UpsertTransactionResult` below,
+ *  never re-derived from a diplomat-layer read shape (`diplomat/db/repos/bills.ts`'s `BillWithItems`
+ *  stays a persistence-side type — `models/` never imports `diplomat/`). `transactions` is always
+ *  the `addLocalizedLabels`-mapped, wire-ready view, never the raw pre-label `RawTransactionView[]`. */
+export type BillView = { bill: Bill; cardName: string; transactions: TransactionView[]; total: number };
 
 // Internal persistence-side entity: `Bill` plus `version` and the credit-card FK (neither on the
 // wire — mirrors `models/account.ts`'s `AccountEntitySchema` split).
