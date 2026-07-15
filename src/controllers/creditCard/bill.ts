@@ -46,10 +46,6 @@ export const getBill = (deps: Deps, input: BillQuery): ResultAsync<BillView, App
 
 export type PayBillInput = PayBill & { source: TransactionSourceType };
 
-/** Builds the version-guarded bill `update` that marks a bill paid, plus the response the caller
- *  sees — shared by the zero-total (no transfer) and positive-total (with transfer) branches of
- *  `payBill` below. `paymentTransactionId` absent (`undefined`) for the zero-total case — the bill
- *  was never paid before, so the column was already unset; present for the positive-total case. */
 const buildPaidBillWrite = (
   rawBill: RawBill,
   paymentTransactionId?: string,
@@ -64,15 +60,6 @@ const buildPaidBillWrite = (
   };
 };
 
-/**
- * Pay a credit card bill (ADR-021 phase 2c): reads the bill and its transactions, and — unless
- * already paid (idempotent) — returns the write as data instead of performing it. A positive total
- * emits an atomic batch of [payment-transfer insert, version-guarded bill update]; the transfer's
- * `billpay-<billId>` idempotency key makes the insert replay-safe, and the bill's `version` guard
- * makes a concurrent pay/edit land as a conflict → the shell rolls back, re-invokes this flow for a
- * fresh read, and finds the bill already paid — idempotent on the retry. A non-positive total marks
- * the bill paid with no transfer at all.
- */
 export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcome<Bill>, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card);
@@ -124,8 +111,7 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
       tagNames: [],
     };
 
-    // The transfer must be inserted before the bill update that references its (freshly minted)
-    // id via paymentTransactionId — the FK would otherwise point at a row that doesn't exist yet.
+    // Transfer must be inserted before the bill update that points paymentTransactionId at its id.
     const { persistable: billUpdate, response } = buildPaidBillWrite(rawBill, txId);
     const persist: Persistable[] = [
       persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: transferEntity }),
@@ -134,9 +120,7 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
     return ok({ persist, response });
   });
 
-/** Builds the version-guarded bill `update` that flips a paid bill back to closed and clears its
- *  payment-transaction link — `null` (not `undefined`) so the write actually clears the column
- *  (`BillEntity`'s doc comment; drizzle's `.set()` drops `undefined`-valued keys). */
+// paymentTransactionId: null, not undefined — undefined would leave the column unchanged.
 const buildClosedBillWrite = (rawBill: RawBill): { persistable: Persistable; response: Bill } => ({
   persistable: persistence.update({
     entity: BILL_ENTITY_TAG,
@@ -145,16 +129,9 @@ const buildClosedBillWrite = (rawBill: RawBill): { persistable: Persistable; res
   response: { ...toBillView(rawBill), status: BillStatus.enum.closed, paymentTransactionId: undefined },
 });
 
-/**
- * Undo a bill payment (ADR-021 phase 2c): deletes its payment transfer and flips paid → closed,
- * returned as data instead of performed. Not-paid bills are a no-op (idempotent, mirrors payBill's
- * own idempotency). When a payment transfer exists, the bill update is version-guarded and ordered
- * *before* the transfer removal in the batch — the reverse of payBill's own insert-before-update
- * order, but for the same FK reason: `bills.payment_transaction_id` references `transactions.id`
- * with no cascading action, and libsql enforces foreign keys, so the bill's own reference must be
- * cleared before the row it points to can be deleted (mirrors the pre-ADR-021 `revertPayment` repo
- * method's own "FK-safe order" comment).
- */
+// Bill update ordered before the transfer remove — the reverse of payBill's insert-before-update —
+// since bills.payment_transaction_id has no ON DELETE action and libsql enforces foreign keys, so
+// the bill's own reference must be cleared before the row it points to can be deleted.
 export const revertBillPayment = (deps: Deps, input: BillQuery): ResultAsync<FlowOutcome<Bill>, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card);
@@ -178,9 +155,6 @@ export const revertBillPayment = (deps: Deps, input: BillQuery): ResultAsync<Flo
     }
 
     const paymentTx = await deps.transactions.getById(rawBill.paymentTransactionId);
-    // A paid bill's paymentTransactionId always points at a real, exclusively-owned transfer
-    // (pay_bill's own row — never editable/deletable by any other flow); a miss here would be data
-    // corruption, not an expected outcome, so this throws rather than joining the AppError track.
     if (!paymentTx) {
       throw new Error(
         `revertBillPayment: dangling paymentTransactionId ${rawBill.paymentTransactionId} on bill ${rawBill.id}`,

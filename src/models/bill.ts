@@ -30,12 +30,6 @@ export const BillSchema = z.object({
 });
 export type Bill = z.infer<typeof BillSchema>;
 
-/** `get_bill`'s response shape (`controllers/creditCard/bill.ts`'s `getBill`) — a read-side
- *  composite of already-validated model pieces (`Bill`, `TransactionView`) plus one computed field
- *  (`total`), not new data of its own to decode; hand-written like `UpsertTransactionResult` below,
- *  never re-derived from a diplomat-layer read shape (`diplomat/db/repos/bills.ts`'s `BillWithItems`
- *  stays a persistence-side type — `models/` never imports `diplomat/`). `transactions` is always
- *  the `addLocalizedLabels`-mapped, wire-ready view, never the raw pre-label `RawTransactionView[]`. */
 export type BillView = { bill: Bill; cardName: string; transactions: TransactionView[]; total: number };
 
 // Internal persistence-side entity: `Bill` plus `version` and the credit-card FK (neither on the
@@ -49,12 +43,8 @@ export type RawBill = z.infer<typeof RawBillSchema>;
 // Mirrors `models/account.ts`'s `ACCOUNT_ENTITY_TAG`.
 export const BILL_ENTITY_TAG = 'bill';
 
-/** The bill entity's `Persistable` model — field names already match the `bills` table's drizzle
- *  column properties one-for-one, so only `INITIAL_VERSION` injection is needed on insert
- *  (`adapters/bills.ts`), no renaming. `paymentTransactionId`: `undefined` leaves the column
- *  unchanged (drizzle's `.set()` drops `undefined`-valued keys — see `versionedTableApplier`);
- *  `null` explicitly clears it (`revertBillPayment`, `controllers/creditCard/bill.ts`) — same
- *  undefined-vs-null convention as `TransactionsRepo.update`'s `subCategoryId`. */
+// paymentTransactionId: undefined leaves the column unchanged (drizzle's .set() drops
+// undefined-valued keys); null explicitly clears it.
 export type BillEntity = {
   id: string;
   creditCardId: string;

@@ -43,11 +43,6 @@ export const billEntityFrom = (bill: RawBill): BillEntity & { version: number } 
   version: bill.version,
 });
 
-/** `billEntityFrom`'s counterpart for a flow's response instead of its write: strips the internal
- *  `creditCardId`/`version` fields a `RawBill` carries for the write path, producing the public
- *  `Bill` a caller gets back (mirrors `diplomat/db/repos/bills.ts`'s own private `toBill`, needed
- *  here too now that FC/IS flows read a `RawBill` directly instead of going through that repo
- *  function). */
 export const toBillView = (bill: RawBill): Bill => R.omit(bill, ['creditCardId', 'version']);
 
 export type BillPeriod = { month: number; year: number; closeDate: string; dueDate: string };
