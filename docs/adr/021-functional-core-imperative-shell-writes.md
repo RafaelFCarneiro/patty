@@ -3,9 +3,10 @@
 **Status:** Accepted (2026-07-13; phase 1 — groundwork + `createAccount` first mover — implemented; phase 2a —
 account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing — implemented 2026-07-13;
 phase 2b — credit-card transaction flows + `billApplier`'s cycle-uniqueness-race-as-retry handling — implemented
-2026-07-15; phases 2c–3 pending) · **Date:** 2026-07-12 · **Deciders:** Rafael · **Supersedes ADR-018** (atomic
-bill payment) and finally resolves the thread ADR-015 opened. Adopts the principle documented in
-`docs/functional-core-imperative-shell.md` for every write flow.
+2026-07-15; phase 2c — bill flows `pay_bill`/`revert_bill_payment`, completing the transaction+bill write path
+and deleting the last bill write methods — implemented 2026-07-15; phase 3 pending) · **Date:** 2026-07-12 ·
+**Deciders:** Rafael · **Supersedes ADR-018** (atomic bill payment) and finally resolves the thread ADR-015
+opened. Adopts the principle documented in `docs/functional-core-imperative-shell.md` for every write flow.
 
 ## Context
 
@@ -258,8 +259,35 @@ gets its own generic atomicity/conflict/idempotency suite.
      merchant-learning trails): this flow's own transaction `Persistable` must stay the batch's last element for
      `lastOutcome` to resolve it correctly, so every other persistable — bill(s), then merchant-learning —
      precedes it.
-   - [ ] Phase 2c (bill flows): convert `payBill`/`revertBillPayment`; delete `bills.pay` if it was ever
-     built (it wasn't — see Consequences).
+   - [x] Phase 2c (bill flows): `payBill`/`revertBillPayment` converted end to end (MCP + REST); `bills.pay`
+     was never built (see Consequences), so nothing to revert there. Neither flow's response is
+     idempotency-aware (rule 6's `PersistOutcome`-derived function) — unlike phase 2b's card-purchase flows,
+     both mint every id and read every field the response needs *before* building the batch (a fresh `newId()`
+     transfer id for `payBill`, the already-read `RawBill` for both), so `response` is the plain value two new
+     helpers return alongside their `Persistable`: `buildPaidBillWrite` (a version-guarded bill `update` to
+     `paid`, with or without a `paymentTransactionId`) and `buildClosedBillWrite` (a version-guarded bill
+     `update` to `closed`, clearing it). `payBill`'s positive-total batch is `[transfer insert, bill update]` —
+     the transfer must exist before the bill update that points `payment_transaction_id` at it; a non-positive
+     total emits just the bill update, no transfer. `revertBillPayment`'s batch reverses that order —
+     `[bill update, transfer remove]` — since `bills.payment_transaction_id` (no `ON DELETE` action) must be
+     cleared before the transfer row it references can be deleted, and libsql enforces foreign keys by default
+     (mirrors the pre-ADR-021 `revertPayment` repo method's own "FK-safe order" comment); a paid bill with no
+     transfer (non-positive-total pay) emits just the bill update. This is why `models/bill.ts`'s
+     `BillEntity.paymentTransactionId` widened to `string | null | undefined`: `undefined` leaves the column
+     unchanged (drizzle's `.set()` drops `undefined`-valued keys), `null` explicitly clears it — the same
+     convention `TransactionsRepo.update`'s `subCategoryId` already established. A `revertBillPayment` whose
+     `paymentTransactionId` fails to resolve to a real transaction row throws rather than joining the
+     `AppError` track: that link is exclusively owned (only `pay_bill` ever sets it, only
+     `revert_bill_payment` ever clears it), so a miss is an invariant violation, not an expected outcome.
+     Deletes the last bill write methods: `deps.bills.markPaid`/`revertPayment`/`setStatus` (the last had no
+     other caller once these two flows converted) — `BillsRepo` now exposes only reads
+     (`get`/`findByCycle`/`findById`) plus the still-repo-driven `ensureOpen` (bulk import, phase 3). Coverage:
+     pure flow tests assert the returned `persist`/`response` for every branch (positive/non-positive total,
+     already-paid/not-paid idempotency, payer validation failures, revert with/without a transfer); a UoW-level
+     suite (`test/integration/db/unitOfWork.test.ts`) replaces the bill-payment atomicity test ADR-018 would
+     have added — two sequential `pay_bill` calls land exactly one transfer and one paid flip, and a simulated
+     concurrent bill mutation (a version bump landing between `payBill`'s read and the shell's write) rolls
+     back the whole batch — transfer included — and recovers cleanly on retry, leaving no partial write.
    - [ ] Phase 3 (remaining flows): bulk import (reusing phase 2a's `PersistOutcome` idempotency-outcome
      contract for per-item created/duplicate/needs-review status), recurring, card/category/tag CRUD; remove
      write methods from `deps`; delete the now-dead transactional repo methods (incl. the phase 2a transitional

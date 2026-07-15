@@ -292,7 +292,16 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'Paying account resolution: explicit `account` → card default `paymentAccount` → error.',
       inputSchema: PayBillSchema.shape,
     },
-    async (args) => fromResult(await payBill(deps, { ...args, source: TransactionSource.enum.mcp })),
+    async (args) => {
+      // billAdapters.outcomeToDb + transactionAdapters.outcomeToDb adapt payBill's mixed
+      // transaction+bill batch (model → db row) here, explicitly, before unitOfWork ever sees it —
+      // diplomat/db only ever writes rows, never adapts them.
+      const flow = () =>
+        payBill(deps, { ...args, source: TransactionSource.enum.mcp })
+          .map(billAdapters.outcomeToDb)
+          .map(outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -304,7 +313,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'Idempotent — calling on a bill that is not paid is a no-op that returns it unchanged.',
       inputSchema: BillQuerySchema.shape,
     },
-    async (args) => fromResult(await revertBillPayment(deps, args)),
+    async (args) => {
+      const flow = () => revertBillPayment(deps, args).map(billAdapters.outcomeToDb).map(outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(

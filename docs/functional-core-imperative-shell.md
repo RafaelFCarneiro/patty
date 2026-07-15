@@ -9,12 +9,13 @@
 > **Status: Adopted** (ADR-021). Phase 1 (groundwork + `createAccount` as the first converted flow), phase 2a
 > (the account-context transaction flows — `add_account_expense`/`add_account_income`/`create_transfer`/
 > `update_account_transaction`/`delete_account_transaction` — plus the `PersistOutcome` idempotency-outcome
-> plumbing rule 6 describes), and phase 2b (the credit-card transaction flows — `add_card_purchase`/
+> plumbing rule 6 describes), phase 2b (the credit-card transaction flows — `add_card_purchase`/
 > `update_card_transaction`/`delete_card_transaction`, including `billApplier`'s cycle-uniqueness-race-as-retry
-> handling) are implemented; bill flows (`pay_bill`/`revert_bill_payment` — phase 2c) and the remaining flows
-> (bulk import, recurring, CRUD — phase 3) still drive their own persistence via injected repo write methods
-> until those phases convert them — this principle is the target shape for every one of them, not yet the
-> as-built state of the whole write path.
+> handling), and phase 2c (the bill flows — `pay_bill`/`revert_bill_payment`, completing the transaction+bill
+> write path and deleting the last bill write methods — `deps.bills.markPaid`/`revertPayment`/`setStatus`) are
+> implemented; the remaining flows (bulk import, recurring, CRUD — phase 3) still drive their own persistence via
+> injected repo write methods until that phase converts them — this principle is the target shape for every one
+> of them, not yet the as-built state of the whole write path.
 
 ## The principle
 

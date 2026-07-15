@@ -42,7 +42,10 @@ export const BILL_ENTITY_TAG = 'bill';
 
 /** The bill entity's `Persistable` model — field names already match the `bills` table's drizzle
  *  column properties one-for-one, so only `INITIAL_VERSION` injection is needed on insert
- *  (`adapters/bills.ts`), no renaming. */
+ *  (`adapters/bills.ts`), no renaming. `paymentTransactionId`: `undefined` leaves the column
+ *  unchanged (drizzle's `.set()` drops `undefined`-valued keys — see `versionedTableApplier`);
+ *  `null` explicitly clears it (`revertBillPayment`, `controllers/creditCard/bill.ts`) — same
+ *  undefined-vs-null convention as `TransactionsRepo.update`'s `subCategoryId`. */
 export type BillEntity = {
   id: string;
   creditCardId: string;
@@ -51,7 +54,7 @@ export type BillEntity = {
   closeDate: string;
   dueDate: string;
   status: BillStatus;
-  paymentTransactionId?: string;
+  paymentTransactionId?: string | null;
 };
 
 export const BillQuerySchema = z.object({
