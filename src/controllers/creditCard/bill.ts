@@ -21,6 +21,7 @@ import type { FlowOutcome, Persistable } from '../../models/persistable.js';
 import {
   ClassificationMethod,
   TRANSACTION_ENTITY_TAG,
+  type RawTransactionView,
   type TransactionEntity,
   type TransactionSource as TransactionSourceType,
   TransactionType,
@@ -129,9 +130,9 @@ const buildClosedBillWrite = (rawBill: RawBill): { persistable: Persistable; res
   response: { ...toBillView(rawBill), status: BillStatus.enum.closed, paymentTransactionId: undefined },
 });
 
-// Bill update ordered before the transfer remove — the reverse of payBill's insert-before-update —
-// since bills.payment_transaction_id has no ON DELETE action and libsql enforces foreign keys, so
-// the bill's own reference must be cleared before the row it points to can be deleted.
+const tryFindPaymentTransaction = (deps: Deps, rawBill: RawBill): Promise<RawTransactionView | null> =>
+  rawBill.paymentTransactionId ? deps.transactions.getById(rawBill.paymentTransactionId) : Promise.resolve(null);
+
 export const revertBillPayment = (deps: Deps, input: BillQuery): ResultAsync<FlowOutcome<Bill>, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.card);
@@ -148,16 +149,15 @@ export const revertBillPayment = (deps: Deps, input: BillQuery): ResultAsync<Flo
       await deps.bills.findById(existing.bill.id),
       billErrors.notFound(card.name, input.month, input.year),
     );
-    const { persistable: billUpdate, response } = buildClosedBillWrite(rawBill);
 
-    const paymentTx = rawBill.paymentTransactionId
-      ? await deps.transactions.getById(rawBill.paymentTransactionId)
-      : null;
-    const persist: Persistable[] = [
-      billUpdate,
-      ...(paymentTx
-        ? [persistence.remove({ entity: TRANSACTION_ENTITY_TAG, id: paymentTx.id, version: paymentTx.version })]
-        : []),
-    ];
+    const { persistable: billUpdate, response } = buildClosedBillWrite(rawBill);
+    const persist: Persistable[] = [billUpdate];
+
+    const paymentTx = await tryFindPaymentTransaction(deps, rawBill);
+    if (paymentTx) {
+      persist.push(
+        persistence.remove({ entity: TRANSACTION_ENTITY_TAG, id: paymentTx.id, version: paymentTx.version }),
+      );
+    }
     return ok({ persist, response });
   });
