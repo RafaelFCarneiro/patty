@@ -2,8 +2,9 @@
 
 **Status:** Accepted (2026-07-13; phase 1 — groundwork + `createAccount` first mover — implemented; phase 2a —
 account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing — implemented 2026-07-13;
-phases 2b–3 pending) · **Date:** 2026-07-12 · **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill
-payment) and finally resolves the thread ADR-015 opened. Adopts the principle documented in
+phase 2b — credit-card transaction flows + `billApplier`'s cycle-uniqueness-race-as-retry handling — implemented
+2026-07-15; phases 2c–3 pending) · **Date:** 2026-07-12 · **Deciders:** Rafael · **Supersedes ADR-018** (atomic
+bill payment) and finally resolves the thread ADR-015 opened. Adopts the principle documented in
 `docs/functional-core-imperative-shell.md` for every write flow.
 
 ## Context
@@ -209,9 +210,56 @@ gets its own generic atomicity/conflict/idempotency suite.
      the not-yet-converted credit-card aggregate) — both share their read/decision logic with the converted
      account-side flows via extracted pure planners (`planAccountMovement`, `decideTransactionUpdate`) rather
      than duplicating it outright.
-   - [ ] Phase 2b/2c (credit-card + bill flows): convert `add_card_purchase`/`update_card_transaction`/
-     `delete_card_transaction`, `payBill`/`revertBillPayment`; delete `bills.pay`/`ensureAndAttach`/self-heal
-     and their atomicity tests.
+   - [x] Phase 2b (credit-card transaction flows): `add_card_purchase`/`update_card_transaction`/
+     `delete_card_transaction` converted end to end (MCP + REST). `bills.ensureAndAttach` and its compensating
+     self-heal (the delete-on-attach-failure branch `addCardPurchase` used to run) are **deleted**, along with
+     their three atomicity/self-heal integration tests (`billsEnsureAndAttach`, `addCardPurchaseSelfHeal`,
+     `updateCardTransactionReassignAtomicity`) — the conditions they guarded no longer exist, because the flow
+     no longer applies its own writes (`docs/functional-core-imperative-shell.md`'s "testing implications").
+     A bill entity (`models/bill.ts`'s `BILL_ENTITY_TAG`, `BillEntity`, and a `RawBill` — `Bill` extended with
+     the internal `version`/`creditCardId` fields a write needs but a read response never exposes, mirroring
+     `RawTransactionView`) is registered under `diplomat/db/repos/bills.ts`'s `billApplier`. Bills fit the
+     `id`/`version` convention for `update`/`delete` (`versionedTableApplier(bills)`), but creation is
+     upsert-by-cycle (`UNIQUE(creditCardId, month, year)`), not by `id` — a genuine concurrent-first-purchase
+     race on the same cycle surfaces as a raw unique-constraint error from `versionedTableApplier`'s own
+     `onConflictDoNothing` (scoped to `id` only), which `billApplier`'s own `insert` recognizes and rethrows as
+     `withUnitOfWork`'s own `VersionConflict` (newly **exported** from `diplomat/db/unitOfWork.ts` for exactly
+     this case) — the whole batch rolls back and the flow re-invokes, re-reading `findByCycle` and emitting a
+     version-guarded *touch* of the winner's row instead of a second insert, never a wrong-id no-op. The
+     "ensure" decision itself (insert-a-fresh-`open`-bill vs. touch-the-existing-one) moved to the domain as
+     `controllers/creditCard/transaction.ts`'s `resolveBillWrite`, shared by `addCardPurchase` (new cycle) and
+     `updateCardTransaction`'s reassignment branch (target cycle); the transaction row carries `billId` at
+     insert/update, so there is no separate attach step and no orphan to self-heal. Guard-what-you-validated:
+     every bill whose paid status the flow read is also version-guarded in the same batch — `addCardPurchase`
+     touches the target bill it validated; `updateCardTransaction`'s reassignment touches both the current and
+     target bill (deduped to one touch when they're the same cycle, to avoid a spurious self-conflict);
+     `deleteCardTransaction` touches the transaction's own bill — so a concurrent `pay_bill` landing between the
+     read and the shell's apply rolls the batch back and re-invokes the flow, which then sees `paid` for real,
+     rather than racing past a paid bill. Because the transaction row's `bill_id` FK must reference a bill that
+     already exists when it's a fresh insert, the bill `Persistable`(s) apply *before* the transaction one in
+     these two flows' batches — the flow's own entity trails the batch instead of leading it, the reverse of
+     every flow phase 2a converted — so `logic/persistence.ts` gained `lastOutcome` (`firstOutcome`'s
+     counterpart) for `response` to resolve against. `updateCardTransaction`/`deleteCardTransaction` no longer
+     delegate to `controllers/transaction/core.ts`'s `updateTransaction`/`deleteTransaction` (both **deleted** —
+     unreachable dead code the moment the credit-card aggregate stopped calling them); both aggregates' FC/IS
+     update flows now share only the pure `decideTransactionUpdate`/`resolveCategorySelection` reads from the
+     core. `importCardStatement` (bulk import, unconverted until phase 3) keeps a legacy repo-write path
+     (`addCardPurchaseViaRepo`, mirroring phase 2a's `addAccountMovementViaRepo`) sharing `planCardPurchase`'s
+     decision with the FC/IS `addCardPurchase`; it sets `billId` at creation too (via a new, narrow
+     `deps.bills.ensureOpen` — idempotent upsert-by-cycle, no paid-guard, no attach — replacing the paid-guard
+     and attach concerns `ensureAndAttach` used to fold in, which move to the caller either way), so it never
+     needed the deleted self-heal either. Behavior-preserving: a pre-existing gap where a plain,
+     non-reassignment `update_card_transaction` edit does **not** check the transaction's current bill's paid
+     status at all (only a `billMonth`/`billYear` reassignment ever reads a bill) is deliberately left as-is,
+     matching prior behavior exactly. `updateCardTransaction` also composes the same merchant-learning write
+     phase 2a gave `updateAccountTransaction` — a category correction inserts a `MERCHANT_CATEGORY_ENTITY_TAG`
+     `Persistable` (`resolveMerchantCorrection`) into the same atomic batch — positioned *before* the
+     transaction update rather than after (unlike the account-side flow, where the transaction leads and
+     merchant-learning trails): this flow's own transaction `Persistable` must stay the batch's last element for
+     `lastOutcome` to resolve it correctly, so every other persistable — bill(s), then merchant-learning —
+     precedes it.
+   - [ ] Phase 2c (bill flows): convert `payBill`/`revertBillPayment`; delete `bills.pay` if it was ever
+     built (it wasn't — see Consequences).
    - [ ] Phase 3 (remaining flows): bulk import (reusing phase 2a's `PersistOutcome` idempotency-outcome
      contract for per-item created/duplicate/needs-review status), recurring, card/category/tag CRUD; remove
      write methods from `deps`; delete the now-dead transactional repo methods (incl. the phase 2a transitional

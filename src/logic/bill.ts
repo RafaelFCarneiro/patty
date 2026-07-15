@@ -3,7 +3,7 @@
 import { purry } from 'remeda';
 import * as R from 'remeda';
 import { localizeBillStatus } from './localize.js';
-import { BillStatus, type Bill } from '../models/bill.js';
+import { BillStatus, type Bill, type BillEntity, type RawBill } from '../models/bill.js';
 import type { Locale } from '../models/locale.js';
 import { TransactionType, type TransactionView } from '../models/transaction.js';
 
@@ -28,6 +28,20 @@ export const assertBillPeriodPaired = (input: { billMonth?: number; billYear?: n
  *  it, on either the raw (pre-`addLocalizedLabels`) or already-localized view, hence generic over
  *  either `TransactionView` shape rather than fixed to one. */
 export const withBillId = <T extends TransactionView>(tx: T, billId: string): T => ({ ...tx, billId });
+
+/** Builds a bill `Persistable` model from an already-read `RawBill` — used for a version-guarded
+ *  "touch" (same fields, guarding only `version`). */
+export const billEntityFrom = (bill: RawBill): BillEntity & { version: number } => ({
+  id: bill.id,
+  creditCardId: bill.creditCardId,
+  month: bill.month,
+  year: bill.year,
+  closeDate: bill.closeDate,
+  dueDate: bill.dueDate,
+  status: bill.status,
+  paymentTransactionId: bill.paymentTransactionId,
+  version: bill.version,
+});
 
 export type BillPeriod = { month: number; year: number; closeDate: string; dueDate: string };
 
@@ -76,3 +90,16 @@ export const billPeriodFor = (txDate: string, closingDay: number, dueDay: number
  */
 export const billPeriodForCycle = (month: number, year: number, closingDay: number, dueDay: number): BillPeriod =>
   periodFor(month, year, closingDay, dueDay);
+
+/** Target bill cycle for a card purchase: an explicit `billMonth`/`billYear` override when given
+ *  (assumed already paired — see `assertBillPeriodPaired`), else derived from the transaction date. */
+export const resolveBillPeriod = (
+  billMonth: number | undefined,
+  billYear: number | undefined,
+  date: string,
+  closingDay: number,
+  dueDay: number,
+): BillPeriod =>
+  R.isNonNullish(billMonth) && R.isNonNullish(billYear)
+    ? billPeriodForCycle(billMonth, billYear, closingDay, dueDay)
+    : billPeriodFor(date, closingDay, dueDay);

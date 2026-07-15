@@ -37,3 +37,12 @@ export const firstOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
   if (!outcome) throw new Error('firstOutcome: expected at least one persist outcome, got none');
   return outcome;
 };
+
+/** `firstOutcome`'s counterpart for a flow whose own entity trails the batch instead of leading it
+ *  (e.g. `addCardPurchase`/`updateCardTransaction`, whose transaction row FKs to a bill that must
+ *  be written first). Same "drift is a bug, not a domain outcome" reasoning as `firstOutcome`. */
+export const lastOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
+  const outcome = outcomes[outcomes.length - 1];
+  if (!outcome) throw new Error('lastOutcome: expected at least one persist outcome, got none');
+  return outcome;
+};

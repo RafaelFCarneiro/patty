@@ -10,9 +10,11 @@ import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { accountApplier } from '../../../src/diplomat/db/repos/accounts.js';
+import { billApplier } from '../../../src/diplomat/db/repos/bills.js';
+import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
 import { merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchants.js';
 import { transactionApplier } from '../../../src/diplomat/db/repos/transactions.js';
-import { categories, tags } from '../../../src/diplomat/db/schema.js';
+import { bills, categories, tags } from '../../../src/diplomat/db/schema.js';
 import {
   MAX_UNIT_OF_WORK_ATTEMPTS,
   versionedTableApplier,
@@ -22,6 +24,7 @@ import {
 } from '../../../src/diplomat/db/unitOfWork.js';
 import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
+import { BILL_ENTITY_TAG, BillStatus } from '../../../src/models/bill.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp, type Persistable, type PersistOutcome } from '../../../src/models/persistable.js';
@@ -633,5 +636,177 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
         }),
       ),
     ).rejects.toThrow('merchantCategoryApplier: delete is unsupported');
+  });
+});
+
+describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, not a raw throw (ADR-021 2b)', () => {
+  const billRegistry: ApplierRegistry = { [BILL_ENTITY_TAG]: billApplier };
+
+  const seedCard = async (): Promise<{ cardId: string }> => {
+    const creditCards = creditCardsRepo(db);
+    const cardAccountId = randomUUID();
+    const created = await creditCards.createWithAccount(
+      {
+        id: randomUUID(),
+        name: `Card ${randomUUID()}`,
+        currency: CurrencyCode.enum.BRL,
+        closingDay: 28,
+        dueDay: 5,
+        accountId: cardAccountId,
+      },
+      {
+        id: cardAccountId,
+        name: 'Card account',
+        type: AccountType.enum.credit,
+        currency: CurrencyCode.enum.BRL,
+        initialBalance: 0,
+      },
+    );
+    return { cardId: created.id };
+  };
+
+  const newBillModel = (cardId: string, overrides: Partial<{ id: string; month: number; year: number }> = {}) => ({
+    id: overrides.id ?? randomUUID(),
+    creditCardId: cardId,
+    month: overrides.month ?? 6,
+    year: overrides.year ?? 2026,
+    closeDate: '2026-06-28',
+    dueDate: '2026-07-05',
+    status: BillStatus.enum.open,
+  });
+
+  it('inserts a brand-new cycle normally', async () => {
+    const { cardId } = await seedCard();
+    const model = newBillModel(cardId);
+
+    const result = await withUnitOfWork(db, billRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: BILL_ENTITY_TAG, model }] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    const [row] = await db.all<{ id: string }>(sql`SELECT id FROM bills WHERE id = ${model.id}`);
+    expect(row?.id).toBe(model.id);
+  });
+
+  it('update/delete follow the plain versioned convention (versionedTableApplier mechanics)', async () => {
+    const { cardId } = await seedCard();
+    const model = newBillModel(cardId);
+    await withUnitOfWork(db, billRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: BILL_ENTITY_TAG, model }] as Persistable[],
+        response: null,
+      }),
+    );
+
+    const updated = await withUnitOfWork(db, billRegistry, () =>
+      okAsync({
+        persist: [
+          {
+            op: PersistOp.enum.update,
+            entity: BILL_ENTITY_TAG,
+            model: { ...model, status: BillStatus.enum.closed, version: 0 },
+          },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+    expect(updated.isOk()).toBe(true);
+    const [row] = await db.all<{ status: string; version: number }>(
+      sql`SELECT status, version FROM bills WHERE id = ${model.id}`,
+    );
+    expect(row).toEqual({ status: BillStatus.enum.closed, version: 1 });
+
+    const deleted = await withUnitOfWork(db, billRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.delete, entity: BILL_ENTITY_TAG, id: model.id, version: 1 }] as Persistable[],
+        response: null,
+      }),
+    );
+    expect(deleted.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM bills WHERE id = ${model.id}`)).toHaveLength(0);
+  });
+
+  it('a concurrent-insert cycle race exhausts retries to the generic conflict error', async () => {
+    const { cardId } = await seedCard();
+    // Simulate "the other writer already committed" — a bill already exists for this cycle.
+    const winner = newBillModel(cardId, { month: 9, year: 2026 });
+    await db.insert(bills).values({ ...winner, version: 0 });
+
+    let attempts = 0;
+    const flow = () => {
+      attempts += 1;
+      // A naive flow that never re-reads — always mints its own speculative id for the same
+      // cycle, reproducing the loser side of the race identically on every retry.
+      const loser = newBillModel(cardId, { month: 9, year: 2026 });
+      return okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: BILL_ENTITY_TAG, model: loser }] as Persistable[],
+        response: null,
+      });
+    };
+
+    const result = await withUnitOfWork(db, billRegistry, flow);
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    expect(attempts).toBe(MAX_UNIT_OF_WORK_ATTEMPTS);
+    // Only the winner's row exists — no loser row was ever left half-committed by a failed attempt.
+    const rows = await db.all<{ id: string }>(
+      sql`SELECT id FROM bills WHERE credit_card_id = ${cardId} AND month = 9 AND year = 2026`,
+    );
+    expect(rows).toEqual([{ id: winner.id }]);
+  });
+
+  it('a flow that re-reads on retry recovers: sees the winner and touches it instead of re-inserting', async () => {
+    const { cardId } = await seedCard();
+    const winner = newBillModel(cardId, { month: 10, year: 2026 });
+    await db.insert(bills).values({ ...winner, version: 0 });
+
+    let attempts = 0;
+    const flow = () => {
+      attempts += 1;
+      if (attempts === 1) {
+        // First attempt believes the cycle is still empty — as if its own read happened just
+        // before the winner's write committed.
+        const loser = newBillModel(cardId, { month: 10, year: 2026 });
+        return okAsync({
+          persist: [{ op: PersistOp.enum.insert, entity: BILL_ENTITY_TAG, model: loser }] as Persistable[],
+          response: null,
+        });
+      }
+      // A fresh read on retry finds the winner already there — touches it instead of inserting,
+      // exactly what `resolveBillWrite` (`controllers/creditCard/transaction.ts`) does.
+      return okAsync({
+        persist: [
+          { op: PersistOp.enum.update, entity: BILL_ENTITY_TAG, model: { ...winner, version: 0 } },
+        ] as Persistable[],
+        response: attempts,
+      });
+    };
+
+    const result = await withUnitOfWork(db, billRegistry, flow);
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe(2); // succeeded on the retry (flow's 2nd invocation)
+    const rows = await db.all<{ id: string }>(
+      sql`SELECT id FROM bills WHERE credit_card_id = ${cardId} AND month = 10 AND year = 2026`,
+    );
+    expect(rows).toEqual([{ id: winner.id }]); // exactly one bill — the loser's speculative id never landed
+  });
+
+  it('a genuine failure unrelated to the race still propagates, never swallowed as a conflict', async () => {
+    const outcome = withUnitOfWork(db, billRegistry, () =>
+      okAsync({
+        // creditCardId references a non-existent card — a real FK violation, not the cycle race.
+        persist: [
+          { op: PersistOp.enum.insert, entity: BILL_ENTITY_TAG, model: newBillModel(randomUUID()) },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+
+    await expect(outcome).rejects.toThrow();
   });
 });

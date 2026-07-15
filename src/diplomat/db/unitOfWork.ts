@@ -88,9 +88,12 @@ export const versionedTableApplier = <T extends VersionedTable>(table: T): Entit
   },
 });
 
-/** Marks "a versioned op affected zero rows" up through `db.transaction`'s promise rejection so
- *  the whole batch rolls back; caught by `applyBatch`, never leaks past this file. */
-class VersionConflict extends Error {}
+/** Marks "roll back the whole batch and re-invoke the flow for a fresh read/decision" up through
+ *  `db.transaction`'s rejection; caught by `applyBatch`, never leaks past `withUnitOfWork`. Thrown
+ *  implicitly below for a versioned `update`/`delete` that affected zero rows. Exported so an
+ *  `EntityApplier` can signal the same retry for its own non-version conflict (see
+ *  `diplomat/db/repos/bills.ts`'s `billApplier`). */
+export class VersionConflict extends Error {}
 
 const resolveApplier = (registry: ApplierRegistry, entity: string): EntityApplier => {
   const applier = registry[entity];

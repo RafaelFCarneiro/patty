@@ -1,30 +1,46 @@
+import { LibsqlError } from '@libsql/client';
 import { eq, sql } from 'drizzle-orm';
+import * as R from 'remeda';
 import { z } from 'zod';
 import * as transactionAdapters from '../../../adapters/transactions.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
-import { BillSchema, BillStatus, type Bill } from '../../../models/bill.js';
+import { BillStatus, RawBillSchema, type Bill, type RawBill } from '../../../models/bill.js';
 import type { RawTransactionView } from '../../../models/transaction.js';
-import { isBillPaid, type BillPeriod } from '../../../logic/bill.js';
+import type { BillPeriod } from '../../../logic/bill.js';
 import { BillRowSchema } from '../../../wire/db/bills.js';
 import type { Db } from '../driver.js';
 import { bills, transactionTags, transactions } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
+import { VersionConflict, versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
-const toBill = (record: Record<string, unknown>): Bill => {
+/** Includes `creditCardId`/`version` — for the FC/IS credit-card transaction flows' own
+ *  read-decide step, which needs them to build a `Persistable`. Every other caller uses `toBill`
+ *  (below), which never lets those internal fields exist on the returned object in the first
+ *  place — there is no wire/out zod parsing on the bill read paths to strip them later. */
+const toRawBill = (record: Record<string, unknown>): RawBill => {
   const row = BillRowSchema.parse(record);
-  return BillSchema.parse({
+  return RawBillSchema.parse({
     id: row.id,
+    creditCardId: row.credit_card_id,
     month: row.month,
     year: row.year,
     closeDate: row.close_date,
     dueDate: row.due_date,
     status: row.status,
     paymentTransactionId: row.payment_transaction_id ?? undefined,
+    version: row.version,
   });
 };
 
-const fetchBillById = async (db: Db, billId: string): Promise<Bill | null> => {
+const toBill = (record: Record<string, unknown>): Bill => R.omit(toRawBill(record), ['creditCardId', 'version']);
+
+const fetchBillRow = async (db: Db, billId: string): Promise<Record<string, unknown> | undefined> => {
   const [row] = await db.all<Record<string, unknown>>(sql`SELECT * FROM bills WHERE id = ${billId}`);
+  return row;
+};
+
+const fetchBillById = async (db: Db, billId: string): Promise<Bill | null> => {
+  const row = await fetchBillRow(db, billId);
   return row ? toBill(row) : null;
 };
 
@@ -35,18 +51,14 @@ const cardNameOf = (record: Record<string, unknown>): string =>
 export type BillWithItems = { bill: Bill; cardName: string; transactions: RawTransactionView[] };
 
 export type BillsRepo = {
-  /**
-   * UPSERT the cycle's bill for a card and attach the transaction, atomically. Refuses (returns
-   * null) if the target bill is already `paid`, or — for a reassignment — if the transaction's
-   * current bill has independently become `paid` since the controller's pre-check. The whole
-   * check-then-write is one DB transaction, so a concurrent pay_bill can't slip a transaction onto
-   * or off of a paid bill mid-attach.
-   */
-  ensureAndAttach: (cardId: string, transactionId: string, period: BillPeriod, newId: string) => Promise<Bill | null>;
   get: (cardId: string, month: number, year: number) => Promise<BillWithItems | null>;
-  /** Lightweight cycle lookup (no card-name join, no transaction items) — for status checks. */
-  findByCycle: (cardId: string, month: number, year: number) => Promise<Bill | null>;
-  findById: (billId: string) => Promise<Bill | null>;
+  /** Lightweight cycle lookup (no card-name join, no transaction items). */
+  findByCycle: (cardId: string, month: number, year: number) => Promise<RawBill | null>;
+  findById: (billId: string) => Promise<RawBill | null>;
+  /** Idempotent upsert-by-cycle: creates the cycle's bill `open` if none exists yet, else returns
+   *  the existing one. Used only by the still-repo-driven bulk-import path; the FC/IS
+   *  `addCardPurchase` expresses the same decision as a `Persistable` via `billApplier` instead. */
+  ensureOpen: (cardId: string, period: BillPeriod, newId: string) => Promise<Bill>;
   setStatus: (billId: string, status: BillStatus) => Promise<Bill | null>;
   /** Marks the bill paid and links its payment transfer, in one write. */
   markPaid: (billId: string, transactionId: string) => Promise<Bill | null>;
@@ -55,22 +67,8 @@ export type BillsRepo = {
 };
 
 export const billsRepo = (db: Db): BillsRepo => ({
-  ensureAndAttach: async (cardId, transactionId, period, newId) => {
+  ensureOpen: async (cardId, period, newId) => {
     return db.transaction(async (tx) => {
-      // Refuse if the transaction currently belongs to a bill that's already paid — the atomic
-      // counterpart to the target-bill check below, closing the same race for the "move off a
-      // paid bill" direction during a reassignment (a fresh insert or a self-heal attach has no
-      // current bill_id yet, so this is a no-op then).
-      const [currentTxRow] = await tx.all<{ bill_id: string | null }>(
-        sql`SELECT bill_id FROM transactions WHERE id = ${transactionId}`,
-      );
-      if (currentTxRow?.bill_id) {
-        const [currentBillRow] = await tx.all<Record<string, unknown>>(
-          sql`SELECT * FROM bills WHERE id = ${currentTxRow.bill_id}`,
-        );
-        if (currentBillRow && isBillPaid(toBill(currentBillRow))) return null;
-      }
-
       await tx
         .insert(bills)
         .values({
@@ -84,22 +82,10 @@ export const billsRepo = (db: Db): BillsRepo => ({
         })
         .onConflictDoNothing({ target: [bills.creditCardId, bills.month, bills.year] });
 
-      // Resolve the bill id (may have been the pre-existing one) — same transaction as the insert
-      // above and the attach below, so a concurrent pay_bill can't observe a stale "not yet paid".
       const [rawBill] = await tx.all<Record<string, unknown>>(sql`
         SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${period.month} AND year = ${period.year}
       `);
-      const bill = toBill(expectPresent(rawBill, rowNotFoundAfterWrite('bills', 'upsert')));
-
-      if (isBillPaid(bill)) return null;
-
-      // Link the transaction to the bill — verify the row actually existed.
-      const result = await tx.update(transactions).set({ billId: bill.id }).where(eq(transactions.id, transactionId));
-      if ((result.rowsAffected ?? 0) === 0) {
-        throw new Error(`bills: transaction ${transactionId} not found, cannot attach to bill ${bill.id}`);
-      }
-
-      return bill;
+      return toBill(expectPresent(rawBill, rowNotFoundAfterWrite('bills', 'upsert')));
     });
   },
 
@@ -127,10 +113,13 @@ export const billsRepo = (db: Db): BillsRepo => ({
     const [row] = await db.all<Record<string, unknown>>(sql`
       SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${month} AND year = ${year}
     `);
-    return row ? toBill(row) : null;
+    return row ? toRawBill(row) : null;
   },
 
-  findById: (billId) => fetchBillById(db, billId),
+  findById: async (billId) => {
+    const row = await fetchBillRow(db, billId);
+    return row ? toRawBill(row) : null;
+  },
 
   setStatus: async (billId, status) => {
     await db.update(bills).set({ status }).where(eq(bills.id, billId));
@@ -159,3 +148,38 @@ export const billsRepo = (db: Db): BillsRepo => ({
     return fetchBillById(db, billId);
   },
 });
+
+// A UNIQUE-constraint error on a bill insert can only be `bills_card_month_year`, the table's one
+// other unique constraint — an `id` collision is already absorbed by `onConflictDoNothing` below
+// and never throws.
+const SQLITE_UNIQUE_CONSTRAINT_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
+
+// Walks the `.cause` chain rather than assuming exactly one level of wrapping (today: drizzle's
+// `DrizzleQueryError` wrapping the driver's own `LibsqlError`) — robust to the driver ever
+// throwing `LibsqlError` directly, or to an extra wrapping layer.
+const isBillCycleUniqueConflict = (cause: unknown): boolean => {
+  for (let current = cause; current instanceof Error; current = current.cause) {
+    if (current instanceof LibsqlError) return current.extendedCode === SQLITE_UNIQUE_CONSTRAINT_CODE;
+  }
+  return false;
+};
+
+const versionedBillApplier = versionedTableApplier(bills);
+
+/** A bill is created by cycle (`UNIQUE(creditCardId, month, year)`), not by `id`, so a concurrent
+ *  first purchase on the same cycle can raise a genuine unique-constraint error that
+ *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow. Recognizing that one
+ *  violation and rethrowing it as `VersionConflict` rolls the batch back and retries the flow (rule
+ *  4) instead of surfacing a raw 500 or a wrong-id no-op. `update`/`delete` are plain
+ *  `versionedTableApplier`. */
+export const billApplier: EntityApplier = {
+  ...versionedBillApplier,
+  insert: async (tx, model) => {
+    try {
+      return await versionedBillApplier.insert(tx, model);
+    } catch (cause) {
+      if (isBillCycleUniqueConflict(cause)) throw new VersionConflict();
+      throw cause;
+    }
+  },
+};

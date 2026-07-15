@@ -75,6 +75,7 @@ import {
   deleteResultToWireOut,
   outcomeToDb,
 } from '../../adapters/transactions.js';
+import * as billAdapters from '../../adapters/bills.js';
 import {
   addCardPurchaseWireInToModel,
   importCardStatementWireInToModel,
@@ -175,12 +176,15 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'with add_account_expense/add_account_income but has no effect here.',
       inputSchema: AddCardPurchaseSchema.shape,
     },
-    async (args) =>
-      fromResult(
-        (await addCardPurchase(deps, addCardPurchaseWireInToModel(args), TransactionSource.enum.mcp)).map(
-          createResultToWireOut,
-        ),
-      ),
+    async (args) => {
+      const model = addCardPurchaseWireInToModel(args);
+      // billAdapters.outcomeToDb + transactionAdapters.outcomeToDb adapt addCardPurchase's mixed
+      // bill+transaction batch (model → db row) here, explicitly, before unitOfWork ever sees it —
+      // diplomat/db only ever writes rows, never adapts them.
+      const flow = () =>
+        addCardPurchase(deps, model, TransactionSource.enum.mcp).map(billAdapters.outcomeToDb).map(outcomeToDb);
+      return fromResult((await unitOfWork(flow)).map(createResultToWireOut));
+    },
   );
 
   server.registerTool(
@@ -364,22 +368,26 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
       description:
         "Update a credit-card transaction by id (from search_transactions) — the credit-card aggregate's " +
         'update entry point (ADR-017/ADR-020). Owns transactions that involve a credit account: card ' +
-        'purchases (including the brief self-heal window before bill attachment) and the bill-payment ' +
-        'transfer. cardId/billId (returned by search_transactions/TransactionView) are reliable proxies ' +
-        'for picking this tool — only these two cases ever have a credit-account leg — but TransactionView ' +
-        'does not expose account types, and the authoritative check is the leg account type; if unsure ' +
-        "(e.g. a transfer's toAccountId), call the tool and follow the wrong-tool redirect. Calling this " +
-        'on a transaction with no credit-account leg is rejected with a validation error redirecting to ' +
-        `${TransactionTool.updateAccountTransaction}. Only provided fields ` +
-        'change. Setting category is a user correction (confidence 1, strengthens the merchant→category ' +
-        "association). account cannot be changed — a card purchase is always funded by the card's own " +
-        'internal liability account (ADR-010). billMonth+billYear reassigns to a different bill cycle ' +
-        '(both required together); rejected with a validation error pointing at revert_bill_payment if the ' +
-        'current or target bill is paid. The bill-payment transfer itself (billId set, no cardId) cannot ' +
-        'be edited at all — it is owned exclusively by pay_bill/revert_bill_payment.',
+        'purchases and the bill-payment transfer. cardId/billId (returned by search_transactions/ ' +
+        'TransactionView) are reliable proxies for picking this tool — only these two cases ever have a ' +
+        'credit-account leg — but TransactionView does not expose account types, and the authoritative ' +
+        "check is the leg account type; if unsure (e.g. a transfer's toAccountId), call the tool and " +
+        'follow the wrong-tool redirect. Calling this on a transaction with no credit-account leg is ' +
+        `rejected with a validation error redirecting to ${TransactionTool.updateAccountTransaction}. Only ` +
+        'provided fields change. Setting category is a user correction (confidence 1, strengthens the ' +
+        'merchant→category association). account cannot be changed — a card purchase is always funded by ' +
+        "the card's own internal liability account (ADR-010). billMonth+billYear reassigns to a different " +
+        'bill cycle (both required together); rejected with a validation error pointing at ' +
+        'revert_bill_payment if the current or target bill is paid. The bill-payment transfer itself ' +
+        '(billId set, no cardId) cannot be edited at all — it is owned exclusively by pay_bill/' +
+        'revert_bill_payment.',
       inputSchema: UpdateCardTransactionSchema.shape,
     },
-    async (args) => fromResult(await updateCardTransaction(deps, updateCardTransactionWireInToModel(args))),
+    async (args) => {
+      const model = updateCardTransactionWireInToModel(args);
+      const flow = () => updateCardTransaction(deps, model).map(billAdapters.outcomeToDb).map(outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -396,7 +404,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'be deleted this way — rejected with a validation error pointing at revert_bill_payment.',
       inputSchema: DeleteTransactionSchema.shape,
     },
-    async (args) => fromResult((await deleteCardTransaction(deps, args)).map(deleteResultToWireOut)),
+    async (args) => {
+      const flow = () => deleteCardTransaction(deps, args).map(billAdapters.outcomeToDb).map(outcomeToDb);
+      return fromResult((await unitOfWork(flow)).map(deleteResultToWireOut));
+    },
   );
 
   server.registerTool(

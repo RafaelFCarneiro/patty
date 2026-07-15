@@ -29,6 +29,31 @@ export const BillSchema = z.object({
 });
 export type Bill = z.infer<typeof BillSchema>;
 
+// Internal persistence-side entity: `Bill` plus `version` and the credit-card FK (neither on the
+// wire — mirrors `models/account.ts`'s `AccountEntitySchema` split).
+export const RawBillSchema = BillSchema.extend({
+  creditCardId: Id.describe('Owning credit card id; internal, never on wire/out'),
+  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
+});
+export type RawBill = z.infer<typeof RawBillSchema>;
+
+// Mirrors `models/account.ts`'s `ACCOUNT_ENTITY_TAG`.
+export const BILL_ENTITY_TAG = 'bill';
+
+/** The bill entity's `Persistable` model — field names already match the `bills` table's drizzle
+ *  column properties one-for-one, so only `INITIAL_VERSION` injection is needed on insert
+ *  (`adapters/bills.ts`), no renaming. */
+export type BillEntity = {
+  id: string;
+  creditCardId: string;
+  month: number;
+  year: number;
+  closeDate: string;
+  dueDate: string;
+  status: BillStatus;
+  paymentTransactionId?: string;
+};
+
 export const BillQuerySchema = z.object({
   card: z.string().min(1).describe('Credit card name'),
   month: BillSchema.shape.month,

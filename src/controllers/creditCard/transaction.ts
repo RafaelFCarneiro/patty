@@ -1,26 +1,32 @@
 // Credit-card aggregate (ADR-016 step 2): owns the card-purchase entry point and the bill-policy
-// side of update/delete for card transactions. Validates (paid-bill immutability, cycle
-// resolution), then delegates row persistence to the transaction core — the core never depends on
-// this module (the reverse is fine and expected).
+// side of update/delete for card transactions. Hands writes off as `Persistable`s (ADR-021) — the
+// core never depends on this module (the reverse is fine and expected).
 
-import { ok, safeTry, type ResultAsync } from 'neverthrow';
+import { ok, safeTry, type Result, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import {
   assertBillPeriodPaired,
-  billPeriodFor,
+  billEntityFrom,
   billPeriodForCycle,
   isBillPaid,
-  withBillId,
+  resolveBillPeriod,
   type BillPeriod,
 } from '../../logic/bill.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
 import { resolveCurrency } from '../../logic/money.js';
-import { normalizeMerchant } from '../../logic/merchant.js';
+import { normalizeMerchant, resolveMerchantCorrection } from '../../logic/merchant.js';
+import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
-import { addLocalizedLabels, assertExclusiveCategorySubCategory, defaultStatusFor } from '../../logic/transaction.js';
+import {
+  addLocalizedLabels,
+  assertExclusiveCategorySubCategory,
+  defaultStatusFor,
+  viewFromOutcome,
+} from '../../logic/transaction.js';
 import { AccountType } from '../../models/account.js';
+import { BILL_ENTITY_TAG, BillStatus, type RawBill } from '../../models/bill.js';
 import {
   cardErrors,
   type AddCardPurchase,
@@ -28,12 +34,19 @@ import {
   type UpdateCardTransaction,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
+import { MERCHANT_CATEGORY_ENTITY_TAG, type MerchantCategoryEdge } from '../../models/merchant.js';
+import { type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import {
+  ClassificationMethod,
+  DELETE_TRANSACTION_CONFIRM_HINT,
+  TRANSACTION_ENTITY_TAG,
   transactionErrors,
   TransactionTool,
   type ClassifiedUpsertResult,
   type ClassifyOutcome,
   type DeleteTransactionResult,
+  type RawTransactionView,
+  type TransactionEntity,
   type TransactionSource,
   type TransactionView,
 } from '../../models/transaction.js';
@@ -41,42 +54,76 @@ import type { BulkResult } from '../../logic/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveCardRef, resolveLegAccounts } from '../resolve.js';
 import { runStatementImport } from '../transaction/bulk.js';
-import {
-  deleteTransaction as coreDeleteTransaction,
-  resolveCategorySelection,
-  updateTransaction as coreUpdateTransaction,
-} from '../transaction/core.js';
+import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
-/** Repo-touching precondition: true when the target bill cycle doesn't exist yet, or isn't paid. */
-const assertTargetBillNotPaid = async (deps: Deps, cardId: string, period: BillPeriod): Promise<boolean> => {
-  const targetBill = await deps.bills.findByCycle(cardId, period.month, period.year);
-  return !targetBill || !isBillPaid(targetBill);
-};
-
-/** Repo-touching precondition: true when the transaction has no bill, or that bill isn't paid. */
-const assertBillNotPaid = async (deps: Deps, billId: string | undefined): Promise<boolean> => {
-  if (!billId) return true;
-  const bill = await deps.bills.findById(billId);
-  return !bill || !isBillPaid(bill);
-};
-
-/**
- * Repo-touching precondition (ADR-020): true when a leg of the transaction is a `credit` account —
- * this aggregate's own positive ownership test (a card purchase's `accountId`, or the bill-payment
- * transfer's `toAccountId`, is the card's internal account). The account aggregate does not share
- * this predicate; it asks its own, different question (`assertAccountOwnedLegs`).
- */
+/** True when a leg of the transaction is the card's own `credit` account (ADR-010/ADR-020) — a
+ *  card purchase's `accountId`, or the bill-payment transfer's `toAccountId`. */
 const assertCreditAccountLeg = (
   deps: Deps,
   tx: Pick<TransactionView, 'accountId' | 'toAccountId'>,
 ): ResultAsync<boolean, AppError> =>
   resolveLegAccounts(deps, tx).map((legs) => legs.some((account) => account.type === AccountType.enum.credit));
 
-export const addCardPurchase = (
+/** billId with no cardId is definitionally the bill-payment transfer (pay_bill's own row) — owned
+ *  exclusively by pay_bill/revert_bill_payment. */
+const resolveOwnCardId = (existing: Pick<TransactionView, 'cardId'>): Result<string, AppError> =>
+  okOr(existing.cardId, cardErrors.paidBillImmutable);
+
+/** Version-guarded no-op update of a bill's current fields — a CAS guard: if a concurrent write
+ *  (e.g. `pay_bill`) bumped the version first, the batch rolls back and retries. */
+const touchBill = (bill: RawBill): Persistable =>
+  persistence.update({ entity: BILL_ENTITY_TAG, model: billEntityFrom(bill) });
+
+const openBillInsert = (billId: string, cardId: string, period: BillPeriod): Persistable =>
+  persistence.insert({
+    entity: BILL_ENTITY_TAG,
+    model: {
+      id: billId,
+      creditCardId: cardId,
+      month: period.month,
+      year: period.year,
+      closeDate: period.closeDate,
+      dueDate: period.dueDate,
+      status: BillStatus.enum.open,
+    },
+  });
+
+/** Insert-or-touch for a bill cycle (replaces the old repo-level `ensureAndAttach`): touches
+ *  `existingBill` if the cycle already has one, else inserts a fresh `open` bill. Returns the id
+ *  the transaction should reference. */
+const resolveBillWrite = (
+  newId: () => string,
+  cardId: string,
+  period: BillPeriod,
+  existingBill: RawBill | null,
+): { billId: string; billPersistable: Persistable } => {
+  if (existingBill) return { billId: existingBill.id, billPersistable: touchBill(existingBill) };
+  const billId = newId();
+  return { billId, billPersistable: openBillInsert(billId, cardId, period) };
+};
+
+/** Appends a merchant-learning insert (rule 5) when `correction` is non-null, else returns
+ *  `persist` unchanged — kept as its own step so the transaction write can always be appended
+ *  after it, staying the batch's last element. */
+const withMerchantLearning = (persist: Persistable[], correction: MerchantCategoryEdge | null): Persistable[] =>
+  correction ? [...persist, persistence.insert({ entity: MERCHANT_CATEGORY_ENTITY_TAG, model: correction })] : persist;
+
+type CardPurchasePlan = {
+  entity: TransactionEntity;
+  classification: ClassifyOutcome;
+  billPeriod: BillPeriod;
+  existingBill: RawBill | null;
+  cardId: string;
+};
+
+/** Shared read-decide step for `addCardPurchase`/`addCardPurchaseViaRepo`: validates, resolves
+ *  the card and target bill cycle (rejecting a paid one), classifies, and builds the transaction
+ *  entity — `billId` still unset, resolved by each caller against `existingBill`. */
+const planCardPurchase = (
   deps: Deps,
   input: AddCardPurchase,
   source: TransactionSource,
-): ResultAsync<ClassifiedUpsertResult, AppError> =>
+): ResultAsync<CardPurchasePlan, AppError> =>
   safeTry(async function* () {
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategory);
     yield* guard(assertBillPeriodPaired(input), cardErrors.billPeriodIncomplete);
@@ -87,15 +134,9 @@ export const addCardPurchase = (
     const date = input.date ?? today;
     const status = input.status ?? defaultStatusFor(date, today);
 
-    // Resolve the target bill period up front (explicit override or cycle-based auto-assignment) and
-    // reject onto a paid bill before doing any category/merchant resolution work or writing the
-    // transaction — a request that's going to be rejected shouldn't pay for that work first, and we
-    // never want to leave an orphan, unattached row.
-    const billPeriod: BillPeriod =
-      input.billMonth !== undefined && input.billYear !== undefined
-        ? billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay)
-        : billPeriodFor(date, card.closingDay, card.dueDay);
-    yield* guard(await assertTargetBillNotPaid(deps, card.id, billPeriod), cardErrors.paidBillImmutable);
+    const billPeriod = resolveBillPeriod(input.billMonth, input.billYear, date, card.closingDay, card.dueDay);
+    const existingBill = await deps.bills.findByCycle(card.id, billPeriod.month, billPeriod.year);
+    yield* guard(!existingBill || !isBillPaid(existingBill), cardErrors.paidBillImmutable);
 
     const categorySelection = yield* resolveCategorySelection(deps, input, input.type);
     const classification: ClassifyOutcome = categorySelection
@@ -103,139 +144,225 @@ export const addCardPurchase = (
       : pickClassification(await deps.merchants.matchCandidates(normalizeMerchant(input.description)));
     const subCategoryId = categorySelection?.subCategoryId;
 
-    const { transaction, created } = await deps.transactions.create(
-      {
-        id: deps.newId(),
-        description: input.description,
-        amount: input.amount,
-        type: input.type,
-        status,
-        date,
-        currency: resolveCurrency(card, input),
-        source,
-        idempotencyKey: input.idempotencyKey,
-        classification,
-        rawInput: input.rawInput,
-        note: input.note,
-        refs: {
-          accountId: card.accountId,
-          cardId: card.id,
-          categoryId: classification.categoryId,
-          subCategoryId,
-          merchantKey: classification.merchantKey,
-        },
+    const entity: TransactionEntity = {
+      id: deps.newId(),
+      description: input.description,
+      amount: input.amount,
+      type: input.type,
+      status,
+      date,
+      currency: resolveCurrency(card, input),
+      source,
+      idempotencyKey: input.idempotencyKey,
+      classification,
+      rawInput: input.rawInput,
+      note: input.note,
+      refs: {
+        accountId: card.accountId,
+        cardId: card.id,
+        categoryId: classification.categoryId,
+        subCategoryId,
+        merchantKey: classification.merchantKey,
       },
-      input.tags ?? [],
-    );
+      tagNames: input.tags ?? [],
+    };
 
-    // Card transactions join their cycle's bill (fatura), created open on demand. Keyed on
-    // "missing billId", not "created" — an idempotent replay of a row that was inserted but never
-    // got attached (e.g. the process died between the two writes) self-heals here instead of
-    // staying permanently orphaned. ensureAndAttach re-checks paid status atomically (null =
-    // blocked) — closes the race where a concurrent pay_bill lands between the pre-check above and
-    // this attach. On the (rare) block, only roll back by deleting the row when this call is the one
-    // that inserted it (created) — never delete a pre-existing row we're merely trying to self-heal.
-    let finalTransaction = transaction;
-    if (!transaction.billId) {
-      const attached = await deps.bills.ensureAndAttach(card.id, transaction.id, billPeriod, deps.newId());
-      if (!attached && created) await deps.transactions.delete(transaction.id);
-      const bill = yield* okOr(attached, cardErrors.paidBillImmutable);
-      finalTransaction = withBillId(transaction, bill.id);
-    }
-
-    const locale = await deps.locale();
-    return ok({ transaction: addLocalizedLabels(finalTransaction, locale), created, classification });
+    return ok({ entity, classification, billPeriod, existingBill, cardId: card.id });
   });
 
-/**
- * Import a credit-card statement (ADR-017 step 2): single-source — every item belongs to the ONE
- * card named in `input.card`, so there is no per-line card to resolve or route. Binds `addCardPurchase`
- * to that fixed card and delegates the generic import plumbing (defaulting, dedup, needs-review
- * flagging) to the shared `runStatementImport` runner.
- */
+export const addCardPurchase = (
+  deps: Deps,
+  input: AddCardPurchase,
+  source: TransactionSource,
+): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> =>
+  safeTry(async function* () {
+    const { entity, classification, billPeriod, existingBill, cardId } = yield* planCardPurchase(deps, input, source);
+    const { billId, billPersistable } = resolveBillWrite(deps.newId, cardId, billPeriod, existingBill);
+
+    // Bill leads, transaction trails (its bill_id FK must resolve within the same batch) —
+    // response resolves lastOutcome, not firstOutcome.
+    const persist: Persistable[] = [
+      billPersistable,
+      persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, refs: { ...entity.refs, billId } } }),
+    ];
+
+    const locale = await deps.locale();
+    const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
+      const outcome = persistence.lastOutcome(outcomes);
+      return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied, classification };
+    };
+    return ok({ persist, response });
+  });
+
+/** Legacy repo-write path for `importCardStatement` (bulk import isn't converted until phase 3) —
+ *  mirrors `controllers/account/transaction.ts`'s `addAccountMovementViaRepo`. Sets `billId` via
+ *  `deps.bills.ensureOpen` at creation, same as the FC/IS path above. */
+const addCardPurchaseViaRepo = (
+  deps: Deps,
+  input: AddCardPurchase,
+  source: TransactionSource,
+): ResultAsync<ClassifiedUpsertResult, AppError> =>
+  safeTry(async function* () {
+    const { entity, classification, billPeriod, existingBill, cardId } = yield* planCardPurchase(deps, input, source);
+    const bill = existingBill ?? (await deps.bills.ensureOpen(cardId, billPeriod, deps.newId()));
+    // Re-check: `ensureOpen` can return an already-paid bill (a concurrent pay_bill landed between
+    // planCardPurchase's read and here, or between two concurrent ensureOpen calls on the same
+    // cycle) — this path isn't atomic the way the FC/IS batch is, so it must guard again.
+    yield* guard(!isBillPaid(bill), cardErrors.paidBillImmutable);
+
+    const { transaction, created } = await deps.transactions.create(
+      { ...entity, refs: { ...entity.refs, billId: bill.id } },
+      entity.tagNames,
+    );
+
+    const locale = await deps.locale();
+    return ok({ transaction: addLocalizedLabels(transaction, locale), created, classification });
+  });
+
 export const importCardStatement = (
   deps: Deps,
   input: ImportCardStatement,
   source: TransactionSource,
 ): ResultAsync<BulkResult<AppError>, AppError> =>
   runStatementImport(deps, input.items, input.rawInput, source, (d, line, src) =>
-    addCardPurchase(d, { ...line, card: input.card }, src),
+    addCardPurchaseViaRepo(d, { ...line, card: input.card }, src),
   );
 
-/**
- * Update a card transaction (ADR-020): asserts the target involves a `credit` account — a
- * transaction with no `credit` leg is rejected with a redirect to `update_account_transaction`.
- * Validates and settles any bill reassignment (billMonth/billYear), then delegates the remaining
- * generic patch (category, description, amount, …) to the transaction core — with the bill fields
- * stripped, since this aggregate already owns and settled them. Never reasons about transfer
- * mutability — the only transfer this aggregate ever sees (the bill-payment transfer) is blocked
- * outright below, by bill-process policy, not by transfer-immutability policy.
- */
+type BillReassignment = { reassignedBillId: string | undefined; billPersistables: Persistable[] };
+
+/** Settles a `billMonth`/`billYear` reassignment: rejects a paid current or target bill, then
+ *  resolves both bills' writes, deduped to one touch when they're the same cycle. A no-op
+ *  (`reassignedBillId: undefined`, no persistables) when no reassignment was requested. */
+const resolveBillReassignment = (
+  deps: Deps,
+  cardId: string,
+  existing: Pick<RawTransactionView, 'billId'>,
+  input: Pick<UpdateCardTransaction, 'billMonth' | 'billYear'>,
+): ResultAsync<BillReassignment, AppError> =>
+  safeTry(async function* () {
+    if (!R.isNonNullish(input.billMonth) || !R.isNonNullish(input.billYear)) {
+      return ok({ reassignedBillId: undefined, billPersistables: [] });
+    }
+
+    const currentBill = existing.billId ? await deps.bills.findById(existing.billId) : null;
+    yield* guard(!currentBill || !isBillPaid(currentBill), cardErrors.paidBillImmutable);
+
+    const card = yield* okOr(await deps.creditCards.findById(cardId), notFound('card', cardId, []));
+    const period = billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay);
+    const targetBill = await deps.bills.findByCycle(card.id, period.month, period.year);
+    yield* guard(!targetBill || !isBillPaid(targetBill), cardErrors.paidBillImmutable);
+
+    const { billId, billPersistable } = resolveBillWrite(deps.newId, card.id, period, targetBill);
+    const sameCycle = currentBill?.id === billId;
+    const billPersistables = [billPersistable, ...(currentBill && !sameCycle ? [touchBill(currentBill)] : [])];
+
+    return ok({ reassignedBillId: billId, billPersistables });
+  });
+
+/** Update a card transaction (ADR-020): rejects the wrong tool and the bill-payment transfer
+ *  itself, settles any bill reassignment, and merges the remaining patch onto `existing`. The
+ *  transaction `Persistable` stays last in the batch (bill + merchant-learning writes precede it)
+ *  so `lastOutcome` resolves the right one. Never reasons about transfer mutability — the only
+ *  transfer this aggregate sees is blocked outright above, by bill-process policy. */
 export const updateCardTransaction = (
   deps: Deps,
   input: UpdateCardTransaction,
-): ResultAsync<TransactionView, AppError> =>
+): ResultAsync<FlowOutcome<TransactionView>, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     const isCreditOwned = yield* assertCreditAccountLeg(deps, existing);
     yield* guard(isCreditOwned, transactionErrors.wrongTool(TransactionTool.updateAccountTransaction));
-
-    // A card-owned transaction with no cardId is definitionally the bill-payment transfer
-    // (pay_bill's own row: billId set, no cardId — nothing else in the domain has billId without
-    // cardId). It's created/removed only by pay_bill/revert_bill_payment (ADR-017 sub-decision 4),
-    // so any direct edit — reassignment or otherwise — is rejected outright before the checks below,
-    // which assume a real card purchase. `okOr` also narrows `cardId` for reuse in the reassignment
-    // branch, replacing what used to be a second, now-unreachable lookup there.
-    const cardId = yield* okOr(existing.cardId, cardErrors.paidBillImmutable);
+    const cardId = yield* resolveOwnCardId(existing);
 
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
     yield* guard(assertBillPeriodPaired(input), cardErrors.billPeriodIncomplete);
-    // A card purchase is always funded by the card's own internal liability account (ADR-010) — it
-    // has no independent `account` to reassign. Reject rather than silently forwarding `account` to
-    // the core patch, which would repoint `from_account_id` at an arbitrary account while leaving
-    // `cardId`/`billId` untouched: the card's own account balance would stop reflecting the purchase
-    // even though the bill total still counts it, and the new account would show a spurious expense.
+    // A card purchase has no independent `account` to reassign — it's always funded by the card's
+    // own internal liability account (ADR-010).
     yield* guard(!R.isNonNullish(input.account), cardErrors.accountChangeRejectedForCard);
 
-    // Reassignment (billMonth/billYear given): validate up front — never leave the current or target
-    // bill in a half-changed state.
-    let reassignedBillId: string | undefined;
-    if (input.billMonth !== undefined && input.billYear !== undefined) {
-      yield* guard(await assertBillNotPaid(deps, existing.billId), cardErrors.paidBillImmutable);
+    const { reassignedBillId, billPersistables } = yield* resolveBillReassignment(deps, cardId, existing, input);
 
-      // A stale cardId here would be an internal FK inconsistency (deleting a card cascades to its
-      // transactions), not a real user-facing case — but the error, if it ever fires, should name the
-      // card that's missing, not the transaction that's present.
-      const card = yield* okOr(await deps.creditCards.findById(cardId), notFound('card', cardId, []));
-      const period = billPeriodForCycle(input.billMonth, input.billYear, card.closingDay, card.dueDay);
-      yield* guard(await assertTargetBillNotPaid(deps, card.id, period), cardErrors.paidBillImmutable);
+    const { categorySelection } = yield* decideTransactionUpdate(
+      deps,
+      R.omit(input, ['billMonth', 'billYear']),
+      existing,
+    );
+    const categoryId = categorySelection?.categoryId ?? existing.categoryId;
+    const subCategoryId = categorySelection ? categorySelection.subCategoryId : existing.subCategoryId;
+    const isUserCorrection = !!categorySelection;
 
-      // Attach before the core patch: ensureAndAttach's atomic re-check (closing the race where a
-      // concurrent pay_bill lands between the pre-check above and this attach) must be able to reject
-      // the request without having already written the rest of the patch — otherwise the client sees
-      // an error response for a write that partially committed.
-      const attached = await deps.bills.ensureAndAttach(card.id, input.id, period, deps.newId());
-      const bill = yield* okOr(attached, cardErrors.paidBillImmutable);
-      reassignedBillId = bill.id;
-    }
+    const entity: TransactionEntity = {
+      id: existing.id,
+      description: input.description ?? existing.description,
+      amount: input.amount ?? existing.amount,
+      type: input.type ?? existing.type,
+      status: existing.status,
+      date: input.date ?? existing.date,
+      currency: existing.currency,
+      source: existing.source,
+      idempotencyKey: existing.idempotencyKey,
+      classification: isUserCorrection
+        ? { method: ClassificationMethod.enum.user, confidence: 1 }
+        : existing.classification,
+      rawInput: existing.rawInput,
+      note: input.note !== undefined ? (input.note === '' ? undefined : input.note) : existing.note,
+      refs: {
+        accountId: existing.accountId,
+        toAccountId: existing.toAccountId,
+        cardId: existing.cardId,
+        billId: reassignedBillId ?? existing.billId,
+        categoryId,
+        subCategoryId,
+        merchantKey: existing.merchant,
+      },
+      tagNames: input.tags ?? existing.tags,
+    };
 
-    const updated = yield* coreUpdateTransaction(deps, R.omit(input, ['billMonth', 'billYear']), existing);
-    return ok(reassignedBillId ? withBillId(updated, reassignedBillId) : updated);
+    const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
+    const persist: Persistable[] = [
+      ...withMerchantLearning(billPersistables, merchantCorrection),
+      persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } }),
+    ];
+
+    const locale = await deps.locale();
+    const response = (outcomes: PersistOutcome[]): TransactionView =>
+      viewFromOutcome(persistence.lastOutcome(outcomes), locale);
+    return ok({ persist, response });
   });
 
-/**
- * Delete a card transaction (ADR-020): asserts the target involves a `credit` account, then
- * paid-bill immutability (which also covers the bill-payment transfer — its own billId is always
- * the bill it paid), then the core's generic delete.
- */
+/** Delete a card transaction (ADR-020): rejects the wrong tool and a transaction whose bill is
+ *  paid — which also covers the bill-payment transfer, whose own billId is always the bill it
+ *  paid. A confirmed delete version-guards that bill too, not just re-checking its paid status. */
 export const deleteCardTransaction = (
   deps: Deps,
   input: { id: string; confirm: boolean },
-): ResultAsync<DeleteTransactionResult, AppError> =>
+): ResultAsync<FlowOutcome<DeleteTransactionResult>, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     const isCreditOwned = yield* assertCreditAccountLeg(deps, existing);
     yield* guard(isCreditOwned, transactionErrors.wrongTool(TransactionTool.deleteAccountTransaction));
-    yield* guard(await assertBillNotPaid(deps, existing.billId), cardErrors.paidBillImmutable);
-    return ok(yield* coreDeleteTransaction(deps, input, existing));
+
+    const bill = existing.billId ? await deps.bills.findById(existing.billId) : null;
+    yield* guard(!bill || !isBillPaid(bill), cardErrors.paidBillImmutable);
+
+    const locale = await deps.locale();
+    const labeled = addLocalizedLabels(existing, locale);
+
+    if (!input.confirm) {
+      return ok({
+        persist: [],
+        response: {
+          deleted: false as const,
+          dryRun: true as const,
+          wouldDelete: labeled,
+          hint: DELETE_TRANSACTION_CONFIRM_HINT,
+        },
+      });
+    }
+
+    const persist: Persistable[] = [
+      ...(bill ? [touchBill(bill)] : []),
+      persistence.remove({ entity: TRANSACTION_ENTITY_TAG, id: existing.id, version: existing.version }),
+    ];
+    return ok({ persist, response: { deleted: true as const, transaction: labeled } });
   });
