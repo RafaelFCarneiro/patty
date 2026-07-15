@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   addCardPurchase,
   deleteCardTransaction,
+  importCardStatement,
   updateCardTransaction,
 } from '../../../../src/controllers/creditCard/transaction.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
@@ -213,6 +214,33 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
     )([billOutcome, txOutcome]);
     expect(response.created).toBe(true);
     expect(response.transaction.id).toBe('tx-new');
+  });
+});
+
+describe('importCardStatement (addCardPurchaseViaRepo) — re-checks paid status after ensureOpen', () => {
+  it('rejects a line whose cycle became paid between the read and ensureOpen (race window)', async () => {
+    const deps = makeDeps({
+      creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
+      bills: {
+        findByCycle: async () => null,
+        ensureOpen: async () => rawBill({ status: BillStatus.enum.paid }),
+      } as unknown as Deps['bills'],
+      transactions: {
+        create: async () => {
+          throw new Error('must not create a transaction against a paid bill');
+        },
+      } as unknown as Deps['transactions'],
+    });
+
+    const result = await importCardStatement(
+      deps,
+      { card: 'Test Card', items: [{ description: 'Race purchase', amount: 20, type: 'expense', date: '2026-06-15' }] },
+      TransactionSource.enum.import,
+    );
+
+    expect(result.isOk()).toBe(true);
+    const { items } = result._unsafeUnwrap();
+    expect(items[0]).toMatchObject({ status: 'error' });
   });
 });
 

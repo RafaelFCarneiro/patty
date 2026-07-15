@@ -148,7 +148,9 @@ controller **decides** and returns the write as data instead of performing it; t
   believes is a brand-new cycle, and a concurrent first purchase on the same cycle can race it (two inserts,
   different ids, same cycle). `versionedTableApplier`'s own `onConflictDoNothing` is scoped to the `id` target
   only, so it does not swallow that race; SQLite raises a genuine unique-constraint error instead. `billApplier`
-  recognizes exactly that one violation (by the constraint's own error message, naming its columns) and rethrows
+  recognizes exactly that one violation (via `LibsqlError.extendedCode === 'SQLITE_CONSTRAINT_UNIQUE'` — a
+  bill's `id` collision never reaches this point, since `onConflictDoNothing` already absorbs it, so any other
+  unique-constraint violation on a bill insert can only be this one) and rethrows
   it as `withUnitOfWork`'s own `VersionConflict` — exported from `diplomat/db/unitOfWork.ts` for exactly this
   case — rolling back the whole batch and re-invoking the flow (rule 4): a fresh read of `findByCycle` now sees
   the winner's row, and the domain emits a version-guarded *touch* of it instead of a second insert. Any other

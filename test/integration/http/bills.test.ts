@@ -33,6 +33,34 @@ describe('GET /api/bills', () => {
     expect(res.json().bill).toHaveProperty('id');
   });
 
+  it('never exposes the internal creditCardId/version fields on the bill (ADR-021 phase 2b)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'LeakCheckPayer', type: 'checking', currency: 'USD', initialBalance: 1000 },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'LeakCheckCard', closingDay: 10, dueDay: 20, currency: 'USD', paymentAccount: 'LeakCheckPayer' },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'Leak check charge',
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-05',
+        idempotencyKey: 'bill-leak-1',
+        card: 'LeakCheckCard',
+      },
+    });
+    const res = await inject({ method: 'GET', url: '/api/bills?card=LeakCheckCard&month=6&year=2026' });
+    expect(res.json().bill).not.toHaveProperty('creditCardId');
+    expect(res.json().bill).not.toHaveProperty('version');
+  });
+
   it('returns note on transaction rows', async () => {
     await inject({
       method: 'POST',
@@ -130,6 +158,8 @@ describe('POST /api/bills/pay', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().status).toBe('paid');
+    expect(res.json()).not.toHaveProperty('creditCardId');
+    expect(res.json()).not.toHaveProperty('version');
     const balances = await inject({ method: 'GET', url: '/api/accounts/balances?account=PayBillAcc' });
     expect(balances.json()[0].balance).toBe(4700);
     const cardBal = await inject({ method: 'GET', url: '/api/accounts/balances?account=Card%3A%20PayBillCard' });

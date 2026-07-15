@@ -1,5 +1,6 @@
 import { LibsqlError } from '@libsql/client';
 import { eq, sql } from 'drizzle-orm';
+import * as R from 'remeda';
 import { z } from 'zod';
 import * as transactionAdapters from '../../../adapters/transactions.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
@@ -12,7 +13,11 @@ import { bills, transactionTags, transactions } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
 import { VersionConflict, versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
-const toBill = (record: Record<string, unknown>): RawBill => {
+/** Includes `creditCardId`/`version` — for the FC/IS credit-card transaction flows' own
+ *  read-decide step, which needs them to build a `Persistable`. Every other caller uses `toBill`
+ *  (below), which never lets those internal fields exist on the returned object in the first
+ *  place — there is no wire/out zod parsing on the bill read paths to strip them later. */
+const toRawBill = (record: Record<string, unknown>): RawBill => {
   const row = BillRowSchema.parse(record);
   return RawBillSchema.parse({
     id: row.id,
@@ -27,8 +32,15 @@ const toBill = (record: Record<string, unknown>): RawBill => {
   });
 };
 
-const fetchBillById = async (db: Db, billId: string): Promise<RawBill | null> => {
+const toBill = (record: Record<string, unknown>): Bill => R.omit(toRawBill(record), ['creditCardId', 'version']);
+
+const fetchBillRow = async (db: Db, billId: string): Promise<Record<string, unknown> | undefined> => {
   const [row] = await db.all<Record<string, unknown>>(sql`SELECT * FROM bills WHERE id = ${billId}`);
+  return row;
+};
+
+const fetchBillById = async (db: Db, billId: string): Promise<Bill | null> => {
+  const row = await fetchBillRow(db, billId);
   return row ? toBill(row) : null;
 };
 
@@ -101,10 +113,13 @@ export const billsRepo = (db: Db): BillsRepo => ({
     const [row] = await db.all<Record<string, unknown>>(sql`
       SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${month} AND year = ${year}
     `);
-    return row ? toBill(row) : null;
+    return row ? toRawBill(row) : null;
   },
 
-  findById: (billId) => fetchBillById(db, billId),
+  findById: async (billId) => {
+    const row = await fetchBillRow(db, billId);
+    return row ? toRawBill(row) : null;
+  },
 
   setStatus: async (billId, status) => {
     await db.update(bills).set({ status }).where(eq(bills.id, billId));

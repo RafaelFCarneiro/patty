@@ -205,6 +205,10 @@ const addCardPurchaseViaRepo = (
   safeTry(async function* () {
     const { entity, classification, billPeriod, existingBill, cardId } = yield* planCardPurchase(deps, input, source);
     const bill = existingBill ?? (await deps.bills.ensureOpen(cardId, billPeriod, deps.newId()));
+    // Re-check: `ensureOpen` can return an already-paid bill (a concurrent pay_bill landed between
+    // planCardPurchase's read and here, or between two concurrent ensureOpen calls on the same
+    // cycle) — this path isn't atomic the way the FC/IS batch is, so it must guard again.
+    yield* guard(!isBillPaid(bill), cardErrors.paidBillImmutable);
 
     const { transaction, created } = await deps.transactions.create(
       { ...entity, refs: { ...entity.refs, billId: bill.id } },
