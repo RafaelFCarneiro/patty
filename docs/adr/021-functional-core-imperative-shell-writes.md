@@ -275,10 +275,13 @@ gets its own generic atomicity/conflict/idempotency suite.
      transfer (non-positive-total pay) emits just the bill update. This is why `models/bill.ts`'s
      `BillEntity.paymentTransactionId` widened to `string | null | undefined`: `undefined` leaves the column
      unchanged (drizzle's `.set()` drops `undefined`-valued keys), `null` explicitly clears it — the same
-     convention `TransactionsRepo.update`'s `subCategoryId` already established. A `revertBillPayment` whose
-     `paymentTransactionId` fails to resolve to a real transaction row throws rather than joining the
-     `AppError` track: that link is exclusively owned (only `pay_bill` ever sets it, only
-     `revert_bill_payment` ever clears it), so a miss is an invariant violation, not an expected outcome.
+     convention `TransactionsRepo.update`'s `subCategoryId` already established. `revertBillPayment`'s
+     `tryFindPaymentTransaction` returns `null` both when the bill never had a payment transfer and when
+     `paymentTransactionId` no longer resolves (e.g. a concurrent `delete_credit_card` — still repo-driven,
+     not yet on this shell — removed it between `revertBillPayment`'s own un-batched reads); either way the
+     batch just carries the bill update alone. If the bill itself was also concurrently deleted, that
+     update's version guard fails at apply time and the shell's retry resolves it to a clean `unknown_bill`
+     instead of a 500 — no throw needed for what is a legitimate, if narrow, race, not corruption.
      Deletes the last bill write methods: `deps.bills.markPaid`/`revertPayment`/`setStatus` (the last had no
      other caller once these two flows converted) — `BillsRepo` now exposes only reads
      (`get`/`findByCycle`/`findById`) plus the still-repo-driven `ensureOpen` (bulk import, phase 3). Coverage:

@@ -205,10 +205,14 @@ performing it; the diplomat shell **applies** it.
   deleted, and libsql enforces foreign keys by default. `BillEntity.paymentTransactionId` therefore distinguishes
   `undefined` (leave the column unchanged — drizzle's `.set()` drops `undefined`-valued keys) from `null`
   (explicitly clear it, `revertBillPayment`'s own case) — the same convention `TransactionsRepo.update`'s
-  `subCategoryId` already established. A `revertBillPayment` whose `paymentTransactionId` fails to resolve to a
-  real transaction row throws rather than joining the `AppError` track — that link is exclusively owned (only
-  `pay_bill` ever sets it, only `revert_bill_payment` ever clears it), so a miss is an invariant violation, not an
-  expected outcome. This phase deletes the last bill write methods: `deps.bills.markPaid`/`revertPayment`/
+  `subCategoryId` already established. `revertBillPayment`'s `tryFindPaymentTransaction` returns `null` both when
+  the bill never had a payment transfer and when `paymentTransactionId` no longer resolves (e.g. a concurrent
+  `delete_credit_card` removed it in the window between `revertBillPayment`'s own un-batched reads — that flow is
+  still repo-driven, not yet on ADR-021's version-guarded shell); either way the batch just carries the bill
+  update alone, nothing to delete. If the bill itself was also concurrently deleted, that update's own version
+  guard fails at apply time and the shell's retry resolves it to a clean `unknown_bill` instead of a 500 — no
+  throw needed for what would otherwise be a legitimate, if narrow, race. This phase deletes the last bill write
+  methods: `deps.bills.markPaid`/`revertPayment`/
   `setStatus` (the last no longer had any other caller once these two flows converted) — `BillsRepo` now exposes
   only reads (`get`/`findByCycle`/`findById`) plus the still-repo-driven `ensureOpen` (bulk import, phase 3).
 - **Merchant key is always stored, matched or not** (`controllers/account/transaction.ts`'s `planAccountMovement`):
