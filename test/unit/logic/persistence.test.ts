@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { entityDbAdapter, insert, remove, update } from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { PersistOp, type Persistable } from '../../../src/models/persistable.js';
+import { INITIAL_VERSION, PersistOp, type Persistable } from '../../../src/models/persistable.js';
 
 const account: Account = {
   id: 'acc-1',
@@ -66,9 +66,9 @@ describe('entityDbAdapter', () => {
     expect(persistableToDb(p)).toEqual({
       op: PersistOp.enum.insert,
       entity: WIDGET_TAG,
-      model: { id: 'w-1', color: 'red', version: 0, colorCode: 'RED' },
+      model: { id: 'w-1', color: 'red', version: INITIAL_VERSION, colorCode: 'RED' },
     });
-    expect(widgetToDb).toHaveBeenCalledWith({ id: 'w-1', color: 'red', version: 0 });
+    expect(widgetToDb).toHaveBeenCalledWith({ id: 'w-1', color: 'red', version: INITIAL_VERSION });
   });
 
   it('update: hands the already-versioned model straight to modelToDb', () => {
@@ -116,7 +116,7 @@ describe('entityDbAdapter', () => {
         {
           op: PersistOp.enum.insert,
           entity: WIDGET_TAG,
-          model: { id: 'w-1', color: 'red', version: 0, colorCode: 'RED' },
+          model: { id: 'w-1', color: 'red', version: INITIAL_VERSION, colorCode: 'RED' },
         },
       ],
       response: { id: 'w-1' },
@@ -138,7 +138,7 @@ describe('entityDbAdapter', () => {
         {
           op: PersistOp.enum.insert,
           entity: WIDGET_TAG,
-          model: { id: 'w-1', color: 'red', version: 0, colorCode: 'RED' },
+          model: { id: 'w-1', color: 'red', version: INITIAL_VERSION, colorCode: 'RED' },
         },
       ],
       response: null,
