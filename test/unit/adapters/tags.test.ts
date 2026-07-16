@@ -19,15 +19,15 @@ describe('Tag model schema', () => {
 
 describe('dbToModel', () => {
   it('maps db node to Tag model', () => {
-    const tag = tagsAdapters.dbToModel({ id: 'tag-1', name: 'work' });
+    const tag = tagsAdapters.dbToModel({ id: 'tag-1', name: 'work', version: 0 });
     expect(tag).toEqual({ id: 'tag-1', name: 'work' });
   });
 
   // Input is now the schema-derived TagRow, so missing/extra keys are a compile-time
   // error rather than a runtime case. Empty-string rejection is still enforced by TagSchema.parse.
   it('throws when id or name is an empty string', () => {
-    expect(() => tagsAdapters.dbToModel({ id: '', name: 'work' })).toThrow();
-    expect(() => tagsAdapters.dbToModel({ id: 'tag-1', name: '' })).toThrow();
+    expect(() => tagsAdapters.dbToModel({ id: '', name: 'work', version: 0 })).toThrow();
+    expect(() => tagsAdapters.dbToModel({ id: 'tag-1', name: '', version: 0 })).toThrow();
   });
 });
 
