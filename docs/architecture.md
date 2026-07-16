@@ -327,10 +327,10 @@ performing it; the diplomat shell **applies** it.
   safe because `recurringIdempotencyKey`'s `rec-<ruleId>-<date>` keys make re-materialization a no-op — an
   already-created occurrence is never duplicated by a retry. `ApplyDueResult`'s `applied`/`count` are shaped
   from the shell's per-insert outcomes (the same idempotency-outcome contract as phase 2a, `viewFromOutcome`) —
-  never inferred by the domain. `recurringRepo.create`/`.advance` (and `deps.transactions.create`, still needed
-  by bulk import) are left in place, unused by these two flows now — their removal is deferred to phase 3d
-  alongside bulk import's own conversion (phase 3c), per this file's own precedent of only removing a `deps`
-  write method once every caller of it has converted.
+  never inferred by the domain. `recurringRepo.create`/`.advance` had no remaining caller once both flows
+  converted — grep-confirmed zero callers (production or test) — and were removed in this same change, the same
+  checked-and-removed precedent phase 3a set for its five entities. `deps.transactions.create` stays: bulk
+  import (phase 3c) still needs it.
 - **Merchant key is always stored, matched or not** (`controllers/account/transaction.ts`'s `planAccountMovement`):
   `pickClassification` (`logic/classify.ts`) only returns a `merchantKey` when it found a match, since a matched
   key is the (possibly partial) `merchant_category` key substring-matched against, not the transaction's own
@@ -447,10 +447,10 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     remaining caller once their flow converted — found genuinely dead (grep-confirmed zero callers, production or
     test) — and removed in the same change rather than deferred (`AccountsRepo.update`/`.delete`,
     `TagsRepo.create`/`.delete`, `CategoriesRepo.create`/`.delete`, `SubCategoriesRepo.create`/`.delete`,
-    `CreditCardsRepo.deleteCard`). `RecurringRepo.create`/`.advance` have no remaining caller either now that
-    both recurring flows converted, but stay in place unused — their removal is explicitly deferred to phase 3d
-    (alongside `deps.transactions.create`, which bulk import still needs) rather than following the same
-    checked-and-removed path as the phase 3a entities above. `AccountsRepo.create`/`CreditCardsRepo.createWithAccount` were removed too —
+    `CreditCardsRepo.deleteCard`). `RecurringRepo.create`/`.advance` followed the same checked-and-removed path
+    once both recurring flows converted (phase 3b) — grep-confirmed zero callers, removed in the same change.
+    `deps.transactions.create` is the one write method still standing, since bulk import (phase 3c) is still its
+    caller. `AccountsRepo.create`/`CreditCardsRepo.createWithAccount` were removed too —
     integration tests seeding fixture accounts/cards switched to raw drizzle inserts
     (`test/integration/db/unitOfWork.test.ts`'s `insertAccount`/`insertCreditCardWithAccount`) rather than keeping
     a production write method alive solely for test convenience. Two documented transitional duplications, both
@@ -533,4 +533,4 @@ available alongside the server.
 - ADR-017: no god write flows — bounded-context ownership for every transaction mutation (extends ADR-016; step 1 [update/delete split] and step 2 [bulk split] both implemented — complete; ownership discriminator revised by ADR-020)
 - ADR-019: minimal transaction core — aggregates `.extend` the shared movement schema up, never `.omit` it down (step 1 [schema compose-up] and step 2 [logic re-homing] both implemented — complete)
 - ADR-020: transaction ownership by account type, not structural field-presence (revises ADR-017's union rule; refines ADR-019 PR-2 — implemented)
-- ADR-021: functional core / imperative shell for the write path — controllers return a `persist` batch instead of writing, a generic versioned unit of work applies it (supersedes ADR-018; phase 1 [groundwork + `createAccount` first mover], phase 2a [account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing], phase 2b [credit-card transaction flows + `billApplier`'s cycle-race-via-retry], phase 2c [bill flows `pay_bill`/`revert_bill_payment`; `deps.bills.markPaid`/`revertPayment`/`setStatus` deleted], and phase 3a [simple entity CRUD — account update/delete, tag/category/sub-category/credit-card create/delete; `tagApplier`'s name-race retry, `merchant_category`'s cascade moved from a hand-written `categoryApplier` mechanic to a schema-declared `ON DELETE CASCADE` (migration 0010), `deleteCreditCard`'s domain-decided correlated-bill/transaction cascade (breaking the paid-bill↔payment-transfer circular FK itself, not a repo-side `creditCardApplier` cascade), a two-entity batch for credit-card create, and phase 3d's own removal of every now-dead `deps` write method these five entities' flows turned out to have no other caller for], and phase 3b [recurring flows `create_recurring`/`apply_due_recurring`; plain `recurringRuleApplier`; `apply_due_recurring`'s one-atomic-batch-per-run design (every due rule's occurrences + advance, conflict retries the whole run) traded off against the pre-ADR-021 per-rule-independent behavior] implemented, phase 3c pending — phase 3d remains open for the still-unconverted entities bulk import (phase 3c) and recurring (`RecurringRepo.create`/`.advance`, now dead but deliberately left in place) will touch)
+- ADR-021: functional core / imperative shell for the write path — controllers return a `persist` batch instead of writing, a generic versioned unit of work applies it (supersedes ADR-018; phase 1 [groundwork + `createAccount` first mover], phase 2a [account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing], phase 2b [credit-card transaction flows + `billApplier`'s cycle-race-via-retry], phase 2c [bill flows `pay_bill`/`revert_bill_payment`; `deps.bills.markPaid`/`revertPayment`/`setStatus` deleted], and phase 3a [simple entity CRUD — account update/delete, tag/category/sub-category/credit-card create/delete; `tagApplier`'s name-race retry, `merchant_category`'s cascade moved from a hand-written `categoryApplier` mechanic to a schema-declared `ON DELETE CASCADE` (migration 0010), `deleteCreditCard`'s domain-decided correlated-bill/transaction cascade (breaking the paid-bill↔payment-transfer circular FK itself, not a repo-side `creditCardApplier` cascade), a two-entity batch for credit-card create, and phase 3d's own removal of every now-dead `deps` write method these five entities' flows turned out to have no other caller for], and phase 3b [recurring flows `create_recurring`/`apply_due_recurring`; plain `recurringRuleApplier`; `apply_due_recurring`'s one-atomic-batch-per-run design (every due rule's occurrences + advance, conflict retries the whole run) traded off against the pre-ADR-021 per-rule-independent behavior; `RecurringRepo.create`/`.advance` checked for any remaining caller and removed in the same change, same as phase 3a's five entities] implemented, phase 3c pending — phase 3d remains open only for the transaction-side write methods bulk import (phase 3c) still needs)

@@ -7,9 +7,10 @@ phase 2b — credit-card transaction flows + `billApplier`'s cycle-uniqueness-ra
 and deleting the last bill write methods — implemented 2026-07-15; phase 3a — simple entity CRUD (account
 update/delete, tag/category/sub-category/credit-card create/delete), including phase 3d's own removal of every
 now-dead `deps` write method for those five entities — implemented 2026-07-15; phase 3b — recurring flows
-(`create_recurring`/`apply_due_recurring`), including `applyDueRecurring`'s one-atomic-batch-per-run design —
-implemented 2026-07-16; phase 3c pending, phase 3d remains open only for the entities phase 3c and (now-dead but
-deliberately unremoved) `RecurringRepo.create`/`.advance` will touch) · **Date:** 2026-07-12 ·
+(`create_recurring`/`apply_due_recurring`), including `applyDueRecurring`'s one-atomic-batch-per-run design and
+phase 3d's own removal of `RecurringRepo.create`/`.advance`, which turned out to have no other caller — implemented
+2026-07-16; phase 3c pending, phase 3d remains open only for the transaction-side write methods phase 3c will
+touch) · **Date:** 2026-07-12 ·
 **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill payment) and finally resolves the thread ADR-015
 opened. Adopts the principle documented in `docs/functional-core-imperative-shell.md` for every write flow.
 
@@ -394,20 +395,18 @@ gets its own generic atomicity/conflict/idempotency suite.
      outcome contract as phase 2a, never inferred by the domain. **Atomicity-granularity decision:** the
      pre-ADR-021 code advanced each rule independently; this phase batches every due rule into one unit of work
      instead — a version conflict retries the whole run, safe because `rec-<ruleId>-<date>` idempotency keys
-     make re-materialization a no-op. `RecurringRepo.create`/`.advance` have no remaining caller after this
-     phase but are deliberately left in place (unlike phase 3a's five entities, whose now-dead write methods
-     were removed immediately) — deferred to phase 3d per this ADR's own scope split, so as not to entangle with
-     phase 3c's still-pending bulk-import conversion. Coverage: pure flow tests for both flows (insert shape,
-     the occurrence+advance batch for single/multiple due rules and multiple rules together, the idempotency-
-     outcome response including a duplicate-replay case), a UoW-level check that the applier is a plain
-     versioned table applier, and the existing MCP/REST integration suites (materialization, `through`,
-     idempotent re-run) passing unchanged through the new shell path.
+     make re-materialization a no-op. `RecurringRepo.create`/`.advance` were grep-checked for any remaining
+     caller once both flows converted — found genuinely dead (zero callers, production or test) — and removed
+     in this same change, phase 3d completed early for recurring, same as phase 3a's five entities. Coverage:
+     pure flow tests for both flows (insert shape, the occurrence+advance batch for single/multiple due rules
+     and multiple rules together, the idempotency-outcome response including a duplicate-replay case), a
+     UoW-level check that the applier is a plain versioned table applier, and the existing MCP/REST integration
+     suites (materialization, `through`, idempotent re-run) passing unchanged through the new shell path.
    - [ ] Phase 3c (bulk import — reusing phase 2a's `PersistOutcome` idempotency-outcome contract for per-item
      created/duplicate/needs-review status): remaining work; update `docs/architecture.md` accordingly as it
      lands. Phase 3d (remove now-dead `deps` write methods across every converted entity) completed early for
-     accounts/tags/categories/subCategories/creditCards as part of phase 3a itself (see above); recurring's
-     `RecurringRepo.create`/`.advance` are also now dead but were deliberately left for phase 3d rather than
-     removed early (see phase 3b above) — what remains of phase 3d is those two plus the transaction-side write
-     methods bulk import (phase 3c) still needs (`TransactionsRepo.create` via
+     accounts/tags/categories/subCategories/creditCards as part of phase 3a itself, and for recurring
+     (`RecurringRepo.create`/`.advance`) as part of phase 3b (see above); what remains of phase 3d is the
+     transaction-side write methods bulk import (phase 3c) still needs (`TransactionsRepo.create` via
      `addAccountMovementViaRepo`/`addCardPurchaseViaRepo`, `BillsRepo.ensureOpen`), removed once phase 3c
      converts their last caller.

@@ -1,5 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
-import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
+import { sql } from 'drizzle-orm';
 import {
   RecurringRuleEntitySchema,
   RecurringRuleViewSchema,
@@ -54,45 +53,12 @@ const RULE_SELECT = sql`
 `;
 
 export type RecurringRepo = {
-  /** No current caller — kept until phase 3d removes it. */
-  create: (
-    rule: {
-      id: string;
-      description: string;
-      amount: number;
-      type: string;
-      period: string;
-      nextDue: string;
-      currency: string;
-    },
-    refs: { accountId: string | null; categoryId: string | null },
-  ) => Promise<RecurringRuleView>;
   list: () => Promise<RecurringRuleView[]>;
   /** Version-carrying — callers build a version-guarded `Persistable` update from it, never write directly. */
   due: (onOrBefore: string) => Promise<RecurringRuleEntity[]>;
-  /** No current caller — kept until phase 3d removes it. */
-  advance: (ruleId: string, newNextDue: string) => Promise<void>;
 };
 
 export const recurringRepo = (db: Db): RecurringRepo => ({
-  create: async (rule, refs) => {
-    await db.insert(recurringRules).values({
-      id: rule.id,
-      description: rule.description,
-      amount: rule.amount,
-      type: rule.type as 'income' | 'expense',
-      period: rule.period as 'monthly' | 'weekly',
-      nextDue: rule.nextDue,
-      currency: rule.currency,
-      accountId: refs.accountId ?? null,
-      categoryId: refs.categoryId ?? null,
-    });
-    const [row] = await db.all<Record<string, unknown>>(sql`
-      ${RULE_SELECT} WHERE r.id = ${rule.id}
-    `);
-    return toRule(expectPresent(row, rowNotFoundAfterWrite('recurring_rules', 'insert')));
-  },
-
   list: async () => {
     const rows = await db.all<Record<string, unknown>>(sql`
       ${RULE_SELECT} ORDER BY r.next_due
@@ -105,10 +71,6 @@ export const recurringRepo = (db: Db): RecurringRepo => ({
       ${RULE_SELECT} WHERE r.next_due <= ${onOrBefore} ORDER BY r.next_due
     `);
     return rows.map(toEntity);
-  },
-
-  advance: async (ruleId, newNextDue) => {
-    await db.update(recurringRules).set({ nextDue: newNextDue }).where(eq(recurringRules.id, ruleId));
   },
 });
 

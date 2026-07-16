@@ -25,12 +25,11 @@
 > `create_recurring`/`apply_due_recurring`, via a plain `recurringRuleApplier` and, for `apply_due_recurring`, one
 > atomic batch across every due rule's occurrences + `next_due` advance — a version conflict retries the whole
 > run, safe because the `rec-<ruleId>-<date>` idempotency keys make re-materialization a no-op; `recurring.create`/
-> `.advance` are left in place, unused, since their removal is deferred to phase 3d alongside bulk import's own
-> conversion) is implemented; the remaining flows (bulk import — phase 3c) still drive their own persistence via
-> injected repo write methods until that phase converts them, and *those* entities' now-unused write methods
-> (`deps.recurring.create`/`.advance`, `deps.transactions.create`) are removed only once their own remaining
-> callers convert — this principle is the target shape for every one of them, not yet the as-built state of the
-> whole write path.
+> `.advance` had no remaining caller once both flows converted and were removed in the same change) is implemented;
+> the remaining flow (bulk import — phase 3c) still drives its own persistence via an injected repo write method
+> (`deps.transactions.create`) until that phase converts it, and *that* now-unused write method is removed only
+> once its own remaining callers convert — this principle is the target shape for every one of them, not yet the
+> as-built state of the whole write path.
 
 ## The principle
 
