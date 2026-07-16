@@ -1,9 +1,14 @@
 import { BILL_ENTITY_TAG, type BillEntity } from '../models/bill.js';
 import { INITIAL_VERSION, PersistOp, type FlowOutcome, type Persistable } from '../models/persistable.js';
 
-/** Adapts one bill `Persistable`'s model to db-row shape, mirroring `adapters/accounts.ts`'s
- *  `persistableToDb` — injects `INITIAL_VERSION` on insert; no-ops on any other entity's
- *  `Persistable` and on `update`/`delete`, which already carry everything the applier needs. */
+/**
+ * Adapts one bill `Persistable`'s model to db-row shape — hand-written rather than built from
+ * `logic/persistence.ts`'s `entityDbAdapter`, since `update` needs to bypass row-shaping entirely:
+ * `paymentTransactionId: undefined` means "leave the column unchanged" (drizzle's `.set()` drops
+ * undefined-valued keys); `null` means "clear it" (models/bill.ts) — a distinction a uniform
+ * `modelToDb` called on every update would collapse into always-clear. `insert` still bakes in
+ * `INITIAL_VERSION`; no-ops on any other entity's `Persistable`.
+ */
 export const persistableToDb = (p: Persistable): Persistable => {
   if (p.entity !== BILL_ENTITY_TAG) return p;
   switch (p.op) {

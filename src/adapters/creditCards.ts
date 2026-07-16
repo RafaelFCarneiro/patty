@@ -3,12 +3,11 @@ import {
   CreditCardEntitySchema,
   type AddCardPurchase,
   type CreateCreditCard,
-  type CreditCard,
   type CreditCardEntity,
   type ImportCardStatement,
   type UpdateCardTransaction,
 } from '../models/creditCard.js';
-import { INITIAL_VERSION, PersistOp, type FlowOutcome, type Persistable } from '../models/persistable.js';
+import * as persistence from '../logic/persistence.js';
 import type { CreditCardRow } from '../wire/db/creditCards.js';
 import type * as wireIn from '../wire/in/creditCards.js';
 
@@ -48,29 +47,4 @@ export const modelToDb = (entity: CreditCardEntity): CreditCardRow => ({
   version: entity.version,
 });
 
-/** Adapts one credit-card `Persistable`'s `model` from domain shape to db-row shape, called
- *  explicitly before the batch reaches `withUnitOfWork`. No-ops on a `Persistable` tagged for a
- *  different entity (`createCreditCard`'s batch also carries an `ACCOUNT_ENTITY_TAG` persistable
- *  for the internal liability account, shaped separately by `accountAdapters.outcomeToDb`). Only
- *  `insert`/`delete` are reachable (no credit-card `update` flow yet). */
-export const persistableToDb = (p: Persistable): Persistable => {
-  if (p.entity !== CREDIT_CARD_ENTITY_TAG) return p;
-  switch (p.op) {
-    case PersistOp.enum.insert:
-      return { ...p, model: modelToDb({ ...(p.model as CreditCard), version: INITIAL_VERSION }) };
-    case PersistOp.enum.update:
-      return { ...p, model: modelToDb(p.model as CreditCardEntity) };
-    case PersistOp.enum.delete:
-      return p;
-    default: {
-      const _exhaustive: never = p;
-      throw new Error(`creditCardAdapters.persistableToDb: unhandled persistable op ${JSON.stringify(_exhaustive)}`);
-    }
-  }
-};
-
-/** Maps every `Persistable` in a flow's outcome through `persistableToDb` before `unitOfWork`. */
-export const outcomeToDb = <T>(outcome: FlowOutcome<T>): FlowOutcome<T> => ({
-  ...outcome,
-  persist: outcome.persist.map(persistableToDb),
-});
+export const { persistableToDb, outcomeToDb } = persistence.entityDbAdapter(CREDIT_CARD_ENTITY_TAG, modelToDb);

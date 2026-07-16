@@ -8,7 +8,7 @@ import {
   type CreateCategory,
   type SubCategory,
 } from '../models/category.js';
-import { INITIAL_VERSION, PersistOp, type FlowOutcome, type Persistable } from '../models/persistable.js';
+import * as persistence from '../logic/persistence.js';
 import { SubCategoryRowSchema, type CategoryRow } from '../wire/db/categories.js';
 import type * as wireIn from '../wire/in/categories.js';
 
@@ -45,27 +45,4 @@ export const modelToDb = (entity: CategoryWriteModel & { version: number }): Cat
   version: entity.version,
 });
 
-/** Adapts one category `Persistable`'s `model` from domain shape to db-row shape, called explicitly
- *  before the batch reaches `withUnitOfWork`. No-ops on a `Persistable` tagged for a different
- *  entity. Only `insert` ever carries a model here (no category `update` flow yet). */
-export const persistableToDb = (p: Persistable): Persistable => {
-  if (p.entity !== CATEGORY_ENTITY_TAG) return p;
-  switch (p.op) {
-    case PersistOp.enum.insert:
-      return { ...p, model: modelToDb({ ...(p.model as CategoryWriteModel), version: INITIAL_VERSION }) };
-    case PersistOp.enum.update:
-      return p;
-    case PersistOp.enum.delete:
-      return p;
-    default: {
-      const _exhaustive: never = p;
-      throw new Error(`categoryAdapters.persistableToDb: unhandled persistable op ${JSON.stringify(_exhaustive)}`);
-    }
-  }
-};
-
-/** Maps every `Persistable` in a flow's outcome through `persistableToDb` before `unitOfWork`. */
-export const outcomeToDb = <T>(outcome: FlowOutcome<T>): FlowOutcome<T> => ({
-  ...outcome,
-  persist: outcome.persist.map(persistableToDb),
-});
+export const { persistableToDb, outcomeToDb } = persistence.entityDbAdapter(CATEGORY_ENTITY_TAG, modelToDb);

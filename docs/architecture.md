@@ -119,11 +119,27 @@ performing it; the diplomat shell **applies** it.
   A converted controller's `Persistable`s carry domain models (`Account`/`AccountEntity`); by the time
   `withUnitOfWork` applies them, they must already be db rows. The MCP/REST handler that calls `unitOfWork`
   does that conversion itself, mapping the controller's `FlowOutcome` through the entity's own `outcomeToDb`
-  (`adapters/accounts.ts`, built from `modelToDb` + `persistableToDb`) *before* handing the flow to
-  `unitOfWork` — e.g. `createAccount(deps, model).map(accountAdapters.outcomeToDb)`. `unitOfWork(flow)` itself
-  is still called with one argument, exactly as before; only what `flow` produces changed. This keeps
-  `modelToDb` calls where the rest of the codebase already expects adapter calls to live — at the boundary,
-  explicit at the call site — rather than hidden inside `diplomat/db`.
+  (`adapters/accounts.ts`, built from just `modelToDb` via `logic/persistence.ts`'s `entityDbAdapter` — see
+  below) *before* handing the flow to `unitOfWork` — e.g.
+  `createAccount(deps, model).map(accountAdapters.outcomeToDb)`. `unitOfWork(flow)` itself is still called
+  with one argument, exactly as before; only what `flow` produces changed. This keeps `modelToDb` calls
+  where the rest of the codebase already expects adapter calls to live — at the boundary, explicit at the
+  call site — rather than hidden inside `diplomat/db`.
+- **`entityDbAdapter`** (`src/logic/persistence.ts`) — the diplomat-edge counterpart to
+  `versionedTableApplier` below, factored out for the same reason: every entity's `persistableToDb`/
+  `outcomeToDb` pair followed the identical op-switch shape by hand (no-op on a foreign entity tag;
+  `insert` bakes in `INITIAL_VERSION` before shaping the row; `update` shapes the already-versioned model;
+  `delete` carries no model to shape). `entityDbAdapter(entityTag, modelToDb)` builds that pair from just
+  the entity's own `modelToDb`, so an adapter module (`adapters/accounts.ts`, `adapters/categories.ts`, …)
+  supplies `modelToDb` and one line —
+  `export const { persistableToDb, outcomeToDb } = entityDbAdapter(ACCOUNT_ENTITY_TAG, modelToDb)` — instead
+  of hand-writing the switch. An entity whose domain model already matches its row shape 1:1 once versioned
+  (`tags`) still supplies a `modelToDb` — the identity function — rather than skipping the factory, so
+  every entity's adapter follows the same one-line shape. Not every entity fits: `adapters/bills.ts` calls
+  `modelToDb` the same way for `insert` and `update`, but a bill's `update` genuinely needs
+  `paymentTransactionId: undefined` (leave the column unchanged) to mean something different from `null`
+  (clear it) — the uniform factory can't express that asymmetry, so `bills` keeps its own hand-written
+  `persistableToDb`/`outcomeToDb`, unchanged by this factory.
 - **`EntityApplier` / `ApplierRegistry`** (`src/diplomat/db/unitOfWork.ts`): **entity-agnostic** — the generic
   engine dispatches an already row-shaped `Persistable` to `registry[p.entity]` and calls that applier's
   `insert`/`update`/`delete`; it never names a specific entity, never imports a specific entity's `modelToDb`

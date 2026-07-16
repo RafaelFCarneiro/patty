@@ -361,11 +361,25 @@ gets its own generic atomicity/conflict/idempotency suite.
      extension covers `tagApplier`'s name-race retry, that a
      plain versioned category delete still removes dependent `merchant_category` rows (now via the schema's own
      cascade, not `categoryApplier` code — including the sub-category case), that `creditCardApplier`
-     genuinely has no cascade of its own (a correlated bill left behind now surfaces a raw FK violation, not a
-     silent removal), and an end-to-end test running the real `deleteCreditCard` controller through the real
+     genuinely has no cascade of its own (a correlated bill left behind now surfaces the generic conflict —
+     `versionedTableApplier`'s `delete` catches the FK violation and retries, per its own later refinement
+     below — not a silent removal), and an end-to-end test running the real `deleteCreditCard` controller
+     through the real
      shell against a seeded DB (two bills — one paid with its payment transfer, one unpaid — plus ordinary
      purchases and a tag) to prove the whole domain-decided batch, including the circular-FK break, commits
-     atomically.
+     atomically. **Refined further:** every converted entity's `persistableToDb`/`outcomeToDb` pair had been
+     hand-written to the same op-switch shape (no-op on a foreign entity tag; `insert` bakes in
+     `INITIAL_VERSION`; `update` shapes the already-versioned model; `delete` passes through) — the adapter-side
+     duplication `versionedTableApplier` had already removed on the applier side. `logic/persistence.ts`'s
+     `entityDbAdapter(entityTag, modelToDb)` factors it out the same way: every adapter now supplies just its
+     own `modelToDb` and one line building `persistableToDb`/`outcomeToDb` from it. `tags`, whose domain model
+     already matches its row shape 1:1 once versioned, gained a small identity `modelToDb` rather than being
+     special-cased out of the factory. `bills` did not fit: its pre-existing `update` branch was a bare
+     passthrough (`return p`) for a real reason, not an oversight — `paymentTransactionId: undefined` means
+     "leave the column unchanged" (drizzle's `.set()` drops undefined-valued keys), `null` means "clear it"
+     (`payBill`'s zero-total path, `models/bill.ts`), a distinction a uniform `modelToDb` called on every
+     `update` collapses into always-`null`. Caught in review before merge; `adapters/bills.ts` kept its own
+     hand-written `persistableToDb`/`outcomeToDb`, unchanged by this factor-out.
    - [ ] Phase 3b (recurring), phase 3c (bulk import — reusing phase 2a's `PersistOutcome` idempotency-outcome
      contract for per-item created/duplicate/needs-review status): remaining work; update `docs/architecture.md`
      accordingly as each lands. Phase 3d (remove now-dead `deps` write methods across every converted entity)

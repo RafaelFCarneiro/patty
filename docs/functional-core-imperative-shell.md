@@ -91,8 +91,13 @@ database, a different transport) without the domain noticing.
    engine (`withUnitOfWork`), it must already speak **rows**. The `modelToDb` adaptation is **not** the
    engine's job, and not the entity's applier's job either — it happens once, explicitly, at the MCP/REST
    handler that calls `unitOfWork`, immediately after the controller returns and before the batch is handed
-   over (e.g. `adapters/accounts.ts`'s `persistableToDb`, mapped over the whole batch via `outcomeToDb`). The
-   engine dispatches each already-row-shaped `Persistable` to the entity's own applier — an object exposing
+   over (e.g. `adapters/accounts.ts`'s `outcomeToDb`, mapped over the whole batch). Every entity's
+   `persistableToDb`/`outcomeToDb` pair is built by the same shared factory
+   (`logic/persistence.ts`'s `entityDbAdapter(entityTag, modelToDb)`) from just its own `modelToDb` — the
+   adapter-side twin of `versionedTableApplier` below, for the same reason: the op-switch (no-op on a
+   foreign tag, bake in `INITIAL_VERSION` on insert, shape the model on update, pass `delete` through
+   untouched) is identical for every entity. The engine dispatches each already-row-shaped `Persistable` to
+   the entity's own applier — an object exposing
    generic `insert`/`update`/`delete` methods that do only the matching table op, nothing else. Because the
    adaptation already happened, those methods are pure mechanics — cast the row, write it, guard on `version`
    — identical for any table keyed by `id` with a `version` column, which most tables are; such an entity
