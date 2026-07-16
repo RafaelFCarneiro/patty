@@ -1,6 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
 import * as accountAdapters from '../../../adapters/accounts.js';
-import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Account, AccountEntity, AccountReferences } from '../../../models/account.js';
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
 import { BalancePartsRow } from '../../../wire/db/accounts.js';
@@ -10,11 +9,6 @@ import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
 export type AccountsRepo = {
   list: () => Promise<Account[]>;
-  /** Test-seeding only in production code's actual write path — `createAccount` (ADR-021) builds
-   *  an `insert` `Persistable` applied by `accountApplier` instead. Kept as a plain repo method
-   *  purely so integration tests can seed a fixture account without going through the full
-   *  controller+shell path. */
-  create: (account: Account) => Promise<Account>;
   findById: (id: string) => Promise<Account | null>;
   findByName: (name: string) => Promise<Account | null>;
   /** Version-carrying read (ADR-021) — for flows building an `update`/`delete` `Persistable`. */
@@ -28,20 +22,6 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
   list: async () => {
     const rows = await db.select().from(accounts).orderBy(accounts.name);
     return rows.map(accountAdapters.dbToModel);
-  },
-
-  create: async (account) => {
-    const [row] = await db
-      .insert(accounts)
-      .values({
-        id: account.id,
-        name: account.name,
-        type: account.type,
-        initialBalance: account.initialBalance,
-        currency: account.currency,
-      })
-      .returning();
-    return accountAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('accounts', 'insert')));
   },
 
   findById: async (id) => {

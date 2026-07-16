@@ -24,6 +24,7 @@ import { merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchant
 import { tagApplier } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
 import {
+  accounts,
   bills,
   categories,
   creditCards,
@@ -95,6 +96,48 @@ const newAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
 
 const insertOne = (model: AccountEntity) => () =>
   okAsync({ persist: [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model })], response: model });
+
+/** Inserts an account row directly (raw drizzle, bypassing any repo/domain layer) — test fixture
+ *  setup only, never the code under test. Every `AccountsRepo` method this suite exercises is a
+ *  read; seeding stays off that surface entirely rather than keeping a write method alive in
+ *  production code solely for test convenience. */
+const insertAccount = async (overrides: Partial<AccountEntity> = {}): Promise<AccountEntity> => {
+  const account = newAccount(overrides);
+  await db.insert(accounts).values(account);
+  return account;
+};
+
+/** Inserts a credit card and its internal liability account directly (raw drizzle) — mirrors what
+ *  `createCreditCard`'s own two-entity `Persistable` batch produces, without going through it;
+ *  test fixture setup only, same reasoning as `insertAccount` above. */
+const insertCreditCardWithAccount = async (
+  paymentAccountId?: string,
+): Promise<{ cardId: string; accountId: string; cardName: string }> => {
+  const accountId = randomUUID();
+  await db.insert(accounts).values({
+    id: accountId,
+    name: 'Card account',
+    type: AccountType.enum.credit,
+    currency: CurrencyCode.enum.BRL,
+    initialBalance: 0,
+    version: 0,
+  });
+
+  const cardId = randomUUID();
+  const cardName = `Card ${cardId}`;
+  await db.insert(creditCards).values({
+    id: cardId,
+    name: cardName,
+    currency: CurrencyCode.enum.BRL,
+    closingDay: 28,
+    dueDay: 5,
+    accountId,
+    paymentAccountId: paymentAccountId ?? null,
+    version: 0,
+  });
+
+  return { cardId, accountId, cardName };
+};
 
 const readVersion = async (id: string): Promise<number | undefined> => {
   const [row] = await db.all<{ version: number }>(sql`SELECT version FROM accounts WHERE id = ${id}`);
@@ -664,26 +707,8 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
   const billRegistry: ApplierRegistry = { [BILL_ENTITY_TAG]: billApplier };
 
   const seedCard = async (): Promise<{ cardId: string }> => {
-    const creditCards = creditCardsRepo(db);
-    const cardAccountId = randomUUID();
-    const created = await creditCards.createWithAccount(
-      {
-        id: randomUUID(),
-        name: `Card ${randomUUID()}`,
-        currency: CurrencyCode.enum.BRL,
-        closingDay: 28,
-        dueDay: 5,
-        accountId: cardAccountId,
-      },
-      {
-        id: cardAccountId,
-        name: 'Card account',
-        type: AccountType.enum.credit,
-        currency: CurrencyCode.enum.BRL,
-        initialBalance: 0,
-      },
-    );
-    return { cardId: created.id };
+    const { cardId } = await insertCreditCardWithAccount();
+    return { cardId };
   };
 
   const newBillModel = (cardId: string, overrides: Partial<{ id: string; month: number; year: number }> = {}) => ({
@@ -845,35 +870,9 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     const transactionsR = transactionsRepo(db);
 
     const payerAccountId = randomUUID();
-    await accountsR.create({
-      id: payerAccountId,
-      name: `Payer ${payerAccountId}`,
-      type: AccountType.enum.checking,
-      currency: CurrencyCode.enum.BRL,
-      initialBalance: 1000,
-    });
+    await insertAccount({ id: payerAccountId, name: `Payer ${payerAccountId}`, initialBalance: 1000 });
 
-    const cardId = randomUUID();
-    const cardAccountId = randomUUID();
-    const cardName = `Card ${cardId}`;
-    await creditCardsR.createWithAccount(
-      {
-        id: cardId,
-        name: cardName,
-        currency: CurrencyCode.enum.BRL,
-        closingDay: 28,
-        dueDay: 5,
-        accountId: cardAccountId,
-        paymentAccountId: payerAccountId,
-      },
-      {
-        id: cardAccountId,
-        name: 'Card account',
-        type: AccountType.enum.credit,
-        currency: CurrencyCode.enum.BRL,
-        initialBalance: 0,
-      },
-    );
+    const { cardId, accountId: cardAccountId, cardName } = await insertCreditCardWithAccount(payerAccountId);
 
     const bill = await billsR.ensureOpen(
       cardId,
@@ -1110,26 +1109,8 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
   };
 
   const insertCardWithAccount = async (): Promise<{ cardId: string; accountId: string }> => {
-    const creditCards_ = creditCardsRepo(db);
-    const accountId = randomUUID();
-    const created = await creditCards_.createWithAccount(
-      {
-        id: randomUUID(),
-        name: `Card ${randomUUID()}`,
-        currency: CurrencyCode.enum.BRL,
-        closingDay: 28,
-        dueDay: 5,
-        accountId,
-      },
-      {
-        id: accountId,
-        name: 'Card account',
-        type: AccountType.enum.credit,
-        currency: CurrencyCode.enum.BRL,
-        initialBalance: 0,
-      },
-    );
-    return { cardId: created.id, accountId };
+    const { cardId, accountId } = await insertCreditCardWithAccount();
+    return { cardId, accountId };
   };
 
   const deleteCardBatch = (cardId: string, cardVersion: number, accountId: string, accountVersion: number) => () =>
@@ -1250,34 +1231,9 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
     const transactionsR = transactionsRepo(db);
 
     const payerId = randomUUID();
-    await accountsR.create({
-      id: payerId,
-      name: `Payer ${payerId}`,
-      type: AccountType.enum.checking,
-      currency: CurrencyCode.enum.BRL,
-      initialBalance: 1000,
-    });
+    await insertAccount({ id: payerId, name: `Payer ${payerId}`, initialBalance: 1000 });
 
-    const cardId = randomUUID();
-    const cardAccountId = randomUUID();
-    const cardName = `Card ${cardId}`;
-    await creditCardsR.createWithAccount(
-      {
-        id: cardId,
-        name: cardName,
-        currency: CurrencyCode.enum.BRL,
-        closingDay: 28,
-        dueDay: 5,
-        accountId: cardAccountId,
-      },
-      {
-        id: cardAccountId,
-        name: 'Card account',
-        type: AccountType.enum.credit,
-        currency: CurrencyCode.enum.BRL,
-        initialBalance: 0,
-      },
-    );
+    const { cardId, accountId: cardAccountId, cardName } = await insertCreditCardWithAccount();
 
     // An unpaid bill with one ordinary purchase.
     const openBill = await billsR.ensureOpen(

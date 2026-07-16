@@ -120,8 +120,7 @@ export const deleteCreditCard = (
 /**
  * Create a credit card with its internal liability account (ADR-010/ADR-021): a two-entity
  * insert batch — `[insert internal account, insert creditCard]`, account first since the card
- * row's `accountId` is a NOT NULL FK into it (mirrors the pre-ADR-021 `createWithAccount`'s own
- * insert order).
+ * row's `accountId` is a NOT NULL FK into it.
  */
 export const createCreditCard = (deps: Deps, input: CreateCreditCard): ResultAsync<FlowOutcome<CreditCard>, AppError> =>
   safeTry(async function* () {

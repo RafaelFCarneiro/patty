@@ -18,10 +18,6 @@ const MatchRow = z.object({
 export type MerchantsRepo = {
   /** Find merchant→category candidates whose key appears in the normalized description. */
   matchCandidates: (normalizedDescription: string) => Promise<MerchantMatch[]>;
-  /** Learning write-back: strengthens (or creates, at weight 1) a merchant→category edge. Pure
-   *  mechanics — which edge to strengthen, and whether to at all, is the caller's own decision
-   *  (`logic/merchant.ts`'s `resolveMerchantCorrection`), never resolved here. */
-  incrementCategoryWeight: (merchantKey: string, categoryId: string) => Promise<void>;
 };
 
 /** Shared upsert-increment mechanics (ADR-021): "insert weight=1 on first correction, increment on
@@ -54,7 +50,6 @@ export const merchantsRepo = (db: Db): MerchantsRepo => ({
     return rows.map((r) => MatchRow.parse(r));
   },
 
-  incrementCategoryWeight: (merchantKey, categoryId) => upsertCategoryWeight(db, merchantKey, categoryId),
 });
 
 /**

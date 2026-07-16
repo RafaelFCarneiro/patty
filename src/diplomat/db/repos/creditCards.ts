@@ -29,7 +29,6 @@ export type CreditCardsRepo = {
    *  builds an `insert` `Persistable` batch (account + card) applied by `accountApplier` +
    *  `creditCardApplier` instead. Kept as a plain repo method purely so integration tests can seed
    *  a fixture card without going through the full controller+shell path. */
-  createWithAccount: (card: CreditCard, account: Account) => Promise<CreditCard>;
   findByName: (name: string) => Promise<CreditCard | null>;
   findById: (id: string) => Promise<CreditCard | null>;
   /** Version-carrying read (ADR-021) — for `deleteCreditCard`, which needs it to build a
@@ -42,32 +41,6 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
   list: async () => {
     const rows = await db.select().from(creditCards).orderBy(creditCards.name);
     return rows.map(toCard);
-  },
-
-  createWithAccount: async (card, account) => {
-    const [row] = await db.transaction(async (tx) => {
-      await tx.insert(accounts).values({
-        id: account.id,
-        name: account.name,
-        type: account.type,
-        initialBalance: account.initialBalance,
-        currency: account.currency,
-      });
-      return tx
-        .insert(creditCards)
-        .values({
-          id: card.id,
-          name: card.name,
-          currency: card.currency,
-          closingDay: card.closingDay,
-          dueDay: card.dueDay,
-          limitAmount: card.limit ?? null,
-          accountId: card.accountId,
-          paymentAccountId: card.paymentAccountId ?? null,
-        })
-        .returning();
-    });
-    return toCard(expectPresent(row, rowNotFoundAfterWrite('credit_cards', 'insert')));
   },
 
   findByName: async (name) => {

@@ -396,10 +396,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     remaining caller once their flow converted — found genuinely dead (grep-confirmed zero callers, production or
     test) — and removed in the same change rather than deferred (`AccountsRepo.update`/`.delete`,
     `TagsRepo.create`/`.delete`, `CategoriesRepo.create`/`.delete`, `SubCategoriesRepo.create`/`.delete`,
-    `CreditCardsRepo.deleteCard`). `AccountsRepo.create`/`CreditCardsRepo.createWithAccount` stayed: integration
-    tests still call them directly to seed fixtures without going through the full controller+shell path, a
-    genuine (if narrow) caller phase 3a's own conversion didn't touch. Two documented transitional
-    duplications, both still repo-driven because their caller
+    `CreditCardsRepo.deleteCard`). 
     (`importAccountStatement`/`importCardStatement`, bulk import — phase 3c) needs an already-applied result per
     line, not a `Persistable`: `controllers/account/transaction.ts`'s `addAccountMovementViaRepo` (sharing
     `planAccountMovement`'s decision with the FC/IS `addAccountMovement`) and
