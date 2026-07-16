@@ -13,6 +13,7 @@ describe('dbToModel', () => {
         kind: CategoryKind.enum.expense,
         parentId: null,
         names: null,
+        version: 0,
       }),
     ).toEqual({ id: 'cat-1', name: 'Transport', kind: CategoryKind.enum.expense, names: null });
   });
@@ -24,6 +25,7 @@ describe('dbToModel', () => {
       kind: CategoryKind.enum.expense,
       parentId: null,
       names: '{"pt":"Alimentação","es":"Alimentación"}',
+      version: 0,
     });
     expect(result.names).toEqual({ pt: 'Alimentação', es: 'Alimentación' });
   });
@@ -36,6 +38,7 @@ describe('dbToModel', () => {
         kind: CategoryKind.enum.expense,
         parentId: null,
         names: '{"":"Alimentação"}',
+        version: 0,
       }),
     ).toThrow();
   });
@@ -48,6 +51,7 @@ describe('dbToModel', () => {
         kind: CategoryKind.enum.expense,
         parentId: null,
         names: '{"pt":""}',
+        version: 0,
       }),
     ).toThrow();
   });
@@ -60,6 +64,7 @@ describe('dbToModel', () => {
         kind: CategoryKind.enum.expense,
         parentId: null,
         names: '{not valid json}',
+        version: 0,
       }),
     ).toThrow(SyntaxError);
   });

@@ -129,7 +129,15 @@ describe('createCreditCard — functional core, two-entity batch (ADR-021 phase 
         paymentAccountId: undefined,
       },
     });
-    expect(outcome.response).toEqual(outcome.persist[1].model);
+    expect(outcome.response).toEqual({
+      id: 'minted-id',
+      name: 'Nubank',
+      currency: CurrencyCode.enum.BRL,
+      closingDay: 10,
+      dueDay: 20,
+      accountId: 'minted-id',
+      paymentAccountId: undefined,
+    });
   });
 
   it('resolves paymentAccount by name and rejects a currency mismatch', async () => {
