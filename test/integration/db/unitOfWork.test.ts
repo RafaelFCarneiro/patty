@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { okAsync, ResultAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { McpTransport } from '../../../src/config.js';
 import * as accountAdapters from '../../../src/adapters/accounts.js';
 import * as billAdapters from '../../../src/adapters/bills.js';
@@ -239,6 +239,18 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
     expect(result.isErr()).toBe(true);
     expect(await readIds(seed.id)).toHaveLength(1);
+  });
+
+  it('an empty persist batch (a dry-run preview flow) skips db.transaction entirely', async () => {
+    const transactionSpy = vi.spyOn(db, 'transaction');
+
+    const result = await withUnitOfWork(db, registry, () => okAsync({ persist: [], response: 'preview' }));
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe('preview');
+    expect(transactionSpy).not.toHaveBeenCalled();
+
+    transactionSpy.mockRestore();
   });
 
   it('treats a duplicate insert (same id) as an idempotent no-op, never a conflict', async () => {

@@ -491,8 +491,6 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const { name } = req.params as { name: string };
       const confirm = (req.query as { confirm?: string }).confirm === 'true';
-      // deleteCreditCard's batch carries all four entity tags (bills/transactions it decided to
-      // remove, plus the card and account) — compose every entity's own outcomeToDb.
       const flow = () =>
         deleteCreditCard(deps, { card: name, confirm })
           .map(creditCardAdapters.outcomeToDb)

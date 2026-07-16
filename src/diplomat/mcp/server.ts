@@ -271,8 +271,6 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
       },
     },
     async (args) => {
-      // deleteCreditCard's batch carries all four entity tags (bills/transactions it decided to
-      // remove, plus the card and account) — compose every entity's own outcomeToDb.
       const flow = () =>
         deleteCreditCard(deps, args)
           .map(creditCardAdapters.outcomeToDb)

@@ -140,12 +140,16 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
 /** Applies the whole batch in one transaction, returning each persistable's own outcome
  *  (positional, parallel to `persist`) on success — empty on a version conflict, since the
  *  transaction has already rolled back and there is nothing to report. Any other failure
- *  propagates. */
+ *  propagates. An empty batch (a dry-run preview flow, e.g. `deleteCreditCard` without
+ *  `confirm`) skips `db.transaction` entirely — nothing to write, and nothing that could
+ *  version-conflict. */
 const applyBatch = async (
   db: Db,
   registry: ApplierRegistry,
   persist: Persistable[],
 ): Promise<{ applied: boolean; outcomes: PersistOutcome[] }> => {
+  if (persist.length === 0) return { applied: true, outcomes: [] };
+
   const outcomes: PersistOutcome[] = [];
   try {
     await db.transaction(async (tx) => {
