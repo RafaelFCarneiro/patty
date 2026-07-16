@@ -669,17 +669,12 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
   it('update throws — every write to this entity is an insert (upsert-increment), never an update', async () => {
     const categoryId = await seedCategory();
     const merchantKey = `merchant-${randomUUID()}`;
+    const model = { merchantKey, categoryId, version: 0 };
 
     await expect(
       withUnitOfWork(db, merchantRegistry, () =>
         okAsync({
-          persist: [
-            {
-              op: PersistOp.enum.update,
-              entity: MERCHANT_CATEGORY_ENTITY_TAG,
-              model: { merchantKey, categoryId, version: 0 },
-            },
-          ] as Persistable[],
+          persist: [{ op: PersistOp.enum.update, entity: MERCHANT_CATEGORY_ENTITY_TAG, model }] as Persistable[],
           response: null,
         }),
       ),
@@ -744,15 +739,10 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
       }),
     );
 
+    const closedModel = { ...model, status: BillStatus.enum.closed, version: 0 };
     const updated = await withUnitOfWork(db, billRegistry, () =>
       okAsync({
-        persist: [
-          {
-            op: PersistOp.enum.update,
-            entity: BILL_ENTITY_TAG,
-            model: { ...model, status: BillStatus.enum.closed, version: 0 },
-          },
-        ] as Persistable[],
+        persist: [{ op: PersistOp.enum.update, entity: BILL_ENTITY_TAG, model: closedModel }] as Persistable[],
         response: null,
       }),
     );
