@@ -1,13 +1,11 @@
 /**
- * The merchant→category learning edge (ADR-021): the account aggregate's FC/IS
- * `updateAccountTransaction` (`controllers/account/transaction.ts`) persists a user category
+ * The merchant→category learning edge (ADR-021): both aggregates' FC/IS update flows —
+ * `controllers/account/transaction.ts`'s `updateAccountTransaction` and
+ * `controllers/creditCard/transaction.ts`'s `updateCardTransaction` — persist a user category
  * correction as this entity's own `Persistable`, riding in the *same* atomic batch as the
- * transaction update it came from (rule 5: composition is concatenation) — rather than a separate,
- * non-atomic write after the fact. Both aggregates decide *which* edge to write the same way, via
- * the shared `resolveMerchantCorrection` (`logic/merchant.ts`); the still-unconverted credit-card
- * aggregate (`controllers/transaction/core.ts`'s `updateTransaction`, phase 2b) still *applies* it
- * as its own separate `deps.merchants.incrementCategoryWeight` repo call, non-atomic with its
- * transaction update until it converts.
+ * transaction update it came from (rule 5: composition is concatenation) rather than a separate,
+ * non-atomic write after the fact. Both decide *which* edge to write the same way, via the shared
+ * `resolveMerchantCorrection` (`logic/merchant.ts`).
  */
 export const MERCHANT_CATEGORY_ENTITY_TAG = 'merchantCategory';
 

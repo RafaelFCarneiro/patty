@@ -352,10 +352,13 @@ gets its own generic atomicity/conflict/idempotency suite.
      `TagsRepo.create`/`.delete`, `CategoriesRepo.create`/`.delete`, `SubCategoriesRepo.create`/`.delete`, and
      `CreditCardsRepo.deleteCard` (plus the `cascadeDeleteCorrelated` helper the last one was `deleteCard`'s own
      sole remaining caller for) all removed in this same change — phase 3d completed early for these five,
-     rather than deferred, since there was no other caller left to defer *for*.
-     Coverage: pure flow tests assert the returned `persist`/`response` for every branch 
-     (no correlated rows, an unpaid bill, a paid bill's clear-then-remove-at-version+1); 
-     a UoW-level suite extension covers `tagApplier`'s name-race retry, that a
+     rather than deferred, since there was no other caller left to defer *for*. `AccountsRepo.create`/
+     `CreditCardsRepo.createWithAccount` were removed too, once their one remaining caller (integration-test
+     fixture seeding) switched to raw drizzle inserts (`test/integration/db/unitOfWork.test.ts`'s
+     `insertAccount`/`insertCreditCardWithAccount`) instead of keeping a production write method alive solely
+     for test convenience. Coverage: pure flow tests assert the returned `persist`/`response` for every branch
+     (no correlated rows, an unpaid bill, a paid bill's clear-then-remove-at-version+1); a UoW-level suite
+     extension covers `tagApplier`'s name-race retry, that a
      plain versioned category delete still removes dependent `merchant_category` rows (now via the schema's own
      cascade, not `categoryApplier` code — including the sub-category case), that `creditCardApplier`
      genuinely has no cascade of its own (a correlated bill left behind now surfaces a raw FK violation, not a

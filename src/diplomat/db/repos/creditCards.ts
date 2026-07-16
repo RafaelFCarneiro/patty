@@ -1,12 +1,10 @@
 import { eq, sql } from 'drizzle-orm';
 import * as creditCardAdapters from '../../../adapters/creditCards.js';
-import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
-import type { Account } from '../../../models/account.js';
 import { CreditCardSchema, type CreditCard, type CreditCardEntity } from '../../../models/creditCard.js';
 import type { CreditCardRow } from '../../../wire/db/creditCards.js';
 import { correlatedToCard } from '../creditCardCorrelation.js';
 import type { Db } from '../driver.js';
-import { accounts, creditCards } from '../schema.js';
+import { creditCards } from '../schema.js';
 import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
 const toCard = (row: CreditCardRow): CreditCard =>
@@ -25,10 +23,6 @@ export type DeleteCardCounts = { transactions: number; bills: number };
 
 export type CreditCardsRepo = {
   list: () => Promise<CreditCard[]>;
-  /** Test-seeding only in production code's actual write path — `createCreditCard` (ADR-021)
-   *  builds an `insert` `Persistable` batch (account + card) applied by `accountApplier` +
-   *  `creditCardApplier` instead. Kept as a plain repo method purely so integration tests can seed
-   *  a fixture card without going through the full controller+shell path. */
   findByName: (name: string) => Promise<CreditCard | null>;
   findById: (id: string) => Promise<CreditCard | null>;
   /** Version-carrying read (ADR-021) — for `deleteCreditCard`, which needs it to build a

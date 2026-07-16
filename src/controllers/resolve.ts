@@ -57,8 +57,9 @@ export const resolveCardRef = (deps: Deps, name: string): ResultAsync<CreditCard
  * treatment as the analogous stale-`cardId` case in `controllers/creditCard/transaction.ts`'s
  * `updateCardTransaction` (`okOr(await deps.creditCards.findById(cardId), notFound('card', cardId,
  * []))`): an internal FK inconsistency that accounts/cards referenced by a transaction can't
- * normally produce (`accountErrors.inUse` blocks deleting a referenced account; `deleteCard`
- * cascades every correlated transaction), but is still routed through `AppError` rather than a bare
+ * normally produce (`accountErrors.inUse` blocks deleting a referenced account; `deleteCreditCard`
+ * cascades every correlated transaction itself, as its own `Persistable`s), but is still routed
+ * through `AppError` rather than a bare
  * throw, for the same reason it is there — consistency with every other resolver in this module.
  */
 export const resolveLegAccounts = (
