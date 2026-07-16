@@ -145,6 +145,17 @@ performing it; the diplomat shell **applies** it.
   (`insert` conflicts on `idempotency_key`, not `id`; both `insert`/`update` upsert the referenced merchant and
   attach/replace `transaction_tags`) — still persistence structure, not business logic, just too much for the
   generic factory to cover.
+- **`versionedTableApplier`'s `delete` — a foreign-key violation is the same race a stale version reports, just
+  caught later**: a flow that emits a version-guarded `delete` (e.g. `deleteCreditCard`) decided what else needs
+  removing from a point-in-time read; if some other row starts referencing the one being deleted after that read
+  but before the batch applies (a concurrent write lands in the gap — e.g. a new `add_card_purchase` on the card
+  a `delete_credit_card` is mid-flight on), the FK check on the `delete` itself fails. `versionedTableApplier`
+  recognizes that one violation (`LibsqlError.extendedCode === 'SQLITE_CONSTRAINT_FOREIGNKEY'`, via
+  `diplomat/db/sqliteErrors.ts`'s `isForeignKeyConstraintViolation` — the same `.cause`-chain walk
+  `isUniqueConstraintViolation` below uses) and rethrows it as `VersionConflict`, rolling back and re-invoking the
+  flow (rule 4) instead of surfacing a raw throw: a fresh read now sees the new row and folds it into the cascade.
+  Applies to every entity built from the factory, not just credit cards — any versioned delete can hit this same
+  race.
 - **`billApplier` — a genuine non-`id` uniqueness conflict on insert, surfaced as a retry, not swallowed**
   (`diplomat/db/repos/bills.ts`, phase 2b): `bills` fits the `id`/`version` convention for `update`/`delete`
   (built from `versionedTableApplier` directly), but a bill is *created* by upsert-by-cycle

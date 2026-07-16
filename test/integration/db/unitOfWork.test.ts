@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
-import { okAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { McpTransport } from '../../../src/config.js';
 import * as accountAdapters from '../../../src/adapters/accounts.js';
@@ -1128,8 +1128,9 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
   });
 
   it('does NOT cascade a correlated bill on its own — that decision now belongs to the domain', async () => {
-    // A bill left behind now surfaces a real FK violation, not a silent cascade — see the
-    // deleteCreditCard describe block below for the real, domain-decided cascade.
+    // A bill left behind trips the card row's own FK constraint on every retry (this batch is a
+    // fixed lambda, not a re-reading flow) — surfacing as the generic conflict, not a raw FK
+    // throw. See the deleteCreditCard describe block below for the real, domain-decided cascade.
     const { cardId, accountId } = await insertCardWithAccount();
     await db.insert(bills).values({
       id: randomUUID(),
@@ -1142,9 +1143,10 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
       version: 0,
     });
 
-    const outcome = withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
 
-    await expect(outcome).rejects.toThrow();
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
     expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(1);
   });
 
@@ -1168,6 +1170,57 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+  });
+
+  it('a row referencing the card, inserted after the read, is caught on delete and resolved by a retry', async () => {
+    // A bill lands in the window between this flow's own read and its batch being applied — as
+    // if another writer (e.g. a concurrent add_card_purchase) committed it concurrently. The
+    // card's own delete trips the bill's FK reference; that's caught and retried (rule 4) rather
+    // than surfacing as a raw throw, and the retried flow picks the new bill up.
+    const { cardId, accountId } = await insertCardWithAccount();
+    const raceRegistry: ApplierRegistry = { ...cardRegistry, [BILL_ENTITY_TAG]: billApplier };
+    const billId = randomUUID();
+
+    let attempts = 0;
+    const flow = () => {
+      attempts += 1;
+      if (attempts === 1) {
+        return ResultAsync.fromSafePromise(
+          db.insert(bills).values({
+            id: billId,
+            creditCardId: cardId,
+            month: 6,
+            year: 2026,
+            closeDate: '2026-06-28',
+            dueDate: '2026-07-05',
+            status: BillStatus.enum.open,
+            version: 0,
+          }),
+        ).map(() => ({
+          persist: [
+            { op: PersistOp.enum.delete, entity: CREDIT_CARD_ENTITY_TAG, id: cardId, version: 0 },
+            { op: PersistOp.enum.delete, entity: ACCOUNT_ENTITY_TAG, id: accountId, version: 0 },
+          ] as Persistable[],
+          response: attempts,
+        }));
+      }
+      return okAsync({
+        persist: [
+          { op: PersistOp.enum.delete, entity: BILL_ENTITY_TAG, id: billId, version: 0 },
+          { op: PersistOp.enum.delete, entity: CREDIT_CARD_ENTITY_TAG, id: cardId, version: 0 },
+          { op: PersistOp.enum.delete, entity: ACCOUNT_ENTITY_TAG, id: accountId, version: 0 },
+        ] as Persistable[],
+        response: attempts,
+      });
+    };
+
+    const result = await withUnitOfWork(db, raceRegistry, flow);
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe(2);
+    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${accountId}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM bills WHERE id = ${billId}`)).toHaveLength(0);
   });
 
   it('two-entity insert batch [account, creditCard] applies atomically', async () => {

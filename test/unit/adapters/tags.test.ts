@@ -43,7 +43,7 @@ describe('dbToEntity', () => {
 
 const tag: Tag = { id: 'tag-1', name: 'work' };
 
-describe('persistableToDb — ADR-021 follow-up: model→row adaptation lives at the diplomat edge', () => {
+describe('persistableToDb (tags) — model→row adaptation lives at the diplomat edge', () => {
   it('insert: bakes in INITIAL_VERSION — the model never carries one', () => {
     const p: Persistable = { op: PersistOp.enum.insert, entity: TAG_ENTITY_TAG, model: tag };
     expect(tagsAdapters.persistableToDb(p)).toEqual({

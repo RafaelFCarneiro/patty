@@ -90,7 +90,7 @@ describe('modelToDb', () => {
   });
 });
 
-describe('persistableToDb — ADR-021 follow-up: model→row adaptation lives at the diplomat edge', () => {
+describe('persistableToDb (creditCards) — model→row adaptation lives at the diplomat edge', () => {
   it('insert: bakes in INITIAL_VERSION — the model never carries one', () => {
     const p: Persistable = { op: PersistOp.enum.insert, entity: CREDIT_CARD_ENTITY_TAG, model: card };
     expect(creditCardAdapters.persistableToDb(p)).toEqual({

@@ -6,6 +6,7 @@ import type { AppError } from '../../common/errors.js';
 import { conflict } from '../../models/error.js';
 import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import type { Db } from './driver.js';
+import { isForeignKeyConstraintViolation } from './sqliteErrors.js';
 
 // Total calls to `flow` across the whole unit of work — the first attempt plus up to
 // (MAX_UNIT_OF_WORK_ATTEMPTS - 1) retries on a version conflict, each re-invoking `flow` for a
@@ -83,8 +84,17 @@ export const versionedTableApplier = <T extends VersionedTable>(table: T): Entit
   },
 
   delete: async (tx, id, version) => {
-    const result = await tx.delete(table).where(and(eq(table.id, id), eq(table.version, version)));
-    return { applied: (result.rowsAffected ?? 0) > 0 };
+    try {
+      const result = await tx.delete(table).where(and(eq(table.id, id), eq(table.version, version)));
+      return { applied: (result.rowsAffected ?? 0) > 0 };
+    } catch (cause) {
+      // A row referencing this one was inserted after the flow's own point-in-time read — the
+      // same "world changed since we read" condition a stale version reports, just surfaced by
+      // the FK check instead. Retrying re-invokes the flow for a fresh read/decision (rule 4),
+      // same as any other VersionConflict.
+      if (isForeignKeyConstraintViolation(cause)) throw new VersionConflict();
+      throw cause;
+    }
   },
 });
 

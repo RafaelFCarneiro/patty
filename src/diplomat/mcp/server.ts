@@ -181,9 +181,6 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const model = addCardPurchaseWireInToModel(args);
-      // billAdapters.outcomeToDb + transactionAdapters.outcomeToDb adapt addCardPurchase's mixed
-      // bill+transaction batch (model → db row) here, explicitly, before unitOfWork ever sees it —
-      // diplomat/db only ever writes rows, never adapts them.
       const flow = () =>
         addCardPurchase(deps, model, TransactionSource.enum.mcp).map(billAdapters.outcomeToDb).map(outcomeToDb);
       return fromResult((await unitOfWork(flow)).map(createResultToWireOut));
@@ -199,8 +196,6 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const model = accountAdapters.addAccountMovementWireInToModel(args);
-      // transactionAdapters.outcomeToDb adapts addAccountExpense's result (model → db row) here,
-      // explicitly, before unitOfWork ever sees the batch — diplomat/db only ever writes rows.
       const flow = () => addAccountExpense(deps, model, TransactionSource.enum.mcp).map(outcomeToDb);
       return fromResult((await unitOfWork(flow)).map(createResultToWireOut));
     },
@@ -250,9 +245,6 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
       inputSchema: CreateCreditCardSchema.shape,
     },
     async (args) => {
-      // accountAdapters.outcomeToDb + creditCardAdapters.outcomeToDb adapt createCreditCard's
-      // mixed account+card batch (model → db row) here, explicitly, before unitOfWork ever sees
-      // it — diplomat/db only ever writes rows, never adapts them.
       const flow = () =>
         createCreditCard(deps, args).map(accountAdapters.outcomeToDb).map(creditCardAdapters.outcomeToDb);
       return fromResult(await unitOfWork(flow));
@@ -313,9 +305,6 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
       inputSchema: PayBillSchema.shape,
     },
     async (args) => {
-      // billAdapters.outcomeToDb + transactionAdapters.outcomeToDb adapt payBill's mixed
-      // transaction+bill batch (model → db row) here, explicitly, before unitOfWork ever sees it —
-      // diplomat/db only ever writes rows, never adapts them.
       const flow = () =>
         payBill(deps, { ...args, source: TransactionSource.enum.mcp })
           .map(billAdapters.outcomeToDb)
@@ -551,8 +540,6 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
       inputSchema: CreateAccountSchema.shape,
     },
     async (args) => {
-      // accountAdapters.outcomeToDb adapts createAccount's result (model → db row) here, explicitly,
-      // before unitOfWork ever sees the batch — diplomat/db only ever writes rows, never adapts them.
       const flow = () =>
         createAccount(deps, accountAdapters.createWireInToModel(args)).map(accountAdapters.outcomeToDb);
       return fromResult(await unitOfWork(flow));

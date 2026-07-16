@@ -201,8 +201,6 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const wireIn = parse(wireInAccounts.CreateAccountSchema, req.body, reply);
       if (!wireIn) return reply;
-      // accountAdapters.outcomeToDb adapts createAccount's result (model → db row) here, explicitly,
-      // before unitOfWork ever sees the batch — diplomat/db only ever writes rows, never adapts them.
       const flow = () =>
         createAccount(deps, accountAdapters.createWireInToModel(wireIn)).map(accountAdapters.outcomeToDb);
       return send(reply, await unitOfWork(flow), 201);
@@ -346,8 +344,6 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const wireIn = parse(wireInAccounts.AddAccountMovementSchema, req.body, reply);
       if (!wireIn) return reply;
       const model = accountAdapters.addAccountMovementWireInToModel(wireIn);
-      // transactionAdapters.outcomeToDb adapts addAccountExpense's result (model → db row) here,
-      // explicitly, before unitOfWork ever sees the batch — diplomat/db only ever writes rows.
       const flow = () =>
         addAccountExpense(deps, model, TransactionSource.enum.rest).map(transactionAdapters.outcomeToDb);
       const result = await unitOfWork(flow);
@@ -421,9 +417,6 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const wireIn = parse(wireInCreditCards.AddCardPurchaseSchema, req.body, reply);
       if (!wireIn) return reply;
       const model = creditCardAdapters.addCardPurchaseWireInToModel(wireIn);
-      // billAdapters.outcomeToDb + transactionAdapters.outcomeToDb adapt addCardPurchase's mixed
-      // bill+transaction batch (model → db row) here, explicitly, before unitOfWork ever sees it —
-      // diplomat/db only ever writes rows, never adapts them.
       const flow = () =>
         addCardPurchase(deps, model, TransactionSource.enum.rest)
           .map(billAdapters.outcomeToDb)
@@ -477,9 +470,6 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const wireIn = parse(wireInCreditCards.CreateCreditCardSchema, req.body, reply);
       if (!wireIn) return reply;
-      // accountAdapters.outcomeToDb + creditCardAdapters.outcomeToDb adapt createCreditCard's
-      // mixed account+card batch (model → db row) here, explicitly, before unitOfWork ever sees
-      // it — diplomat/db only ever writes rows, never adapts them.
       const flow = () =>
         createCreditCard(deps, creditCardAdapters.wireInToModel(wireIn))
           .map(accountAdapters.outcomeToDb)
@@ -541,9 +531,6 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const input = parse(PayBill, req.body, reply) as PayBillType;
       if (!input) return reply;
-      // billAdapters.outcomeToDb + transactionAdapters.outcomeToDb adapt payBill's mixed
-      // transaction+bill batch (model → db row) here, explicitly, before unitOfWork ever sees it —
-      // diplomat/db only ever writes rows, never adapts them.
       const flow = () =>
         payBill(deps, { ...input, source: TransactionSource.enum.rest })
           .map(billAdapters.outcomeToDb)

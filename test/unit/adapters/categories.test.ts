@@ -115,7 +115,7 @@ describe('modelToDb', () => {
   });
 });
 
-describe('persistableToDb — ADR-021 follow-up: model→row adaptation lives at the diplomat edge', () => {
+describe('persistableToDb (categories) — model→row adaptation lives at the diplomat edge', () => {
   it('insert: bakes in INITIAL_VERSION — the model never carries one', () => {
     const p: Persistable = { op: PersistOp.enum.insert, entity: CATEGORY_ENTITY_TAG, model: category };
     expect(categoryAdapters.persistableToDb(p)).toEqual({
