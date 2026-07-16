@@ -76,6 +76,7 @@ import {
   outcomeToDb,
 } from '../../adapters/transactions.js';
 import * as billAdapters from '../../adapters/bills.js';
+import * as creditCardAdapters from '../../adapters/creditCards.js';
 import {
   addCardPurchaseWireInToModel,
   importCardStatementWireInToModel,
@@ -91,6 +92,8 @@ import {
 } from '../../wire/in/accounts.js';
 import { CreateTagSchema } from '../../wire/in/tags.js';
 import * as accountAdapters from '../../adapters/accounts.js';
+import * as categoryAdapters from '../../adapters/categories.js';
+import * as tagAdapters from '../../adapters/tags.js';
 import { buildOpenApiDocument } from '../http/openapi.js';
 import { buildRouteDefinitions } from '../http/routes.js';
 
@@ -178,9 +181,6 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const model = addCardPurchaseWireInToModel(args);
-      // billAdapters.outcomeToDb + transactionAdapters.outcomeToDb adapt addCardPurchase's mixed
-      // bill+transaction batch (model → db row) here, explicitly, before unitOfWork ever sees it —
-      // diplomat/db only ever writes rows, never adapts them.
       const flow = () =>
         addCardPurchase(deps, model, TransactionSource.enum.mcp).map(billAdapters.outcomeToDb).map(outcomeToDb);
       return fromResult((await unitOfWork(flow)).map(createResultToWireOut));
@@ -196,8 +196,6 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const model = accountAdapters.addAccountMovementWireInToModel(args);
-      // transactionAdapters.outcomeToDb adapts addAccountExpense's result (model → db row) here,
-      // explicitly, before unitOfWork ever sees the batch — diplomat/db only ever writes rows.
       const flow = () => addAccountExpense(deps, model, TransactionSource.enum.mcp).map(outcomeToDb);
       return fromResult((await unitOfWork(flow)).map(createResultToWireOut));
     },
@@ -246,7 +244,11 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'defaults to USD. The card auto-creates an internal credit account that tracks outstanding debt.',
       inputSchema: CreateCreditCardSchema.shape,
     },
-    async (args) => fromResult(await createCreditCard(deps, args)),
+    async (args) => {
+      const flow = () =>
+        createCreditCard(deps, args).map(accountAdapters.outcomeToDb).map(creditCardAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -268,7 +270,15 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         confirm: z.boolean().default(false).describe('Must be true to actually delete'),
       },
     },
-    async (args) => fromResult(await deleteCreditCard(deps, args)),
+    async (args) => {
+      const flow = () =>
+        deleteCreditCard(deps, args)
+          .map(creditCardAdapters.outcomeToDb)
+          .map(accountAdapters.outcomeToDb)
+          .map(billAdapters.outcomeToDb)
+          .map(outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -293,9 +303,6 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
       inputSchema: PayBillSchema.shape,
     },
     async (args) => {
-      // billAdapters.outcomeToDb + transactionAdapters.outcomeToDb adapt payBill's mixed
-      // transaction+bill batch (model → db row) here, explicitly, before unitOfWork ever sees it —
-      // diplomat/db only ever writes rows, never adapts them.
       const flow = () =>
         payBill(deps, { ...args, source: TransactionSource.enum.mcp })
           .map(billAdapters.outcomeToDb)
@@ -531,8 +538,6 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
       inputSchema: CreateAccountSchema.shape,
     },
     async (args) => {
-      // accountAdapters.outcomeToDb adapts createAccount's result (model → db row) here, explicitly,
-      // before unitOfWork ever sees the batch — diplomat/db only ever writes rows, never adapts them.
       const flow = () =>
         createAccount(deps, accountAdapters.createWireInToModel(args)).map(accountAdapters.outcomeToDb);
       return fromResult(await unitOfWork(flow));
@@ -586,7 +591,11 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'Credit accounts (card-managed) are rejected — use the card flow.',
       inputSchema: UpdateAccountSchema.shape,
     },
-    async (args) => fromResult(await updateAccount(deps, accountAdapters.updateWireInToModel(args))),
+    async (args) => {
+      const flow = () =>
+        updateAccount(deps, accountAdapters.updateWireInToModel(args)).map(accountAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -602,7 +611,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         name: z.string().min(1).describe('Account name'),
       },
     },
-    async (args) => fromResult(await deleteAccount(deps, args.name)),
+    async (args) => {
+      const flow = () => deleteAccount(deps, args.name).map(accountAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -629,7 +641,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
       description: 'Create a category. Prefer existing categories (list_categories) before creating new ones.',
       inputSchema: CreateCategorySchema.shape,
     },
-    async (args) => fromResult(await createCategory(deps, args)),
+    async (args) => {
+      const flow = () => createCategory(deps, args).map(categoryAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -651,7 +666,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'of their parent. Use list_categories to find the parent id. Names must be unique within the same parent.',
       inputSchema: CreateSubCategorySchema.shape,
     },
-    async (args) => fromResult(await createSubCategory(deps, args)),
+    async (args) => {
+      const flow = () => createSubCategory(deps, args).map(categoryAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -676,7 +694,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         "On success, also removes the category's learned merchant classification rules (re-learnable).",
       inputSchema: { name: z.string().min(1).describe('Category name') },
     },
-    async (args) => fromResult(await deleteCategory(deps, args.name)),
+    async (args) => {
+      const flow = () => deleteCategory(deps, args.name).map(categoryAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -690,7 +711,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'On success, also removes learned merchant classification rules for this sub-category.',
       inputSchema: { name: z.string().min(1).describe('Sub-category name') },
     },
-    async (args) => fromResult(await deleteSubCategory(deps, args.name)),
+    async (args) => {
+      const flow = () => deleteSubCategory(deps, args.name).map(categoryAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool('list_tags', { title: 'List tags', description: 'List all tags.', inputSchema: {} }, async () =>
@@ -706,7 +730,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         '(e.g. "work", "travel", "reembolsável").',
       inputSchema: CreateTagSchema.shape,
     },
-    async (args) => fromResult(await createTag(deps, args.name)),
+    async (args) => {
+      const flow = () => createTag(deps, args.name).map(tagAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -716,7 +743,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
       description: 'Delete a tag by id. Removes the tag and all its associations with transactions.',
       inputSchema: { id: z.string().min(1) },
     },
-    async (args) => fromResult(await deleteTag(deps, args.id)),
+    async (args) => {
+      const flow = () => deleteTag(deps, args.id).map(tagAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(

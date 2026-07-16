@@ -32,6 +32,15 @@ export const CreditCardSchema = z.object({
 });
 export type CreditCard = z.infer<typeof CreditCardSchema>;
 
+// Entity tag for this aggregate's `Persistable`s.
+export const CREDIT_CARD_ENTITY_TAG = 'creditCard';
+
+// `CreditCard` plus the optimistic-concurrency `version` token. Never sent over the wire.
+export const CreditCardEntitySchema = CreditCardSchema.extend({
+  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
+});
+export type CreditCardEntity = z.infer<typeof CreditCardEntitySchema>;
+
 export const CreateCreditCardSchema = CreditCardSchema.omit({
   id: true,
   accountId: true,
@@ -75,11 +84,13 @@ export const ImportCardStatementItemSchema = AddCardPurchaseSchema.omit({
   rawInput: true,
   subCategory: true,
   tags: true,
-}).extend({
-  idempotencyKey: AddCardPurchaseSchema.shape.idempotencyKey
-    .optional()
-    .describe(STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION),
-}).strict();
+})
+  .extend({
+    idempotencyKey: AddCardPurchaseSchema.shape.idempotencyKey
+      .optional()
+      .describe(STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION),
+  })
+  .strict();
 export type ImportCardStatementItem = z.infer<typeof ImportCardStatementItemSchema>;
 
 /** Credit-card statement import (ADR-017 step 2): single-source — every item is a purchase on the
@@ -100,11 +111,15 @@ export type ImportCardStatement = z.infer<typeof ImportCardStatementSchema>;
  *  vocabulary. `.strict()` still rejects truly foreign fields at the REST boundary (MCP tool args
  *  are reconstructed as a non-strict shape by the SDK). */
 export const UpdateCardTransactionSchema = UpdateTransactionSchema.extend({
-  account: z.string().min(1).optional().describe(
-    "Rejected: a card transaction is always funded by the card's own internal account. Sending this " +
-      'field returns a validation error rather than reassigning it — present only so that error can be ' +
-      'raised, not because the account is changeable',
-  ),
+  account: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Rejected: a card transaction is always funded by the card's own internal account. Sending this " +
+        'field returns a validation error rather than reassigning it — present only so that error can be ' +
+        'raised, not because the account is changeable',
+    ),
   billMonth: BillQuerySchema.shape.month
     .optional()
     .describe(
@@ -117,6 +132,12 @@ export const UpdateCardTransactionSchema = UpdateTransactionSchema.extend({
     .describe('Reassignment target bill cycle year; provide with billMonth'),
 }).strict();
 export type UpdateCardTransaction = z.infer<typeof UpdateCardTransactionSchema>;
+
+/** `deleteCreditCard`'s dry-run response (`controllers/creditCard/creditCard.ts`) — named so the
+ *  string can't drift between the response and its own test's assertion, matching
+ *  `DELETE_TRANSACTION_CONFIRM_HINT` (`models/transaction.ts`)'s reason for existing. */
+export const DELETE_CREDIT_CARD_CONFIRM_HINT =
+  'Destructive action: show what would be deleted to the user and call again with confirm: true.';
 
 export type CardError = NotFound<'card'> | Ambiguous<'card'> | DuplicateName<'credit_card'> | ValidationError;
 

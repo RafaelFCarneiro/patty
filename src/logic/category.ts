@@ -47,9 +47,6 @@ export const assertSubCategoryNameAvailable = (siblings: readonly { name: string
 export const isCategoryUnreferenced = (refs: CategoryReferences): boolean =>
   refs.transactions === 0 && refs.recurring === 0 && refs.subCategories === 0;
 
-export const parentExists = (categories: readonly Category[], parentId: string): boolean =>
-  categories.some((c) => c.id === parentId);
-
 export const resolveAndSort = (categories: readonly Category[], locale: string): Category[] => {
   const resolved = categories.map((c) => resolveDisplayName(c, locale));
   const collator = new Intl.Collator(locale, { sensitivity: 'base' });

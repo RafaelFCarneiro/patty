@@ -18,18 +18,11 @@ const MatchRow = z.object({
 export type MerchantsRepo = {
   /** Find merchant→category candidates whose key appears in the normalized description. */
   matchCandidates: (normalizedDescription: string) => Promise<MerchantMatch[]>;
-  /** Learning write-back: strengthens (or creates, at weight 1) a merchant→category edge. Pure
-   *  mechanics — which edge to strengthen, and whether to at all, is the caller's own decision
-   *  (`logic/merchant.ts`'s `resolveMerchantCorrection`), never resolved here. */
-  incrementCategoryWeight: (merchantKey: string, categoryId: string) => Promise<void>;
 };
 
-/** Shared upsert-increment mechanics (ADR-021): "insert weight=1 on first correction, increment on
- *  repeat" — the one place this SQL is written, run identically whether reached through the plain
- *  repo (`merchantsRepo`, for the still-unconverted credit-card aggregate) or the unit-of-work
- *  applier (`merchantCategoryApplier`, for the FC/IS account aggregate) below. `Db | Tx`: the
- *  latter runs it inside an existing `db.transaction` callback. */
-const upsertCategoryWeight = async (db: Db | Tx, merchantKey: string, categoryId: string): Promise<void> => {
+/** Upsert-increment: insert weight=1 on first correction, increment on repeat. Only called from
+ *  `merchantCategoryApplier.insert` below, inside `withUnitOfWork`'s own transaction (`Tx`). */
+const upsertCategoryWeight = async (db: Tx, merchantKey: string, categoryId: string): Promise<void> => {
   await db.insert(merchants).values({ key: merchantKey }).onConflictDoNothing();
   await db
     .insert(merchantCategory)
@@ -53,17 +46,10 @@ export const merchantsRepo = (db: Db): MerchantsRepo => ({
     `);
     return rows.map((r) => MatchRow.parse(r));
   },
-
-  incrementCategoryWeight: (merchantKey, categoryId) => upsertCategoryWeight(db, merchantKey, categoryId),
 });
 
-/**
- * The merchant-category edge's `EntityApplier` (ADR-021), registered under `models/merchant.ts`'s
- * `MERCHANT_CATEGORY_ENTITY_TAG` — `upsertCategoryWeight` above, driven by a `Persistable`
- * (`merchantKey`/`categoryId` already known to the caller) instead of the plain repo call. Always
- * an `insert` (no `id`/`version` — see `models/merchant.ts`) — `update`/`delete` are structurally
- * unreachable for this entity.
- */
+/** Always an `insert` (no `id`/`version` — see `models/merchant.ts`) — `update`/`delete` are
+ *  structurally unreachable for this entity. */
 export const merchantCategoryApplier: EntityApplier = {
   insert: async (tx, model) => {
     const { merchantKey, categoryId } = model as MerchantCategoryEdge;

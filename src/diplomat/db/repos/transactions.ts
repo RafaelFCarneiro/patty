@@ -81,6 +81,16 @@ const keysetPredicate = (sort: TransactionSortField, dir: SortDirection, key: Cu
   return sql`(${column} ${cmp} ${key.value} OR (${column} = ${key.value} AND t.id ${cmp} ${key.id}))`;
 };
 
+/** What counts as "correlated" to a credit card: a purchase on the card itself (`credit_card_id`)
+ *  or any movement on its own internal liability account (`from_account_id`/`to_account_id`),
+ *  including the bill-payment transfer. `alias` lets a caller qualify the columns for a joined
+ *  query. Exported for `creditCardsRepo.countCorrelated`, which also filters the transactions
+ *  table by this predicate. */
+export const correlatedToCard = (cardId: string, accountId: string, alias = ''): SQL => {
+  const col = (name: string) => sql.raw(alias ? `${alias}.${name}` : name);
+  return sql`${col('credit_card_id')} = ${cardId} OR ${col('from_account_id')} = ${accountId} OR ${col('to_account_id')} = ${accountId}`;
+};
+
 export type TransactionsRepo = {
   /** Receives domain entity; model→db flattening happens here (adapters/transactions.ts). */
   create: (entity: Transaction, tagNames: string[]) => Promise<CreateTxResult>;
@@ -99,6 +109,11 @@ export type TransactionsRepo = {
   /** Flip status pending → effective. Returns null if the id does not exist. */
   confirm: (id: string) => Promise<RawTransactionView | null>;
   delete: (id: string) => Promise<boolean>;
+  /** Every transaction correlated to a credit card — card purchases (`creditCardId`) and any
+   *  movement on its internal liability account (`fromAccountId`/`toAccountId`), including the
+   *  bill-payment transfer. Version-carrying — `deleteCreditCard` decides which of these to remove
+   *  as its own `Persistable`s. */
+  findAllCorrelatedToCard: (cardId: string, accountId: string) => Promise<RawTransactionView[]>;
   /** Keyset page: fetches one extra row (LIMIT n+1) to derive `hasMore` without a COUNT query.
    *  Receives the model plus the refs the controller had to resolve via I/O; shaping that pair
    *  into the flat SQL-filter object (`toSearchFilters`) happens in here, not at the call site. */
@@ -218,6 +233,11 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
   delete: async (id) => {
     const result = await db.delete(transactions).where(eq(transactions.id, id));
     return (result.rowsAffected ?? 0) > 0;
+  },
+
+  findAllCorrelatedToCard: async (cardId, accountId) => {
+    const rows = await db.all<Record<string, unknown>>(fullTxSelect(correlatedToCard(cardId, accountId, 't')));
+    return rows.map(transactionAdapters.dbToModel);
   },
 
   search: async (input, refs) => {

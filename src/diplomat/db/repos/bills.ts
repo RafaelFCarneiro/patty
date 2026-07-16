@@ -1,4 +1,3 @@
-import { LibsqlError } from '@libsql/client';
 import { sql } from 'drizzle-orm';
 import * as R from 'remeda';
 import { z } from 'zod';
@@ -10,6 +9,7 @@ import type { BillPeriod } from '../../../logic/bill.js';
 import { BillRowSchema } from '../../../wire/db/bills.js';
 import type { Db } from '../driver.js';
 import { bills } from '../schema.js';
+import { isUniqueConstraintViolation } from '../sqliteErrors.js';
 import { fullTxSelect } from '../transactionSelect.js';
 import { VersionConflict, versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
@@ -50,6 +50,10 @@ export type BillsRepo = {
   /** Lightweight cycle lookup (no card-name join, no transaction items). */
   findByCycle: (cardId: string, month: number, year: number) => Promise<RawBill | null>;
   findById: (billId: string) => Promise<RawBill | null>;
+  /** Every bill ever opened for a card, version-carrying — `deleteCreditCard` decides which of
+   *  these to remove (and which need `paymentTransactionId` cleared first) as its own
+   *  `Persistable`s. */
+  findAllByCard: (cardId: string) => Promise<RawBill[]>;
   /** Idempotent upsert-by-cycle: creates the cycle's bill `open` if none exists yet, else returns
    *  the existing one. Used only by the still-repo-driven bulk-import path; the FC/IS
    *  `addCardPurchase` expresses the same decision as a `Persistable` via `billApplier` instead. */
@@ -110,38 +114,27 @@ export const billsRepo = (db: Db): BillsRepo => ({
     const row = await fetchBillRow(db, billId);
     return row ? toRawBill(row) : null;
   },
+
+  findAllByCard: async (cardId) => {
+    const rows = await db.all<Record<string, unknown>>(sql`SELECT * FROM bills WHERE credit_card_id = ${cardId}`);
+    return rows.map(toRawBill);
+  },
 });
-
-// A UNIQUE-constraint error on a bill insert can only be `bills_card_month_year`, the table's one
-// other unique constraint — an `id` collision is already absorbed by `onConflictDoNothing` below
-// and never throws.
-const SQLITE_UNIQUE_CONSTRAINT_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
-
-// Walks the `.cause` chain rather than assuming exactly one level of wrapping (today: drizzle's
-// `DrizzleQueryError` wrapping the driver's own `LibsqlError`) — robust to the driver ever
-// throwing `LibsqlError` directly, or to an extra wrapping layer.
-const isBillCycleUniqueConflict = (cause: unknown): boolean => {
-  for (let current = cause; current instanceof Error; current = current.cause) {
-    if (current instanceof LibsqlError) return current.extendedCode === SQLITE_UNIQUE_CONSTRAINT_CODE;
-  }
-  return false;
-};
 
 const versionedBillApplier = versionedTableApplier(bills);
 
 /** A bill is created by cycle (`UNIQUE(creditCardId, month, year)`), not by `id`, so a concurrent
- *  first purchase on the same cycle can raise a genuine unique-constraint error that
- *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow. Recognizing that one
- *  violation and rethrowing it as `VersionConflict` rolls the batch back and retries the flow (rule
- *  4) instead of surfacing a raw 500 or a wrong-id no-op. `update`/`delete` are plain
- *  `versionedTableApplier`. */
+ *  first purchase on the same cycle can raise a real unique-constraint error that
+ *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow. Rethrown as
+ *  `VersionConflict` to roll back and retry the flow instead of surfacing a raw 500 or a
+ *  wrong-id no-op. `update`/`delete` stay plain. */
 export const billApplier: EntityApplier = {
   ...versionedBillApplier,
   insert: async (tx, model) => {
     try {
       return await versionedBillApplier.insert(tx, model);
     } catch (cause) {
-      if (isBillCycleUniqueConflict(cause)) throw new VersionConflict();
+      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
       throw cause;
     }
   },

@@ -1,10 +1,11 @@
 import { eq, sql } from 'drizzle-orm';
-import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
-import type { Account } from '../../../models/account.js';
-import { CreditCardSchema, type CreditCard } from '../../../models/creditCard.js';
+import * as creditCardAdapters from '../../../adapters/creditCards.js';
+import { CreditCardSchema, type CreditCard, type CreditCardEntity } from '../../../models/creditCard.js';
 import type { CreditCardRow } from '../../../wire/db/creditCards.js';
 import type { Db } from '../driver.js';
-import { accounts, bills, creditCards } from '../schema.js';
+import { creditCards } from '../schema.js';
+import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
+import { correlatedToCard } from './transactions.js';
 
 const toCard = (row: CreditCardRow): CreditCard =>
   CreditCardSchema.parse({
@@ -22,43 +23,18 @@ export type DeleteCardCounts = { transactions: number; bills: number };
 
 export type CreditCardsRepo = {
   list: () => Promise<CreditCard[]>;
-  createWithAccount: (card: CreditCard, account: Account) => Promise<CreditCard>;
   findByName: (name: string) => Promise<CreditCard | null>;
   findById: (id: string) => Promise<CreditCard | null>;
+  /** Version-carrying read (ADR-021) — for `deleteCreditCard`, which needs it to build a
+   *  version-guarded `Persistable`. */
+  findRawById: (id: string) => Promise<CreditCardEntity | null>;
   countCorrelated: (cardId: string, accountId: string) => Promise<DeleteCardCounts>;
-  deleteCard: (cardId: string, accountId: string) => Promise<void>;
 };
 
 export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
   list: async () => {
     const rows = await db.select().from(creditCards).orderBy(creditCards.name);
     return rows.map(toCard);
-  },
-
-  createWithAccount: async (card, account) => {
-    const [row] = await db.transaction(async (tx) => {
-      await tx.insert(accounts).values({
-        id: account.id,
-        name: account.name,
-        type: account.type,
-        initialBalance: account.initialBalance,
-        currency: account.currency,
-      });
-      return tx
-        .insert(creditCards)
-        .values({
-          id: card.id,
-          name: card.name,
-          currency: card.currency,
-          closingDay: card.closingDay,
-          dueDay: card.dueDay,
-          limitAmount: card.limit ?? null,
-          accountId: card.accountId,
-          paymentAccountId: card.paymentAccountId ?? null,
-        })
-        .returning();
-    });
-    return toCard(expectPresent(row, rowNotFoundAfterWrite('credit_cards', 'insert')));
   },
 
   findByName: async (name) => {
@@ -75,42 +51,23 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
     return rows[0] ? toCard(rows[0]) : null;
   },
 
+  findRawById: async (id) => {
+    const rows = await db.select().from(creditCards).where(eq(creditCards.id, id)).limit(1);
+    return rows[0] ? creditCardAdapters.dbToEntity(rows[0]) : null;
+  },
+
   countCorrelated: async (cardId, accountId) => {
-    const [txRow] = await db.all<{ count: number }>(sql`
-      SELECT COUNT(*) as count FROM transactions
-      WHERE credit_card_id = ${cardId}
-        OR from_account_id = ${accountId}
-        OR to_account_id = ${accountId}
-    `);
+    const [txRow] = await db.all<{ count: number }>(
+      sql`SELECT COUNT(*) as count FROM transactions WHERE ${correlatedToCard(cardId, accountId)}`,
+    );
     const [billRow] = await db.all<{ count: number }>(sql`
       SELECT COUNT(*) as count FROM bills WHERE credit_card_id = ${cardId}
     `);
     return { transactions: txRow?.count ?? 0, bills: billRow?.count ?? 0 };
   },
-
-  deleteCard: async (cardId, accountId) => {
-    await db.transaction(async (tx) => {
-      // FK-safe order: clear bills' reference to their payment transfer first (bills.payment_transaction_id
-      // → transactions.id would otherwise block deleting a bill-payment row below), then tags → transactions
-      // → bills → card → account.
-      await tx.update(bills).set({ paymentTransactionId: null }).where(eq(bills.creditCardId, cardId));
-      await tx.run(sql`
-        DELETE FROM transaction_tags WHERE transaction_id IN (
-          SELECT id FROM transactions
-          WHERE credit_card_id = ${cardId}
-            OR from_account_id = ${accountId}
-            OR to_account_id = ${accountId}
-        )
-      `);
-      await tx.run(sql`
-        DELETE FROM transactions
-        WHERE credit_card_id = ${cardId}
-          OR from_account_id = ${accountId}
-          OR to_account_id = ${accountId}
-      `);
-      await tx.delete(bills).where(eq(bills.creditCardId, cardId));
-      await tx.delete(creditCards).where(eq(creditCards.id, cardId));
-      await tx.delete(accounts).where(eq(accounts.id, accountId));
-    });
-  },
 });
+
+/** Deleting a card cascades to its correlated bills/transactions, but that's decided in
+ *  `deleteCreditCard` (`controllers/creditCard/creditCard.ts`), which emits their own
+ *  `Persistable`s ahead of the card's — this applier just writes the row it's handed. */
+export const creditCardApplier: EntityApplier = versionedTableApplier(creditCards);

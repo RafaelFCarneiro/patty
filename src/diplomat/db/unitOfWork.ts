@@ -6,6 +6,7 @@ import type { AppError } from '../../common/errors.js';
 import { conflict } from '../../models/error.js';
 import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import type { Db } from './driver.js';
+import { isForeignKeyConstraintViolation } from './sqliteErrors.js';
 
 // Total calls to `flow` across the whole unit of work — the first attempt plus up to
 // (MAX_UNIT_OF_WORK_ATTEMPTS - 1) retries on a version conflict, each re-invoking `flow` for a
@@ -83,8 +84,17 @@ export const versionedTableApplier = <T extends VersionedTable>(table: T): Entit
   },
 
   delete: async (tx, id, version) => {
-    const result = await tx.delete(table).where(and(eq(table.id, id), eq(table.version, version)));
-    return { applied: (result.rowsAffected ?? 0) > 0 };
+    try {
+      const result = await tx.delete(table).where(and(eq(table.id, id), eq(table.version, version)));
+      return { applied: (result.rowsAffected ?? 0) > 0 };
+    } catch (cause) {
+      // A row referencing this one was inserted after the flow's own point-in-time read — the
+      // same "world changed since we read" condition a stale version reports, just surfaced by
+      // the FK check instead. Retrying re-invokes the flow for a fresh read/decision (rule 4),
+      // same as any other VersionConflict.
+      if (isForeignKeyConstraintViolation(cause)) throw new VersionConflict();
+      throw cause;
+    }
   },
 });
 
@@ -130,12 +140,16 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
 /** Applies the whole batch in one transaction, returning each persistable's own outcome
  *  (positional, parallel to `persist`) on success — empty on a version conflict, since the
  *  transaction has already rolled back and there is nothing to report. Any other failure
- *  propagates. */
+ *  propagates. An empty batch (a dry-run preview flow, e.g. `deleteCreditCard` without
+ *  `confirm`) skips `db.transaction` entirely — nothing to write, and nothing that could
+ *  version-conflict. */
 const applyBatch = async (
   db: Db,
   registry: ApplierRegistry,
   persist: Persistable[],
 ): Promise<{ applied: boolean; outcomes: PersistOutcome[] }> => {
+  if (persist.length === 0) return { applied: true, outcomes: [] };
+
   const outcomes: PersistOutcome[] = [];
   try {
     await db.transaction(async (tx) => {

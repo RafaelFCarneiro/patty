@@ -3,22 +3,36 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
-import { okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { okAsync, ResultAsync } from 'neverthrow';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { McpTransport } from '../../../src/config.js';
+import * as accountAdapters from '../../../src/adapters/accounts.js';
 import * as billAdapters from '../../../src/adapters/bills.js';
+import * as creditCardAdapters from '../../../src/adapters/creditCards.js';
 import * as transactionAdapters from '../../../src/adapters/transactions.js';
 import { payBill } from '../../../src/controllers/creditCard/bill.js';
+import { deleteCreditCard } from '../../../src/controllers/creditCard/creditCard.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { accountApplier, accountsRepo } from '../../../src/diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from '../../../src/diplomat/db/repos/bills.js';
-import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
+import { categoryApplier } from '../../../src/diplomat/db/repos/categories.js';
+import { creditCardApplier, creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
 import { merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchants.js';
+import { tagApplier } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
-import { bills, categories, tags } from '../../../src/diplomat/db/schema.js';
+import {
+  accounts,
+  bills,
+  categories,
+  creditCards,
+  merchantCategory,
+  tags,
+  transactionTags,
+  transactions,
+} from '../../../src/diplomat/db/schema.js';
 import {
   MAX_UNIT_OF_WORK_ATTEMPTS,
   versionedTableApplier,
@@ -29,10 +43,13 @@ import {
 import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus } from '../../../src/models/bill.js';
+import { CATEGORY_ENTITY_TAG, CategoryKind } from '../../../src/models/category.js';
+import { CREDIT_CARD_ENTITY_TAG, type CreditCardEntity } from '../../../src/models/creditCard.js';
 import { Locale } from '../../../src/models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp, type Persistable, type PersistOutcome } from '../../../src/models/persistable.js';
+import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
 import {
   ClassificationMethod,
   TRANSACTION_ENTITY_TAG,
@@ -79,6 +96,45 @@ const newAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
 
 const insertOne = (model: AccountEntity) => () =>
   okAsync({ persist: [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model })], response: model });
+
+/** Inserts an account row directly (raw drizzle) — test fixture setup only, never the code under
+ *  test. */
+const insertAccount = async (overrides: Partial<AccountEntity> = {}): Promise<AccountEntity> => {
+  const account = newAccount(overrides);
+  await db.insert(accounts).values(account);
+  return account;
+};
+
+/** Inserts a credit card and its internal liability account directly (raw drizzle) — test fixture
+ *  setup only. */
+const insertCreditCardWithAccount = async (
+  paymentAccountId?: string,
+): Promise<{ cardId: string; accountId: string; cardName: string }> => {
+  const accountId = randomUUID();
+  await db.insert(accounts).values({
+    id: accountId,
+    name: 'Card account',
+    type: AccountType.enum.credit,
+    currency: CurrencyCode.enum.BRL,
+    initialBalance: 0,
+    version: 0,
+  });
+
+  const cardId = randomUUID();
+  const cardName = `Card ${cardId}`;
+  await db.insert(creditCards).values({
+    id: cardId,
+    name: cardName,
+    currency: CurrencyCode.enum.BRL,
+    closingDay: 28,
+    dueDay: 5,
+    accountId,
+    paymentAccountId: paymentAccountId ?? null,
+    version: 0,
+  });
+
+  return { cardId, accountId, cardName };
+};
 
 const readVersion = async (id: string): Promise<number | undefined> => {
   const [row] = await db.all<{ version: number }>(sql`SELECT version FROM accounts WHERE id = ${id}`);
@@ -183,6 +239,18 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
     expect(result.isErr()).toBe(true);
     expect(await readIds(seed.id)).toHaveLength(1);
+  });
+
+  it('an empty persist batch (a dry-run preview flow) skips db.transaction entirely', async () => {
+    const transactionSpy = vi.spyOn(db, 'transaction');
+
+    const result = await withUnitOfWork(db, registry, () => okAsync({ persist: [], response: 'preview' }));
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe('preview');
+    expect(transactionSpy).not.toHaveBeenCalled();
+
+    transactionSpy.mockRestore();
   });
 
   it('treats a duplicate insert (same id) as an idempotent no-op, never a conflict', async () => {
@@ -613,17 +681,12 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
   it('update throws — every write to this entity is an insert (upsert-increment), never an update', async () => {
     const categoryId = await seedCategory();
     const merchantKey = `merchant-${randomUUID()}`;
+    const model = { merchantKey, categoryId, version: 0 };
 
     await expect(
       withUnitOfWork(db, merchantRegistry, () =>
         okAsync({
-          persist: [
-            {
-              op: PersistOp.enum.update,
-              entity: MERCHANT_CATEGORY_ENTITY_TAG,
-              model: { merchantKey, categoryId, version: 0 },
-            },
-          ] as Persistable[],
+          persist: [{ op: PersistOp.enum.update, entity: MERCHANT_CATEGORY_ENTITY_TAG, model }] as Persistable[],
           response: null,
         }),
       ),
@@ -648,26 +711,8 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
   const billRegistry: ApplierRegistry = { [BILL_ENTITY_TAG]: billApplier };
 
   const seedCard = async (): Promise<{ cardId: string }> => {
-    const creditCards = creditCardsRepo(db);
-    const cardAccountId = randomUUID();
-    const created = await creditCards.createWithAccount(
-      {
-        id: randomUUID(),
-        name: `Card ${randomUUID()}`,
-        currency: CurrencyCode.enum.BRL,
-        closingDay: 28,
-        dueDay: 5,
-        accountId: cardAccountId,
-      },
-      {
-        id: cardAccountId,
-        name: 'Card account',
-        type: AccountType.enum.credit,
-        currency: CurrencyCode.enum.BRL,
-        initialBalance: 0,
-      },
-    );
-    return { cardId: created.id };
+    const { cardId } = await insertCreditCardWithAccount();
+    return { cardId };
   };
 
   const newBillModel = (cardId: string, overrides: Partial<{ id: string; month: number; year: number }> = {}) => ({
@@ -706,15 +751,10 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
       }),
     );
 
+    const closedModel = { ...model, status: BillStatus.enum.closed, version: 0 };
     const updated = await withUnitOfWork(db, billRegistry, () =>
       okAsync({
-        persist: [
-          {
-            op: PersistOp.enum.update,
-            entity: BILL_ENTITY_TAG,
-            model: { ...model, status: BillStatus.enum.closed, version: 0 },
-          },
-        ] as Persistable[],
+        persist: [{ op: PersistOp.enum.update, entity: BILL_ENTITY_TAG, model: closedModel }] as Persistable[],
         response: null,
       }),
     );
@@ -829,35 +869,9 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     const transactionsR = transactionsRepo(db);
 
     const payerAccountId = randomUUID();
-    await accountsR.create({
-      id: payerAccountId,
-      name: `Payer ${payerAccountId}`,
-      type: AccountType.enum.checking,
-      currency: CurrencyCode.enum.BRL,
-      initialBalance: 1000,
-    });
+    await insertAccount({ id: payerAccountId, name: `Payer ${payerAccountId}`, initialBalance: 1000 });
 
-    const cardId = randomUUID();
-    const cardAccountId = randomUUID();
-    const cardName = `Card ${cardId}`;
-    await creditCardsR.createWithAccount(
-      {
-        id: cardId,
-        name: cardName,
-        currency: CurrencyCode.enum.BRL,
-        closingDay: 28,
-        dueDay: 5,
-        accountId: cardAccountId,
-        paymentAccountId: payerAccountId,
-      },
-      {
-        id: cardAccountId,
-        name: 'Card account',
-        type: AccountType.enum.credit,
-        currency: CurrencyCode.enum.BRL,
-        initialBalance: 0,
-      },
-    );
+    const { cardId, accountId: cardAccountId, cardName } = await insertCreditCardWithAccount(payerAccountId);
 
     const bill = await billsR.ensureOpen(
       cardId,
@@ -965,5 +979,430 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
 
     // No partial write survived the rolled-back first attempt — exactly one payment transfer exists.
     expect(await countPaymentTransfers()).toBe(1);
+  });
+});
+
+describe('tagApplier — name-uniqueness race surfaces as a generic conflict (ADR-021 phase 3a)', () => {
+  const tagRegistry: ApplierRegistry = { [TAG_ENTITY_TAG]: tagApplier };
+
+  it('inserts a brand-new tag normally', async () => {
+    const id = randomUUID();
+    const result = await withUnitOfWork(db, tagRegistry, () =>
+      okAsync({
+        persist: [
+          { op: PersistOp.enum.insert, entity: TAG_ENTITY_TAG, model: { id, name: `Tag ${id}`, version: 0 } },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM tags WHERE id = ${id}`)).toHaveLength(1);
+  });
+
+  it('a concurrent create-same-name race exhausts retries to the generic conflict error, never a raw 500', async () => {
+    const name = `Tag ${randomUUID()}`;
+    await db.insert(tags).values({ id: randomUUID(), name, version: 0 });
+
+    let attempts = 0;
+    const flow = () => {
+      attempts += 1;
+      // A naive flow that never re-reads — always mints its own speculative id for the same name.
+      const loser = { id: randomUUID(), name, version: 0 };
+      return okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: TAG_ENTITY_TAG, model: loser }] as Persistable[],
+        response: null,
+      });
+    };
+
+    const result = await withUnitOfWork(db, tagRegistry, flow);
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    expect(attempts).toBe(MAX_UNIT_OF_WORK_ATTEMPTS);
+    expect(await db.all(sql`SELECT id FROM tags WHERE name = ${name}`)).toHaveLength(1); // no loser row landed
+  });
+});
+
+describe('categoryApplier — plain mechanics; merchant_category cascades via schema FK (ADR-021 3a follow-up)', () => {
+  const categoryRegistry: ApplierRegistry = { [CATEGORY_ENTITY_TAG]: categoryApplier };
+
+  const seedCategoryWithLearnedEdge = async (): Promise<string> => {
+    const categoryId = randomUUID();
+    await db
+      .insert(categories)
+      .values({ id: categoryId, name: `Category ${categoryId}`, kind: CategoryKind.enum.both, version: 0 });
+    const merchantKey = `merchant-${randomUUID()}`;
+    await db.run(sql`INSERT INTO merchants (key) VALUES (${merchantKey})`);
+    await db
+      .insert(merchantCategory)
+      .values({ merchantKey, categoryId, weight: 1, origin: ClassificationMethod.enum.history });
+    return categoryId;
+  };
+
+  it('deletes a category with no learned edges via the plain versioned mechanics', async () => {
+    const categoryId = randomUUID();
+    await db
+      .insert(categories)
+      .values({ id: categoryId, name: `Category ${categoryId}`, kind: CategoryKind.enum.both, version: 0 });
+
+    const result = await withUnitOfWork(db, categoryRegistry, () =>
+      okAsync({
+        persist: [
+          { op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: categoryId, version: 0 },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM categories WHERE id = ${categoryId}`)).toHaveLength(0);
+  });
+
+  it('a plain versioned delete still removes dependent merchant_category rows — the schema cascades them', async () => {
+    const categoryId = await seedCategoryWithLearnedEdge();
+    expect(await db.all(sql`SELECT 1 FROM merchant_category WHERE category_id = ${categoryId}`)).toHaveLength(1);
+
+    const result = await withUnitOfWork(db, categoryRegistry, () =>
+      okAsync({
+        persist: [
+          { op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: categoryId, version: 0 },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM categories WHERE id = ${categoryId}`)).toHaveLength(0);
+    // Gone via merchant_category.category_id's ON DELETE CASCADE, not applier code.
+    expect(await db.all(sql`SELECT 1 FROM merchant_category WHERE category_id = ${categoryId}`)).toHaveLength(0);
+  });
+
+  it('a sub-category (parentId set) is deleted the same way — same table, same applier', async () => {
+    const parentId = randomUUID();
+    await db
+      .insert(categories)
+      .values({ id: parentId, name: `Parent ${parentId}`, kind: CategoryKind.enum.both, version: 0 });
+    const subId = randomUUID();
+    await db
+      .insert(categories)
+      .values({ id: subId, name: `Sub ${subId}`, kind: CategoryKind.enum.both, parentId, version: 0 });
+
+    const result = await withUnitOfWork(db, categoryRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: subId, version: 0 }] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM categories WHERE id = ${subId}`)).toHaveLength(0);
+  });
+});
+
+describe('creditCardApplier — plain versioned mechanics, no cascade of its own (ADR-021 phase 3a follow-up)', () => {
+  const cardRegistry: ApplierRegistry = {
+    [ACCOUNT_ENTITY_TAG]: accountApplier,
+    [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
+  };
+
+  const insertCardWithAccount = async (): Promise<{ cardId: string; accountId: string }> => {
+    const { cardId, accountId } = await insertCreditCardWithAccount();
+    return { cardId, accountId };
+  };
+
+  const deleteCardBatch = (cardId: string, cardVersion: number, accountId: string, accountVersion: number) => () =>
+    okAsync({
+      persist: [
+        { op: PersistOp.enum.delete, entity: CREDIT_CARD_ENTITY_TAG, id: cardId, version: cardVersion },
+        { op: PersistOp.enum.delete, entity: ACCOUNT_ENTITY_TAG, id: accountId, version: accountVersion },
+      ] as Persistable[],
+      response: null,
+    });
+
+  it('a card with no correlated rows is removed along with its internal account', async () => {
+    const { cardId, accountId } = await insertCardWithAccount();
+
+    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${accountId}`)).toHaveLength(0);
+  });
+
+  it('does NOT cascade a correlated bill on its own — that decision now belongs to the domain', async () => {
+    // A bill left behind trips the card row's own FK constraint on every retry (this batch is a
+    // fixed lambda, not a re-reading flow) — surfacing as the generic conflict, not a raw FK
+    // throw. See the deleteCreditCard describe block below for the real, domain-decided cascade.
+    const { cardId, accountId } = await insertCardWithAccount();
+    await db.insert(bills).values({
+      id: randomUUID(),
+      creditCardId: cardId,
+      month: 6,
+      year: 2026,
+      closeDate: '2026-06-28',
+      dueDate: '2026-07-05',
+      status: BillStatus.enum.open,
+      version: 0,
+    });
+
+    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(1);
+  });
+
+  it('a stale account version rolls back the whole batch, the card cascade included — nothing partial', async () => {
+    const { cardId, accountId } = await insertCardWithAccount();
+
+    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 99));
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    // Rolled back — the card (and its cascade) never actually committed either.
+    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(1);
+    expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${accountId}`)).toHaveLength(1);
+  });
+
+  it('a missing card row (already deleted) reports the same conflict/retry signal as a stale version', async () => {
+    const { cardId, accountId } = await insertCardWithAccount();
+    await db.delete(creditCards).where(sql`${creditCards.id} = ${cardId}`);
+
+    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+  });
+
+  it('a row referencing the card, inserted after the read, is caught on delete and resolved by a retry', async () => {
+    // A bill lands in the window between this flow's own read and its batch being applied — as
+    // if another writer (e.g. a concurrent add_card_purchase) committed it concurrently. The
+    // card's own delete trips the bill's FK reference; that's caught and retried (rule 4) rather
+    // than surfacing as a raw throw, and the retried flow picks the new bill up.
+    const { cardId, accountId } = await insertCardWithAccount();
+    const raceRegistry: ApplierRegistry = { ...cardRegistry, [BILL_ENTITY_TAG]: billApplier };
+    const billId = randomUUID();
+
+    let attempts = 0;
+    const flow = () => {
+      attempts += 1;
+      if (attempts === 1) {
+        return ResultAsync.fromSafePromise(
+          db.insert(bills).values({
+            id: billId,
+            creditCardId: cardId,
+            month: 6,
+            year: 2026,
+            closeDate: '2026-06-28',
+            dueDate: '2026-07-05',
+            status: BillStatus.enum.open,
+            version: 0,
+          }),
+        ).map(() => ({
+          persist: [
+            { op: PersistOp.enum.delete, entity: CREDIT_CARD_ENTITY_TAG, id: cardId, version: 0 },
+            { op: PersistOp.enum.delete, entity: ACCOUNT_ENTITY_TAG, id: accountId, version: 0 },
+          ] as Persistable[],
+          response: attempts,
+        }));
+      }
+      return okAsync({
+        persist: [
+          { op: PersistOp.enum.delete, entity: BILL_ENTITY_TAG, id: billId, version: 0 },
+          { op: PersistOp.enum.delete, entity: CREDIT_CARD_ENTITY_TAG, id: cardId, version: 0 },
+          { op: PersistOp.enum.delete, entity: ACCOUNT_ENTITY_TAG, id: accountId, version: 0 },
+        ] as Persistable[],
+        response: attempts,
+      });
+    };
+
+    const result = await withUnitOfWork(db, raceRegistry, flow);
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe(2);
+    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${accountId}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM bills WHERE id = ${billId}`)).toHaveLength(0);
+  });
+
+  it('two-entity insert batch [account, creditCard] applies atomically', async () => {
+    const accountId = randomUUID();
+    const cardId = randomUUID();
+    const accountModel: AccountEntity & { version: number } = {
+      id: accountId,
+      name: `Card account ${accountId}`,
+      type: AccountType.enum.credit,
+      currency: CurrencyCode.enum.BRL,
+      initialBalance: 0,
+      version: 0,
+    };
+    const cardModel: CreditCardEntity = {
+      id: cardId,
+      name: `Card ${cardId}`,
+      currency: CurrencyCode.enum.BRL,
+      closingDay: 10,
+      dueDay: 20,
+      accountId,
+      version: 0,
+    };
+
+    const result = await withUnitOfWork(db, cardRegistry, () =>
+      okAsync({
+        persist: [
+          persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: accountModel }),
+          persistence.insert({ entity: CREDIT_CARD_ENTITY_TAG, model: cardModel }),
+        ],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${accountId}`)).toHaveLength(1);
+    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(1);
+  });
+});
+
+describe('deleteCreditCard — domain-decided cascade, applied atomically end to end (ADR-021 3a follow-up)', () => {
+  const fullRegistry: ApplierRegistry = {
+    [ACCOUNT_ENTITY_TAG]: accountApplier,
+    [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
+    [BILL_ENTITY_TAG]: billApplier,
+    [TRANSACTION_ENTITY_TAG]: transactionApplier,
+  };
+
+  const seedCardWithBillsAndTransactions = async (): Promise<{ deps: Deps; cardName: string; payerId: string }> => {
+    const accountsR = accountsRepo(db);
+    const creditCardsR = creditCardsRepo(db);
+    const billsR = billsRepo(db);
+    const transactionsR = transactionsRepo(db);
+
+    const payerId = randomUUID();
+    await insertAccount({ id: payerId, name: `Payer ${payerId}`, initialBalance: 1000 });
+
+    const { cardId, accountId: cardAccountId, cardName } = await insertCreditCardWithAccount();
+
+    // An unpaid bill with one ordinary purchase.
+    const openBill = await billsR.ensureOpen(
+      cardId,
+      { month: 5, year: 2026, closeDate: '2026-05-28', dueDate: '2026-06-05' },
+      randomUUID(),
+    );
+    const purchaseId = randomUUID();
+    await transactionsR.create(
+      {
+        id: purchaseId,
+        description: 'Purchase',
+        amount: 40,
+        type: TransactionType.enum.expense,
+        status: TransactionStatus.enum.effective,
+        date: '2026-05-10',
+        currency: CurrencyCode.enum.BRL,
+        source: TransactionSource.enum.mcp,
+        idempotencyKey: `idem-${randomUUID()}`,
+        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+        refs: { accountId: cardAccountId, cardId, billId: openBill.id },
+      },
+      [],
+    );
+    const tagId = randomUUID();
+    await db.insert(tags).values({ id: tagId, name: `Tag ${tagId}`, version: 0 });
+    await db.insert(transactionTags).values({ transactionId: purchaseId, tagId });
+
+    // A paid bill: its own purchase plus the payment transfer, wired both ways
+    // (bill.payment_transaction_id <-> transfer.bill_id) exactly as payBill would leave it.
+    const paidBillId = randomUUID();
+    await db.insert(bills).values({
+      id: paidBillId,
+      creditCardId: cardId,
+      month: 4,
+      year: 2026,
+      closeDate: '2026-04-28',
+      dueDate: '2026-05-05',
+      status: BillStatus.enum.paid,
+      version: 0,
+    });
+    const paidPurchaseId = randomUUID();
+    await transactionsR.create(
+      {
+        id: paidPurchaseId,
+        description: 'Old purchase',
+        amount: 60,
+        type: TransactionType.enum.expense,
+        status: TransactionStatus.enum.effective,
+        date: '2026-04-10',
+        currency: CurrencyCode.enum.BRL,
+        source: TransactionSource.enum.mcp,
+        idempotencyKey: `idem-${randomUUID()}`,
+        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+        refs: { accountId: cardAccountId, cardId, billId: paidBillId },
+      },
+      [],
+    );
+    const transferId = randomUUID();
+    await transactionsR.create(
+      {
+        id: transferId,
+        description: 'Bill payment',
+        amount: 60,
+        type: TransactionType.enum.transfer,
+        status: TransactionStatus.enum.effective,
+        date: '2026-05-01',
+        currency: CurrencyCode.enum.BRL,
+        source: TransactionSource.enum.mcp,
+        idempotencyKey: `idem-${randomUUID()}`,
+        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+        refs: { accountId: payerId, toAccountId: cardAccountId, billId: paidBillId },
+      },
+      [],
+    );
+    await db
+      .update(bills)
+      .set({ paymentTransactionId: transferId })
+      .where(sql`${bills.id} = ${paidBillId}`);
+
+    const deps: Deps = {
+      accounts: accountsR,
+      bills: billsR,
+      categories: {} as Deps['categories'],
+      subCategories: {} as Deps['subCategories'],
+      creditCards: creditCardsR,
+      dashboards: {} as Deps['dashboards'],
+      health: {} as Deps['health'],
+      merchants: {} as Deps['merchants'],
+      recurring: {} as Deps['recurring'],
+      settings: {} as Deps['settings'],
+      tags: {} as Deps['tags'],
+      transactions: transactionsR,
+      clock: () => new Date('2026-06-15'),
+      newId: () => randomUUID(),
+      locale: async () => Locale.enum.en,
+      resetLocale: () => {},
+    };
+
+    return { deps, cardName, payerId };
+  };
+
+  const deleteCreditCardFlow = (deps: Deps, cardName: string) => () =>
+    deleteCreditCard(deps, { card: cardName, confirm: true })
+      .map(creditCardAdapters.outcomeToDb)
+      .map(accountAdapters.outcomeToDb)
+      .map(billAdapters.outcomeToDb)
+      .map(transactionAdapters.outcomeToDb);
+
+  it('removes every correlated bill/transaction, breaks the paid bill<->transfer circular FK', async () => {
+    const { deps, cardName, payerId } = await seedCardWithBillsAndTransactions();
+
+    const result = await withUnitOfWork(db, fullRegistry, deleteCreditCardFlow(deps, cardName));
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual({ deleted: true, card: cardName });
+
+    expect(await db.all(sql`SELECT id FROM credit_cards`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM bills`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM transactions WHERE credit_card_id IS NOT NULL`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM transactions WHERE description = ${'Bill payment'}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT * FROM transaction_tags`)).toHaveLength(0);
+    // The payer account (never part of the card's own cascade) survives untouched.
+    expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${payerId}`)).toHaveLength(1);
   });
 });

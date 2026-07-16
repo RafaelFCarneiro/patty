@@ -4,7 +4,10 @@
 account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing — implemented 2026-07-13;
 phase 2b — credit-card transaction flows + `billApplier`'s cycle-uniqueness-race-as-retry handling — implemented
 2026-07-15; phase 2c — bill flows `pay_bill`/`revert_bill_payment`, completing the transaction+bill write path
-and deleting the last bill write methods — implemented 2026-07-15; phase 3 pending) · **Date:** 2026-07-12 ·
+and deleting the last bill write methods — implemented 2026-07-15; phase 3a — simple entity CRUD (account
+update/delete, tag/category/sub-category/credit-card create/delete), including phase 3d's own removal of every
+now-dead `deps` write method for those five entities — implemented 2026-07-15; phase 3b/3c pending, phase 3d
+remains open only for the entities those phases will touch) · **Date:** 2026-07-12 ·
 **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill payment) and finally resolves the thread ADR-015
 opened. Adopts the principle documented in `docs/functional-core-imperative-shell.md` for every write flow.
 
@@ -291,7 +294,96 @@ gets its own generic atomicity/conflict/idempotency suite.
      have added — two sequential `pay_bill` calls land exactly one transfer and one paid flip, and a simulated
      concurrent bill mutation (a version bump landing between `payBill`'s read and the shell's write) rolls
      back the whole batch — transfer included — and recovers cleanly on retry, leaving no partial write.
-   - [ ] Phase 3 (remaining flows): bulk import (reusing phase 2a's `PersistOutcome` idempotency-outcome
-     contract for per-item created/duplicate/needs-review status), recurring, card/category/tag CRUD; remove
-     write methods from `deps`; delete the now-dead transactional repo methods (incl. the phase 2a transitional
-     `addAccountMovementViaRepo`); update `docs/architecture.md` accordingly.
+   - [x] Phase 3a (simple entity CRUD): `update_account`/`delete_account` (the applier already existed from
+     phase 1 — `accountsRepo.findRawById` added for the version-carrying read the flows needed),
+     `create_tag`/`delete_tag`, `create_category`/`delete_category`/`create_sub_category`/`delete_sub_category`,
+     `create_credit_card`/`delete_credit_card` converted end to end (MCP + REST). Three new entities, each owning
+     its own tag (`models/tag.ts`'s `TAG_ENTITY_TAG`, `models/category.ts`'s `CATEGORY_ENTITY_TAG`,
+     `models/creditCard.ts`'s `CREDIT_CARD_ENTITY_TAG`). `tagApplier` (`diplomat/db/repos/tags.ts`) mirrors
+     `billApplier`'s pattern: `tags.name` carries its own `UNIQUE` constraint beyond the `id`-scoped
+     `onConflictDoNothing`, so a concurrent same-name create surfaces as a genuine unique-constraint violation,
+     recognized and rethrown as `VersionConflict` — the retried flow's own `assertTagNameAvailable` then sees
+     the committed row and returns `duplicate_name` instead of a raw 500. The shared cause-chain-walking
+     unique-constraint check moved out of `bills.ts` into `diplomat/db/sqliteErrors.ts`'s
+     `isUniqueConstraintViolation`, used by both appliers now. `deleteTag` stays idempotent-by-design (delete by
+     id, no name resolution): a missing id returns `{ deleted: false }` on an empty `persist` batch, unchanged
+     pre-ADR-021 behavior — not an error. `categoryApplier` (`diplomat/db/repos/categories.ts`) is shared by a
+     top-level category and a sub-category (same table, `parentId` set or not) and is plain
+     `versionedTableApplier(categories)`. It first shipped with a hand-written `delete` that purged dependent
+     `merchant_category` rows itself first (`merchant_category.category_id` had no `ON DELETE` action, so a
+     plain delete would otherwise violate the FK while a learned association still pointed at the category) —
+     caught in review as the same layering slip `creditCardApplier` (below) had, the repo hand-implementing a
+     referential-integrity mechanic that belongs to the schema. Unlike the credit-card cascade, though, this one
+     is *pure mechanics* with zero decision in it — no reads, no branching, always the identical unconditional
+     cascade whenever a category disappears (the domain's own `isCategoryUnreferenced` guard already
+     deliberately leaves merchant learning out of what *blocks* a delete — deleting a category is meant to also
+     clear its learned classifications, re-learnable later — so there was never a decision for the domain to
+     make here), making it structurally identical to `transaction_tags.transaction_id`'s existing
+     `ON DELETE CASCADE`. Moved there: `merchant_category.category_id` now references `categories.id` with
+     `{ onDelete: 'cascade' }` (migration `drizzle/0010_category_merchant_association_cascade.sql`); the
+     now-redundant `categoriesRepo.delete`/`subCategoriesRepo.delete` repo methods dropped their manual
+     `merchant_category` cleanup (the cascade handles it) — and, once checked, turned out to have no other
+     caller left at all (see the `deps` write-method note below), so they were removed outright rather than kept
+     simplified. `creditCardApplier` (`diplomat/db/repos/creditCards.ts`) is plain
+     `versionedTableApplier(creditCards)` — a first version of this applier read the card's own `accountId`
+     back and cascade-deleted every correlated bill/transaction/tag itself, mirroring the pre-ADR-021
+     `deleteCard`'s cascade; caught in review as the repo deciding a business question ("what happens when a
+     card is deleted") — the exact ADR-015/018 smell this whole ADR exists to remove, recurring one layer down
+     — and fixed before merge. **The cascade decision now lives in the domain.** `deleteCreditCard`
+     (`controllers/creditCard/creditCard.ts`) reads every bill (`billsRepo.findAllByCard`, new) and transaction
+     (`transactionsRepo.findAllCorrelatedToCard`, new) correlated to the card and emits their own removal as
+     explicit `Persistable`s, in FK-safe order. A bill with a payment transfer has a **circular reference** with
+     it (`bills.payment_transaction_id` → the transfer; the transfer's own `bill_id` → the bill; no `ON DELETE`
+     action on either column, libsql enforces foreign keys) — cleared first via an `update`
+     (`paymentTransactionId: null`), then every correlated transaction removed (`transaction_tags` cascades via
+     its own schema-declared `ON DELETE CASCADE` — a genuine DB mechanic, not a business decision, so it never
+     becomes a `Persistable`), then every bill, then the card, then its internal liability account. A bill
+     that received the clearing `update` is removed at `bill.version + 1` — the version the shell will have
+     already bumped it to by the time that delete applies in the same batch (rule 4's `model.version + 1` is
+     deterministic, so the domain can compute it too) — not the version read at decision time, which the update
+     already moved past; carrying the stale read version there would be a false, unresolvable version conflict.
+     `deleteCreditCard`'s batch is therefore variable-length — `[...bill-clears, ...transaction removals,
+     ...bill removals, remove creditCard, remove account]` — genuine rule-5 multi-entity composition, not the
+     two-entity batch a repo-side cascade let this flow get away with. `createCreditCard` stays a two-entity
+     insert batch — `[insert account, insert creditCard]`, account first since the card row's `accountId` is a
+     `NOT NULL` FK into it. **`deps.<x>` write methods for these five entities were grep-checked for any
+     remaining caller (production or test) rather than assumed still needed, per the phase 2a/2b/2c
+     transitional-duplication precedent** — and found genuinely dead: `AccountsRepo.update`/`.delete`,
+     `TagsRepo.create`/`.delete`, `CategoriesRepo.create`/`.delete`, `SubCategoriesRepo.create`/`.delete`, and
+     `CreditCardsRepo.deleteCard` (plus the `cascadeDeleteCorrelated` helper the last one was `deleteCard`'s own
+     sole remaining caller for) all removed in this same change — phase 3d completed early for these five,
+     rather than deferred, since there was no other caller left to defer *for*. `AccountsRepo.create`/
+     `CreditCardsRepo.createWithAccount` were removed too, once their one remaining caller (integration-test
+     fixture seeding) switched to raw drizzle inserts (`test/integration/db/unitOfWork.test.ts`'s
+     `insertAccount`/`insertCreditCardWithAccount`) instead of keeping a production write method alive solely
+     for test convenience. Coverage: pure flow tests assert the returned `persist`/`response` for every branch
+     (no correlated rows, an unpaid bill, a paid bill's clear-then-remove-at-version+1); a UoW-level suite
+     extension covers `tagApplier`'s name-race retry, that a
+     plain versioned category delete still removes dependent `merchant_category` rows (now via the schema's own
+     cascade, not `categoryApplier` code — including the sub-category case), that `creditCardApplier`
+     genuinely has no cascade of its own (a correlated bill left behind now surfaces the generic conflict —
+     `versionedTableApplier`'s `delete` catches the FK violation and retries, per its own later refinement
+     below — not a silent removal), and an end-to-end test running the real `deleteCreditCard` controller
+     through the real
+     shell against a seeded DB (two bills — one paid with its payment transfer, one unpaid — plus ordinary
+     purchases and a tag) to prove the whole domain-decided batch, including the circular-FK break, commits
+     atomically. **Refined further:** every converted entity's `persistableToDb`/`outcomeToDb` pair had been
+     hand-written to the same op-switch shape (no-op on a foreign entity tag; `insert` bakes in
+     `INITIAL_VERSION`; `update` shapes the already-versioned model; `delete` passes through) — the adapter-side
+     duplication `versionedTableApplier` had already removed on the applier side. `logic/persistence.ts`'s
+     `entityDbAdapter(entityTag, modelToDb)` factors it out the same way: every adapter now supplies just its
+     own `modelToDb` and one line building `persistableToDb`/`outcomeToDb` from it. `tags`, whose domain model
+     already matches its row shape 1:1 once versioned, gained a small identity `modelToDb` rather than being
+     special-cased out of the factory. `bills` did not fit: its pre-existing `update` branch was a bare
+     passthrough (`return p`) for a real reason, not an oversight — `paymentTransactionId: undefined` means
+     "leave the column unchanged" (drizzle's `.set()` drops undefined-valued keys), `null` means "clear it"
+     (`payBill`'s zero-total path, `models/bill.ts`), a distinction a uniform `modelToDb` called on every
+     `update` collapses into always-`null`. Caught in review before merge; `adapters/bills.ts` kept its own
+     hand-written `persistableToDb`/`outcomeToDb`, unchanged by this factor-out.
+   - [ ] Phase 3b (recurring), phase 3c (bulk import — reusing phase 2a's `PersistOutcome` idempotency-outcome
+     contract for per-item created/duplicate/needs-review status): remaining work; update `docs/architecture.md`
+     accordingly as each lands. Phase 3d (remove now-dead `deps` write methods across every converted entity)
+     completed early for accounts/tags/categories/subCategories/creditCards as part of phase 3a itself (see
+     above) — what remains of phase 3d is the transaction-side write methods bulk import (phase 3c) still needs
+     (`TransactionsRepo.create` via `addAccountMovementViaRepo`/`addCardPurchaseViaRepo`, `BillsRepo.ensureOpen`),
+     removed once phase 3c converts their last caller.

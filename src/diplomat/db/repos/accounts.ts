@@ -1,51 +1,27 @@
 import { eq, sql } from 'drizzle-orm';
 import * as accountAdapters from '../../../adapters/accounts.js';
-import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
-import type { Account, AccountReferences, AccountType } from '../../../models/account.js';
-import type { CurrencyCode } from '../../../models/money.js';
+import type { Account, AccountEntity, AccountReferences } from '../../../models/account.js';
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
 import { BalancePartsRow } from '../../../wire/db/accounts.js';
 import type { Db } from '../driver.js';
 import { accounts, creditCards, recurringRules, transactions } from '../schema.js';
 import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
-export type AccountPatch = {
-  name?: string;
-  initialBalance?: number;
-  type?: AccountType;
-  currency?: CurrencyCode;
-};
-
 export type AccountsRepo = {
   list: () => Promise<Account[]>;
-  create: (account: Account) => Promise<Account>;
   findById: (id: string) => Promise<Account | null>;
   findByName: (name: string) => Promise<Account | null>;
+  /** Version-carrying read (ADR-021) — for flows building an `update`/`delete` `Persistable`. */
+  findRawById: (id: string) => Promise<AccountEntity | null>;
   /** Aggregated movement per account: transactions + transfers, both directions. */
   balanceParts: (accountId: string) => Promise<BalancePartsRow>;
   countReferences: (accountId: string) => Promise<AccountReferences>;
-  delete: (accountId: string) => Promise<void>;
-  update: (accountId: string, patch: AccountPatch) => Promise<Account>;
 };
 
 export const accountsRepo = (db: Db): AccountsRepo => ({
   list: async () => {
     const rows = await db.select().from(accounts).orderBy(accounts.name);
     return rows.map(accountAdapters.dbToModel);
-  },
-
-  create: async (account) => {
-    const [row] = await db
-      .insert(accounts)
-      .values({
-        id: account.id,
-        name: account.name,
-        type: account.type,
-        initialBalance: account.initialBalance,
-        currency: account.currency,
-      })
-      .returning();
-    return accountAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('accounts', 'insert')));
   },
 
   findById: async (id) => {
@@ -64,6 +40,15 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
       .where(sql`lower(${accounts.name}) = lower(${name})`)
       .limit(1);
     return rows[0] ? accountAdapters.dbToModel(rows[0]) : null;
+  },
+
+  findRawById: async (id) => {
+    const rows = await db
+      .select()
+      .from(accounts)
+      .where(sql`${accounts.id} = ${id}`)
+      .limit(1);
+    return rows[0] ? accountAdapters.dbToEntity(rows[0]) : null;
   },
 
   balanceParts: async (accountId) => {
@@ -115,23 +100,6 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
     };
   },
 
-  delete: async (accountId) => {
-    await db.delete(accounts).where(eq(accounts.id, accountId));
-  },
-
-  update: async (accountId, patch) => {
-    const values: Record<string, unknown> = {};
-    if (patch.name !== undefined) values.name = patch.name;
-    if (patch.initialBalance !== undefined) values.initialBalance = patch.initialBalance;
-    if (patch.type !== undefined) values.type = patch.type;
-    if (patch.currency !== undefined) values.currency = patch.currency;
-    if (Object.keys(values).length === 0) {
-      const existing = await db.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
-      return accountAdapters.dbToModel(expectPresent(existing[0], 'accounts: row not found'));
-    }
-    const [row] = await db.update(accounts).set(values).where(eq(accounts.id, accountId)).returning();
-    return accountAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('accounts', 'update')));
-  },
 });
 
 /**

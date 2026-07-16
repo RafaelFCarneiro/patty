@@ -1,9 +1,9 @@
 import { eq, isNull, sql } from 'drizzle-orm';
 import * as categoryAdapters from '../../../adapters/categories.js';
-import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
-import type { Category } from '../../../models/category.js';
+import type { Category, CategoryVersion } from '../../../models/category.js';
 import type { Db } from '../driver.js';
-import { categories, merchantCategory, recurringRules, transactions } from '../schema.js';
+import { categories, recurringRules, transactions } from '../schema.js';
+import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
 export type ListCategoriesOptions = {
   orderBy?: 'name';
@@ -13,9 +13,11 @@ export type BlockingReferences = { transactions: number; recurring: number; subC
 
 export type CategoriesRepo = {
   list: (options?: ListCategoriesOptions) => Promise<Category[]>;
-  create: (category: Category) => Promise<Category>;
   countReferences: (categoryId: string) => Promise<BlockingReferences>;
-  delete: (categoryId: string) => Promise<void>;
+  /** Version-carrying read (ADR-021) — for `deleteCategory`/`deleteSubCategory`, which need it to
+   *  build a version-guarded `Persistable`. Shared by both, since a sub-category is a row in this
+   *  same table. */
+  findRawById: (categoryId: string) => Promise<CategoryVersion | null>;
 };
 
 export const categoriesRepo = (db: Db): CategoriesRepo => ({
@@ -24,19 +26,6 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
     const query = db.select().from(categories).where(isNull(categories.parentId));
     const rows = options?.orderBy === 'name' ? await query.orderBy(categories.name) : await query;
     return rows.map(categoryAdapters.dbToModel);
-  },
-
-  create: async (category) => {
-    const [row] = await db
-      .insert(categories)
-      .values({
-        id: category.id,
-        name: category.name,
-        kind: category.kind,
-        names: category.names ? JSON.stringify(category.names) : null,
-      })
-      .returning();
-    return categoryAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('categories', 'insert')));
   },
 
   countReferences: async (categoryId) => {
@@ -63,10 +52,17 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
     };
   },
 
-  delete: async (categoryId) => {
-    await db.transaction(async (tx) => {
-      await tx.delete(merchantCategory).where(eq(merchantCategory.categoryId, categoryId));
-      await tx.delete(categories).where(eq(categories.id, categoryId));
-    });
+  findRawById: async (categoryId) => {
+    const [row] = await db
+      .select({ id: categories.id, version: categories.version })
+      .from(categories)
+      .where(eq(categories.id, categoryId))
+      .limit(1);
+    return row ?? null;
   },
 });
+
+/** Shared by both a top-level category and a sub-category (same table). Deleting a category also
+ *  clears its `merchant_category` learning rows, but that's a schema-declared `ON DELETE CASCADE`
+ *  on `merchant_category.category_id` (`schema.ts`), not applier code — this stays plain. */
+export const categoryApplier: EntityApplier = versionedTableApplier(categories);

@@ -11,11 +11,21 @@
 > `update_account_transaction`/`delete_account_transaction` — plus the `PersistOutcome` idempotency-outcome
 > plumbing rule 6 describes), phase 2b (the credit-card transaction flows — `add_card_purchase`/
 > `update_card_transaction`/`delete_card_transaction`, including `billApplier`'s cycle-uniqueness-race-as-retry
-> handling), and phase 2c (the bill flows — `pay_bill`/`revert_bill_payment`, completing the transaction+bill
-> write path and deleting the last bill write methods — `deps.bills.markPaid`/`revertPayment`/`setStatus`) are
-> implemented; the remaining flows (bulk import, recurring, CRUD — phase 3) still drive their own persistence via
-> injected repo write methods until that phase converts them — this principle is the target shape for every one
-> of them, not yet the as-built state of the whole write path.
+> handling), phase 2c (the bill flows — `pay_bill`/`revert_bill_payment`, completing the transaction+bill
+> write path and deleting the last bill write methods — `deps.bills.markPaid`/`revertPayment`/`setStatus`), and
+> phase 3a (the simple entity CRUD flows — `update_account`/`delete_account`, `create_tag`/`delete_tag`,
+> `create_category`/`delete_category`/`create_sub_category`/`delete_sub_category`,
+> `create_credit_card`/`delete_credit_card` — including `tagApplier`'s own beyond-`id`/`version` mechanics, a
+> two-entity batch for credit-card create, `deleteCreditCard`'s own domain-decided cascade of every correlated
+> bill/transaction ahead of the card, and `merchant_category`'s cleanup on category delete moved to a
+> schema-declared `ON DELETE CASCADE` rather than either the domain or an applier deciding it) are implemented,
+> including phase 3d's own removal of every `deps` write method these five entities' flows turned out to have no
+> other caller for (`accounts.update`/`.delete`, `tags.create`/`.delete`, `categories.create`/`.delete`,
+> `subCategories.create`/`.delete`, `creditCards.deleteCard`); the
+> remaining flows (bulk import, recurring — phase 3b/3c) still drive their own persistence via injected repo
+> write methods until that phase converts them, and *those* entities' now-unused write methods are removed only
+> once their own callers convert — this principle is the target shape for every one of them, not yet the
+> as-built state of the whole write path.
 
 ## The principle
 
@@ -81,8 +91,13 @@ database, a different transport) without the domain noticing.
    engine (`withUnitOfWork`), it must already speak **rows**. The `modelToDb` adaptation is **not** the
    engine's job, and not the entity's applier's job either — it happens once, explicitly, at the MCP/REST
    handler that calls `unitOfWork`, immediately after the controller returns and before the batch is handed
-   over (e.g. `adapters/accounts.ts`'s `persistableToDb`, mapped over the whole batch via `outcomeToDb`). The
-   engine dispatches each already-row-shaped `Persistable` to the entity's own applier — an object exposing
+   over (e.g. `adapters/accounts.ts`'s `outcomeToDb`, mapped over the whole batch). Every entity's
+   `persistableToDb`/`outcomeToDb` pair is built by the same shared factory
+   (`logic/persistence.ts`'s `entityDbAdapter(entityTag, modelToDb)`) from just its own `modelToDb` — the
+   adapter-side twin of `versionedTableApplier` below, for the same reason: the op-switch (no-op on a
+   foreign tag, bake in `INITIAL_VERSION` on insert, shape the model on update, pass `delete` through
+   untouched) is identical for every entity. The engine dispatches each already-row-shaped `Persistable` to
+   the entity's own applier — an object exposing
    generic `insert`/`update`/`delete` methods that do only the matching table op, nothing else. Because the
    adaptation already happened, those methods are pure mechanics — cast the row, write it, guard on `version`
    — identical for any table keyed by `id` with a `version` column, which most tables are; such an entity

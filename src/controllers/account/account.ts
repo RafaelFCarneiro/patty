@@ -1,8 +1,7 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
-import { guard } from '../../common/result.js';
-import type { AccountPatch } from '../../diplomat/db/repos/accounts.js';
+import { guard, okOr } from '../../common/result.js';
 import {
   assertNonCreditType,
   filterByType,
@@ -16,7 +15,15 @@ import { computeBalance, computeProjectedBalance } from '../../logic/balance.js'
 import * as persistence from '../../logic/persistence.js';
 import { resolveByName } from '../../logic/resolve.js';
 import { accountErrors, ACCOUNT_ENTITY_TAG } from '../../models/account.js';
-import type { Account, AccountBalance, AccountType, CreateAccount, UpdateAccount } from '../../models/account.js';
+import type {
+  Account,
+  AccountBalance,
+  AccountEntity,
+  AccountType,
+  CreateAccount,
+  UpdateAccount,
+} from '../../models/account.js';
+import { notFound } from '../../models/error.js';
 import type { FlowOutcome, Persistable } from '../../models/persistable.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
@@ -74,17 +81,19 @@ export const getAccountBalances = (
     return ok(balances);
   });
 
-export const deleteAccount = (deps: Deps, name: string): ResultAsync<{ deleted: boolean }, AppError> =>
+export const deleteAccount = (deps: Deps, name: string): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>
   safeTry(async function* () {
     const account = yield* resolveAccountRef(deps, name);
     yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected);
     const refs = await deps.accounts.countReferences(account.id);
     yield* guard(isUnreferenced(refs), accountErrors.inUse(account.name, refs));
-    await deps.accounts.delete(account.id);
-    return ok({ deleted: true });
+
+    const raw = yield* okOr(await deps.accounts.findRawById(account.id), notFound('account', account.id, []));
+    const persist = [persistence.remove({ entity: ACCOUNT_ENTITY_TAG, id: raw.id, version: raw.version })];
+    return ok({ persist, response: { deleted: true } });
   });
 
-export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<Account, AppError> =>
+export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
   safeTry(async function* () {
     const account = yield* resolveAccountRef(deps, input.name);
     yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected);
@@ -106,12 +115,19 @@ export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<Acc
       }
     }
 
-    const patch: AccountPatch = {};
-    if (R.isDefined(input.newName)) patch.name = input.newName;
-    if (R.isDefined(input.initialBalance)) patch.initialBalance = input.initialBalance;
-    if (R.isDefined(input.type)) patch.type = input.type;
-    if (R.isDefined(input.currency)) patch.currency = input.currency;
+    const raw = yield* okOr(await deps.accounts.findRawById(account.id), notFound('account', account.id, []));
+    const entity: AccountEntity = {
+      ...raw,
+      name: input.newName ?? raw.name,
+      initialBalance: input.initialBalance ?? raw.initialBalance,
+      type: input.type ?? raw.type,
+      currency: input.currency ?? raw.currency,
+    };
 
     const locale = await deps.locale();
-    return ok(withTypeLabel(await deps.accounts.update(account.id, patch), locale));
+    const persist = R.isDeepEqual(entity, raw)
+      ? []
+      : [persistence.update({ entity: ACCOUNT_ENTITY_TAG, model: entity })];
+    const response = withTypeLabel(R.omit(entity, ['version']), locale);
+    return ok({ persist, response });
   });

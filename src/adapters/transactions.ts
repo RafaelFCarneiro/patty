@@ -10,7 +10,7 @@ import { LocalizedNamesSchema } from '../models/category.js';
 import type { ClassifiedUpsertResult, DeleteTransactionResult, SearchTransactions } from '../models/transaction.js';
 import type { BulkItemResult } from '../logic/transaction.js';
 import type { AppError } from '../common/errors.js';
-import { INITIAL_VERSION, PersistOp, type FlowOutcome, type Persistable } from '../models/persistable.js';
+import * as persistence from '../logic/persistence.js';
 import { TransactionRowSchema, type TransactionDbProps, type TransactionDbRefs } from '../wire/db/transactions.js';
 import type * as wireIn from '../wire/in/transactions.js';
 import type { BulkItemOut } from '../wire/out/transactions.js';
@@ -127,40 +127,7 @@ export const entityToDb = (entity: TransactionEntity & { version: number }): Tra
   };
 };
 
-/**
- * Adapts one transaction `Persistable`'s `model` from domain shape to db-row shape (ADR-021),
- * mirroring `adapters/accounts.ts`'s `persistableToDb` — called explicitly by the MCP/REST handler,
- * via `outcomeToDb` below, before the batch ever reaches `withUnitOfWork`, so `diplomat/db` (the
- * `transactionApplier`, registered under `TRANSACTION_ENTITY_TAG`) never adapts a model itself, only
- * writes the row it's handed. No-ops on a `Persistable` tagged for a different entity (rule 5:
- * composed flows may carry other entities' persistables too). `insert` has no `version` on its
- * model (nothing the core decides — see `models/persistable.ts`); it's added here. `delete` carries
- * no model to adapt.
- */
-export const persistableToDb = (p: Persistable): Persistable => {
-  if (p.entity !== TRANSACTION_ENTITY_TAG) return p;
-  switch (p.op) {
-    case PersistOp.enum.insert:
-      return { ...p, model: entityToDb({ ...(p.model as TransactionEntity), version: INITIAL_VERSION }) };
-    case PersistOp.enum.update:
-      return { ...p, model: entityToDb(p.model as TransactionEntity & { version: number }) };
-    case PersistOp.enum.delete:
-      return p;
-    default: {
-      const _exhaustive: never = p;
-      throw new Error(`transactionAdapters.persistableToDb: unhandled persistable op ${JSON.stringify(_exhaustive)}`);
-    }
-  }
-};
-
-/** Maps every `Persistable` in a flow's outcome through `persistableToDb` — the one call an
- *  account-producing MCP/REST handler makes between the controller and `unitOfWork`. Safe over a
- *  mixed-entity batch (composed flows, ADR-021 rule 5) — `persistableToDb` no-ops on anything not
- *  tagged `TRANSACTION_ENTITY_TAG`. */
-export const outcomeToDb = <T>(outcome: FlowOutcome<T>): FlowOutcome<T> => ({
-  ...outcome,
-  persist: outcome.persist.map(persistableToDb),
-});
+export const { persistableToDb, outcomeToDb } = persistence.entityDbAdapter(TRANSACTION_ENTITY_TAG, entityToDb);
 
 /** model→db: flatten a domain patch into SQL-settable properties. */
 export const patchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> => ({
