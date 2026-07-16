@@ -208,16 +208,15 @@ describe('updateAccount — functional core (ADR-021 phase 3a)', () => {
     expect(outcome.response).toMatchObject({ name: 'Renamed', typeLabel: 'Checking' });
   });
 
-  it('a no-field update returns the account unchanged', async () => {
+  it('a no-field update returns the account unchanged and writes nothing', async () => {
     const deps = makeDeps({ accounts: makeAccountsRepo() });
 
     const result = await updateAccount(deps, { name: 'Nubank' });
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
-    expect(outcome.persist).toEqual([
-      { op: PersistOp.enum.update, entity: ACCOUNT_ENTITY_TAG, model: accountEntity() },
-    ]);
+    expect(outcome.persist).toEqual([]);
+    expect(outcome.response).toMatchObject({ name: 'Nubank' });
   });
 
   it('rejects setting type to credit', async () => {

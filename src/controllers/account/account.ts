@@ -125,7 +125,9 @@ export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<Flo
     };
 
     const locale = await deps.locale();
-    const persist = [persistence.update({ entity: ACCOUNT_ENTITY_TAG, model: entity })];
+    const persist = R.isDeepEqual(entity, raw)
+      ? []
+      : [persistence.update({ entity: ACCOUNT_ENTITY_TAG, model: entity })];
     const response = withTypeLabel(R.omit(entity, ['version']), locale);
     return ok({ persist, response });
   });
