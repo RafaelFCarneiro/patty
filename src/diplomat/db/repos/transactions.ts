@@ -19,7 +19,6 @@ import type { SummaryRow } from '../../../models/summary.js';
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js';
 import { ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
-import { correlatedToCard } from '../creditCardCorrelation.js';
 import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
 import { merchants, tags, transactionTags, transactions } from '../schema.js';
@@ -80,6 +79,16 @@ const keysetPredicate = (sort: TransactionSortField, dir: SortDirection, key: Cu
   const column = sql.raw(ORDER_BY_COLUMN[sort]);
   const cmp = dir === SortDirection.enum.asc ? sql`>` : sql`<`;
   return sql`(${column} ${cmp} ${key.value} OR (${column} = ${key.value} AND t.id ${cmp} ${key.id}))`;
+};
+
+/** What counts as "correlated" to a credit card: a purchase on the card itself (`credit_card_id`)
+ *  or any movement on its own internal liability account (`from_account_id`/`to_account_id`),
+ *  including the bill-payment transfer. `alias` lets a caller qualify the columns for a joined
+ *  query. Exported for `creditCardsRepo.countCorrelated`, which also filters the transactions
+ *  table by this predicate. */
+export const correlatedToCard = (cardId: string, accountId: string, alias = ''): SQL => {
+  const col = (name: string) => sql.raw(alias ? `${alias}.${name}` : name);
+  return sql`${col('credit_card_id')} = ${cardId} OR ${col('from_account_id')} = ${accountId} OR ${col('to_account_id')} = ${accountId}`;
 };
 
 export type TransactionsRepo = {

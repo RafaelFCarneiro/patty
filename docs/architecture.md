@@ -259,9 +259,11 @@ performing it; the diplomat shell **applies** it.
     `deleteCreditCard` (`controllers/creditCard/creditCard.ts`) reads every bill (`billsRepo.findAllByCard`) and
     transaction (`transactionsRepo.findAllCorrelatedToCard`) correlated to the card and emits their own
     `update`/`delete` `Persistable`s explicitly. "Correlated to a card" (a purchase on it, or any movement on its
-    own internal liability account) is itself one predicate, `diplomat/db/creditCardCorrelation.ts`'s
-    `correlatedToCard` — shared by that new read, `countCorrelated`'s dry-run counts, and the legacy `deleteCard`
-    repo method's own cascade, so the definition lives in one place rather than three copies of the same SQL. In
+    own internal liability account) is itself one predicate, `diplomat/db/repos/transactions.ts`'s
+    `correlatedToCard` — exported from the transactions repo since every column it reads
+    (`credit_card_id`, `from_account_id`, `to_account_id`) is a transactions-table column, and reused by
+    `creditCardsRepo.countCorrelated`'s dry-run counts, so the definition lives in one place rather than
+    two copies of the same SQL. In
     FK-safe order: a bill with a payment transfer has a
     **circular reference** with it (`bills.payment_transaction_id` → the transfer; the transfer's own `bill_id`
     → the bill; libsql enforces foreign keys, no `ON DELETE` action on either column) — that one reference is

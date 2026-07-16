@@ -2,10 +2,10 @@ import { eq, sql } from 'drizzle-orm';
 import * as creditCardAdapters from '../../../adapters/creditCards.js';
 import { CreditCardSchema, type CreditCard, type CreditCardEntity } from '../../../models/creditCard.js';
 import type { CreditCardRow } from '../../../wire/db/creditCards.js';
-import { correlatedToCard } from '../creditCardCorrelation.js';
 import type { Db } from '../driver.js';
 import { creditCards } from '../schema.js';
 import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
+import { correlatedToCard } from './transactions.js';
 
 const toCard = (row: CreditCardRow): CreditCard =>
   CreditCardSchema.parse({
