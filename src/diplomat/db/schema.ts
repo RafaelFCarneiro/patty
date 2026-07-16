@@ -75,7 +75,7 @@ export const merchantCategory = sqliteTable(
       .references(() => merchants.key),
     categoryId: text('category_id')
       .notNull()
-      .references(() => categories.id),
+      .references(() => categories.id, { onDelete: 'cascade' }),
     weight: real('weight').notNull().default(1),
     origin: text('origin', { enum: [ClassificationMethod.enum.rule, ClassificationMethod.enum.history] }).notNull(),
     lastSeen: integer('last_seen'),

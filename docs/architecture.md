@@ -235,15 +235,20 @@ performing it; the diplomat shell **applies** it.
     `{ deleted: false }` on an *empty* `persist` batch (no write) rather than an error — unchanged pre-ADR-021
     behavior (mirrors `deleteAccountTransaction`'s dry-run shape).
   - **`categoryApplier`** (`diplomat/db/repos/categories.ts`) is shared by both a top-level category and a
-    sub-category — same `categories` table, `parentId` set or not, one `CATEGORY_ENTITY_TAG`. Its `delete` has
-    genuine extra mechanics beyond the plain convention: `merchant_category.category_id` references
-    `categories.id` with no `ON DELETE` action, so a plain versioned delete would violate the FK while any
-    learned merchant association still points at the category (the domain's own `isCategoryUnreferenced` guard
-    deliberately does *not* count `merchant_category` rows — deleting a category is meant to also clear its
-    learned classifications, re-learnable later). `categoryApplier.delete` purges the dependent
-    `merchant_category` rows first, in the same transaction, then the version-guarded row delete — mirrors the
-    pre-ADR-021 repo `delete`'s own two-step transaction. `insert`/`update` stay plain
-    `versionedTableApplier(categories)`.
+    sub-category — same `categories` table, `parentId` set or not, one `CATEGORY_ENTITY_TAG` — and is plain
+    `versionedTableApplier(categories)`, no mechanics beyond the ordinary convention. It once purged dependent
+    `merchant_category` rows itself before the row delete (`merchant_category.category_id` has no `ON DELETE`
+    action, so a plain delete would otherwise violate the FK while a learned association still pointed at the
+    category) — the repo hand-implementing a referential-integrity mechanic that belongs to the schema, the same
+    layering slip `creditCardApplier` (below) had. Unlike that case, this cleanup is *pure mechanics* with zero
+    decision in it — no reads, no branching, always the identical unconditional cascade whenever a category
+    disappears (the domain's own `isCategoryUnreferenced` guard already deliberately leaves merchant learning
+    out of what *blocks* a delete — deleting a category is meant to also clear its learned classifications,
+    re-learnable later — so there was never a decision for the domain to make here). That makes it structurally
+    identical to `transaction_tags.transaction_id`'s `ON DELETE CASCADE` — an association row with no
+    independent meaning once its owner is gone — so it now lives there too:
+    `merchant_category.category_id` references `categories.id` with `{ onDelete: 'cascade' }`
+    (migration `drizzle/0010_category_merchant_association_cascade.sql`).
   - **`creditCardApplier`** (`diplomat/db/repos/creditCards.ts`) is plain `versionedTableApplier(creditCards)` —
     no cascade of its own. An earlier version of this applier read the card's own `accountId` back and
     cascade-deleted every correlated bill/transaction/tag itself, mirroring the pre-ADR-021 `deleteCard` repo
@@ -469,4 +474,4 @@ available alongside the server.
 - ADR-017: no god write flows — bounded-context ownership for every transaction mutation (extends ADR-016; step 1 [update/delete split] and step 2 [bulk split] both implemented — complete; ownership discriminator revised by ADR-020)
 - ADR-019: minimal transaction core — aggregates `.extend` the shared movement schema up, never `.omit` it down (step 1 [schema compose-up] and step 2 [logic re-homing] both implemented — complete)
 - ADR-020: transaction ownership by account type, not structural field-presence (revises ADR-017's union rule; refines ADR-019 PR-2 — implemented)
-- ADR-021: functional core / imperative shell for the write path — controllers return a `persist` batch instead of writing, a generic versioned unit of work applies it (supersedes ADR-018; phase 1 [groundwork + `createAccount` first mover], phase 2a [account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing], phase 2b [credit-card transaction flows + `billApplier`'s cycle-race-via-retry], phase 2c [bill flows `pay_bill`/`revert_bill_payment`; `deps.bills.markPaid`/`revertPayment`/`setStatus` deleted], and phase 3a [simple entity CRUD — account update/delete, tag/category/sub-category/credit-card create/delete; `tagApplier`'s name-race retry, `categoryApplier`'s merchant_category cascade, `deleteCreditCard`'s domain-decided correlated-bill/transaction cascade (breaking the paid-bill↔payment-transfer circular FK itself, not a repo-side `creditCardApplier` cascade), a two-entity batch for credit-card create] implemented, phase 3b–3d pending)
+- ADR-021: functional core / imperative shell for the write path — controllers return a `persist` batch instead of writing, a generic versioned unit of work applies it (supersedes ADR-018; phase 1 [groundwork + `createAccount` first mover], phase 2a [account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing], phase 2b [credit-card transaction flows + `billApplier`'s cycle-race-via-retry], phase 2c [bill flows `pay_bill`/`revert_bill_payment`; `deps.bills.markPaid`/`revertPayment`/`setStatus` deleted], and phase 3a [simple entity CRUD — account update/delete, tag/category/sub-category/credit-card create/delete; `tagApplier`'s name-race retry, `merchant_category`'s cascade moved from a hand-written `categoryApplier` mechanic to a schema-declared `ON DELETE CASCADE` (migration 0010), `deleteCreditCard`'s domain-decided correlated-bill/transaction cascade (breaking the paid-bill↔payment-transfer circular FK itself, not a repo-side `creditCardApplier` cascade), a two-entity batch for credit-card create] implemented, phase 3b–3d pending)

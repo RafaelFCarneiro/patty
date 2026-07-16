@@ -3,7 +3,7 @@ import * as categoryAdapters from '../../../adapters/categories.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Category, CategoryVersion } from '../../../models/category.js';
 import type { Db } from '../driver.js';
-import { categories, merchantCategory, recurringRules, transactions } from '../schema.js';
+import { categories, recurringRules, transactions } from '../schema.js';
 import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
 export type ListCategoriesOptions = {
@@ -68,11 +68,10 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
     };
   },
 
+  // merchant_category rows for this category cascade away on their own (schema-declared
+  // ON DELETE CASCADE on merchant_category.category_id) — no separate delete needed here.
   delete: async (categoryId) => {
-    await db.transaction(async (tx) => {
-      await tx.delete(merchantCategory).where(eq(merchantCategory.categoryId, categoryId));
-      await tx.delete(categories).where(eq(categories.id, categoryId));
-    });
+    await db.delete(categories).where(eq(categories.id, categoryId));
   },
 
   findRawById: async (categoryId) => {
@@ -85,26 +84,23 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
   },
 });
 
-const versionedCategoryApplier = versionedTableApplier(categories);
-
 /**
  * The category entity's `EntityApplier` (ADR-021) — shared by both a top-level category and a
- * sub-category (same table). `merchant_category.category_id` references `categories.id` with no
- * `ON DELETE` action (libsql enforces foreign keys), so a plain versioned delete of the category
- * row would fail while any learned merchant association still points at it — the domain's own
- * referential-integrity guard (`isCategoryUnreferenced`) only checks transactions/recurring/
- * sub-categories, deliberately leaving merchant learning out of what blocks a delete (a category
- * delete is meant to also clear its learned classifications, re-learnable later). Mirrors the
- * pre-ADR-021 repo `delete` above: purge the dependent `merchant_category` rows first, in the same
- * transaction, then the version-guarded row delete — genuine extra mechanics beyond the plain
- * `id`/`version` convention, so this is a hand-written applier rather than
- * `versionedTableApplier(categories)` directly (mirrors `diplomat/db/repos/bills.ts`'s
- * `billApplier`). `insert`/`update` have no such mechanics and stay plain.
+ * sub-category (same table). Plain `versionedTableApplier(categories)` — deleting a category row
+ * has no mechanics beyond the ordinary `id`/`version` convention. It once did: an earlier version
+ * of this applier purged dependent `merchant_category` rows itself before the row delete, imitating
+ * an `ON DELETE CASCADE` by hand — the repo deciding a referential-integrity mechanic that belongs
+ * to the schema, the same layering slip `diplomat/db/repos/creditCards.ts`'s `creditCardApplier`
+ * had (see its own doc comment). Unlike that case, though, this cleanup is *pure mechanics* with no
+ * decision in it at all — no reads, no branching, always the same unconditional cascade whenever a
+ * category disappears (the domain's own referential-integrity guard, `isCategoryUnreferenced`,
+ * already deliberately leaves merchant learning out of what *blocks* a delete — a category delete
+ * is meant to also clear its learned classifications, re-learnable later — so there was never a
+ * decision left for the domain to make here). That makes it structurally identical to
+ * `transaction_tags.transaction_id`'s `ON DELETE CASCADE` (`schema.ts`) — an association row with
+ * no independent meaning once its owner is gone — so it now lives there too:
+ * `merchant_category.category_id` references `categories.id` with `{ onDelete: 'cascade' }`
+ * (migration `drizzle/0010_category_merchant_association_cascade.sql`). The applier writes only the
+ * row it's handed, same as every other plain entity.
  */
-export const categoryApplier: EntityApplier = {
-  ...versionedCategoryApplier,
-  delete: async (tx, id, version) => {
-    await tx.delete(merchantCategory).where(eq(merchantCategory.categoryId, id));
-    return versionedCategoryApplier.delete(tx, id, version);
-  },
-};
+export const categoryApplier: EntityApplier = versionedTableApplier(categories);

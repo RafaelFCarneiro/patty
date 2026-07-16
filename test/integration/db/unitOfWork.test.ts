@@ -1025,7 +1025,7 @@ describe('tagApplier — name-uniqueness race surfaces as a generic conflict (AD
   });
 });
 
-describe('categoryApplier — delete cascades merchant_category rows (ADR-021 phase 3a)', () => {
+describe('categoryApplier — plain mechanics; merchant_category cascades via schema FK (ADR-021 3a follow-up)', () => {
   const categoryRegistry: ApplierRegistry = { [CATEGORY_ENTITY_TAG]: categoryApplier };
 
   const seedCategoryWithLearnedEdge = async (): Promise<string> => {
@@ -1060,7 +1060,7 @@ describe('categoryApplier — delete cascades merchant_category rows (ADR-021 ph
     expect(await db.all(sql`SELECT id FROM categories WHERE id = ${categoryId}`)).toHaveLength(0);
   });
 
-  it('purges dependent merchant_category rows first — a plain delete would violate the FK', async () => {
+  it('a plain versioned delete still removes dependent merchant_category rows — the schema cascades them', async () => {
     const categoryId = await seedCategoryWithLearnedEdge();
     expect(await db.all(sql`SELECT 1 FROM merchant_category WHERE category_id = ${categoryId}`)).toHaveLength(1);
 
@@ -1075,6 +1075,9 @@ describe('categoryApplier — delete cascades merchant_category rows (ADR-021 ph
 
     expect(result.isOk()).toBe(true);
     expect(await db.all(sql`SELECT id FROM categories WHERE id = ${categoryId}`)).toHaveLength(0);
+    // Gone via merchant_category.category_id's ON DELETE CASCADE (schema.ts) — categoryApplier
+    // itself is the same plain versionedTableApplier(categories) used for insert/update above,
+    // with no merchant_category-specific code of its own.
     expect(await db.all(sql`SELECT 1 FROM merchant_category WHERE category_id = ${categoryId}`)).toHaveLength(0);
   });
 

@@ -307,13 +307,22 @@ gets its own generic atomicity/conflict/idempotency suite.
      `isUniqueConstraintViolation`, used by both appliers now. `deleteTag` stays idempotent-by-design (delete by
      id, no name resolution): a missing id returns `{ deleted: false }` on an empty `persist` batch, unchanged
      pre-ADR-021 behavior — not an error. `categoryApplier` (`diplomat/db/repos/categories.ts`) is shared by a
-     top-level category and a sub-category (same table, `parentId` set or not); its `delete` has genuine extra
-     mechanics — `merchant_category.category_id` references `categories.id` with no `ON DELETE` action, and the
-     domain's own referential-integrity guard (`isCategoryUnreferenced`) deliberately does not count
-     `merchant_category` rows (a category delete is meant to also clear learned classifications, re-learnable
-     later) — so a plain versioned delete would violate the FK; `categoryApplier.delete` purges the dependent
-     `merchant_category` rows first, in the same transaction, mirroring the pre-ADR-021 repo `delete`'s own
-     two-step transaction. `creditCardApplier` (`diplomat/db/repos/creditCards.ts`) is plain
+     top-level category and a sub-category (same table, `parentId` set or not) and is plain
+     `versionedTableApplier(categories)`. It first shipped with a hand-written `delete` that purged dependent
+     `merchant_category` rows itself first (`merchant_category.category_id` had no `ON DELETE` action, so a
+     plain delete would otherwise violate the FK while a learned association still pointed at the category) —
+     caught in review as the same layering slip `creditCardApplier` (below) had, the repo hand-implementing a
+     referential-integrity mechanic that belongs to the schema. Unlike the credit-card cascade, though, this one
+     is *pure mechanics* with zero decision in it — no reads, no branching, always the identical unconditional
+     cascade whenever a category disappears (the domain's own `isCategoryUnreferenced` guard already
+     deliberately leaves merchant learning out of what *blocks* a delete — deleting a category is meant to also
+     clear its learned classifications, re-learnable later — so there was never a decision for the domain to
+     make here), making it structurally identical to `transaction_tags.transaction_id`'s existing
+     `ON DELETE CASCADE`. Moved there: `merchant_category.category_id` now references `categories.id` with
+     `{ onDelete: 'cascade' }` (migration `drizzle/0010_category_merchant_association_cascade.sql`); the
+     now-redundant manual `merchant_category` deletes in the legacy `categoriesRepo.delete`/`subCategoriesRepo
+     .delete` repo methods were removed too (the cascade handles it; those methods stay for phase 3d otherwise).
+     `creditCardApplier` (`diplomat/db/repos/creditCards.ts`) is plain
      `versionedTableApplier(creditCards)` — a first version of this applier read the card's own `accountId`
      back and cascade-deleted every correlated bill/transaction/tag itself, mirroring the pre-ADR-021
      `deleteCard`'s cascade; caught in review as the repo deciding a business question ("what happens when a
@@ -339,8 +348,9 @@ gets its own generic atomicity/conflict/idempotency suite.
      left in place, unused by their converted flow — phase 3d removes them once every caller has converted
      (mirrors phase 2a/2b/2c's own transitional-duplication precedent). Coverage: pure flow tests assert the
      returned `persist`/`response` for every branch (no correlated rows, an unpaid bill, a paid bill's
-     clear-then-remove-at-version+1); a UoW-level suite extension covers `tagApplier`'s name-race retry,
-     `categoryApplier`'s merchant_category cascade (including the sub-category case), that `creditCardApplier`
+     clear-then-remove-at-version+1); a UoW-level suite extension covers `tagApplier`'s name-race retry, that a
+     plain versioned category delete still removes dependent `merchant_category` rows (now via the schema's own
+     cascade, not `categoryApplier` code — including the sub-category case), that `creditCardApplier`
      genuinely has no cascade of its own (a correlated bill left behind now surfaces a raw FK violation, not a
      silent removal), and an end-to-end test running the real `deleteCreditCard` controller through the real
      shell against a seeded DB (two bills — one paid with its payment transfer, one unpaid — plus ordinary

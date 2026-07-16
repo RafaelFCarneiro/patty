@@ -4,7 +4,7 @@ import { expectPresent } from '../present.js';
 import type { SubCategory, CreateSubCategory } from '../../../models/category.js';
 import type { BlockingReferences } from './categories.js';
 import type { Db } from '../driver.js';
-import { categories, merchantCategory, recurringRules, transactions } from '../schema.js';
+import { categories, recurringRules, transactions } from '../schema.js';
 
 export type SubCategoriesRepo = {
   list: () => Promise<SubCategory[]>;
@@ -90,10 +90,9 @@ export const subCategoriesRepo = (db: Db): SubCategoriesRepo => ({
     };
   },
 
+  // merchant_category rows for this sub-category cascade away on their own (schema-declared
+  // ON DELETE CASCADE on merchant_category.category_id) — no separate delete needed here.
   delete: async (subCategoryId) => {
-    await db.transaction(async (tx) => {
-      await tx.delete(merchantCategory).where(eq(merchantCategory.categoryId, subCategoryId));
-      await tx.delete(categories).where(eq(categories.id, subCategoryId));
-    });
+    await db.delete(categories).where(eq(categories.id, subCategoryId));
   },
 });
