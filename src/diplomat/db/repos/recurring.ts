@@ -1,49 +1,9 @@
 import { sql } from 'drizzle-orm';
-import {
-  RecurringRuleEntitySchema,
-  RecurringRuleViewSchema,
-  type RecurringRuleEntity,
-  type RecurringRuleView,
-} from '../../../models/recurring.js';
-import { RecurringRowSchema } from '../../../wire/db/recurring.js';
+import * as recurringAdapters from '../../../adapters/recurring.js';
+import type { RecurringRuleEntity, RecurringRuleView } from '../../../models/recurring.js';
 import type { Db } from '../driver.js';
 import { recurringRules } from '../schema.js';
 import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
-
-const toRule = (record: Record<string, unknown>): RecurringRuleView => {
-  const row = RecurringRowSchema.parse(record);
-  return RecurringRuleViewSchema.parse({
-    id: row.id,
-    description: row.description,
-    amount: row.amount,
-    type: row.type,
-    period: row.period,
-    nextDue: row.next_due,
-    currency: row.currency,
-    accountId: row.account_id ?? undefined,
-    accountName: row.account_name ?? undefined,
-    categoryId: row.category_id ?? undefined,
-    categoryName: row.category_name ?? undefined,
-  });
-};
-
-/** Read variant carrying `version`, no joined display names — a due rule is never displayed, only
- *  used to build a version-guarded `Persistable`. Mirrors `adapters/accounts.ts`'s `dbToEntity`. */
-const toEntity = (record: Record<string, unknown>): RecurringRuleEntity => {
-  const row = RecurringRowSchema.parse(record);
-  return RecurringRuleEntitySchema.parse({
-    id: row.id,
-    description: row.description,
-    amount: row.amount,
-    type: row.type,
-    period: row.period,
-    nextDue: row.next_due,
-    currency: row.currency,
-    accountId: row.account_id ?? undefined,
-    categoryId: row.category_id ?? undefined,
-    version: row.version,
-  });
-};
 
 const RULE_SELECT = sql`
   SELECT r.*, a.name AS account_name, c.name AS category_name
@@ -63,14 +23,14 @@ export const recurringRepo = (db: Db): RecurringRepo => ({
     const rows = await db.all<Record<string, unknown>>(sql`
       ${RULE_SELECT} ORDER BY r.next_due
     `);
-    return rows.map(toRule);
+    return rows.map(recurringAdapters.dbToModel);
   },
 
   due: async (onOrBefore) => {
     const rows = await db.all<Record<string, unknown>>(sql`
       ${RULE_SELECT} WHERE r.next_due <= ${onOrBefore} ORDER BY r.next_due
     `);
-    return rows.map(toEntity);
+    return rows.map(recurringAdapters.dbToEntity);
   },
 });
 
