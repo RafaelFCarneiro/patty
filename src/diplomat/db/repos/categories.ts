@@ -1,6 +1,5 @@
 import { eq, isNull, sql } from 'drizzle-orm';
 import * as categoryAdapters from '../../../adapters/categories.js';
-import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Category, CategoryVersion } from '../../../models/category.js';
 import type { Db } from '../driver.js';
 import { categories, recurringRules, transactions } from '../schema.js';
@@ -14,9 +13,7 @@ export type BlockingReferences = { transactions: number; recurring: number; subC
 
 export type CategoriesRepo = {
   list: (options?: ListCategoriesOptions) => Promise<Category[]>;
-  create: (category: Category) => Promise<Category>;
   countReferences: (categoryId: string) => Promise<BlockingReferences>;
-  delete: (categoryId: string) => Promise<void>;
   /** Version-carrying read (ADR-021) — for `deleteCategory`/`deleteSubCategory`, which need it to
    *  build a version-guarded `Persistable`. Shared by both, since a sub-category is a row in this
    *  same table. */
@@ -29,19 +26,6 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
     const query = db.select().from(categories).where(isNull(categories.parentId));
     const rows = options?.orderBy === 'name' ? await query.orderBy(categories.name) : await query;
     return rows.map(categoryAdapters.dbToModel);
-  },
-
-  create: async (category) => {
-    const [row] = await db
-      .insert(categories)
-      .values({
-        id: category.id,
-        name: category.name,
-        kind: category.kind,
-        names: category.names ? JSON.stringify(category.names) : null,
-      })
-      .returning();
-    return categoryAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('categories', 'insert')));
   },
 
   countReferences: async (categoryId) => {
@@ -66,12 +50,6 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
       recurring: recRow?.count ?? 0,
       subCategories: subRow?.count ?? 0,
     };
-  },
-
-  // merchant_category rows for this category cascade away on their own (schema-declared
-  // ON DELETE CASCADE on merchant_category.category_id) — no separate delete needed here.
-  delete: async (categoryId) => {
-    await db.delete(categories).where(eq(categories.id, categoryId));
   },
 
   findRawById: async (categoryId) => {

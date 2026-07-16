@@ -65,12 +65,14 @@ export const SubCategorySchema = z.object({
 });
 export type SubCategory = z.infer<typeof SubCategorySchema>;
 
+// Base for wire/in/categories.ts's own CreateSubCategorySchema (`.omit({ id: true })`) — the
+// domain-level type itself has no other consumer; `createSubCategory` (controllers/categories.ts)
+// takes its input as a plain `{ name, parentId }` object, not this schema's inferred type.
 export const CreateSubCategorySchema = z.object({
   id: Id,
   name: z.string().min(1).describe('Sub-category display name'),
   parentId: Id.describe('ID of the parent category'),
 });
-export type CreateSubCategory = z.infer<typeof CreateSubCategorySchema>;
 
 export type CategoryReferences = { transactions: number; recurring: number; subCategories: number };
 

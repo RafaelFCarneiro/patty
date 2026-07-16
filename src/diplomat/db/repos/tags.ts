@@ -11,9 +11,6 @@ export type TagsRepo = {
   findByName: (name: string) => Promise<Tag | null>;
   /** Version-carrying read (ADR-021) — for `deleteTag`, which needs it to build a `Persistable`. */
   findById: (id: string) => Promise<TagEntity | null>;
-  /** Returns `null` when a tag with the same name already exists. */
-  create: (tag: Tag) => Promise<Tag | null>;
-  delete: (id: string) => Promise<boolean>;
 };
 
 export const tagsRepo = (db: Db): TagsRepo => ({
@@ -30,20 +27,6 @@ export const tagsRepo = (db: Db): TagsRepo => ({
   findById: async (id) => {
     const [row] = await db.select().from(tags).where(eq(tags.id, id)).limit(1);
     return row ? tagAdapters.dbToEntity(row) : null;
-  },
-
-  create: async (tag) => {
-    const [row] = await db
-      .insert(tags)
-      .values({ id: tag.id, name: tag.name })
-      .onConflictDoNothing({ target: tags.name })
-      .returning();
-    return row ? tagAdapters.dbToModel(row) : null;
-  },
-
-  delete: async (id) => {
-    const result = await db.delete(tags).where(eq(tags.id, id));
-    return (result.rowsAffected ?? 0) > 0;
   },
 });
 

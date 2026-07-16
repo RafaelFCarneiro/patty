@@ -15,14 +15,17 @@
 > write path and deleting the last bill write methods — `deps.bills.markPaid`/`revertPayment`/`setStatus`), and
 > phase 3a (the simple entity CRUD flows — `update_account`/`delete_account`, `create_tag`/`delete_tag`,
 > `create_category`/`delete_category`/`create_sub_category`/`delete_sub_category`,
-> `create_credit_card`/`delete_credit_card` — including `tagApplier`'s/`categoryApplier`'s own
-> beyond-`id`/`version` mechanics, a two-entity batch for credit-card create, and `deleteCreditCard`'s own
-> domain-decided cascade of every correlated bill/transaction ahead of the card — not a repo-side applier
-> cascade) are implemented; the
+> `create_credit_card`/`delete_credit_card` — including `tagApplier`'s own beyond-`id`/`version` mechanics, a
+> two-entity batch for credit-card create, `deleteCreditCard`'s own domain-decided cascade of every correlated
+> bill/transaction ahead of the card, and `merchant_category`'s cleanup on category delete moved to a
+> schema-declared `ON DELETE CASCADE` rather than either the domain or an applier deciding it) are implemented,
+> including phase 3d's own removal of every `deps` write method these five entities' flows turned out to have no
+> other caller for (`accounts.update`/`.delete`, `tags.create`/`.delete`, `categories.create`/`.delete`,
+> `subCategories.create`/`.delete`, `creditCards.deleteCard`); the
 > remaining flows (bulk import, recurring — phase 3b/3c) still drive their own persistence via injected repo
-> write methods until that phase converts them, and `deps`'s now-unused write methods for every converted
-> entity are removed only once phase 3d completes — this principle is the target shape for every one of them,
-> not yet the as-built state of the whole write path.
+> write methods until that phase converts them, and *those* entities' now-unused write methods are removed only
+> once their own callers convert — this principle is the target shape for every one of them, not yet the
+> as-built state of the whole write path.
 
 ## The principle
 

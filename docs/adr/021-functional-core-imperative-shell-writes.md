@@ -5,8 +5,9 @@ account-context transaction flows + `PersistOutcome` idempotency-outcome plumbin
 phase 2b — credit-card transaction flows + `billApplier`'s cycle-uniqueness-race-as-retry handling — implemented
 2026-07-15; phase 2c — bill flows `pay_bill`/`revert_bill_payment`, completing the transaction+bill write path
 and deleting the last bill write methods — implemented 2026-07-15; phase 3a — simple entity CRUD (account
-update/delete, tag/category/sub-category/credit-card create/delete) — implemented 2026-07-15; phase 3b–3d
-pending) · **Date:** 2026-07-12 ·
+update/delete, tag/category/sub-category/credit-card create/delete), including phase 3d's own removal of every
+now-dead `deps` write method for those five entities — implemented 2026-07-15; phase 3b/3c pending, phase 3d
+remains open only for the entities those phases will touch) · **Date:** 2026-07-12 ·
 **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill payment) and finally resolves the thread ADR-015
 opened. Adopts the principle documented in `docs/functional-core-imperative-shell.md` for every write flow.
 
@@ -320,9 +321,10 @@ gets its own generic atomicity/conflict/idempotency suite.
      make here), making it structurally identical to `transaction_tags.transaction_id`'s existing
      `ON DELETE CASCADE`. Moved there: `merchant_category.category_id` now references `categories.id` with
      `{ onDelete: 'cascade' }` (migration `drizzle/0010_category_merchant_association_cascade.sql`); the
-     now-redundant manual `merchant_category` deletes in the legacy `categoriesRepo.delete`/`subCategoriesRepo
-     .delete` repo methods were removed too (the cascade handles it; those methods stay for phase 3d otherwise).
-     `creditCardApplier` (`diplomat/db/repos/creditCards.ts`) is plain
+     now-redundant `categoriesRepo.delete`/`subCategoriesRepo.delete` repo methods dropped their manual
+     `merchant_category` cleanup (the cascade handles it) — and, once checked, turned out to have no other
+     caller left at all (see the `deps` write-method note below), so they were removed outright rather than kept
+     simplified. `creditCardApplier` (`diplomat/db/repos/creditCards.ts`) is plain
      `versionedTableApplier(creditCards)` — a first version of this applier read the card's own `accountId`
      back and cascade-deleted every correlated bill/transaction/tag itself, mirroring the pre-ADR-021
      `deleteCard`'s cascade; caught in review as the repo deciding a business question ("what happens when a
@@ -344,9 +346,16 @@ gets its own generic atomicity/conflict/idempotency suite.
      ...bill removals, remove creditCard, remove account]` — genuine rule-5 multi-entity composition, not the
      two-entity batch a repo-side cascade let this flow get away with. `createCreditCard` stays a two-entity
      insert batch — `[insert account, insert creditCard]`, account first since the card row's `accountId` is a
-     `NOT NULL` FK into it. `deps.<x>.create/update/delete` methods for every converted entity are deliberately
-     left in place, unused by their converted flow — phase 3d removes them once every caller has converted
-     (mirrors phase 2a/2b/2c's own transitional-duplication precedent). Coverage: pure flow tests assert the
+     `NOT NULL` FK into it. **`deps.<x>` write methods for these five entities were grep-checked for any
+     remaining caller (production or test) rather than assumed still needed, per the phase 2a/2b/2c
+     transitional-duplication precedent** — and found genuinely dead: `AccountsRepo.update`/`.delete`,
+     `TagsRepo.create`/`.delete`, `CategoriesRepo.create`/`.delete`, `SubCategoriesRepo.create`/`.delete`, and
+     `CreditCardsRepo.deleteCard` (plus the `cascadeDeleteCorrelated` helper the last one was `deleteCard`'s own
+     sole remaining caller for) all removed in this same change — phase 3d completed early for these five,
+     rather than deferred, since there was no other caller left to defer *for*.
+     `AccountsRepo.create`/`CreditCardsRepo.createWithAccount` stayed: `test/integration/db/unitOfWork.test.ts`
+     still calls both directly to seed fixtures without going through the full controller+shell path — a
+     genuine caller, just not a production one. Coverage: pure flow tests assert the
      returned `persist`/`response` for every branch (no correlated rows, an unpaid bill, a paid bill's
      clear-then-remove-at-version+1); a UoW-level suite extension covers `tagApplier`'s name-race retry, that a
      plain versioned category delete still removes dependent `merchant_category` rows (now via the schema's own
@@ -357,6 +366,9 @@ gets its own generic atomicity/conflict/idempotency suite.
      purchases and a tag) to prove the whole domain-decided batch, including the circular-FK break, commits
      atomically.
    - [ ] Phase 3b (recurring), phase 3c (bulk import — reusing phase 2a's `PersistOutcome` idempotency-outcome
-     contract for per-item created/duplicate/needs-review status), phase 3d (remove now-dead `deps` write
-     methods across every converted entity, including the phase 2a transitional `addAccountMovementViaRepo`):
-     remaining work; update `docs/architecture.md` accordingly as each lands.
+     contract for per-item created/duplicate/needs-review status): remaining work; update `docs/architecture.md`
+     accordingly as each lands. Phase 3d (remove now-dead `deps` write methods across every converted entity)
+     completed early for accounts/tags/categories/subCategories/creditCards as part of phase 3a itself (see
+     above) — what remains of phase 3d is the transaction-side write methods bulk import (phase 3c) still needs
+     (`TransactionsRepo.create` via `addAccountMovementViaRepo`/`addCardPurchaseViaRepo`, `BillsRepo.ensureOpen`),
+     removed once phase 3c converts their last caller.

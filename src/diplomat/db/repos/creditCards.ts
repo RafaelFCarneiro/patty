@@ -6,8 +6,8 @@ import { CreditCardSchema, type CreditCard, type CreditCardEntity } from '../../
 import type { CreditCardRow } from '../../../wire/db/creditCards.js';
 import { correlatedToCard } from '../creditCardCorrelation.js';
 import type { Db } from '../driver.js';
-import { accounts, bills, creditCards } from '../schema.js';
-import { versionedTableApplier, type EntityApplier, type Tx } from '../unitOfWork.js';
+import { accounts, creditCards } from '../schema.js';
+import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
 const toCard = (row: CreditCardRow): CreditCard =>
   CreditCardSchema.parse({
@@ -21,28 +21,14 @@ const toCard = (row: CreditCardRow): CreditCard =>
     paymentAccountId: row.paymentAccountId ?? undefined,
   });
 
-// Cascades every row correlated to the card (bill-payment references, tags, transactions, bills)
-// ahead of the card row itself — FK-safe order: clear bills' reference to their payment transfer
-// first (bills.payment_transaction_id → transactions.id would otherwise block deleting a
-// bill-payment row below), then tags → transactions → bills. Used only by the plain repo
-// `deleteCard` below — kept, though no longer called by `deleteCreditCard` (which now decides this
-// cascade itself, in the domain — see `creditCardApplier`'s doc comment), per ADR-021 phase 3d:
-// repo write methods are removed only once every caller has converted.
-const cascadeDeleteCorrelated = async (tx: Tx, cardId: string, accountId: string): Promise<void> => {
-  await tx.update(bills).set({ paymentTransactionId: null }).where(eq(bills.creditCardId, cardId));
-  await tx.run(sql`
-    DELETE FROM transaction_tags WHERE transaction_id IN (
-      SELECT id FROM transactions WHERE ${correlatedToCard(cardId, accountId)}
-    )
-  `);
-  await tx.run(sql`DELETE FROM transactions WHERE ${correlatedToCard(cardId, accountId)}`);
-  await tx.delete(bills).where(eq(bills.creditCardId, cardId));
-};
-
 export type DeleteCardCounts = { transactions: number; bills: number };
 
 export type CreditCardsRepo = {
   list: () => Promise<CreditCard[]>;
+  /** Test-seeding only in production code's actual write path — `createCreditCard` (ADR-021)
+   *  builds an `insert` `Persistable` batch (account + card) applied by `accountApplier` +
+   *  `creditCardApplier` instead. Kept as a plain repo method purely so integration tests can seed
+   *  a fixture card without going through the full controller+shell path. */
   createWithAccount: (card: CreditCard, account: Account) => Promise<CreditCard>;
   findByName: (name: string) => Promise<CreditCard | null>;
   findById: (id: string) => Promise<CreditCard | null>;
@@ -50,7 +36,6 @@ export type CreditCardsRepo = {
    *  version-guarded `Persistable`. */
   findRawById: (id: string) => Promise<CreditCardEntity | null>;
   countCorrelated: (cardId: string, accountId: string) => Promise<DeleteCardCounts>;
-  deleteCard: (cardId: string, accountId: string) => Promise<void>;
 };
 
 export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
@@ -113,26 +98,18 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
     `);
     return { transactions: txRow?.count ?? 0, bills: billRow?.count ?? 0 };
   },
-
-  deleteCard: async (cardId, accountId) => {
-    await db.transaction(async (tx) => {
-      await cascadeDeleteCorrelated(tx, cardId, accountId);
-      await tx.delete(creditCards).where(eq(creditCards.id, cardId));
-      await tx.delete(accounts).where(eq(accounts.id, accountId));
-    });
-  },
 });
 
 /**
  * The credit-card entity's `EntityApplier` (ADR-021). Plain `versionedTableApplier` — deleting a
  * card row has no mechanics beyond the ordinary `id`/`version` convention. It did once: an earlier
  * version of this applier read the card's own `accountId` back and cascade-deleted every
- * correlated bill/transaction/tag itself, mirroring the pre-ADR-021 `deleteCard` above. That was
- * the repo deciding a business question — "what happens when a card is deleted" — the exact
- * ADR-015/018 smell ADR-021 exists to remove, just recurring one layer down. The cascade decision
- * now lives in the domain: `deleteCreditCard` (`controllers/creditCard/creditCard.ts`) reads the
- * card's correlated bills/transactions itself and emits their `update`/`delete` `Persistable`s
- * explicitly, ahead of the card's own — this applier only ever writes the row it's handed, same as
- * every other plain entity.
+ * correlated bill/transaction/tag itself, mirroring what the pre-ADR-021 repo's own `deleteCard`
+ * method used to do. That was the repo deciding a business question — "what happens when a card is
+ * deleted" — the exact ADR-015/018 smell ADR-021 exists to remove, just recurring one layer down.
+ * The cascade decision now lives in the domain: `deleteCreditCard`
+ * (`controllers/creditCard/creditCard.ts`) reads the card's correlated bills/transactions itself
+ * and emits their `update`/`delete` `Persistable`s explicitly, ahead of the card's own — this
+ * applier only ever writes the row it's handed, same as every other plain entity.
  */
 export const creditCardApplier: EntityApplier = versionedTableApplier(creditCards);
