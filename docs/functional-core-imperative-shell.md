@@ -11,11 +11,16 @@
 > `update_account_transaction`/`delete_account_transaction` — plus the `PersistOutcome` idempotency-outcome
 > plumbing rule 6 describes), phase 2b (the credit-card transaction flows — `add_card_purchase`/
 > `update_card_transaction`/`delete_card_transaction`, including `billApplier`'s cycle-uniqueness-race-as-retry
-> handling), and phase 2c (the bill flows — `pay_bill`/`revert_bill_payment`, completing the transaction+bill
-> write path and deleting the last bill write methods — `deps.bills.markPaid`/`revertPayment`/`setStatus`) are
-> implemented; the remaining flows (bulk import, recurring, CRUD — phase 3) still drive their own persistence via
-> injected repo write methods until that phase converts them — this principle is the target shape for every one
-> of them, not yet the as-built state of the whole write path.
+> handling), phase 2c (the bill flows — `pay_bill`/`revert_bill_payment`, completing the transaction+bill
+> write path and deleting the last bill write methods — `deps.bills.markPaid`/`revertPayment`/`setStatus`), and
+> phase 3a (the simple entity CRUD flows — `update_account`/`delete_account`, `create_tag`/`delete_tag`,
+> `create_category`/`delete_category`/`create_sub_category`/`delete_sub_category`,
+> `create_credit_card`/`delete_credit_card` — including `tagApplier`'s/`categoryApplier`'s own
+> beyond-`id`/`version` mechanics and two two-entity batches for credit-card create/delete) are implemented; the
+> remaining flows (bulk import, recurring — phase 3b/3c) still drive their own persistence via injected repo
+> write methods until that phase converts them, and `deps`'s now-unused write methods for every converted
+> entity are removed only once phase 3d completes — this principle is the target shape for every one of them,
+> not yet the as-built state of the whole write path.
 
 ## The principle
 

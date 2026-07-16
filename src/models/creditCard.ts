@@ -32,6 +32,19 @@ export const CreditCardSchema = z.object({
 });
 export type CreditCard = z.infer<typeof CreditCardSchema>;
 
+// The credit-card aggregate owns its own entity tag (ADR-021), mirroring `models/account.ts`'s
+// `ACCOUNT_ENTITY_TAG` — `models/persistable.ts` is generic over any entity's tag/model and never
+// lists this constant itself.
+export const CREDIT_CARD_ENTITY_TAG = 'creditCard';
+
+// The persistence-side entity: `CreditCard` plus the optimistic-concurrency `version` token.
+// Never sent over the wire — only `deleteCreditCard` (which needs it to build a `Persistable`) and
+// `adapters/creditCards.ts`'s model→row adaptation speak `CreditCardEntity`.
+export const CreditCardEntitySchema = CreditCardSchema.extend({
+  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
+});
+export type CreditCardEntity = z.infer<typeof CreditCardEntitySchema>;
+
 export const CreateCreditCardSchema = CreditCardSchema.omit({
   id: true,
   accountId: true,
@@ -75,11 +88,13 @@ export const ImportCardStatementItemSchema = AddCardPurchaseSchema.omit({
   rawInput: true,
   subCategory: true,
   tags: true,
-}).extend({
-  idempotencyKey: AddCardPurchaseSchema.shape.idempotencyKey
-    .optional()
-    .describe(STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION),
-}).strict();
+})
+  .extend({
+    idempotencyKey: AddCardPurchaseSchema.shape.idempotencyKey
+      .optional()
+      .describe(STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION),
+  })
+  .strict();
 export type ImportCardStatementItem = z.infer<typeof ImportCardStatementItemSchema>;
 
 /** Credit-card statement import (ADR-017 step 2): single-source — every item is a purchase on the
@@ -100,11 +115,15 @@ export type ImportCardStatement = z.infer<typeof ImportCardStatementSchema>;
  *  vocabulary. `.strict()` still rejects truly foreign fields at the REST boundary (MCP tool args
  *  are reconstructed as a non-strict shape by the SDK). */
 export const UpdateCardTransactionSchema = UpdateTransactionSchema.extend({
-  account: z.string().min(1).optional().describe(
-    "Rejected: a card transaction is always funded by the card's own internal account. Sending this " +
-      'field returns a validation error rather than reassigning it — present only so that error can be ' +
-      'raised, not because the account is changeable',
-  ),
+  account: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Rejected: a card transaction is always funded by the card's own internal account. Sending this " +
+        'field returns a validation error rather than reassigning it — present only so that error can be ' +
+        'raised, not because the account is changeable',
+    ),
   billMonth: BillQuerySchema.shape.month
     .optional()
     .describe(

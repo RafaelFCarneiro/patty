@@ -1,4 +1,10 @@
-import { ACCOUNT_ENTITY_TAG, type Account, type AccountEntity, AccountSchema } from '../models/account.js';
+import {
+  ACCOUNT_ENTITY_TAG,
+  AccountEntitySchema,
+  type Account,
+  type AccountEntity,
+  AccountSchema,
+} from '../models/account.js';
 import type {
   AddAccountMovement,
   CreateAccount,
@@ -18,6 +24,20 @@ export const dbToModel = (row: AccountRow): Account =>
     type: row.type,
     initialBalance: row.initialBalance,
     currency: row.currency,
+  });
+
+/** Read variant carrying `version` (ADR-021) — for the flows that need to build an `update`/
+ *  `delete` `Persistable` from a fresh read (`updateAccount`/`deleteAccount`, and
+ *  `deleteCreditCard`'s internal-account lookup). Never used for a plain list/read response, which
+ *  stays `dbToModel` above so `version` can't leak onto the wire. */
+export const dbToEntity = (row: AccountRow): AccountEntity =>
+  AccountEntitySchema.parse({
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    initialBalance: row.initialBalance,
+    currency: row.currency,
+    version: row.version,
   });
 
 /** Entity → row for the versioned unit of work (ADR-021) — the only account write path that

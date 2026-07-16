@@ -15,10 +15,20 @@ import type { Db } from '../../../src/diplomat/db/driver.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { accountApplier, accountsRepo } from '../../../src/diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from '../../../src/diplomat/db/repos/bills.js';
-import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
+import { categoryApplier } from '../../../src/diplomat/db/repos/categories.js';
+import { creditCardApplier, creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
 import { merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchants.js';
+import { tagApplier } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
-import { bills, categories, tags } from '../../../src/diplomat/db/schema.js';
+import {
+  bills,
+  categories,
+  creditCards,
+  merchantCategory,
+  tags,
+  transactionTags,
+  transactions,
+} from '../../../src/diplomat/db/schema.js';
 import {
   MAX_UNIT_OF_WORK_ATTEMPTS,
   versionedTableApplier,
@@ -29,10 +39,13 @@ import {
 import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus } from '../../../src/models/bill.js';
+import { CATEGORY_ENTITY_TAG, CategoryKind } from '../../../src/models/category.js';
+import { CREDIT_CARD_ENTITY_TAG, type CreditCardEntity } from '../../../src/models/creditCard.js';
 import { Locale } from '../../../src/models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp, type Persistable, type PersistOutcome } from '../../../src/models/persistable.js';
+import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
 import {
   ClassificationMethod,
   TRANSACTION_ENTITY_TAG,
@@ -965,5 +978,273 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
 
     // No partial write survived the rolled-back first attempt — exactly one payment transfer exists.
     expect(await countPaymentTransfers()).toBe(1);
+  });
+});
+
+describe('tagApplier — name-uniqueness race surfaces as a generic conflict (ADR-021 phase 3a)', () => {
+  const tagRegistry: ApplierRegistry = { [TAG_ENTITY_TAG]: tagApplier };
+
+  it('inserts a brand-new tag normally', async () => {
+    const id = randomUUID();
+    const result = await withUnitOfWork(db, tagRegistry, () =>
+      okAsync({
+        persist: [
+          { op: PersistOp.enum.insert, entity: TAG_ENTITY_TAG, model: { id, name: `Tag ${id}`, version: 0 } },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM tags WHERE id = ${id}`)).toHaveLength(1);
+  });
+
+  it('a concurrent create-same-name race exhausts retries to the generic conflict error, never a raw 500', async () => {
+    const name = `Tag ${randomUUID()}`;
+    await db.insert(tags).values({ id: randomUUID(), name, version: 0 });
+
+    let attempts = 0;
+    const flow = () => {
+      attempts += 1;
+      // A naive flow that never re-reads — always mints its own speculative id for the same name.
+      const loser = { id: randomUUID(), name, version: 0 };
+      return okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: TAG_ENTITY_TAG, model: loser }] as Persistable[],
+        response: null,
+      });
+    };
+
+    const result = await withUnitOfWork(db, tagRegistry, flow);
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    expect(attempts).toBe(MAX_UNIT_OF_WORK_ATTEMPTS);
+    expect(await db.all(sql`SELECT id FROM tags WHERE name = ${name}`)).toHaveLength(1); // no loser row landed
+  });
+});
+
+describe('categoryApplier — delete cascades merchant_category rows (ADR-021 phase 3a)', () => {
+  const categoryRegistry: ApplierRegistry = { [CATEGORY_ENTITY_TAG]: categoryApplier };
+
+  const seedCategoryWithLearnedEdge = async (): Promise<string> => {
+    const categoryId = randomUUID();
+    await db
+      .insert(categories)
+      .values({ id: categoryId, name: `Category ${categoryId}`, kind: CategoryKind.enum.both, version: 0 });
+    const merchantKey = `merchant-${randomUUID()}`;
+    await db.run(sql`INSERT INTO merchants (key) VALUES (${merchantKey})`);
+    await db
+      .insert(merchantCategory)
+      .values({ merchantKey, categoryId, weight: 1, origin: ClassificationMethod.enum.history });
+    return categoryId;
+  };
+
+  it('deletes a category with no learned edges via the plain versioned mechanics', async () => {
+    const categoryId = randomUUID();
+    await db
+      .insert(categories)
+      .values({ id: categoryId, name: `Category ${categoryId}`, kind: CategoryKind.enum.both, version: 0 });
+
+    const result = await withUnitOfWork(db, categoryRegistry, () =>
+      okAsync({
+        persist: [
+          { op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: categoryId, version: 0 },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM categories WHERE id = ${categoryId}`)).toHaveLength(0);
+  });
+
+  it('purges dependent merchant_category rows first — a plain delete would violate the FK', async () => {
+    const categoryId = await seedCategoryWithLearnedEdge();
+    expect(await db.all(sql`SELECT 1 FROM merchant_category WHERE category_id = ${categoryId}`)).toHaveLength(1);
+
+    const result = await withUnitOfWork(db, categoryRegistry, () =>
+      okAsync({
+        persist: [
+          { op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: categoryId, version: 0 },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM categories WHERE id = ${categoryId}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT 1 FROM merchant_category WHERE category_id = ${categoryId}`)).toHaveLength(0);
+  });
+
+  it('a sub-category (parentId set) is deleted the same way — same table, same applier', async () => {
+    const parentId = randomUUID();
+    await db
+      .insert(categories)
+      .values({ id: parentId, name: `Parent ${parentId}`, kind: CategoryKind.enum.both, version: 0 });
+    const subId = randomUUID();
+    await db
+      .insert(categories)
+      .values({ id: subId, name: `Sub ${subId}`, kind: CategoryKind.enum.both, parentId, version: 0 });
+
+    const result = await withUnitOfWork(db, categoryRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: subId, version: 0 }] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM categories WHERE id = ${subId}`)).toHaveLength(0);
+  });
+});
+
+describe('creditCardApplier — delete cascades correlated rows; two-entity batch atomicity (ADR-021 phase 3a)', () => {
+  const cardRegistry: ApplierRegistry = {
+    [ACCOUNT_ENTITY_TAG]: accountApplier,
+    [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
+  };
+
+  const insertCardWithAccount = async (): Promise<{ cardId: string; accountId: string }> => {
+    const creditCards_ = creditCardsRepo(db);
+    const accountId = randomUUID();
+    const created = await creditCards_.createWithAccount(
+      {
+        id: randomUUID(),
+        name: `Card ${randomUUID()}`,
+        currency: CurrencyCode.enum.BRL,
+        closingDay: 28,
+        dueDay: 5,
+        accountId,
+      },
+      {
+        id: accountId,
+        name: 'Card account',
+        type: AccountType.enum.credit,
+        currency: CurrencyCode.enum.BRL,
+        initialBalance: 0,
+      },
+    );
+    return { cardId: created.id, accountId };
+  };
+
+  const deleteCardBatch = (cardId: string, cardVersion: number, accountId: string, accountVersion: number) => () =>
+    okAsync({
+      persist: [
+        { op: PersistOp.enum.delete, entity: CREDIT_CARD_ENTITY_TAG, id: cardId, version: cardVersion },
+        { op: PersistOp.enum.delete, entity: ACCOUNT_ENTITY_TAG, id: accountId, version: accountVersion },
+      ] as Persistable[],
+      response: null,
+    });
+
+  it('a card with no correlated rows is removed along with its internal account', async () => {
+    const { cardId, accountId } = await insertCardWithAccount();
+
+    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${accountId}`)).toHaveLength(0);
+  });
+
+  it('cascades correlated bills, transactions, and transaction_tags ahead of the card row', async () => {
+    const { cardId, accountId } = await insertCardWithAccount();
+    const billId = randomUUID();
+    await db.insert(bills).values({
+      id: billId,
+      creditCardId: cardId,
+      month: 6,
+      year: 2026,
+      closeDate: '2026-06-28',
+      dueDate: '2026-07-05',
+      status: BillStatus.enum.open,
+      version: 0,
+    });
+    const txId = randomUUID();
+    await db.insert(transactions).values({
+      id: txId,
+      description: 'Purchase',
+      amount: 10,
+      type: TransactionType.enum.expense,
+      status: TransactionStatus.enum.effective,
+      date: '2026-06-01',
+      currency: CurrencyCode.enum.BRL,
+      source: TransactionSource.enum.mcp,
+      idempotencyKey: `idem-${randomUUID()}`,
+      classificationMethod: ClassificationMethod.enum.none,
+      confidence: 0,
+      creditCardId: cardId,
+      billId,
+      version: 0,
+    });
+    const tagId = randomUUID();
+    await db.insert(tags).values({ id: tagId, name: `Tag ${tagId}`, version: 0 });
+    await db.insert(transactionTags).values({ transactionId: txId, tagId });
+
+    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM bills WHERE id = ${billId}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM transactions WHERE id = ${txId}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT * FROM transaction_tags WHERE transaction_id = ${txId}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(0);
+    // The tag row itself is untouched — only its association with the deleted transaction is gone.
+    expect(await db.all(sql`SELECT id FROM tags WHERE id = ${tagId}`)).toHaveLength(1);
+  });
+
+  it('a stale account version rolls back the whole batch, the card cascade included — nothing partial', async () => {
+    const { cardId, accountId } = await insertCardWithAccount();
+
+    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 99));
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    // Rolled back — the card (and its cascade) never actually committed either.
+    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(1);
+    expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${accountId}`)).toHaveLength(1);
+  });
+
+  it('a missing card row (already deleted) reports the same conflict/retry signal as a stale version', async () => {
+    const { cardId, accountId } = await insertCardWithAccount();
+    await db.delete(creditCards).where(sql`${creditCards.id} = ${cardId}`);
+
+    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+  });
+
+  it('two-entity insert batch [account, creditCard] applies atomically', async () => {
+    const accountId = randomUUID();
+    const cardId = randomUUID();
+    const accountModel: AccountEntity & { version: number } = {
+      id: accountId,
+      name: `Card account ${accountId}`,
+      type: AccountType.enum.credit,
+      currency: CurrencyCode.enum.BRL,
+      initialBalance: 0,
+      version: 0,
+    };
+    const cardModel: CreditCardEntity = {
+      id: cardId,
+      name: `Card ${cardId}`,
+      currency: CurrencyCode.enum.BRL,
+      closingDay: 10,
+      dueDay: 20,
+      accountId,
+      version: 0,
+    };
+
+    const result = await withUnitOfWork(db, cardRegistry, () =>
+      okAsync({
+        persist: [
+          persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: accountModel }),
+          persistence.insert({ entity: CREDIT_CARD_ENTITY_TAG, model: cardModel }),
+        ],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${accountId}`)).toHaveLength(1);
+    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(1);
   });
 });

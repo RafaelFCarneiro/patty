@@ -7,6 +7,7 @@ import * as billAdapters from '../../adapters/bills.js';
 import * as categoryAdapters from '../../adapters/categories.js';
 import * as creditCardAdapters from '../../adapters/creditCards.js';
 import * as recurringAdapters from '../../adapters/recurring.js';
+import * as tagAdapters from '../../adapters/tags.js';
 import * as transactionAdapters from '../../adapters/transactions.js';
 import {
   createAccount,
@@ -223,7 +224,9 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const { name } = req.params as { name: string };
       const wireIn = parse(wireInAccounts.UpdateAccountSchema, { ...(req.body ?? {}), name }, reply);
       if (!wireIn) return reply;
-      return send(reply, await updateAccount(deps, accountAdapters.updateWireInToModel(wireIn)));
+      const flow = () =>
+        updateAccount(deps, accountAdapters.updateWireInToModel(wireIn)).map(accountAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow));
     },
   },
   {
@@ -240,7 +243,8 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     },
     handler: async (req, reply) => {
       const { name } = req.params as { name: string };
-      return send(reply, await deleteAccount(deps, name));
+      const flow = () => deleteAccount(deps, name).map(accountAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow));
     },
   },
 
@@ -262,7 +266,8 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const wireIn = parse(wireInCategories.CreateCategorySchema, req.body, reply);
       if (!wireIn) return reply;
-      return send(reply, await createCategory(deps, categoryAdapters.wireInToModel(wireIn)), 201);
+      const flow = () => createCategory(deps, categoryAdapters.wireInToModel(wireIn)).map(categoryAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow), 201);
     },
   },
   {
@@ -293,7 +298,8 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const wireIn = parse(wireInCategories.CreateSubCategorySchema, req.body, reply);
       if (!wireIn) return reply;
-      return send(reply, await createSubCategory(deps, wireIn), 201);
+      const flow = () => createSubCategory(deps, wireIn).map(categoryAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow), 201);
     },
   },
   {
@@ -305,7 +311,8 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     responses: { 200: okResponse('Category deleted', DeletedOut), 404: notFound404, 409: conflict409 },
     handler: async (req, reply) => {
       const { name } = req.params as { name: string };
-      return send(reply, await deleteCategory(deps, name));
+      const flow = () => deleteCategory(deps, name).map(categoryAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow));
     },
   },
   {
@@ -317,7 +324,8 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     responses: { 200: okResponse('Sub-category deleted', DeletedOut), 404: notFound404, 409: conflict409 },
     handler: async (req, reply) => {
       const { name } = req.params as { name: string };
-      return send(reply, await deleteSubCategory(deps, name));
+      const flow = () => deleteSubCategory(deps, name).map(categoryAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow));
     },
   },
 
@@ -469,7 +477,14 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const wireIn = parse(wireInCreditCards.CreateCreditCardSchema, req.body, reply);
       if (!wireIn) return reply;
-      return send(reply, await createCreditCard(deps, creditCardAdapters.wireInToModel(wireIn)), 201);
+      // accountAdapters.outcomeToDb + creditCardAdapters.outcomeToDb adapt createCreditCard's
+      // mixed account+card batch (model → db row) here, explicitly, before unitOfWork ever sees
+      // it — diplomat/db only ever writes rows, never adapts them.
+      const flow = () =>
+        createCreditCard(deps, creditCardAdapters.wireInToModel(wireIn))
+          .map(accountAdapters.outcomeToDb)
+          .map(creditCardAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow), 201);
     },
   },
   {
@@ -486,7 +501,11 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const { name } = req.params as { name: string };
       const confirm = (req.query as { confirm?: string }).confirm === 'true';
-      return send(reply, await deleteCreditCard(deps, { card: name, confirm }));
+      const flow = () =>
+        deleteCreditCard(deps, { card: name, confirm })
+          .map(creditCardAdapters.outcomeToDb)
+          .map(accountAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow));
     },
   },
 
@@ -755,7 +774,8 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const input = parse(CreateTagSchema, req.body, reply);
       if (!input) return reply;
-      return send(reply, await createTag(deps, input.name), 201);
+      const flow = () => createTag(deps, input.name).map(tagAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow), 201);
     },
   },
   {
@@ -767,7 +787,8 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     responses: { 200: okResponse('Tag deleted', DeletedOut) },
     handler: async (req, reply) => {
       const { id } = req.params as { id: string };
-      return send(reply, await deleteTag(deps, id));
+      const flow = () => deleteTag(deps, id).map(tagAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow));
     },
   },
 

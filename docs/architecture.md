@@ -84,9 +84,12 @@ These three live with the domain entity in `models/`, not scattered across contr
 **In progress — phase 1 (`createAccount`), phase 2a (the account-context transaction flows:
 `add_account_expense`/`add_account_income`/`create_transfer`/`update_account_transaction`/
 `delete_account_transaction`), phase 2b (the credit-card transaction flows: `add_card_purchase`/
-`update_card_transaction`/`delete_card_transaction`), and phase 2c (the bill flows: `pay_bill`/
-`revert_bill_payment`) are converted; bulk import/recurring/remaining CRUD (phase 3) still drive their own
-persistence via injected repo write methods (`deps.<x>.create/update/...`), as described elsewhere in this doc.**
+`update_card_transaction`/`delete_card_transaction`), phase 2c (the bill flows: `pay_bill`/
+`revert_bill_payment`), and phase 3a (the simple entity CRUD flows: `update_account`/`delete_account`,
+`create_tag`/`delete_tag`, `create_category`/`delete_category`/`create_sub_category`/`delete_sub_category`,
+`create_credit_card`/`delete_credit_card`) are converted; bulk import/recurring/the `deps` write-method removal
+(phase 3b–3d) still drive their own persistence via injected repo write methods (`deps.<x>.create/update/...`),
+as described elsewhere in this doc.**
 The target shape, adopted for the whole write path and applied flow-by-flow across phases 2–3, is
 `docs/functional-core-imperative-shell.md`: a controller **decides** and returns the write as data instead of
 performing it; the diplomat shell **applies** it.
@@ -215,6 +218,50 @@ performing it; the diplomat shell **applies** it.
   methods: `deps.bills.markPaid`/`revertPayment`/
   `setStatus` (the last no longer had any other caller once these two flows converted) — `BillsRepo` now exposes
   only reads (`get`/`findByCycle`/`findById`) plus the still-repo-driven `ensureOpen` (bulk import, phase 3).
+- **Phase 3a — the simple entity CRUD flows, including two entity-agnostic cascade appliers and a two-entity
+  batch pattern.** `update_account`/`delete_account` needed no new applier (`accountApplier` already existed,
+  phase 1) — just a version-carrying read (`accountsRepo.findRawById`) the flows didn't have before. Three new
+  entities converted, each owning its own tag (`models/tag.ts`'s `TAG_ENTITY_TAG`, `models/category.ts`'s
+  `CATEGORY_ENTITY_TAG`, `models/creditCard.ts`'s `CREDIT_CARD_ENTITY_TAG`):
+  - **`tagApplier`** (`diplomat/db/repos/tags.ts`) mirrors `billApplier`'s pattern exactly: `tags.name` carries
+    its own `UNIQUE` constraint the domain's own pre-check (`assertTagNameAvailable`) only guards the common
+    case, so a concurrent same-name create can raise a genuine non-`id` unique-constraint violation
+    `versionedTableApplier`'s `onConflictDoNothing` (scoped to `id`) doesn't swallow; `tagApplier` recognizes it
+    and rethrows as `VersionConflict`, rolling back and retrying — on retry the domain's own name check now sees
+    the committed row and returns `duplicate_name` instead of a raw 500. The shared cause-chain-walking check
+    (`LibsqlError.extendedCode === 'SQLITE_CONSTRAINT_UNIQUE'`) moved out of `bills.ts` into
+    `diplomat/db/sqliteErrors.ts`'s `isUniqueConstraintViolation`, so both appliers share one implementation.
+    `deleteTag` is by id (no name resolution) and stays idempotent-by-design: a missing id returns
+    `{ deleted: false }` on an *empty* `persist` batch (no write) rather than an error — unchanged pre-ADR-021
+    behavior (mirrors `deleteAccountTransaction`'s dry-run shape).
+  - **`categoryApplier`** (`diplomat/db/repos/categories.ts`) is shared by both a top-level category and a
+    sub-category — same `categories` table, `parentId` set or not, one `CATEGORY_ENTITY_TAG`. Its `delete` has
+    genuine extra mechanics beyond the plain convention: `merchant_category.category_id` references
+    `categories.id` with no `ON DELETE` action, so a plain versioned delete would violate the FK while any
+    learned merchant association still points at the category (the domain's own `isCategoryUnreferenced` guard
+    deliberately does *not* count `merchant_category` rows — deleting a category is meant to also clear its
+    learned classifications, re-learnable later). `categoryApplier.delete` purges the dependent
+    `merchant_category` rows first, in the same transaction, then the version-guarded row delete — mirrors the
+    pre-ADR-021 repo `delete`'s own two-step transaction. `insert`/`update` stay plain
+    `versionedTableApplier(categories)`.
+  - **`creditCardApplier`** (`diplomat/db/repos/creditCards.ts`) preserves `deleteCard`'s full pre-ADR-021
+    cascade — deleting a card also removes every purchase, bill, and tag association it (and its internal
+    liability account) ever produced, not just the card row. Because a `Persistable`'s `delete` variant only
+    ever carries the entity's own `id`/`version` (no room for a second id), the applier reads the card's
+    `accountId` back from its own row, inside the same transaction, immediately before cascading — the shared
+    `cascadeDeleteCorrelated` helper (clear bills' `payment_transaction_id`, delete `transaction_tags`, delete
+    `transactions`, delete `bills` — all scoped by `credit_card_id OR from_account_id OR to_account_id`) is used
+    by both the applier and the still-present (unused by any flow, kept for phase 3d) `deleteCard` repo method,
+    so the cascade SQL is written once. `deleteCreditCard`'s domain flow emits a **two-entity delete batch** —
+    `[remove creditCard, remove account]`, card first since the applier's own cascade needs the card row to
+    still exist — the plain `accountApplier` removes the now-unreferenced internal account right after.
+    `createCreditCard` mirrors this with a **two-entity insert batch** — `[insert account, insert creditCard]`,
+    account first since the card row's `accountId` is a `NOT NULL` FK into it. Both are ordinary
+    `docs/functional-core-imperative-shell.md` rule-5 composition (concatenated `persist` arrays), applied
+    atomically by the shell in one transaction — no special-casing in `withUnitOfWork` itself.
+  - MCP/REST handlers compose the entity's own `outcomeToDb` per batch member, same as `add_card_purchase`'s
+    bill+transaction pattern: `create_credit_card`/`delete_credit_card` map through both `accountAdapters
+    .outcomeToDb` and `creditCardAdapters.outcomeToDb`.
 - **Merchant key is always stored, matched or not** (`controllers/account/transaction.ts`'s `planAccountMovement`):
   `pickClassification` (`logic/classify.ts`) only returns a `merchantKey` when it found a match, since a matched
   key is the (possibly partial) `merchant_category` key substring-matched against, not the transaction's own
@@ -315,17 +362,22 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 16. **Unbounded collections page by keyset cursor with the paginated envelope (ADR-014).** `search_transactions` (first mover) returns `{ items, nextCursor?, total? }`; `ORDER BY` is composed only from a whitelisted enum-keyed column map (`ORDER_BY_COLUMN` in `wire/db/transactions.ts`, turned into SQL only in `diplomat/db/repos/transactions.ts`), the same mechanism as invariant 11 applied to ordering — caller text never reaches `ORDER BY`. Cursors are opaque, zod-validated at the boundary, and bound to the `sort`/`dir` that produced them (a mismatch is a `validation` error). `total` is opt-in (`includeTotal`) — an extra same-WHERE `COUNT(*)`, never paid by sequential "walk until no `nextCursor`" consumers. Small, cycle-bounded `list_*` endpoints stay plain arrays; the envelope is the signal a collection can page.
 17. **No god write flows for any transaction mutation (ADR-017, complete; ownership mechanism revised by ADR-020).** The only cross-cutting transaction surface is the read side (`search_transactions`, `get_spending_summary`, `aggregate_spending`, account balances); every write is an aggregate-specific entry point that validates ownership itself and never dispatches by inspection — there is no composition-root router left (`diplomat/transactionRouting.ts` is deleted). Update/delete: `update_card_transaction`/`delete_card_transaction`, `update_account_transaction`/`delete_account_transaction` (step 1). **Ownership is resolved by account type, not by a core structural discriminator (ADR-020), and each aggregate asks its own question rather than sharing one judgment:** `controllers/resolve.ts`'s `resolveLegAccounts` is a neutral I/O helper (resolves the accounts referenced by a transaction's leg(s) — `accountId`/`toAccountId` — via `deps.accounts.findById`; makes no ownership judgment of its own). The credit-card aggregate's own `assertCreditAccountLeg` (`controllers/creditCard/transaction.ts`) asks "is a leg `credit`" (ADR-010) — true for a card purchase (`accountId` **is** the card's own internal account) and the bill-payment transfer (`toAccountId` **is** that same account). The account aggregate's own `assertAccountOwnedLegs` (`controllers/account/transaction.ts`) asks the different, positive question "is every leg one of *my* types" against `logic/account.ts`'s `isAccountOwnedType` (an enumeration of `checking`/`savings`/`wallet`/`investment` — the account domain's own scope, not the negation of `credit`; vacuously true for an unattached movement with no legs at all). Neither aggregate reuses or negates the other's predicate. This replaces the retired `cardId`/`billId` field-presence heuristic (`isCardOwned`) and the shared core `assertOwnership` (both deleted from `controllers/transaction/core.ts`/`logic/transaction.ts` — the core owns no ownership discriminator at all). A wrong-tool call is rejected with a `validation` error naming the correct tool (`transactionErrors.wrongTool`, raised by each aggregate's own guard) — a guard, not a redirect the server performs on the caller's behalf. Routing outcomes are unchanged from the union rule (card purchases and the bill-payment transfer → card; regular movements/transfers → account); only the mechanism moved. Transfer *mutation* policy (`guardTransferMutability`, the `transferTypeImmutable`/`transferCategoryRejected` errors) lives wholly in the account context (`logic/account.ts`, `models/account.ts`) — the credit-card aggregate never reasons about transfer invariants; its one transfer (the bill-payment transfer) is blocked outright by its own bill-process guard (redirect to `revert_bill_payment`), not by transfer-immutability. Bulk (step 2): `create_transactions_bulk` and its per-line ownership router (`routeTransactionLine`) are removed, replaced by single-source `import_card_statement`/`import_account_statement` — a statement belongs wholly to the ONE card/account the caller named, so there is no per-line owner left to decide; the shared `controllers/transaction/bulk.ts` runner (`runStatementImport`) only defaults per-line fields and makes no ownership decision.
 18. **The transaction core's movement schema is minimal (ADR-019 step 1).** `CreateTransactionSchema`/`UpdateTransactionSchema` (`models/transaction.ts`) carry only genuinely-shared ledger vocabulary (description, amount, type, status, date, category/subCategory, currency, idempotencyKey, rawInput, note, tags) — they name no sibling context's field. Each aggregate `.extend`s the core up with its own vocabulary rather than the core carrying the union for aggregates to `.omit` down: `AddCardPurchaseSchema` (`models/creditCard.ts`) adds `card`/`billMonth`/`billYear`; `UpdateCardTransactionSchema` adds `billMonth`/`billYear` (bill reassignment — no `card` field, since a transaction's card can't change on update); `AddAccountMovementSchema`/`UpdateAccountTransactionSchema` (`models/account.ts`) add `account`. The field-tied bill errors (`billPeriodIncomplete`, `billAssignmentRequiresCard`) moved with the fields to `cardErrors`. One documented exception: `UpdateCardTransactionSchema` also `.extend`s `account` (rather than leaving it out) purely so `controllers/creditCard/transaction.ts`'s `updateCardTransaction` can keep rejecting it with its dedicated `cardErrors.accountChangeRejectedForCard` message — omitting the field would replace that message with a generic `.strict()` unrecognized-key error, a worse-not-better outcome. Transfer is the boundary case: the transfer *row kind* (`TransactionType.enum.transfer`, balance/summary math, `TransactionView.toAccountId`) stays core because the shared read/balance side is structurally defined over it (`resolveEffectiveType` stays in `logic/transaction.ts`); transfer *policy* (`guardTransferMutability`, the `transferTypeImmutable`/`transferCategoryRejected` errors) moved to the account context at step 2 (ADR-019 PR-2 / ADR-020). Step 2 (implemented) also moved: `isCardOwned` **deleted** (not relocated — superseded by ADR-020's account-type ownership, see invariant #17) and `resolveCurrency` → `logic/money.ts` (context-neutral signature: a `{ currency } | null` funding source plus the input override, replacing the old `(account, card, input)` shape); `assertBillPeriodPaired`/`withBillId` → `logic/bill.ts` (credit-card context).
-19. **A converted write flow returns its writes as data; it never performs them (ADR-021, phases 1–2c:
+19. **A converted write flow returns its writes as data; it never performs them (ADR-021, phases 1–3a:
     `createAccount`, the account-context transaction flows, the credit-card transaction flows
-    `add_card_purchase`/`update_card_transaction`/`delete_card_transaction`, and the bill flows
-    `pay_bill`/`revert_bill_payment`).** See § Write path above. A
+    `add_card_purchase`/`update_card_transaction`/`delete_card_transaction`, the bill flows
+    `pay_bill`/`revert_bill_payment`, and the simple entity CRUD flows `update_account`/`delete_account`,
+    `create_tag`/`delete_tag`, `create_category`/`delete_category`/`create_sub_category`/`delete_sub_category`,
+    `create_credit_card`/`delete_credit_card`).** See § Write path above. A
     converted controller's `deps` never receives a write method it calls directly for that flow — it builds one
     or more `Persistable`s and returns them in `persist`; only `withUnitOfWork` (`diplomat/db`, invoked from the
-    MCP/REST handler) touches `Db`. Unconverted flows (bulk import, recurring, remaining CRUD — phase 3) are
+    MCP/REST handler) touches `Db`. Unconverted flows (bulk import, recurring — phase 3b/3c) are
     unaffected and keep calling their `deps.<x>.create/update/...` write method exactly as before — this
-    invariant applies per-flow, not repo-wide, until phase 3 finishes the migration. Two documented transitional
+    invariant applies per-flow, not repo-wide, until phase 3 finishes the migration. `deps.<x>.create/update/
+    delete` methods for every converted entity (`accounts`, `tags`, `categories`, `subCategories`, `creditCards`)
+    are deliberately left in place, unused by their converted flow — phase 3d removes them once every caller has
+    converted. Two documented transitional
     duplications, both still repo-driven because their caller
-    (`importAccountStatement`/`importCardStatement`, bulk import — phase 3) needs an already-applied result per
+    (`importAccountStatement`/`importCardStatement`, bulk import — phase 3c) needs an already-applied result per
     line, not a `Persistable`: `controllers/account/transaction.ts`'s `addAccountMovementViaRepo` (sharing
     `planAccountMovement`'s decision with the FC/IS `addAccountMovement`) and
     `controllers/creditCard/transaction.ts`'s `addCardPurchaseViaRepo` (sharing `planCardPurchase`'s decision
@@ -403,4 +455,4 @@ available alongside the server.
 - ADR-017: no god write flows — bounded-context ownership for every transaction mutation (extends ADR-016; step 1 [update/delete split] and step 2 [bulk split] both implemented — complete; ownership discriminator revised by ADR-020)
 - ADR-019: minimal transaction core — aggregates `.extend` the shared movement schema up, never `.omit` it down (step 1 [schema compose-up] and step 2 [logic re-homing] both implemented — complete)
 - ADR-020: transaction ownership by account type, not structural field-presence (revises ADR-017's union rule; refines ADR-019 PR-2 — implemented)
-- ADR-021: functional core / imperative shell for the write path — controllers return a `persist` batch instead of writing, a generic versioned unit of work applies it (supersedes ADR-018; phase 1 [groundwork + `createAccount` first mover], phase 2a [account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing], phase 2b [credit-card transaction flows + `billApplier`'s cycle-race-via-retry], and phase 2c [bill flows `pay_bill`/`revert_bill_payment`; `deps.bills.markPaid`/`revertPayment`/`setStatus` deleted] implemented, phase 3 pending)
+- ADR-021: functional core / imperative shell for the write path — controllers return a `persist` batch instead of writing, a generic versioned unit of work applies it (supersedes ADR-018; phase 1 [groundwork + `createAccount` first mover], phase 2a [account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing], phase 2b [credit-card transaction flows + `billApplier`'s cycle-race-via-retry], phase 2c [bill flows `pay_bill`/`revert_bill_payment`; `deps.bills.markPaid`/`revertPayment`/`setStatus` deleted], and phase 3a [simple entity CRUD — account update/delete, tag/category/sub-category/credit-card create/delete; `tagApplier`'s name-race retry, `categoryApplier`'s merchant_category cascade, `creditCardApplier`'s full correlated-row cascade, two two-entity batches for credit-card create/delete] implemented, phase 3b–3d pending)

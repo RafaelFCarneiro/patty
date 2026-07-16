@@ -4,7 +4,9 @@
 account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing — implemented 2026-07-13;
 phase 2b — credit-card transaction flows + `billApplier`'s cycle-uniqueness-race-as-retry handling — implemented
 2026-07-15; phase 2c — bill flows `pay_bill`/`revert_bill_payment`, completing the transaction+bill write path
-and deleting the last bill write methods — implemented 2026-07-15; phase 3 pending) · **Date:** 2026-07-12 ·
+and deleting the last bill write methods — implemented 2026-07-15; phase 3a — simple entity CRUD (account
+update/delete, tag/category/sub-category/credit-card create/delete) — implemented 2026-07-15; phase 3b–3d
+pending) · **Date:** 2026-07-12 ·
 **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill payment) and finally resolves the thread ADR-015
 opened. Adopts the principle documented in `docs/functional-core-imperative-shell.md` for every write flow.
 
@@ -291,7 +293,44 @@ gets its own generic atomicity/conflict/idempotency suite.
      have added — two sequential `pay_bill` calls land exactly one transfer and one paid flip, and a simulated
      concurrent bill mutation (a version bump landing between `payBill`'s read and the shell's write) rolls
      back the whole batch — transfer included — and recovers cleanly on retry, leaving no partial write.
-   - [ ] Phase 3 (remaining flows): bulk import (reusing phase 2a's `PersistOutcome` idempotency-outcome
-     contract for per-item created/duplicate/needs-review status), recurring, card/category/tag CRUD; remove
-     write methods from `deps`; delete the now-dead transactional repo methods (incl. the phase 2a transitional
-     `addAccountMovementViaRepo`); update `docs/architecture.md` accordingly.
+   - [x] Phase 3a (simple entity CRUD): `update_account`/`delete_account` (the applier already existed from
+     phase 1 — `accountsRepo.findRawById` added for the version-carrying read the flows needed),
+     `create_tag`/`delete_tag`, `create_category`/`delete_category`/`create_sub_category`/`delete_sub_category`,
+     `create_credit_card`/`delete_credit_card` converted end to end (MCP + REST). Three new entities, each owning
+     its own tag (`models/tag.ts`'s `TAG_ENTITY_TAG`, `models/category.ts`'s `CATEGORY_ENTITY_TAG`,
+     `models/creditCard.ts`'s `CREDIT_CARD_ENTITY_TAG`). `tagApplier` (`diplomat/db/repos/tags.ts`) mirrors
+     `billApplier`'s pattern: `tags.name` carries its own `UNIQUE` constraint beyond the `id`-scoped
+     `onConflictDoNothing`, so a concurrent same-name create surfaces as a genuine unique-constraint violation,
+     recognized and rethrown as `VersionConflict` — the retried flow's own `assertTagNameAvailable` then sees
+     the committed row and returns `duplicate_name` instead of a raw 500. The shared cause-chain-walking
+     unique-constraint check moved out of `bills.ts` into `diplomat/db/sqliteErrors.ts`'s
+     `isUniqueConstraintViolation`, used by both appliers now. `deleteTag` stays idempotent-by-design (delete by
+     id, no name resolution): a missing id returns `{ deleted: false }` on an empty `persist` batch, unchanged
+     pre-ADR-021 behavior — not an error. `categoryApplier` (`diplomat/db/repos/categories.ts`) is shared by a
+     top-level category and a sub-category (same table, `parentId` set or not); its `delete` has genuine extra
+     mechanics — `merchant_category.category_id` references `categories.id` with no `ON DELETE` action, and the
+     domain's own referential-integrity guard (`isCategoryUnreferenced`) deliberately does not count
+     `merchant_category` rows (a category delete is meant to also clear learned classifications, re-learnable
+     later) — so a plain versioned delete would violate the FK; `categoryApplier.delete` purges the dependent
+     `merchant_category` rows first, in the same transaction, mirroring the pre-ADR-021 repo `delete`'s own
+     two-step transaction. `creditCardApplier` (`diplomat/db/repos/creditCards.ts`) preserves the pre-ADR-021
+     `deleteCard`'s full cascade (every correlated purchase, bill, and tag association, not just the card row);
+     since a `delete` `Persistable` only ever carries the entity's own `id`/`version`, the applier reads the
+     card's `accountId` back from its own row inside the same transaction, immediately before cascading — the
+     cascade SQL itself (`cascadeDeleteCorrelated`) is shared with the still-present (now-unused by any flow,
+     kept for phase 3d) `deleteCard` repo method rather than duplicated. `deleteCreditCard` emits a two-entity
+     delete batch — `[remove creditCard, remove account]`, card first since its cascade needs the card row
+     intact — and `createCreditCard` mirrors it with a two-entity insert batch — `[insert account, insert
+     creditCard]`, account first since the card row's `accountId` is a `NOT NULL` FK into it; both are ordinary
+     rule-5 composition (concatenated `persist` arrays), applied atomically by the shell in one transaction, no
+     special-casing in `withUnitOfWork`. `deps.<x>.create/update/delete` methods for every converted entity are
+     deliberately left in place, unused by their converted flow — phase 3d removes them once every caller has
+     converted (mirrors phase 2a/2b/2c's own transitional-duplication precedent). Coverage: pure flow tests
+     assert the returned `persist`/`response` for every branch (including both two-entity batches and their
+     ordering); a UoW-level suite extension covers `tagApplier`'s name-race retry, `categoryApplier`'s
+     merchant_category cascade (including the sub-category case), and `creditCardApplier`'s full cascade plus
+     the two-entity batch's atomicity (a stale account version rolls back the card's own cascade too).
+   - [ ] Phase 3b (recurring), phase 3c (bulk import — reusing phase 2a's `PersistOutcome` idempotency-outcome
+     contract for per-item created/duplicate/needs-review status), phase 3d (remove now-dead `deps` write
+     methods across every converted entity, including the phase 2a transitional `addAccountMovementViaRepo`):
+     remaining work; update `docs/architecture.md` accordingly as each lands.

@@ -31,6 +31,29 @@ export type Category = z.infer<typeof CategorySchema>;
 export const CreateCategorySchema = CategorySchema.omit({ id: true, kindLabel: true, names: true });
 export type CreateCategory = z.infer<typeof CreateCategorySchema>;
 
+// The category aggregate owns its own entity tag (ADR-021), mirroring `models/account.ts`'s
+// `ACCOUNT_ENTITY_TAG` — `models/persistable.ts` is generic over any entity's tag/model and never
+// lists this constant itself. Shared by both a top-level category and a sub-category (same table,
+// `parentId` set or not).
+export const CATEGORY_ENTITY_TAG = 'category';
+
+/** The category `Persistable`'s `insert` model vocabulary (ADR-021): the categories-table row
+ *  shape, shared by `createCategory` (no `parentId`) and `createSubCategory` (`parentId` set) —
+ *  `Category`/`SubCategory` are read projections (joined parent name, localized `kindLabel`), not
+ *  what the domain persists. No `version` — a fresh insert never carries one (`models/
+ *  persistable.ts`). */
+export type CategoryWriteModel = {
+  id: string;
+  name: string;
+  kind: CategoryKind;
+  parentId?: string;
+  names: LocalizedNames;
+};
+
+/** Version-carrying read (ADR-021) — enough for `deleteCategory`/`deleteSubCategory` to build a
+ *  version-guarded `delete` `Persistable`; both resolve to a row in the same `categories` table. */
+export type CategoryVersion = { id: string; version: number };
+
 /** Sub-category read projection — includes parent info joined from [:BELONGS_TO]->(:Category). */
 export const SubCategorySchema = z.object({
   id: Id,

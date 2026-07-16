@@ -1,4 +1,3 @@
-import { LibsqlError } from '@libsql/client';
 import { sql } from 'drizzle-orm';
 import * as R from 'remeda';
 import { z } from 'zod';
@@ -10,6 +9,7 @@ import type { BillPeriod } from '../../../logic/bill.js';
 import { BillRowSchema } from '../../../wire/db/bills.js';
 import type { Db } from '../driver.js';
 import { bills } from '../schema.js';
+import { isUniqueConstraintViolation } from '../sqliteErrors.js';
 import { fullTxSelect } from '../transactionSelect.js';
 import { VersionConflict, versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
@@ -112,36 +112,22 @@ export const billsRepo = (db: Db): BillsRepo => ({
   },
 });
 
-// A UNIQUE-constraint error on a bill insert can only be `bills_card_month_year`, the table's one
-// other unique constraint — an `id` collision is already absorbed by `onConflictDoNothing` below
-// and never throws.
-const SQLITE_UNIQUE_CONSTRAINT_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
-
-// Walks the `.cause` chain rather than assuming exactly one level of wrapping (today: drizzle's
-// `DrizzleQueryError` wrapping the driver's own `LibsqlError`) — robust to the driver ever
-// throwing `LibsqlError` directly, or to an extra wrapping layer.
-const isBillCycleUniqueConflict = (cause: unknown): boolean => {
-  for (let current = cause; current instanceof Error; current = current.cause) {
-    if (current instanceof LibsqlError) return current.extendedCode === SQLITE_UNIQUE_CONSTRAINT_CODE;
-  }
-  return false;
-};
-
 const versionedBillApplier = versionedTableApplier(bills);
 
 /** A bill is created by cycle (`UNIQUE(creditCardId, month, year)`), not by `id`, so a concurrent
  *  first purchase on the same cycle can raise a genuine unique-constraint error that
- *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow. Recognizing that one
- *  violation and rethrowing it as `VersionConflict` rolls the batch back and retries the flow (rule
- *  4) instead of surfacing a raw 500 or a wrong-id no-op. `update`/`delete` are plain
- *  `versionedTableApplier`. */
+ *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow — the table's only
+ *  other unique constraint, so `isUniqueConstraintViolation` needs no per-constraint disambiguation
+ *  here. Recognizing that one violation and rethrowing it as `VersionConflict` rolls the batch back
+ *  and retries the flow (rule 4) instead of surfacing a raw 500 or a wrong-id no-op. `update`/
+ *  `delete` are plain `versionedTableApplier`. */
 export const billApplier: EntityApplier = {
   ...versionedBillApplier,
   insert: async (tx, model) => {
     try {
       return await versionedBillApplier.insert(tx, model);
     } catch (cause) {
-      if (isBillCycleUniqueConflict(cause)) throw new VersionConflict();
+      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
       throw cause;
     }
   },

@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import * as accountAdapters from '../../../adapters/accounts.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
-import type { Account, AccountReferences, AccountType } from '../../../models/account.js';
+import type { Account, AccountEntity, AccountReferences, AccountType } from '../../../models/account.js';
 import type { CurrencyCode } from '../../../models/money.js';
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
 import { BalancePartsRow } from '../../../wire/db/accounts.js';
@@ -21,6 +21,8 @@ export type AccountsRepo = {
   create: (account: Account) => Promise<Account>;
   findById: (id: string) => Promise<Account | null>;
   findByName: (name: string) => Promise<Account | null>;
+  /** Version-carrying read (ADR-021) — for flows building an `update`/`delete` `Persistable`. */
+  findRawById: (id: string) => Promise<AccountEntity | null>;
   /** Aggregated movement per account: transactions + transfers, both directions. */
   balanceParts: (accountId: string) => Promise<BalancePartsRow>;
   countReferences: (accountId: string) => Promise<AccountReferences>;
@@ -64,6 +66,15 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
       .where(sql`lower(${accounts.name}) = lower(${name})`)
       .limit(1);
     return rows[0] ? accountAdapters.dbToModel(rows[0]) : null;
+  },
+
+  findRawById: async (id) => {
+    const rows = await db
+      .select()
+      .from(accounts)
+      .where(sql`${accounts.id} = ${id}`)
+      .limit(1);
+    return rows[0] ? accountAdapters.dbToEntity(rows[0]) : null;
   },
 
   balanceParts: async (accountId) => {

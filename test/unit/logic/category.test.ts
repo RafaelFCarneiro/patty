@@ -8,7 +8,6 @@ import {
   hasSubCategoryNameCollision,
   isCategoryUnreferenced,
   localizeCategoryName,
-  parentExists,
   resolveAndSort,
   resolveDisplayName,
   withKindLabel,
@@ -177,17 +176,5 @@ describe('isCategoryUnreferenced', () => {
     expect(isCategoryUnreferenced({ transactions: 1, recurring: 0, subCategories: 0 })).toBe(false);
     expect(isCategoryUnreferenced({ transactions: 0, recurring: 1, subCategories: 0 })).toBe(false);
     expect(isCategoryUnreferenced({ transactions: 0, recurring: 0, subCategories: 1 })).toBe(false);
-  });
-});
-
-describe('parentExists', () => {
-  const categories = [seeded, userCreated];
-
-  it('returns true when parent id is found', () => {
-    expect(parentExists(categories, 'cat-food')).toBe(true);
-  });
-
-  it('returns false when parent id is not found', () => {
-    expect(parentExists(categories, 'nonexistent')).toBe(false);
   });
 });

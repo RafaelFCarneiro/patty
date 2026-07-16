@@ -10,21 +10,24 @@ import { openDatabase } from './diplomat/db/driver.js';
 import { withUnitOfWork, type ApplierRegistry } from './diplomat/db/unitOfWork.js';
 import { accountApplier, accountsRepo } from './diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from './diplomat/db/repos/bills.js';
-import { categoriesRepo } from './diplomat/db/repos/categories.js';
+import { categoriesRepo, categoryApplier } from './diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js';
-import { creditCardsRepo } from './diplomat/db/repos/creditCards.js';
+import { creditCardApplier, creditCardsRepo } from './diplomat/db/repos/creditCards.js';
 import { dashboardsRepo } from './diplomat/db/repos/dashboards.js';
 import { merchantCategoryApplier, merchantsRepo } from './diplomat/db/repos/merchants.js';
 import { recurringRepo } from './diplomat/db/repos/recurring.js';
 import { settingsRepo } from './diplomat/db/repos/settings.js';
-import { tagsRepo } from './diplomat/db/repos/tags.js';
+import { tagApplier, tagsRepo } from './diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from './diplomat/db/repos/transactions.js';
 import { healthRepo } from './diplomat/db/repos/health.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { Locale } from './models/locale.js';
 import { ACCOUNT_ENTITY_TAG } from './models/account.js';
 import { BILL_ENTITY_TAG } from './models/bill.js';
+import { CATEGORY_ENTITY_TAG } from './models/category.js';
+import { CREDIT_CARD_ENTITY_TAG } from './models/creditCard.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from './models/merchant.js';
+import { TAG_ENTITY_TAG } from './models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from './models/transaction.js';
 import type { HttpSidecar } from './server.js';
 
@@ -104,6 +107,9 @@ const main = async (): Promise<void> => {
     [TRANSACTION_ENTITY_TAG]: transactionApplier,
     [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
     [BILL_ENTITY_TAG]: billApplier,
+    [TAG_ENTITY_TAG]: tagApplier,
+    [CATEGORY_ENTITY_TAG]: categoryApplier,
+    [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
   };
   const runUnitOfWork: UnitOfWork = (flow) => withUnitOfWork(db, applierRegistry, flow);
 
