@@ -6,9 +6,12 @@ import { sql } from 'drizzle-orm';
 import { okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { McpTransport } from '../../../src/config.js';
+import * as accountAdapters from '../../../src/adapters/accounts.js';
 import * as billAdapters from '../../../src/adapters/bills.js';
+import * as creditCardAdapters from '../../../src/adapters/creditCards.js';
 import * as transactionAdapters from '../../../src/adapters/transactions.js';
 import { payBill } from '../../../src/controllers/creditCard/bill.js';
+import { deleteCreditCard } from '../../../src/controllers/creditCard/creditCard.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
@@ -1097,7 +1100,7 @@ describe('categoryApplier — delete cascades merchant_category rows (ADR-021 ph
   });
 });
 
-describe('creditCardApplier — delete cascades correlated rows; two-entity batch atomicity (ADR-021 phase 3a)', () => {
+describe('creditCardApplier — plain versioned mechanics, no cascade of its own (ADR-021 phase 3a follow-up)', () => {
   const cardRegistry: ApplierRegistry = {
     [ACCOUNT_ENTITY_TAG]: accountApplier,
     [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
@@ -1145,11 +1148,16 @@ describe('creditCardApplier — delete cascades correlated rows; two-entity batc
     expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${accountId}`)).toHaveLength(0);
   });
 
-  it('cascades correlated bills, transactions, and transaction_tags ahead of the card row', async () => {
+  it('does NOT cascade a correlated bill on its own — that decision now belongs to the domain', async () => {
+    // Deleting a card whose bill/transaction rows the caller never removed first now surfaces a
+    // real FK violation, not a silent cascade — `creditCardApplier` is plain `versionedTableApplier`
+    // mechanics with no knowledge of what else references the card. `deleteCreditCard`
+    // (`controllers/creditCard/creditCard.ts`) is the one that reads and removes correlated rows
+    // itself, ahead of the card, as its own `Persistable`s — see the `deleteCreditCard` describe
+    // block below for the real, domain-decided cascade applied end to end.
     const { cardId, accountId } = await insertCardWithAccount();
-    const billId = randomUUID();
     await db.insert(bills).values({
-      id: billId,
+      id: randomUUID(),
       creditCardId: cardId,
       month: 6,
       year: 2026,
@@ -1158,36 +1166,11 @@ describe('creditCardApplier — delete cascades correlated rows; two-entity batc
       status: BillStatus.enum.open,
       version: 0,
     });
-    const txId = randomUUID();
-    await db.insert(transactions).values({
-      id: txId,
-      description: 'Purchase',
-      amount: 10,
-      type: TransactionType.enum.expense,
-      status: TransactionStatus.enum.effective,
-      date: '2026-06-01',
-      currency: CurrencyCode.enum.BRL,
-      source: TransactionSource.enum.mcp,
-      idempotencyKey: `idem-${randomUUID()}`,
-      classificationMethod: ClassificationMethod.enum.none,
-      confidence: 0,
-      creditCardId: cardId,
-      billId,
-      version: 0,
-    });
-    const tagId = randomUUID();
-    await db.insert(tags).values({ id: tagId, name: `Tag ${tagId}`, version: 0 });
-    await db.insert(transactionTags).values({ transactionId: txId, tagId });
 
-    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+    const outcome = withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
 
-    expect(result.isOk()).toBe(true);
-    expect(await db.all(sql`SELECT id FROM bills WHERE id = ${billId}`)).toHaveLength(0);
-    expect(await db.all(sql`SELECT id FROM transactions WHERE id = ${txId}`)).toHaveLength(0);
-    expect(await db.all(sql`SELECT * FROM transaction_tags WHERE transaction_id = ${txId}`)).toHaveLength(0);
-    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(0);
-    // The tag row itself is untouched — only its association with the deleted transaction is gone.
-    expect(await db.all(sql`SELECT id FROM tags WHERE id = ${tagId}`)).toHaveLength(1);
+    await expect(outcome).rejects.toThrow();
+    expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(1);
   });
 
   it('a stale account version rolls back the whole batch, the card cascade included — nothing partial', async () => {
@@ -1246,5 +1229,175 @@ describe('creditCardApplier — delete cascades correlated rows; two-entity batc
     expect(result.isOk()).toBe(true);
     expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${accountId}`)).toHaveLength(1);
     expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(1);
+  });
+});
+
+describe('deleteCreditCard — domain-decided cascade, applied atomically end to end (ADR-021 3a follow-up)', () => {
+  const fullRegistry: ApplierRegistry = {
+    [ACCOUNT_ENTITY_TAG]: accountApplier,
+    [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
+    [BILL_ENTITY_TAG]: billApplier,
+    [TRANSACTION_ENTITY_TAG]: transactionApplier,
+  };
+
+  const seedCardWithBillsAndTransactions = async (): Promise<{ deps: Deps; cardName: string; payerId: string }> => {
+    const accountsR = accountsRepo(db);
+    const creditCardsR = creditCardsRepo(db);
+    const billsR = billsRepo(db);
+    const transactionsR = transactionsRepo(db);
+
+    const payerId = randomUUID();
+    await accountsR.create({
+      id: payerId,
+      name: `Payer ${payerId}`,
+      type: AccountType.enum.checking,
+      currency: CurrencyCode.enum.BRL,
+      initialBalance: 1000,
+    });
+
+    const cardId = randomUUID();
+    const cardAccountId = randomUUID();
+    const cardName = `Card ${cardId}`;
+    await creditCardsR.createWithAccount(
+      {
+        id: cardId,
+        name: cardName,
+        currency: CurrencyCode.enum.BRL,
+        closingDay: 28,
+        dueDay: 5,
+        accountId: cardAccountId,
+      },
+      {
+        id: cardAccountId,
+        name: 'Card account',
+        type: AccountType.enum.credit,
+        currency: CurrencyCode.enum.BRL,
+        initialBalance: 0,
+      },
+    );
+
+    // An unpaid bill with one ordinary purchase.
+    const openBill = await billsR.ensureOpen(
+      cardId,
+      { month: 5, year: 2026, closeDate: '2026-05-28', dueDate: '2026-06-05' },
+      randomUUID(),
+    );
+    const purchaseId = randomUUID();
+    await transactionsR.create(
+      {
+        id: purchaseId,
+        description: 'Purchase',
+        amount: 40,
+        type: TransactionType.enum.expense,
+        status: TransactionStatus.enum.effective,
+        date: '2026-05-10',
+        currency: CurrencyCode.enum.BRL,
+        source: TransactionSource.enum.mcp,
+        idempotencyKey: `idem-${randomUUID()}`,
+        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+        refs: { accountId: cardAccountId, cardId, billId: openBill.id },
+      },
+      [],
+    );
+    const tagId = randomUUID();
+    await db.insert(tags).values({ id: tagId, name: `Tag ${tagId}`, version: 0 });
+    await db.insert(transactionTags).values({ transactionId: purchaseId, tagId });
+
+    // A paid bill: its own purchase plus the payment transfer, wired both ways
+    // (bill.payment_transaction_id <-> transfer.bill_id) exactly as payBill would leave it.
+    const paidBillId = randomUUID();
+    await db.insert(bills).values({
+      id: paidBillId,
+      creditCardId: cardId,
+      month: 4,
+      year: 2026,
+      closeDate: '2026-04-28',
+      dueDate: '2026-05-05',
+      status: BillStatus.enum.paid,
+      version: 0,
+    });
+    const paidPurchaseId = randomUUID();
+    await transactionsR.create(
+      {
+        id: paidPurchaseId,
+        description: 'Old purchase',
+        amount: 60,
+        type: TransactionType.enum.expense,
+        status: TransactionStatus.enum.effective,
+        date: '2026-04-10',
+        currency: CurrencyCode.enum.BRL,
+        source: TransactionSource.enum.mcp,
+        idempotencyKey: `idem-${randomUUID()}`,
+        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+        refs: { accountId: cardAccountId, cardId, billId: paidBillId },
+      },
+      [],
+    );
+    const transferId = randomUUID();
+    await transactionsR.create(
+      {
+        id: transferId,
+        description: 'Bill payment',
+        amount: 60,
+        type: TransactionType.enum.transfer,
+        status: TransactionStatus.enum.effective,
+        date: '2026-05-01',
+        currency: CurrencyCode.enum.BRL,
+        source: TransactionSource.enum.mcp,
+        idempotencyKey: `idem-${randomUUID()}`,
+        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+        refs: { accountId: payerId, toAccountId: cardAccountId, billId: paidBillId },
+      },
+      [],
+    );
+    await db
+      .update(bills)
+      .set({ paymentTransactionId: transferId })
+      .where(sql`${bills.id} = ${paidBillId}`);
+
+    const deps: Deps = {
+      accounts: accountsR,
+      bills: billsR,
+      categories: {} as Deps['categories'],
+      subCategories: {} as Deps['subCategories'],
+      creditCards: creditCardsR,
+      dashboards: {} as Deps['dashboards'],
+      health: {} as Deps['health'],
+      merchants: {} as Deps['merchants'],
+      recurring: {} as Deps['recurring'],
+      settings: {} as Deps['settings'],
+      tags: {} as Deps['tags'],
+      transactions: transactionsR,
+      clock: () => new Date('2026-06-15'),
+      newId: () => randomUUID(),
+      locale: async () => Locale.enum.en,
+      resetLocale: () => {},
+    };
+
+    return { deps, cardName, payerId };
+  };
+
+  const deleteCreditCardFlow = (deps: Deps, cardName: string) => () =>
+    deleteCreditCard(deps, { card: cardName, confirm: true })
+      .map(creditCardAdapters.outcomeToDb)
+      .map(accountAdapters.outcomeToDb)
+      .map(billAdapters.outcomeToDb)
+      .map(transactionAdapters.outcomeToDb);
+
+  it('removes every correlated bill/transaction, breaks the paid bill<->transfer circular FK', async () => {
+    const { deps, cardName, payerId } = await seedCardWithBillsAndTransactions();
+
+    const result = await withUnitOfWork(db, fullRegistry, deleteCreditCardFlow(deps, cardName));
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual({ deleted: true, card: cardName });
+
+    expect(await db.all(sql`SELECT id FROM credit_cards`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM bills`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM transactions WHERE credit_card_id IS NOT NULL`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT id FROM transactions WHERE description = ${'Bill payment'}`)).toHaveLength(0);
+    expect(await db.all(sql`SELECT * FROM transaction_tags`)).toHaveLength(0);
+    // The payer account (never part of the card's own cascade) survives untouched.
+    expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${payerId}`)).toHaveLength(1);
   });
 });

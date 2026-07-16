@@ -501,10 +501,15 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const { name } = req.params as { name: string };
       const confirm = (req.query as { confirm?: string }).confirm === 'true';
+      // The domain now decides its own correlated bill/transaction removals (ADR-021 phase 3a
+      // follow-up), so this batch carries all four entity tags — compose every entity's own
+      // outcomeToDb, same pattern as the credit-card purchase route's mixed bill+transaction batch.
       const flow = () =>
         deleteCreditCard(deps, { card: name, confirm })
           .map(creditCardAdapters.outcomeToDb)
-          .map(accountAdapters.outcomeToDb);
+          .map(accountAdapters.outcomeToDb)
+          .map(billAdapters.outcomeToDb)
+          .map(transactionAdapters.outcomeToDb);
       return send(reply, await unitOfWork(flow));
     },
   },

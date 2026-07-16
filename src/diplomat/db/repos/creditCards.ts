@@ -4,6 +4,7 @@ import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Account } from '../../../models/account.js';
 import { CreditCardSchema, type CreditCard, type CreditCardEntity } from '../../../models/creditCard.js';
 import type { CreditCardRow } from '../../../wire/db/creditCards.js';
+import { correlatedToCard } from '../creditCardCorrelation.js';
 import type { Db } from '../driver.js';
 import { accounts, bills, creditCards } from '../schema.js';
 import { versionedTableApplier, type EntityApplier, type Tx } from '../unitOfWork.js';
@@ -23,26 +24,18 @@ const toCard = (row: CreditCardRow): CreditCard =>
 // Cascades every row correlated to the card (bill-payment references, tags, transactions, bills)
 // ahead of the card row itself — FK-safe order: clear bills' reference to their payment transfer
 // first (bills.payment_transaction_id → transactions.id would otherwise block deleting a
-// bill-payment row below), then tags → transactions → bills. Shared by the plain repo `deleteCard`
-// below (kept, though no longer called by `deleteCreditCard`, per ADR-021 phase 3d — repo write
-// methods are removed only once every caller has converted) and `creditCardApplier.delete`, which
-// need the identical mechanics.
+// bill-payment row below), then tags → transactions → bills. Used only by the plain repo
+// `deleteCard` below — kept, though no longer called by `deleteCreditCard` (which now decides this
+// cascade itself, in the domain — see `creditCardApplier`'s doc comment), per ADR-021 phase 3d:
+// repo write methods are removed only once every caller has converted.
 const cascadeDeleteCorrelated = async (tx: Tx, cardId: string, accountId: string): Promise<void> => {
   await tx.update(bills).set({ paymentTransactionId: null }).where(eq(bills.creditCardId, cardId));
   await tx.run(sql`
     DELETE FROM transaction_tags WHERE transaction_id IN (
-      SELECT id FROM transactions
-      WHERE credit_card_id = ${cardId}
-        OR from_account_id = ${accountId}
-        OR to_account_id = ${accountId}
+      SELECT id FROM transactions WHERE ${correlatedToCard(cardId, accountId)}
     )
   `);
-  await tx.run(sql`
-    DELETE FROM transactions
-    WHERE credit_card_id = ${cardId}
-      OR from_account_id = ${accountId}
-      OR to_account_id = ${accountId}
-  `);
+  await tx.run(sql`DELETE FROM transactions WHERE ${correlatedToCard(cardId, accountId)}`);
   await tx.delete(bills).where(eq(bills.creditCardId, cardId));
 };
 
@@ -112,12 +105,9 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
   },
 
   countCorrelated: async (cardId, accountId) => {
-    const [txRow] = await db.all<{ count: number }>(sql`
-      SELECT COUNT(*) as count FROM transactions
-      WHERE credit_card_id = ${cardId}
-        OR from_account_id = ${accountId}
-        OR to_account_id = ${accountId}
-    `);
+    const [txRow] = await db.all<{ count: number }>(
+      sql`SELECT COUNT(*) as count FROM transactions WHERE ${correlatedToCard(cardId, accountId)}`,
+    );
     const [billRow] = await db.all<{ count: number }>(sql`
       SELECT COUNT(*) as count FROM bills WHERE credit_card_id = ${cardId}
     `);
@@ -133,34 +123,16 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
   },
 });
 
-const versionedCreditCardApplier = versionedTableApplier(creditCards);
-
 /**
- * The credit-card entity's `EntityApplier` (ADR-021). Deleting a card is meant to cascade every
- * purchase, bill, and tag association it (and its internal liability account) ever produced — the
- * pre-ADR-021 `deleteCard` above's own behavior, preserved here rather than narrowed to a plain
- * card-row delete. That cascade is genuine extra mechanics beyond the plain `id`/`version`
- * convention (mirrors `diplomat/db/repos/categories.ts`'s `categoryApplier`,
- * `diplomat/db/repos/bills.ts`'s `billApplier`), so this is a hand-written applier rather than
- * `versionedTableApplier(creditCards)` directly. The card `Persistable`'s `delete` only ever
- * carries the card's own `id`/`version` (`models/persistable.ts`'s generic shape has no room for a
- * second id) — the cascade's `accountId` is read back from the card row itself, inside the same
- * transaction, immediately before it's deleted; `deleteCreditCard` (`controllers/creditCard/
- * creditCard.ts`) still emits a SEPARATE version-guarded `delete` for the internal account,
- * applied by the plain `accountApplier` right after this one in the same batch — this applier
- * never touches the account row itself. A missing card row (already gone — a concurrent delete
- * race) reports `applied: false`, the same "roll back and retry" signal a stale version produces.
+ * The credit-card entity's `EntityApplier` (ADR-021). Plain `versionedTableApplier` — deleting a
+ * card row has no mechanics beyond the ordinary `id`/`version` convention. It did once: an earlier
+ * version of this applier read the card's own `accountId` back and cascade-deleted every
+ * correlated bill/transaction/tag itself, mirroring the pre-ADR-021 `deleteCard` above. That was
+ * the repo deciding a business question — "what happens when a card is deleted" — the exact
+ * ADR-015/018 smell ADR-021 exists to remove, just recurring one layer down. The cascade decision
+ * now lives in the domain: `deleteCreditCard` (`controllers/creditCard/creditCard.ts`) reads the
+ * card's correlated bills/transactions itself and emits their `update`/`delete` `Persistable`s
+ * explicitly, ahead of the card's own — this applier only ever writes the row it's handed, same as
+ * every other plain entity.
  */
-export const creditCardApplier: EntityApplier = {
-  ...versionedCreditCardApplier,
-  delete: async (tx, id, version) => {
-    const [row] = await tx
-      .select({ accountId: creditCards.accountId })
-      .from(creditCards)
-      .where(eq(creditCards.id, id))
-      .limit(1);
-    if (!row) return { applied: false };
-    await cascadeDeleteCorrelated(tx, id, row.accountId);
-    return versionedCreditCardApplier.delete(tx, id, version);
-  },
-};
+export const creditCardApplier: EntityApplier = versionedTableApplier(creditCards);

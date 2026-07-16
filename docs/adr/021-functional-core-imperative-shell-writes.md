@@ -313,23 +313,39 @@ gets its own generic atomicity/conflict/idempotency suite.
      `merchant_category` rows (a category delete is meant to also clear learned classifications, re-learnable
      later) — so a plain versioned delete would violate the FK; `categoryApplier.delete` purges the dependent
      `merchant_category` rows first, in the same transaction, mirroring the pre-ADR-021 repo `delete`'s own
-     two-step transaction. `creditCardApplier` (`diplomat/db/repos/creditCards.ts`) preserves the pre-ADR-021
-     `deleteCard`'s full cascade (every correlated purchase, bill, and tag association, not just the card row);
-     since a `delete` `Persistable` only ever carries the entity's own `id`/`version`, the applier reads the
-     card's `accountId` back from its own row inside the same transaction, immediately before cascading — the
-     cascade SQL itself (`cascadeDeleteCorrelated`) is shared with the still-present (now-unused by any flow,
-     kept for phase 3d) `deleteCard` repo method rather than duplicated. `deleteCreditCard` emits a two-entity
-     delete batch — `[remove creditCard, remove account]`, card first since its cascade needs the card row
-     intact — and `createCreditCard` mirrors it with a two-entity insert batch — `[insert account, insert
-     creditCard]`, account first since the card row's `accountId` is a `NOT NULL` FK into it; both are ordinary
-     rule-5 composition (concatenated `persist` arrays), applied atomically by the shell in one transaction, no
-     special-casing in `withUnitOfWork`. `deps.<x>.create/update/delete` methods for every converted entity are
-     deliberately left in place, unused by their converted flow — phase 3d removes them once every caller has
-     converted (mirrors phase 2a/2b/2c's own transitional-duplication precedent). Coverage: pure flow tests
-     assert the returned `persist`/`response` for every branch (including both two-entity batches and their
-     ordering); a UoW-level suite extension covers `tagApplier`'s name-race retry, `categoryApplier`'s
-     merchant_category cascade (including the sub-category case), and `creditCardApplier`'s full cascade plus
-     the two-entity batch's atomicity (a stale account version rolls back the card's own cascade too).
+     two-step transaction. `creditCardApplier` (`diplomat/db/repos/creditCards.ts`) is plain
+     `versionedTableApplier(creditCards)` — a first version of this applier read the card's own `accountId`
+     back and cascade-deleted every correlated bill/transaction/tag itself, mirroring the pre-ADR-021
+     `deleteCard`'s cascade; caught in review as the repo deciding a business question ("what happens when a
+     card is deleted") — the exact ADR-015/018 smell this whole ADR exists to remove, recurring one layer down
+     — and fixed before merge. **The cascade decision now lives in the domain.** `deleteCreditCard`
+     (`controllers/creditCard/creditCard.ts`) reads every bill (`billsRepo.findAllByCard`, new) and transaction
+     (`transactionsRepo.findAllCorrelatedToCard`, new) correlated to the card and emits their own removal as
+     explicit `Persistable`s, in FK-safe order. A bill with a payment transfer has a **circular reference** with
+     it (`bills.payment_transaction_id` → the transfer; the transfer's own `bill_id` → the bill; no `ON DELETE`
+     action on either column, libsql enforces foreign keys) — cleared first via an `update`
+     (`paymentTransactionId: null`), then every correlated transaction removed (`transaction_tags` cascades via
+     its own schema-declared `ON DELETE CASCADE` — a genuine DB mechanic, not a business decision, so it never
+     becomes a `Persistable`), then every bill, then the card, then its internal liability account. A bill
+     that received the clearing `update` is removed at `bill.version + 1` — the version the shell will have
+     already bumped it to by the time that delete applies in the same batch (rule 4's `model.version + 1` is
+     deterministic, so the domain can compute it too) — not the version read at decision time, which the update
+     already moved past; carrying the stale read version there would be a false, unresolvable version conflict.
+     `deleteCreditCard`'s batch is therefore variable-length — `[...bill-clears, ...transaction removals,
+     ...bill removals, remove creditCard, remove account]` — genuine rule-5 multi-entity composition, not the
+     two-entity batch a repo-side cascade let this flow get away with. `createCreditCard` stays a two-entity
+     insert batch — `[insert account, insert creditCard]`, account first since the card row's `accountId` is a
+     `NOT NULL` FK into it. `deps.<x>.create/update/delete` methods for every converted entity are deliberately
+     left in place, unused by their converted flow — phase 3d removes them once every caller has converted
+     (mirrors phase 2a/2b/2c's own transitional-duplication precedent). Coverage: pure flow tests assert the
+     returned `persist`/`response` for every branch (no correlated rows, an unpaid bill, a paid bill's
+     clear-then-remove-at-version+1); a UoW-level suite extension covers `tagApplier`'s name-race retry,
+     `categoryApplier`'s merchant_category cascade (including the sub-category case), that `creditCardApplier`
+     genuinely has no cascade of its own (a correlated bill left behind now surfaces a raw FK violation, not a
+     silent removal), and an end-to-end test running the real `deleteCreditCard` controller through the real
+     shell against a seeded DB (two bills — one paid with its payment transfer, one unpaid — plus ordinary
+     purchases and a tag) to prove the whole domain-decided batch, including the circular-FK break, commits
+     atomically.
    - [ ] Phase 3b (recurring), phase 3c (bulk import — reusing phase 2a's `PersistOutcome` idempotency-outcome
      contract for per-item created/duplicate/needs-review status), phase 3d (remove now-dead `deps` write
      methods across every converted entity, including the phase 2a transitional `addAccountMovementViaRepo`):

@@ -50,6 +50,10 @@ export type BillsRepo = {
   /** Lightweight cycle lookup (no card-name join, no transaction items). */
   findByCycle: (cardId: string, month: number, year: number) => Promise<RawBill | null>;
   findById: (billId: string) => Promise<RawBill | null>;
+  /** Every bill ever opened for a card. Version-carrying (ADR-021) — for `deleteCreditCard`, which
+   *  decides which of these to remove (and which need `paymentTransactionId` cleared first) as its
+   *  own `Persistable`s, rather than leaving that decision to a repo-side cascade. */
+  findAllByCard: (cardId: string) => Promise<RawBill[]>;
   /** Idempotent upsert-by-cycle: creates the cycle's bill `open` if none exists yet, else returns
    *  the existing one. Used only by the still-repo-driven bulk-import path; the FC/IS
    *  `addCardPurchase` expresses the same decision as a `Persistable` via `billApplier` instead. */
@@ -109,6 +113,11 @@ export const billsRepo = (db: Db): BillsRepo => ({
   findById: async (billId) => {
     const row = await fetchBillRow(db, billId);
     return row ? toRawBill(row) : null;
+  },
+
+  findAllByCard: async (cardId) => {
+    const rows = await db.all<Record<string, unknown>>(sql`SELECT * FROM bills WHERE credit_card_id = ${cardId}`);
+    return rows.map(toRawBill);
   },
 });
 

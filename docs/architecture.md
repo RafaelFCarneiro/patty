@@ -244,24 +244,38 @@ performing it; the diplomat shell **applies** it.
     `merchant_category` rows first, in the same transaction, then the version-guarded row delete — mirrors the
     pre-ADR-021 repo `delete`'s own two-step transaction. `insert`/`update` stay plain
     `versionedTableApplier(categories)`.
-  - **`creditCardApplier`** (`diplomat/db/repos/creditCards.ts`) preserves `deleteCard`'s full pre-ADR-021
-    cascade — deleting a card also removes every purchase, bill, and tag association it (and its internal
-    liability account) ever produced, not just the card row. Because a `Persistable`'s `delete` variant only
-    ever carries the entity's own `id`/`version` (no room for a second id), the applier reads the card's
-    `accountId` back from its own row, inside the same transaction, immediately before cascading — the shared
-    `cascadeDeleteCorrelated` helper (clear bills' `payment_transaction_id`, delete `transaction_tags`, delete
-    `transactions`, delete `bills` — all scoped by `credit_card_id OR from_account_id OR to_account_id`) is used
-    by both the applier and the still-present (unused by any flow, kept for phase 3d) `deleteCard` repo method,
-    so the cascade SQL is written once. `deleteCreditCard`'s domain flow emits a **two-entity delete batch** —
-    `[remove creditCard, remove account]`, card first since the applier's own cascade needs the card row to
-    still exist — the plain `accountApplier` removes the now-unreferenced internal account right after.
-    `createCreditCard` mirrors this with a **two-entity insert batch** — `[insert account, insert creditCard]`,
-    account first since the card row's `accountId` is a `NOT NULL` FK into it. Both are ordinary
-    `docs/functional-core-imperative-shell.md` rule-5 composition (concatenated `persist` arrays), applied
-    atomically by the shell in one transaction — no special-casing in `withUnitOfWork` itself.
+  - **`creditCardApplier`** (`diplomat/db/repos/creditCards.ts`) is plain `versionedTableApplier(creditCards)` —
+    no cascade of its own. An earlier version of this applier read the card's own `accountId` back and
+    cascade-deleted every correlated bill/transaction/tag itself, mirroring the pre-ADR-021 `deleteCard` repo
+    method's own cascade. That was the repo deciding a business question — "what happens when a card is
+    deleted" (hard-delete vs. a future soft-delete/archive is exactly the kind of call that should be able to
+    change without touching the persistence layer) — the ADR-015/018 smell ADR-021 exists to remove, recurring
+    one layer down; fixed before shipping. **The cascade decision now lives in the domain.**
+    `deleteCreditCard` (`controllers/creditCard/creditCard.ts`) reads every bill (`billsRepo.findAllByCard`) and
+    transaction (`transactionsRepo.findAllCorrelatedToCard`) correlated to the card and emits their own
+    `update`/`delete` `Persistable`s explicitly. "Correlated to a card" (a purchase on it, or any movement on its
+    own internal liability account) is itself one predicate, `diplomat/db/creditCardCorrelation.ts`'s
+    `correlatedToCard` — shared by that new read, `countCorrelated`'s dry-run counts, and the legacy `deleteCard`
+    repo method's own cascade, so the definition lives in one place rather than three copies of the same SQL. In
+    FK-safe order: a bill with a payment transfer has a
+    **circular reference** with it (`bills.payment_transaction_id` → the transfer; the transfer's own `bill_id`
+    → the bill; libsql enforces foreign keys, no `ON DELETE` action on either column) — that one reference is
+    cleared first (`update`, `paymentTransactionId: null`), then every correlated transaction is removed
+    (`transaction_tags` cascades via its own `ON DELETE CASCADE` — a genuine DB mechanic declared in the schema,
+    not a business decision, so it stays outside the `Persistable` batch entirely), then every bill, then the
+    card, then its internal liability account. A bill this batch already cleared is removed at the version the
+    shell will have bumped it to by the time that delete applies in the same transaction (`bill.version + 1` —
+    computed by the domain from the same deterministic rule the shell itself uses, rule 4) — carrying the
+    version read at decision-time would target a row the update already moved past, a false version conflict.
+    `deleteCreditCard`'s batch is therefore variable-length: `[...bill-clears, ...transaction removals, ...bill
+    removals, remove creditCard, remove account]` — a genuine multi-entity composition (rule 5), not the
+    two-entity batch an earlier version of this flow got away with by pushing the correlated-row cleanup into
+    the applier. `createCreditCard` stays a **two-entity insert batch** — `[insert account, insert creditCard]`,
+    account first since the card row's `accountId` is a `NOT NULL` FK into it.
   - MCP/REST handlers compose the entity's own `outcomeToDb` per batch member, same as `add_card_purchase`'s
-    bill+transaction pattern: `create_credit_card`/`delete_credit_card` map through both `accountAdapters
-    .outcomeToDb` and `creditCardAdapters.outcomeToDb`.
+    bill+transaction pattern: `create_credit_card` maps through `accountAdapters.outcomeToDb` and
+    `creditCardAdapters.outcomeToDb`; `delete_credit_card`'s larger batch maps through all four —
+    `creditCardAdapters`, `accountAdapters`, `billAdapters`, and `adapters/transactions.ts`'s `outcomeToDb`.
 - **Merchant key is always stored, matched or not** (`controllers/account/transaction.ts`'s `planAccountMovement`):
   `pickClassification` (`logic/classify.ts`) only returns a `merchantKey` when it found a match, since a matched
   key is the (possibly partial) `merchant_category` key substring-matched against, not the transaction's own
@@ -455,4 +469,4 @@ available alongside the server.
 - ADR-017: no god write flows — bounded-context ownership for every transaction mutation (extends ADR-016; step 1 [update/delete split] and step 2 [bulk split] both implemented — complete; ownership discriminator revised by ADR-020)
 - ADR-019: minimal transaction core — aggregates `.extend` the shared movement schema up, never `.omit` it down (step 1 [schema compose-up] and step 2 [logic re-homing] both implemented — complete)
 - ADR-020: transaction ownership by account type, not structural field-presence (revises ADR-017's union rule; refines ADR-019 PR-2 — implemented)
-- ADR-021: functional core / imperative shell for the write path — controllers return a `persist` batch instead of writing, a generic versioned unit of work applies it (supersedes ADR-018; phase 1 [groundwork + `createAccount` first mover], phase 2a [account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing], phase 2b [credit-card transaction flows + `billApplier`'s cycle-race-via-retry], phase 2c [bill flows `pay_bill`/`revert_bill_payment`; `deps.bills.markPaid`/`revertPayment`/`setStatus` deleted], and phase 3a [simple entity CRUD — account update/delete, tag/category/sub-category/credit-card create/delete; `tagApplier`'s name-race retry, `categoryApplier`'s merchant_category cascade, `creditCardApplier`'s full correlated-row cascade, two two-entity batches for credit-card create/delete] implemented, phase 3b–3d pending)
+- ADR-021: functional core / imperative shell for the write path — controllers return a `persist` batch instead of writing, a generic versioned unit of work applies it (supersedes ADR-018; phase 1 [groundwork + `createAccount` first mover], phase 2a [account-context transaction flows + `PersistOutcome` idempotency-outcome plumbing], phase 2b [credit-card transaction flows + `billApplier`'s cycle-race-via-retry], phase 2c [bill flows `pay_bill`/`revert_bill_payment`; `deps.bills.markPaid`/`revertPayment`/`setStatus` deleted], and phase 3a [simple entity CRUD — account update/delete, tag/category/sub-category/credit-card create/delete; `tagApplier`'s name-race retry, `categoryApplier`'s merchant_category cascade, `deleteCreditCard`'s domain-decided correlated-bill/transaction cascade (breaking the paid-bill↔payment-transfer circular FK itself, not a repo-side `creditCardApplier` cascade), a two-entity batch for credit-card create] implemented, phase 3b–3d pending)

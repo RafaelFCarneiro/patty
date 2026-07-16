@@ -2,11 +2,14 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import { assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
+import { billEntityFrom } from '../../logic/bill.js';
 import * as persistence from '../../logic/persistence.js';
 import { accountErrors, ACCOUNT_ENTITY_TAG, AccountType, type Account } from '../../models/account.js';
+import { BILL_ENTITY_TAG, type RawBill } from '../../models/bill.js';
 import { cardErrors, CREDIT_CARD_ENTITY_TAG, type CreateCreditCard, type CreditCard } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
 import type { FlowOutcome, Persistable } from '../../models/persistable.js';
+import { TRANSACTION_ENTITY_TAG } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCardRef } from '../resolve.js';
 
@@ -30,13 +33,45 @@ const assertAccountNameAvailable = async (deps: Deps, name: string): Promise<boo
   !(await deps.accounts.findByName(name));
 
 /**
+ * A bill with a payment transfer has a circular reference with it: `bills
+ * .payment_transaction_id` points at the transfer, and the transfer's own `bill_id` points back at
+ * the bill — and libsql enforces foreign keys, with no `ON DELETE` action declared on either
+ * column. Deleting both therefore needs the reference broken first: `payment_transaction_id`
+ * cleared (an `update`) before the transfer can be removed, and the bill's own removal ordered
+ * after that. Returns just the `update` when there's a transfer to unlink, nothing for a bill that
+ * never had one — the version-guarded `remove` for the bill itself lives in `billRemovalFor` below,
+ * not here, since it must always run last regardless.
+ */
+const billClearFor = (bill: RawBill): Persistable[] =>
+  bill.paymentTransactionId
+    ? [persistence.update({ entity: BILL_ENTITY_TAG, model: { ...billEntityFrom(bill), paymentTransactionId: null } })]
+    : [];
+
+/** The bill's own removal — version-guarded. A bill `billClearFor` already emitted an `update` for
+ *  is removed at the version the shell will have bumped it to by the time this applies in the same
+ *  batch (rule 4: an `update` always becomes `model.version + 1`, deterministically) — not the
+ *  version read here, which the update already moved past. */
+const billRemovalFor = (bill: RawBill): Persistable =>
+  persistence.remove({
+    entity: BILL_ENTITY_TAG,
+    id: bill.id,
+    version: bill.paymentTransactionId ? bill.version + 1 : bill.version,
+  });
+
+/**
  * Delete a credit card (ADR-021): the dry-run preview (no writes — an empty `persist` batch,
- * mirroring `deleteAccountTransaction`) is unchanged. On confirm, emits a two-entity batch —
- * `[remove creditCard, remove account]` — the card first (its own `creditCardApplier` cascades
- * every correlated purchase/bill/tag ahead of the card row itself, mirroring the pre-ADR-021
- * `deleteCard`'s behavior), then the internal liability account, safe to remove once the card row
- * referencing it is gone. `resolveCardRef`'s `CreditCard`/`resolveAccountRef`'s `Account` carry no
- * `version`; a version-carrying re-read of each (`findRawById`) supplies what the `Persistable`s need.
+ * mirroring `deleteAccountTransaction`) is unchanged. On confirm, the domain reads every bill and
+ * transaction correlated to the card (`findAllByCard`/`findAllCorrelatedToCard`) and decides their
+ * removal itself, rather than leaving "what does deleting a card cascade to" as a repo-side
+ * decision (the exact ADR-015/018 smell ADR-021 exists to remove) — an earlier version of this
+ * flow left that cascade to `creditCardApplier`; it's `versionedTableApplier(creditCards)` now,
+ * with nothing left to decide once the domain owns the batch. FK-safe order, matching the
+ * pre-ADR-021 `deleteCard` repo method's own reasoning: every bill's payment-transfer reference
+ * cleared first, then every correlated transaction removed (transaction_tags cascades via its own
+ * `ON DELETE CASCADE` — a genuine DB mechanic, not a business decision, so it stays declarative
+ * schema, never a `Persistable`), then every bill removed, then the card, then its internal
+ * liability account. `resolveCardRef`'s `CreditCard`/`resolveAccountRef`'s `Account` carry no
+ * `version`; version-carrying re-reads (`findRawById`) supply what the `Persistable`s need.
  */
 export const deleteCreditCard = (
   deps: Deps,
@@ -67,8 +102,15 @@ export const deleteCreditCard = (
       await deps.accounts.findRawById(card.accountId),
       notFound('account', card.accountId, []),
     );
+    const correlatedBills = await deps.bills.findAllByCard(card.id);
+    const correlatedTransactions = await deps.transactions.findAllCorrelatedToCard(card.id, card.accountId);
 
     const persist: Persistable[] = [
+      ...correlatedBills.flatMap(billClearFor),
+      ...correlatedTransactions.map((tx) =>
+        persistence.remove({ entity: TRANSACTION_ENTITY_TAG, id: tx.id, version: tx.version }),
+      ),
+      ...correlatedBills.map(billRemovalFor),
       persistence.remove({ entity: CREDIT_CARD_ENTITY_TAG, id: rawCard.id, version: rawCard.version }),
       persistence.remove({ entity: ACCOUNT_ENTITY_TAG, id: rawAccount.id, version: rawAccount.version }),
     ];

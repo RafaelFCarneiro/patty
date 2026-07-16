@@ -19,6 +19,7 @@ import type { SummaryRow } from '../../../models/summary.js';
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js';
 import { ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
+import { correlatedToCard } from '../creditCardCorrelation.js';
 import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
 import { merchants, tags, transactionTags, transactions } from '../schema.js';
@@ -99,6 +100,12 @@ export type TransactionsRepo = {
   /** Flip status pending → effective. Returns null if the id does not exist. */
   confirm: (id: string) => Promise<RawTransactionView | null>;
   delete: (id: string) => Promise<boolean>;
+  /** Every transaction correlated to a credit card — card purchases (`creditCardId`) and any
+   *  movement on its internal liability account (`fromAccountId`/`toAccountId`), including the
+   *  bill-payment transfer. Version-carrying (ADR-021) — for `deleteCreditCard`, which decides
+   *  which of these to remove as its own `Persistable`s rather than leaving that decision to a
+   *  repo-side cascade. */
+  findAllCorrelatedToCard: (cardId: string, accountId: string) => Promise<RawTransactionView[]>;
   /** Keyset page: fetches one extra row (LIMIT n+1) to derive `hasMore` without a COUNT query.
    *  Receives the model plus the refs the controller had to resolve via I/O; shaping that pair
    *  into the flat SQL-filter object (`toSearchFilters`) happens in here, not at the call site. */
@@ -218,6 +225,11 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
   delete: async (id) => {
     const result = await db.delete(transactions).where(eq(transactions.id, id));
     return (result.rowsAffected ?? 0) > 0;
+  },
+
+  findAllCorrelatedToCard: async (cardId, accountId) => {
+    const rows = await db.all<Record<string, unknown>>(fullTxSelect(correlatedToCard(cardId, accountId, 't')));
+    return rows.map(transactionAdapters.dbToModel);
   },
 
   search: async (input, refs) => {
