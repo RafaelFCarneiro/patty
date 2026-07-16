@@ -133,6 +133,12 @@ export const UpdateCardTransactionSchema = UpdateTransactionSchema.extend({
 }).strict();
 export type UpdateCardTransaction = z.infer<typeof UpdateCardTransactionSchema>;
 
+/** `deleteCreditCard`'s dry-run response (`controllers/creditCard/creditCard.ts`) — named so the
+ *  string can't drift between the response and its own test's assertion, matching
+ *  `DELETE_TRANSACTION_CONFIRM_HINT` (`models/transaction.ts`)'s reason for existing. */
+export const DELETE_CREDIT_CARD_CONFIRM_HINT =
+  'Destructive action: show what would be deleted to the user and call again with confirm: true.';
+
 export type CardError = NotFound<'card'> | Ambiguous<'card'> | DuplicateName<'credit_card'> | ValidationError;
 
 export const cardErrors = {

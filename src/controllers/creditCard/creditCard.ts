@@ -6,7 +6,13 @@ import { billEntityFrom } from '../../logic/bill.js';
 import * as persistence from '../../logic/persistence.js';
 import { accountErrors, ACCOUNT_ENTITY_TAG, AccountType, type Account } from '../../models/account.js';
 import { BILL_ENTITY_TAG, type RawBill } from '../../models/bill.js';
-import { cardErrors, CREDIT_CARD_ENTITY_TAG, type CreateCreditCard, type CreditCard } from '../../models/creditCard.js';
+import {
+  cardErrors,
+  CREDIT_CARD_ENTITY_TAG,
+  DELETE_CREDIT_CARD_CONFIRM_HINT,
+  type CreateCreditCard,
+  type CreditCard,
+} from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
 import type { FlowOutcome, Persistable } from '../../models/persistable.js';
 import { TRANSACTION_ENTITY_TAG } from '../../models/transaction.js';
@@ -82,7 +88,7 @@ export const deleteCreditCard = (
             transactions: counts.transactions,
             bills: counts.bills,
           },
-          hint: 'Destructive action: show what would be deleted to the user and call again with confirm: true.',
+          hint: DELETE_CREDIT_CARD_CONFIRM_HINT,
         },
       });
 

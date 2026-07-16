@@ -3,7 +3,12 @@ import { createCreditCard, deleteCreditCard } from '../../../../src/controllers/
 import type { Deps } from '../../../../src/controllers/deps.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus, type RawBill } from '../../../../src/models/bill.js';
-import { CREDIT_CARD_ENTITY_TAG, type CreditCard, type CreditCardEntity } from '../../../../src/models/creditCard.js';
+import {
+  CREDIT_CARD_ENTITY_TAG,
+  DELETE_CREDIT_CARD_CONFIRM_HINT,
+  type CreditCard,
+  type CreditCardEntity,
+} from '../../../../src/models/creditCard.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
 import { Locale } from '../../../../src/models/locale.js';
 import { PersistOp } from '../../../../src/models/persistable.js';
@@ -196,7 +201,7 @@ describe('deleteCreditCard — functional core, two-entity batch (ADR-021 phase 
       deleted: false,
       dryRun: true,
       wouldDelete: { card: 'Nubank', account: 'Card: Nubank', transactions: 3, bills: 1 },
-      hint: 'Destructive action: show what would be deleted to the user and call again with confirm: true.',
+      hint: DELETE_CREDIT_CARD_CONFIRM_HINT,
     });
   });
 
