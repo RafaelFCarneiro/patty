@@ -14,7 +14,7 @@ const RULE_SELECT = sql`
 
 export type RecurringRepo = {
   list: () => Promise<RecurringRuleView[]>;
-  /** Version-carrying — callers build a version-guarded `Persistable` update from it, never write directly. */
+  /** Version-carrying, for building a version-guarded `Persistable` update. */
   due: (onOrBefore: string) => Promise<RecurringRuleEntity[]>;
 };
 
@@ -34,11 +34,4 @@ export const recurringRepo = (db: Db): RecurringRepo => ({
   },
 });
 
-/**
- * The recurring-rule entity's `EntityApplier` (ADR-021) — plain `versionedTableApplier`, no
- * mechanics beyond the ordinary `id`/`version` convention (mirrors `accountApplier`): the row shape
- * (`adapters/recurring.ts`'s `modelToDb`) already matches the `recurring_rules` table 1:1.
- * Registered under `models/recurring.ts`'s `RECURRING_ENTITY_TAG` at the composition root
- * (`main.ts`).
- */
 export const recurringRuleApplier: EntityApplier = versionedTableApplier(recurringRules);

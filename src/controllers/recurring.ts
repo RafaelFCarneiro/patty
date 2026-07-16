@@ -34,11 +34,8 @@ export const listRecurring = async (deps: Deps): Promise<RecurringRuleView[]> =>
   return rules.map(withPeriodLabel(locale));
 };
 
-/**
- * Resolves the account/category by name, builds the rule model, and hands the write off as an
- * insert `Persistable` (ADR-021) — no read-back needed, the response is built from the same model
- * plus the already-resolved account/category names (rule 6).
- */
+/** No read-back needed — the response is built from the same model plus the already-resolved
+ *  account/category names (rule 6). */
 export const createRecurring = (
   deps: Deps,
   input: CreateRecurring,
@@ -73,14 +70,11 @@ export type ApplyDueResult = {
   count: number;
 };
 
-/** Everything one due rule materializes: its own occurrence inserts (planned alongside the display
- *  metadata `applyDueRecurring`'s response needs to report them) plus its `advance` update. */
 type RulePlan = {
   occurrences: Array<{ rule: string; date: string; persistable: Persistable }>;
   advance: Persistable;
 };
 
-/** One materialized occurrence's transaction entity, for the core to hand off as an insert `Persistable`. */
 const buildOccurrenceEntity = (
   deps: Deps,
   rule: RecurringRuleEntity,
@@ -101,10 +95,9 @@ const buildOccurrenceEntity = (
   tagNames: [],
 });
 
-/** Materializes one due rule's occurrences (bounded loop to prevent runaway on ancient rules) and
- *  its `advance` — a version-guarded update carrying the rule's full desired end-state (only
- *  `nextDue` actually changes) so the shell can apply it generically (rule 3/4). Always advances,
- *  even when no new occurrence gets inserted (an idempotent replay). */
+/** `advance`'s model carries the rule's full desired end-state, not just `nextDue`, so the shell's
+ *  generic versioned update can apply it (rule 3/4). Always advances, even when no new occurrence
+ *  gets inserted (an idempotent replay). */
 const planRule = (deps: Deps, rule: RecurringRuleEntity, through: string, today: string): RulePlan => {
   const occurrences: RulePlan['occurrences'] = [];
   let due = rule.nextDue;
