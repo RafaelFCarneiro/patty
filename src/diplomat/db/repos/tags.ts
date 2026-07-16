@@ -32,14 +32,12 @@ export const tagsRepo = (db: Db): TagsRepo => ({
 
 const versionedTagApplier = versionedTableApplier(tags);
 
-/** `tags.name` carries its own `UNIQUE` constraint (the domain's own pre-check, `createTag`'s
- *  `assertTagNameAvailable`, only guards the common case) — a concurrent create of the same name
- *  can raise a genuine unique-constraint error that `versionedTableApplier`'s id-scoped
- *  `onConflictDoNothing` doesn't swallow, the table's only other unique constraint. Mirrors
- *  `diplomat/db/repos/bills.ts`'s `billApplier`: recognize that one violation and rethrow it as
- *  `VersionConflict`, rolling the batch back and retrying the flow (rule 4) — on retry,
- *  `assertTagNameAvailable` sees the now-committed row and returns the proper `duplicate_name`
- *  error, instead of a raw 500. `update`/`delete` are plain `versionedTableApplier`. */
+/** `tags.name` has its own `UNIQUE` constraint beyond `createTag`'s pre-check
+ *  (`assertTagNameAvailable`, which only guards the common case) — a concurrent same-name insert
+ *  can raise a real unique-constraint error `versionedTableApplier`'s id-scoped
+ *  `onConflictDoNothing` doesn't swallow. Recognized and rethrown as `VersionConflict`, rolling
+ *  back and retrying — the retry's own `assertTagNameAvailable` then sees the committed row and
+ *  returns `duplicate_name` instead of a raw 500. `update`/`delete` stay plain. */
 export const tagApplier: EntityApplier = {
   ...versionedTagApplier,
   insert: async (tx, model) => {

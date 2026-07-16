@@ -8,14 +8,10 @@ export const TagSchema = z.object({
 });
 export type Tag = z.infer<typeof TagSchema>;
 
-// The tag aggregate owns its own entity tag (ADR-021), mirroring `models/account.ts`'s
-// `ACCOUNT_ENTITY_TAG` — `models/persistable.ts` is generic over any entity's tag/model and never
-// lists this constant itself.
+// Entity tag for this aggregate's `Persistable`s.
 export const TAG_ENTITY_TAG = 'tag';
 
-// The persistence-side entity (ADR-021): `Tag` plus the optimistic-concurrency `version` token.
-// Never sent over the wire — only flows that build `Persistable`s (`deleteTag`) and
-// `adapters/tags.ts`'s model→row adaptation speak `TagEntity`.
+// `Tag` plus the optimistic-concurrency `version` token. Never sent over the wire.
 export const TagEntitySchema = TagSchema.extend({
   version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
 });

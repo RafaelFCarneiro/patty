@@ -102,9 +102,8 @@ export type TransactionsRepo = {
   delete: (id: string) => Promise<boolean>;
   /** Every transaction correlated to a credit card — card purchases (`creditCardId`) and any
    *  movement on its internal liability account (`fromAccountId`/`toAccountId`), including the
-   *  bill-payment transfer. Version-carrying (ADR-021) — for `deleteCreditCard`, which decides
-   *  which of these to remove as its own `Persistable`s rather than leaving that decision to a
-   *  repo-side cascade. */
+   *  bill-payment transfer. Version-carrying — `deleteCreditCard` decides which of these to remove
+   *  as its own `Persistable`s. */
   findAllCorrelatedToCard: (cardId: string, accountId: string) => Promise<RawTransactionView[]>;
   /** Keyset page: fetches one extra row (LIMIT n+1) to derive `hasMore` without a COUNT query.
    *  Receives the model plus the refs the controller had to resolve via I/O; shaping that pair

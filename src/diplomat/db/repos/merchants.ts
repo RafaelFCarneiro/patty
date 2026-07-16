@@ -20,12 +20,8 @@ export type MerchantsRepo = {
   matchCandidates: (normalizedDescription: string) => Promise<MerchantMatch[]>;
 };
 
-/** Upsert-increment mechanics (ADR-021): "insert weight=1 on first correction, increment on
- *  repeat" — the one place this SQL is written. Its only caller is `merchantCategoryApplier.insert`
- *  below, running inside `withUnitOfWork`'s own `db.transaction` callback (`Tx`, not `Db`) — the
- *  repo-driven path this once also served (`merchantsRepo.incrementCategoryWeight`, for the
- *  pre-phase-2b credit-card aggregate) was removed once its own caller,
- *  `controllers/transaction/core.ts`'s `updateTransaction`, was deleted in phase 2b. */
+/** Upsert-increment: insert weight=1 on first correction, increment on repeat. Only called from
+ *  `merchantCategoryApplier.insert` below, inside `withUnitOfWork`'s own transaction (`Tx`). */
 const upsertCategoryWeight = async (db: Tx, merchantKey: string, categoryId: string): Promise<void> => {
   await db.insert(merchants).values({ key: merchantKey }).onConflictDoNothing();
   await db
@@ -52,12 +48,8 @@ export const merchantsRepo = (db: Db): MerchantsRepo => ({
   },
 });
 
-/**
- * The merchant-category edge's `EntityApplier` (ADR-021), registered under `models/merchant.ts`'s
- * `MERCHANT_CATEGORY_ENTITY_TAG` — `upsertCategoryWeight` above, driven by a `Persistable`
- * (`merchantKey`/`categoryId` already known to the caller). Always an `insert` (no `id`/`version` —
- * see `models/merchant.ts`) — `update`/`delete` are structurally unreachable for this entity.
- */
+/** Always an `insert` (no `id`/`version` — see `models/merchant.ts`) — `update`/`delete` are
+ *  structurally unreachable for this entity. */
 export const merchantCategoryApplier: EntityApplier = {
   insert: async (tx, model) => {
     const { merchantKey, categoryId } = model as MerchantCategoryEdge;

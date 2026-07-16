@@ -97,19 +97,16 @@ const newAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
 const insertOne = (model: AccountEntity) => () =>
   okAsync({ persist: [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model })], response: model });
 
-/** Inserts an account row directly (raw drizzle, bypassing any repo/domain layer) — test fixture
- *  setup only, never the code under test. Every `AccountsRepo` method this suite exercises is a
- *  read; seeding stays off that surface entirely rather than keeping a write method alive in
- *  production code solely for test convenience. */
+/** Inserts an account row directly (raw drizzle) — test fixture setup only, never the code under
+ *  test. */
 const insertAccount = async (overrides: Partial<AccountEntity> = {}): Promise<AccountEntity> => {
   const account = newAccount(overrides);
   await db.insert(accounts).values(account);
   return account;
 };
 
-/** Inserts a credit card and its internal liability account directly (raw drizzle) — mirrors what
- *  `createCreditCard`'s own two-entity `Persistable` batch produces, without going through it;
- *  test fixture setup only, same reasoning as `insertAccount` above. */
+/** Inserts a credit card and its internal liability account directly (raw drizzle) — test fixture
+ *  setup only. */
 const insertCreditCardWithAccount = async (
   paymentAccountId?: string,
 ): Promise<{ cardId: string; accountId: string; cardName: string }> => {
@@ -1074,9 +1071,7 @@ describe('categoryApplier — plain mechanics; merchant_category cascades via sc
 
     expect(result.isOk()).toBe(true);
     expect(await db.all(sql`SELECT id FROM categories WHERE id = ${categoryId}`)).toHaveLength(0);
-    // Gone via merchant_category.category_id's ON DELETE CASCADE (schema.ts) — categoryApplier
-    // itself is the same plain versionedTableApplier(categories) used for insert/update above,
-    // with no merchant_category-specific code of its own.
+    // Gone via merchant_category.category_id's ON DELETE CASCADE, not applier code.
     expect(await db.all(sql`SELECT 1 FROM merchant_category WHERE category_id = ${categoryId}`)).toHaveLength(0);
   });
 
@@ -1133,12 +1128,8 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
   });
 
   it('does NOT cascade a correlated bill on its own — that decision now belongs to the domain', async () => {
-    // Deleting a card whose bill/transaction rows the caller never removed first now surfaces a
-    // real FK violation, not a silent cascade — `creditCardApplier` is plain `versionedTableApplier`
-    // mechanics with no knowledge of what else references the card. `deleteCreditCard`
-    // (`controllers/creditCard/creditCard.ts`) is the one that reads and removes correlated rows
-    // itself, ahead of the card, as its own `Persistable`s — see the `deleteCreditCard` describe
-    // block below for the real, domain-decided cascade applied end to end.
+    // A bill left behind now surfaces a real FK violation, not a silent cascade — see the
+    // deleteCreditCard describe block below for the real, domain-decided cascade.
     const { cardId, accountId } = await insertCardWithAccount();
     await db.insert(bills).values({
       id: randomUUID(),

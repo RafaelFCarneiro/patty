@@ -50,9 +50,9 @@ export type BillsRepo = {
   /** Lightweight cycle lookup (no card-name join, no transaction items). */
   findByCycle: (cardId: string, month: number, year: number) => Promise<RawBill | null>;
   findById: (billId: string) => Promise<RawBill | null>;
-  /** Every bill ever opened for a card. Version-carrying (ADR-021) — for `deleteCreditCard`, which
-   *  decides which of these to remove (and which need `paymentTransactionId` cleared first) as its
-   *  own `Persistable`s, rather than leaving that decision to a repo-side cascade. */
+  /** Every bill ever opened for a card, version-carrying — `deleteCreditCard` decides which of
+   *  these to remove (and which need `paymentTransactionId` cleared first) as its own
+   *  `Persistable`s. */
   findAllByCard: (cardId: string) => Promise<RawBill[]>;
   /** Idempotent upsert-by-cycle: creates the cycle's bill `open` if none exists yet, else returns
    *  the existing one. Used only by the still-repo-driven bulk-import path; the FC/IS
@@ -124,12 +124,10 @@ export const billsRepo = (db: Db): BillsRepo => ({
 const versionedBillApplier = versionedTableApplier(bills);
 
 /** A bill is created by cycle (`UNIQUE(creditCardId, month, year)`), not by `id`, so a concurrent
- *  first purchase on the same cycle can raise a genuine unique-constraint error that
- *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow — the table's only
- *  other unique constraint, so `isUniqueConstraintViolation` needs no per-constraint disambiguation
- *  here. Recognizing that one violation and rethrowing it as `VersionConflict` rolls the batch back
- *  and retries the flow (rule 4) instead of surfacing a raw 500 or a wrong-id no-op. `update`/
- *  `delete` are plain `versionedTableApplier`. */
+ *  first purchase on the same cycle can raise a real unique-constraint error that
+ *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow. Rethrown as
+ *  `VersionConflict` to roll back and retry the flow instead of surfacing a raw 500 or a
+ *  wrong-id no-op. `update`/`delete` stay plain. */
 export const billApplier: EntityApplier = {
   ...versionedBillApplier,
   insert: async (tx, model) => {

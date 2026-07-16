@@ -4,14 +4,14 @@ import type { TagRow } from '../wire/db/tags.js';
 
 export const dbToModel = (row: TagRow): Tag => TagSchema.parse({ id: row.id, name: row.name });
 
-/** Read variant carrying `version` (ADR-021) — for `deleteTag`, which needs it to build a
- *  version-guarded `Persistable`. */
+/** Read variant carrying `version` — for `deleteTag`, which needs it to build a version-guarded
+ *  `Persistable`. */
 export const dbToEntity = (row: TagRow): TagEntity =>
   TagEntitySchema.parse({ id: row.id, name: row.name, version: row.version });
 
-/** Adapts one tag `Persistable`'s `model` from domain shape to db-row shape (ADR-021), mirroring
- *  `adapters/accounts.ts`'s `persistableToDb` — called explicitly by the MCP/REST handler before
- *  the batch ever reaches `withUnitOfWork`. No-ops on a `Persistable` tagged for a different entity. */
+/** Adapts one tag `Persistable`'s `model` from domain shape to db-row shape, called explicitly
+ *  before the batch reaches `withUnitOfWork`. No-ops on a `Persistable` tagged for a different
+ *  entity. */
 export const persistableToDb = (p: Persistable): Persistable => {
   if (p.entity !== TAG_ENTITY_TAG) return p;
   switch (p.op) {

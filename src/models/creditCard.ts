@@ -32,14 +32,10 @@ export const CreditCardSchema = z.object({
 });
 export type CreditCard = z.infer<typeof CreditCardSchema>;
 
-// The credit-card aggregate owns its own entity tag (ADR-021), mirroring `models/account.ts`'s
-// `ACCOUNT_ENTITY_TAG` — `models/persistable.ts` is generic over any entity's tag/model and never
-// lists this constant itself.
+// Entity tag for this aggregate's `Persistable`s.
 export const CREDIT_CARD_ENTITY_TAG = 'creditCard';
 
-// The persistence-side entity: `CreditCard` plus the optimistic-concurrency `version` token.
-// Never sent over the wire — only `deleteCreditCard` (which needs it to build a `Persistable`) and
-// `adapters/creditCards.ts`'s model→row adaptation speak `CreditCardEntity`.
+// `CreditCard` plus the optimistic-concurrency `version` token. Never sent over the wire.
 export const CreditCardEntitySchema = CreditCardSchema.extend({
   version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
 });

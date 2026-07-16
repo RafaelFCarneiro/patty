@@ -62,23 +62,7 @@ export const categoriesRepo = (db: Db): CategoriesRepo => ({
   },
 });
 
-/**
- * The category entity's `EntityApplier` (ADR-021) — shared by both a top-level category and a
- * sub-category (same table). Plain `versionedTableApplier(categories)` — deleting a category row
- * has no mechanics beyond the ordinary `id`/`version` convention. It once did: an earlier version
- * of this applier purged dependent `merchant_category` rows itself before the row delete, imitating
- * an `ON DELETE CASCADE` by hand — the repo deciding a referential-integrity mechanic that belongs
- * to the schema, the same layering slip `diplomat/db/repos/creditCards.ts`'s `creditCardApplier`
- * had (see its own doc comment). Unlike that case, though, this cleanup is *pure mechanics* with no
- * decision in it at all — no reads, no branching, always the same unconditional cascade whenever a
- * category disappears (the domain's own referential-integrity guard, `isCategoryUnreferenced`,
- * already deliberately leaves merchant learning out of what *blocks* a delete — a category delete
- * is meant to also clear its learned classifications, re-learnable later — so there was never a
- * decision left for the domain to make here). That makes it structurally identical to
- * `transaction_tags.transaction_id`'s `ON DELETE CASCADE` (`schema.ts`) — an association row with
- * no independent meaning once its owner is gone — so it now lives there too:
- * `merchant_category.category_id` references `categories.id` with `{ onDelete: 'cascade' }`
- * (migration `drizzle/0010_category_merchant_association_cascade.sql`). The applier writes only the
- * row it's handed, same as every other plain entity.
- */
+/** Shared by both a top-level category and a sub-category (same table). Deleting a category also
+ *  clears its `merchant_category` learning rows, but that's a schema-declared `ON DELETE CASCADE`
+ *  on `merchant_category.category_id` (`schema.ts`), not applier code — this stays plain. */
 export const categoryApplier: EntityApplier = versionedTableApplier(categories);

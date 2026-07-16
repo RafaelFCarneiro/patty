@@ -16,17 +16,10 @@ export const normalizeMerchant = (description: string): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
-/**
- * Resolves the merchant-learning edge worth writing for a category update — or `null` when
- * there's nothing to learn from: no category was actually resolved, it matches what the
- * transaction already had (not a correction), or the transaction has no classified merchant at
- * all. A single check, not split between a caller-side emptiness guard and a same-ness comparison
- * inside — callers just branch on the result, never re-deriving the fields themselves (the
- * returned edge already carries the right `merchantKey`/`categoryId`, ready to wrap in a
- * `MERCHANT_CATEGORY_ENTITY_TAG` `Persistable`). Shared by `controllers/account/transaction.ts`'s
- * `updateAccountTransaction` and `controllers/creditCard/transaction.ts`'s `updateCardTransaction`
- * — the one place this business rule is decided, not duplicated.
- */
+/** Resolves the merchant-learning edge worth writing for a category update — or `null` when
+ *  there's nothing to learn from: no category was actually resolved, it matches what the
+ *  transaction already had, or the transaction has no classified merchant at all. Shared by
+ *  `updateAccountTransaction` and `updateCardTransaction` — decided once, not duplicated. */
 export const resolveMerchantCorrection = (
   existing: { merchant?: string; categoryId?: string },
   newCategoryId: string | null | undefined,

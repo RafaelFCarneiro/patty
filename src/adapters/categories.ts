@@ -34,8 +34,8 @@ export const dbToSubCategory = (record: Record<string, unknown>): SubCategory =>
 
 export const wireInToModel = (input: wireIn.CreateCategory): CreateCategory => input;
 
-/** Entity → row for the versioned unit of work (ADR-021) — shared by a top-level category and a
- *  sub-category, both rows in the `categories` table. */
+/** Entity → row for the versioned unit of work — shared by a top-level category and a sub-category,
+ *  both rows in the `categories` table. */
 export const modelToDb = (entity: CategoryWriteModel & { version: number }): CategoryRow => ({
   id: entity.id,
   name: entity.name,
@@ -45,10 +45,9 @@ export const modelToDb = (entity: CategoryWriteModel & { version: number }): Cat
   version: entity.version,
 });
 
-/** Adapts one category `Persistable`'s `model` from domain shape to db-row shape (ADR-021),
- *  mirroring `adapters/accounts.ts`'s `persistableToDb` — called explicitly by the MCP/REST
- *  handler before the batch ever reaches `withUnitOfWork`. No-ops on a `Persistable` tagged for a
- *  different entity. Only `insert` ever carries a model here (no category `update` flow yet). */
+/** Adapts one category `Persistable`'s `model` from domain shape to db-row shape, called explicitly
+ *  before the batch reaches `withUnitOfWork`. No-ops on a `Persistable` tagged for a different
+ *  entity. Only `insert` ever carries a model here (no category `update` flow yet). */
 export const persistableToDb = (p: Persistable): Persistable => {
   if (p.entity !== CATEGORY_ENTITY_TAG) return p;
   switch (p.op) {

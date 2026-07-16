@@ -5,13 +5,10 @@ import { LibsqlError } from '@libsql/client';
 // `onConflictDoNothing` (scoped to `id`) and never throws in the first place.
 const SQLITE_UNIQUE_CONSTRAINT_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
 
-/** Walks the `.cause` chain rather than assuming exactly one level of wrapping (today: drizzle's
- *  `DrizzleQueryError` wrapping the driver's own `LibsqlError`) — robust to the driver ever
- *  throwing `LibsqlError` directly, or to an extra wrapping layer. Shared by every entity applier
- *  that needs to recognize a genuine non-`id` unique-constraint race and rethrow it as a
- *  `VersionConflict` (ADR-021 rule 4) instead of letting it surface as a raw 500 — e.g.
- *  `diplomat/db/repos/bills.ts`'s cycle-uniqueness race, `diplomat/db/repos/tags.ts`'s
- *  name-uniqueness race. */
+/** Walks the `.cause` chain rather than assuming exactly one level of wrapping (drizzle's
+ *  `DrizzleQueryError` wraps the driver's own `LibsqlError`) — robust to an extra or missing
+ *  wrapping layer. Used by appliers that need to recognize a non-`id` unique-constraint race and
+ *  rethrow it as a `VersionConflict` instead of a raw 500. */
 export const isUniqueConstraintViolation = (cause: unknown): boolean => {
   for (let current = cause; current instanceof Error; current = current.cause) {
     if (current instanceof LibsqlError) return current.extendedCode === SQLITE_UNIQUE_CONSTRAINT_CODE;

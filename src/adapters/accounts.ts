@@ -26,10 +26,9 @@ export const dbToModel = (row: AccountRow): Account =>
     currency: row.currency,
   });
 
-/** Read variant carrying `version` (ADR-021) — for the flows that need to build an `update`/
- *  `delete` `Persistable` from a fresh read (`updateAccount`/`deleteAccount`, and
- *  `deleteCreditCard`'s internal-account lookup). Never used for a plain list/read response, which
- *  stays `dbToModel` above so `version` can't leak onto the wire. */
+/** Read variant carrying `version` — for flows building an `update`/`delete` `Persistable` from a
+ *  fresh read (`updateAccount`/`deleteAccount`, `deleteCreditCard`'s internal-account lookup).
+ *  Never used for a plain list/read response, so `version` can't leak onto the wire. */
 export const dbToEntity = (row: AccountRow): AccountEntity =>
   AccountEntitySchema.parse({
     id: row.id,

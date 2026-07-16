@@ -67,16 +67,7 @@ export const creditCardsRepo = (db: Db): CreditCardsRepo => ({
   },
 });
 
-/**
- * The credit-card entity's `EntityApplier` (ADR-021). Plain `versionedTableApplier` — deleting a
- * card row has no mechanics beyond the ordinary `id`/`version` convention. It did once: an earlier
- * version of this applier read the card's own `accountId` back and cascade-deleted every
- * correlated bill/transaction/tag itself, mirroring what the pre-ADR-021 repo's own `deleteCard`
- * method used to do. That was the repo deciding a business question — "what happens when a card is
- * deleted" — the exact ADR-015/018 smell ADR-021 exists to remove, just recurring one layer down.
- * The cascade decision now lives in the domain: `deleteCreditCard`
- * (`controllers/creditCard/creditCard.ts`) reads the card's correlated bills/transactions itself
- * and emits their `update`/`delete` `Persistable`s explicitly, ahead of the card's own — this
- * applier only ever writes the row it's handed, same as every other plain entity.
- */
+/** Deleting a card cascades to its correlated bills/transactions, but that's decided in
+ *  `deleteCreditCard` (`controllers/creditCard/creditCard.ts`), which emits their own
+ *  `Persistable`s ahead of the card's — this applier just writes the row it's handed. */
 export const creditCardApplier: EntityApplier = versionedTableApplier(creditCards);

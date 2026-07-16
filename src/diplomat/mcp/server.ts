@@ -279,9 +279,8 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
       },
     },
     async (args) => {
-      // The domain now decides its own correlated bill/transaction removals (ADR-021 phase 3a
-      // follow-up), so this batch carries all four entity tags — compose every entity's own
-      // outcomeToDb, same pattern as add_card_purchase's mixed bill+transaction batch.
+      // deleteCreditCard's batch carries all four entity tags (bills/transactions it decided to
+      // remove, plus the card and account) — compose every entity's own outcomeToDb.
       const flow = () =>
         deleteCreditCard(deps, args)
           .map(creditCardAdapters.outcomeToDb)

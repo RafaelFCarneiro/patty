@@ -32,16 +32,10 @@ const assertCardNameAvailable = async (deps: Deps, name: string): Promise<boolea
 const assertAccountNameAvailable = async (deps: Deps, name: string): Promise<boolean> =>
   !(await deps.accounts.findByName(name));
 
-/**
- * A bill with a payment transfer has a circular reference with it: `bills
- * .payment_transaction_id` points at the transfer, and the transfer's own `bill_id` points back at
- * the bill — and libsql enforces foreign keys, with no `ON DELETE` action declared on either
- * column. Deleting both therefore needs the reference broken first: `payment_transaction_id`
- * cleared (an `update`) before the transfer can be removed, and the bill's own removal ordered
- * after that. Returns just the `update` when there's a transfer to unlink, nothing for a bill that
- * never had one — the version-guarded `remove` for the bill itself lives in `billRemovalFor` below,
- * not here, since it must always run last regardless.
- */
+/** A bill with a payment transfer has a circular reference with it (`bills.payment_transaction_id`
+ *  → the transfer; the transfer's own `bill_id` → the bill; no `ON DELETE` action on either
+ *  column, libsql enforces foreign keys) — so that reference must be cleared before either row can
+ *  be deleted. Returns nothing for a bill that never had a transfer. */
 const billClearFor = (bill: RawBill): Persistable[] =>
   bill.paymentTransactionId
     ? [persistence.update({ entity: BILL_ENTITY_TAG, model: { ...billEntityFrom(bill), paymentTransactionId: null } })]
@@ -59,19 +53,14 @@ const billRemovalFor = (bill: RawBill): Persistable =>
   });
 
 /**
- * Delete a credit card (ADR-021): the dry-run preview (no writes — an empty `persist` batch,
- * mirroring `deleteAccountTransaction`) is unchanged. On confirm, the domain reads every bill and
- * transaction correlated to the card (`findAllByCard`/`findAllCorrelatedToCard`) and decides their
- * removal itself, rather than leaving "what does deleting a card cascade to" as a repo-side
- * decision (the exact ADR-015/018 smell ADR-021 exists to remove) — an earlier version of this
- * flow left that cascade to `creditCardApplier`; it's `versionedTableApplier(creditCards)` now,
- * with nothing left to decide once the domain owns the batch. FK-safe order, matching the
- * pre-ADR-021 `deleteCard` repo method's own reasoning: every bill's payment-transfer reference
- * cleared first, then every correlated transaction removed (transaction_tags cascades via its own
- * `ON DELETE CASCADE` — a genuine DB mechanic, not a business decision, so it stays declarative
- * schema, never a `Persistable`), then every bill removed, then the card, then its internal
- * liability account. `resolveCardRef`'s `CreditCard`/`resolveAccountRef`'s `Account` carry no
- * `version`; version-carrying re-reads (`findRawById`) supply what the `Persistable`s need.
+ * Delete a credit card: the dry-run preview (no writes — an empty `persist` batch) is unchanged.
+ * On confirm, the domain reads every bill and transaction correlated to the card
+ * (`findAllByCard`/`findAllCorrelatedToCard`) and decides their removal itself, in FK-safe order:
+ * every bill's payment-transfer reference cleared first, then every correlated transaction removed
+ * (`transaction_tags` cascades via its own `ON DELETE CASCADE`, not a `Persistable`), then every
+ * bill, then the card, then its internal liability account. `resolveCardRef`'s `CreditCard`/
+ * `resolveAccountRef`'s `Account` carry no `version`; `findRawById` re-reads supply what the
+ * `Persistable`s need.
  */
 export const deleteCreditCard = (
   deps: Deps,

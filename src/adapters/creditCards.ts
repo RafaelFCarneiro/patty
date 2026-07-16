@@ -20,7 +20,7 @@ export const updateCardTransactionWireInToModel = (input: wireIn.UpdateCardTrans
 
 export const importCardStatementWireInToModel = (input: wireIn.ImportCardStatement): ImportCardStatement => input;
 
-/** Read variant carrying `version` (ADR-021) — for `deleteCreditCard`, which needs it to build a
+/** Read variant carrying `version` — for `deleteCreditCard`, which needs it to build a
  *  version-guarded `Persistable`. */
 export const dbToEntity = (row: CreditCardRow): CreditCardEntity =>
   CreditCardEntitySchema.parse({
@@ -35,8 +35,7 @@ export const dbToEntity = (row: CreditCardRow): CreditCardEntity =>
     version: row.version,
   });
 
-/** Entity → row for the versioned unit of work (ADR-021) — mirrors `adapters/accounts.ts`'s
- *  `modelToDb`. */
+/** Entity → row for the versioned unit of work. */
 export const modelToDb = (entity: CreditCardEntity): CreditCardRow => ({
   id: entity.id,
   name: entity.name,
@@ -49,11 +48,10 @@ export const modelToDb = (entity: CreditCardEntity): CreditCardRow => ({
   version: entity.version,
 });
 
-/** Adapts one credit-card `Persistable`'s `model` from domain shape to db-row shape (ADR-021),
- *  mirroring `adapters/accounts.ts`'s `persistableToDb` — called explicitly by the MCP/REST
- *  handler before the batch ever reaches `withUnitOfWork`. No-ops on a `Persistable` tagged for a
+/** Adapts one credit-card `Persistable`'s `model` from domain shape to db-row shape, called
+ *  explicitly before the batch reaches `withUnitOfWork`. No-ops on a `Persistable` tagged for a
  *  different entity (`createCreditCard`'s batch also carries an `ACCOUNT_ENTITY_TAG` persistable
- *  for the internal liability account — `accountAdapters.outcomeToDb` shapes that one). Only
+ *  for the internal liability account, shaped separately by `accountAdapters.outcomeToDb`). Only
  *  `insert`/`delete` are reachable (no credit-card `update` flow yet). */
 export const persistableToDb = (p: Persistable): Persistable => {
   if (p.entity !== CREDIT_CARD_ENTITY_TAG) return p;
