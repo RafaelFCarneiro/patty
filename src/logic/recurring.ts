@@ -38,3 +38,6 @@ export const nextDue = (current: string, period: RecurringPeriod): string => {
 
 /** Stable idempotency key so re-applying a due rule never duplicates. */
 export const recurringIdempotencyKey = (ruleId: string, due: string): string => `rec-${ruleId}-${due}`;
+
+/** Bounds `applyDueRecurring`'s per-rule materialization loop to prevent runaway on ancient rules. */
+export const MAX_RECURRING_OCCURRENCES_PER_RUN = 36;

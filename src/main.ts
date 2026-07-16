@@ -15,7 +15,7 @@ import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js';
 import { creditCardApplier, creditCardsRepo } from './diplomat/db/repos/creditCards.js';
 import { dashboardsRepo } from './diplomat/db/repos/dashboards.js';
 import { merchantCategoryApplier, merchantsRepo } from './diplomat/db/repos/merchants.js';
-import { recurringRepo } from './diplomat/db/repos/recurring.js';
+import { recurringRepo, recurringRuleApplier } from './diplomat/db/repos/recurring.js';
 import { settingsRepo } from './diplomat/db/repos/settings.js';
 import { tagApplier, tagsRepo } from './diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from './diplomat/db/repos/transactions.js';
@@ -27,6 +27,7 @@ import { BILL_ENTITY_TAG } from './models/bill.js';
 import { CATEGORY_ENTITY_TAG } from './models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from './models/creditCard.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from './models/merchant.js';
+import { RECURRING_ENTITY_TAG } from './models/recurring.js';
 import { TAG_ENTITY_TAG } from './models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from './models/transaction.js';
 import type { HttpSidecar } from './server.js';
@@ -110,6 +111,7 @@ const main = async (): Promise<void> => {
     [TAG_ENTITY_TAG]: tagApplier,
     [CATEGORY_ENTITY_TAG]: categoryApplier,
     [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
+    [RECURRING_ENTITY_TAG]: recurringRuleApplier,
   };
   const runUnitOfWork: UnitOfWork = (flow) => withUnitOfWork(db, applierRegistry, flow);
 

@@ -93,6 +93,7 @@ import {
 import { CreateTagSchema } from '../../wire/in/tags.js';
 import * as accountAdapters from '../../adapters/accounts.js';
 import * as categoryAdapters from '../../adapters/categories.js';
+import * as recurringAdapters from '../../adapters/recurring.js';
 import * as tagAdapters from '../../adapters/tags.js';
 import { buildOpenApiDocument } from '../http/openapi.js';
 import { buildRouteDefinitions } from '../http/routes.js';
@@ -334,7 +335,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         'Create a recurring transaction rule (salary, rent, subscription). Materialized by apply_due_recurring.',
       inputSchema: CreateRecurringSchema.shape,
     },
-    async (args) => fromResult(await createRecurring(deps, args)),
+    async (args) => {
+      const flow = () => createRecurring(deps, args).map(recurringAdapters.outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(
@@ -362,7 +366,10 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
           ),
       },
     },
-    async (args) => json(await applyDueRecurring(deps, args)),
+    async (args) => {
+      const flow = () => applyDueRecurring(deps, args).map(recurringAdapters.outcomeToDb).map(outcomeToDb);
+      return fromResult(await unitOfWork(flow));
+    },
   );
 
   server.registerTool(

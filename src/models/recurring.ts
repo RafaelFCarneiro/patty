@@ -31,6 +31,22 @@ export const RecurringRuleSchema = z.object({
 });
 export type RecurringRule = z.infer<typeof RecurringRuleSchema>;
 
+// The recurring-rule aggregate owns its own entity tag (ADR-021), mirroring `models/account.ts`'s
+// `ACCOUNT_ENTITY_TAG` — `models/persistable.ts` is generic over any entity's tag/model and never
+// lists this constant itself.
+export const RECURRING_ENTITY_TAG = 'recurring';
+
+// The persistence-side entity (ADR-021 / functional-core-imperative-shell.md): `RecurringRule` plus
+// the optimistic-concurrency `version` token. Never sent over the wire — kept off `RecurringRuleSchema`/
+// `RecurringRuleViewSchema` (the display-facing shape `list_recurring`/`create_recurring` return) the
+// same way `AccountEntitySchema` stays off `AccountSchema`. Only `applyDueRecurring` (which needs the
+// version to build the version-guarded `advance` update) and `adapters/recurring.ts`'s model→row
+// adaptation speak `RecurringRuleEntity`.
+export const RecurringRuleEntitySchema = RecurringRuleSchema.extend({
+  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
+});
+export type RecurringRuleEntity = z.infer<typeof RecurringRuleEntitySchema>;
+
 export const RecurringRuleViewSchema = RecurringRuleSchema.extend({
   periodLabel: z.string().optional().describe('Localized period label'),
   accountName: z.string().optional().describe('Resolved account name'),

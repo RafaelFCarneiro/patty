@@ -21,11 +21,16 @@
 > schema-declared `ON DELETE CASCADE` rather than either the domain or an applier deciding it) are implemented,
 > including phase 3d's own removal of every `deps` write method these five entities' flows turned out to have no
 > other caller for (`accounts.update`/`.delete`, `tags.create`/`.delete`, `categories.create`/`.delete`,
-> `subCategories.create`/`.delete`, `creditCards.deleteCard`); the
-> remaining flows (bulk import, recurring — phase 3b/3c) still drive their own persistence via injected repo
-> write methods until that phase converts them, and *those* entities' now-unused write methods are removed only
-> once their own callers convert — this principle is the target shape for every one of them, not yet the
-> as-built state of the whole write path.
+> `subCategories.create`/`.delete`, `creditCards.deleteCard`); and phase 3b (the recurring flows —
+> `create_recurring`/`apply_due_recurring`, via a plain `recurringRuleApplier` and, for `apply_due_recurring`, one
+> atomic batch across every due rule's occurrences + `next_due` advance — a version conflict retries the whole
+> run, safe because the `rec-<ruleId>-<date>` idempotency keys make re-materialization a no-op; `recurring.create`/
+> `.advance` are left in place, unused, since their removal is deferred to phase 3d alongside bulk import's own
+> conversion) is implemented; the remaining flows (bulk import — phase 3c) still drive their own persistence via
+> injected repo write methods until that phase converts them, and *those* entities' now-unused write methods
+> (`deps.recurring.create`/`.advance`, `deps.transactions.create`) are removed only once their own remaining
+> callers convert — this principle is the target shape for every one of them, not yet the as-built state of the
+> whole write path.
 
 ## The principle
 
