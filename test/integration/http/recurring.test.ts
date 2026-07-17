@@ -9,6 +9,31 @@ describe('GET /api/recurring', () => {
     expect(res.statusCode).toBe(200);
     expect(Array.isArray(res.json())).toBe(true);
   });
+
+  it('resolves the linked account name', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'Recurring Test Account', type: 'checking', currency: 'USD', initialBalance: 0 },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/recurring',
+      payload: {
+        description: 'Named Account Rule',
+        amount: 42,
+        type: 'expense',
+        period: 'monthly',
+        startDate: '2026-07-01',
+        account: 'Recurring Test Account',
+      },
+    });
+
+    const res = await inject({ method: 'GET', url: '/api/recurring' });
+    const rules = res.json() as Array<{ description?: string; accountName?: string }>;
+    const rule = rules.find((r) => r.description === 'Named Account Rule');
+    expect(rule?.accountName).toBe('Recurring Test Account');
+  });
 });
 
 describe('POST /api/recurring', () => {

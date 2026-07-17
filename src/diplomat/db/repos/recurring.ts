@@ -5,19 +5,15 @@ import type { Db } from '../driver.js';
 import { recurringRules } from '../schema.js';
 import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
+const RULE_FROM = sql`FROM recurring_rules r`;
+
+const RULE_SELECT_BARE = sql`SELECT r.*, NULL AS account_name, NULL AS category_name ${RULE_FROM}`;
+
 const RULE_SELECT = sql`
   SELECT r.*, a.name AS account_name, c.name AS category_name
-  FROM recurring_rules r
+  ${RULE_FROM}
   LEFT JOIN accounts a ON a.id = r.account_id
   LEFT JOIN categories c ON c.id = r.category_id
-`;
-
-// due() only needs the entity (dbToEntity ignores account_name/category_name) — the joins RULE_SELECT
-// pays for display names are wasted work here. NULL-projects the same two columns so RecurringRowSchema
-// still parses without actually joining.
-const RULE_SELECT_BARE = sql`
-  SELECT r.*, NULL AS account_name, NULL AS category_name
-  FROM recurring_rules r
 `;
 
 export type RecurringRepo = {
