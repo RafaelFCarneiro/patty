@@ -12,6 +12,14 @@ const RULE_SELECT = sql`
   LEFT JOIN categories c ON c.id = r.category_id
 `;
 
+// due() only needs the entity (dbToEntity ignores account_name/category_name) — the joins RULE_SELECT
+// pays for display names are wasted work here. NULL-projects the same two columns so RecurringRowSchema
+// still parses without actually joining.
+const RULE_SELECT_BARE = sql`
+  SELECT r.*, NULL AS account_name, NULL AS category_name
+  FROM recurring_rules r
+`;
+
 export type RecurringRepo = {
   list: () => Promise<RecurringRuleView[]>;
   /** Version-carrying, for building a version-guarded `Persistable` update. */
@@ -28,7 +36,7 @@ export const recurringRepo = (db: Db): RecurringRepo => ({
 
   due: async (onOrBefore) => {
     const rows = await db.all<Record<string, unknown>>(sql`
-      ${RULE_SELECT} WHERE r.next_due <= ${onOrBefore} ORDER BY r.next_due
+      ${RULE_SELECT_BARE} WHERE r.next_due <= ${onOrBefore} ORDER BY r.next_due
     `);
     return rows.map(recurringAdapters.dbToEntity);
   },
