@@ -606,7 +606,9 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const wireIn = parse(wireInRecurring.CreateRecurringSchema, req.body, reply);
       if (!wireIn) return reply;
-      return send(reply, await createRecurring(deps, recurringAdapters.wireInToModel(wireIn)), 201);
+      const flow = () =>
+        createRecurring(deps, recurringAdapters.wireInToModel(wireIn)).map(recurringAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow), 201);
     },
   },
   {
@@ -615,12 +617,18 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     tags: [RouteTag.recurring],
     summary: 'Materialize due recurring rules',
     request: { body: jsonBody(wireInRecurring.ApplyDueBodySchema) },
-    responses: { 200: okResponse('Applied recurring rules', ApplyDueResultOut), 422: validation422 },
+    responses: {
+      200: okResponse('Applied recurring rules', ApplyDueResultOut),
+      409: conflict409,
+      422: validation422,
+    },
     handler: async (req, reply) => {
       const q = wireInRecurring.ApplyDueBodySchema.safeParse(req.body ?? {});
       if (!q.success)
         return reply.status(422).send({ error: { code: 'validation', issues: ['invalid through date'] } });
-      return reply.send(await applyDueRecurring(deps, q.data));
+      const flow = () =>
+        applyDueRecurring(deps, q.data).map(recurringAdapters.outcomeToDb).map(transactionAdapters.outcomeToDb);
+      return send(reply, await unitOfWork(flow));
     },
   },
 

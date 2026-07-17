@@ -31,6 +31,15 @@ export const RecurringRuleSchema = z.object({
 });
 export type RecurringRule = z.infer<typeof RecurringRuleSchema>;
 
+export const RECURRING_ENTITY_TAG = 'recurring';
+
+// Never sent over the wire — kept off `RecurringRuleSchema`/`RecurringRuleViewSchema` the same way
+// `AccountEntitySchema` stays off `AccountSchema`.
+export const RecurringRuleEntitySchema = RecurringRuleSchema.extend({
+  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
+});
+export type RecurringRuleEntity = z.infer<typeof RecurringRuleEntitySchema>;
+
 export const RecurringRuleViewSchema = RecurringRuleSchema.extend({
   periodLabel: z.string().optional().describe('Localized period label'),
   accountName: z.string().optional().describe('Resolved account name'),

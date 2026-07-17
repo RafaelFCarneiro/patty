@@ -1,86 +1,41 @@
-import { eq, sql } from 'drizzle-orm';
-import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
-import { RecurringRuleViewSchema, type RecurringRuleView } from '../../../models/recurring.js';
-import { RecurringRowSchema } from '../../../wire/db/recurring.js';
+import { sql } from 'drizzle-orm';
+import * as recurringAdapters from '../../../adapters/recurring.js';
+import type { RecurringRuleEntity, RecurringRuleView } from '../../../models/recurring.js';
 import type { Db } from '../driver.js';
 import { recurringRules } from '../schema.js';
+import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
 
-const toRule = (record: Record<string, unknown>): RecurringRuleView => {
-  const row = RecurringRowSchema.parse(record);
-  return RecurringRuleViewSchema.parse({
-    id: row.id,
-    description: row.description,
-    amount: row.amount,
-    type: row.type,
-    period: row.period,
-    nextDue: row.next_due,
-    currency: row.currency,
-    accountId: row.account_id ?? undefined,
-    accountName: row.account_name ?? undefined,
-    categoryId: row.category_id ?? undefined,
-    categoryName: row.category_name ?? undefined,
-  });
-};
+const RULE_FROM = sql`FROM recurring_rules r`;
+
+const RULE_SELECT_BARE = sql`SELECT r.*, NULL AS account_name, NULL AS category_name ${RULE_FROM}`;
 
 const RULE_SELECT = sql`
   SELECT r.*, a.name AS account_name, c.name AS category_name
-  FROM recurring_rules r
+  ${RULE_FROM}
   LEFT JOIN accounts a ON a.id = r.account_id
   LEFT JOIN categories c ON c.id = r.category_id
 `;
 
 export type RecurringRepo = {
-  create: (
-    rule: {
-      id: string;
-      description: string;
-      amount: number;
-      type: string;
-      period: string;
-      nextDue: string;
-      currency: string;
-    },
-    refs: { accountId: string | null; categoryId: string | null },
-  ) => Promise<RecurringRuleView>;
   list: () => Promise<RecurringRuleView[]>;
-  due: (onOrBefore: string) => Promise<RecurringRuleView[]>;
-  advance: (ruleId: string, newNextDue: string) => Promise<void>;
+  /** Version-carrying, for building a version-guarded `Persistable` update. */
+  due: (onOrBefore: string) => Promise<RecurringRuleEntity[]>;
 };
 
 export const recurringRepo = (db: Db): RecurringRepo => ({
-  create: async (rule, refs) => {
-    await db.insert(recurringRules).values({
-      id: rule.id,
-      description: rule.description,
-      amount: rule.amount,
-      type: rule.type as 'income' | 'expense',
-      period: rule.period as 'monthly' | 'weekly',
-      nextDue: rule.nextDue,
-      currency: rule.currency,
-      accountId: refs.accountId ?? null,
-      categoryId: refs.categoryId ?? null,
-    });
-    const [row] = await db.all<Record<string, unknown>>(sql`
-      ${RULE_SELECT} WHERE r.id = ${rule.id}
-    `);
-    return toRule(expectPresent(row, rowNotFoundAfterWrite('recurring_rules', 'insert')));
-  },
-
   list: async () => {
     const rows = await db.all<Record<string, unknown>>(sql`
       ${RULE_SELECT} ORDER BY r.next_due
     `);
-    return rows.map(toRule);
+    return rows.map(recurringAdapters.dbToModel);
   },
 
   due: async (onOrBefore) => {
     const rows = await db.all<Record<string, unknown>>(sql`
-      ${RULE_SELECT} WHERE r.next_due <= ${onOrBefore} ORDER BY r.next_due
+      ${RULE_SELECT_BARE} WHERE r.next_due <= ${onOrBefore} ORDER BY r.next_due
     `);
-    return rows.map(toRule);
-  },
-
-  advance: async (ruleId, newNextDue) => {
-    await db.update(recurringRules).set({ nextDue: newNextDue }).where(eq(recurringRules.id, ruleId));
+    return rows.map(recurringAdapters.dbToEntity);
   },
 });
+
+export const recurringRuleApplier: EntityApplier = versionedTableApplier(recurringRules);

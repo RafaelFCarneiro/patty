@@ -6,8 +6,11 @@ phase 2b — credit-card transaction flows + `billApplier`'s cycle-uniqueness-ra
 2026-07-15; phase 2c — bill flows `pay_bill`/`revert_bill_payment`, completing the transaction+bill write path
 and deleting the last bill write methods — implemented 2026-07-15; phase 3a — simple entity CRUD (account
 update/delete, tag/category/sub-category/credit-card create/delete), including phase 3d's own removal of every
-now-dead `deps` write method for those five entities — implemented 2026-07-15; phase 3b/3c pending, phase 3d
-remains open only for the entities those phases will touch) · **Date:** 2026-07-12 ·
+now-dead `deps` write method for those five entities — implemented 2026-07-15; phase 3b — recurring flows
+(`create_recurring`/`apply_due_recurring`), including `applyDueRecurring`'s one-atomic-batch-per-run design and
+phase 3d's own removal of `RecurringRepo.create`/`.advance`, which turned out to have no other caller — implemented
+2026-07-16; phase 3c pending, phase 3d remains open only for the transaction-side write methods phase 3c will
+touch) · **Date:** 2026-07-12 ·
 **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill payment) and finally resolves the thread ADR-015
 opened. Adopts the principle documented in `docs/functional-core-imperative-shell.md` for every write flow.
 
@@ -380,10 +383,30 @@ gets its own generic atomicity/conflict/idempotency suite.
      (`payBill`'s zero-total path, `models/bill.ts`), a distinction a uniform `modelToDb` called on every
      `update` collapses into always-`null`. Caught in review before merge; `adapters/bills.ts` kept its own
      hand-written `persistableToDb`/`outcomeToDb`, unchanged by this factor-out.
-   - [ ] Phase 3b (recurring), phase 3c (bulk import — reusing phase 2a's `PersistOutcome` idempotency-outcome
-     contract for per-item created/duplicate/needs-review status): remaining work; update `docs/architecture.md`
-     accordingly as each lands. Phase 3d (remove now-dead `deps` write methods across every converted entity)
-     completed early for accounts/tags/categories/subCategories/creditCards as part of phase 3a itself (see
-     above) — what remains of phase 3d is the transaction-side write methods bulk import (phase 3c) still needs
-     (`TransactionsRepo.create` via `addAccountMovementViaRepo`/`addCardPurchaseViaRepo`, `BillsRepo.ensureOpen`),
-     removed once phase 3c converts their last caller.
+   - [x] Phase 3b (recurring): `create_recurring`/`apply_due_recurring` converted end to end (MCP + REST). New
+     `models/recurring.ts` `RECURRING_ENTITY_TAG`/`RecurringRuleEntitySchema` (versioned, kept off the
+     wire-facing view schemas) and `recurringRuleApplier` — plain `versionedTableApplier(recurringRules)`, the
+     row shape already matched the table 1:1. `createRecurring` is a one-entity insert batch, response built
+     from the already-resolved account/category (rule 6). `applyDueRecurring` computes every due rule's
+     occurrences (bounded, `MAX_RECURRING_OCCURRENCES_PER_RUN`) and advanced `nextDue` in the domain and emits
+     **one merged batch across every due rule** — every occurrence as a `transactionApplier` insert (phase 2a's
+     applier, reused as-is) followed by every rule's own version-guarded `advance` update — applied atomically;
+     `ApplyDueResult` is shaped from the shell's per-insert outcomes via `viewFromOutcome`, same idempotency-
+     outcome contract as phase 2a, never inferred by the domain. **Atomicity-granularity decision:** the
+     pre-ADR-021 code advanced each rule independently; this phase batches every due rule into one unit of work
+     instead — a version conflict retries the whole run, safe because `rec-<ruleId>-<date>` idempotency keys
+     make re-materialization a no-op. `RecurringRepo.create`/`.advance` were grep-checked for any remaining
+     caller once both flows converted — found genuinely dead (zero callers, production or test) — and removed
+     in this same change, phase 3d completed early for recurring, same as phase 3a's five entities. Coverage:
+     pure flow tests for both flows (insert shape, the occurrence+advance batch for single/multiple due rules
+     and multiple rules together, the idempotency-outcome response including a duplicate-replay case), a
+     UoW-level check that the applier is a plain versioned table applier, and the existing MCP/REST integration
+     suites (materialization, `through`, idempotent re-run) passing unchanged through the new shell path.
+   - [ ] Phase 3c (bulk import — reusing phase 2a's `PersistOutcome` idempotency-outcome contract for per-item
+     created/duplicate/needs-review status): remaining work; update `docs/architecture.md` accordingly as it
+     lands. Phase 3d (remove now-dead `deps` write methods across every converted entity) completed early for
+     accounts/tags/categories/subCategories/creditCards as part of phase 3a itself, and for recurring
+     (`RecurringRepo.create`/`.advance`) as part of phase 3b (see above); what remains of phase 3d is the
+     transaction-side write methods bulk import (phase 3c) still needs (`TransactionsRepo.create` via
+     `addAccountMovementViaRepo`/`addCardPurchaseViaRepo`, `BillsRepo.ensureOpen`), removed once phase 3c
+     converts their last caller.
