@@ -131,6 +131,8 @@ This is a quick operational summary for agents. Canonical wording lives in `docs
 
 ## Documentation map (read before generating)
 
+**Taxonomy (keep each doc in its lane).** Canonical concept docs (`docs/diplomatic-architecture.md`, `docs/functional-core-imperative-shell.md`) are **agnostic** — concepts and the obligations to satisfy them, with **no** project nouns, identifiers, library names, ADR references, or status/phase tracking. Project specifics (schema, concrete types, structures), the ADR index, and current-state/next-steps live in `docs/architecture.md`, kept **current-only** (prune replaced concepts — no ghosts). Operational rules live in `docs/code-style.md`/`docs/code-quality.md`. A canonical doc that names a project entity, identifier, ADR, or phase is a taxonomy violation — move it to `docs/architecture.md`. **Check this on any docs change (self-review).**
+
 - `docs/architecture.md` — the system **as built**: relational schema, invariants, layer rules. The source of truth when generating code; if your change alters it, update it in the same change.
 - `docs/diplomatic-architecture.md`: The Diplomatic Architecture core concepts.
 - `docs/functional-core-imperative-shell.md` — ADR-021: the write path's core/shell split (controllers return `{ persist, response }`, the diplomat shell applies it via `withUnitOfWork`). Mandatory alongside the Diplomatic Architecture doc for write-flow changes.

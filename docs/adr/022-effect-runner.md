@@ -18,8 +18,9 @@ unit of work is a *special case* of "execute the effects the model declared," no
 name anchors the concept to the database, which is exactly the coupling FC/IS exists to avoid at the *conceptual*
 level.
 
-A concrete need forces the generalization now (it is not speculative renaming). Two flows are inherently **N
-independent units**, not one atomic batch:
+A concrete need forces the generalization now (it is not speculative renaming). Two flows exercise the **two
+different granularities** the executor must express — one inherently a sequence of independent units, the other a
+single atomic batch:
 
 - **Bulk statement import** (phase 3c): a statement paste is partial-success by nature — import the valid lines,
   flag the invalid ones. Forcing it into one atomic batch is both wrong semantics (one bad/conflicting line
