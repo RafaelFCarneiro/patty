@@ -99,7 +99,6 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
       cards: cardRow?.count ?? 0,
     };
   },
-
 });
 
 /**
