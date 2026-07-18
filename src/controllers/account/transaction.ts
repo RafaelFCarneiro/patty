@@ -1,7 +1,6 @@
-// Account aggregate (ADR-016 step 3): owns the account-movement entry points. Validates
-// (category/sub-category exclusivity, non-credit account), then hands the write off as a
-// `Persistable` (ADR-021) — the core never depends on this module (the reverse is fine and
-// expected).
+// Account aggregate: owns the account-movement entry points. Validates (category/sub-category
+// exclusivity, non-credit account), then hands the write off as a `Persistable` — the core never
+// depends on this module (the reverse is fine and expected).
 
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
@@ -49,9 +48,9 @@ import { runStatementImport } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
 /**
- * Repo-touching precondition (ADR-020): true when every leg the transaction has resolves to one of
- * *this* aggregate's own account types — a positive scope test (`isAccountOwnedType`), not the
- * negation of the credit-card aggregate's test. The account domain doesn't ask "does the credit-card
+ * Repo-touching precondition: true when every leg the transaction has resolves to one of *this*
+ * aggregate's own account types — a positive scope test (`isAccountOwnedType`), not the negation
+ * of the credit-card aggregate's test. The account domain doesn't ask "does the credit-card
  * aggregate own this instead"; it asks "is every leg mine", vacuously true for an unattached movement.
  */
 const assertAccountOwnedLegs = (
@@ -122,10 +121,10 @@ const planAccountMovement = (
     return ok({ entity, classification });
   });
 
-/** Shared by addAccountExpense/addAccountIncome (ADR-016/ADR-021) — everything but the fixed
- *  movement type. Returns the write as data: the shell (MCP/REST handler + `unitOfWork`) applies
- *  the insert and reports back whether it actually landed (vs. an idempotent duplicate replay),
- *  which is what `created` reflects here — never faked by the domain. */
+/** Shared by addAccountExpense/addAccountIncome — everything but the fixed movement type. Returns
+ *  the write as data: the shell applies the insert and reports back whether it actually landed
+ *  (vs. an idempotent duplicate replay), which is what `created` reflects here — never faked by
+ *  the domain. */
 const addAccountMovement = (
   deps: Deps,
   input: AddAccountMovement,
@@ -196,16 +195,15 @@ export const importAccountStatement = (
   });
 
 /**
- * Update an account transaction (ADR-020/ADR-021): asserts every leg the target has is one of this
- * aggregate's own account types (`assertAccountOwnedLegs`) — a transaction with a leg outside that
- * scope is rejected with a redirect to `update_card_transaction` — then enforces transfer
- * mutability, shares `decideTransactionUpdate`'s reads with the (still repo-driven) credit-card
- * aggregate, and merges the result onto `existing` to build the full desired end-state entity the
- * shell applies as a version-guarded update. Merchant learning (a correction strengthens the
- * merchant→category association) is composed into the SAME `persist` batch as a
- * `MERCHANT_CATEGORY_ENTITY_TAG` insert (rule 5) — not a side effect performed from `response` —
- * so it applies atomically with the transaction update: it commits only when the update does, and
- * never fires on a version-conflict attempt that gets rolled back and retried.
+ * Update an account transaction: asserts every leg the target has is one of this aggregate's own
+ * account types (`assertAccountOwnedLegs`) — a transaction with a leg outside that scope is
+ * rejected with a redirect to `update_card_transaction` — then enforces transfer mutability, and
+ * merges the result onto `existing` to build the full desired end-state entity the shell applies
+ * as a version-guarded update. Merchant learning (a correction strengthens the merchant→category
+ * association) is composed into the SAME `persist` batch as a `MERCHANT_CATEGORY_ENTITY_TAG`
+ * insert (rule 5) — not a side effect performed from `response` — so it applies atomically with
+ * the transaction update: it commits only when the update does, and never fires on a
+ * version-conflict attempt that gets rolled back and retried.
  */
 export const updateAccountTransaction = (
   deps: Deps,
@@ -262,9 +260,9 @@ export const updateAccountTransaction = (
   });
 
 /**
- * Delete an account transaction (ADR-020/ADR-021): same ownership guard as
- * updateAccountTransaction, then a dry-run preview (no writes at all — an empty `persist` batch)
- * or a version-guarded remove the shell applies.
+ * Delete an account transaction: same ownership guard as updateAccountTransaction, then a dry-run
+ * preview (no writes at all — an empty `persist` batch) or a version-guarded remove the shell
+ * applies.
  */
 export const deleteAccountTransaction = (
   deps: Deps,

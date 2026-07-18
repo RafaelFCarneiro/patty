@@ -37,12 +37,11 @@ export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Acco
   return R.pipe(all, R.filter(filterByType(type)), R.map(withTypeLabel(locale)));
 };
 
-/** First mover for ADR-021 / docs/functional-core-imperative-shell.md: a functional-core flow —
- *  it decides and returns the write as data (`persist`) instead of performing it. The imperative
- *  shell (the MCP/REST handler's `outcomeToDb` + `withUnitOfWork`) adapts and applies the batch
- *  and returns `response`. A new account has no `version` to decide (that's the shell's own
- *  structural constant, `INITIAL_VERSION` in `models/persistable.ts`) — the model built here, and
- *  the response, are both the plain wire-shaped `Account`. */
+/** A functional-core flow (docs/functional-core-imperative-shell.md): decides and returns the
+ *  write as data (`persist`) instead of performing it; the imperative shell adapts and applies
+ *  the batch and returns `response`. A new account has no `version` to decide — that's the
+ *  shell's own structural constant (`INITIAL_VERSION`) — so the model built here, and the
+ *  response, are both the plain wire-shaped `Account`. */
 export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
   safeTry(async function* () {
     yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected);

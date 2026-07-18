@@ -1,15 +1,15 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { FastifyInstance } from 'fastify';
-import type { Deps, UnitOfWork } from '../../controllers/deps.js';
+import type { Deps, RunEffects } from '../../controllers/deps.js';
 import { buildMcpServer } from './server.js';
 
 /**
  * Stateless MCP over streamable HTTP: a fresh server+transport per request.
  * Claude clients connect to POST /mcp.
  */
-export const registerMcpRoute = (app: FastifyInstance, deps: Deps, version: string, unitOfWork: UnitOfWork): void => {
+export const registerMcpRoute = (app: FastifyInstance, deps: Deps, version: string, runEffects: RunEffects): void => {
   app.post('/mcp', async (req, reply) => {
-    const server = buildMcpServer(deps, version, unitOfWork);
+    const server = buildMcpServer(deps, version, runEffects);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
-import type { Deps, UnitOfWork } from './controllers/deps.js';
+import type { Deps, RunEffects } from './controllers/deps.js';
 import { registerRoutes } from './diplomat/http/routes.js';
 import { registerMcpRoute } from './diplomat/mcp/route.js';
 
@@ -14,12 +14,12 @@ import { registerMcpRoute } from './diplomat/mcp/route.js';
 export const buildHttpApp = (
   deps: Deps,
   version: string,
-  unitOfWork: UnitOfWork,
+  runEffects: RunEffects,
   opts?: { logger?: boolean },
 ): FastifyInstance => {
   const app = Fastify({ logger: opts?.logger ?? true });
-  registerRoutes(app, deps, version, unitOfWork);
-  registerMcpRoute(app, deps, version, unitOfWork);
+  registerRoutes(app, deps, version, runEffects);
+  registerMcpRoute(app, deps, version, runEffects);
   return app;
 };
 
@@ -35,10 +35,10 @@ export type HttpSidecar = { app: FastifyInstance; listening: boolean };
 export const startHttpSidecar = async (
   deps: Deps,
   version: string,
-  unitOfWork: UnitOfWork,
+  runEffects: RunEffects,
   port: number,
 ): Promise<HttpSidecar> => {
-  const app = buildHttpApp(deps, version, unitOfWork, { logger: false });
+  const app = buildHttpApp(deps, version, runEffects, { logger: false });
   try {
     await app.listen({ port, host: LOOPBACK_HOST });
     // `port` may be 0 (OS-assigned); read back the address actually bound for the banner.

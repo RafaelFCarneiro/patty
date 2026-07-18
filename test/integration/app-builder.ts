@@ -27,12 +27,12 @@ import { TAG_ENTITY_TAG } from '../../src/models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
 import { Locale } from '../../src/models/locale.js';
 import { buildHttpApp } from '../../src/server.js';
-import { withUnitOfWork, type ApplierRegistry } from '../../src/diplomat/db/unitOfWork.js';
-import type { Deps, UnitOfWork } from '../../src/controllers/deps.js';
+import { runEffects, type ApplierRegistry } from '../../src/diplomat/db/effects.js';
+import type { Deps, RunEffects } from '../../src/controllers/deps.js';
 
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64);
 
-export type AppContext = { app: FastifyInstance; deps: Deps; version: string; unitOfWork: UnitOfWork };
+export type AppContext = { app: FastifyInstance; deps: Deps; version: string; runEffects: RunEffects };
 
 export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promise<AppContext> => {
   const db = openDatabase({
@@ -81,8 +81,8 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
     [RECURRING_ENTITY_TAG]: recurringRuleApplier,
   };
-  const unitOfWork: UnitOfWork = (flow) => withUnitOfWork(db, applierRegistry, flow);
-  const app = buildHttpApp(deps, version, unitOfWork, { logger: false });
+  const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow);
+  const app = buildHttpApp(deps, version, boundRunEffects, { logger: false });
 
-  return { app, deps, version, unitOfWork };
+  return { app, deps, version, runEffects: boundRunEffects };
 };

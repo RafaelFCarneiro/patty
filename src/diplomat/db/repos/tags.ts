@@ -4,12 +4,12 @@ import type { Tag, TagEntity } from '../../../models/tag.js';
 import type { Db } from '../driver.js';
 import { tags } from '../schema.js';
 import { isUniqueConstraintViolation } from '../sqliteErrors.js';
-import { VersionConflict, versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
+import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
 
 export type TagsRepo = {
   list: () => Promise<Tag[]>;
   findByName: (name: string) => Promise<Tag | null>;
-  /** Version-carrying read (ADR-021) — for `deleteTag`, which needs it to build a `Persistable`. */
+  /** Version-carrying read — for `deleteTag`, which needs it to build a `Persistable`. */
   findById: (id: string) => Promise<TagEntity | null>;
 };
 

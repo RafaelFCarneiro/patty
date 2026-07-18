@@ -38,23 +38,21 @@ export const AccountSchema = z.object({
 });
 export type Account = z.infer<typeof AccountSchema>;
 
-// The persistence-side entity (ADR-021 / functional-core-imperative-shell.md): `Account` plus
+// The persistence-side entity (docs/functional-core-imperative-shell.md): `Account` plus
 // the optimistic-concurrency `version` token. Never sent over the wire — kept off `AccountSchema`
 // itself so every existing account-returning flow (which reuses `AccountSchema` as its wire/out
 // shape) stays unchanged. Only flows that build `Persistable`s and `adapters/accounts.ts`'s
-// model→row adaptation (`modelToDb`/`persistableToDb`) speak `AccountEntity` — the unit-of-work
-// applier itself doesn't: by the time a batch reaches `diplomat/db`, it's already been adapted to
-// a plain row (`versionedTableApplier` in `diplomat/db/unitOfWork.ts` is entity-agnostic).
+// model→row adaptation (`modelToDb`/`persistableToDb`) speak `AccountEntity` — the applier itself
+// doesn't: by the time a batch reaches `diplomat/db`, it's already been adapted to a plain row
+// (`versionedTableApplier` in `diplomat/db/effects.ts` is entity-agnostic).
 export const AccountEntitySchema = AccountSchema.extend({
   version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
 });
 export type AccountEntity = z.infer<typeof AccountEntitySchema>;
 
-// The account aggregate owns its own entity tag (ADR-021) — `models/persistable.ts` is generic
-// over any entity's tag/model and never lists this constant itself, so adding a new converted
-// aggregate never means editing that shared file. `logic/persistence.ts`'s `Persistable` builders
-// take it as a plain field value; `main.ts` keys the `ApplierRegistry` by it when registering
-// `diplomat/db/repos/accounts.ts`'s `accountApplier`.
+// The account aggregate owns its own entity tag — `models/persistable.ts` is generic over any
+// entity's tag/model and never lists this constant itself, so adding a new converted aggregate
+// never means editing that shared file.
 export const ACCOUNT_ENTITY_TAG = 'account';
 
 export const CreateAccountSchema = AccountSchema.omit({ id: true, typeLabel: true });
@@ -75,8 +73,8 @@ export const AccountBalanceSchema = AccountSchema.extend({
 });
 export type AccountBalance = z.infer<typeof AccountBalanceSchema>;
 
-/** Natural input for an account expense/income (ADR-016): the transaction core's minimal
- *  `CreateTransactionSchema` (ADR-019) plus `account`, minus `type` (the movement kind is the tool
+/** Natural input for an account expense/income: the transaction core's minimal
+ *  `CreateTransactionSchema` plus `account`, minus `type` (the movement kind is the tool
  *  itself — `add_account_expense` vs. `add_account_income` — not a field; card/bill-assignment
  *  vocabulary never reaches this schema at all, since the core no longer carries it). `account`
  *  stays optional: an omitted account records an unattached (e.g. cash) movement. Depends on the
@@ -93,14 +91,13 @@ export const AddAccountMovementSchema = CreateTransactionSchema.extend({
   .strict();
 export type AddAccountMovement = z.infer<typeof AddAccountMovementSchema>;
 
-/** A single line of an `import_account_statement` request (ADR-017 step 2): the transaction core's
- *  minimal `CreateTransactionSchema` (ADR-019) minus `idempotencyKey`/`rawInput`/`subCategory`/`tags`
- *  (statement-level concerns, same reduced shape the retired god bulk item carried) — no `account`
- *  (fixed once, at the statement's top level — single-source, no per-line account) and no
- *  `card`/`billMonth`/`billYear` (card/bill-assignment vocabulary the core never carries). Unlike
- *  `AddAccountMovementSchema`, `type` stays required — a statement line still needs its own
- *  expense-vs-income discriminator, since (unlike `add_account_expense`/`add_account_income`) the
- *  movement kind isn't fixed by which tool was called. */
+/** A single line of an `import_account_statement` request: the transaction core's minimal
+ *  `CreateTransactionSchema` minus `idempotencyKey`/`rawInput`/`subCategory`/`tags` (statement-level
+ *  concerns) — no `account` (fixed once, at the statement's top level — single-source, no per-line
+ *  account) and no `card`/`billMonth`/`billYear` (card/bill-assignment vocabulary the core never
+ *  carries). Unlike `AddAccountMovementSchema`, `type` stays required — a statement line still
+ *  needs its own expense-vs-income discriminator, since the movement kind isn't fixed by which
+ *  tool was called. */
 export const ImportAccountStatementItemSchema = CreateTransactionSchema.omit({
   idempotencyKey: true,
   rawInput: true,
@@ -115,11 +112,10 @@ export const ImportAccountStatementItemSchema = CreateTransactionSchema.omit({
   .strict();
 export type ImportAccountStatementItem = z.infer<typeof ImportAccountStatementItemSchema>;
 
-/** Account statement import (ADR-017 step 2): single-source — every item is an expense or income
- *  (per item's `type`) on the ONE account named here (omit for unattached, e.g. cash, movements),
- *  via `addAccountExpense`/`addAccountIncome`. Replaces the god `create_transactions_bulk`'s
- *  per-line account-vs-card routing entirely (a statement can't carry a conflicting per-line owner
- *  by construction). */
+/** Account statement import: single-source — every item is an expense or income (per item's
+ *  `type`) on the ONE account named here (omit for unattached, e.g. cash, movements), via
+ *  `addAccountExpense`/`addAccountIncome`. A statement can't carry a conflicting per-line owner
+ *  by construction. */
 export const ImportAccountStatementSchema = z.object({
   account: z
     .string()
@@ -133,20 +129,18 @@ export const ImportAccountStatementSchema = z.object({
 });
 export type ImportAccountStatement = z.infer<typeof ImportAccountStatementSchema>;
 
-/** Account-aggregate update schema (ADR-017/ADR-019): `.extend`s the core's minimal
- *  `UpdateTransactionSchema` with `account` — the core no longer carries bill-assignment
- *  (`billMonth`/`billYear`) at all, so unlike before there is nothing left to omit; it structurally
- *  can't reach this schema (mirrors `AddAccountMovementSchema`'s create-side shape). `.strict()`:
- *  same REST-boundary-only reasoning as `AddAccountMovementSchema` above. */
+/** Account-aggregate update schema: `.extend`s the core's minimal `UpdateTransactionSchema` with
+ *  `account` — the core no longer carries bill-assignment (`billMonth`/`billYear`) at all, so it
+ *  structurally can't reach this schema (mirrors `AddAccountMovementSchema`'s create-side shape).
+ *  `.strict()`: same REST-boundary-only reasoning as `AddAccountMovementSchema` above. */
 export const UpdateAccountTransactionSchema = UpdateTransactionSchema.extend({
   account: z.string().min(1).optional().describe('New account name'),
 }).strict();
 export type UpdateAccountTransaction = z.infer<typeof UpdateAccountTransactionSchema>;
 
-/** Natural input for a transfer (ADR-016 step 4): account-context vocabulary — a transfer request
- *  is an account-aggregate concern even though it persists as a transaction row via the shared core
- *  primitive (account → core, the allowed direction). Moved here from models/transaction.ts, which
- *  never had a `createTransfer` entry point of its own. */
+/** Natural input for a transfer: account-context vocabulary — a transfer request is an
+ *  account-aggregate concern even though it persists as a transaction row via the shared core
+ *  primitive (account → core, the allowed direction). */
 export const CreateTransferSchema = z.object({
   from: z.string().min(1).describe('Source account name'),
   to: z.string().min(1).describe('Destination account name'),
@@ -235,9 +229,9 @@ export const accountErrors = {
       `cross-currency transfer not supported yet: ${from.name} is ${from.currency}, ${to.name} is ${to.currency}`,
     ],
   }),
-  // Transfer mutation policy (ADR-020 §4) — moved from transactionErrors: only the account
-  // aggregate's update ever reaches a mutable transfer (the credit-card aggregate's only transfer,
-  // the bill-payment transfer, is blocked outright by its own bill-process guard, never by these).
+  // Transfer mutation policy: only the account aggregate's update ever reaches a mutable transfer
+  // (the credit-card aggregate's only transfer, the bill-payment transfer, is blocked outright by
+  // its own bill-process guard, never by these).
   transferTypeImmutable: {
     code: 'validation',
     issues: ['cannot change the type of a transfer transaction'],

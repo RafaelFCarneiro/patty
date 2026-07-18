@@ -4,7 +4,7 @@ import { CreditCardSchema, type CreditCard, type CreditCardEntity } from '../../
 import type { CreditCardRow } from '../../../wire/db/creditCards.js';
 import type { Db } from '../driver.js';
 import { creditCards } from '../schema.js';
-import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
+import { versionedTableApplier, type EntityApplier } from '../effects.js';
 import { correlatedToCard } from './transactions.js';
 
 const toCard = (row: CreditCardRow): CreditCard =>
@@ -25,7 +25,7 @@ export type CreditCardsRepo = {
   list: () => Promise<CreditCard[]>;
   findByName: (name: string) => Promise<CreditCard | null>;
   findById: (id: string) => Promise<CreditCard | null>;
-  /** Version-carrying read (ADR-021) — for `deleteCreditCard`, which needs it to build a
+  /** Version-carrying read — for `deleteCreditCard`, which needs it to build a
    *  version-guarded `Persistable`. */
   findRawById: (id: string) => Promise<CreditCardEntity | null>;
   countCorrelated: (cardId: string, accountId: string) => Promise<DeleteCardCounts>;

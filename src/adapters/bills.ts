@@ -25,7 +25,7 @@ export const persistableToDb = (p: Persistable): Persistable => {
   }
 };
 
-/** Maps every `Persistable` in a flow's outcome through `persistableToDb` before `unitOfWork`. */
+/** Maps every `Persistable` in a flow's outcome through `persistableToDb` before `runEffects`. */
 export const outcomeToDb = <T>(outcome: FlowOutcome<T>): FlowOutcome<T> => ({
   ...outcome,
   persist: outcome.persist.map(persistableToDb),
