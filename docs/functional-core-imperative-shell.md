@@ -30,6 +30,14 @@
 > (`deps.transactions.create`) until that phase converts it, and *that* now-unused write method is removed only
 > once its own remaining callers convert — this principle is the target shape for every one of them, not yet the
 > as-built state of the whole write path.
+>
+> **Proposed evolution (ADR-022):** the shell's executor is being reframed as a generic **effect runner**
+> (`withUnitOfWork` → `runEffects`) — persistence is one *kind* of effect, the response another, message dispatch
+> a future one; the database "unit of work" is one execution *mode*, not the whole abstraction — and generalized
+> to run either a **single atomic unit** or a **sequence of independent units** (per-unit transaction, per-unit
+> retry, partial success). Bulk import (3c) then lands as a sequence of per-line units reusing the single flows
+> verbatim. The rename and the reframing of the rules below land on ADR-022's acceptance; until then the as-built
+> mechanism is `withUnitOfWork` as described.
 
 ## The principle
 
