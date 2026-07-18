@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
-import { errAsync, okAsync, Result, ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, type Result, ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { conflict } from '../../models/error.js';
@@ -186,7 +186,7 @@ export type SequenceOutcome<T> = Result<T, AppError>;
 export const runEffectsSequence = async <I, T>(
   db: Db,
   registry: ApplierRegistry,
-  items: I[],
+  items: readonly I[],
   flowFor: (item: I) => Flow<T>,
 ): Promise<SequenceOutcome<T>[]> => {
   const outcomes: SequenceOutcome<T>[] = [];
