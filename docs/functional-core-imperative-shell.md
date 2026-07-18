@@ -64,7 +64,7 @@ database, a different transport) without the domain noticing.
 
 5. **Composition is merging.** When a flow orchestrates other flows, it takes their effect descriptions and
    **merges** them with its own; the merged set executes as one unit. A flow that needs another context's write
-   asks that context's flow for the *effect*, and never touches its storage.
+   asks that context's flow for the *effects*, and never touches its storage.
 
 6. **The response is the core's, derived from the values it already holds.** The core minted the identifiers and
    built the values, so it returns the response without reading anything back. The exception is
