@@ -150,7 +150,7 @@ instead of performing it; the diplomat shell **applies** it.
   `versionedTableApplier(table)` builds a complete `EntityApplier` from just the drizzle table reference —
   `diplomat/db/repos/accounts.ts`'s `accountApplier` is `versionedTableApplier(accounts)`, a one-liner. An
   entity whose table doesn't fit the convention (e.g. `dashboards`) still hand-writes its own `EntityApplier`
-  against this same interface — `diplomat/db/repos/transactions.ts`'s `transactionApplier` (phase 2a) is the
+  against this same interface — `diplomat/db/repos/transactions.ts`'s `transactionApplier` is the
   first example: a transaction row's storage shape has genuine extra mechanics beyond `id`/`version`
   (`insert` conflicts on `idempotency_key`, not `id`; both `insert`/`update` upsert the referenced merchant and
   attach/replace `transaction_tags`) — still persistence structure, not business logic, just too much for the
@@ -167,7 +167,7 @@ instead of performing it; the diplomat shell **applies** it.
   Applies to every entity built from the factory, not just credit cards — any versioned delete can hit this same
   race.
 - **`billApplier` — a genuine non-`id` uniqueness conflict on insert, surfaced as a retry, not swallowed**
-  (`diplomat/db/repos/bills.ts`, phase 2b): `bills` fits the `id`/`version` convention for `update`/`delete`
+  (`diplomat/db/repos/bills.ts`): `bills` fits the `id`/`version` convention for `update`/`delete`
   (built from `versionedTableApplier` directly), but a bill is *created* by upsert-by-cycle
   (`UNIQUE(creditCardId, month, year)`), not by `id` — `add_card_purchase` mints a speculative id for what it
   believes is a brand-new cycle, and a concurrent first purchase on the same cycle can race it (two inserts,
@@ -189,7 +189,7 @@ instead of performing it; the diplomat shell **applies** it.
   the batch's `PersistOutcome[]`, which `runEffects` calls once applied — `response` stays data-shaping
   only, deliberately never a place a flow performs I/O of its own (rule 1). `add_account_expense`/
   `add_account_income`/`create_transfer`'s `created` flag is the first user; this is the mechanism bulk import
-  (phase 3) reuses for its own per-item created/duplicate outcomes. A flow that needs a *further* write (e.g.
+  reuses for its own per-item created/duplicate outcomes. A flow that needs a *further* write (e.g.
   `update_account_transaction`'s merchant-learning off a category correction) puts that write in `persist` too
   — composed into the same atomic batch (rule 5) via its own minimal entity
   (`models/merchant.ts`'s `MERCHANT_CATEGORY_ENTITY_TAG` / `diplomat/db/repos/merchants.ts`'s
@@ -203,7 +203,7 @@ instead of performing it; the diplomat shell **applies** it.
   `add_account_expense`/`add_account_income` with a real one — `ClassifiedUpsertResult` names the
   classification-required narrowing those two actually return). `update_account_transaction` uses
   `buildTransactionView` (`viewFromOutcome` composed with `firstOutcome` — its own entity leads the batch).
-  `add_card_purchase`/`update_card_transaction` (phase 2b) instead compose `viewFromOutcome` with
+  `add_card_purchase`/`update_card_transaction` instead compose `viewFromOutcome` with
   `logic/persistence.ts`'s `lastOutcome`: a card-purchase/reassignment batch's bill `Persistable`(s) must apply
   *before* the transaction one (the transaction row's own `bill_id` FK must reference a row that already exists
   when it's a fresh bill insert), so the flow's own entity trails the batch instead of leading it — `firstOutcome`
@@ -216,8 +216,8 @@ instead of performing it; the diplomat shell **applies** it.
   dual-calling convention, same as `addLocalizedLabels`), so e.g. `buildUpsertResult(classification, locale)`
   **is** the `(outcomes) => T` function `FlowOutcome.response` wants — every converted flow assigns it directly,
   no wrapping arrow at any call site.
-- **`payBill`/`revertBillPayment` (phase 2c, `controllers/creditCard/bill.ts`) — a plain (non-idempotency-aware)
-  `response`, and an FK direction that reverses the batch order between the two flows.** Unlike phase 2b's
+- **`payBill`/`revertBillPayment` (`controllers/creditCard/bill.ts`) — a plain (non-idempotency-aware)
+  `response`, and an FK direction that reverses the batch order between the two flows.** Unlike the
   card-purchase flows, neither bill flow needs `PersistOutcome`-derived response shaping: both mint every id and
   read every field the response needs *before* the batch is built (a fresh `newId()` transfer id for `payBill`,
   the already-read `RawBill` for both), so `response` is the plain value `buildPaidBillWrite`/
@@ -237,9 +237,9 @@ instead of performing it; the diplomat shell **applies** it.
   guard fails at apply time and the shell's retry resolves it to a clean `unknown_bill` instead of a 500 — no
   throw needed for what would otherwise be a legitimate, if narrow, race. `BillsRepo` exposes only reads (e.g. `findById`) plus the
   still-repo-driven `ensureOpen` upsert, which bulk import uses until it converts.
-- **Phase 3a — the simple entity CRUD flows, including two entity-agnostic cascade appliers and a two-entity
-  batch pattern.** `update_account`/`delete_account` needed no new applier (`accountApplier` already existed,
-  phase 1) — just a version-carrying read (`accountsRepo.findRawById`) the flows didn't have before. Three new
+- **Simple entity CRUD flows — including two entity-agnostic cascade appliers and a two-entity
+  batch pattern.** `update_account`/`delete_account` need no applier of their own (`accountApplier` already
+  covers them) — just a version-carrying read (`accountsRepo.findRawById`). Three new
   entities converted, each owning its own tag (`models/tag.ts`'s `TAG_ENTITY_TAG`, `models/category.ts`'s
   `CATEGORY_ENTITY_TAG`, `models/creditCard.ts`'s `CREDIT_CARD_ENTITY_TAG`):
   - **`tagApplier`** (`diplomat/db/repos/tags.ts`) mirrors `billApplier`'s pattern exactly: `tags.name` carries
@@ -302,7 +302,7 @@ instead of performing it; the diplomat shell **applies** it.
     bill+transaction pattern: `create_credit_card` maps through `accountAdapters.outcomeToDb` and
     `creditCardAdapters.outcomeToDb`; `delete_credit_card`'s larger batch maps through all four —
     `creditCardAdapters`, `accountAdapters`, `billAdapters`, and `adapters/transactions.ts`'s `outcomeToDb`.
-- **Phase 3b — the recurring flows.** `create_recurring` needed a new entity (`models/recurring.ts`'s
+- **Recurring flows.** `create_recurring` needed a new entity (`models/recurring.ts`'s
   `RECURRING_ENTITY_TAG`, `RecurringRuleEntitySchema` carrying `version`, kept off the wire-facing
   `RecurringRuleSchema`/`RecurringRuleViewSchema` the same way `AccountEntitySchema` stays off `AccountSchema`)
   and a new `recurringRuleApplier` — plain `versionedTableApplier(recurringRules)`, no mechanics beyond the
@@ -311,17 +311,17 @@ instead of performing it; the diplomat shell **applies** it.
   is the meatier conversion: it reads every due rule (`recurringRepo.due`, now version-carrying), computes each
   rule's occurrences (bounded at `MAX_RECURRING_OCCURRENCES_PER_RUN` = 36) and its advanced `nextDue` in the
   domain, and emits **one merged batch for every due rule** — every occurrence as a `TRANSACTION_ENTITY_TAG`
-  insert (via the same `transactionApplier` phase 2a introduced) followed by every rule's own version-guarded
+  insert (via the same `transactionApplier`) followed by every rule's own version-guarded
   `RECURRING_ENTITY_TAG` update (`advance`) — applied atomically. This is a deliberate atomicity-granularity
   choice: the pre-ADR-021 code advanced each rule independently (a failure partway through could leave some
   rules advanced and others not); the FC/IS version retries the *whole* run on any version conflict, which is
   safe because `recurringIdempotencyKey`'s `rec-<ruleId>-<date>` keys make re-materialization a no-op — an
   already-created occurrence is never duplicated by a retry. `ApplyDueResult`'s `applied`/`count` are shaped
-  from the shell's per-insert outcomes (the same idempotency-outcome contract as phase 2a, `viewFromOutcome`) —
+  from the shell's per-insert outcomes (the same idempotency-outcome contract, `viewFromOutcome`) —
   never inferred by the domain. `recurringRepo.create`/`.advance` had no remaining caller once both flows
   converted — grep-confirmed zero callers (production or test) — and were removed in this same change, the same
-  checked-and-removed precedent phase 3a set for its five entities. `deps.transactions.create` stays: bulk
-  import (phase 3c) still needs it.
+  checked-and-removed precedent that the CRUD entities set. `deps.transactions.create` stays: bulk
+  import, the one flow not yet converted, still needs it.
 - **Merchant key is always stored, matched or not** (`controllers/account/transaction.ts`'s `planAccountMovement`):
   `pickClassification` (`logic/classify.ts`) only returns a `merchantKey` when it found a match, since a matched
   key is the (possibly partial) `merchant_category` key substring-matched against, not the transaction's own
@@ -330,11 +330,11 @@ instead of performing it; the diplomat shell **applies** it.
   stored on its row, or a later category correction (`resolveMerchantCorrection`) has nothing to attach to — it
   can only ever strengthen a merchant the transaction is already linked to. `planAccountMovement` falls back to
   the full `normalizeMerchant(description)` in that case (empty-string guarded, since that can't back a
-  `merchants` FK row). This closes a real gap: before this fallback existed (true on `main` too, not introduced
-  by this phase), a brand-new merchant's first correction was silently dropped — `merchant_key` stayed `null` on
+  `merchants` FK row). This closes a real gap: before this fallback existed, a brand-new
+  merchant's first correction was silently dropped — `merchant_key` stayed `null` on
   the row, so `resolveMerchantCorrection`/the old `strengthenFromTransaction` had nothing to key off. The
   identical gap still exists in `add_card_purchase` (its own `planCardPurchase` uses
-  `classification.merchantKey` as-is, with no fallback) — the FC/IS conversion (phase 2b) deliberately left this
+  `classification.merchantKey` as-is, with no fallback) — the FC/IS conversion deliberately left this
   behavior unchanged; tracked as [#115](https://github.com/RafaelFCarneiro/fintrack/issues/115).
 - **`runEffects`** (`src/diplomat/db/effects.ts`, `diplomat/db` — the only place that touches `Db` for a
   converted flow) is the shell's generic **effect runner** (ADR-022): `runEffects(db, registry, flow)`
@@ -417,7 +417,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
    `income` may only use `income` or `both`. Enforced in `controllers/transaction/core.ts`'s `resolveCategory`/
    `resolveSubCategory` (shared by every movement path) via `isCategoryKindAllowed` (predicate in `logic/transaction.ts`).
 7. **Sub-category always paired with parent**: `subcategory_id` set → `category_id` must also be set to the sub-category's parent. Enforced by a `CHECK` constraint and in `controllers/resolve.ts`.
-8. **Card purchases are funded by the card's internal liability account (debt).** Bill payment is a canonical transfer (ADR-002) from a bank account to the card account, excluded from spending summaries — never an expense (double-count). `pay_bill` creates it, links it via `bills.payment_transaction_id`, and marks the bill paid. Value enters a `credit` account only via `pay_bill`. **A `paid` bill has at most one payment transfer** (Feature Design 011): created only by `pay_bill`, removed only by `revert_bill_payment` (which deletes the transfer and flips `paid → closed` — the exact inverse; both are idempotent no-ops outside that transition). A bill marked paid with a non-positive total has no transfer (`payment_transaction_id` absent) — revert still flips it to `closed`. **A `paid` bill is composition-immutable** (Feature Design 012): `add_card_purchase` rejects landing a transaction on a `paid` bill (whether by explicit `billMonth`/`billYear` or plain cycle auto-assignment), `update_card_transaction` rejects moving a transaction off a bill that is currently `paid` (and rejects editing the bill-payment transfer itself outright — ADR-017), and `delete_card_transaction` rejects any transaction whose `bill_id` points at a `paid` bill — not just the payment transfer (which is itself always covered, since its own `bill_id` is the bill it paid, even though the transfer itself has no `credit_card_id`; ADR-017's union ownership rule — `cardId` **or** `billId` — routes the payment transfer to `update_card_transaction`/`delete_card_transaction` by construction, not by a composition-root lookup). Every case points the caller at `revert_bill_payment`; none of these guards ever auto-revert. `transactions.bill_id` is assigned automatically by cycle (`billPeriodFor`) or, when given, by an explicit `billMonth`/`billYear` (`billPeriodForCycle`) — either way it is set on the transaction row **at insert/update time itself** (ADR-021 phase 2b: `controllers/creditCard/transaction.ts`'s `resolveBillWrite` decides insert-a-fresh-`open`-bill vs. version-guarded-touch-the-existing-one as a `Persistable`, applied atomically with the transaction write by the shell; there is no separate "attach" step and so no orphan row to self-heal) — and is readable on `TransactionView` as `billId`. A transaction can only ever belong to a bill of its own card (structural: there is no way to change a transaction's card via `update_card_transaction`). All of this policy lives in the credit-card aggregate (`controllers/creditCard/transaction.ts`), never in the transaction core (ADR-016).
+8. **Card purchases are funded by the card's internal liability account (debt).** Bill payment is a canonical transfer (ADR-002) from a bank account to the card account, excluded from spending summaries — never an expense (double-count). `pay_bill` creates it, links it via `bills.payment_transaction_id`, and marks the bill paid. Value enters a `credit` account only via `pay_bill`. **A `paid` bill has at most one payment transfer** (Feature Design 011): created only by `pay_bill`, removed only by `revert_bill_payment` (which deletes the transfer and flips `paid → closed` — the exact inverse; both are idempotent no-ops outside that transition). A bill marked paid with a non-positive total has no transfer (`payment_transaction_id` absent) — revert still flips it to `closed`. **A `paid` bill is composition-immutable** (Feature Design 012): `add_card_purchase` rejects landing a transaction on a `paid` bill (whether by explicit `billMonth`/`billYear` or plain cycle auto-assignment), `update_card_transaction` rejects moving a transaction off a bill that is currently `paid` (and rejects editing the bill-payment transfer itself outright — ADR-017), and `delete_card_transaction` rejects any transaction whose `bill_id` points at a `paid` bill — not just the payment transfer (which is itself always covered, since its own `bill_id` is the bill it paid, even though the transfer itself has no `credit_card_id`; ADR-017's union ownership rule — `cardId` **or** `billId` — routes the payment transfer to `update_card_transaction`/`delete_card_transaction` by construction, not by a composition-root lookup). Every case points the caller at `revert_bill_payment`; none of these guards ever auto-revert. `transactions.bill_id` is assigned automatically by cycle (`billPeriodFor`) or, when given, by an explicit `billMonth`/`billYear` (`billPeriodForCycle`) — either way it is set on the transaction row **at insert/update time itself** (`controllers/creditCard/transaction.ts`'s `resolveBillWrite` decides insert-a-fresh-`open`-bill vs. version-guarded-touch-the-existing-one as a `Persistable`, applied atomically with the transaction write by the shell; there is no separate "attach" step and so no orphan row to self-heal) — and is readable on `TransactionView` as `billId`. A transaction can only ever belong to a bill of its own card (structural: there is no way to change a transaction's card via `update_card_transaction`). All of this policy lives in the credit-card aggregate (`controllers/creditCard/transaction.ts`), never in the transaction core (ADR-016).
 9. **Encryption on by default**: the database is always opened with an encryption key (from keychain or `FINTRACK_DB_KEY`). Opening without a key is a startup error. The key is never logged or committed (ADR-005).
 10. Decode at the boundary: every external input and SQL row is zod-parsed before entering the domain.
 11. **Dynamic query structure is composed only from whitelisted enum-keyed SQL fragments** (ADR-011); caller-supplied values are always parameter-bound; caller text is never concatenated into SQL. Exhaustive `Record<Enum, Fragment>` maps in `diplomat/db` are the only source of structural SQL; `assertNever` / TS exhaustiveness guards unmapped keys at compile time.
@@ -437,22 +437,22 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     `apply_due_recurring`).** See § Write path above. A
     converted controller's `deps` never receives a write method it calls directly for that flow — it builds one
     or more `Persistable`s and returns them in `persist`; only `runEffects` (`diplomat/db`, invoked from the
-    MCP/REST handler) touches `Db`. The unconverted bulk-import flow (phase 3c) is
+    MCP/REST handler) touches `Db`. The unconverted bulk-import flow is
     unaffected and keeps calling its `deps.transactions.create` write method exactly as before — this
-    invariant applies per-flow, not repo-wide, until phase 3 finishes the migration. `deps.<x>.create/update/
+    invariant applies per-flow, not repo-wide, until bulk import converts. `deps.<x>.create/update/
     delete` methods for `accounts`, `tags`, `categories`, `subCategories`, and `creditCards` were checked for any
     remaining caller once their flow converted — found genuinely dead (grep-confirmed zero callers, production or
     test) — and removed in the same change rather than deferred (`AccountsRepo.update`/`.delete`,
     `TagsRepo.create`/`.delete`, `CategoriesRepo.create`/`.delete`, `SubCategoriesRepo.create`/`.delete`,
     `CreditCardsRepo.deleteCard`). `RecurringRepo.create`/`.advance` followed the same checked-and-removed path
-    once both recurring flows converted (phase 3b) — grep-confirmed zero callers, removed in the same change.
-    `deps.transactions.create` is the one write method still standing, since bulk import (phase 3c) is still its
+    once both recurring flows converted — grep-confirmed zero callers, removed in the same change.
+    `deps.transactions.create` is the one write method still standing, since bulk import is still its
     caller. `AccountsRepo.create`/`CreditCardsRepo.createWithAccount` were removed too —
     integration tests seeding fixture accounts/cards switched to raw drizzle inserts
     (`test/integration/db/effects.test.ts`'s `insertAccount`/`insertCreditCardWithAccount`) rather than keeping
     a production write method alive solely for test convenience. Two documented transitional duplications, both
     still repo-driven because their caller
-    (`importAccountStatement`/`importCardStatement`, bulk import — phase 3c) needs an already-applied result per
+    (`importAccountStatement`/`importCardStatement`, bulk import) needs an already-applied result per
     line, not a `Persistable`: `controllers/account/transaction.ts`'s `addAccountMovementViaRepo` (sharing
     `planAccountMovement`'s decision with the FC/IS `addAccountMovement`) and
     `controllers/creditCard/transaction.ts`'s `addCardPurchaseViaRepo` (sharing `planCardPurchase`'s decision
