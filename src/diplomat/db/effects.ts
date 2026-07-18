@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
-import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, Result, ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { conflict } from '../../models/error.js';
@@ -165,3 +165,33 @@ const attempt = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>, attemptsLe
  */
 export const runEffects = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>): ResultAsync<T, AppError> =>
   attempt(db, registry, flow, MAX_RUN_EFFECTS_ATTEMPTS);
+
+/** One unit's outcome from `runEffectsSequence`: its response, or the `AppError` it failed with
+ *  (a domain error from its own flow, or a bounded-retry-exhausted `conflict`). A plain neverthrow
+ *  `Result` — the caller narrows via `isOk`/`isErr` to shape a partial-success response, no
+ *  bespoke tagged union or casting needed. */
+export type SequenceOutcome<T> = Result<T, AppError>;
+
+/**
+ * The sequence-of-independent-units mode (ADR-022 decisions 3–4): applies `items` in order, each
+ * through its own call to `attempt` — its own transaction, its own bounded conflict retry — so
+ * retry semantics are identical to the single-atomic-unit mode by construction, never
+ * re-implemented here. `flowFor(item)` is invoked only once this loop reaches that item, i.e.
+ * after every earlier item has already committed (or been recorded as failed) — the re-invocation
+ * this relies on for retry is the same mechanism that makes unit *i+1* see unit *i*'s committed
+ * writes (option B). A unit's domain error, or its own retry exhaustion, is recorded as `Err` and
+ * the loop continues to the next item — partial success, never a short-circuit; only a genuine
+ * unexpected failure (not a version conflict) still throws, same as `runEffects`.
+ */
+export const runEffectsSequence = async <I, T>(
+  db: Db,
+  registry: ApplierRegistry,
+  items: I[],
+  flowFor: (item: I) => Flow<T>,
+): Promise<SequenceOutcome<T>[]> => {
+  const outcomes: SequenceOutcome<T>[] = [];
+  for (const item of items) {
+    outcomes.push(await attempt(db, registry, flowFor(item), MAX_RUN_EFFECTS_ATTEMPTS));
+  }
+  return outcomes;
+};

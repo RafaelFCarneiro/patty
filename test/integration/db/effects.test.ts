@@ -3,8 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
-import { okAsync, ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AppError } from '../../../src/common/errors.js';
 import { McpTransport } from '../../../src/config.js';
 import * as accountAdapters from '../../../src/adapters/accounts.js';
 import * as billAdapters from '../../../src/adapters/bills.js';
@@ -37,18 +38,21 @@ import {
   MAX_RUN_EFFECTS_ATTEMPTS,
   versionedTableApplier,
   runEffects,
+  runEffectsSequence,
   type ApplierRegistry,
   type EntityApplier,
+  type SequenceOutcome,
 } from '../../../src/diplomat/db/effects.js';
 import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus } from '../../../src/models/bill.js';
 import { CATEGORY_ENTITY_TAG, CategoryKind } from '../../../src/models/category.js';
 import { CREDIT_CARD_ENTITY_TAG, type CreditCardEntity } from '../../../src/models/creditCard.js';
+import { validation } from '../../../src/models/error.js';
 import { Locale } from '../../../src/models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { PersistOp, type Persistable, type PersistOutcome } from '../../../src/models/persistable.js';
+import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } from '../../../src/models/persistable.js';
 import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
 import {
   ClassificationMethod,
@@ -342,6 +346,144 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ created: false });
+  });
+});
+
+describe('runEffectsSequence — sequence-of-independent-units mode (ADR-022 step 2)', () => {
+  type Unit = 'one' | 'two' | 'three';
+  // Mirrors effects.ts's own (unexported) `Flow<T>` shape, just named here so each synthetic
+  // flow below can be annotated without re-deriving `ResultAsync<FlowOutcome<T>, AppError>` inline.
+  type SeqFlow<T> = () => ResultAsync<FlowOutcome<T>, AppError>;
+
+  it('a unit that fails domain validation is recorded as err; the sibling units still commit', async () => {
+    const a1 = newAccount();
+    const a3 = newAccount();
+
+    const flowFor = (unit: Unit): SeqFlow<AccountEntity> => {
+      if (unit === 'two') return () => errAsync(validation(['bad line']));
+      return insertOne(unit === 'one' ? a1 : a3);
+    };
+
+    const outcomes = await runEffectsSequence(db, registry, ['one', 'two', 'three'], flowFor);
+
+    expect(outcomes[0]?.isOk()).toBe(true);
+    expect(outcomes[1]?.isErr()).toBe(true);
+    expect(outcomes[1]?._unsafeUnwrapErr()).toEqual({ code: 'validation', issues: ['bad line'] });
+    expect(outcomes[2]?.isOk()).toBe(true);
+    expect(await readIds(a1.id)).toHaveLength(1);
+    expect(await readIds(a3.id)).toHaveLength(1);
+  });
+
+  it('a per-unit conflict retries only that unit — unit 1 runs once, the sequence is not restarted', async () => {
+    const a1 = newAccount();
+    const seed = await insertAccount();
+    const a3 = newAccount();
+
+    let unit1Calls = 0;
+    let unit2Calls = 0;
+    const flowFor = (unit: Unit): SeqFlow<AccountEntity | string> => {
+      if (unit === 'one')
+        return () => {
+          unit1Calls += 1;
+          return insertOne(a1)();
+        };
+      if (unit === 'three') return insertOne(a3);
+      return () => {
+        unit2Calls += 1;
+        // First invocation simulates a stale read; the retry's re-invocation uses the real version.
+        const version = unit2Calls === 1 ? seed.version + 1 : seed.version;
+        const model: AccountEntity = { ...seed, name: 'Renamed', version };
+        return okAsync({ persist: [persistence.update({ entity: ACCOUNT_ENTITY_TAG, model })], response: seed.id });
+      };
+    };
+
+    const outcomes = await runEffectsSequence(db, registry, ['one', 'two', 'three'], flowFor);
+
+    expect(outcomes.map((o) => o.isOk())).toEqual([true, true, true]);
+    expect(unit1Calls).toBe(1);
+    expect(unit2Calls).toBe(2); // conflicted once, succeeded on the retry
+    expect(await readVersion(seed.id)).toBe(seed.version + 1);
+    expect(await readIds(a1.id)).toHaveLength(1);
+    expect(await readIds(a3.id)).toHaveLength(1);
+  });
+
+  it("a later unit's flow reads an earlier unit's committed write (post-commit re-invocation)", async () => {
+    const a1 = newAccount();
+    const a2 = newAccount();
+
+    const flowFor = (unit: 'one' | 'two'): SeqFlow<AccountEntity | null> => {
+      if (unit === 'one') return insertOne(a1);
+      return () =>
+        ResultAsync.fromSafePromise(readIds(a1.id)).andThen((rows) =>
+          rows.length === 0
+            ? errAsync(validation(['unit one not committed yet']))
+            : okAsync({ persist: [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: a2 })], response: null }),
+        );
+    };
+
+    const outcomes = await runEffectsSequence(db, registry, ['one', 'two'] as const, flowFor);
+
+    expect(outcomes[0]?.isOk()).toBe(true);
+    expect(outcomes[1]?.isOk()).toBe(true);
+    expect(await readIds(a1.id)).toHaveLength(1);
+    expect(await readIds(a2.id)).toHaveLength(1);
+  });
+
+  it('a unit whose retries are exhausted reports conflict; the rest of the sequence still completes', async () => {
+    const a1 = newAccount();
+    const seed = await insertAccount();
+    const a3 = newAccount();
+
+    let seedCalls = 0;
+    const flowFor = (unit: Unit): SeqFlow<AccountEntity | null> => {
+      if (unit === 'one') return insertOne(a1);
+      if (unit === 'three') return insertOne(a3);
+      return () => {
+        seedCalls += 1;
+        const model: AccountEntity = { ...seed, name: 'Renamed', version: seed.version + 999 }; // never matches
+        return okAsync({ persist: [persistence.update({ entity: ACCOUNT_ENTITY_TAG, model })], response: null });
+      };
+    };
+
+    const outcomes = await runEffectsSequence(db, registry, ['one', 'two', 'three'], flowFor);
+
+    expect(outcomes[0]?.isOk()).toBe(true);
+    expect(outcomes[1]?.isErr()).toBe(true);
+    expect(outcomes[1]?._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    expect(seedCalls).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
+    expect(outcomes[2]?.isOk()).toBe(true);
+    expect(await readIds(a1.id)).toHaveLength(1);
+    expect(await readIds(a3.id)).toHaveLength(1);
+    expect(await readVersion(seed.id)).toBe(seed.version); // never bumped by an exhausted, rolled-back attempt
+  });
+
+  it('preserves order and resolves an idempotent-duplicate insert per unit', async () => {
+    const shared = newAccount();
+    const a3 = newAccount();
+
+    const idempotentInsert =
+      (model: AccountEntity): SeqFlow<{ created: boolean }> =>
+      () =>
+        okAsync({
+          persist: [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model })],
+          response: (outcomes: PersistOutcome[]) => ({ created: outcomes[0]?.applied ?? false }),
+        });
+
+    // Second item duplicates the first item's id — an idempotent no-op, not an error.
+    const items = [shared, shared, a3];
+    const outcomes: SequenceOutcome<{ created: boolean }>[] = await runEffectsSequence(
+      db,
+      registry,
+      items,
+      idempotentInsert,
+    );
+
+    expect(outcomes.map((o) => o.isOk())).toEqual([true, true, true]);
+    expect(outcomes[0]?._unsafeUnwrap()).toEqual({ created: true });
+    expect(outcomes[1]?._unsafeUnwrap()).toEqual({ created: false });
+    expect(outcomes[2]?._unsafeUnwrap()).toEqual({ created: true });
+    expect(await readIds(shared.id)).toHaveLength(1);
+    expect(await readIds(a3.id)).toHaveLength(1);
   });
 });
 
