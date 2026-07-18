@@ -162,18 +162,6 @@ export const RawTransactionViewSchema = TransactionViewSchema.extend({
 });
 export type RawTransactionView = z.infer<typeof RawTransactionViewSchema>;
 
-/** Domain patch for updates — only provided fields change; classification set on user correction. */
-export type TransactionPatch = {
-  description?: string;
-  amount?: number;
-  type?: MovementType;
-  status?: TransactionStatus;
-  date?: string;
-  currency?: CurrencyCode;
-  classification?: Classification;
-  note?: string;
-};
-
 // ─── Input contracts ──────────────────────────────────────────
 // Zod-first, types inferred. Wire derives from these (re-export / extend).
 
@@ -306,8 +294,6 @@ export type ClassifyOutcome = Classification & {
   categoryName?: string;
   merchantKey?: string;
 };
-
-export type CreateTxResult = { transaction: RawTransactionView; created: boolean };
 
 /** The shared shape of "did this write land, and what does the caller need to know about it" —
  *  every insert-shaped account/credit-card flow's result. `classification` is optional: present

@@ -27,12 +27,18 @@ import { TAG_ENTITY_TAG } from '../../src/models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
 import { Locale } from '../../src/models/locale.js';
 import { buildHttpApp } from '../../src/server.js';
-import { runEffects, type ApplierRegistry } from '../../src/diplomat/db/effects.js';
-import type { Deps, RunEffects } from '../../src/controllers/deps.js';
+import { runEffects, runEffectsSequence, type ApplierRegistry } from '../../src/diplomat/db/effects.js';
+import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
 
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64);
 
-export type AppContext = { app: FastifyInstance; deps: Deps; version: string; runEffects: RunEffects };
+export type AppContext = {
+  app: FastifyInstance;
+  deps: Deps;
+  version: string;
+  runEffects: RunEffects;
+  runEffectsSequence: RunEffectsSequence;
+};
 
 export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promise<AppContext> => {
   const db = openDatabase({
@@ -82,7 +88,9 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     [RECURRING_ENTITY_TAG]: recurringRuleApplier,
   };
   const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow);
-  const app = buildHttpApp(deps, version, boundRunEffects, { logger: false });
+  const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
+    runEffectsSequence(db, applierRegistry, items, flowFor);
+  const app = buildHttpApp(deps, version, boundRunEffects, boundRunEffectsSequence, { logger: false });
 
-  return { app, deps, version, runEffects: boundRunEffects };
+  return { app, deps, version, runEffects: boundRunEffects, runEffectsSequence: boundRunEffectsSequence };
 };

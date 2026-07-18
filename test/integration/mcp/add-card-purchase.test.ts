@@ -322,6 +322,192 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
     }
   });
 
+  // The case the old within-batch "dedup" existed for (ADR-022 step 3): two lines landing on the
+  // SAME brand-new cycle no longer coordinate inside one batch — the second line's flow simply
+  // reads the bill the first line's flow already committed (option B, sequential re-invocation).
+  it('two lines sharing a brand-new bill cycle attach to exactly one bill, not two', async () => {
+    const cardName = `AddPurchase Bulk SharedBill Card ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      });
+
+      const result = (await callTool(client, {
+        name: 'import_card_statement',
+        args: {
+          card: cardName,
+          items: [
+            {
+              description: `Shared bill line A ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              date: today,
+              idempotencyKey: `bulk-shared-a-${stamp}`,
+            },
+            {
+              description: `Shared bill line B ${stamp}`,
+              amount: 15,
+              type: 'expense',
+              date: today,
+              idempotencyKey: `bulk-shared-b-${stamp}`,
+            },
+          ],
+        },
+      })) as { items?: Array<{ status?: string; transaction?: { billId?: string } }> };
+
+      ensure(result.items?.length === 2, 'expected two statement item results');
+      const [lineA, lineB] = result.items;
+      expect(lineA?.status).not.toBe('error');
+      expect(lineB?.status).not.toBe('error');
+      ensure(lineA?.transaction?.billId, 'expected line A to be attached to a bill');
+      ensure(lineB?.transaction?.billId, 'expected line B to be attached to a bill');
+      expect(lineB.transaction.billId).toBe(lineA.transaction.billId);
+
+      const bill = (await callTool(client, { name: 'get_bill', args: { card: cardName, month, year } })) as {
+        total?: number;
+      };
+      expect(bill.total).toBe(25);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('a line failing validation errors while sibling lines still import (partial success)', async () => {
+    const cardName = `AddPurchase Bulk Partial Card ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      });
+
+      const result = (await callTool(client, {
+        name: 'import_card_statement',
+        args: {
+          card: cardName,
+          items: [
+            {
+              description: `Partial line A ${stamp}`,
+              amount: 10,
+              type: 'expense',
+              date: today,
+              idempotencyKey: `bulk-partial-a-${stamp}`,
+            },
+            {
+              // billMonth without billYear fails the domain's pairing guard
+              // (cardErrors.billPeriodIncomplete) — a per-line business rejection, not a schema
+              // one, since the schema leaves both fields independently optional.
+              description: `Partial line invalid ${stamp}`,
+              amount: 20,
+              type: 'expense',
+              date: today,
+              idempotencyKey: `bulk-partial-bad-${stamp}`,
+              billMonth: month,
+            },
+            {
+              description: `Partial line C ${stamp}`,
+              amount: 30,
+              type: 'expense',
+              date: today,
+              idempotencyKey: `bulk-partial-c-${stamp}`,
+            },
+          ],
+        },
+      })) as {
+        summary?: { created?: number; needsReview?: number; errors?: number };
+        items?: Array<{ status?: string; transaction?: { id?: string } }>;
+      };
+
+      ensure(result.items?.length === 3, 'expected three statement item results');
+      expect(result.items[0]?.status).not.toBe('error');
+      expect(result.items[1]?.status).toBe('error');
+      expect(result.items[2]?.status).not.toBe('error');
+      expect(result.summary?.errors).toBe(1);
+      expect((result.summary?.created ?? 0) + (result.summary?.needsReview ?? 0)).toBe(2);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('a line targeting an already-paid bill cycle errors without aborting sibling lines', async () => {
+    const cardName = `AddPurchase Bulk PaidCycle Card ${stamp}`;
+    const bankName = `AddPurchase Bulk PaidCycle Bank ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: bankName, type: 'checking', currency: 'BRL', initialBalance: 1000 },
+      });
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      });
+
+      // Open and pay off the NEXT cycle up front, so a statement line explicitly targeting it
+      // lands on a bill that's already paid.
+      await callTool(client, {
+        name: 'add_card_purchase',
+        args: {
+          description: `Paid-cycle seed ${stamp}`,
+          amount: 40,
+          type: 'expense',
+          date: today,
+          card: cardName,
+          billMonth: nextCycle.month,
+          billYear: nextCycle.year,
+          idempotencyKey: `bulk-paidcycle-seed-${stamp}`,
+        },
+      });
+      await callTool(client, {
+        name: 'pay_bill',
+        args: { card: cardName, month: nextCycle.month, year: nextCycle.year, account: bankName },
+      });
+
+      const result = (await callTool(client, {
+        name: 'import_card_statement',
+        args: {
+          card: cardName,
+          items: [
+            {
+              description: `Paid-cycle line ${stamp}`,
+              amount: 5,
+              type: 'expense',
+              date: today,
+              billMonth: nextCycle.month,
+              billYear: nextCycle.year,
+              idempotencyKey: `bulk-paidcycle-line-${stamp}`,
+            },
+            {
+              description: `Current-cycle line ${stamp}`,
+              amount: 8,
+              type: 'expense',
+              date: today,
+              idempotencyKey: `bulk-paidcycle-current-${stamp}`,
+            },
+          ],
+        },
+      })) as { items?: Array<{ status?: string; transaction?: { id?: string } }> };
+
+      ensure(result.items?.length === 2, 'expected two statement item results');
+      expect(result.items[0]?.status).toBe('error');
+      expect(result.items[1]?.status).not.toBe('error');
+      ensure(result.items[1]?.transaction?.id, 'expected the current-cycle line to still be created');
+    } finally {
+      await transport.close();
+    }
+  });
+
   // The retired create_transactions_bulk's "rejects a line resolving both account and card via
   // top-level defaults" case is impossible by construction now (ADR-017 step 2): import_card_statement
   // items structurally have no `account` field (mirroring add_card_purchase's own single-purpose

@@ -60,6 +60,7 @@ import {
   TransactionSource,
   TransactionStatus,
   TransactionType,
+  type Transaction,
 } from '../../../src/models/transaction.js';
 import type { TransactionRowEntity } from '../../../src/adapters/transactions.js';
 
@@ -138,6 +139,58 @@ const insertCreditCardWithAccount = async (
   });
 
   return { cardId, accountId, cardName };
+};
+
+/** Inserts a fresh `open` bill directly (raw drizzle) — test fixture setup only, replacing the
+ *  `BillsRepo.ensureOpen` this file used to seed with before phase 3c removed that dead repo
+ *  method (its production caller, `addCardPurchaseViaRepo`, no longer exists). */
+const insertOpenBill = async (
+  cardId: string,
+  period: { month: number; year: number; closeDate: string; dueDate: string },
+): Promise<{ id: string }> => {
+  const id = randomUUID();
+  await db.insert(bills).values({
+    id,
+    creditCardId: cardId,
+    month: period.month,
+    year: period.year,
+    closeDate: period.closeDate,
+    dueDate: period.dueDate,
+    status: BillStatus.enum.open,
+    version: 0,
+  });
+  return { id };
+};
+
+/** Inserts a transaction row directly (raw drizzle) — test fixture setup only, replacing
+ *  `TransactionsRepo.create` this file used to seed with before phase 3c removed that dead repo
+ *  method (its production callers, `addAccountMovementViaRepo`/`addCardPurchaseViaRepo`, no longer
+ *  exist). No tags in any fixture using this, so unlike the real applier this never attaches any. */
+const insertTransaction = async (entity: Transaction): Promise<void> => {
+  const { props, refs } = transactionAdapters.modelToDb(entity);
+  await db.insert(transactions).values({
+    id: props.id,
+    description: props.description,
+    amount: props.amount,
+    type: props.type,
+    status: props.status,
+    date: props.date,
+    currency: props.currency,
+    source: props.source,
+    idempotencyKey: props.idempotencyKey,
+    classificationMethod: props.classificationMethod,
+    confidence: props.confidence,
+    rawInput: props.rawInput ?? null,
+    note: props.note ?? null,
+    fromAccountId: refs.accountId,
+    toAccountId: refs.toAccountId,
+    creditCardId: refs.cardId,
+    billId: refs.billId,
+    categoryId: refs.categoryId,
+    subcategoryId: refs.subCategoryId,
+    merchantKey: refs.merchantKey,
+    version: 0,
+  });
 };
 
 const readVersion = async (id: string): Promise<number | undefined> => {
@@ -1015,28 +1068,21 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
 
     const { cardId, accountId: cardAccountId, cardName } = await insertCreditCardWithAccount(payerAccountId);
 
-    const bill = await billsR.ensureOpen(
-      cardId,
-      { month: 6, year: 2026, closeDate: '2026-06-28', dueDate: '2026-07-05' },
-      randomUUID(),
-    );
+    const bill = await insertOpenBill(cardId, { month: 6, year: 2026, closeDate: '2026-06-28', dueDate: '2026-07-05' });
 
-    await transactionsR.create(
-      {
-        id: randomUUID(),
-        description: 'Purchase',
-        amount: 100,
-        type: TransactionType.enum.expense,
-        status: TransactionStatus.enum.effective,
-        date: '2026-06-01',
-        currency: CurrencyCode.enum.BRL,
-        source: TransactionSource.enum.mcp,
-        idempotencyKey: `idem-${randomUUID()}`,
-        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-        refs: { accountId: cardAccountId, cardId, billId: bill.id },
-      },
-      [],
-    );
+    await insertTransaction({
+      id: randomUUID(),
+      description: 'Purchase',
+      amount: 100,
+      type: TransactionType.enum.expense,
+      status: TransactionStatus.enum.effective,
+      date: '2026-06-01',
+      currency: CurrencyCode.enum.BRL,
+      source: TransactionSource.enum.mcp,
+      idempotencyKey: `idem-${randomUUID()}`,
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+      refs: { accountId: cardAccountId, cardId, billId: bill.id },
+    });
 
     const deps: Deps = {
       accounts: accountsR,
@@ -1424,28 +1470,26 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
     const { cardId, accountId: cardAccountId, cardName } = await insertCreditCardWithAccount();
 
     // An unpaid bill with one ordinary purchase.
-    const openBill = await billsR.ensureOpen(
-      cardId,
-      { month: 5, year: 2026, closeDate: '2026-05-28', dueDate: '2026-06-05' },
-      randomUUID(),
-    );
+    const openBill = await insertOpenBill(cardId, {
+      month: 5,
+      year: 2026,
+      closeDate: '2026-05-28',
+      dueDate: '2026-06-05',
+    });
     const purchaseId = randomUUID();
-    await transactionsR.create(
-      {
-        id: purchaseId,
-        description: 'Purchase',
-        amount: 40,
-        type: TransactionType.enum.expense,
-        status: TransactionStatus.enum.effective,
-        date: '2026-05-10',
-        currency: CurrencyCode.enum.BRL,
-        source: TransactionSource.enum.mcp,
-        idempotencyKey: `idem-${randomUUID()}`,
-        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-        refs: { accountId: cardAccountId, cardId, billId: openBill.id },
-      },
-      [],
-    );
+    await insertTransaction({
+      id: purchaseId,
+      description: 'Purchase',
+      amount: 40,
+      type: TransactionType.enum.expense,
+      status: TransactionStatus.enum.effective,
+      date: '2026-05-10',
+      currency: CurrencyCode.enum.BRL,
+      source: TransactionSource.enum.mcp,
+      idempotencyKey: `idem-${randomUUID()}`,
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+      refs: { accountId: cardAccountId, cardId, billId: openBill.id },
+    });
     const tagId = randomUUID();
     await db.insert(tags).values({ id: tagId, name: `Tag ${tagId}`, version: 0 });
     await db.insert(transactionTags).values({ transactionId: purchaseId, tagId });
@@ -1464,39 +1508,33 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       version: 0,
     });
     const paidPurchaseId = randomUUID();
-    await transactionsR.create(
-      {
-        id: paidPurchaseId,
-        description: 'Old purchase',
-        amount: 60,
-        type: TransactionType.enum.expense,
-        status: TransactionStatus.enum.effective,
-        date: '2026-04-10',
-        currency: CurrencyCode.enum.BRL,
-        source: TransactionSource.enum.mcp,
-        idempotencyKey: `idem-${randomUUID()}`,
-        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-        refs: { accountId: cardAccountId, cardId, billId: paidBillId },
-      },
-      [],
-    );
+    await insertTransaction({
+      id: paidPurchaseId,
+      description: 'Old purchase',
+      amount: 60,
+      type: TransactionType.enum.expense,
+      status: TransactionStatus.enum.effective,
+      date: '2026-04-10',
+      currency: CurrencyCode.enum.BRL,
+      source: TransactionSource.enum.mcp,
+      idempotencyKey: `idem-${randomUUID()}`,
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+      refs: { accountId: cardAccountId, cardId, billId: paidBillId },
+    });
     const transferId = randomUUID();
-    await transactionsR.create(
-      {
-        id: transferId,
-        description: 'Bill payment',
-        amount: 60,
-        type: TransactionType.enum.transfer,
-        status: TransactionStatus.enum.effective,
-        date: '2026-05-01',
-        currency: CurrencyCode.enum.BRL,
-        source: TransactionSource.enum.mcp,
-        idempotencyKey: `idem-${randomUUID()}`,
-        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-        refs: { accountId: payerId, toAccountId: cardAccountId, billId: paidBillId },
-      },
-      [],
-    );
+    await insertTransaction({
+      id: transferId,
+      description: 'Bill payment',
+      amount: 60,
+      type: TransactionType.enum.transfer,
+      status: TransactionStatus.enum.effective,
+      date: '2026-05-01',
+      currency: CurrencyCode.enum.BRL,
+      source: TransactionSource.enum.mcp,
+      idempotencyKey: `idem-${randomUUID()}`,
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+      refs: { accountId: payerId, toAccountId: cardAccountId, billId: paidBillId },
+    });
     await db
       .update(bills)
       .set({ paymentTransactionId: transferId })

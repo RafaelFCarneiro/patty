@@ -3,9 +3,11 @@ import {
   addAccountExpense,
   addAccountIncome,
   deleteAccountTransaction,
+  importAccountStatement,
   updateAccountTransaction,
 } from '../../../../src/controllers/account/transaction.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
+import { toIsoDate } from '../../../../src/logic/period.js';
 import { AccountType, type Account } from '../../../../src/models/account.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
 import type { FlowOutcome, PersistOutcome } from '../../../../src/models/persistable.js';
@@ -495,5 +497,77 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
     const persisted = result._unsafeUnwrap().persist[0] as { model: { type: string; amount: number } };
     expect(persisted.model.type).toBe('transfer');
     expect(persisted.model.amount).toBe(50);
+  });
+});
+
+describe('importAccountStatement — pure per-line plan for the shell (ADR-022 step 3)', () => {
+  it("defaults every line and stamps the whole import's rawInput onto each", () => {
+    const clock = new Date('2026-06-01');
+    const deps = makeDeps({ clock: () => clock });
+
+    const plan = importAccountStatement(
+      deps,
+      {
+        account: 'Nubank',
+        items: [
+          { description: 'iFood', amount: 45, type: 'expense' },
+          { description: 'Salary', amount: 5000, type: 'income', date: '2026-05-01', idempotencyKey: 'explicit' },
+        ],
+        rawInput: 'pasted statement text',
+      },
+      TransactionSource.enum.import,
+    );
+
+    expect(plan.lines).toHaveLength(2);
+    expect(plan.lines[0]).toMatchObject({ date: toIsoDate(clock), rawInput: 'pasted statement text' });
+    expect(plan.lines[0].idempotencyKey).toBeTruthy();
+    expect(plan.lines[1]).toMatchObject({ date: '2026-05-01', idempotencyKey: 'explicit' });
+  });
+
+  it("routes an 'expense' line through addAccountExpense, an 'income' one through addAccountIncome", async () => {
+    const deps = makeDeps({ accounts: { list: async () => [account()] } as unknown as Deps['accounts'] });
+
+    const plan = importAccountStatement(
+      deps,
+      {
+        account: 'Nubank',
+        items: [
+          { description: 'iFood', amount: 45, type: 'expense', date: '2026-06-01', idempotencyKey: 'k1' },
+          { description: 'Salary', amount: 5000, type: 'income', date: '2026-06-01', idempotencyKey: 'k2' },
+        ],
+      },
+      TransactionSource.enum.import,
+    );
+
+    const [expenseResult, incomeResult] = await Promise.all(plan.lines.map((line) => plan.flowFor(line)()));
+
+    expect(expenseResult.isOk()).toBe(true);
+    const expenseModel = (expenseResult._unsafeUnwrap().persist[0] as { model: { type: string } }).model;
+    expect(expenseModel.type).toBe('expense');
+
+    expect(incomeResult.isOk()).toBe(true);
+    const incomeModel = (incomeResult._unsafeUnwrap().persist[0] as { model: { type: string } }).model;
+    expect(incomeModel.type).toBe('income');
+  });
+
+  it("binds every line to the statement's fixed account, not a per-line one", async () => {
+    const deps = makeDeps({
+      accounts: { list: async () => [account({ name: 'Nubank' })] } as unknown as Deps['accounts'],
+    });
+
+    const plan = importAccountStatement(
+      deps,
+      {
+        account: 'Nubank',
+        items: [{ description: 'iFood', amount: 45, type: 'expense', date: '2026-06-01', idempotencyKey: 'k1' }],
+      },
+      TransactionSource.enum.import,
+    );
+
+    const result = await plan.flowFor(plan.lines[0])();
+
+    expect(result.isOk()).toBe(true);
+    const model = (result._unsafeUnwrap().persist[0] as { model: { refs: { accountId?: string } } }).model;
+    expect(model.refs.accountId).toBe('acc-1');
   });
 });

@@ -36,10 +36,11 @@ import {
   importCardStatement,
   updateCardTransaction,
 } from '../../controllers/creditCard/transaction.js';
-import type { Deps, RunEffects } from '../../controllers/deps.js';
+import type { Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
 import { getSpendingSummary } from '../../controllers/summary.js';
+import { buildBulkResult } from '../../controllers/transaction/bulk.js';
 import { confirmTransaction } from '../../controllers/transaction/core.js';
 import { searchTransactions } from '../../controllers/transaction/read.js';
 import { createTransfer } from '../../controllers/account/transfer.js';
@@ -128,10 +129,18 @@ const STATEMENT_IMPORT_RESULT_DESCRIPTION =
   're-importing is safe). Returns a per-item status: created, needs_review (low confidence — confirm ' +
   'categories with the user), duplicate, or error.';
 
-export const buildMcpServer = (deps: Deps, version: string, runEffects: RunEffects): McpServer => {
+export const buildMcpServer = (
+  deps: Deps,
+  version: string,
+  runEffects: RunEffects,
+  runEffectsSequence: RunEffectsSequence,
+): McpServer => {
   const server = new McpServer({ name: 'fintrack', version });
 
-  const openApiDocument = buildOpenApiDocument(buildRouteDefinitions(deps, version, runEffects), version);
+  const openApiDocument = buildOpenApiDocument(
+    buildRouteDefinitions(deps, version, runEffects, runEffectsSequence),
+    version,
+  );
   server.registerResource(
     'openapi',
     'fintrack://openapi',
@@ -158,12 +167,14 @@ export const buildMcpServer = (deps: Deps, version: string, runEffects: RunEffec
         `bank/wallet statement. ${STATEMENT_IMPORT_RESULT_DESCRIPTION}`,
       inputSchema: ImportCardStatementSchema.shape,
     },
-    async (args) =>
-      fromResult(
-        (await importCardStatement(deps, importCardStatementWireInToModel(args), TransactionSource.enum.import)).map(
-          bulkResultToWireOut,
-        ),
-      ),
+    async (args) => {
+      const plan = importCardStatement(deps, importCardStatementWireInToModel(args), TransactionSource.enum.import);
+      const outcomes = await runEffectsSequence(
+        plan.lines,
+        (line) => () => plan.flowFor(line)().map(billAdapters.outcomeToDb).map(outcomeToDb),
+      );
+      return json(bulkResultToWireOut(buildBulkResult(outcomes, plan.lines)));
+    },
   );
 
   server.registerTool(
@@ -229,9 +240,9 @@ export const buildMcpServer = (deps: Deps, version: string, runEffects: RunEffec
     },
     async (args) => {
       const model = accountAdapters.importAccountStatementWireInToModel(args);
-      return fromResult(
-        (await importAccountStatement(deps, model, TransactionSource.enum.import)).map(bulkResultToWireOut),
-      );
+      const plan = importAccountStatement(deps, model, TransactionSource.enum.import);
+      const outcomes = await runEffectsSequence(plan.lines, (line) => () => plan.flowFor(line)().map(outcomeToDb));
+      return json(bulkResultToWireOut(buildBulkResult(outcomes, plan.lines)));
     },
   );
 

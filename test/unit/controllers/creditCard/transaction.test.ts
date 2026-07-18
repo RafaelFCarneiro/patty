@@ -6,6 +6,7 @@ import {
   updateCardTransaction,
 } from '../../../../src/controllers/creditCard/transaction.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
+import { toIsoDate } from '../../../../src/logic/period.js';
 import { AccountType, type Account } from '../../../../src/models/account.js';
 import type { CreditCard } from '../../../../src/models/creditCard.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
@@ -217,30 +218,56 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
   });
 });
 
-describe('importCardStatement (addCardPurchaseViaRepo) — re-checks paid status after ensureOpen', () => {
-  it('rejects a line whose cycle became paid between the read and ensureOpen (race window)', async () => {
-    const deps = makeDeps({
-      creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
-      bills: {
-        findByCycle: async () => null,
-        ensureOpen: async () => rawBill({ status: BillStatus.enum.paid }),
-      } as unknown as Deps['bills'],
-      transactions: {
-        create: async () => {
-          throw new Error('must not create a transaction against a paid bill');
-        },
-      } as unknown as Deps['transactions'],
-    });
+describe('importCardStatement — pure per-line plan for the shell (ADR-022 step 3)', () => {
+  it('defaults date/idempotencyKey per line and stamps the whole import\'s rawInput onto each', () => {
+    const clock = new Date('2026-06-10');
+    const deps = makeDeps({ clock: () => clock });
 
-    const result = await importCardStatement(
+    const plan = importCardStatement(
       deps,
-      { card: 'Test Card', items: [{ description: 'Race purchase', amount: 20, type: 'expense', date: '2026-06-15' }] },
+      {
+        card: 'Test Card',
+        items: [
+          { description: 'Coffee', amount: 5, type: 'expense' },
+          { description: 'Taxi', amount: 12, type: 'expense', date: '2026-06-01', idempotencyKey: 'explicit-key' },
+        ],
+        rawInput: 'pasted statement text',
+      },
       TransactionSource.enum.import,
     );
 
+    expect(plan.lines).toHaveLength(2);
+    expect(plan.lines[0]).toMatchObject({ date: toIsoDate(clock), rawInput: 'pasted statement text' });
+    expect(plan.lines[0].idempotencyKey).toBeTruthy();
+    // An explicit idempotencyKey/date is never overridden by the default.
+    expect(plan.lines[1]).toMatchObject({ date: '2026-06-01', idempotencyKey: 'explicit-key' });
+  });
+
+  it("flowFor binds a defaulted line to addCardPurchase's own single-line flow, with the fixed card", async () => {
+    const deps = makeDeps({
+      creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
+      bills: { findByCycle: async () => null } as unknown as Deps['bills'],
+      newId: sequentialNewId(),
+    });
+
+    const plan = importCardStatement(
+      deps,
+      {
+        card: 'Test Card',
+        items: [{ description: 'Plan line', amount: 20, type: 'expense', date: '2026-06-15', idempotencyKey: 'k1' }],
+      },
+      TransactionSource.enum.import,
+    );
+
+    const result = await plan.flowFor(plan.lines[0])();
+
     expect(result.isOk()).toBe(true);
-    const { items } = result._unsafeUnwrap();
-    expect(items[0]).toMatchObject({ status: 'error' });
+    const { persist } = result._unsafeUnwrap();
+    // Same two-entry batch addCardPurchase itself emits on a fresh cycle (bill insert, then
+    // transaction insert) — proving the plan reused that flow verbatim, not a bespoke write path.
+    expect(persist).toHaveLength(2);
+    expect(persist[0]).toMatchObject({ op: PersistOp.enum.insert, entity: 'bill' });
+    expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });
   });
 });
 

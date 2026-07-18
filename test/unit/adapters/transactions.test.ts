@@ -81,33 +81,6 @@ describe('modelToDb', () => {
   });
 });
 
-describe('patchToDb', () => {
-  it('emits only provided fields — absent fields never reach SET', () => {
-    expect(transactionAdapters.patchToDb({ amount: 50 })).toEqual({ amount: 50 });
-    expect(transactionAdapters.patchToDb({})).toEqual({});
-  });
-
-  it('flattens a classification correction', () => {
-    expect(transactionAdapters.patchToDb({ classification: { method: 'user', confidence: 1 } })).toEqual({
-      classificationMethod: 'user',
-      confidence: 1,
-    });
-  });
-
-  it('keeps falsy-but-provided values', () => {
-    expect(transactionAdapters.patchToDb({ description: 'x', date: '2026-01-01' })).toEqual({
-      description: 'x',
-      date: '2026-01-01',
-    });
-  });
-
-  it('maps note: value → set, empty string → null (clear), omitted → absent', () => {
-    expect(transactionAdapters.patchToDb({ note: 'memo' })).toEqual({ note: 'memo' });
-    expect(transactionAdapters.patchToDb({ note: '' })).toEqual({ note: null });
-    expect(transactionAdapters.patchToDb({})).not.toHaveProperty('note');
-  });
-});
-
 // Flat SQL row as returned by a full transaction SELECT (with JOINs)
 const sqlRow = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   id: 'tx-1',

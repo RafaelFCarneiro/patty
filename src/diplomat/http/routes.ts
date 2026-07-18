@@ -34,11 +34,12 @@ import {
   importCardStatement,
   updateCardTransaction,
 } from '../../controllers/creditCard/transaction.js';
-import type { Deps, RunEffects } from '../../controllers/deps.js';
+import type { Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
 import { getStatus } from '../../controllers/status.js';
 import { getSpendingSummary } from '../../controllers/summary.js';
+import { buildBulkResult } from '../../controllers/transaction/bulk.js';
 import { confirmTransaction } from '../../controllers/transaction/core.js';
 import { searchTransactions } from '../../controllers/transaction/read.js';
 import {
@@ -142,7 +143,12 @@ const RouteTag = {
  * `/api/openapi.json`; the MCP resource `fintrack://openapi` documents the same list without
  * ever mounting it — so there is nowhere for the two surfaces to drift apart (ADR-013 Phase A).
  */
-export const buildRouteDefinitions = (deps: Deps, version: string, runEffects: RunEffects): RouteDefinition[] => [
+export const buildRouteDefinitions = (
+  deps: Deps,
+  version: string,
+  runEffects: RunEffects,
+  runEffectsSequence: RunEffectsSequence,
+): RouteDefinition[] => [
   {
     method: 'get',
     path: '/api/health',
@@ -396,8 +402,13 @@ export const buildRouteDefinitions = (deps: Deps, version: string, runEffects: R
       const wireIn = parse(wireInAccounts.ImportAccountStatementSchema, req.body, reply);
       if (!wireIn) return reply;
       const model = accountAdapters.importAccountStatementWireInToModel(wireIn);
-      const result = await importAccountStatement(deps, model, TransactionSource.enum.import);
-      return send(reply, result.map(transactionAdapters.bulkResultToWireOut), 201);
+      const plan = importAccountStatement(deps, model, TransactionSource.enum.import);
+      const outcomes = await runEffectsSequence(
+        plan.lines,
+        (line) => () => plan.flowFor(line)().map(transactionAdapters.outcomeToDb),
+      );
+      const result = buildBulkResult(outcomes, plan.lines);
+      return reply.status(201).send(transactionAdapters.bulkResultToWireOut(result));
     },
   },
   {
@@ -442,8 +453,13 @@ export const buildRouteDefinitions = (deps: Deps, version: string, runEffects: R
       const wireIn = parse(wireInCreditCards.ImportCardStatementSchema, req.body, reply);
       if (!wireIn) return reply;
       const model = creditCardAdapters.importCardStatementWireInToModel(wireIn);
-      const result = await importCardStatement(deps, model, TransactionSource.enum.import);
-      return send(reply, result.map(transactionAdapters.bulkResultToWireOut), 201);
+      const plan = importCardStatement(deps, model, TransactionSource.enum.import);
+      const outcomes = await runEffectsSequence(
+        plan.lines,
+        (line) => () => plan.flowFor(line)().map(billAdapters.outcomeToDb).map(transactionAdapters.outcomeToDb),
+      );
+      const result = buildBulkResult(outcomes, plan.lines);
+      return reply.status(201).send(transactionAdapters.bulkResultToWireOut(result));
     },
   },
 
@@ -857,8 +873,14 @@ export const buildRouteDefinitions = (deps: Deps, version: string, runEffects: R
   },
 ];
 
-export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string, runEffects: RunEffects): void => {
-  const definitions = buildRouteDefinitions(deps, version, runEffects);
+export const registerRoutes = (
+  app: FastifyInstance,
+  deps: Deps,
+  version: string,
+  runEffects: RunEffects,
+  runEffectsSequence: RunEffectsSequence,
+): void => {
+  const definitions = buildRouteDefinitions(deps, version, runEffects, runEffectsSequence);
   mountRoutes(app, definitions);
 
   // Browser-facing HTML surface (ADR-013 Phase A item 2), not a JSON API contract — kept out of

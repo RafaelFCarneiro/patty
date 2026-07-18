@@ -31,6 +31,7 @@ import {
   cardErrors,
   type AddCardPurchase,
   type ImportCardStatement,
+  type ImportCardStatementItem,
   type UpdateCardTransaction,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
@@ -50,10 +51,9 @@ import {
   type TransactionSource,
   type TransactionView,
 } from '../../models/transaction.js';
-import type { BulkResult } from '../../logic/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveCardRef, resolveLegAccounts } from '../resolve.js';
-import { runStatementImport } from '../transaction/bulk.js';
+import { defaultStatementLines, type StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
 /** True when a leg of the transaction is the card's own `credit` account (ADR-010/ADR-020) — a
@@ -116,9 +116,9 @@ type CardPurchasePlan = {
   cardId: string;
 };
 
-/** Shared read-decide step for `addCardPurchase`/`addCardPurchaseViaRepo`: validates, resolves
- *  the card and target bill cycle (rejecting a paid one), classifies, and builds the transaction
- *  entity — `billId` still unset, resolved by each caller against `existingBill`. */
+/** `addCardPurchase`'s read-decide step: validates, resolves the card and target bill cycle
+ *  (rejecting a paid one), classifies, and builds the transaction entity — `billId` still unset,
+ *  resolved against `existingBill` below. */
 const planCardPurchase = (
   deps: Deps,
   input: AddCardPurchase,
@@ -194,39 +194,25 @@ export const addCardPurchase = (
     return ok({ persist, response });
   });
 
-/** Legacy repo-write path for `importCardStatement` (bulk import isn't converted until phase 3) —
- *  mirrors `controllers/account/transaction.ts`'s `addAccountMovementViaRepo`. Sets `billId` via
- *  `deps.bills.ensureOpen` at creation, same as the FC/IS path above. */
-const addCardPurchaseViaRepo = (
-  deps: Deps,
-  input: AddCardPurchase,
-  source: TransactionSource,
-): ResultAsync<ClassifiedUpsertResult, AppError> =>
-  safeTry(async function* () {
-    const { entity, classification, billPeriod, existingBill, cardId } = yield* planCardPurchase(deps, input, source);
-    const bill = existingBill ?? (await deps.bills.ensureOpen(cardId, billPeriod, deps.newId()));
-    // Re-check: `ensureOpen` can return an already-paid bill (a concurrent pay_bill landed between
-    // planCardPurchase's read and here, or between two concurrent ensureOpen calls on the same
-    // cycle) — this path isn't atomic the way the FC/IS batch is, so it must guard again.
-    yield* guard(!isBillPaid(bill), cardErrors.paidBillImmutable);
-
-    const { transaction, created } = await deps.transactions.create(
-      { ...entity, refs: { ...entity.refs, billId: bill.id } },
-      entity.tagNames,
-    );
-
-    const locale = await deps.locale();
-    return ok({ transaction: addLocalizedLabels(transaction, locale), created, classification });
-  });
-
+/**
+ * Import a credit-card statement (ADR-017 step 2 / ADR-022 step 3): single-source — every item is
+ * a purchase on the ONE card named in `input.card`. Defaults each line, then binds it to
+ * `addCardPurchase` — the same single-line flow `add_card_purchase` calls, unchanged — as a
+ * `flowFor` the shell runs through `runEffectsSequence`. Because the shell re-invokes each line's
+ * flow only after the previous line committed (ADR-022 decision 4), two lines landing on the same
+ * new bill cycle simply share it: the second line's `planCardPurchase` read sees the first line's
+ * bill already there — no within-batch dedup needed. This module only decides; it never applies a
+ * write itself.
+ */
 export const importCardStatement = (
   deps: Deps,
   input: ImportCardStatement,
   source: TransactionSource,
-): ResultAsync<BulkResult<AppError>, AppError> =>
-  runStatementImport(deps, input.items, input.rawInput, source, (d, line, src) =>
-    addCardPurchaseViaRepo(d, { ...line, card: input.card }, src),
-  );
+): StatementImportPlan<ImportCardStatementItem, ClassifiedUpsertResult> => {
+  const lines = defaultStatementLines(deps, input.items, input.rawInput);
+  const flowFor = (line: (typeof lines)[number]) => () => addCardPurchase(deps, { ...line, card: input.card }, source);
+  return { lines, flowFor };
+};
 
 type BillReassignment = { reassignedBillId: string | undefined; billPersistables: Persistable[] };
 

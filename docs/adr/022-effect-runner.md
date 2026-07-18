@@ -1,6 +1,8 @@
 # ADR-022: The imperative shell runs effects, not just a unit of work
 
-**Status:** Accepted (Migration plan steps 1–2 implemented — rename + on-acceptance docs, sequence-of-independent-units mode; steps 3–4 pending) ·
+**Status:** Accepted — migration complete (all four steps implemented: step 1 rename + on-acceptance docs; step 2
+sequence-of-independent-units mode; step 3 bulk import on the generic runner; step 4 the last `deps` write
+methods removed) ·
 **Date:** 2026-07-12 · **Deciders:** Rafael · Extends **ADR-021** (Functional Core / Imperative Shell).
 Renames and generalizes the shell's executor introduced there; sequences bulk import (ADR-021 phase 3c)
 through the generalized runner instead of a bespoke path.
@@ -120,10 +122,11 @@ being generalized is precisely the *generic* executor.
    (mechanical, behavior-preserving); add the ADR-021 amendment note and the `docs/architecture.md` update.
 2. **Add the sequence-of-independent-units mode** to `runEffects` (per-unit transaction + retry + partial-success
    + per-unit outcomes), with its own generic tests.
-3. **Phase 3c on the generic runner**: bulk import declares a sequence of per-line units (reusing the single
-   flows); delete `ensureOpen` / the via-repo variants / the within-batch dedup.
-4. **Phase 3d** (unchanged): remove the last `deps` write methods; final `docs/architecture.md` + ADR-021
-   completion.
+3. **Phase 3c on the generic runner** (implemented): bulk import declares a sequence of per-line units (reusing
+   the single flows); `ensureOpen` / the via-repo variants / the within-batch dedup deleted.
+4. **Phase 3d** (implemented): the last `deps` write methods removed — `TransactionsRepo.create` (bulk import's
+   last caller), `BillsRepo.ensureOpen`, and `TransactionsRepo.update`/`.delete` (grep-confirmed already
+   callerless since ADR-021 phase 2b); `docs/architecture.md` + ADR-021 updated to reflect completion.
 
 ## Action Items
 
@@ -131,4 +134,4 @@ being generalized is precisely the *generic* executor.
 2. [x] On acceptance: rename PR + canonical-doc reframe + `docs/architecture.md` update + ADR-021 amendment note +
    add this ADR to the index.
 3. [x] Implement the sequence-of-independent-units mode (`runEffectsSequence`), generically tested.
-4. [ ] Phase 3c: bulk import through the generic runner, then phase 3d (remove the last `deps` write methods).
+4. [x] Phase 3c: bulk import through the generic runner, then phase 3d (remove the last `deps` write methods).
