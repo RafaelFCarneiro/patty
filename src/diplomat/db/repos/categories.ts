@@ -14,7 +14,7 @@ export type BlockingReferences = { transactions: number; recurring: number; subC
 export type CategoriesRepo = {
   list: (options?: ListCategoriesOptions) => Promise<Category[]>;
   countReferences: (categoryId: string) => Promise<BlockingReferences>;
-  /** Version-carrying read (ADR-021) — for `deleteCategory`/`deleteSubCategory`, which need it to
+  /** Version-carrying read — for `deleteCategory`/`deleteSubCategory`, which need it to
    *  build a version-guarded `Persistable`. Shared by both, since a sub-category is a row in this
    *  same table. */
   findRawById: (categoryId: string) => Promise<CategoryVersion | null>;

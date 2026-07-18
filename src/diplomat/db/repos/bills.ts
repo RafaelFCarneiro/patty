@@ -55,8 +55,8 @@ export type BillsRepo = {
    *  `Persistable`s. */
   findAllByCard: (cardId: string) => Promise<RawBill[]>;
   /** Idempotent upsert-by-cycle: creates the cycle's bill `open` if none exists yet, else returns
-   *  the existing one. Used only by the still-repo-driven bulk-import path; the FC/IS
-   *  `addCardPurchase` expresses the same decision as a `Persistable` via `billApplier` instead. */
+   *  the existing one. Used only by the still-repo-driven bulk-import path; `addCardPurchase`
+   *  expresses the same decision as a `Persistable` via `billApplier` instead. */
   ensureOpen: (cardId: string, period: BillPeriod, newId: string) => Promise<Bill>;
 };
 

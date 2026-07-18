@@ -271,11 +271,11 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
   });
 
   it('the applier is purely mechanical — it writes exactly the row it is handed, never adapts it', async () => {
-    // ADR-021 follow-up: model→row adaptation (including baking in `INITIAL_VERSION` for a fresh
-    // insert) happens once, explicitly, at the diplomat handler (`accountAdapters.outcomeToDb`,
-    // called before `runEffects` ever sees the batch) — never inside `diplomat/db`. This suite
-    // calls `runEffects` directly, bypassing that handler-level step, so whatever `version` the
-    // test seeds here is exactly what lands in the row — proving `accountApplier` trusts its input
+    // model→row adaptation (including baking in `INITIAL_VERSION` for a fresh insert) happens
+    // once, explicitly, at the diplomat handler (`accountAdapters.outcomeToDb`, called before
+    // `runEffects` ever sees the batch) — never inside `diplomat/db`. This suite calls
+    // `runEffects` directly, bypassing that handler-level step, so whatever `version` the test
+    // seeds here is exactly what lands in the row — proving `accountApplier` trusts its input
     // rather than re-deriving it.
     const seed = newAccount({ version: 99 });
 

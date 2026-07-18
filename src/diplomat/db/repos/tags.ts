@@ -9,7 +9,7 @@ import { VersionConflict, versionedTableApplier, type EntityApplier } from '../e
 export type TagsRepo = {
   list: () => Promise<Tag[]>;
   findByName: (name: string) => Promise<Tag | null>;
-  /** Version-carrying read (ADR-021) — for `deleteTag`, which needs it to build a `Persistable`. */
+  /** Version-carrying read — for `deleteTag`, which needs it to build a `Persistable`. */
   findById: (id: string) => Promise<TagEntity | null>;
 };
 

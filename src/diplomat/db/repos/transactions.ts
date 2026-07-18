@@ -339,25 +339,18 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
 });
 
 /**
- * The transaction entity's `EntityApplier` (ADR-021) — hand-written rather than
- * `versionedTableApplier` (unlike `accounts.ts`'s `accountApplier`) because a transaction row's
- * storage shape has genuine extra mechanics beyond a plain `id`/`version` table: `insert` conflicts
- * on `idempotency_key` (not `id`); both `insert` and `update` upsert the referenced merchant — the
- * applier never assumes an update's merchant key already has a satisfying `merchants` row, even
- * though no current caller actually changes it on update — and attach/replace the row's
- * `transaction_tags`. This is still *persistence structure*, not business
- * logic — no bill/paid reasoning, exactly the repo's own former `create`/`update` mechanics,
- * relocated here so the domain (`controllers/account/transaction.ts`,
- * `controllers/account/transfer.ts`) can describe a transaction write as a `Persistable` instead of
- * calling this repo directly. Registered under `models/transaction.ts`'s `TRANSACTION_ENTITY_TAG`
- * at the composition root (`main.ts`). `model` arrives already row-shaped
- * (`adapters/transactions.ts`'s `entityToDb`, run via `outcomeToDb` before `runEffects` ever sees
- * the batch) — this applier only ever writes the row it's handed, never adapts one.
+ * The transaction entity's `EntityApplier` — hand-written rather than `versionedTableApplier`
+ * because a transaction row has genuine extra mechanics: `insert` conflicts on `idempotency_key`
+ * (not `id`); both `insert` and `update` upsert the referenced merchant — never assuming an
+ * update's merchant key already has a satisfying `merchants` row, even though no current caller
+ * actually changes it on update — and attach/replace the row's `transaction_tags`. Still
+ * persistence structure, not business logic — no bill/paid reasoning here. `model` arrives
+ * already row-shaped (adaptation happens upstream, before `runEffects` ever sees the batch), so
+ * this applier only ever writes the row it's handed, never adapts one.
  *
- * Both `insert` and `update` read the row back after writing (`fetchTx`/`fetchTxByIdempotencyKey`)
- * so a flow's idempotency-aware `response` can reflect the actually-persisted, display-joined view
- * (account/category names, the tag rows that actually matched by name) without a second read of
- * its own — mirroring exactly what the pre-ADR-021 repo's own `create`/`update` returned.
+ * Both `insert` and `update` read the row back after writing so a flow's idempotency-aware
+ * `response` can reflect the actually-persisted, display-joined view (account/category names, the
+ * tag rows that actually matched by name) without a second read of its own.
  */
 export const transactionApplier: EntityApplier = {
   insert: async (tx, model) => {

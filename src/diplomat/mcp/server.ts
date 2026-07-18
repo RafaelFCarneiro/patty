@@ -111,8 +111,8 @@ const jsonError = (e: AppError) => ({
 
 const fromResult = <T>(result: Result<T, AppError>) => result.match(json, jsonError);
 
-/** Shared by add_account_expense/add_account_income (ADR-016) — identical aside from which
- *  movement kind is being recorded. */
+/** Shared by add_account_expense/add_account_income — identical aside from which movement kind
+ *  is being recorded. */
 const addAccountMovementDescription = (movement: 'expense' | 'income'): string =>
   `Record ${movement === 'expense' ? 'an expense from' : 'income into'} a bank account / wallet — the ` +
   "account aggregate's movement entry point (ADR-016). Resolves the account and category by name; " +
@@ -121,7 +121,7 @@ const addAccountMovementDescription = (movement: 'expense' | 'income'): string =
   'stable key like "<date>-<description>-<amount>". Currency comes from the account, or the currency field ' +
   `(default USD). Omitting account records an unattached ${movement === 'expense' ? '(e.g. cash) expense' : 'income'}.`;
 
-/** Shared by import_card_statement/import_account_statement (ADR-017 step 2) — the per-item
+/** Shared by import_card_statement/import_account_statement — the per-item
  *  classification/idempotency/result-status contract is identical for both single-source importers. */
 const STATEMENT_IMPORT_RESULT_DESCRIPTION =
   'Each item is auto-classified and idempotent (key derived from date+description+amount when absent — ' +

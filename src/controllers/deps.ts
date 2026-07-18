@@ -36,13 +36,11 @@ export type Deps = {
 };
 
 /**
- * The imperative shell's capability to run a functional-core flow
- * (docs/functional-core-imperative-shell.md): invoke `flow`, execute the effects it returns, and
- * yield the flow's `response`. Not a field on `Deps` — `Deps` is handed to controllers, and a
- * `RunEffects` runner is a shell-only concern (only diplomat handlers call it, wrapping a
- * controller invocation); keeping the two separate means a controller can never reach for it and
- * apply its own writes. The concrete implementation (`runEffects`, bound to a `Db`) lives in
- * `diplomat/db` — this is just the shape the shell's edges (`diplomat/mcp`, `diplomat/http`)
- * depend on.
+ * The imperative shell's capability to run a functional-core flow (docs/functional-core-imperative-shell.md):
+ * invoke `flow`, execute the effects it returns, and yield the response. Not a field on `Deps` —
+ * `Deps` is handed to controllers, and this is shell-only (only diplomat handlers call it), so a
+ * controller can never reach for it and apply its own writes. The concrete implementation
+ * (`runEffects`, bound to a `Db`) lives in `diplomat/db`; this is just the shape
+ * `diplomat/mcp`/`diplomat/http` depend on.
  */
 export type RunEffects = <T>(flow: () => ResultAsync<FlowOutcome<T>, AppError>) => ResultAsync<T, AppError>;

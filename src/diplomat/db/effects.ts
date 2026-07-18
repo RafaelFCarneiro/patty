@@ -8,30 +8,23 @@ import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } fr
 import type { Db } from './driver.js';
 import { isForeignKeyConstraintViolation } from './sqliteErrors.js';
 
-// Total calls to `flow` in one `runEffects` run — the first attempt plus up to
-// (MAX_RUN_EFFECTS_ATTEMPTS - 1) retries on a version conflict, each re-invoking `flow` for a
-// fresh read → fresh decision (docs/functional-core-imperative-shell.md rule 4). Exported so
-// tests assert against the real policy instead of duplicating the literal.
+// A version conflict re-invokes `flow` for a fresh read → fresh decision
+// (docs/functional-core-imperative-shell.md rule 4), up to this many attempts total. Exported so
+// tests assert the real policy instead of duplicating the literal.
 export const MAX_RUN_EFFECTS_ATTEMPTS = 3;
 
-/** The transaction handle `db.transaction` hands its callback — inferred from `Db` itself so this
- *  file never names a drizzle-internal type directly. Exported so each entity's `EntityApplier`
- *  (which runs inside that same transaction) can type its methods against it. */
+/** The transaction handle `db.transaction` hands its callback — inferred from `Db` itself rather
+ *  than naming a drizzle-internal type directly. Exported so each `EntityApplier` (which runs
+ *  inside that same transaction) can type its methods against it. */
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 /**
  * What an entity module supplies so this generic shell can apply a `Persistable` tagged with its
- * entity, without this file ever naming that entity: the actual drizzle table op. `insert`/`update`
- * receive an already db-row-shaped `model` — the model→row adaptation (`modelToDb`) happens
- * upstream, at the MCP/REST handler that calls `runEffects` (e.g. `adapters/accounts.ts`'s
- * `persistableToDb`, run via `outcomeToDb` before the batch ever reaches here), not inside this
- * file or inside the applier: `diplomat/db` only ever writes the row it's handed, never adapts
- * one. Built once per entity (e.g. `diplomat/db/repos/accounts.ts`'s `accountApplier`) and
- * registered under that entity's own tag — see `ApplierRegistry`. `insert`/`update` take `unknown`
- * because this file has no entity-specific row type to name; the applier that receives it is the
- * one place that knows how to interpret it. Each method returns a `PersistOutcome` (models/
- * persistable.ts) — `applied` drives this file's own retry/conflict decision (rule 4); an applier
- * that has nothing else to report just returns `{ applied }`, e.g. `versionedTableApplier` below.
+ * entity, without this file ever naming that entity. `insert`/`update` receive an already
+ * db-row-shaped `model` — the model→row adaptation happens upstream, at the handler that calls
+ * `runEffects`, never here — so `unknown` is deliberate: this file has no entity-specific row
+ * type to name. Each method returns a `PersistOutcome`; `applied` drives this file's own
+ * retry/conflict decision (rule 4).
  */
 export type EntityApplier = {
   insert: (tx: Tx, model: unknown) => Promise<PersistOutcome>;
@@ -40,29 +33,21 @@ export type EntityApplier = {
 };
 
 /** Every entity tag a converted flow might produce a `Persistable` for, mapped to how to apply
- *  one. Assembled once at the composition root (`main.ts`) from each entity's own applier — this
- *  file only ever looks values up in it, never lists an entity itself. */
+ *  it — assembled once at the composition root; this file only ever looks values up in it, never
+ *  lists an entity itself. */
 export type ApplierRegistry = Record<string, EntityApplier>;
 
-/** A table shaped for `versionedTableApplier` below: an `id` + `version` column, by the exact
- *  property names every mutable table's row already uses (schema.ts). True for 8 of the 9
- *  mutable tables — `dashboards` keys on `name` instead, so it needs its own hand-written
- *  `EntityApplier` rather than this factory. */
+/** An `id` + `version` column shape, matching what 8 of the 9 mutable tables already use —
+ *  `dashboards` keys on `name` instead, so it needs its own hand-written `EntityApplier`. */
 type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteColumn };
 
 /**
- * Builds an `EntityApplier` for any table that follows the `id`/`version` convention — the
- * mechanics (insert with `onConflictDoNothing` scoped to the `id` conflict target only — so a
- * genuine violation of some other unique column on the table, e.g. `tags.name` or
- * `transactions.idempotencyKey`, surfaces as a real error instead of being silently swallowed as
- * if it were the same-id idempotent-retry case — `... SET ..., version = <read version + 1> WHERE
- * id = ? AND version = ?` — the new version computed right below in application code from the
- * row's own `version` field, never a SQL-side `version + 1` expression the database engine
- * evaluates on its own — delete under the same guard) are identical for every such table, so an
- * entity whose table fits this shape (most of them) never hand-writes its own applier; it just
- * calls `versionedTableApplier(itsTable)`. `model` still arrives already db-row-shaped
- * (`diplomat/db` never adapts — see `EntityApplier` above), so this only ever destructures and
- * writes it.
+ * Builds an `EntityApplier` for any table following the `id`/`version` convention. Two mechanics
+ * worth knowing: `insert`'s `onConflictDoNothing` is scoped to the `id` conflict target only, so a
+ * genuine violation of some other unique column (e.g. `tags.name`) still surfaces as a real error
+ * instead of being swallowed as a same-id retry; and the next `version` is computed here in
+ * application code from the row's own field, never a SQL-side `version + 1` the database
+ * evaluates on its own.
  */
 export const versionedTableApplier = <T extends VersionedTable>(table: T): EntityApplier => ({
   insert: async (tx, model) => {
@@ -88,20 +73,17 @@ export const versionedTableApplier = <T extends VersionedTable>(table: T): Entit
       const result = await tx.delete(table).where(and(eq(table.id, id), eq(table.version, version)));
       return { applied: (result.rowsAffected ?? 0) > 0 };
     } catch (cause) {
-      // A row referencing this one was inserted after the flow's own point-in-time read — the
-      // same "world changed since we read" condition a stale version reports, just surfaced by
-      // the FK check instead. Retrying re-invokes the flow for a fresh read/decision (rule 4),
-      // same as any other VersionConflict.
+      // A row referencing this one was inserted after the flow's read — the same "world changed"
+      // condition a stale version reports, just surfaced by the FK check instead.
       if (isForeignKeyConstraintViolation(cause)) throw new VersionConflict();
       throw cause;
     }
   },
 });
 
-/** Marks "roll back the whole batch and re-invoke the flow for a fresh read/decision" up through
- *  `db.transaction`'s rejection; caught by `applyBatch`, never leaks past `runEffects`. Thrown
- *  implicitly below for a versioned `update`/`delete` that affected zero rows. Exported so an
- *  `EntityApplier` can signal the same retry for its own non-version conflict (see
+/** Signals "roll back the whole batch and re-invoke the flow for a fresh read/decision" up
+ *  through `db.transaction`'s rejection; caught by `applyBatch`, never leaks past `runEffects`.
+ *  Exported so an `EntityApplier` can raise the same retry for its own non-version conflict (see
  *  `diplomat/db/repos/bills.ts`'s `billApplier`). */
 export class VersionConflict extends Error {}
 
@@ -115,10 +97,7 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
   const applier = resolveApplier(registry, p.entity);
   switch (p.op) {
     case PersistOp.enum.insert:
-      // onConflictDoNothing is the applier's own concern (e.g. a retried insert after an apply
-      // that actually committed is an idempotent no-op, not a version conflict) — inserts never
-      // retry here regardless of what an applier does internally; its outcome is only ever
-      // reported onward, never itself a reason to throw.
+      // Idempotent-duplicate handling is the applier's own concern — inserts never retry here.
       return applier.insert(tx, p.model);
     case PersistOp.enum.update: {
       const outcome = await applier.update(tx, p.model);
@@ -137,12 +116,9 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
   }
 };
 
-/** Applies the whole batch in one transaction, returning each persistable's own outcome
- *  (positional, parallel to `persist`) on success — empty on a version conflict, since the
- *  transaction has already rolled back and there is nothing to report. Any other failure
- *  propagates. An empty batch (a dry-run preview flow, e.g. `deleteCreditCard` without
- *  `confirm`) skips `db.transaction` entirely — nothing to write, and nothing that could
- *  version-conflict. */
+/** Applies the whole batch in one transaction, returning each outcome positionally parallel to
+ *  `persist` — empty on a version conflict, since the transaction already rolled back. An empty
+ *  batch (a dry-run preview flow) skips `db.transaction` entirely. */
 const applyBatch = async (
   db: Db,
   registry: ApplierRegistry,
@@ -164,9 +140,8 @@ const applyBatch = async (
 
 type Flow<T> = () => ResultAsync<FlowOutcome<T>, AppError>;
 
-/** Resolves a `FlowOutcome`'s `response` against the batch's apply outcomes — the plain value for
- *  the common case, or the result of calling the function an idempotency-aware flow handed back
- *  instead (rule 6). Sync — see `models/persistable.ts`'s `FlowOutcome` doc for why. */
+/** Resolves `FlowOutcome.response` against the batch's outcomes — the plain value for the common
+ *  case, or the result of calling the function an idempotency-aware flow handed back (rule 6). */
 const resolveResponse = <T>(response: T | ((outcomes: PersistOutcome[]) => T), outcomes: PersistOutcome[]): T =>
   typeof response === 'function' ? (response as (o: PersistOutcome[]) => T)(outcomes) : response;
 
@@ -182,15 +157,11 @@ const attempt = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>, attemptsLe
 /**
  * The generic effect runner (docs/functional-core-imperative-shell.md): runs `flow`, applies the
  * `persist` batch it returns in one `db.transaction` by dispatching each `Persistable` to the
- * `registry`'s applier for its entity, and returns `flow`'s `response`. This file has no
- * knowledge of any specific entity — no per-entity switch statement, no entity's
- * `modelToDb`/table import — only the `registry` (built once at the composition root) does. A
- * version-guarded op that affects zero rows rolls back the whole batch and re-invokes `flow` — a
- * fresh read, a fresh decision — up to `MAX_RUN_EFFECTS_ATTEMPTS` times, then surfaces the
- * generic `conflict` error. This is the single-atomic-unit mode — the "unit of work" mode.
- * `diplomat/db` is the only place that touches `Db` for a converted flow; controllers and
- * `diplomat/mcp`/`diplomat/http` see only the `RunEffects` function shape
- * (`controllers/deps.ts`).
+ * `registry`'s applier for its entity, and returns `flow`'s `response`. Entity-agnostic — only the
+ * `registry` (built once at the composition root) knows which entity is which. A version conflict
+ * rolls back the whole batch and re-invokes `flow`, up to `MAX_RUN_EFFECTS_ATTEMPTS` times, before
+ * surfacing the generic `conflict` error. This is the single-atomic-unit mode — the "unit of
+ * work" mode.
  */
 export const runEffects = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>): ResultAsync<T, AppError> =>
   attempt(db, registry, flow, MAX_RUN_EFFECTS_ATTEMPTS);

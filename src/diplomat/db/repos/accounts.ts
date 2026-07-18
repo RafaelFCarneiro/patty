@@ -11,7 +11,7 @@ export type AccountsRepo = {
   list: () => Promise<Account[]>;
   findById: (id: string) => Promise<Account | null>;
   findByName: (name: string) => Promise<Account | null>;
-  /** Version-carrying read (ADR-021) — for flows building an `update`/`delete` `Persistable`. */
+  /** Version-carrying read — for flows building an `update`/`delete` `Persistable`. */
   findRawById: (id: string) => Promise<AccountEntity | null>;
   /** Aggregated movement per account: transactions + transfers, both directions. */
   balanceParts: (accountId: string) => Promise<BalancePartsRow>;
@@ -102,13 +102,9 @@ export const accountsRepo = (db: Db): AccountsRepo => ({
 });
 
 /**
- * The account entity's `EntityApplier` (ADR-021) — how the generic `runEffects` (`diplomat/db/
- * effects.ts`) applies an account `Persistable` without that file ever naming "account" itself.
- * Registered under `models/account.ts`'s `ACCOUNT_ENTITY_TAG` at the composition root (`main.ts`).
- * `accounts` follows the `id`/`version` convention every mutable table but `dashboards` does, so
- * this is `versionedTableApplier(accounts)` rather than a hand-written insert/update/delete —
- * there's no account-specific mechanics left to write: the model→row adaptation happens upstream
- * (`adapters/accounts.ts`'s `outcomeToDb`, run by the MCP/REST handler before `runEffects` ever
- * sees the batch), so this applier only ever writes the row it's handed.
+ * The account entity's `EntityApplier` — how `runEffects` applies an account `Persistable`
+ * without ever naming "account" itself. `accounts` follows the `id`/`version` convention, so this
+ * is just `versionedTableApplier(accounts)` — model→row adaptation already happened upstream,
+ * before `runEffects` ever sees the batch, so this applier only ever writes the row it's handed.
  */
 export const accountApplier: EntityApplier = versionedTableApplier(accounts);
