@@ -347,9 +347,18 @@ instead of performing it; the diplomat shell **applies** it.
   outbox, notifications) is a named future effect kind — not built yet. A version-guarded persistence op that
   affects zero rows rolls back the whole batch and re-invokes `flow` — a fresh read, a fresh decision — up to
   a bounded number of attempts, then surfaces the generic `conflict` `AppError` (`models/error.ts`; no
-  business payload by design). This is `runEffects`'s **single-atomic-unit** mode — the only mode
-  implemented; a **sequence-of-independent-units** mode (per-unit transaction, per-unit retry, partial
-  success) is planned (ADR-022) but not built.
+  business payload by design). This is `runEffects`'s **single-atomic-unit** mode: one `persist` batch, one
+  transaction, all-or-nothing. `runEffectsSequence(db, registry, items, flowFor)` is the shell's second mode
+  (ADR-022): each item's flow — freshly built by `flowFor`, not invoked until the runner reaches that item —
+  runs through the same `attempt`/retry primitive as the atomic mode, so retry semantics never diverge
+  between the two. Each unit gets its **own transaction**, applied **in order**; item *i+1*'s flow is only
+  invoked once item *i* has committed (or been recorded as failed), so it reads whatever item *i* just wrote
+  — this is what lets bulk import's per-line flows reuse the single-transaction flows verbatim, with no
+  cross-unit coordination. A unit's own version conflict retries **only that unit**, bounded the same way as
+  the atomic mode; a unit's domain error, or its own exhausted retries, is recorded as `Err` and the sequence
+  **continues** to the next item — partial success. The runner returns one `SequenceOutcome<T>` (a plain
+  neverthrow `Result<T, AppError>`) per item, positionally parallel to `items`, so a caller shapes a
+  partial-success response without casting.
 - **Wiring**: `controllers/deps.ts` exports the `RunEffects` function type (`(flow) => ResultAsync<T, AppError>`)
   — the shape the shell's edges depend on — but it is **not** a field on `Deps`; `Deps` is handed to
   controllers, and a `RunEffects` runner is shell-only (only `diplomat/mcp`/`diplomat/http` handlers call it,
@@ -531,4 +540,4 @@ available alongside the server.
 - ADR-019: minimal transaction core — aggregates `.extend` the shared movement schema up, never `.omit` it down (step 1 [schema compose-up] and step 2 [logic re-homing] both implemented — complete)
 - ADR-020: transaction ownership by account type, not structural field-presence (revises ADR-017's union rule; refines ADR-019 PR-2 — implemented)
 - ADR-021: functional core / imperative shell for the write path — controllers return the write as data (a `persist` batch) instead of performing it; a generic versioned unit of work applies it (supersedes ADR-018)
-- ADR-022: the shell's executor is a generic effect runner (`runEffects`) rather than a DB-specific unit of work — persistence is one effect kind, response always produced, message dispatch a named future kind; generalized to run a single atomic unit or (planned) a sequence of independent units (renames/extends ADR-021)
+- ADR-022: the shell's executor is a generic effect runner (`runEffects`/`runEffectsSequence`) rather than a DB-specific unit of work — persistence is one effect kind, response always produced, message dispatch a named future kind; runs either a single atomic unit or a sequence of independent units (renames/extends ADR-021)
