@@ -15,7 +15,7 @@ Split the system into two parts:
   core **decides**. It is a (mostly) pure function from input + data to a **decision**: the response to return
   **and a description of the side effects to perform**. The core performs no writes and dispatches no messages.
 - **Imperative shell** — the boundary/infrastructure layer. It reads inputs, invokes the core, **executes** the
-  effects the core described — persistence, messaging — and returns the core's response.
+  effects the core described — persistence, message dispatch — and returns the core's response.
 
 The core says *what should happen*; the shell *makes it happen*. Persistence and dispatch are side effects that
 follow from domain decisions, so they belong to the shell — the component that can be swapped (a different
