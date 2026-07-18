@@ -1,9 +1,9 @@
 # ADR-022: The imperative shell runs effects, not just a unit of work
 
-**Status:** Accepted (step 1 implemented — rename + on-acceptance docs; steps 2–4 pending) · **Date:** 2026-07-12
-· **Deciders:** Rafael · Extends **ADR-021** (Functional Core / Imperative Shell). Renames and generalizes the
-shell's executor introduced there; sequences bulk import (ADR-021 phase 3c) through the generalized runner
-instead of a bespoke path.
+**Status:** Accepted (Migration plan step 1 implemented — rename + on-acceptance docs; steps 2–4 pending) ·
+**Date:** 2026-07-12 · **Deciders:** Rafael · Extends **ADR-021** (Functional Core / Imperative Shell).
+Renames and generalizes the shell's executor introduced there; sequences bulk import (ADR-021 phase 3c)
+through the generalized runner instead of a bespoke path.
 
 ## Context
 
@@ -127,7 +127,7 @@ being generalized is precisely the *generic* executor.
 
 ## Action Items
 
-1. [x] Review/accept this ADR (decision review — no implementation in this PR).
+1. [x] Review/accept this ADR — accepted alongside the Migration plan step 1 implementation in this PR.
 2. [x] On acceptance: rename PR + canonical-doc reframe + `docs/architecture.md` update + ADR-021 amendment note +
    add this ADR to the index.
 3. [ ] Implement the sequence mode, then phase 3c through it, then phase 3d.

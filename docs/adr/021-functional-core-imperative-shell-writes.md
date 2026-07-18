@@ -14,8 +14,10 @@ touch) · **Date:** 2026-07-12 ·
 **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill payment) and finally resolves the thread ADR-015
 opened. Adopts the principle documented in `docs/functional-core-imperative-shell.md` for every write flow.
 
-**Amendment (ADR-022):** the executor this ADR introduced (`withUnitOfWork`) is renamed to `runEffects` and
-reframed as a generic effect runner; "unit of work" survives only as the name of its single-atomic-unit mode.
+**Amendment (ADR-022):** the executor this ADR introduced (`withUnitOfWork`, `diplomat/db/unitOfWork.ts`) is
+renamed to `runEffects` (`diplomat/db/effects.ts`) and reframed as a generic effect runner; "unit of work"
+survives only as the name of its single-atomic-unit mode. The rest of this ADR is left as the historical record
+of the original decision and still refers to the pre-rename names throughout — see ADR-022 for the current ones.
 
 ## Context
 
