@@ -235,9 +235,8 @@ instead of performing it; the diplomat shell **applies** it.
   still repo-driven, not yet on ADR-021's version-guarded shell); either way the batch just carries the bill
   update alone, nothing to delete. If the bill itself was also concurrently deleted, that update's own version
   guard fails at apply time and the shell's retry resolves it to a clean `unknown_bill` instead of a 500 — no
-  throw needed for what would otherwise be a legitimate, if narrow, race. `BillsRepo` exposes
-  no write methods — only reads (e.g. `findById`) plus the still-repo-driven `ensureOpen`, which bulk import
-  uses until it converts.
+  throw needed for what would otherwise be a legitimate, if narrow, race. `BillsRepo` exposes only reads (e.g. `findById`) plus the
+  still-repo-driven `ensureOpen` upsert, which bulk import uses until it converts.
 - **Phase 3a — the simple entity CRUD flows, including two entity-agnostic cascade appliers and a two-entity
   batch pattern.** `update_account`/`delete_account` needed no new applier (`accountApplier` already existed,
   phase 1) — just a version-carrying read (`accountsRepo.findRawById`) the flows didn't have before. Three new
