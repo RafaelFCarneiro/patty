@@ -102,7 +102,8 @@ describing the effects. The boundary layer *is* the imperative shell.
 
 - **Flow (core) tests** assert on the returned effects + response — pure, no infrastructure. "Performing X
   produces an insert of A and a version-guarded update of B" is an assertion on data.
-- **The shell's engine** is tested once, generically: unit atomicity, version-conflict → discard → re-run,
-  outcome-dependent results, and — for the sequence granularity — per-unit retry and partial success.
+- **The shell's engine** is tested once, generically, per granularity it implements: unit atomicity and
+  version-conflict → discard → re-run for a single atomic unit; per-unit retry and partial success for a
+  sequence of independent units. Outcome-dependent results are tested either way.
 - Flow-specific atomicity / self-heal tests are **removed** — the conditions they guarded no longer exist,
   because the flow no longer executes its own effects.
