@@ -34,7 +34,7 @@ import {
   importCardStatement,
   updateCardTransaction,
 } from '../../controllers/creditCard/transaction.js';
-import type { Deps, UnitOfWork } from '../../controllers/deps.js';
+import type { Deps, RunEffects } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
 import { getStatus } from '../../controllers/status.js';
@@ -142,7 +142,7 @@ const RouteTag = {
  * `/api/openapi.json`; the MCP resource `fintrack://openapi` documents the same list without
  * ever mounting it — so there is nowhere for the two surfaces to drift apart (ADR-013 Phase A).
  */
-export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: UnitOfWork): RouteDefinition[] => [
+export const buildRouteDefinitions = (deps: Deps, version: string, runEffects: RunEffects): RouteDefinition[] => [
   {
     method: 'get',
     path: '/api/health',
@@ -203,7 +203,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       if (!wireIn) return reply;
       const flow = () =>
         createAccount(deps, accountAdapters.createWireInToModel(wireIn)).map(accountAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow), 201);
+      return send(reply, await runEffects(flow), 201);
     },
   },
   {
@@ -224,7 +224,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       if (!wireIn) return reply;
       const flow = () =>
         updateAccount(deps, accountAdapters.updateWireInToModel(wireIn)).map(accountAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow));
+      return send(reply, await runEffects(flow));
     },
   },
   {
@@ -242,7 +242,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const { name } = req.params as { name: string };
       const flow = () => deleteAccount(deps, name).map(accountAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow));
+      return send(reply, await runEffects(flow));
     },
   },
 
@@ -265,7 +265,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const wireIn = parse(wireInCategories.CreateCategorySchema, req.body, reply);
       if (!wireIn) return reply;
       const flow = () => createCategory(deps, categoryAdapters.wireInToModel(wireIn)).map(categoryAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow), 201);
+      return send(reply, await runEffects(flow), 201);
     },
   },
   {
@@ -297,7 +297,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const wireIn = parse(wireInCategories.CreateSubCategorySchema, req.body, reply);
       if (!wireIn) return reply;
       const flow = () => createSubCategory(deps, wireIn).map(categoryAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow), 201);
+      return send(reply, await runEffects(flow), 201);
     },
   },
   {
@@ -310,7 +310,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const { name } = req.params as { name: string };
       const flow = () => deleteCategory(deps, name).map(categoryAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow));
+      return send(reply, await runEffects(flow));
     },
   },
   {
@@ -323,7 +323,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const { name } = req.params as { name: string };
       const flow = () => deleteSubCategory(deps, name).map(categoryAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow));
+      return send(reply, await runEffects(flow));
     },
   },
 
@@ -346,7 +346,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const model = accountAdapters.addAccountMovementWireInToModel(wireIn);
       const flow = () =>
         addAccountExpense(deps, model, TransactionSource.enum.rest).map(transactionAdapters.outcomeToDb);
-      const result = await unitOfWork(flow);
+      const result = await runEffects(flow);
       return result.match(
         (value) => {
           const out = transactionAdapters.createResultToWireOut(value);
@@ -375,7 +375,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const model = accountAdapters.addAccountMovementWireInToModel(wireIn);
       const flow = () =>
         addAccountIncome(deps, model, TransactionSource.enum.rest).map(transactionAdapters.outcomeToDb);
-      const result = await unitOfWork(flow);
+      const result = await runEffects(flow);
       return result.match(
         (value) => {
           const out = transactionAdapters.createResultToWireOut(value);
@@ -421,7 +421,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
         addCardPurchase(deps, model, TransactionSource.enum.rest)
           .map(billAdapters.outcomeToDb)
           .map(transactionAdapters.outcomeToDb);
-      const result = await unitOfWork(flow);
+      const result = await runEffects(flow);
       return result.match(
         (value) => {
           const out = transactionAdapters.createResultToWireOut(value);
@@ -474,7 +474,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
         createCreditCard(deps, creditCardAdapters.wireInToModel(wireIn))
           .map(accountAdapters.outcomeToDb)
           .map(creditCardAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow), 201);
+      return send(reply, await runEffects(flow), 201);
     },
   },
   {
@@ -497,7 +497,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
           .map(accountAdapters.outcomeToDb)
           .map(billAdapters.outcomeToDb)
           .map(transactionAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow));
+      return send(reply, await runEffects(flow));
     },
   },
 
@@ -533,7 +533,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
         payBill(deps, { ...input, source: TransactionSource.enum.rest })
           .map(billAdapters.outcomeToDb)
           .map(transactionAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow));
+      return send(reply, await runEffects(flow));
     },
   },
   {
@@ -553,7 +553,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       if (!input) return reply;
       const flow = () =>
         revertBillPayment(deps, input).map(billAdapters.outcomeToDb).map(transactionAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow));
+      return send(reply, await runEffects(flow));
     },
   },
 
@@ -575,7 +575,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       if (!wireIn) return reply;
       const model = accountAdapters.transferWireInToModel(wireIn);
       const flow = () => createTransfer(deps, model, TransactionSource.enum.rest).map(transactionAdapters.outcomeToDb);
-      const result = await unitOfWork(flow);
+      const result = await runEffects(flow);
       return result.match(
         (value) => reply.status(value.created ? 201 : 200).send(value),
         (e) => reply.status(httpStatus(e)).send({ error: e }),
@@ -608,7 +608,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       if (!wireIn) return reply;
       const flow = () =>
         createRecurring(deps, recurringAdapters.wireInToModel(wireIn)).map(recurringAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow), 201);
+      return send(reply, await runEffects(flow), 201);
     },
   },
   {
@@ -628,7 +628,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
         return reply.status(422).send({ error: { code: 'validation', issues: ['invalid through date'] } });
       const flow = () =>
         applyDueRecurring(deps, q.data).map(recurringAdapters.outcomeToDb).map(transactionAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow));
+      return send(reply, await runEffects(flow));
     },
   },
 
@@ -655,7 +655,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
         updateAccountTransaction(deps, accountAdapters.updateAccountTransactionWireInToModel(wireIn)).map(
           transactionAdapters.outcomeToDb,
         );
-      return send(reply, await unitOfWork(flow));
+      return send(reply, await runEffects(flow));
     },
   },
   {
@@ -673,7 +673,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const { id } = req.params as { id: string };
       const confirm = (req.query as { confirm?: string }).confirm === 'true';
       const flow = () => deleteAccountTransaction(deps, { id, confirm }).map(transactionAdapters.outcomeToDb);
-      const result = (await unitOfWork(flow)).map(transactionAdapters.deleteResultToWireOut);
+      const result = (await runEffects(flow)).map(transactionAdapters.deleteResultToWireOut);
       return send(reply, result);
     },
   },
@@ -699,7 +699,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const model = creditCardAdapters.updateCardTransactionWireInToModel(wireIn);
       const flow = () =>
         updateCardTransaction(deps, model).map(billAdapters.outcomeToDb).map(transactionAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow));
+      return send(reply, await runEffects(flow));
     },
   },
   {
@@ -718,7 +718,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const confirm = (req.query as { confirm?: string }).confirm === 'true';
       const flow = () =>
         deleteCardTransaction(deps, { id, confirm }).map(billAdapters.outcomeToDb).map(transactionAdapters.outcomeToDb);
-      const result = (await unitOfWork(flow)).map(transactionAdapters.deleteResultToWireOut);
+      const result = (await runEffects(flow)).map(transactionAdapters.deleteResultToWireOut);
       return send(reply, result);
     },
   },
@@ -772,7 +772,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
       const input = parse(CreateTagSchema, req.body, reply);
       if (!input) return reply;
       const flow = () => createTag(deps, input.name).map(tagAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow), 201);
+      return send(reply, await runEffects(flow), 201);
     },
   },
   {
@@ -785,7 +785,7 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
     handler: async (req, reply) => {
       const { id } = req.params as { id: string };
       const flow = () => deleteTag(deps, id).map(tagAdapters.outcomeToDb);
-      return send(reply, await unitOfWork(flow));
+      return send(reply, await runEffects(flow));
     },
   },
 
@@ -857,8 +857,8 @@ export const buildRouteDefinitions = (deps: Deps, version: string, unitOfWork: U
   },
 ];
 
-export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string, unitOfWork: UnitOfWork): void => {
-  const definitions = buildRouteDefinitions(deps, version, unitOfWork);
+export const registerRoutes = (app: FastifyInstance, deps: Deps, version: string, runEffects: RunEffects): void => {
+  const definitions = buildRouteDefinitions(deps, version, runEffects);
   mountRoutes(app, definitions);
 
   // Browser-facing HTML surface (ADR-013 Phase A item 2), not a JSON API contract — kept out of

@@ -11,7 +11,7 @@ import type { Db } from '../driver.js';
 import { bills } from '../schema.js';
 import { isUniqueConstraintViolation } from '../sqliteErrors.js';
 import { fullTxSelect } from '../transactionSelect.js';
-import { VersionConflict, versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
+import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
 
 /** Includes `creditCardId`/`version` — for the FC/IS credit-card transaction flows' own
  *  read-decide step, which needs them to build a `Persistable`. Every other caller uses `toBill`

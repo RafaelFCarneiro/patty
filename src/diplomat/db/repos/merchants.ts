@@ -5,7 +5,7 @@ import type { MerchantCategoryEdge } from '../../../models/merchant.js';
 import { ClassificationMethod } from '../../../models/transaction.js';
 import type { Db } from '../driver.js';
 import { merchantCategory, merchants } from '../schema.js';
-import type { EntityApplier, Tx } from '../unitOfWork.js';
+import type { EntityApplier, Tx } from '../effects.js';
 
 const MatchRow = z.object({
   merchantKey: z.string(),
@@ -21,7 +21,7 @@ export type MerchantsRepo = {
 };
 
 /** Upsert-increment: insert weight=1 on first correction, increment on repeat. Only called from
- *  `merchantCategoryApplier.insert` below, inside `withUnitOfWork`'s own transaction (`Tx`). */
+ *  `merchantCategoryApplier.insert` below, inside `runEffects`'s own transaction (`Tx`). */
 const upsertCategoryWeight = async (db: Tx, merchantKey: string, categoryId: string): Promise<void> => {
   await db.insert(merchants).values({ key: merchantKey }).onConflictDoNothing();
   await db

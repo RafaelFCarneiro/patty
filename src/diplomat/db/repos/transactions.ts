@@ -23,7 +23,7 @@ import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
 import { merchants, tags, transactionTags, transactions } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
-import type { EntityApplier, Tx } from '../unitOfWork.js';
+import type { EntityApplier, Tx } from '../effects.js';
 
 // search_transactions' includeTotal COUNT(*) row — decoded like every other SQL row (ADR
 // "decode at the boundary" invariant), not trusted on the strength of a type parameter alone.
@@ -32,8 +32,8 @@ import type { EntityApplier, Tx } from '../unitOfWork.js';
 // being exported as a wire/db "storage contract" with no second consumer.
 const SearchCountRowSchema = z.object({ count: z.number().int() });
 
-// `Db | Tx`: every helper below also runs inside `transactionApplier`'s unit-of-work transaction
-// (ADR-021), so each accepts either the top-level `Db` handle or the `Tx` a `db.transaction`
+// `Db | Tx`: every helper below also runs inside `transactionApplier`'s `runEffects` transaction,
+// so each accepts either the top-level `Db` handle or the `Tx` a `db.transaction`
 // callback receives — the same query-builder surface (select/insert/update/delete/all) either way.
 type Executor = Db | Tx;
 
@@ -351,7 +351,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
  * `controllers/account/transfer.ts`) can describe a transaction write as a `Persistable` instead of
  * calling this repo directly. Registered under `models/transaction.ts`'s `TRANSACTION_ENTITY_TAG`
  * at the composition root (`main.ts`). `model` arrives already row-shaped
- * (`adapters/transactions.ts`'s `entityToDb`, run via `outcomeToDb` before `unitOfWork` ever sees
+ * (`adapters/transactions.ts`'s `entityToDb`, run via `outcomeToDb` before `runEffects` ever sees
  * the batch) — this applier only ever writes the row it's handed, never adapts one.
  *
  * Both `insert` and `update` read the row back after writing (`fetchTx`/`fetchTxByIdempotencyKey`)

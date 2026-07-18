@@ -38,7 +38,7 @@ const account = (overrides: Partial<Account> = {}): Account => ({
 });
 
 /** Deliberately sync, matching `FlowOutcome.response`'s own (sync-only) contract and
- *  `unitOfWork.ts`'s real `resolveResponse` — `withUnitOfWork` never awaits it, so a test helper
+ *  `effects.ts`'s real `resolveResponse` — `runEffects` never awaits it, so a test helper
  *  that did would mask a flow accidentally returning an async response instead of failing on it. */
 const resolveResponse = <T>(outcome: FlowOutcome<T>, outcomes: PersistOutcome[]): T => {
   const { response } = outcome;

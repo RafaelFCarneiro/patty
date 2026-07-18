@@ -36,13 +36,13 @@ export type Deps = {
 };
 
 /**
- * The imperative shell's capability to run a functional-core flow (ADR-021 /
- * docs/functional-core-imperative-shell.md): invoke `flow`, apply the `persist` batch it returns
- * in one versioned unit of work, and yield the flow's `response`. Not a field on `Deps` — `Deps`
- * is handed to controllers, and a `UnitOfWork` runner is a shell-only concern (only diplomat
- * handlers call it, wrapping a controller invocation); keeping the two separate means a
- * controller can never reach for it and apply its own writes. The concrete implementation
- * (`withUnitOfWork`, bound to a `Db`) lives in `diplomat/db` — this is just the shape the shell's
- * edges (`diplomat/mcp`, `diplomat/http`) depend on.
+ * The imperative shell's capability to run a functional-core flow
+ * (docs/functional-core-imperative-shell.md): invoke `flow`, execute the effects it returns, and
+ * yield the flow's `response`. Not a field on `Deps` — `Deps` is handed to controllers, and a
+ * `RunEffects` runner is a shell-only concern (only diplomat handlers call it, wrapping a
+ * controller invocation); keeping the two separate means a controller can never reach for it and
+ * apply its own writes. The concrete implementation (`runEffects`, bound to a `Db`) lives in
+ * `diplomat/db` — this is just the shape the shell's edges (`diplomat/mcp`, `diplomat/http`)
+ * depend on.
  */
-export type UnitOfWork = <T>(flow: () => ResultAsync<FlowOutcome<T>, AppError>) => ResultAsync<T, AppError>;
+export type RunEffects = <T>(flow: () => ResultAsync<FlowOutcome<T>, AppError>) => ResultAsync<T, AppError>;

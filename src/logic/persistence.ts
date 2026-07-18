@@ -55,7 +55,7 @@ export const lastOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
 
 /**
  * Builds an entity's `persistableToDb`/`outcomeToDb` pair from just its own `modelToDb` — the
- * diplomat-edge counterpart to `diplomat/db/unitOfWork.ts`'s `versionedTableApplier`: every entity's
+ * diplomat-edge counterpart to `diplomat/db/effects.ts`'s `versionedTableApplier`: every entity's
  * adapter followed the same op-switch shape (no-op on a foreign entity tag; `insert` bakes in
  * `INITIAL_VERSION` before shaping the row; `update` shapes the already-versioned model; `delete`
  * carries no model to shape) by hand, so the shape itself moved here once, entity-agnostic like the

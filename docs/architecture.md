@@ -79,7 +79,7 @@ These three live with the domain entity in `models/`, not scattered across contr
   - `dbToModel`
 - In call sites, prefer namespace imports for clarity, e.g. `import * as transactionAdapters from '../adapters/transactions.js'` then `transactionAdapters.modelToDb(...)`.
 
-## Write path: functional core / imperative shell (ADR-021)
+## Write path: functional core / imperative shell (ADR-021/ADR-022)
 
 **Current state:** every write flow is converted except **bulk statement import**, which still drives its own
 persistence via injected repo write methods (`deps.transactions.create`); those write methods are removed once it
@@ -111,11 +111,11 @@ instead of performing it; the diplomat shell **applies** it.
   response is that same model — no stripping needed.
 - **The model→row adaptation happens once, explicitly, at the diplomat handler — never inside `diplomat/db`.**
   A converted controller's `Persistable`s carry domain models (`Account`/`AccountEntity`); by the time
-  `withUnitOfWork` applies them, they must already be db rows. The MCP/REST handler that calls `unitOfWork`
+  `runEffects` applies them, they must already be db rows. The MCP/REST handler that calls `runEffects`
   does that conversion itself, mapping the controller's `FlowOutcome` through the entity's own `outcomeToDb`
   (`adapters/accounts.ts`, built from just `modelToDb` via `logic/persistence.ts`'s `entityDbAdapter` — see
-  below) *before* handing the flow to `unitOfWork` — e.g.
-  `createAccount(deps, model).map(accountAdapters.outcomeToDb)`. `unitOfWork(flow)` itself is still called
+  below) *before* handing the flow to `runEffects` — e.g.
+  `createAccount(deps, model).map(accountAdapters.outcomeToDb)`. `runEffects(flow)` itself is still called
   with one argument, exactly as before; only what `flow` produces changed. This keeps `modelToDb` calls
   where the rest of the codebase already expects adapter calls to live — at the boundary, explicit at the
   call site — rather than hidden inside `diplomat/db`.
@@ -134,18 +134,18 @@ instead of performing it; the diplomat shell **applies** it.
   `paymentTransactionId: undefined` (leave the column unchanged) to mean something different from `null`
   (clear it) — the uniform factory can't express that asymmetry, so `bills` keeps its own hand-written
   `persistableToDb`/`outcomeToDb`, unchanged by this factory.
-- **`EntityApplier` / `ApplierRegistry`** (`src/diplomat/db/unitOfWork.ts`): **entity-agnostic** — the generic
+- **`EntityApplier` / `ApplierRegistry`** (`src/diplomat/db/effects.ts`): **entity-agnostic** — the generic
   engine dispatches an already row-shaped `Persistable` to `registry[p.entity]` and calls that applier's
   `insert`/`update`/`delete`; it never names a specific entity, never imports a specific entity's `modelToDb`
   adapter or drizzle table, and — critically — never needs a new `case` as more entities convert. The
   `ApplierRegistry` (`Record<string, EntityApplier>`) is assembled once, at the composition root (`main.ts`,
   `test/integration/app-builder.ts`), from each entity's applier keyed by its own tag constant, and bound into
-  the `UnitOfWork` closure alongside `Db`.
-- **`versionedTableApplier`** (`src/diplomat/db/unitOfWork.ts`): once the model→row adaptation moved to the
+  the `RunEffects` closure alongside `Db`.
+- **`versionedTableApplier`** (`src/diplomat/db/effects.ts`): once the model→row adaptation moved to the
   handler (above), an `EntityApplier`'s `insert`/`update`/`delete` became pure mechanics — cast the row, run
   `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?` (the new version computed in
   application code from the row's own `version` field — never a SQL-side `version + 1` expression; same rule
-  as `withUnitOfWork` below) — identical for any table keyed by an `id` column with a `version` column, which
+  as `runEffects` below) — identical for any table keyed by an `id` column with a `version` column, which
   is 8 of the 9 mutable tables (`dashboards` keys on `name` instead). Rather than hand-write that per entity,
   `versionedTableApplier(table)` builds a complete `EntityApplier` from just the drizzle table reference —
   `diplomat/db/repos/accounts.ts`'s `accountApplier` is `versionedTableApplier(accounts)`, a one-liner. An
@@ -176,7 +176,7 @@ instead of performing it; the diplomat shell **applies** it.
   recognizes exactly that one violation (via `LibsqlError.extendedCode === 'SQLITE_CONSTRAINT_UNIQUE'` — a
   bill's `id` collision never reaches this point, since `onConflictDoNothing` already absorbs it, so any other
   unique-constraint violation on a bill insert can only be this one) and rethrows
-  it as `withUnitOfWork`'s own `VersionConflict` — exported from `diplomat/db/unitOfWork.ts` for exactly this
+  it as `runEffects`'s own `VersionConflict` — exported from `diplomat/db/effects.ts` for exactly this
   case — rolling back the whole batch and re-invoking the flow (rule 4): a fresh read of `findByCycle` now sees
   the winner's row, and the domain emits a version-guarded *touch* of it instead of a second insert. Any other
   error still propagates unchanged. This is the only entity whose `insert` needs anything beyond the generic
@@ -186,7 +186,7 @@ instead of performing it; the diplomat shell **applies** it.
   landed (`applied`) or was skipped as an idempotent duplicate, plus the entity's own already-decoded `read` of
   what is now actually persisted (e.g. the existing row on a duplicate). A `FlowOutcome.response` is normally
   just the plain, core-derived value; an idempotency-aware flow instead hands back a **pure, sync** function of
-  the batch's `PersistOutcome[]`, which `withUnitOfWork` calls once applied — `response` stays data-shaping
+  the batch's `PersistOutcome[]`, which `runEffects` calls once applied — `response` stays data-shaping
   only, deliberately never a place a flow performs I/O of its own (rule 1). `add_account_expense`/
   `add_account_income`/`create_transfer`'s `created` flag is the first user; this is the mechanism bulk import
   (phase 3) reuses for its own per-item created/duplicate outcomes. A flow that needs a *further* write (e.g.
@@ -211,7 +211,7 @@ instead of performing it; the diplomat shell **applies** it.
   deliberately avoids "response" — these build/format a model, not an HTTP/MCP response; a further envelope
   around the shell's outcome is genuine *controller* orchestration when one is needed, not something to push
   into `logic/` or an adapter (an adapter can't do it: `created` only exists inside the `PersistOutcome` the
-  flow's own `response` closure sees, never after `unitOfWork` resolves, which is the only point an adapter
+  flow's own `response` closure sees, never after `runEffects` resolves, which is the only point an adapter
   could run). Each of these is `purry`'d (data-last curried on the non-`outcomes` args — `docs/code-quality.md`'s
   dual-calling convention, same as `addLocalizedLabels`), so e.g. `buildUpsertResult(classification, locale)`
   **is** the `(outcomes) => T` function `FlowOutcome.response` wants — every converted flow assigns it directly,
@@ -336,20 +336,25 @@ instead of performing it; the diplomat shell **applies** it.
   identical gap still exists in `add_card_purchase` (its own `planCardPurchase` uses
   `classification.merchantKey` as-is, with no fallback) — the FC/IS conversion (phase 2b) deliberately left this
   behavior unchanged; tracked as [#115](https://github.com/RafaelFCarneiro/fintrack/issues/115).
-- **`withUnitOfWork`** (`src/diplomat/db/unitOfWork.ts`, `diplomat/db` — the only place that touches `Db` for a
-  converted flow): `withUnitOfWork(db, registry, flow)` invokes `flow`, applies the returned `persist` batch in
-  one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry` (insert
-  honors `onConflictDoNothing`, left to each applier's own discretion; `update`/`delete` apply
+- **`runEffects`** (`src/diplomat/db/effects.ts`, `diplomat/db` — the only place that touches `Db` for a
+  converted flow) is the shell's generic **effect runner** (ADR-022): `runEffects(db, registry, flow)`
+  invokes `flow` and executes the effects it returns. Effect kinds: **persistence** — the `persist` batch,
+  applied in one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry`
+  (insert honors `onConflictDoNothing`, left to each applier's own discretion; `update`/`delete` apply
   `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?`, with the new version computed in
   application code from the row's `version` — never an opaque `version + 1` SQL expression the database
-  evaluates on its own), and returns `flow`'s `response`. A version-guarded op that affects zero rows rolls
-  back the whole batch and re-invokes `flow` — a fresh read, a fresh decision — up to a bounded number of
-  attempts, then surfaces the generic `conflict` `AppError` (`models/error.ts`; no business payload by design).
-- **Wiring**: `controllers/deps.ts` exports the `UnitOfWork` function type (`(flow) => ResultAsync<T, AppError>`)
+  evaluates on its own); **response** — `flow`'s returned value, always produced. Message dispatch (an
+  outbox, notifications) is a named future effect kind — not built yet. A version-guarded persistence op that
+  affects zero rows rolls back the whole batch and re-invokes `flow` — a fresh read, a fresh decision — up to
+  a bounded number of attempts, then surfaces the generic `conflict` `AppError` (`models/error.ts`; no
+  business payload by design). This is `runEffects`'s **single-atomic-unit** mode — the only mode
+  implemented; a **sequence-of-independent-units** mode (per-unit transaction, per-unit retry, partial
+  success) is planned (ADR-022) but not built.
+- **Wiring**: `controllers/deps.ts` exports the `RunEffects` function type (`(flow) => ResultAsync<T, AppError>`)
   — the shape the shell's edges depend on — but it is **not** a field on `Deps`; `Deps` is handed to
-  controllers, and a `UnitOfWork` runner is shell-only (only `diplomat/mcp`/`diplomat/http` handlers call it,
+  controllers, and a `RunEffects` runner is shell-only (only `diplomat/mcp`/`diplomat/http` handlers call it,
   wrapping a controller invocation), so a controller can never reach for it and apply its own writes.
-  `main.ts` (and `test/integration/app-builder.ts`) construct the one `UnitOfWork` bound to the real `Db` and
+  `main.ts` (and `test/integration/app-builder.ts`) construct the one `RunEffects` bound to the real `Db` and
   the `ApplierRegistry`, and thread it alongside `deps` through `connectStdio`/`buildMcpServer`/
   `buildHttpApp`/`registerRoutes`/`registerMcpRoute` to the handlers that call a converted controller.
 
@@ -358,7 +363,8 @@ instead of performing it; the diplomat shell **applies** it.
 Database: encrypted libSQL file (`fintrack.db`) opened via `@libsql/client` (async) with `drizzle-orm/libsql`. Schema defined in `src/diplomat/db/schema.ts`; migrations generated by `drizzle-kit` and applied at startup via `migrate()`. Key `from @napi-rs/keyring` (ADR-005); `FINTRACK_DB_KEY` env var overrides for CI/headless.
 
 Every mutable entity table below also carries `version INTEGER NOT NULL DEFAULT 0` (not shown per-line) —
-the optimistic-concurrency token for the generic versioned unit of work (ADR-021 § Write path below).
+the optimistic-concurrency token `runEffects` uses in its versioned unit-of-work mode (ADR-021 § Write path
+below; ADR-022).
 `currencies`, `merchants`, `merchant_category`, and `transaction_tags` do not — they are reference/join tables,
 not aggregates a flow returns as a `Persistable`.
 
@@ -430,7 +436,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     `create_credit_card`/`delete_credit_card`, and the recurring flows `create_recurring`/
     `apply_due_recurring`).** See § Write path above. A
     converted controller's `deps` never receives a write method it calls directly for that flow — it builds one
-    or more `Persistable`s and returns them in `persist`; only `withUnitOfWork` (`diplomat/db`, invoked from the
+    or more `Persistable`s and returns them in `persist`; only `runEffects` (`diplomat/db`, invoked from the
     MCP/REST handler) touches `Db`. The unconverted bulk-import flow (phase 3c) is
     unaffected and keeps calling its `deps.transactions.create` write method exactly as before — this
     invariant applies per-flow, not repo-wide, until phase 3 finishes the migration. `deps.<x>.create/update/
@@ -443,7 +449,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     `deps.transactions.create` is the one write method still standing, since bulk import (phase 3c) is still its
     caller. `AccountsRepo.create`/`CreditCardsRepo.createWithAccount` were removed too —
     integration tests seeding fixture accounts/cards switched to raw drizzle inserts
-    (`test/integration/db/unitOfWork.test.ts`'s `insertAccount`/`insertCreditCardWithAccount`) rather than keeping
+    (`test/integration/db/effects.test.ts`'s `insertAccount`/`insertCreditCardWithAccount`) rather than keeping
     a production write method alive solely for test convenience. Two documented transitional duplications, both
     still repo-driven because their caller
     (`importAccountStatement`/`importCardStatement`, bulk import — phase 3c) needs an already-applied result per
@@ -525,3 +531,4 @@ available alongside the server.
 - ADR-019: minimal transaction core — aggregates `.extend` the shared movement schema up, never `.omit` it down (step 1 [schema compose-up] and step 2 [logic re-homing] both implemented — complete)
 - ADR-020: transaction ownership by account type, not structural field-presence (revises ADR-017's union rule; refines ADR-019 PR-2 — implemented)
 - ADR-021: functional core / imperative shell for the write path — controllers return the write as data (a `persist` batch) instead of performing it; a generic versioned unit of work applies it (supersedes ADR-018)
+- ADR-022: the shell's executor is a generic effect runner (`runEffects`) rather than a DB-specific unit of work — persistence is one effect kind, response always produced, message dispatch a named future kind; generalized to run a single atomic unit or (planned) a sequence of independent units (renames/extends ADR-021)

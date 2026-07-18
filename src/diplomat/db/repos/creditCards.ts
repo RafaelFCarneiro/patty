@@ -4,7 +4,7 @@ import { CreditCardSchema, type CreditCard, type CreditCardEntity } from '../../
 import type { CreditCardRow } from '../../../wire/db/creditCards.js';
 import type { Db } from '../driver.js';
 import { creditCards } from '../schema.js';
-import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
+import { versionedTableApplier, type EntityApplier } from '../effects.js';
 import { correlatedToCard } from './transactions.js';
 
 const toCard = (row: CreditCardRow): CreditCard =>

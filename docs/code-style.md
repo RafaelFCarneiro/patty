@@ -88,7 +88,7 @@ that isn't in scope for your change just because you're touching the file.
 A converted controller still composes with `safeTry`/`guard`/`okOr` exactly as before — only the last step
 changes: instead of `await`ing a repo write and returning the written row, it builds the write as a typed
 `Persistable` (`models/persistable.ts`) via the `logic/persistence.ts` builders, and returns it alongside the
-response, for the diplomat shell's `withUnitOfWork` (`diplomat/db/unitOfWork.ts`) to apply:
+response, for the diplomat shell's `runEffects` (`diplomat/db/effects.ts`) to apply:
 
 ```ts
 // ✅ DO — the core decides and returns the write as data; it never calls a repo write method
@@ -103,10 +103,10 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
   })
 
 // the diplomat handler (MCP tool / REST route) adapts model → row explicitly, right here, before
-// unitOfWork ever sees the batch — this is the shell applying the effect
+// runEffects ever sees the batch — this is the shell applying the effect
 async (args) => {
   const flow = () => createAccount(deps, accountAdapters.createWireInToModel(args)).map(accountAdapters.outcomeToDb)
-  return fromResult(await unitOfWork(flow))
+  return fromResult(await runEffects(flow))
 }
 
 // ❌ DON'T — the core performing its own write (the pre-ADR-021 shape; fine for an unconverted flow, but
@@ -136,22 +136,22 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   or returns. `update`/`delete` are different: `version` is the value the core actually read, so it's real
   data the model carries (`AccountEntity` — `Account` + `version`).
 - **The `modelToDb` adaptation happens once, explicitly, at the diplomat handler — never inside `diplomat/db`.**
-  The handler that calls `unitOfWork` maps the controller's `FlowOutcome` through the entity's own
-  `outcomeToDb` (`adapters/accounts.ts`) *before* handing it to `unitOfWork`, converting every `Persistable`'s
-  domain-shaped `model` into a db row (baking in `INITIAL_VERSION` for an insert). By the time `withUnitOfWork`
+  The handler that calls `runEffects` maps the controller's `FlowOutcome` through the entity's own
+  `outcomeToDb` (`adapters/accounts.ts`) *before* handing it to `runEffects`, converting every `Persistable`'s
+  domain-shaped `model` into a db row (baking in `INITIAL_VERSION` for an insert). By the time `runEffects`
   or the entity's `EntityApplier` (`diplomat/db/repos/accounts.ts`'s `accountApplier`) sees a `Persistable`, its
   `model` is already a row — the applier only ever writes it, never adapts it. This is the boundary-adaptation
   rule from earlier in this doc ("diplomats adapt `wire/in -> model` before controller calls and `model ->
   wire/out` after") extended one step further: the same handler also adapts `model -> db row` between the
   controller and the shell.
-- **The shell's generic engine (`diplomat/db/unitOfWork.ts`) never names a specific entity.** It dispatches
+- **The shell's generic engine (`diplomat/db/effects.ts`) never names a specific entity.** It dispatches
   each already-row-shaped `Persistable` to `registry[p.entity]` — an `EntityApplier` (just the drizzle table
   op, e.g. `tx.insert(accounts).values(row)`) that lives beside that entity's other persistence code. The
-  `ApplierRegistry` is assembled once at the composition root (`main.ts`); `withUnitOfWork` itself only ever
+  `ApplierRegistry` is assembled once at the composition root (`main.ts`); `runEffects` itself only ever
   calls generic `applier.insert/update/delete` — never an `if (entity === 'account')`, and never a call into
   `modelToDb`.
 - **Don't hand-write an `EntityApplier` for a table that already fits the `id`/`version` convention** — call
-  `versionedTableApplier(table)` (`diplomat/db/unitOfWork.ts`) instead. `accountApplier` is
+  `versionedTableApplier(table)` (`diplomat/db/effects.ts`) instead. `accountApplier` is
   `versionedTableApplier(accounts)`, nothing more: once the model→row adaptation moved to the handler (above),
   an applier's `insert`/`update`/`delete` became identical mechanics for every table shaped that way (cast the
   row, write it, guard on `version`). Only hand-write a custom `EntityApplier` for a table that doesn't fit —

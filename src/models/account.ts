@@ -42,9 +42,9 @@ export type Account = z.infer<typeof AccountSchema>;
 // the optimistic-concurrency `version` token. Never sent over the wire — kept off `AccountSchema`
 // itself so every existing account-returning flow (which reuses `AccountSchema` as its wire/out
 // shape) stays unchanged. Only flows that build `Persistable`s and `adapters/accounts.ts`'s
-// model→row adaptation (`modelToDb`/`persistableToDb`) speak `AccountEntity` — the unit-of-work
-// applier itself doesn't: by the time a batch reaches `diplomat/db`, it's already been adapted to
-// a plain row (`versionedTableApplier` in `diplomat/db/unitOfWork.ts` is entity-agnostic).
+// model→row adaptation (`modelToDb`/`persistableToDb`) speak `AccountEntity` — the applier itself
+// doesn't: by the time a batch reaches `diplomat/db`, it's already been adapted to a plain row
+// (`versionedTableApplier` in `diplomat/db/effects.ts` is entity-agnostic).
 export const AccountEntitySchema = AccountSchema.extend({
   version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
 });

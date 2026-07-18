@@ -3,7 +3,7 @@ import * as categoryAdapters from '../../../adapters/categories.js';
 import type { Category, CategoryVersion } from '../../../models/category.js';
 import type { Db } from '../driver.js';
 import { categories, recurringRules, transactions } from '../schema.js';
-import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
+import { versionedTableApplier, type EntityApplier } from '../effects.js';
 
 export type ListCategoriesOptions = {
   orderBy?: 'name';

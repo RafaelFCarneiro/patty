@@ -39,7 +39,7 @@ export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Acco
 
 /** First mover for ADR-021 / docs/functional-core-imperative-shell.md: a functional-core flow —
  *  it decides and returns the write as data (`persist`) instead of performing it. The imperative
- *  shell (the MCP/REST handler's `outcomeToDb` + `withUnitOfWork`) adapts and applies the batch
+ *  shell (the MCP/REST handler's `outcomeToDb` + `runEffects`) adapts and applies the batch
  *  and returns `response`. A new account has no `version` to decide (that's the shell's own
  *  structural constant, `INITIAL_VERSION` in `models/persistable.ts`) — the model built here, and
  *  the response, are both the plain wire-shaped `Account`. */

@@ -36,7 +36,7 @@ import {
   importCardStatement,
   updateCardTransaction,
 } from '../../controllers/creditCard/transaction.js';
-import type { Deps, UnitOfWork } from '../../controllers/deps.js';
+import type { Deps, RunEffects } from '../../controllers/deps.js';
 import { applyDueRecurring, createRecurring, listRecurring } from '../../controllers/recurring.js';
 import { createTag, deleteTag, listTags } from '../../controllers/tags.js';
 import { getSpendingSummary } from '../../controllers/summary.js';
@@ -128,10 +128,10 @@ const STATEMENT_IMPORT_RESULT_DESCRIPTION =
   're-importing is safe). Returns a per-item status: created, needs_review (low confidence — confirm ' +
   'categories with the user), duplicate, or error.';
 
-export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWork): McpServer => {
+export const buildMcpServer = (deps: Deps, version: string, runEffects: RunEffects): McpServer => {
   const server = new McpServer({ name: 'fintrack', version });
 
-  const openApiDocument = buildOpenApiDocument(buildRouteDefinitions(deps, version, unitOfWork), version);
+  const openApiDocument = buildOpenApiDocument(buildRouteDefinitions(deps, version, runEffects), version);
   server.registerResource(
     'openapi',
     'fintrack://openapi',
@@ -184,7 +184,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
       const model = addCardPurchaseWireInToModel(args);
       const flow = () =>
         addCardPurchase(deps, model, TransactionSource.enum.mcp).map(billAdapters.outcomeToDb).map(outcomeToDb);
-      return fromResult((await unitOfWork(flow)).map(createResultToWireOut));
+      return fromResult((await runEffects(flow)).map(createResultToWireOut));
     },
   );
 
@@ -198,7 +198,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     async (args) => {
       const model = accountAdapters.addAccountMovementWireInToModel(args);
       const flow = () => addAccountExpense(deps, model, TransactionSource.enum.mcp).map(outcomeToDb);
-      return fromResult((await unitOfWork(flow)).map(createResultToWireOut));
+      return fromResult((await runEffects(flow)).map(createResultToWireOut));
     },
   );
 
@@ -212,7 +212,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     async (args) => {
       const model = accountAdapters.addAccountMovementWireInToModel(args);
       const flow = () => addAccountIncome(deps, model, TransactionSource.enum.mcp).map(outcomeToDb);
-      return fromResult((await unitOfWork(flow)).map(createResultToWireOut));
+      return fromResult((await runEffects(flow)).map(createResultToWireOut));
     },
   );
 
@@ -248,7 +248,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     async (args) => {
       const flow = () =>
         createCreditCard(deps, args).map(accountAdapters.outcomeToDb).map(creditCardAdapters.outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -278,7 +278,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
           .map(accountAdapters.outcomeToDb)
           .map(billAdapters.outcomeToDb)
           .map(outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -308,7 +308,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
         payBill(deps, { ...args, source: TransactionSource.enum.mcp })
           .map(billAdapters.outcomeToDb)
           .map(outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -323,7 +323,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => revertBillPayment(deps, args).map(billAdapters.outcomeToDb).map(outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -337,7 +337,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => createRecurring(deps, args).map(recurringAdapters.outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -368,7 +368,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => applyDueRecurring(deps, args).map(recurringAdapters.outcomeToDb).map(outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -412,7 +412,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     async (args) => {
       const model = updateCardTransactionWireInToModel(args);
       const flow = () => updateCardTransaction(deps, model).map(billAdapters.outcomeToDb).map(outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -432,7 +432,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => deleteCardTransaction(deps, args).map(billAdapters.outcomeToDb).map(outcomeToDb);
-      return fromResult((await unitOfWork(flow)).map(deleteResultToWireOut));
+      return fromResult((await runEffects(flow)).map(deleteResultToWireOut));
     },
   );
 
@@ -457,7 +457,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     async (args) => {
       const flow = () =>
         updateAccountTransaction(deps, accountAdapters.updateAccountTransactionWireInToModel(args)).map(outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -476,7 +476,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => deleteAccountTransaction(deps, args).map(outcomeToDb);
-      return fromResult((await unitOfWork(flow)).map(deleteResultToWireOut));
+      return fromResult((await runEffects(flow)).map(deleteResultToWireOut));
     },
   );
 
@@ -547,7 +547,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     async (args) => {
       const flow = () =>
         createAccount(deps, accountAdapters.createWireInToModel(args)).map(accountAdapters.outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -601,7 +601,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     async (args) => {
       const flow = () =>
         updateAccount(deps, accountAdapters.updateWireInToModel(args)).map(accountAdapters.outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -620,7 +620,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => deleteAccount(deps, args.name).map(accountAdapters.outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -637,7 +637,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => createTransfer(deps, args, TransactionSource.enum.mcp).map(outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -650,7 +650,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => createCategory(deps, args).map(categoryAdapters.outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -675,7 +675,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => createSubCategory(deps, args).map(categoryAdapters.outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -703,7 +703,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => deleteCategory(deps, args.name).map(categoryAdapters.outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -720,7 +720,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => deleteSubCategory(deps, args.name).map(categoryAdapters.outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -739,7 +739,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => createTag(deps, args.name).map(tagAdapters.outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 
@@ -752,7 +752,7 @@ export const buildMcpServer = (deps: Deps, version: string, unitOfWork: UnitOfWo
     },
     async (args) => {
       const flow = () => deleteTag(deps, args.id).map(tagAdapters.outcomeToDb);
-      return fromResult(await unitOfWork(flow));
+      return fromResult(await runEffects(flow));
     },
   );
 

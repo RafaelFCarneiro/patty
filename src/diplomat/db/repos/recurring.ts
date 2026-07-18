@@ -3,7 +3,7 @@ import * as recurringAdapters from '../../../adapters/recurring.js';
 import type { RecurringRuleEntity, RecurringRuleView } from '../../../models/recurring.js';
 import type { Db } from '../driver.js';
 import { recurringRules } from '../schema.js';
-import { versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
+import { versionedTableApplier, type EntityApplier } from '../effects.js';
 
 const RULE_FROM = sql`FROM recurring_rules r`;
 

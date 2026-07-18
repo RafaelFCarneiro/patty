@@ -8,7 +8,7 @@ export type PersistOp = z.infer<typeof PersistOp>;
 /** Every entity starts at this version — a structural fact of the versioning scheme itself, not a
  *  business decision, so a core's `insert` model never carries it. Each entity's own diplomat-edge
  *  adapter (e.g. `adapters/accounts.ts`'s `persistableToDb`, called explicitly by the MCP/REST
- *  handler before `withUnitOfWork` ever sees the batch) supplies it when it shapes the insert row
+ *  handler before `runEffects` ever sees the batch) supplies it when it shapes the insert row
  *  — never the database's own `.default(0)` supplying it implicitly, and never `diplomat/db`
  *  either: the entity's own adapter is the one place model→row shaping happens. */
 export const INITIAL_VERSION = 0;

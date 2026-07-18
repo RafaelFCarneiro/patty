@@ -47,7 +47,7 @@ const category = (overrides: Partial<Category> = {}): Category => ({
   ...overrides,
 });
 
-/** Mirrors `withUnitOfWork`'s own `resolveResponse` — pure, no database (docs/functional-core-
+/** Mirrors `runEffects`'s own `resolveResponse` — pure, no database (docs/functional-core-
  *  imperative-shell.md: flow tests assert on `{ persist, response }`). */
 const resolveResponse = <T>(outcome: FlowOutcome<T>, outcomes: PersistOutcome[]): T => {
   const { response } = outcome;

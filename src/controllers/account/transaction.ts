@@ -123,7 +123,7 @@ const planAccountMovement = (
   });
 
 /** Shared by addAccountExpense/addAccountIncome (ADR-016/ADR-021) — everything but the fixed
- *  movement type. Returns the write as data: the shell (MCP/REST handler + `unitOfWork`) applies
+ *  movement type. Returns the write as data: the shell (MCP/REST handler + `runEffects`) applies
  *  the insert and reports back whether it actually landed (vs. an idempotent duplicate replay),
  *  which is what `created` reflects here — never faked by the domain. */
 const addAccountMovement = (

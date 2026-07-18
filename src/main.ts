@@ -4,10 +4,10 @@ import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
 import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import { loadConfig, McpTransport, type Config } from './config.js';
-import type { Deps, UnitOfWork } from './controllers/deps.js';
+import type { Deps, RunEffects } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
 import { openDatabase } from './diplomat/db/driver.js';
-import { withUnitOfWork, type ApplierRegistry } from './diplomat/db/unitOfWork.js';
+import { runEffects, type ApplierRegistry } from './diplomat/db/effects.js';
 import { accountApplier, accountsRepo } from './diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from './diplomat/db/repos/bills.js';
 import { categoriesRepo, categoryApplier } from './diplomat/db/repos/categories.js';
@@ -46,12 +46,12 @@ const loadServerModule = () => import('./server.js');
 const maybeStartSidecar = async (
   deps: Deps,
   version: string,
-  unitOfWork: UnitOfWork,
+  runEffects: RunEffects,
   config: Config,
 ): Promise<HttpSidecar | null> => {
   if (!config.FINTRACK_HTTP) return null;
   const { startHttpSidecar } = await loadServerModule();
-  return startHttpSidecar(deps, version, unitOfWork, config.PORT);
+  return startHttpSidecar(deps, version, runEffects, config.PORT);
 };
 
 const main = async (): Promise<void> => {
@@ -102,7 +102,7 @@ const main = async (): Promise<void> => {
   };
 
   // Every converted entity's applier, keyed by its own tag (ADR-021) — assembled once here, the
-  // composition root, so `diplomat/db/unitOfWork.ts` itself never names a specific entity.
+  // composition root, so `diplomat/db/effects.ts` itself never names a specific entity.
   const applierRegistry: ApplierRegistry = {
     [ACCOUNT_ENTITY_TAG]: accountApplier,
     [TRANSACTION_ENTITY_TAG]: transactionApplier,
@@ -113,14 +113,14 @@ const main = async (): Promise<void> => {
     [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
     [RECURRING_ENTITY_TAG]: recurringRuleApplier,
   };
-  const runUnitOfWork: UnitOfWork = (flow) => withUnitOfWork(db, applierRegistry, flow);
+  const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow);
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
-    const server = await connectStdio(deps, version, runUnitOfWork);
+    const server = await connectStdio(deps, version, boundRunEffects);
 
     // A bind failure inside startHttpSidecar is caught there and is never fatal — the stdio
     // connection above is the resilient primary (ADR-013 Decision 7).
-    const sidecar = await maybeStartSidecar(deps, version, runUnitOfWork, config);
+    const sidecar = await maybeStartSidecar(deps, version, boundRunEffects, config);
 
     // 'close' commonly follows 'end' on stdin, and a client can also send SIGINT/SIGTERM around
     // the same disconnect — guard against shutdown() running (and double process.exit-ing) twice.
@@ -145,7 +145,7 @@ const main = async (): Promise<void> => {
   // sidecar, this is the only surface running — a bind failure here is fatal by design
   // (there is no stdio fallback to keep the process alive), handled below in main().catch.
   const { buildHttpApp } = await loadServerModule();
-  const app = buildHttpApp(deps, version, runUnitOfWork);
+  const app = buildHttpApp(deps, version, boundRunEffects);
 
   // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.
   let shuttingDown = false;

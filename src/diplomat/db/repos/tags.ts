@@ -4,7 +4,7 @@ import type { Tag, TagEntity } from '../../../models/tag.js';
 import type { Db } from '../driver.js';
 import { tags } from '../schema.js';
 import { isUniqueConstraintViolation } from '../sqliteErrors.js';
-import { VersionConflict, versionedTableApplier, type EntityApplier } from '../unitOfWork.js';
+import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
 
 export type TagsRepo = {
   list: () => Promise<Tag[]>;

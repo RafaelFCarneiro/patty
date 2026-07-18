@@ -71,6 +71,18 @@ database, a different transport) without the domain noticing.
    **outcome-dependent** responses (e.g. an idempotent create that must report created-vs-already-present): those
    need the shell's per-effect outcome, so the shell returns it and the core's response is a function of it.
 
+7. **Effects come in kinds, and a flow declares its granularity.** The shell's execution surface has a small,
+   closed set of effect **kinds** — a **write** (persistence), the **response** (always produced), and
+   **dispatch** (an outbound message) — each executed by its own generic shell mechanism; the core only ever
+   describes an effect by kind and payload, never performs one. Independently, a flow declares its
+   **granularity**: a **single atomic unit** — one batch, applied together, all-or-nothing, where a failure
+   discards the whole unit and re-invokes the core for a fresh decision — or a **sequence of independent
+   units**, where each unit is applied and retried on its own so one unit's failure does not roll back the
+   others (partial success), and the shell reports a per-unit outcome alongside the flow's overall result.
+   Both granularities follow the same principle — the core describes, the shell executes and owns retry — at
+   a different boundary of "what commits together"; a flow picks whichever grain matches what it is actually
+   declaring: one indivisible change, or many independently-meaningful ones.
+
 ## What this is not
 
 - **Not "the core does no I/O."** It reads. It just does not *write* or *dispatch*.
@@ -91,6 +103,6 @@ describing the effects. The boundary layer *is* the imperative shell.
 - **Flow (core) tests** assert on the returned effects + response — pure, no infrastructure. "Performing X
   produces an insert of A and a version-guarded update of B" is an assertion on data.
 - **The shell's engine** is tested once, generically: unit atomicity, version-conflict → discard → re-run,
-  outcome-dependent results.
+  outcome-dependent results, and — for the sequence granularity — per-unit retry and partial success.
 - Flow-specific atomicity / self-heal tests are **removed** — the conditions they guarded no longer exist,
   because the flow no longer executes its own effects.

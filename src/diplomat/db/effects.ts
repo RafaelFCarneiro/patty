@@ -8,11 +8,11 @@ import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } fr
 import type { Db } from './driver.js';
 import { isForeignKeyConstraintViolation } from './sqliteErrors.js';
 
-// Total calls to `flow` across the whole unit of work — the first attempt plus up to
-// (MAX_UNIT_OF_WORK_ATTEMPTS - 1) retries on a version conflict, each re-invoking `flow` for a
+// Total calls to `flow` in one `runEffects` run — the first attempt plus up to
+// (MAX_RUN_EFFECTS_ATTEMPTS - 1) retries on a version conflict, each re-invoking `flow` for a
 // fresh read → fresh decision (docs/functional-core-imperative-shell.md rule 4). Exported so
 // tests assert against the real policy instead of duplicating the literal.
-export const MAX_UNIT_OF_WORK_ATTEMPTS = 3;
+export const MAX_RUN_EFFECTS_ATTEMPTS = 3;
 
 /** The transaction handle `db.transaction` hands its callback — inferred from `Db` itself so this
  *  file never names a drizzle-internal type directly. Exported so each entity's `EntityApplier`
@@ -23,7 +23,7 @@ export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
  * What an entity module supplies so this generic shell can apply a `Persistable` tagged with its
  * entity, without this file ever naming that entity: the actual drizzle table op. `insert`/`update`
  * receive an already db-row-shaped `model` — the model→row adaptation (`modelToDb`) happens
- * upstream, at the MCP/REST handler that calls `unitOfWork` (e.g. `adapters/accounts.ts`'s
+ * upstream, at the MCP/REST handler that calls `runEffects` (e.g. `adapters/accounts.ts`'s
  * `persistableToDb`, run via `outcomeToDb` before the batch ever reaches here), not inside this
  * file or inside the applier: `diplomat/db` only ever writes the row it's handed, never adapts
  * one. Built once per entity (e.g. `diplomat/db/repos/accounts.ts`'s `accountApplier`) and
@@ -99,7 +99,7 @@ export const versionedTableApplier = <T extends VersionedTable>(table: T): Entit
 });
 
 /** Marks "roll back the whole batch and re-invoke the flow for a fresh read/decision" up through
- *  `db.transaction`'s rejection; caught by `applyBatch`, never leaks past `withUnitOfWork`. Thrown
+ *  `db.transaction`'s rejection; caught by `applyBatch`, never leaks past `runEffects`. Thrown
  *  implicitly below for a versioned `update`/`delete` that affected zero rows. Exported so an
  *  `EntityApplier` can signal the same retry for its own non-version conflict (see
  *  `diplomat/db/repos/bills.ts`'s `billApplier`). */
@@ -107,7 +107,7 @@ export class VersionConflict extends Error {}
 
 const resolveApplier = (registry: ApplierRegistry, entity: string): EntityApplier => {
   const applier = registry[entity];
-  if (!applier) throw new Error(`withUnitOfWork: no applier registered for entity "${entity}"`);
+  if (!applier) throw new Error(`runEffects: no applier registered for entity "${entity}"`);
   return applier;
 };
 
@@ -132,7 +132,7 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
     }
     default: {
       const _exhaustive: never = p;
-      throw new Error(`withUnitOfWork: unhandled persistable op ${JSON.stringify(_exhaustive)}`);
+      throw new Error(`runEffects: unhandled persistable op ${JSON.stringify(_exhaustive)}`);
     }
   }
 };
@@ -180,16 +180,17 @@ const attempt = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>, attemptsLe
   );
 
 /**
- * The generic versioned unit of work (ADR-021 / docs/functional-core-imperative-shell.md): runs
- * `flow`, applies the `persist` batch it returns in one `db.transaction` by dispatching each
- * `Persistable` to the `registry`'s applier for its entity, and returns `flow`'s `response`. This
- * file has no knowledge of any specific entity — no per-entity switch statement, no entity's
+ * The generic effect runner (docs/functional-core-imperative-shell.md): runs `flow`, applies the
+ * `persist` batch it returns in one `db.transaction` by dispatching each `Persistable` to the
+ * `registry`'s applier for its entity, and returns `flow`'s `response`. This file has no
+ * knowledge of any specific entity — no per-entity switch statement, no entity's
  * `modelToDb`/table import — only the `registry` (built once at the composition root) does. A
  * version-guarded op that affects zero rows rolls back the whole batch and re-invokes `flow` — a
- * fresh read, a fresh decision — up to `MAX_UNIT_OF_WORK_ATTEMPTS` times, then surfaces the
- * generic `conflict` error. `diplomat/db` is the only place that touches `Db` for a converted
- * flow; controllers and `diplomat/mcp`/`diplomat/http` see only the `UnitOfWork` function shape
+ * fresh read, a fresh decision — up to `MAX_RUN_EFFECTS_ATTEMPTS` times, then surfaces the
+ * generic `conflict` error. This is the single-atomic-unit mode — the "unit of work" mode.
+ * `diplomat/db` is the only place that touches `Db` for a converted flow; controllers and
+ * `diplomat/mcp`/`diplomat/http` see only the `RunEffects` function shape
  * (`controllers/deps.ts`).
  */
-export const withUnitOfWork = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>): ResultAsync<T, AppError> =>
-  attempt(db, registry, flow, MAX_UNIT_OF_WORK_ATTEMPTS);
+export const runEffects = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>): ResultAsync<T, AppError> =>
+  attempt(db, registry, flow, MAX_RUN_EFFECTS_ATTEMPTS);

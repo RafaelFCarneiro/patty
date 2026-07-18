@@ -34,12 +34,12 @@ import {
   transactions,
 } from '../../../src/diplomat/db/schema.js';
 import {
-  MAX_UNIT_OF_WORK_ATTEMPTS,
+  MAX_RUN_EFFECTS_ATTEMPTS,
   versionedTableApplier,
-  withUnitOfWork,
+  runEffects,
   type ApplierRegistry,
   type EntityApplier,
-} from '../../../src/diplomat/db/unitOfWork.js';
+} from '../../../src/diplomat/db/effects.js';
 import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus } from '../../../src/models/bill.js';
@@ -143,10 +143,10 @@ const readVersion = async (id: string): Promise<number | undefined> => {
 
 const readIds = async (id: string): Promise<unknown[]> => db.all(sql`SELECT id FROM accounts WHERE id = ${id}`);
 
-describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', () => {
+describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () => {
   it('applies a batch atomically: a version-conflicting update rolls back a sibling insert', async () => {
     const seed = newAccount();
-    await withUnitOfWork(db, registry, insertOne(seed));
+    await runEffects(db, registry, insertOne(seed));
 
     const sibling = newAccount();
     const staleUpdate: Persistable = persistence.update({
@@ -155,7 +155,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
     });
     const insertSibling: Persistable = persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: sibling });
 
-    const result = await withUnitOfWork(db, registry, () =>
+    const result = await runEffects(db, registry, () =>
       okAsync({ persist: [insertSibling, staleUpdate], response: null }),
     );
 
@@ -167,7 +167,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
   it('rolls back a version conflict, re-invokes the flow for a fresh read, and succeeds', async () => {
     const seed = newAccount();
-    await withUnitOfWork(db, registry, insertOne(seed));
+    await runEffects(db, registry, insertOne(seed));
 
     let calls = 0;
     const flow = () => {
@@ -182,7 +182,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
       });
     };
 
-    const result = await withUnitOfWork(db, registry, flow);
+    const result = await runEffects(db, registry, flow);
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe(2); // succeeded on the retry (flow's 2nd invocation)
@@ -191,7 +191,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
   it('exhausts retries and surfaces the generic conflict error when the version never matches', async () => {
     const seed = newAccount();
-    await withUnitOfWork(db, registry, insertOne(seed));
+    await runEffects(db, registry, insertOne(seed));
 
     let calls = 0;
     const flow = () => {
@@ -203,19 +203,19 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
       });
     };
 
-    const result = await withUnitOfWork(db, registry, flow);
+    const result = await runEffects(db, registry, flow);
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
-    expect(calls).toBe(MAX_UNIT_OF_WORK_ATTEMPTS);
+    expect(calls).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
     expect(await readVersion(seed.id)).toBe(seed.version); // never bumped by a rolled-back attempt
   });
 
   it('applies a versioned delete the same way it applies a versioned update', async () => {
     const seed = newAccount();
-    await withUnitOfWork(db, registry, insertOne(seed));
+    await runEffects(db, registry, insertOne(seed));
 
-    const result = await withUnitOfWork(db, registry, () =>
+    const result = await runEffects(db, registry, () =>
       okAsync({
         persist: [persistence.remove({ entity: ACCOUNT_ENTITY_TAG, id: seed.id, version: seed.version })],
         response: null,
@@ -228,9 +228,9 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
   it('refuses a versioned delete against a stale version, leaving the row untouched', async () => {
     const seed = newAccount();
-    await withUnitOfWork(db, registry, insertOne(seed));
+    await runEffects(db, registry, insertOne(seed));
 
-    const result = await withUnitOfWork(db, registry, () =>
+    const result = await runEffects(db, registry, () =>
       okAsync({
         persist: [persistence.remove({ entity: ACCOUNT_ENTITY_TAG, id: seed.id, version: seed.version + 1 })],
         response: null,
@@ -244,7 +244,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
   it('an empty persist batch (a dry-run preview flow) skips db.transaction entirely', async () => {
     const transactionSpy = vi.spyOn(db, 'transaction');
 
-    const result = await withUnitOfWork(db, registry, () => okAsync({ persist: [], response: 'preview' }));
+    const result = await runEffects(db, registry, () => okAsync({ persist: [], response: 'preview' }));
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe('preview');
@@ -256,7 +256,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
   it('treats a duplicate insert (same id) as an idempotent no-op, never a conflict', async () => {
     const model = newAccount();
 
-    const result = await withUnitOfWork(db, registry, () =>
+    const result = await runEffects(db, registry, () =>
       okAsync({
         persist: [
           persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model }),
@@ -273,13 +273,13 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
   it('the applier is purely mechanical — it writes exactly the row it is handed, never adapts it', async () => {
     // ADR-021 follow-up: model→row adaptation (including baking in `INITIAL_VERSION` for a fresh
     // insert) happens once, explicitly, at the diplomat handler (`accountAdapters.outcomeToDb`,
-    // called before `unitOfWork` ever sees the batch) — never inside `diplomat/db`. This suite
-    // calls `withUnitOfWork` directly, bypassing that handler-level step, so whatever `version` the
+    // called before `runEffects` ever sees the batch) — never inside `diplomat/db`. This suite
+    // calls `runEffects` directly, bypassing that handler-level step, so whatever `version` the
     // test seeds here is exactly what lands in the row — proving `accountApplier` trusts its input
     // rather than re-deriving it.
     const seed = newAccount({ version: 99 });
 
-    await withUnitOfWork(db, registry, insertOne(seed));
+    await runEffects(db, registry, insertOne(seed));
 
     expect(await readVersion(seed.id)).toBe(99);
   });
@@ -296,7 +296,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
     };
     const mixedRegistry: ApplierRegistry = { ...registry, widget: widgetApplier };
 
-    const result = await withUnitOfWork(db, mixedRegistry, () =>
+    const result = await runEffects(db, mixedRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: 'widget', model: { id: 'w-1' } }],
         response: null,
@@ -308,7 +308,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
   });
 
   it('throws a clear error for a Persistable whose entity has no registered applier', async () => {
-    const outcome = withUnitOfWork(db, {}, () =>
+    const outcome = runEffects(db, {}, () =>
       okAsync({ persist: [{ op: PersistOp.enum.insert, entity: 'unregistered', model: {} }], response: null }),
     );
 
@@ -318,7 +318,7 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
   it('resolves an idempotency-aware response by calling it with the batch apply outcomes (rule 6)', async () => {
     const model = newAccount();
 
-    const result = await withUnitOfWork(db, registry, () =>
+    const result = await runEffects(db, registry, () =>
       okAsync({
         persist: [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model })],
         response: (outcomes: PersistOutcome[]) => ({ created: outcomes[0]?.applied }),
@@ -331,9 +331,9 @@ describe('withUnitOfWork — generic versioned unit of work (ADR-021 phase 1)', 
 
   it('reports applied:false (not a conflict) for the outcome of an idempotent duplicate insert', async () => {
     const model = newAccount();
-    await withUnitOfWork(db, registry, insertOne(model));
+    await runEffects(db, registry, insertOne(model));
 
-    const result = await withUnitOfWork(db, registry, () =>
+    const result = await runEffects(db, registry, () =>
       okAsync({
         persist: [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model })],
         response: (outcomes: PersistOutcome[]) => ({ created: outcomes[0]?.applied }),
@@ -351,7 +351,7 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
     const tagRegistry: ApplierRegistry = { tag: tagApplier };
     const tagId = randomUUID();
 
-    const inserted = await withUnitOfWork(db, tagRegistry, () =>
+    const inserted = await runEffects(db, tagRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: 'tag', model: { id: tagId, name: `Tag ${tagId}`, version: 0 } }],
         response: null,
@@ -359,7 +359,7 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
     );
     expect(inserted.isOk()).toBe(true);
 
-    const updated = await withUnitOfWork(db, tagRegistry, () =>
+    const updated = await runEffects(db, tagRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.update, entity: 'tag', model: { id: tagId, name: 'Renamed', version: 0 } }],
         response: null,
@@ -380,7 +380,7 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
     const tagRegistry: ApplierRegistry = { tag: tagApplier };
     const name = `Tag ${randomUUID()}`;
 
-    const first = await withUnitOfWork(db, tagRegistry, () =>
+    const first = await runEffects(db, tagRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: 'tag', model: { id: randomUUID(), name, version: 0 } }],
         response: null,
@@ -388,7 +388,7 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
     );
     expect(first.isOk()).toBe(true);
 
-    const outcome = withUnitOfWork(db, tagRegistry, () =>
+    const outcome = runEffects(db, tagRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: 'tag', model: { id: randomUUID(), name, version: 0 } }],
         response: null,
@@ -439,7 +439,7 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
   it('insert reports applied:true and reads back the persisted, joined view for a brand-new transaction', async () => {
     const row = newTransactionRow();
 
-    const result = await withUnitOfWork(db, transactionRegistry, insertRow(row));
+    const result = await runEffects(db, transactionRegistry, insertRow(row));
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
@@ -449,12 +449,12 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
 
   it('insert reports applied:false and reads back the EXISTING row on an idempotency-key duplicate', async () => {
     const original = newTransactionRow({ description: 'Original' });
-    await withUnitOfWork(db, transactionRegistry, insertRow(original));
+    await runEffects(db, transactionRegistry, insertRow(original));
 
     // Same idempotency key, different id and description — a replay with drifted content; the
     // existing (first-write-wins) row is what must come back, not this attempt's own values.
     const replay = newTransactionRow({ idempotencyKey: original.idempotencyKey, description: 'Replay attempt' });
-    const result = await withUnitOfWork(db, transactionRegistry, insertRow(replay));
+    const result = await runEffects(db, transactionRegistry, insertRow(replay));
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
@@ -467,7 +467,7 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
   it('insert upserts the referenced merchant row', async () => {
     const row = newTransactionRow({ merchantKey: `merchant-${randomUUID()}` });
 
-    await withUnitOfWork(db, transactionRegistry, insertRow(row));
+    await runEffects(db, transactionRegistry, insertRow(row));
 
     const [merchantRow] = await db.all<{ key: string }>(sql`SELECT key FROM merchants WHERE key = ${row.merchantKey}`);
     expect(merchantRow?.key).toBe(row.merchantKey);
@@ -475,11 +475,11 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
 
   it('update upserts the referenced merchant row too, so a key introduced on update satisfies the FK', async () => {
     const row = newTransactionRow();
-    await withUnitOfWork(db, transactionRegistry, insertRow(row));
+    await runEffects(db, transactionRegistry, insertRow(row));
 
     const newMerchantKey = `merchant-${randomUUID()}`;
     const updated: TransactionRowEntity = { ...row, merchantKey: newMerchantKey };
-    const result = await withUnitOfWork(db, transactionRegistry, () =>
+    const result = await runEffects(db, transactionRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: updated }] as Persistable[],
         response: null,
@@ -501,7 +501,7 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
     await db.insert(tags).values({ id: existingTagId, name: existingTagName, version: 0 });
 
     const row = newTransactionRow({ tagNames: [existingTagName, 'does-not-exist'] });
-    await withUnitOfWork(db, transactionRegistry, insertRow(row));
+    await runEffects(db, transactionRegistry, insertRow(row));
 
     const attached = await db.all<{ name: string }>(sql`
       SELECT tg.name FROM transaction_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tt.transaction_id = ${row.id}
@@ -515,10 +515,10 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
     await db.insert(tags).values({ id: tagId, name: tagName, version: 0 });
 
     const row = newTransactionRow({ tagNames: [tagName] });
-    await withUnitOfWork(db, transactionRegistry, insertRow(row));
+    await runEffects(db, transactionRegistry, insertRow(row));
 
     const updated: TransactionRowEntity = { ...row, description: 'Renamed', tagNames: [] };
-    const result = await withUnitOfWork(db, transactionRegistry, () =>
+    const result = await runEffects(db, transactionRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: updated }] as Persistable[],
         response: null,
@@ -537,10 +537,10 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
 
   it('update rolls back and surfaces the generic conflict error on a stale version', async () => {
     const row = newTransactionRow();
-    await withUnitOfWork(db, transactionRegistry, insertRow(row));
+    await runEffects(db, transactionRegistry, insertRow(row));
 
     const stale: TransactionRowEntity = { ...row, description: 'Stale writer', version: row.version + 5 };
-    const result = await withUnitOfWork(db, transactionRegistry, () =>
+    const result = await runEffects(db, transactionRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: stale }] as Persistable[],
         response: null,
@@ -553,9 +553,9 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
 
   it('delete is version-guarded, same as update', async () => {
     const row = newTransactionRow();
-    await withUnitOfWork(db, transactionRegistry, insertRow(row));
+    await runEffects(db, transactionRegistry, insertRow(row));
 
-    const result = await withUnitOfWork(db, transactionRegistry, () =>
+    const result = await runEffects(db, transactionRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.delete, entity: TRANSACTION_ENTITY_TAG, id: row.id, version: row.version },
@@ -585,7 +585,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
     const categoryId = await seedCategory();
     const merchantKey = `merchant-${randomUUID()}`;
 
-    const result = await withUnitOfWork(db, merchantRegistry, () =>
+    const result = await runEffects(db, merchantRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.insert, entity: MERCHANT_CATEGORY_ENTITY_TAG, model: { merchantKey, categoryId } },
@@ -605,7 +605,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
     const categoryId = await seedCategory();
     const merchantKey = `merchant-${randomUUID()}`;
     const insertEdge = () =>
-      withUnitOfWork(db, merchantRegistry, () =>
+      runEffects(db, merchantRegistry, () =>
         okAsync({
           persist: [
             { op: PersistOp.enum.insert, entity: MERCHANT_CATEGORY_ENTITY_TAG, model: { merchantKey, categoryId } },
@@ -651,7 +651,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
       version: 0,
       tagNames: [],
     };
-    await withUnitOfWork(db, merchantRegistry, () =>
+    await runEffects(db, merchantRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model: row }] as Persistable[],
         response: null,
@@ -659,7 +659,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
     );
 
     const staleUpdate: TransactionRowEntity = { ...row, categoryId, version: row.version + 5 }; // never matches
-    const result = await withUnitOfWork(db, merchantRegistry, () =>
+    const result = await runEffects(db, merchantRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: staleUpdate },
@@ -684,7 +684,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
     const model = { merchantKey, categoryId, version: 0 };
 
     await expect(
-      withUnitOfWork(db, merchantRegistry, () =>
+      runEffects(db, merchantRegistry, () =>
         okAsync({
           persist: [{ op: PersistOp.enum.update, entity: MERCHANT_CATEGORY_ENTITY_TAG, model }] as Persistable[],
           response: null,
@@ -695,7 +695,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
 
   it('delete throws — merchant-category edges are never removed', async () => {
     await expect(
-      withUnitOfWork(db, merchantRegistry, () =>
+      runEffects(db, merchantRegistry, () =>
         okAsync({
           persist: [
             { op: PersistOp.enum.delete, entity: MERCHANT_CATEGORY_ENTITY_TAG, id: 'unused', version: 0 },
@@ -729,7 +729,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
     const { cardId } = await seedCard();
     const model = newBillModel(cardId);
 
-    const result = await withUnitOfWork(db, billRegistry, () =>
+    const result = await runEffects(db, billRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: BILL_ENTITY_TAG, model }] as Persistable[],
         response: null,
@@ -744,7 +744,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
   it('update/delete follow the plain versioned convention (versionedTableApplier mechanics)', async () => {
     const { cardId } = await seedCard();
     const model = newBillModel(cardId);
-    await withUnitOfWork(db, billRegistry, () =>
+    await runEffects(db, billRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: BILL_ENTITY_TAG, model }] as Persistable[],
         response: null,
@@ -752,7 +752,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
     );
 
     const closedModel = { ...model, status: BillStatus.enum.closed, version: 0 };
-    const updated = await withUnitOfWork(db, billRegistry, () =>
+    const updated = await runEffects(db, billRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.update, entity: BILL_ENTITY_TAG, model: closedModel }] as Persistable[],
         response: null,
@@ -764,7 +764,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
     );
     expect(row).toEqual({ status: BillStatus.enum.closed, version: 1 });
 
-    const deleted = await withUnitOfWork(db, billRegistry, () =>
+    const deleted = await runEffects(db, billRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.delete, entity: BILL_ENTITY_TAG, id: model.id, version: 1 }] as Persistable[],
         response: null,
@@ -792,11 +792,11 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
       });
     };
 
-    const result = await withUnitOfWork(db, billRegistry, flow);
+    const result = await runEffects(db, billRegistry, flow);
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
-    expect(attempts).toBe(MAX_UNIT_OF_WORK_ATTEMPTS);
+    expect(attempts).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
     // Only the winner's row exists — no loser row was ever left half-committed by a failed attempt.
     const rows = await db.all<{ id: string }>(
       sql`SELECT id FROM bills WHERE credit_card_id = ${cardId} AND month = 9 AND year = 2026`,
@@ -831,7 +831,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
       });
     };
 
-    const result = await withUnitOfWork(db, billRegistry, flow);
+    const result = await runEffects(db, billRegistry, flow);
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe(2); // succeeded on the retry (flow's 2nd invocation)
@@ -842,7 +842,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
   });
 
   it('a genuine failure unrelated to the race still propagates, never swallowed as a conflict', async () => {
-    const outcome = withUnitOfWork(db, billRegistry, () =>
+    const outcome = runEffects(db, billRegistry, () =>
       okAsync({
         // creditCardId references a non-existent card — a real FK violation, not the cycle race.
         persist: [
@@ -919,7 +919,7 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
   };
 
   // Mirrors the diplomat handler's own composition (diplomat/mcp/server.ts's pay_bill tool) — a
-  // test calling withUnitOfWork directly must adapt payBill's mixed transaction+bill batch itself,
+  // test calling runEffects directly must adapt payBill's mixed transaction+bill batch itself,
   // the same way the real handler does before the batch ever reaches the shell.
   const payBillFlow = (deps: Deps, cardName: string) => () =>
     payBill(deps, { card: cardName, month: 6, year: 2026, source: TransactionSource.enum.mcp })
@@ -934,11 +934,11 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
   it('two sequential pay_bill calls: exactly one transfer, one paid flip, second is idempotent', async () => {
     const { deps, cardName } = await seedCardWithOpenBill();
 
-    const first = await withUnitOfWork(db, fullRegistry, payBillFlow(deps, cardName));
+    const first = await runEffects(db, fullRegistry, payBillFlow(deps, cardName));
     expect(first.isOk()).toBe(true);
     expect(first._unsafeUnwrap().status).toBe(BillStatus.enum.paid);
 
-    const second = await withUnitOfWork(db, fullRegistry, payBillFlow(deps, cardName));
+    const second = await runEffects(db, fullRegistry, payBillFlow(deps, cardName));
     expect(second.isOk()).toBe(true);
     expect(second._unsafeUnwrap().status).toBe(BillStatus.enum.paid);
     expect(second._unsafeUnwrap().paymentTransactionId).toBe(first._unsafeUnwrap().paymentTransactionId);
@@ -971,7 +971,7 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     };
     const racingDeps: Deps = { ...deps, bills: racingBills };
 
-    const result = await withUnitOfWork(db, fullRegistry, payBillFlow(racingDeps, cardName));
+    const result = await runEffects(db, fullRegistry, payBillFlow(racingDeps, cardName));
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().status).toBe(BillStatus.enum.paid);
@@ -987,7 +987,7 @@ describe('tagApplier — name-uniqueness race surfaces as a generic conflict (AD
 
   it('inserts a brand-new tag normally', async () => {
     const id = randomUUID();
-    const result = await withUnitOfWork(db, tagRegistry, () =>
+    const result = await runEffects(db, tagRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.insert, entity: TAG_ENTITY_TAG, model: { id, name: `Tag ${id}`, version: 0 } },
@@ -1014,11 +1014,11 @@ describe('tagApplier — name-uniqueness race surfaces as a generic conflict (AD
       });
     };
 
-    const result = await withUnitOfWork(db, tagRegistry, flow);
+    const result = await runEffects(db, tagRegistry, flow);
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
-    expect(attempts).toBe(MAX_UNIT_OF_WORK_ATTEMPTS);
+    expect(attempts).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
     expect(await db.all(sql`SELECT id FROM tags WHERE name = ${name}`)).toHaveLength(1); // no loser row landed
   });
 });
@@ -1045,7 +1045,7 @@ describe('categoryApplier — plain mechanics; merchant_category cascades via sc
       .insert(categories)
       .values({ id: categoryId, name: `Category ${categoryId}`, kind: CategoryKind.enum.both, version: 0 });
 
-    const result = await withUnitOfWork(db, categoryRegistry, () =>
+    const result = await runEffects(db, categoryRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: categoryId, version: 0 },
@@ -1062,7 +1062,7 @@ describe('categoryApplier — plain mechanics; merchant_category cascades via sc
     const categoryId = await seedCategoryWithLearnedEdge();
     expect(await db.all(sql`SELECT 1 FROM merchant_category WHERE category_id = ${categoryId}`)).toHaveLength(1);
 
-    const result = await withUnitOfWork(db, categoryRegistry, () =>
+    const result = await runEffects(db, categoryRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: categoryId, version: 0 },
@@ -1087,7 +1087,7 @@ describe('categoryApplier — plain mechanics; merchant_category cascades via sc
       .insert(categories)
       .values({ id: subId, name: `Sub ${subId}`, kind: CategoryKind.enum.both, parentId, version: 0 });
 
-    const result = await withUnitOfWork(db, categoryRegistry, () =>
+    const result = await runEffects(db, categoryRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: subId, version: 0 }] as Persistable[],
         response: null,
@@ -1122,7 +1122,7 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
   it('a card with no correlated rows is removed along with its internal account', async () => {
     const { cardId, accountId } = await insertCardWithAccount();
 
-    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+    const result = await runEffects(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
 
     expect(result.isOk()).toBe(true);
     expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(0);
@@ -1145,7 +1145,7 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
       version: 0,
     });
 
-    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+    const result = await runEffects(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -1155,7 +1155,7 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
   it('a stale account version rolls back the whole batch, the card cascade included — nothing partial', async () => {
     const { cardId, accountId } = await insertCardWithAccount();
 
-    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 99));
+    const result = await runEffects(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 99));
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -1168,7 +1168,7 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
     const { cardId, accountId } = await insertCardWithAccount();
     await db.delete(creditCards).where(sql`${creditCards.id} = ${cardId}`);
 
-    const result = await withUnitOfWork(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+    const result = await runEffects(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -1216,7 +1216,7 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
       });
     };
 
-    const result = await withUnitOfWork(db, raceRegistry, flow);
+    const result = await runEffects(db, raceRegistry, flow);
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe(2);
@@ -1246,7 +1246,7 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
       version: 0,
     };
 
-    const result = await withUnitOfWork(db, cardRegistry, () =>
+    const result = await runEffects(db, cardRegistry, () =>
       okAsync({
         persist: [
           persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: accountModel }),
@@ -1392,7 +1392,7 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
   it('removes every correlated bill/transaction, breaks the paid bill<->transfer circular FK', async () => {
     const { deps, cardName, payerId } = await seedCardWithBillsAndTransactions();
 
-    const result = await withUnitOfWork(db, fullRegistry, deleteCreditCardFlow(deps, cardName));
+    const result = await runEffects(db, fullRegistry, deleteCreditCardFlow(deps, cardName));
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ deleted: true, card: cardName });
