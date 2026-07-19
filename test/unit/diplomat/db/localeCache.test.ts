@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLocaleResolver } from '../../../../src/diplomat/db/localeCache.js';
-import { Locale, LocaleSource } from '../../../../src/models/locale.js';
+import { Locale, LocaleSource, SETTINGS_SINGLETON_ID } from '../../../../src/models/locale.js';
 import type { SettingsRepo } from '../../../../src/diplomat/db/repos/settings.js';
 
 const makeSettings = (locale?: Locale): SettingsRepo => ({
   getLocale: vi.fn(async () =>
-    locale ? { id: 'singleton' as const, locale, localeSource: LocaleSource.enum.explicit, version: 0 } : undefined,
+    locale ? { id: SETTINGS_SINGLETON_ID, locale, localeSource: LocaleSource.enum.explicit, version: 0 } : undefined,
   ),
 });
 
