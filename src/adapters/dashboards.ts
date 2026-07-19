@@ -1,6 +1,5 @@
 import {
   DASHBOARD_ENTITY_TAG,
-  DashboardEntitySchema,
   DashboardListItemSchema,
   DashboardSchema,
   type Dashboard,
@@ -12,9 +11,6 @@ import type { DashboardRow } from '../wire/db/dashboards.js';
 
 export const dbToModel = (row: DashboardRow): Dashboard =>
   DashboardSchema.parse({ name: row.name, html: row.html, updatedAt: row.updatedAt });
-
-export const dbToEntity = (row: DashboardRow): DashboardEntity =>
-  DashboardEntitySchema.parse({ name: row.name, html: row.html, updatedAt: row.updatedAt, version: row.version });
 
 export const dbToListItem = (row: Pick<DashboardRow, 'name' | 'updatedAt'>): DashboardListItem =>
   DashboardListItemSchema.parse({ name: row.name, updatedAt: row.updatedAt });

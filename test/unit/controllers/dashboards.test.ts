@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { getDashboard, listDashboards, saveDashboard } from '../../../src/controllers/dashboards.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
-import type { Dashboard, DashboardEntity, DashboardListItem } from '../../../src/models/dashboard.js';
+import type { Dashboard, DashboardListItem } from '../../../src/models/dashboard.js';
 import { PersistOp } from '../../../src/models/persistable.js';
 
 const FIXED_CLOCK = new Date('2026-07-02T12:00:00.000Z');
 
 const makeDeps = (overrides?: Partial<Deps['dashboards']>): Deps => ({
   dashboards: {
-    findRawByName: vi.fn(async () => null),
+    findVersionByName: vi.fn(async () => null),
     get: vi.fn(async () => null),
     list: vi.fn(async (): Promise<DashboardListItem[]> => []),
     ...overrides,
@@ -41,13 +41,7 @@ describe('saveDashboard', () => {
   });
 
   it('emits a version-guarded update and overwrites by name when present', async () => {
-    const existing: DashboardEntity = {
-      name: 'overview',
-      html: '<html>old</html>',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-      version: 4,
-    };
-    const deps = makeDeps({ findRawByName: vi.fn(async () => existing) });
+    const deps = makeDeps({ findVersionByName: vi.fn(async () => 4) });
     const result = await saveDashboard(deps, 'overview', '<html>new</html>');
     const outcome = result._unsafeUnwrap();
     const dashboard: Dashboard = { name: 'overview', html: '<html>new</html>', updatedAt: FIXED_CLOCK.toISOString() };
@@ -67,7 +61,7 @@ describe('saveDashboard', () => {
     // (test/unit/logic/dashboard.test.ts) — asserting a substring here keeps this test focused on
     // saveDashboard's own behavior (reject + never touch the repo) without duplicating that string.
     expect((error as { issues: string[] }).issues.some((issue) => issue.includes('root element'))).toBe(true);
-    expect(deps.dashboards.findRawByName).not.toHaveBeenCalled();
+    expect(deps.dashboards.findVersionByName).not.toHaveBeenCalled();
   });
 
   it('rejects html with a broken inline <script> without reading the repo for a decision', async () => {
@@ -78,7 +72,7 @@ describe('saveDashboard', () => {
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
     expect((error as { issues: string[] }).issues.some((issue) => issue.includes('syntax error'))).toBe(true);
-    expect(deps.dashboards.findRawByName).not.toHaveBeenCalled();
+    expect(deps.dashboards.findVersionByName).not.toHaveBeenCalled();
   });
 });
 

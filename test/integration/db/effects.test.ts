@@ -1283,14 +1283,14 @@ describe('dashboardApplier — name-PK race surfaces as a generic conflict, neve
     // PRIMARYKEY conflict and the whole batch rolls back for a retry.
     const racingDashboards: Deps['dashboards'] = {
       ...dashboardsR,
-      findRawByName: async (n) => {
+      findVersionByName: async (n) => {
         reads += 1;
-        const existing = await dashboardsR.findRawByName(n);
-        if (reads === 1 && !existing) {
+        const existingVersion = await dashboardsR.findVersionByName(n);
+        if (reads === 1 && existingVersion === null) {
           await db.insert(dashboards).values({ name: n, html: '<html>racer</html>', updatedAt: '2026-05-01' });
           return null; // this read itself still predates the race — the decision is already stale
         }
-        return existing;
+        return existingVersion;
       },
     };
     const racingDeps: Deps = { ...deps, dashboards: racingDashboards };

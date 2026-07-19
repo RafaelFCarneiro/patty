@@ -521,8 +521,10 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     no-op with an empty `persist`; missing → `notFound`) and reuses the existing `transactionApplier` — no new
     applier needed. `TransactionsRepo.confirm` (the `UPDATE ... WHERE status = 'pending'` SQL predicate) is
     deleted; the rule now lives in the domain, and the shell's version guard alone covers the race.
-    `saveDashboard` (`controllers/dashboards.ts`) reads `dashboards.findRawByName` and emits an `insert` (absent)
-    or a version-guarded `update` (present) — still upsert-by-name from the caller's perspective. `dashboards`
+    `saveDashboard` (`controllers/dashboards.ts`) reads `dashboards.findVersionByName` — a version-only read,
+    since presence + version is all the decision needs, never the (potentially ~500KB) `html` a full-row read
+    would pull on every save — and emits an `insert` (absent) or a version-guarded `update` (present) — still
+    upsert-by-name from the caller's perspective. `dashboards`
     keys on `name`, not `id` (§ Write path), so its `EntityApplier` (`diplomat/db/repos/dashboards.ts`'s
     `dashboardApplier`) is hand-written rather than `versionedTableApplier`: `name` being the primary key
     itself (not a secondary `UNIQUE` column like `tags.name`) means a concurrent first save of a brand new
@@ -548,7 +550,8 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     **`deps` now exposes no write method at all, unconditionally — not for "every entity this migration
     covers", for every entity in the system.** `TransactionsRepo` keeps only `getById`/`findAllCorrelatedToCard`/
     `search`/`count`/`aggregate`/`summaryRows`/`pendingBalanceParts`; `DashboardsRepo` keeps only `get`/
-    `findRawByName`/`list`; `SettingsRepo` keeps only `getLocale`; `BillsRepo` keeps only its four read methods.
+    `findVersionByName`/`list`; `SettingsRepo` keeps only `getLocale`; `BillsRepo` keeps only its four read
+    methods.
     No repo interface in the codebase exposes a write method, and no domain rule survives as a SQL predicate in
     a repo.
 
@@ -582,7 +585,7 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 The `dashboards` table (`name` PK, `html`, `updated_at`) stores agent-authored HTML shells, keyed by name — `save_dashboard` (MCP tool) / `POST /api/dashboards` (REST) is an **upsert**: saving to an existing name replaces its content immediately, no rebuild, restart, or migration. `GET /ui/:name` (mounted by `registerRoutes` in `diplomat/http/routes.ts`, same Fastify instance as `/api`, so it rides the HTTP sidecar per ADR-013 Decision 7) returns the currently-stored HTML as `text/html; charset=utf-8` with `cache-control: no-cache` — a regenerated dashboard is never masked by a stale browser copy. Absent name → `unknown_dashboard` (404).
 
-Before persisting, `saveDashboard` (`controllers/dashboards.ts`) runs `findHtmlValidationIssues` (`logic/dashboard.ts`, pure) and rejects with `validation` (422) if it fails: no `<!doctype html>`/`<html>` root element, or an inline `<script>` that fails to *compile* (via Node's `vm.Script` — checked, never executed, so this can't itself run untrusted code). This is a narrow render-ability check, not sanitization: it exists because there was previously nothing stopping a broken save (e.g. a JS syntax error) from silently overwriting a working dashboard with no version history to recover from — full HTML sanitization remains explicitly out of scope for this local single-user app (ADR-013 Phase A). A rejected save never reads `dashboards.findRawByName` or decides a `Persistable`, so the previously stored
+Before persisting, `saveDashboard` (`controllers/dashboards.ts`) runs `findHtmlValidationIssues` (`logic/dashboard.ts`, pure) and rejects with `validation` (422) if it fails: no `<!doctype html>`/`<html>` root element, or an inline `<script>` that fails to *compile* (via Node's `vm.Script` — checked, never executed, so this can't itself run untrusted code). This is a narrow render-ability check, not sanitization: it exists because there was previously nothing stopping a broken save (e.g. a JS syntax error) from silently overwriting a working dashboard with no version history to recover from — full HTML sanitization remains explicitly out of scope for this local single-user app (ADR-013 Phase A). A rejected save never reads `dashboards.findVersionByName` or decides a `Persistable`, so the previously stored
 dashboard is untouched (§ Write path — `saveDashboard` is FC/IS: it decides an insert/update as data, never
 writes directly).
 

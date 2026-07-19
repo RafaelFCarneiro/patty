@@ -12,12 +12,13 @@ export const saveDashboard = (deps: Deps, name: string, html: string): ResultAsy
     const issues = findHtmlValidationIssues(html);
     yield* guard(issues.length === 0, dashboardErrors.invalidHtml(issues));
 
-    const existing = await deps.dashboards.findRawByName(name);
+    const existingVersion = await deps.dashboards.findVersionByName(name);
     const dashboard: Dashboard = { name, html, updatedAt: deps.clock().toISOString() };
 
-    const persist: Persistable[] = existing
-      ? [persistence.update({ entity: DASHBOARD_ENTITY_TAG, model: { ...dashboard, version: existing.version } })]
-      : [persistence.insert({ entity: DASHBOARD_ENTITY_TAG, model: dashboard })];
+    const persist: Persistable[] =
+      existingVersion === null
+        ? [persistence.insert({ entity: DASHBOARD_ENTITY_TAG, model: dashboard })]
+        : [persistence.update({ entity: DASHBOARD_ENTITY_TAG, model: { ...dashboard, version: existingVersion } })];
 
     return ok({ persist, response: dashboard });
   });

@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import * as dashboardAdapters from '../../../adapters/dashboards.js';
-import type { Dashboard, DashboardEntity, DashboardListItem } from '../../../models/dashboard.js';
+import type { Dashboard, DashboardListItem } from '../../../models/dashboard.js';
 import type { Db } from '../driver.js';
 import { dashboards } from '../schema.js';
 import { isPrimaryKeyConstraintViolation } from '../sqliteErrors.js';
@@ -8,7 +8,9 @@ import { VersionConflict, type EntityApplier } from '../effects.js';
 
 export type DashboardsRepo = {
   get: (name: string) => Promise<Dashboard | null>;
-  findRawByName: (name: string) => Promise<DashboardEntity | null>;
+  // Version-only read — saveDashboard only needs presence + version to decide insert vs. update,
+  // never the (potentially ~500KB) html, so this avoids pulling that on every save.
+  findVersionByName: (name: string) => Promise<number | null>;
   list: () => Promise<DashboardListItem[]>;
 };
 
@@ -18,9 +20,13 @@ export const dashboardsRepo = (db: Db): DashboardsRepo => ({
     return row ? dashboardAdapters.dbToModel(row) : null;
   },
 
-  findRawByName: async (name) => {
-    const [row] = await db.select().from(dashboards).where(eq(dashboards.name, name)).limit(1);
-    return row ? dashboardAdapters.dbToEntity(row) : null;
+  findVersionByName: async (name) => {
+    const [row] = await db
+      .select({ version: dashboards.version })
+      .from(dashboards)
+      .where(eq(dashboards.name, name))
+      .limit(1);
+    return row?.version ?? null;
   },
 
   list: async () => {
