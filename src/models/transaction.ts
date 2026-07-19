@@ -207,14 +207,11 @@ export const CreateTransactionSchema = z.object({
 });
 export type CreateTransaction = z.infer<typeof CreateTransactionSchema>;
 
-/** Minimal shape every statement line carries, regardless of aggregate — a structural subset of
- *  `CreateTransaction` (both `ImportAccountStatementItemSchema`/`ImportCardStatementItemSchema`
- *  derive from it, relaxing `idempotencyKey` to optional the same way). Never independently
- *  decoded: real statement-line data is always already one of those two concrete zod types by the
- *  time bulk import's shared defaulting step runs. */
+// Not a schema of its own: every real statement line is already a decoded
+// ImportAccountStatementItem/ImportCardStatementItem; this is a structural subset of
+// CreateTransaction, generic over both.
 export type StatementLine = Pick<CreateTransaction, 'date' | 'description' | 'amount'> & { idempotencyKey?: string };
 
-/** A statement line with the runner's defaults applied, plus the whole import's own `rawInput`. */
 export type DefaultedStatementLine<Line extends StatementLine> = Line & {
   date: string;
   idempotencyKey: string;

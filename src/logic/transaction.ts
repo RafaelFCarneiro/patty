@@ -131,9 +131,7 @@ export const resolveEffectiveType = (
 export const deriveIdempotencyKey = (item: { date: string; description: string; amount: number }): string =>
   `${item.date}-${normalizeMerchant(item.description).replace(/\s+/g, '-') || 'tx'}-${item.amount.toFixed(2)}`;
 
-/** Defaults the fields shared by every statement line (date, idempotencyKey), and stamps the
- *  whole import's own `rawInput` onto each — pure; `today` is the caller's already-resolved
- *  `toIsoDate(deps.clock())`, since logic never reads the clock itself. */
+// today is the caller's already-resolved toIsoDate(deps.clock()) — logic never reads the clock.
 export const defaultStatementLines = <Line extends StatementLine>(
   today: string,
   lines: readonly Line[],
