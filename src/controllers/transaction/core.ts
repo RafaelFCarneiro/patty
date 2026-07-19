@@ -81,13 +81,6 @@ export const resolveCategorySelection = (
     () => okAsync(null),
   );
 
-/**
- * Flip a pending transaction to effective — a functional-core flow
- * (docs/functional-core-imperative-shell.md): idempotent no-op (returns the existing view, no
- * writes) if already effective; otherwise the domain rule "only a pending transaction can be
- * confirmed" is enforced here, not as a SQL predicate — the shell's version guard alone covers the
- * concurrent-confirm race.
- */
 export const confirmTransaction = (
   deps: Deps,
   input: { id: string },

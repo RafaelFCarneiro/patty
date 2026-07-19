@@ -8,8 +8,6 @@ import { VersionConflict, type EntityApplier } from '../effects.js';
 
 export type DashboardsRepo = {
   get: (name: string) => Promise<Dashboard | null>;
-  /** Version-carrying read — for `saveDashboard`, which needs it to decide between an insert
-   *  (absent) and a version-guarded update (present). */
   findRawByName: (name: string) => Promise<DashboardEntity | null>;
   list: () => Promise<DashboardListItem[]>;
 };
@@ -34,18 +32,11 @@ export const dashboardsRepo = (db: Db): DashboardsRepo => ({
   },
 });
 
-/**
- * The dashboard entity's `EntityApplier` — hand-written rather than `versionedTableApplier`
- * because `dashboards` keys on `name`, not `id` (docs/functional-core-imperative-shell.md; see
- * `diplomat/db/effects.ts`'s `VersionedTable` comment). `name` being the primary key (not a
- * secondary unique column) means a concurrent first save of the same new name raises a
- * `SQLITE_CONSTRAINT_PRIMARYKEY` violation instead of `versionedTableApplier`'s id-scoped
- * `onConflictDoNothing` swallowing it — recognized by `isPrimaryKeyConstraintViolation` (distinct
- * from `isUniqueConstraintViolation`, which only matches a secondary `UNIQUE`/`uniqueIndex`
- * column, e.g. `tags.name`) and rethrown as `VersionConflict` (mirroring `tagApplier`/
- * `billApplier`) so the whole batch rolls back and `saveDashboard` re-invokes: its retry re-reads,
- * finds the row the race just inserted, and takes the update path instead of racing another insert.
- */
+// Hand-written rather than `versionedTableApplier` because `dashboards` keys on `name`, not `id`.
+// A concurrent first save of the same name raises `SQLITE_CONSTRAINT_PRIMARYKEY` — NOT
+// `SQLITE_CONSTRAINT_UNIQUE`, since `name` is the primary key rather than a secondary unique
+// column — so it needs `isPrimaryKeyConstraintViolation`, not `isUniqueConstraintViolation`
+// (`tagApplier`'s check). Rethrown as `VersionConflict` to roll back and retry.
 export const dashboardApplier: EntityApplier = {
   insert: async (tx, model) => {
     const row = model as { name: string; html: string; updatedAt: string };

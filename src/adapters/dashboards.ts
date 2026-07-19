@@ -13,15 +13,13 @@ import type { DashboardRow } from '../wire/db/dashboards.js';
 export const dbToModel = (row: DashboardRow): Dashboard =>
   DashboardSchema.parse({ name: row.name, html: row.html, updatedAt: row.updatedAt });
 
-/** Read variant carrying `version` — for `saveDashboard`, which needs it to decide between an
- *  insert (absent) and a version-guarded update (present). */
 export const dbToEntity = (row: DashboardRow): DashboardEntity =>
   DashboardEntitySchema.parse({ name: row.name, html: row.html, updatedAt: row.updatedAt, version: row.version });
 
 export const dbToListItem = (row: Pick<DashboardRow, 'name' | 'updatedAt'>): DashboardListItem =>
   DashboardListItemSchema.parse({ name: row.name, updatedAt: row.updatedAt });
 
-/** Entity → row for the versioned unit of work — a `Dashboard` is already row-shaped once versioned. */
+// Identity: a versioned Dashboard is already row-shaped.
 export const modelToDb = (entity: DashboardEntity): DashboardRow => entity;
 
 export const { persistableToDb, outcomeToDb } = persistence.entityDbAdapter(DASHBOARD_ENTITY_TAG, modelToDb);

@@ -5,8 +5,6 @@ import { settings } from '../schema.js';
 import { versionedTableApplier, type EntityApplier } from '../effects.js';
 
 export type SettingsRepo = {
-  /** Version-carrying read — for `setLocale`, which needs it to decide between an insert (no
-   *  settings row exists yet) and a version-guarded update. */
   getLocale: () => Promise<SettingsEntity | undefined>;
 };
 
@@ -23,9 +21,5 @@ export const settingsRepo = (db: Db): SettingsRepo => ({
   },
 });
 
-/**
- * The settings entity's `EntityApplier` — `settings` is a singleton table but still follows the
- * `id`/`version` convention (`id` is always `SETTINGS_SINGLETON_ID`), so this is just
- * `versionedTableApplier(settings)`, same as `accountApplier`.
- */
+// Singleton row, but still id/version-shaped (id is always SETTINGS_SINGLETON_ID).
 export const settingsApplier: EntityApplier = versionedTableApplier(settings);

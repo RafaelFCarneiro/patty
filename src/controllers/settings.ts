@@ -24,11 +24,8 @@ export const getPreferences = async (deps: Deps): Promise<Preferences> => {
   };
 };
 
-/** A functional-core flow (docs/functional-core-imperative-shell.md): insert if no settings row
- *  exists yet, version-guarded update otherwise. Cache invalidation (the process-level locale
- *  cache main.ts builds) is shell-side bookkeeping attached to this write, not a domain effect —
- *  the shell resets it after this flow's persist batch commits (`diplomat/mcp/server.ts`'s
- *  `set_locale` handler), never from here. */
+// The locale cache reset (main.ts's process-level cache) is shell bookkeeping, not a domain
+// effect — the shell resets it after this flow's write commits, never from here.
 export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<FlowOutcome<Preferences>, AppError> =>
   safeTry(async function* () {
     const current = await deps.settings.getLocale();
