@@ -62,9 +62,8 @@ const assertAccountOwnedLegs = (
 
 type MovementPlan = { entity: TransactionEntity; classification: ClassifyOutcome };
 
-/** Everything addAccountExpense/addAccountIncome decide via injected reads, before `addAccountMovement`
- *  (below) shapes its own write — validation, account/category resolution, and the full transaction
- *  entity to persist. Pure decision, no write. */
+/** Shared read-decide step for addAccountExpense/addAccountIncome: validates, resolves the
+ *  account/category, and builds the transaction entity `addAccountMovement` (below) persists. */
 const planAccountMovement = (
   deps: Deps,
   input: AddAccountMovement,
@@ -155,12 +154,10 @@ export const addAccountIncome = (
   addAccountMovement(deps, input, MovementType.enum.income, source);
 
 /**
- * Import an account statement (ADR-017 step 2 / ADR-022 step 3): single-source — every item
- * belongs to the ONE account named in `input.account` (or unattached if omitted), so there is no
- * per-line account to resolve or route. Defaults each line, then binds it to `addAccountExpense`/
- * `addAccountIncome` per its own `type` — the same single-line flows the individual tools call,
- * unchanged — as a `flowFor` the shell runs through `runEffectsSequence`. This module only decides;
- * it never applies a write itself.
+ * Import an account statement: single-source — every item belongs to the ONE account named in
+ * `input.account` (or unattached if omitted), so there is no per-line account to resolve or route.
+ * Each line's own `type` picks `addAccountExpense`/`addAccountIncome`; the shell runs the resulting
+ * flows via `runEffectsSequence`. This module only decides; it never applies a write itself.
  */
 export const importAccountStatement = (
   deps: Deps,
@@ -169,9 +166,9 @@ export const importAccountStatement = (
 ): StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult> => {
   const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
   // Resolves locale once for the whole import rather than once per line: every line's flow reads
-  // deps.locale() to build its localized response, and overriding it here to the same in-flight
-  // promise (never re-invoked) keeps every item's labels consistent even if the process-level
-  // locale cache resets mid-import — matching the single-resolve behavior bulk import always had.
+  // deps.locale() to build its localized response, so overriding it here to the same in-flight
+  // promise keeps every item's labels consistent even if the process-level locale cache resets
+  // mid-import.
   const localePromise = deps.locale();
   const cachedDeps: Deps = { ...deps, locale: () => localePromise };
   const flowFor = (line: (typeof lines)[number]) => (): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> => {

@@ -46,12 +46,12 @@ export type Deps = {
 export type RunEffects = <T>(flow: () => ResultAsync<FlowOutcome<T>, AppError>) => ResultAsync<T, AppError>;
 
 /**
- * The imperative shell's capability to run a **sequence** of independent per-item flows (ADR-022
- * decisions 3-4): each item's flow runs and applies in its own transaction, in commit order, so
- * item *i+1*'s flow sees item *i*'s committed writes; one item's failure is recorded and the
- * sequence continues (partial success). Shell-only, like `RunEffects` — never a field a controller
- * can reach for. The concrete implementation (`runEffectsSequence`, bound to a `Db`) lives in
- * `diplomat/db`; this is just the shape `diplomat/mcp`/`diplomat/http` depend on.
+ * The imperative shell's capability to run a **sequence** of independent per-item flows: each
+ * item's flow runs and applies in its own transaction, in commit order, so item *i+1*'s flow sees
+ * item *i*'s committed writes; one item's failure is recorded and the sequence continues (partial
+ * success). Shell-only, like `RunEffects` — never a field a controller can reach for. The concrete
+ * implementation (`runEffectsSequence`, bound to a `Db`) lives in `diplomat/db`; this is just the
+ * shape `diplomat/mcp`/`diplomat/http` depend on.
  */
 export type RunEffectsSequence = <I, T>(
   items: readonly I[],

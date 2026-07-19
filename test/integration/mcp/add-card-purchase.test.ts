@@ -322,9 +322,9 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
     }
   });
 
-  // The case the old within-batch "dedup" existed for (ADR-022 step 3): two lines landing on the
-  // SAME brand-new cycle no longer coordinate inside one batch — the second line's flow simply
-  // reads the bill the first line's flow already committed (option B, sequential re-invocation).
+  // Two lines landing on the SAME brand-new cycle don't coordinate inside one batch — the second
+  // line's flow simply reads the bill the first line's flow already committed (each line is its
+  // own transaction, applied sequentially).
   it('two lines sharing a brand-new bill cycle attach to exactly one bill, not two', async () => {
     const cardName = `AddPurchase Bulk SharedBill Card ${stamp}`;
     const { client, transport } = makeClient();

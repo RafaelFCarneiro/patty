@@ -196,14 +196,12 @@ export const addCardPurchase = (
   });
 
 /**
- * Import a credit-card statement (ADR-017 step 2 / ADR-022 step 3): single-source — every item is
- * a purchase on the ONE card named in `input.card`. Defaults each line, then binds it to
- * `addCardPurchase` — the same single-line flow `add_card_purchase` calls, unchanged — as a
- * `flowFor` the shell runs through `runEffectsSequence`. Because the shell re-invokes each line's
- * flow only after the previous line committed (ADR-022 decision 4), two lines landing on the same
- * new bill cycle simply share it: the second line's `planCardPurchase` read sees the first line's
- * bill already there — no within-batch dedup needed. This module only decides; it never applies a
- * write itself.
+ * Import a credit-card statement: single-source — every item is a purchase on the ONE card named
+ * in `input.card`. Each line binds to `addCardPurchase`; the shell runs the resulting flows via
+ * `runEffectsSequence`. Because the shell re-invokes each line's flow only after the previous line
+ * committed, two lines landing on the same new bill cycle simply share it — the second line's
+ * `planCardPurchase` read sees the first line's bill already there, no within-batch dedup needed.
+ * This module only decides; it never applies a write itself.
  */
 export const importCardStatement = (
   deps: Deps,
@@ -212,9 +210,9 @@ export const importCardStatement = (
 ): StatementImportPlan<ImportCardStatementItem, ClassifiedUpsertResult> => {
   const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
   // Resolves locale once for the whole import rather than once per line: every line's flow reads
-  // deps.locale() to build its localized response, and overriding it here to the same in-flight
-  // promise (never re-invoked) keeps every item's labels consistent even if the process-level
-  // locale cache resets mid-import — matching the single-resolve behavior bulk import always had.
+  // deps.locale() to build its localized response, so overriding it here to the same in-flight
+  // promise keeps every item's labels consistent even if the process-level locale cache resets
+  // mid-import.
   const localePromise = deps.locale();
   const cachedDeps: Deps = { ...deps, locale: () => localePromise };
   const flowFor = (line: (typeof lines)[number]) => () =>

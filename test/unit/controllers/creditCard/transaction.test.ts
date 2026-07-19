@@ -264,7 +264,7 @@ describe('importCardStatement — pure per-line plan for the shell (ADR-022 step
     expect(result.isOk()).toBe(true);
     const { persist } = result._unsafeUnwrap();
     // Same two-entry batch addCardPurchase itself emits on a fresh cycle (bill insert, then
-    // transaction insert) — proving the plan reused that flow verbatim, not a bespoke write path.
+    // transaction insert) — the plan reuses that flow, unmodified.
     expect(persist).toHaveLength(2);
     expect(persist[0]).toMatchObject({ op: PersistOp.enum.insert, entity: 'bill' });
     expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });

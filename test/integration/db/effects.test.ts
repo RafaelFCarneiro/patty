@@ -141,9 +141,7 @@ const insertCreditCardWithAccount = async (
   return { cardId, accountId, cardName };
 };
 
-/** Inserts a fresh `open` bill directly (raw drizzle) — test fixture setup only, replacing the
- *  `BillsRepo.ensureOpen` this file used to seed with before phase 3c removed that dead repo
- *  method (its production caller, `addCardPurchaseViaRepo`, no longer exists). */
+/** Inserts a fresh `open` bill directly (raw drizzle) — test fixture setup only. */
 const insertOpenBill = async (
   cardId: string,
   period: { month: number; year: number; closeDate: string; dueDate: string },
@@ -162,10 +160,8 @@ const insertOpenBill = async (
   return { id };
 };
 
-/** Inserts a transaction row directly (raw drizzle) — test fixture setup only, replacing
- *  `TransactionsRepo.create` this file used to seed with before phase 3c removed that dead repo
- *  method (its production callers, `addAccountMovementViaRepo`/`addCardPurchaseViaRepo`, no longer
- *  exist). No tags in any fixture using this, so unlike the real applier this never attaches any. */
+/** Inserts a transaction row directly (raw drizzle) — test fixture setup only. No tags in any
+ *  fixture using this, so unlike the real applier this never attaches any. */
 const insertTransaction = async (entity: Transaction): Promise<void> => {
   const { props, refs } = transactionAdapters.modelToDb(entity);
   await db.insert(transactions).values({
