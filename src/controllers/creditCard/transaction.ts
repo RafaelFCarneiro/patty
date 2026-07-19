@@ -210,7 +210,14 @@ export const importCardStatement = (
   source: TransactionSource,
 ): StatementImportPlan<ImportCardStatementItem, ClassifiedUpsertResult> => {
   const lines = defaultStatementLines(deps, input.items, input.rawInput);
-  const flowFor = (line: (typeof lines)[number]) => () => addCardPurchase(deps, { ...line, card: input.card }, source);
+  // Resolves locale once for the whole import rather than once per line: every line's flow reads
+  // deps.locale() to build its localized response, and overriding it here to the same in-flight
+  // promise (never re-invoked) keeps every item's labels consistent even if the process-level
+  // locale cache resets mid-import — matching the single-resolve behavior bulk import always had.
+  const localePromise = deps.locale();
+  const cachedDeps: Deps = { ...deps, locale: () => localePromise };
+  const flowFor = (line: (typeof lines)[number]) => () =>
+    addCardPurchase(cachedDeps, { ...line, card: input.card }, source);
   return { lines, flowFor };
 };
 

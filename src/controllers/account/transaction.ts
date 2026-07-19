@@ -167,11 +167,17 @@ export const importAccountStatement = (
   source: TransactionSource,
 ): StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult> => {
   const lines = defaultStatementLines(deps, input.items, input.rawInput);
+  // Resolves locale once for the whole import rather than once per line: every line's flow reads
+  // deps.locale() to build its localized response, and overriding it here to the same in-flight
+  // promise (never re-invoked) keeps every item's labels consistent even if the process-level
+  // locale cache resets mid-import — matching the single-resolve behavior bulk import always had.
+  const localePromise = deps.locale();
+  const cachedDeps: Deps = { ...deps, locale: () => localePromise };
   const flowFor = (line: (typeof lines)[number]) => (): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> => {
     const movement = { ...R.omit(line, ['type']), account: input.account };
     return line.type === MovementType.enum.expense
-      ? addAccountExpense(deps, movement, source)
-      : addAccountIncome(deps, movement, source);
+      ? addAccountExpense(cachedDeps, movement, source)
+      : addAccountIncome(cachedDeps, movement, source);
   };
   return { lines, flowFor };
 };
