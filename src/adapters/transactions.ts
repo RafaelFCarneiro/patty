@@ -4,7 +4,6 @@ import {
   type RawTransactionView,
   type Transaction,
   type TransactionEntity,
-  type TransactionPatch,
 } from '../models/transaction.js';
 import { LocalizedNamesSchema } from '../models/category.js';
 import type { ClassifiedUpsertResult, DeleteTransactionResult, SearchTransactions } from '../models/transaction.js';
@@ -129,21 +128,6 @@ export const entityToDb = (entity: TransactionEntity & { version: number }): Tra
 
 export const { persistableToDb, outcomeToDb } = persistence.entityDbAdapter(TRANSACTION_ENTITY_TAG, entityToDb);
 
-/** model→db: flatten a domain patch into SQL-settable properties. */
-export const patchToDb = (patch: TransactionPatch): Partial<TransactionDbProps> => ({
-  ...(patch.description !== undefined && { description: patch.description }),
-  ...(patch.amount !== undefined && { amount: patch.amount }),
-  ...(patch.type !== undefined && { type: patch.type }),
-  ...(patch.status !== undefined && { status: patch.status }),
-  ...(patch.date !== undefined && { date: patch.date }),
-  ...(patch.currency !== undefined && { currency: patch.currency }),
-  ...(patch.classification !== undefined && {
-    classificationMethod: patch.classification.method,
-    confidence: patch.classification.confidence,
-  }),
-  ...(patch.note !== undefined && { note: patch.note === '' ? null : patch.note }),
-});
-
 // ─── wire/in→model ───────────────────────────────────────────────────────────
 
 export const searchWireInToModel = (input: wireIn.SearchTransactionsInput): SearchTransactions => input;
@@ -153,9 +137,8 @@ export const searchWireInToModel = (input: wireIn.SearchTransactionsInput): Sear
 // `classification` required (narrower than `UpsertTransactionResult`'s general optional field):
 // this adapter is only ever reached from add_account_expense/add_account_income/add_card_purchase,
 // never create_transfer (transfers are never classified — TransferResultOut has no such field).
-export const createResultToWireOut = (
-  result: ClassifiedUpsertResult,
-): CreateTransactionOut => CreateTransactionOut.parse(result);
+export const createResultToWireOut = (result: ClassifiedUpsertResult): CreateTransactionOut =>
+  CreateTransactionOut.parse(result);
 
 const bulkItemToWireOut = (item: BulkItemResult<AppError>): BulkItemOut =>
   item.status === 'error'

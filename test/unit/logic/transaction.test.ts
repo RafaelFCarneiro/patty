@@ -16,6 +16,7 @@ import {
   assertExclusiveCategorySubCategory,
   buildTransactionView,
   buildUpsertResult,
+  defaultStatementLines,
   deriveIdempotencyKey,
   hasCategory,
   hasSubCategory,
@@ -37,6 +38,40 @@ describe('deriveIdempotencyKey', () => {
   it('differs when amount differs', () => {
     const a = { date: '2026-06-09', description: 'IFOOD', amount: 30 };
     expect(deriveIdempotencyKey(a)).not.toBe(deriveIdempotencyKey({ ...a, amount: 31 }));
+  });
+});
+
+describe('defaultStatementLines — pure per-line defaulting (ADR-022 step 3)', () => {
+  it('defaults date to the caller-resolved today and derives an idempotencyKey when both are absent', () => {
+    const [line] = defaultStatementLines('2026-06-10', [{ description: 'Coffee', amount: 5 }], undefined);
+
+    expect(line.date).toBe('2026-06-10');
+    expect(line.idempotencyKey).toBeTruthy();
+    expect(line.rawInput).toBeUndefined();
+  });
+
+  it('never overrides an explicit date/idempotencyKey', () => {
+    const [line] = defaultStatementLines(
+      '2026-06-10',
+      [{ description: 'Coffee', amount: 5, date: '2026-01-01', idempotencyKey: 'explicit' }],
+      undefined,
+    );
+
+    expect(line.date).toBe('2026-01-01');
+    expect(line.idempotencyKey).toBe('explicit');
+  });
+
+  it("stamps the whole import's rawInput onto every line", () => {
+    const lines = defaultStatementLines(
+      '2026-06-10',
+      [
+        { description: 'Coffee', amount: 5 },
+        { description: 'Taxi', amount: 12 },
+      ],
+      'pasted statement text',
+    );
+
+    expect(lines.map((l) => l.rawInput)).toEqual(['pasted statement text', 'pasted statement text']);
   });
 });
 

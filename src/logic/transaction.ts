@@ -7,8 +7,10 @@ import type {
   Classification,
   ClassifiedUpsertResult,
   ClassifyOutcome,
+  DefaultedStatementLine,
   UpsertTransactionResult,
   SearchTransactions,
+  StatementLine,
   TransactionError,
   TransactionView,
   UpdateTransaction,
@@ -128,6 +130,18 @@ export const resolveEffectiveType = (
 /** Stable idempotency key derived from statement line: re-importing is a no-op. */
 export const deriveIdempotencyKey = (item: { date: string; description: string; amount: number }): string =>
   `${item.date}-${normalizeMerchant(item.description).replace(/\s+/g, '-') || 'tx'}-${item.amount.toFixed(2)}`;
+
+// today is the caller's already-resolved toIsoDate(deps.clock()) — logic never reads the clock.
+export const defaultStatementLines = <Line extends StatementLine>(
+  today: string,
+  lines: readonly Line[],
+  rawInput: string | undefined,
+): DefaultedStatementLine<Line>[] =>
+  lines.map((line) => {
+    const date = line.date ?? today;
+    const idempotencyKey = line.idempotencyKey ?? deriveIdempotencyKey({ ...line, date });
+    return { ...line, date, idempotencyKey, rawInput };
+  });
 
 export const LOW_CONFIDENCE_THRESHOLD = 0.6;
 

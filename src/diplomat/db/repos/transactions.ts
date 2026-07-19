@@ -7,12 +7,9 @@ import { SortDirection, type CursorKey } from '../../../models/page.js';
 import {
   TransactionStatus,
   TransactionType,
-  type CreateTxResult,
   type ResolvedSearchRefs,
   type SearchTransactions,
-  type Transaction,
   type RawTransactionView,
-  type TransactionPatch,
   type TransactionSortField,
 } from '../../../models/transaction.js';
 import type { SummaryRow } from '../../../models/summary.js';
@@ -92,23 +89,9 @@ export const correlatedToCard = (cardId: string, accountId: string, alias = ''):
 };
 
 export type TransactionsRepo = {
-  /** Receives domain entity; model→db flattening happens here (adapters/transactions.ts). */
-  create: (entity: Transaction, tagNames: string[]) => Promise<CreateTxResult>;
   getById: (id: string) => Promise<RawTransactionView | null>;
-  update: (
-    id: string,
-    patch: TransactionPatch,
-    refs: {
-      accountId: string | null;
-      categoryId: string | null;
-      /** undefined = leave untouched; null = explicitly clear (decided by the controller). */
-      subCategoryId: string | null | undefined;
-      tagNames: string[] | null;
-    },
-  ) => Promise<RawTransactionView | null>;
   /** Flip status pending → effective. Returns null if the id does not exist. */
   confirm: (id: string) => Promise<RawTransactionView | null>;
-  delete: (id: string) => Promise<boolean>;
   /** Every transaction correlated to a credit card — card purchases (`creditCardId`) and any
    *  movement on its internal liability account (`fromAccountId`/`toAccountId`), including the
    *  bill-payment transfer. Version-carrying — `deleteCreditCard` decides which of these to remove
@@ -138,89 +121,7 @@ export type TransactionsRepo = {
 };
 
 export const transactionsRepo = (db: Db): TransactionsRepo => ({
-  /** Idempotent create: INSERT OR IGNORE on idempotency_key. */
-  create: async (entity, tagNames) => {
-    const { props, refs } = transactionAdapters.modelToDb(entity);
-
-    // Ensure merchant row exists before FK reference
-    if (refs.merchantKey) {
-      await db.insert(merchants).values({ key: refs.merchantKey }).onConflictDoNothing();
-    }
-
-    const result = await db
-      .insert(transactions)
-      .values({
-        id: props.id,
-        description: props.description,
-        amount: props.amount,
-        type: props.type,
-        status: props.status,
-        date: props.date,
-        currency: props.currency,
-        source: props.source,
-        idempotencyKey: props.idempotencyKey,
-        classificationMethod: props.classificationMethod,
-        confidence: props.confidence,
-        rawInput: props.rawInput ?? null,
-        note: props.note ?? null,
-        fromAccountId: refs.accountId,
-        toAccountId: refs.toAccountId,
-        creditCardId: refs.cardId,
-        billId: refs.billId,
-        categoryId: refs.categoryId,
-        subcategoryId: refs.subCategoryId,
-        merchantKey: refs.merchantKey,
-      })
-      .onConflictDoNothing({ target: transactions.idempotencyKey });
-
-    const created = (result.rowsAffected ?? 0) > 0;
-
-    let transaction: RawTransactionView | null;
-    if (created) {
-      if (tagNames.length > 0) await attachTags(db, entity.id, tagNames);
-      transaction = await fetchTx(db, entity.id);
-    } else {
-      // Duplicate: the new entity.id was never inserted; find the existing row by idempotency key.
-      const [existing] = await db.all<Record<string, unknown>>(
-        fullTxSelect(sql`t.idempotency_key = ${props.idempotencyKey}`),
-      );
-      transaction = existing ? transactionAdapters.dbToModel(existing) : null;
-    }
-
-    return { transaction: expectPresent(transaction, rowNotFoundAfterWrite('transactions', 'write')), created };
-  },
-
   getById: (id) => fetchTx(db, id),
-
-  update: async (id, patch, refs) => {
-    const props = transactionAdapters.patchToDb(patch);
-
-    const setData = {
-      ...(props.description !== undefined && { description: props.description }),
-      ...(props.amount !== undefined && { amount: props.amount }),
-      ...(props.type !== undefined && { type: props.type }),
-      ...(props.status !== undefined && { status: props.status }),
-      ...(props.date !== undefined && { date: props.date }),
-      ...(props.currency !== undefined && { currency: props.currency }),
-      ...(props.classificationMethod !== undefined && { classificationMethod: props.classificationMethod }),
-      ...(props.confidence !== undefined && { confidence: props.confidence }),
-      ...(props.note !== undefined && { note: props.note }),
-      ...(refs.accountId !== null && { fromAccountId: refs.accountId }),
-      ...(refs.categoryId !== null && { categoryId: refs.categoryId }),
-      // undefined = caller left it untouched; null = caller explicitly clears it
-      // (e.g. controller clears a stale sub-category when only the category changes).
-      ...(refs.subCategoryId !== undefined && { subcategoryId: refs.subCategoryId }),
-    };
-    if (Object.keys(setData).length > 0) {
-      await db.update(transactions).set(setData).where(eq(transactions.id, id));
-    }
-
-    if (refs.tagNames !== null) {
-      await replaceTags(db, id, refs.tagNames);
-    }
-
-    return fetchTx(db, id);
-  },
 
   confirm: async (id) => {
     await db
@@ -228,11 +129,6 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       .set({ status: TransactionStatus.enum.effective })
       .where(sql`${transactions.id} = ${id} AND ${transactions.status} = ${TransactionStatus.enum.pending}`);
     return fetchTx(db, id);
-  },
-
-  delete: async (id) => {
-    const result = await db.delete(transactions).where(eq(transactions.id, id));
-    return (result.rowsAffected ?? 0) > 0;
   },
 
   findAllCorrelatedToCard: async (cardId, accountId) => {

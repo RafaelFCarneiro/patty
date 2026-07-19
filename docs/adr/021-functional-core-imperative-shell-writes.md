@@ -9,8 +9,11 @@ update/delete, tag/category/sub-category/credit-card create/delete), including p
 now-dead `deps` write method for those five entities — implemented 2026-07-15; phase 3b — recurring flows
 (`create_recurring`/`apply_due_recurring`), including `applyDueRecurring`'s one-atomic-batch-per-run design and
 phase 3d's own removal of `RecurringRepo.create`/`.advance`, which turned out to have no other caller — implemented
-2026-07-16; phase 3c pending, phase 3d remains open only for the transaction-side write methods phase 3c will
-touch) · **Date:** 2026-07-12 ·
+2026-07-16; phase 3c — bulk statement import (`import_card_statement`/`import_account_statement`) reusing the
+single-line flows verbatim via `runEffectsSequence` (ADR-022 step 3), and phase 3d's own removal of the last
+transaction-side write methods (`TransactionsRepo.create`/`.update`/`.delete`, `BillsRepo.ensureOpen`) — the last
+two grep-confirmed already dead from phase 2b — implemented 2026-07-18; **migration complete: `deps` exposes no
+write method for any entity this ADR covers**) · **Date:** 2026-07-12 ·
 **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill payment) and finally resolves the thread ADR-015
 opened. Adopts the principle documented in `docs/functional-core-imperative-shell.md` for every write flow.
 
@@ -151,7 +154,7 @@ gets its own generic atomicity/conflict/idempotency suite.
    `docs/functional-core-imperative-shell.md` as mandatory in `docs/architecture.md` + `CLAUDE.md` (alongside
    `docs/diplomatic-architecture.md`); flip that doc's status note to adopted.
 3. [x] Do NOT merge `feat/atomic-bill-payment` (ADR-018) — it is superseded by this decision (PR #111 closed).
-4. [ ] Implement phases 1–3 (groundwork → transaction/bill flows → remaining), behavior-preserving where the
+4. [x] Implement phases 1–3 (groundwork → transaction/bill flows → remaining), behavior-preserving where the
    surface allows, coverage moved to core-level effect assertions + the generic UoW suite.
    - [x] Phase 1 (groundwork): `version` migration on all mutable entity tables; `Persistable`/`PersistOp`
      (`models/persistable.ts`) — generic over the entity's own tag/model, not a closed union, so the shared
@@ -407,11 +410,29 @@ gets its own generic atomicity/conflict/idempotency suite.
      and multiple rules together, the idempotency-outcome response including a duplicate-replay case), a
      UoW-level check that the applier is a plain versioned table applier, and the existing MCP/REST integration
      suites (materialization, `through`, idempotent re-run) passing unchanged through the new shell path.
-   - [ ] Phase 3c (bulk import — reusing phase 2a's `PersistOutcome` idempotency-outcome contract for per-item
-     created/duplicate/needs-review status): remaining work; update `docs/architecture.md` accordingly as it
-     lands. Phase 3d (remove now-dead `deps` write methods across every converted entity) completed early for
-     accounts/tags/categories/subCategories/creditCards as part of phase 3a itself, and for recurring
-     (`RecurringRepo.create`/`.advance`) as part of phase 3b (see above); what remains of phase 3d is the
-     transaction-side write methods bulk import (phase 3c) still needs (`TransactionsRepo.create` via
-     `addAccountMovementViaRepo`/`addCardPurchaseViaRepo`, `BillsRepo.ensureOpen`), removed once phase 3c
-     converts their last caller.
+   - [x] Phase 3c (bulk import — reusing phase 2a's `PersistOutcome` idempotency-outcome contract, generalized to
+     `runEffectsSequence`'s per-unit `SequenceOutcome` for per-item created/duplicate/needs-review status —
+     ADR-022 step 3): `import_card_statement`/`import_account_statement` (`controllers/creditCard/transaction.ts`/
+     `controllers/account/transaction.ts`) default each line (`controllers/transaction/bulk.ts`'s
+     `defaultStatementLines`) and return a `StatementImportPlan` — the defaulted lines plus a `flowFor` binding
+     one line to the aggregate's own single-line flow (`addCardPurchase`, `addAccountExpense`/`addAccountIncome`)
+     **unchanged** — for the MCP/REST handler to run through `runEffectsSequence`, then shape back into
+     `BulkResult` via `bulk.ts`'s `buildBulkResult`. The within-batch bill-cycle dedup `addCardPurchaseViaRepo`
+     needed is **dissolved, not ported**: `runEffectsSequence` re-invokes each line's flow only after the prior
+     line committed (ADR-022 decision 4), so a second line targeting a brand-new cycle simply reads the bill the
+     first line's flow just inserted. `docs/architecture.md` updated accordingly. Phase 3d (remove now-dead
+     `deps` write methods across every converted entity) completed early for accounts/tags/categories/
+     subCategories/creditCards as part of phase 3a, and for recurring (`RecurringRepo.create`/`.advance`) as part
+     of phase 3b (see above); phase 3c completes the rest: `addAccountMovementViaRepo`/`addCardPurchaseViaRepo`
+     and the write methods they were the last callers of (`deps.transactions.create`, `deps.bills.ensureOpen`)
+     are deleted, and the same grep sweep found `TransactionsRepo.update`/`.delete` had already had zero callers
+     since phase 2b — removed alongside (their sole remaining callers were two integration-test fixtures, which
+     switched to raw drizzle inserts, the same test-convenience-isn't-a-caller precedent phase 3a's
+     `AccountsRepo.create` set). **`deps` now exposes no write method for any entity this ADR covers** —
+     `TransactionsRepo` keeps only reads plus `confirm` (`confirm_transaction` was never in this ADR's scope);
+     `BillsRepo` keeps only its four read methods. Coverage: unit tests on `bulk.ts`'s pure functions and on each
+     aggregate importer's `StatementImportPlan` (defaulting, `flowFor` reusing the single-line flow verbatim); MCP
+     integration tests for the shared-new-bill-cycle case the old dedup covered, a failing line not aborting
+     sibling lines (partial success), and a line targeting an already-paid cycle erroring without aborting the
+     import — plus every prior bulk-import behavior (per-item status, idempotent re-import, note-per-item)
+     unchanged through the new shell path.

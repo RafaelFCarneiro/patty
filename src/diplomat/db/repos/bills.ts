@@ -2,10 +2,8 @@ import { sql } from 'drizzle-orm';
 import * as R from 'remeda';
 import { z } from 'zod';
 import * as transactionAdapters from '../../../adapters/transactions.js';
-import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
-import { BillStatus, RawBillSchema, type Bill, type RawBill } from '../../../models/bill.js';
+import { RawBillSchema, type Bill, type RawBill } from '../../../models/bill.js';
 import type { RawTransactionView } from '../../../models/transaction.js';
-import type { BillPeriod } from '../../../logic/bill.js';
 import { BillRowSchema } from '../../../wire/db/bills.js';
 import type { Db } from '../driver.js';
 import { bills } from '../schema.js';
@@ -54,35 +52,9 @@ export type BillsRepo = {
    *  these to remove (and which need `paymentTransactionId` cleared first) as its own
    *  `Persistable`s. */
   findAllByCard: (cardId: string) => Promise<RawBill[]>;
-  /** Idempotent upsert-by-cycle: creates the cycle's bill `open` if none exists yet, else returns
-   *  the existing one. Used only by the still-repo-driven bulk-import path; `addCardPurchase`
-   *  expresses the same decision as a `Persistable` via `billApplier` instead. */
-  ensureOpen: (cardId: string, period: BillPeriod, newId: string) => Promise<Bill>;
 };
 
 export const billsRepo = (db: Db): BillsRepo => ({
-  ensureOpen: async (cardId, period, newId) => {
-    return db.transaction(async (tx) => {
-      await tx
-        .insert(bills)
-        .values({
-          id: newId,
-          creditCardId: cardId,
-          month: period.month,
-          year: period.year,
-          closeDate: period.closeDate,
-          dueDate: period.dueDate,
-          status: BillStatus.enum.open,
-        })
-        .onConflictDoNothing({ target: [bills.creditCardId, bills.month, bills.year] });
-
-      const [rawBill] = await tx.all<Record<string, unknown>>(sql`
-        SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${period.month} AND year = ${period.year}
-      `);
-      return toBill(expectPresent(rawBill, rowNotFoundAfterWrite('bills', 'upsert')));
-    });
-  },
-
   get: async (cardId, month, year) => {
     const [billRow] = await db.all<Record<string, unknown>>(sql`
       SELECT b.*, cc.name AS card_name

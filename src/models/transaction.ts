@@ -162,18 +162,6 @@ export const RawTransactionViewSchema = TransactionViewSchema.extend({
 });
 export type RawTransactionView = z.infer<typeof RawTransactionViewSchema>;
 
-/** Domain patch for updates — only provided fields change; classification set on user correction. */
-export type TransactionPatch = {
-  description?: string;
-  amount?: number;
-  type?: MovementType;
-  status?: TransactionStatus;
-  date?: string;
-  currency?: CurrencyCode;
-  classification?: Classification;
-  note?: string;
-};
-
 // ─── Input contracts ──────────────────────────────────────────
 // Zod-first, types inferred. Wire derives from these (re-export / extend).
 
@@ -218,6 +206,17 @@ export const CreateTransactionSchema = z.object({
   tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
 });
 export type CreateTransaction = z.infer<typeof CreateTransactionSchema>;
+
+// Not a schema of its own: every real statement line is already a decoded
+// ImportAccountStatementItem/ImportCardStatementItem; this is a structural subset of
+// CreateTransaction, generic over both.
+export type StatementLine = Pick<CreateTransaction, 'date' | 'description' | 'amount'> & { idempotencyKey?: string };
+
+export type DefaultedStatementLine<Line extends StatementLine> = Line & {
+  date: string;
+  idempotencyKey: string;
+  rawInput?: string;
+};
 
 /** Shared base for the aggregate-specific update tools (ADR-017), mirroring how
  *  CreateTransactionSchema is the minimal shared base for add_card_purchase/add_account_expense/
@@ -306,8 +305,6 @@ export type ClassifyOutcome = Classification & {
   categoryName?: string;
   merchantKey?: string;
 };
-
-export type CreateTxResult = { transaction: RawTransactionView; created: boolean };
 
 /** The shared shape of "did this write land, and what does the caller need to know about it" —
  *  every insert-shaped account/credit-card flow's result. `classification` is optional: present

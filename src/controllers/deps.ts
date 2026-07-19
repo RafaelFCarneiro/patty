@@ -1,4 +1,4 @@
-import type { ResultAsync } from 'neverthrow';
+import type { Result, ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import type { FlowOutcome } from '../models/persistable.js';
 import type { Locale } from '../models/locale.js';
@@ -44,3 +44,16 @@ export type Deps = {
  * `diplomat/mcp`/`diplomat/http` depend on.
  */
 export type RunEffects = <T>(flow: () => ResultAsync<FlowOutcome<T>, AppError>) => ResultAsync<T, AppError>;
+
+/**
+ * The imperative shell's capability to run a **sequence** of independent per-item flows: each
+ * item's flow runs and applies in its own transaction, in commit order, so item *i+1*'s flow sees
+ * item *i*'s committed writes; one item's failure is recorded and the sequence continues (partial
+ * success). Shell-only, like `RunEffects` — never a field a controller can reach for. The concrete
+ * implementation (`runEffectsSequence`, bound to a `Db`) lives in `diplomat/db`; this is just the
+ * shape `diplomat/mcp`/`diplomat/http` depend on.
+ */
+export type RunEffectsSequence = <I, T>(
+  items: readonly I[],
+  flowFor: (item: I) => () => ResultAsync<FlowOutcome<T>, AppError>,
+) => Promise<Result<T, AppError>[]>;

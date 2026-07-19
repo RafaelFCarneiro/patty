@@ -17,12 +17,14 @@ import {
   assertExclusiveCategorySubCategory,
   buildTransactionView,
   buildUpsertResult,
+  defaultStatementLines,
   defaultStatusFor,
 } from '../../logic/transaction.js';
 import {
   accountErrors,
   type AddAccountMovement,
   type ImportAccountStatement,
+  type ImportAccountStatementItem,
   type UpdateAccountTransaction,
 } from '../../models/account.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../models/merchant.js';
@@ -41,10 +43,9 @@ import {
   type TransactionSource,
   type TransactionView,
 } from '../../models/transaction.js';
-import type { BulkResult } from '../../logic/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveLegAccounts } from '../resolve.js';
-import { runStatementImport } from '../transaction/bulk.js';
+import type { StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
 /**
@@ -61,10 +62,6 @@ const assertAccountOwnedLegs = (
 
 type MovementPlan = { entity: TransactionEntity; classification: ClassifyOutcome };
 
-/** Everything addAccountExpense/addAccountIncome decide via injected reads, before either the
- *  FC/IS path or the (bulk-import-only) legacy repo path shapes its own write — validation,
- *  account/category resolution, and the full transaction entity to persist. Pure decision, no
- *  write: shared by `addAccountMovement` (below) and `addAccountMovementViaRepo`. */
 const planAccountMovement = (
   deps: Deps,
   input: AddAccountMovement,
@@ -154,45 +151,27 @@ export const addAccountIncome = (
 ): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> =>
   addAccountMovement(deps, input, MovementType.enum.income, source);
 
-/**
- * Legacy repo-write path — used only by `importAccountStatement` below. `runStatementImport`
- * (controllers/transaction/bulk.ts) applies each statement line's write immediately and expects an
- * already-applied `UpsertTransactionResult` back, not a `FlowOutcome`; folding N lines into one
- * atomic `Persistable` batch (and giving the whole import idempotency-aware, per-item outcome
- * semantics) is bulk import's own conversion, deliberately deferred to ADR-021 phase 3. Shares
- * `planAccountMovement`'s decision with the FC/IS `addAccountMovement` above; only the write
- * mechanics differ.
- */
-const addAccountMovementViaRepo = (
-  deps: Deps,
-  input: AddAccountMovement,
-  type: MovementType,
-  source: TransactionSource,
-): ResultAsync<ClassifiedUpsertResult, AppError> =>
-  safeTry(async function* () {
-    const { entity, classification } = yield* planAccountMovement(deps, input, type, source);
-    const { transaction, created } = await deps.transactions.create(entity, entity.tagNames);
-    const locale = await deps.locale();
-    return ok({ transaction: addLocalizedLabels(transaction, locale), created, classification });
-  });
-
-/**
- * Import an account statement (ADR-017 step 2): single-source — every item belongs to the ONE
- * account named in `input.account` (or unattached if omitted), so there is no per-line account to
- * resolve or route. Each line's own `type` picks the expense or income movement (still a per-line
- * discriminator here, unlike the single-movement tools, since a statement mixes expenses and
- * income); both are bound to the fixed account and delegate the generic import plumbing
- * (defaulting, dedup, needs-review flagging) to `runStatementImport`.
- */
+// Single-source: every item belongs to the ONE account named in `input.account` (or unattached).
 export const importAccountStatement = (
   deps: Deps,
   input: ImportAccountStatement,
   source: TransactionSource,
-): ResultAsync<BulkResult<AppError>, AppError> =>
-  runStatementImport(deps, input.items, input.rawInput, source, (d, line, src) => {
-    const movement = R.omit(line, ['type']);
-    return addAccountMovementViaRepo(d, { ...movement, account: input.account }, line.type, src);
-  });
+): StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult> => {
+  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
+  // Resolves locale once for the whole import rather than once per line: every line's flow reads
+  // deps.locale() to build its localized response, so overriding it here to the same in-flight
+  // promise keeps every item's labels consistent even if the process-level locale cache resets
+  // mid-import.
+  const localePromise = deps.locale();
+  const cachedDeps: Deps = { ...deps, locale: () => localePromise };
+  const flowFor = (line: (typeof lines)[number]) => (): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> => {
+    const movement = { ...R.omit(line, ['type']), account: input.account };
+    return line.type === MovementType.enum.expense
+      ? addAccountExpense(cachedDeps, movement, source)
+      : addAccountIncome(cachedDeps, movement, source);
+  };
+  return { lines, flowFor };
+};
 
 /**
  * Update an account transaction: asserts every leg the target has is one of this aggregate's own
