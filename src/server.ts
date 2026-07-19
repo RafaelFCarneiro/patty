@@ -16,11 +16,12 @@ export const buildHttpApp = (
   version: string,
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
+  resetLocale: () => void,
   opts?: { logger?: boolean },
 ): FastifyInstance => {
   const app = Fastify({ logger: opts?.logger ?? true });
   registerRoutes(app, deps, version, runEffects, runEffectsSequence);
-  registerMcpRoute(app, deps, version, runEffects, runEffectsSequence);
+  registerMcpRoute(app, deps, version, runEffects, runEffectsSequence, resetLocale);
   return app;
 };
 
@@ -38,9 +39,10 @@ export const startHttpSidecar = async (
   version: string,
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
+  resetLocale: () => void,
   port: number,
 ): Promise<HttpSidecar> => {
-  const app = buildHttpApp(deps, version, runEffects, runEffectsSequence, { logger: false });
+  const app = buildHttpApp(deps, version, runEffects, runEffectsSequence, resetLocale, { logger: false });
   try {
     await app.listen({ port, host: LOOPBACK_HOST });
     // `port` may be 0 (OS-assigned); read back the address actually bound for the banner.

@@ -13,9 +13,10 @@ export const registerMcpRoute = (
   version: string,
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
+  resetLocale: () => void,
 ): void => {
   app.post('/mcp', async (req, reply) => {
-    const server = buildMcpServer(deps, version, runEffects, runEffectsSequence);
+    const server = buildMcpServer(deps, version, runEffects, runEffectsSequence, resetLocale);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

@@ -81,11 +81,11 @@ These three live with the domain entity in `models/`, not scattered across contr
 
 ## Write path: functional core / imperative shell (ADR-021/ADR-022)
 
-**Current state:** every write flow is converted (ADR-021 phases 1–3c complete). `deps` exposes no write method at
-all anymore, for any of the entities this migration covers — controllers only ever decide and return effects; the
-domain is structurally incapable of writing. (`settings.setLocale`, behind `set_locale`, is the one repo-driven
-write left in the codebase — that flow was never part of this migration's scope.) Migration history lives in
-ADR-021/ADR-022, not here.
+**Current state:** every write flow in the codebase is converted (ADR-021 phases 1–3c complete, plus
+`confirm_transaction`/`save_dashboard`/`set_locale` — the three flows that sat outside the ledger domain and were
+picked up in a final pass once the rest had landed). `deps` exposes **no write method at all, unconditionally** —
+controllers only ever decide and return effects; the domain is structurally incapable of writing. Migration history
+lives in ADR-021/ADR-022, not here.
 
 The shape, per `docs/functional-core-imperative-shell.md`: a controller **decides** and returns the write as data
 instead of performing it; the diplomat shell **applies** it.
@@ -342,14 +342,16 @@ instead of performing it; the diplomat shell **applies** it.
   bill-cycle "dedup" is gone, not reimplemented**: because `runEffectsSequence` re-invokes line *i+1*'s flow only
   after line *i* has committed (option B, ADR-022 decision 4), two lines landing on the same brand-new cycle
   simply share it — the second line's `planCardPurchase` read sees the bill the first line's flow just inserted.
-  This converts the last unconverted write flow — every write flow in the codebase now returns effects as data;
-  none apply their own writes. The legacy repo-write paths this replaced (`addAccountMovementViaRepo`,
-  `addCardPurchaseViaRepo`, and the `deps.bills.ensureOpen`/`deps.transactions.create` write methods they were
-  the last callers of) are deleted, along with `TransactionsRepo.update`/`.delete` — grep-confirmed to already
-  have zero remaining callers once checked, the same precedent above. `TransactionsRepo` now exposes only reads
-  (`getById`/`confirm`/`findAllCorrelatedToCard`/`search`/`count`/`aggregate`/`summaryRows`/
-  `pendingBalanceParts`) — `confirm` stays because `confirm_transaction` (`controllers/transaction/core.ts`) is
-  not part of this migration's scope.
+  This converts the last unconverted write flow in the ledger domain — every write flow in that domain now
+  returns effects as data; none apply their own writes. The legacy repo-write paths this replaced
+  (`addAccountMovementViaRepo`, `addCardPurchaseViaRepo`, and the `deps.bills.ensureOpen`/`deps.transactions.create`
+  write methods they were the last callers of) are deleted, along with `TransactionsRepo.update`/`.delete` —
+  grep-confirmed to already have zero remaining callers once checked, the same precedent above.
+  `TransactionsRepo` now exposes only reads (`getById`/`findAllCorrelatedToCard`/`search`/`count`/`aggregate`/
+  `summaryRows`/`pendingBalanceParts`) — `confirm` (the last raw write method on this repo) was removed once
+  `confirm_transaction` itself converted (see below): the "only confirm a pending transaction" rule that used to
+  live as a SQL `AND status = 'pending'` predicate now lives in the domain, and the shell's version guard alone
+  covers the concurrent-confirm race.
 - **Merchant key is always stored, matched or not** (`controllers/account/transaction.ts`'s `planAccountMovement`):
   `pickClassification` (`logic/classify.ts`) only returns a `merchantKey` when it found a match, since a matched
   key is the (possibly partial) `merchant_category` key substring-matched against, not the transaction's own
@@ -394,6 +396,14 @@ instead of performing it; the diplomat shell **applies** it.
   `main.ts` (and `test/integration/app-builder.ts`) construct the one `RunEffects` bound to the real `Db` and
   the `ApplierRegistry`, and thread it alongside `deps` through `connectStdio`/`buildMcpServer`/
   `buildHttpApp`/`registerRoutes`/`registerMcpRoute` to the handlers that call a converted controller.
+- **`resetLocale` is shell-only bookkeeping, threaded the same way `RunEffects` is, never a field on `Deps`.**
+  `diplomat/db/localeCache.ts`'s `createLocaleResolver(settingsRepo, configLocale?)` builds the process-level
+  locale cache: `locale()` becomes `Deps.locale` (a read, per rule 2); `resetLocale()` clears the cache and is
+  threaded alongside `runEffects`/`runEffectsSequence` through `connectStdio`/`buildMcpServer`/`buildHttpApp`/
+  `registerMcpRoute` to the one handler that needs it — `set_locale` (`diplomat/mcp/server.ts`), which calls it
+  only after `runEffects` reports the `setLocale` write committed. This is infrastructure bookkeeping attached
+  to a write, not a domain-declared effect (rule 7's kinds are write/response/dispatch) — the domain never
+  triggers it.
 
 ## Relational schema (as built)
 
@@ -470,8 +480,10 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     `add_card_purchase`/`update_card_transaction`/`delete_card_transaction`, the bill flows
     `pay_bill`/`revert_bill_payment`, the simple entity CRUD flows `update_account`/`delete_account`,
     `create_tag`/`delete_tag`, `create_category`/`delete_category`/`create_sub_category`/`delete_sub_category`,
-    `create_credit_card`/`delete_credit_card`, the recurring flows `create_recurring`/`apply_due_recurring`, and
-    finally the bulk-import flows `import_card_statement`/`import_account_statement`).** See § Write path above. A
+    `create_credit_card`/`delete_credit_card`, the recurring flows `create_recurring`/`apply_due_recurring`, the
+    bulk-import flows `import_card_statement`/`import_account_statement`, and finally the three flows that sat
+    outside the ledger domain — `confirm_transaction` (reuses the existing `transactionApplier`), `save_dashboard`
+    (a new `dashboardApplier`), and `set_locale` (a new `settingsApplier`)).** See § Write path above. A
     converted controller's `deps` never receives a write method it calls directly — it builds one or more
     `Persistable`s and returns them in `persist` (or, for bulk import's sequence of independent units, a
     `StatementImportPlan` the shell runs through `runEffectsSequence`); only `diplomat/db/effects.ts` (invoked
@@ -499,12 +511,49 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     2b) and removed those as well — the fixture seeding two integration tests did through them
     (`test/integration/db/effects.test.ts`) switched to raw drizzle inserts (`insertOpenBill`/
     `insertTransaction`), the same test-convenience-isn't-a-caller precedent `AccountsRepo.create` set.
-    **`deps` now exposes no write method at all** for any entity this migration covers — `TransactionsRepo`
-    keeps only `getById`/`confirm`/`findAllCorrelatedToCard`/`search`/`count`/`aggregate`/`summaryRows`/
-    `pendingBalanceParts` (`confirm` stays: `confirm_transaction` was never part of this migration's scope), and
-    `BillsRepo` keeps only its four read methods. `controllers/transaction/core.ts` no longer carries an
-    `updateTransaction`/`deleteTransaction` of its own — both aggregates' update/delete are FC/IS, sharing only
-    the pure `decideTransactionUpdate`/`resolveCategorySelection` reads-and-validation from the core.
+    `controllers/transaction/core.ts` no longer carries an `updateTransaction`/`deleteTransaction` of its own —
+    both aggregates' update/delete are FC/IS, sharing only the pure `decideTransactionUpdate`/
+    `resolveCategorySelection` reads-and-validation from the core.
+    **The final pass converted the three flows that sat outside the ledger domain entirely — the same
+    violation, just not covered by the migration above (a controller calling a repo write method).**
+    `confirmTransaction` (`controllers/transaction/core.ts`) now reads the transaction, decides in the domain
+    (pending → a version-guarded `update` flipping `status` to `effective`; already effective → an idempotent
+    no-op with an empty `persist`; missing → `notFound`) and reuses the existing `transactionApplier` — no new
+    applier needed. `TransactionsRepo.confirm` (the `UPDATE ... WHERE status = 'pending'` SQL predicate) is
+    deleted; the rule now lives in the domain, and the shell's version guard alone covers the race.
+    `saveDashboard` (`controllers/dashboards.ts`) reads `dashboards.findVersionByName` — a version-only read,
+    since presence + version is all the decision needs, never the (potentially ~500KB) `html` a full-row read
+    would pull on every save — and emits an `insert` (absent) or a version-guarded `update` (present) — still
+    upsert-by-name from the caller's perspective. `dashboards`
+    keys on `name`, not `id` (§ Write path), so its `EntityApplier` (`diplomat/db/repos/dashboards.ts`'s
+    `dashboardApplier`) is hand-written rather than `versionedTableApplier`: `name` being the primary key
+    itself (not a secondary `UNIQUE` column like `tags.name`) means a concurrent first save of a brand new
+    name raises `SQLITE_CONSTRAINT_PRIMARYKEY`, a distinct extended code from the `SQLITE_CONSTRAINT_UNIQUE`
+    `tagApplier`/`billApplier` recognize — `diplomat/db/sqliteErrors.ts`'s `isPrimaryKeyConstraintViolation`
+    matches this one specifically. `dashboardApplier` recognizes it and rethrows as `VersionConflict` (the
+    same pattern otherwise), rolling back and re-invoking `saveDashboard` — the retry re-reads, finds the row
+    the race just inserted, and takes the update path instead of racing another insert (regression-tested in
+    `test/integration/db/effects.test.ts`'s `dashboardApplier` describe block, including the actual retry
+    landing a clean update). `DashboardsRepo.upsert` (the `onConflictDoUpdate`) is deleted. `setLocale`
+    (`controllers/settings.ts`) reads the singleton settings row and emits an `insert` (absent) or
+    version-guarded `update` (present); `settings` fits the `id`/`version` convention despite being a singleton
+    (`id` is always `SETTINGS_SINGLETON_ID`). Unlike a random-UUID-keyed entity, though, an `id` collision on
+    insert here is a real concurrent-first-insert race, not a negligible chance event — the plain
+    `versionedTableApplier`'s `onConflictDoNothing` would silently no-op the loser's insert and let `setLocale`
+    report success without its value ever landing, so `settingsApplier` wraps `versionedTableApplier(settings)`
+    to check the insert outcome and rethrow `VersionConflict` on a no-op, the same false-success bug class as
+    `dashboardApplier`'s (regression-tested alongside it in `test/integration/db/effects.test.ts`).
+    `SettingsRepo.setLocale` (the `onConflictDoUpdate`) is deleted. The process-level locale cache reset that
+    used to be a second side effect the domain performed (`deps.resetLocale()`, called from inside `setLocale`
+    after its write) moved to the shell — see the `resetLocale` wiring bullet above — and `resetLocale` is gone
+    from `Deps` entirely.
+    **`deps` now exposes no write method at all, unconditionally — not for "every entity this migration
+    covers", for every entity in the system.** `TransactionsRepo` keeps only `getById`/`findAllCorrelatedToCard`/
+    `search`/`count`/`aggregate`/`summaryRows`/`pendingBalanceParts`; `DashboardsRepo` keeps only `get`/
+    `findVersionByName`/`list`; `SettingsRepo` keeps only `getLocale`; `BillsRepo` keeps only its four read
+    methods.
+    No repo interface in the codebase exposes a write method, and no domain rule survives as a SQL predicate in
+    a repo.
 
 ## Tool surface
 
@@ -536,7 +585,9 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 The `dashboards` table (`name` PK, `html`, `updated_at`) stores agent-authored HTML shells, keyed by name — `save_dashboard` (MCP tool) / `POST /api/dashboards` (REST) is an **upsert**: saving to an existing name replaces its content immediately, no rebuild, restart, or migration. `GET /ui/:name` (mounted by `registerRoutes` in `diplomat/http/routes.ts`, same Fastify instance as `/api`, so it rides the HTTP sidecar per ADR-013 Decision 7) returns the currently-stored HTML as `text/html; charset=utf-8` with `cache-control: no-cache` — a regenerated dashboard is never masked by a stale browser copy. Absent name → `unknown_dashboard` (404).
 
-Before persisting, `saveDashboard` (`controllers/dashboards.ts`) runs `findHtmlValidationIssues` (`logic/dashboard.ts`, pure) and rejects with `validation` (422) if it fails: no `<!doctype html>`/`<html>` root element, or an inline `<script>` that fails to *compile* (via Node's `vm.Script` — checked, never executed, so this can't itself run untrusted code). This is a narrow render-ability check, not sanitization: it exists because there was previously nothing stopping a broken save (e.g. a JS syntax error) from silently overwriting a working dashboard with no version history to recover from — full HTML sanitization remains explicitly out of scope for this local single-user app (ADR-013 Phase A). A rejected save never reaches `deps.dashboards.upsert`, so the previously stored dashboard is untouched.
+Before persisting, `saveDashboard` (`controllers/dashboards.ts`) runs `findHtmlValidationIssues` (`logic/dashboard.ts`, pure) and rejects with `validation` (422) if it fails: no `<!doctype html>`/`<html>` root element, or an inline `<script>` that fails to *compile* (via Node's `vm.Script` — checked, never executed, so this can't itself run untrusted code). This is a narrow render-ability check, not sanitization: it exists because there was previously nothing stopping a broken save (e.g. a JS syntax error) from silently overwriting a working dashboard with no version history to recover from — full HTML sanitization remains explicitly out of scope for this local single-user app (ADR-013 Phase A). A rejected save never reads `dashboards.findVersionByName` or decides a `Persistable`, so the previously stored
+dashboard is untouched (§ Write path — `saveDashboard` is FC/IS: it decides an insert/update as data, never
+writes directly).
 
 `/ui/:name` is deliberately **not** part of the `/api` OpenAPI document: that document exists to give an agent correct `fetch()` shapes for the JSON data API (§ OpenAPI contract above), and `/ui` is a browser-facing HTML page, not a JSON contract. Management of dashboards (list/get/save) does have REST parity under `/api/dashboards*` and is documented in the OpenAPI spec like every other route.
 

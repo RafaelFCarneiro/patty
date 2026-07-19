@@ -22,6 +22,13 @@ export type DashboardListItem = z.infer<typeof DashboardListItemSchema>;
 export const SaveDashboardSchema = DashboardSchema.pick({ name: true, html: true });
 export type SaveDashboard = z.infer<typeof SaveDashboardSchema>;
 
+export const DASHBOARD_ENTITY_TAG = 'dashboard';
+
+export const DashboardEntitySchema = DashboardSchema.extend({
+  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
+});
+export type DashboardEntity = z.infer<typeof DashboardEntitySchema>;
+
 export type DashboardError = NotFound<'dashboard'> | ValidationError;
 
 export const dashboardErrors = {

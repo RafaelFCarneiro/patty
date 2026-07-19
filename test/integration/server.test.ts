@@ -43,7 +43,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
 
     const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    sidecar = await startHttpSidecar(deps, version, runEffects, runEffectsSequence, port);
+    sidecar = await startHttpSidecar(deps, version, runEffects, runEffectsSequence, () => {}, port);
 
     expect(sidecar.listening).toBe(false);
     const logged = stderr.mock.calls.flat().join(' ');
@@ -54,7 +54,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
   });
 
   it('comes up and serves /api routes when the port is free', async () => {
-    sidecar = await startHttpSidecar(deps, version, runEffects, runEffectsSequence, 0);
+    sidecar = await startHttpSidecar(deps, version, runEffects, runEffectsSequence, () => {}, 0);
     expect(sidecar.listening).toBe(true);
 
     const port = (sidecar.app.server.address() as AddressInfo).port;
@@ -64,7 +64,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
   });
 
   it('binds loopback-only, not the LAN-reachable wildcard address', async () => {
-    sidecar = await startHttpSidecar(deps, version, runEffects, runEffectsSequence, 0);
+    sidecar = await startHttpSidecar(deps, version, runEffects, runEffectsSequence, () => {}, 0);
     expect(sidecar.listening).toBe(true);
 
     const address = sidecar.app.server.address() as AddressInfo;
@@ -72,7 +72,7 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
   });
 
   it('drains cleanly on shutdown — the port is released', async () => {
-    sidecar = await startHttpSidecar(deps, version, runEffects, runEffectsSequence, 0);
+    sidecar = await startHttpSidecar(deps, version, runEffects, runEffectsSequence, () => {}, 0);
     expect(sidecar.listening).toBe(true);
     const port = (sidecar.app.server.address() as AddressInfo).port;
 

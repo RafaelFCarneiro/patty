@@ -1,12 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
-import { Locale, LocaleSource } from '../../../src/models/locale.js';
+import { describe, expect, it } from 'vitest';
+import { Locale, LocaleSource, SETTINGS_ENTITY_TAG, SETTINGS_SINGLETON_ID } from '../../../src/models/locale.js';
+import { PersistOp } from '../../../src/models/persistable.js';
 import { getPreferences, setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
+import type { SettingsEntity } from '../../../src/models/locale.js';
 
-const makeDeps = (stored?: { locale: Locale; localeSource: LocaleSource }, envLocale?: Locale): Deps => ({
+const makeDeps = (stored?: SettingsEntity, envLocale?: Locale): Deps => ({
   settings: {
     getLocale: async () => stored,
-    setLocale: async () => {},
   },
   locale: async () => envLocale ?? stored?.locale ?? Locale.enum.en,
   accounts: {} as Deps['accounts'],
@@ -22,18 +23,24 @@ const makeDeps = (stored?: { locale: Locale; localeSource: LocaleSource }, envLo
   transactions: {} as Deps['transactions'],
   clock: () => new Date(),
   newId: () => 'test-id',
-  resetLocale: vi.fn(),
+});
+
+const storedRow = (locale: Locale, localeSource: LocaleSource, version = 0): SettingsEntity => ({
+  id: SETTINGS_SINGLETON_ID,
+  locale,
+  localeSource,
+  version,
 });
 
 describe('getPreferences', () => {
   it('returns stored locale and source from DB', async () => {
-    const deps = makeDeps({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit }, Locale.enum.en);
+    const deps = makeDeps(storedRow(Locale.enum.pt, LocaleSource.enum.explicit), Locale.enum.en);
     const prefs = await getPreferences(deps);
     expect(prefs).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
   });
 
   it('returns DB values even when env locale differs', async () => {
-    const deps = makeDeps({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred }, Locale.enum.en);
+    const deps = makeDeps(storedRow(Locale.enum.pt, LocaleSource.enum.inferred), Locale.enum.en);
     const prefs = await getPreferences(deps);
     expect(prefs.locale).toBe(Locale.enum.pt);
   });
@@ -46,46 +53,57 @@ describe('getPreferences', () => {
 });
 
 describe('setLocale', () => {
-  it('returns the written locale, not the env-resolved one', async () => {
+  it('emits an insert and returns the written locale when no settings row exists yet', async () => {
     const deps = makeDeps(undefined, Locale.enum.en);
     const result = await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.explicit });
-    expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.response).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
+    expect(outcome.persist).toEqual([
+      {
+        op: PersistOp.enum.insert,
+        entity: SETTINGS_ENTITY_TAG,
+        model: { id: SETTINGS_SINGLETON_ID, locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit },
+      },
+    ]);
+  });
+
+  it('emits a version-guarded update when a settings row already exists', async () => {
+    const deps = makeDeps(storedRow(Locale.enum.pt, LocaleSource.enum.explicit, 3));
+    const result = await setLocale(deps, { locale: Locale.enum.en, source: LocaleSource.enum.explicit });
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.response).toEqual({ locale: Locale.enum.en, localeSource: LocaleSource.enum.explicit });
+    expect(outcome.persist).toEqual([
+      {
+        op: PersistOp.enum.update,
+        entity: SETTINGS_ENTITY_TAG,
+        model: {
+          id: SETTINGS_SINGLETON_ID,
+          locale: Locale.enum.en,
+          localeSource: LocaleSource.enum.explicit,
+          version: 3,
+        },
+      },
+    ]);
   });
 
   it('rejects inferred switch when current source is explicit', async () => {
-    const deps = makeDeps({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
+    const deps = makeDeps(storedRow(Locale.enum.pt, LocaleSource.enum.explicit));
     const result = await setLocale(deps, { locale: Locale.enum.en, source: LocaleSource.enum.inferred });
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
   });
 
   it('allows explicit switch when current source is explicit', async () => {
-    const deps = makeDeps({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
+    const deps = makeDeps(storedRow(Locale.enum.pt, LocaleSource.enum.explicit));
     const result = await setLocale(deps, { locale: Locale.enum.en, source: LocaleSource.enum.explicit });
     expect(result.isOk()).toBe(true);
   });
 
-  it('inferred no-op preserves explicit source', async () => {
-    const deps = makeDeps({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
+  it('inferred no-op preserves explicit source and emits no writes', async () => {
+    const deps = makeDeps(storedRow(Locale.enum.pt, LocaleSource.enum.explicit));
     const result = await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred });
-    expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
-  });
-
-  it('calls resetLocale after a successful locale change', async () => {
-    const deps = makeDeps(undefined, Locale.enum.en);
-    await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.explicit });
-    expect(deps.resetLocale).toHaveBeenCalledOnce();
-  });
-
-  it('does not call resetLocale when locale is unchanged (no-op)', async () => {
-    const deps = makeDeps({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });
-    await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred });
-    expect(deps.resetLocale).not.toHaveBeenCalled();
-  });
-
-  it('does not call resetLocale when inferred switch is rejected', async () => {
-    const deps = makeDeps({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
-    await setLocale(deps, { locale: Locale.enum.en, source: LocaleSource.enum.inferred });
-    expect(deps.resetLocale).not.toHaveBeenCalled();
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.response).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
+    expect(outcome.persist).toEqual([]);
   });
 });

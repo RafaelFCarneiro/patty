@@ -6,24 +6,29 @@ import { ok, okAsync, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
+import * as persistence from '../../logic/persistence.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
+  buildTransactionView,
   hasCategory,
   hasSubCategory,
   isCategoryKindAllowed,
   resolveEffectiveType,
 } from '../../logic/transaction.js';
 import {
+  TRANSACTION_ENTITY_TAG,
   TransactionStatus,
   transactionErrors,
   type CategoryFields,
   type CategorySelection,
   type MovementType,
+  type TransactionEntity,
   type TransactionView,
   type UpdateTransaction,
 } from '../../models/transaction.js';
 import type { CurrencyCode } from '../../models/money.js';
+import type { FlowOutcome, Persistable } from '../../models/persistable.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCategoryRef, resolveSubCategoryRef } from '../resolve.js';
 
@@ -76,17 +81,48 @@ export const resolveCategorySelection = (
     () => okAsync(null),
   );
 
-/** Flip a pending transaction to effective. No-op (returns existing) if already effective. */
-export const confirmTransaction = (deps: Deps, input: { id: string }): ResultAsync<TransactionView, AppError> =>
+export const confirmTransaction = (
+  deps: Deps,
+  input: { id: string },
+): ResultAsync<FlowOutcome<TransactionView>, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
 
     const locale = await deps.locale();
 
-    if (existing.status === TransactionStatus.enum.effective) return ok(addLocalizedLabels(existing, locale));
+    if (existing.status === TransactionStatus.enum.effective) {
+      return ok({ persist: [], response: addLocalizedLabels(existing, locale) });
+    }
 
-    const confirmed = yield* okOr(await deps.transactions.confirm(input.id), transactionErrors.notFound(input.id));
-    return ok(addLocalizedLabels(confirmed, locale));
+    const entity: TransactionEntity = {
+      id: existing.id,
+      description: existing.description,
+      amount: existing.amount,
+      type: existing.type,
+      status: TransactionStatus.enum.effective,
+      date: existing.date,
+      currency: existing.currency,
+      source: existing.source,
+      idempotencyKey: existing.idempotencyKey,
+      classification: existing.classification,
+      rawInput: existing.rawInput,
+      note: existing.note,
+      refs: {
+        accountId: existing.accountId,
+        toAccountId: existing.toAccountId,
+        cardId: existing.cardId,
+        billId: existing.billId,
+        categoryId: existing.categoryId,
+        subCategoryId: existing.subCategoryId,
+        merchantKey: existing.merchant,
+      },
+      tagNames: existing.tags,
+    };
+
+    const persist: Persistable[] = [
+      persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } }),
+    ];
+    return ok({ persist, response: buildTransactionView(locale) });
   });
 
 /** Generic patch input: the core's minimal `UpdateTransaction` (ADR-019) plus `account` — the one

@@ -1,29 +1,32 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import * as dashboardAdapters from '../../../adapters/dashboards.js';
-import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import type { Dashboard, DashboardListItem } from '../../../models/dashboard.js';
 import type { Db } from '../driver.js';
 import { dashboards } from '../schema.js';
+import { isPrimaryKeyConstraintViolation } from '../sqliteErrors.js';
+import { VersionConflict, type EntityApplier } from '../effects.js';
 
 export type DashboardsRepo = {
-  upsert: (name: string, html: string, updatedAt: string) => Promise<Dashboard>;
   get: (name: string) => Promise<Dashboard | null>;
+  // Version-only read — saveDashboard only needs presence + version to decide insert vs. update,
+  // never the (potentially ~500KB) html, so this avoids pulling that on every save.
+  findVersionByName: (name: string) => Promise<number | null>;
   list: () => Promise<DashboardListItem[]>;
 };
 
 export const dashboardsRepo = (db: Db): DashboardsRepo => ({
-  upsert: async (name, html, updatedAt) => {
-    const [row] = await db
-      .insert(dashboards)
-      .values({ name, html, updatedAt })
-      .onConflictDoUpdate({ target: dashboards.name, set: { html, updatedAt } })
-      .returning();
-    return dashboardAdapters.dbToModel(expectPresent(row, rowNotFoundAfterWrite('dashboards', 'upsert')));
-  },
-
   get: async (name) => {
     const [row] = await db.select().from(dashboards).where(eq(dashboards.name, name)).limit(1);
     return row ? dashboardAdapters.dbToModel(row) : null;
+  },
+
+  findVersionByName: async (name) => {
+    const [row] = await db
+      .select({ version: dashboards.version })
+      .from(dashboards)
+      .where(eq(dashboards.name, name))
+      .limit(1);
+    return row?.version ?? null;
   },
 
   list: async () => {
@@ -34,3 +37,35 @@ export const dashboardsRepo = (db: Db): DashboardsRepo => ({
     return rows.map(dashboardAdapters.dbToListItem);
   },
 });
+
+// Hand-written rather than `versionedTableApplier` because `dashboards` keys on `name`, not `id`.
+// A concurrent first save of the same name raises `SQLITE_CONSTRAINT_PRIMARYKEY` — NOT
+// `SQLITE_CONSTRAINT_UNIQUE`, since `name` is the primary key rather than a secondary unique
+// column — so it needs `isPrimaryKeyConstraintViolation`, not `isUniqueConstraintViolation`
+// (`tagApplier`'s check). Rethrown as `VersionConflict` to roll back and retry.
+export const dashboardApplier: EntityApplier = {
+  insert: async (tx, model) => {
+    const row = model as { name: string; html: string; updatedAt: string };
+    try {
+      const result = await tx.insert(dashboards).values(row);
+      return { applied: (result.rowsAffected ?? 0) > 0 };
+    } catch (cause) {
+      if (isPrimaryKeyConstraintViolation(cause)) throw new VersionConflict();
+      throw cause;
+    }
+  },
+
+  update: async (tx, model) => {
+    const row = model as { name: string; html: string; updatedAt: string; version: number };
+    const result = await tx
+      .update(dashboards)
+      .set({ html: row.html, updatedAt: row.updatedAt, version: row.version + 1 })
+      .where(and(eq(dashboards.name, row.name), eq(dashboards.version, row.version)));
+    return { applied: (result.rowsAffected ?? 0) > 0 };
+  },
+
+  delete: async (tx, name, version) => {
+    const result = await tx.delete(dashboards).where(and(eq(dashboards.name, name), eq(dashboards.version, version)));
+    return { applied: (result.rowsAffected ?? 0) > 0 };
+  },
+};

@@ -1,17 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getDashboard, listDashboards, saveDashboard } from '../../../src/controllers/dashboards.js';
 import type { Deps } from '../../../src/controllers/deps.js';
+import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
 import type { Dashboard, DashboardListItem } from '../../../src/models/dashboard.js';
+import { PersistOp } from '../../../src/models/persistable.js';
 
 const FIXED_CLOCK = new Date('2026-07-02T12:00:00.000Z');
 
 const makeDeps = (overrides?: Partial<Deps['dashboards']>): Deps => ({
   dashboards: {
-    upsert: vi.fn(async (name: string, html: string, updatedAt: string): Promise<Dashboard> => ({
-      name,
-      html,
-      updatedAt,
-    })),
+    findVersionByName: vi.fn(async () => null),
     get: vi.fn(async () => null),
     list: vi.fn(async (): Promise<DashboardListItem[]> => []),
     ...overrides,
@@ -30,22 +28,30 @@ const makeDeps = (overrides?: Partial<Deps['dashboards']>): Deps => ({
   clock: () => FIXED_CLOCK,
   newId: () => 'test-id',
   locale: async () => 'en',
-  resetLocale: vi.fn(),
 });
 
 describe('saveDashboard', () => {
-  it('upserts using the current clock as updatedAt', async () => {
+  it('emits an insert and returns the saved dashboard when absent', async () => {
     const deps = makeDeps();
     const result = await saveDashboard(deps, 'overview', '<html></html>');
-    expect(result._unsafeUnwrap()).toEqual({
-      name: 'overview',
-      html: '<html></html>',
-      updatedAt: FIXED_CLOCK.toISOString(),
-    });
-    expect(deps.dashboards.upsert).toHaveBeenCalledWith('overview', '<html></html>', FIXED_CLOCK.toISOString());
+    const outcome = result._unsafeUnwrap();
+    const dashboard: Dashboard = { name: 'overview', html: '<html></html>', updatedAt: FIXED_CLOCK.toISOString() };
+    expect(outcome.response).toEqual(dashboard);
+    expect(outcome.persist).toEqual([{ op: PersistOp.enum.insert, entity: DASHBOARD_ENTITY_TAG, model: dashboard }]);
   });
 
-  it('rejects html with no <html> root without touching the repo', async () => {
+  it('emits a version-guarded update and overwrites by name when present', async () => {
+    const deps = makeDeps({ findVersionByName: vi.fn(async () => 4) });
+    const result = await saveDashboard(deps, 'overview', '<html>new</html>');
+    const outcome = result._unsafeUnwrap();
+    const dashboard: Dashboard = { name: 'overview', html: '<html>new</html>', updatedAt: FIXED_CLOCK.toISOString() };
+    expect(outcome.response).toEqual(dashboard);
+    expect(outcome.persist).toEqual([
+      { op: PersistOp.enum.update, entity: DASHBOARD_ENTITY_TAG, model: { ...dashboard, version: 4 } },
+    ]);
+  });
+
+  it('rejects html with no <html> root without reading the repo for a decision', async () => {
     const deps = makeDeps();
     const result = await saveDashboard(deps, 'overview', 'not html at all');
     expect(result.isErr()).toBe(true);
@@ -55,10 +61,10 @@ describe('saveDashboard', () => {
     // (test/unit/logic/dashboard.test.ts) — asserting a substring here keeps this test focused on
     // saveDashboard's own behavior (reject + never touch the repo) without duplicating that string.
     expect((error as { issues: string[] }).issues.some((issue) => issue.includes('root element'))).toBe(true);
-    expect(deps.dashboards.upsert).not.toHaveBeenCalled();
+    expect(deps.dashboards.findVersionByName).not.toHaveBeenCalled();
   });
 
-  it('rejects html with a broken inline <script> without touching the repo', async () => {
+  it('rejects html with a broken inline <script> without reading the repo for a decision', async () => {
     const deps = makeDeps();
     const html = '<!doctype html><html><body><script>function( { broken</script></body></html>';
     const result = await saveDashboard(deps, 'overview', html);
@@ -66,7 +72,7 @@ describe('saveDashboard', () => {
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
     expect((error as { issues: string[] }).issues.some((issue) => issue.includes('syntax error'))).toBe(true);
-    expect(deps.dashboards.upsert).not.toHaveBeenCalled();
+    expect(deps.dashboards.findVersionByName).not.toHaveBeenCalled();
   });
 });
 

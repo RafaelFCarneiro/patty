@@ -9,23 +9,25 @@ import { billApplier, billsRepo } from '../../src/diplomat/db/repos/bills.js';
 import { categoriesRepo, categoryApplier } from '../../src/diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from '../../src/diplomat/db/repos/subCategories.js';
 import { creditCardApplier, creditCardsRepo } from '../../src/diplomat/db/repos/creditCards.js';
-import { dashboardsRepo } from '../../src/diplomat/db/repos/dashboards.js';
+import { dashboardApplier, dashboardsRepo } from '../../src/diplomat/db/repos/dashboards.js';
 import { merchantCategoryApplier, merchantsRepo } from '../../src/diplomat/db/repos/merchants.js';
 import { recurringRepo, recurringRuleApplier } from '../../src/diplomat/db/repos/recurring.js';
-import { settingsRepo } from '../../src/diplomat/db/repos/settings.js';
+import { settingsApplier, settingsRepo } from '../../src/diplomat/db/repos/settings.js';
 import { tagApplier, tagsRepo } from '../../src/diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../../src/diplomat/db/repos/transactions.js';
 import { healthRepo } from '../../src/diplomat/db/repos/health.js';
+import { createLocaleResolver } from '../../src/diplomat/db/localeCache.js';
 import { McpTransport } from '../../src/config.js';
 import { ACCOUNT_ENTITY_TAG } from '../../src/models/account.js';
 import { BILL_ENTITY_TAG } from '../../src/models/bill.js';
 import { CATEGORY_ENTITY_TAG } from '../../src/models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from '../../src/models/creditCard.js';
+import { DASHBOARD_ENTITY_TAG } from '../../src/models/dashboard.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../src/models/merchant.js';
 import { RECURRING_ENTITY_TAG } from '../../src/models/recurring.js';
+import { SETTINGS_ENTITY_TAG } from '../../src/models/locale.js';
 import { TAG_ENTITY_TAG } from '../../src/models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
-import { Locale } from '../../src/models/locale.js';
 import { buildHttpApp } from '../../src/server.js';
 import { runEffects, runEffectsSequence, type ApplierRegistry } from '../../src/diplomat/db/effects.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
@@ -51,6 +53,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
   await bootstrap(db);
 
   const settingsR = settingsRepo(db);
+  const localeResolver = createLocaleResolver(settingsR);
 
   const deps: Deps = {
     accounts: accountsRepo(db),
@@ -67,11 +70,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     transactions: transactionsRepo(db),
     clock: () => new Date(),
     newId: () => randomUUID(),
-    locale: async () => {
-      const row = await settingsR.getLocale();
-      return row?.locale ?? Locale.enum.en;
-    },
-    resetLocale: () => {},
+    locale: localeResolver.locale,
   };
 
   const require = createRequire(import.meta.url);
@@ -86,11 +85,15 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     [CATEGORY_ENTITY_TAG]: categoryApplier,
     [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
     [RECURRING_ENTITY_TAG]: recurringRuleApplier,
+    [DASHBOARD_ENTITY_TAG]: dashboardApplier,
+    [SETTINGS_ENTITY_TAG]: settingsApplier,
   };
   const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
     runEffectsSequence(db, applierRegistry, items, flowFor);
-  const app = buildHttpApp(deps, version, boundRunEffects, boundRunEffectsSequence, { logger: false });
+  const app = buildHttpApp(deps, version, boundRunEffects, boundRunEffectsSequence, localeResolver.resetLocale, {
+    logger: false,
+  });
 
   return { app, deps, version, runEffects: boundRunEffects, runEffectsSequence: boundRunEffectsSequence };
 };

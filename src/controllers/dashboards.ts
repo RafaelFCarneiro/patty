@@ -2,14 +2,25 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
 import { findHtmlValidationIssues } from '../logic/dashboard.js';
-import { dashboardErrors, type Dashboard, type DashboardListItem } from '../models/dashboard.js';
+import * as persistence from '../logic/persistence.js';
+import { DASHBOARD_ENTITY_TAG, dashboardErrors, type Dashboard, type DashboardListItem } from '../models/dashboard.js';
+import type { FlowOutcome, Persistable } from '../models/persistable.js';
 import type { Deps } from './deps.js';
 
-export const saveDashboard = (deps: Deps, name: string, html: string): ResultAsync<Dashboard, AppError> =>
+export const saveDashboard = (deps: Deps, name: string, html: string): ResultAsync<FlowOutcome<Dashboard>, AppError> =>
   safeTry(async function* () {
     const issues = findHtmlValidationIssues(html);
     yield* guard(issues.length === 0, dashboardErrors.invalidHtml(issues));
-    return ok(await deps.dashboards.upsert(name, html, deps.clock().toISOString()));
+
+    const existingVersion = await deps.dashboards.findVersionByName(name);
+    const dashboard: Dashboard = { name, html, updatedAt: deps.clock().toISOString() };
+
+    const persist: Persistable[] =
+      existingVersion === null
+        ? [persistence.insert({ entity: DASHBOARD_ENTITY_TAG, model: dashboard })]
+        : [persistence.update({ entity: DASHBOARD_ENTITY_TAG, model: { ...dashboard, version: existingVersion } })];
+
+    return ok({ persist, response: dashboard });
   });
 
 export const listDashboards = (deps: Deps): Promise<DashboardListItem[]> => deps.dashboards.list();

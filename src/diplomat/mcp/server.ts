@@ -94,7 +94,9 @@ import {
 import { CreateTagSchema } from '../../wire/in/tags.js';
 import * as accountAdapters from '../../adapters/accounts.js';
 import * as categoryAdapters from '../../adapters/categories.js';
+import * as dashboardAdapters from '../../adapters/dashboards.js';
 import * as recurringAdapters from '../../adapters/recurring.js';
+import * as settingsAdapters from '../../adapters/settings.js';
 import * as tagAdapters from '../../adapters/tags.js';
 import { buildOpenApiDocument } from '../http/openapi.js';
 import { buildRouteDefinitions } from '../http/routes.js';
@@ -134,6 +136,7 @@ export const buildMcpServer = (
   version: string,
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
+  resetLocale: () => void,
 ): McpServer => {
   const server = new McpServer({ name: 'fintrack', version });
 
@@ -395,7 +398,10 @@ export const buildMcpServer = (
         id: z.string().min(1).describe('Transaction id (from search_transactions with status: "pending")'),
       },
     },
-    async (args) => fromResult(await confirmTransaction(deps, args)),
+    async (args) => {
+      const flow = () => confirmTransaction(deps, args).map(outcomeToDb);
+      return fromResult(await runEffects(flow));
+    },
   );
 
   server.registerTool(
@@ -781,7 +787,10 @@ export const buildMcpServer = (
         'an inline <script> has a syntax error — fix the reported issue and save again.',
       inputSchema: SaveDashboardSchema.shape,
     },
-    async (args) => fromResult(await saveDashboard(deps, args.name, args.html)),
+    async (args) => {
+      const flow = () => saveDashboard(deps, args.name, args.html).map(dashboardAdapters.outcomeToDb);
+      return fromResult(await runEffects(flow));
+    },
   );
 
   server.registerTool(
@@ -811,7 +820,12 @@ export const buildMcpServer = (
         source: LocaleSource.exclude([LocaleSource.enum.default]),
       },
     },
-    async (args) => fromResult(await setLocale(deps, args)),
+    async (args) => {
+      const flow = () => setLocale(deps, args).map(settingsAdapters.outcomeToDb);
+      const result = await runEffects(flow);
+      if (result.isOk()) resetLocale();
+      return fromResult(result);
+    },
   );
 
   server.registerTool(
