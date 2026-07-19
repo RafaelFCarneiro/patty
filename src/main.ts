@@ -15,7 +15,7 @@ import { categoriesRepo, categoryApplier } from './diplomat/db/repos/categories.
 import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js';
 import { creditCardApplier, creditCardsRepo } from './diplomat/db/repos/creditCards.js';
 import { dashboardApplier, dashboardsRepo } from './diplomat/db/repos/dashboards.js';
-import { merchantCategoryApplier, merchantsRepo } from './diplomat/db/repos/merchants.js';
+import { merchantApplier, merchantCategoryApplier, merchantsRepo } from './diplomat/db/repos/merchants.js';
 import { recurringRepo, recurringRuleApplier } from './diplomat/db/repos/recurring.js';
 import { settingsApplier, settingsRepo } from './diplomat/db/repos/settings.js';
 import { tagApplier, tagsRepo } from './diplomat/db/repos/tags.js';
@@ -28,7 +28,7 @@ import { CATEGORY_ENTITY_TAG } from './models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from './models/creditCard.js';
 import { DASHBOARD_ENTITY_TAG } from './models/dashboard.js';
 import { SETTINGS_ENTITY_TAG } from './models/locale.js';
-import { MERCHANT_CATEGORY_ENTITY_TAG } from './models/merchant.js';
+import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from './models/merchant.js';
 import { RECURRING_ENTITY_TAG } from './models/recurring.js';
 import { TAG_ENTITY_TAG } from './models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from './models/transaction.js';
@@ -96,6 +96,7 @@ const main = async (): Promise<void> => {
   const applierRegistry: ApplierRegistry = {
     [ACCOUNT_ENTITY_TAG]: accountApplier,
     [TRANSACTION_ENTITY_TAG]: transactionApplier,
+    [MERCHANT_ENTITY_TAG]: merchantApplier,
     [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
     [BILL_ENTITY_TAG]: billApplier,
     [TAG_ENTITY_TAG]: tagApplier,

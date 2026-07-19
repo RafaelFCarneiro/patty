@@ -16,7 +16,12 @@ import {
 } from '../../logic/bill.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
 import { resolveCurrency } from '../../logic/money.js';
-import { normalizeMerchant, resolveMerchantCorrection } from '../../logic/merchant.js';
+import {
+  normalizeMerchant,
+  resolveMerchantCorrection,
+  withMerchant,
+  withMerchantLearning,
+} from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import {
@@ -36,7 +41,6 @@ import {
   type UpdateCardTransaction,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
-import { MERCHANT_CATEGORY_ENTITY_TAG, type MerchantCategoryEdge } from '../../models/merchant.js';
 import { type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import {
   ClassificationMethod,
@@ -102,12 +106,6 @@ const resolveBillWrite = (
   const billId = newId();
   return { billId, billPersistable: openBillInsert(billId, cardId, period) };
 };
-
-/** Appends a merchant-learning insert (rule 5) when `correction` is non-null, else returns
- *  `persist` unchanged — kept as its own step so the transaction write can always be appended
- *  after it, staying the batch's last element. */
-const withMerchantLearning = (persist: Persistable[], correction: MerchantCategoryEdge | null): Persistable[] =>
-  correction ? [...persist, persistence.insert({ entity: MERCHANT_CATEGORY_ENTITY_TAG, model: correction })] : persist;
 
 type CardPurchasePlan = {
   entity: TransactionEntity;
@@ -178,16 +176,26 @@ export const addCardPurchase = (
     const { entity, classification, billPeriod, existingBill, cardId } = yield* planCardPurchase(deps, input, source);
     const { billId, billPersistable } = resolveBillWrite(deps.newId, cardId, billPeriod, existingBill);
 
-    // Bill leads, transaction trails (its bill_id FK must resolve within the same batch) —
-    // response resolves lastOutcome, not firstOutcome.
+    // Bill leads, transaction trails (its bill_id FK must resolve within the same batch); a
+    // merchant Persistable (rule 5) is ordered before the transaction for the same reason
+    // (transactions.merchant_key FKs merchants.key) — response resolves the transaction's own
+    // outcome by entity tag, so neither ordering affects it.
     const persist: Persistable[] = [
       billPersistable,
-      persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, refs: { ...entity.refs, billId } } }),
+      ...withMerchant(
+        [
+          persistence.insert({
+            entity: TRANSACTION_ENTITY_TAG,
+            model: { ...entity, refs: { ...entity.refs, billId } },
+          }),
+        ],
+        entity.refs.merchantKey,
+      ),
     ];
 
     const locale = await deps.locale();
     const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
-      const outcome = persistence.lastOutcome(outcomes);
+      const outcome = persistence.outcomeFor(TRANSACTION_ENTITY_TAG, outcomes);
       return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied, classification };
     };
     return ok({ persist, response });
@@ -245,10 +253,11 @@ const resolveBillReassignment = (
   });
 
 /** Update a card transaction (ADR-020): rejects the wrong tool and the bill-payment transfer
- *  itself, settles any bill reassignment, and merges the remaining patch onto `existing`. The
- *  transaction `Persistable` stays last in the batch (bill + merchant-learning writes precede it)
- *  so `lastOutcome` resolves the right one. Never reasons about transfer mutability — the only
- *  transfer this aggregate sees is blocked outright above, by bill-process policy. */
+ *  itself, settles any bill reassignment, and merges the remaining patch onto `existing`. Bill and
+ *  merchant-learning writes precede the transaction `Persistable` for FK reasons; the response
+ *  resolves the transaction's own outcome by entity tag regardless. Never reasons about transfer
+ *  mutability — the only transfer this aggregate sees is blocked outright above, by bill-process
+ *  policy. */
 export const updateCardTransaction = (
   deps: Deps,
   input: UpdateCardTransaction,
@@ -311,7 +320,7 @@ export const updateCardTransaction = (
 
     const locale = await deps.locale();
     const response = (outcomes: PersistOutcome[]): TransactionView =>
-      viewFromOutcome(persistence.lastOutcome(outcomes), locale);
+      viewFromOutcome(persistence.outcomeFor(TRANSACTION_ENTITY_TAG, outcomes), locale);
     return ok({ persist, response });
   });
 

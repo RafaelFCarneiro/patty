@@ -221,8 +221,8 @@ describe('applyDueRecurring — functional core (ADR-021 phase 3b)', () => {
     const outcome = result._unsafeUnwrap();
 
     const response = resolveResponse(outcome, [
-      { applied: true, read: rawViewFor('tx-new', 'Rent') },
-      { applied: true },
+      { entity: TRANSACTION_ENTITY_TAG, applied: true, read: rawViewFor('tx-new', 'Rent') },
+      { entity: RECURRING_ENTITY_TAG, applied: true },
     ]);
     expect(response.count).toBe(1);
     expect(response.applied).toEqual([
@@ -237,8 +237,8 @@ describe('applyDueRecurring — functional core (ADR-021 phase 3b)', () => {
     const outcome = result._unsafeUnwrap();
 
     const response = resolveResponse(outcome, [
-      { applied: false, read: rawViewFor('tx-existing', 'Rent') },
-      { applied: true },
+      { entity: TRANSACTION_ENTITY_TAG, applied: false, read: rawViewFor('tx-existing', 'Rent') },
+      { entity: RECURRING_ENTITY_TAG, applied: true },
     ]);
     expect(response.count).toBe(0);
     expect(response.applied).toEqual([]);
@@ -294,10 +294,10 @@ describe('applyDueRecurring — functional core (ADR-021 phase 3b)', () => {
     ]);
 
     const response = resolveResponse(outcome, [
-      { applied: true, read: rawViewFor('tx-rent', 'Rent') },
-      { applied: true, read: rawViewFor('tx-internet', 'Internet') },
-      { applied: true },
-      { applied: true },
+      { entity: TRANSACTION_ENTITY_TAG, applied: true, read: rawViewFor('tx-rent', 'Rent') },
+      { entity: TRANSACTION_ENTITY_TAG, applied: true, read: rawViewFor('tx-internet', 'Internet') },
+      { entity: RECURRING_ENTITY_TAG, applied: true },
+      { entity: RECURRING_ENTITY_TAG, applied: true },
     ]);
     expect(response.count).toBe(2);
     expect(response.applied.map((a) => a.rule)).toEqual(['Rent', 'Internet']);

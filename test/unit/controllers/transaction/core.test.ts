@@ -106,7 +106,7 @@ describe('confirmTransaction — flips pending to effective as a functional-core
     const outcome = result._unsafeUnwrap();
 
     const persistedView: RawTransactionView = { ...pendingTx, status: TransactionStatus.enum.effective };
-    const response = resolveResponse(outcome, [{ applied: true, read: persistedView }]);
+    const response = resolveResponse(outcome, [{ entity: 'transaction', applied: true, read: persistedView }]);
     expect(response.status).toBe(TransactionStatus.enum.effective);
     expect(response.id).toBe('tx-1');
   });

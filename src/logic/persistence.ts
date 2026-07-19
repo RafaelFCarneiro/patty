@@ -1,3 +1,4 @@
+import * as R from 'remeda';
 import {
   INITIAL_VERSION,
   PersistOp,
@@ -30,25 +31,17 @@ export const remove = <Tag extends string>(fields: { entity: Tag; id: string; ve
   ...fields,
 });
 
-/** Extracts the primary outcome — `persist[0]`'s — from a flow's idempotency-aware `response`
- *  function (`docs/functional-core-imperative-shell.md` rule 6): the entity the flow itself is
- *  about always leads the batch, even when composed with another entity's persistable afterward
- *  (rule 5 — e.g. `updateAccountTransaction` appending a merchant-learning edge). Throws rather
- *  than silently defaulting: an empty `outcomes` here would mean the flow's own `persist` batch and
+/** Extracts a flow's own outcome — the one whose `entity` matches `tag` — from a flow's
+ *  idempotency-aware `response` function (`docs/functional-core-imperative-shell.md` rule 6).
+ *  Addressed by entity tag (ADR-023), not batch position: a flow's own `Persistable` can sit
+ *  anywhere in the batch once another entity's write (e.g. a merchant, composed in per rule 5) is
+ *  ordered around it for FK reasons, and this still finds the right one. Throws rather than
+ *  silently defaulting: no outcome for `tag` here would mean the flow's own `persist` batch and
  *  its `response` function have drifted out of sync — an internal invariant violation, not a
  *  domain outcome. */
-export const firstOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
-  const [outcome] = outcomes;
-  if (!outcome) throw new Error('firstOutcome: expected at least one persist outcome, got none');
-  return outcome;
-};
-
-/** `firstOutcome`'s counterpart for a flow whose own entity trails the batch instead of leading it
- *  (e.g. `addCardPurchase`/`updateCardTransaction`, whose transaction row FKs to a bill that must
- *  be written first). Same "drift is a bug, not a domain outcome" reasoning as `firstOutcome`. */
-export const lastOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
-  const outcome = outcomes[outcomes.length - 1];
-  if (!outcome) throw new Error('lastOutcome: expected at least one persist outcome, got none');
+export const outcomeFor = (tag: string, outcomes: PersistOutcome[]): PersistOutcome => {
+  const outcome = R.find(outcomes, (o) => o.entity === tag);
+  if (!outcome) throw new Error(`outcomeFor: no persist outcome found for entity "${tag}"`);
   return outcome;
 };
 

@@ -4,6 +4,7 @@ import { Locale } from '../../../src/models/locale.js';
 import { CURSOR_VERSION, encodeCursor, SortDirection } from '../../../src/models/page.js';
 import {
   ClassificationMethod,
+  TRANSACTION_ENTITY_TAG,
   TransactionSortField,
   TransactionSource,
   TransactionStatus,
@@ -144,7 +145,6 @@ const baseTx: RawTransactionView = {
 };
 
 describe('addLocalizedLabels', () => {
-
   it('adds typeLabel and statusLabel for the given locale', () => {
     const labeled = addLocalizedLabels(baseTx, Locale.enum.pt);
     expect(labeled.typeLabel).toBe('Despesa');
@@ -242,7 +242,11 @@ describe('addLocalizedLabels', () => {
 describe('buildUpsertResult (ADR-021 rule 6)', () => {
   it('reports created:true and the localized view when the shell actually inserted the row (no classification)', () => {
     const view = { ...baseTx, description: 'Groceries' };
-    const result = buildUpsertResult([{ applied: true, read: view }], undefined, Locale.enum.en);
+    const result = buildUpsertResult(
+      [{ entity: TRANSACTION_ENTITY_TAG, applied: true, read: view }],
+      undefined,
+      Locale.enum.en,
+    );
 
     expect(result.created).toBe(true);
     expect(result.transaction.description).toBe('Groceries');
@@ -251,7 +255,11 @@ describe('buildUpsertResult (ADR-021 rule 6)', () => {
 
   it("reports created:false and the EXISTING row's data on an idempotent duplicate replay", () => {
     const existing = { ...baseTx, description: 'Original replay target' };
-    const result = buildUpsertResult([{ applied: false, read: existing }], undefined, Locale.enum.en);
+    const result = buildUpsertResult(
+      [{ entity: TRANSACTION_ENTITY_TAG, applied: false, read: existing }],
+      undefined,
+      Locale.enum.en,
+    );
 
     expect(result.created).toBe(false);
     expect(result.transaction.description).toBe('Original replay target');
@@ -260,7 +268,11 @@ describe('buildUpsertResult (ADR-021 rule 6)', () => {
   it('includes classification when a create-shaped flow (e.g. add_account_expense) supplies one', () => {
     const classification = { method: ClassificationMethod.enum.rule, confidence: 0.8 } as const;
     const view = { ...baseTx, description: 'Groceries' };
-    const result = buildUpsertResult([{ applied: true, read: view }], classification, Locale.enum.en);
+    const result = buildUpsertResult(
+      [{ entity: TRANSACTION_ENTITY_TAG, applied: true, read: view }],
+      classification,
+      Locale.enum.en,
+    );
 
     expect(result).toEqual({
       transaction: addLocalizedLabels(view, Locale.enum.en),
@@ -274,8 +286,8 @@ describe('buildUpsertResult (ADR-021 rule 6)', () => {
     const response = buildUpsertResult(undefined, Locale.enum.en);
 
     expect(typeof response).toBe('function');
-    expect(response([{ applied: true, read: view }])).toEqual(
-      buildUpsertResult([{ applied: true, read: view }], undefined, Locale.enum.en),
+    expect(response([{ entity: TRANSACTION_ENTITY_TAG, applied: true, read: view }])).toEqual(
+      buildUpsertResult([{ entity: TRANSACTION_ENTITY_TAG, applied: true, read: view }], undefined, Locale.enum.en),
     );
   });
 
@@ -284,8 +296,12 @@ describe('buildUpsertResult (ADR-021 rule 6)', () => {
     const view = { ...baseTx, description: 'Groceries' };
     const response = buildUpsertResult(classification, Locale.enum.en);
 
-    expect(response([{ applied: true, read: view }])).toEqual(
-      buildUpsertResult([{ applied: true, read: view }], classification, Locale.enum.en),
+    expect(response([{ entity: TRANSACTION_ENTITY_TAG, applied: true, read: view }])).toEqual(
+      buildUpsertResult(
+        [{ entity: TRANSACTION_ENTITY_TAG, applied: true, read: view }],
+        classification,
+        Locale.enum.en,
+      ),
     );
   });
 });
@@ -293,7 +309,10 @@ describe('buildUpsertResult (ADR-021 rule 6)', () => {
 describe('buildTransactionView (ADR-021 rule 6)', () => {
   it('returns the localized view of the row the shell actually wrote — no created/classification envelope', () => {
     const view = { ...baseTx, description: 'Updated' };
-    const result = buildTransactionView([{ applied: true, read: view }], Locale.enum.pt);
+    const result = buildTransactionView(
+      [{ entity: TRANSACTION_ENTITY_TAG, applied: true, read: view }],
+      Locale.enum.pt,
+    );
 
     expect(result.description).toBe('Updated');
     expect(result.typeLabel).toBe('Despesa');
@@ -304,8 +323,8 @@ describe('buildTransactionView (ADR-021 rule 6)', () => {
     const view = { ...baseTx, description: 'Updated' };
     const response = buildTransactionView(Locale.enum.pt);
 
-    expect(response([{ applied: true, read: view }])).toEqual(
-      buildTransactionView([{ applied: true, read: view }], Locale.enum.pt),
+    expect(response([{ entity: TRANSACTION_ENTITY_TAG, applied: true, read: view }])).toEqual(
+      buildTransactionView([{ entity: TRANSACTION_ENTITY_TAG, applied: true, read: view }], Locale.enum.pt),
     );
   });
 });

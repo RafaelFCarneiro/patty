@@ -10,7 +10,7 @@ import type { Deps } from '../../../../src/controllers/deps.js';
 import { toIsoDate } from '../../../../src/logic/period.js';
 import { AccountType, type Account } from '../../../../src/models/account.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
-import type { FlowOutcome, PersistOutcome } from '../../../../src/models/persistable.js';
+import type { FlowOutcome, Persistable, PersistOutcome } from '../../../../src/models/persistable.js';
 import { PersistOp } from '../../../../src/models/persistable.js';
 import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
 import { Locale } from '../../../../src/models/locale.js';
@@ -72,6 +72,15 @@ const rawViewFor = (entity: MinimalEntity): RawTransactionView =>
     tags: [],
     version: 0,
   }) as RawTransactionView;
+
+/** Locates the transaction `Persistable` in a batch by entity tag — a batch conditionally leads
+ *  with a merchant insert (ADR-023 `withMerchant`), so the transaction's own entry is no longer
+ *  reliably `persist[0]`. */
+const findTransactionPersistable = (persist: readonly Persistable[]): Persistable => {
+  const found = persist.find((p) => p.entity === 'transaction');
+  if (!found) throw new Error('findTransactionPersistable: no transaction Persistable in batch');
+  return found;
+};
 
 describe('addAccountExpense — account resolution is value-based, not truthy', () => {
   it('rejects a present-but-empty account with unknown_account, not silently ignoring it', async () => {
@@ -143,9 +152,11 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
-    expect(outcome.persist).toHaveLength(1);
-    expect(outcome.persist[0]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });
-    expect((outcome.persist[0] as { model: { currency: string } }).model.currency).toBe('BRL');
+    // 'Lunch' normalizes to a non-empty merchant key, so a merchant insert precedes it (ADR-023).
+    expect(outcome.persist).toHaveLength(2);
+    const tx = findTransactionPersistable(outcome.persist);
+    expect(tx).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });
+    expect((tx as { model: { currency: string } }).model.currency).toBe('BRL');
   });
 
   it('falls back to the input currency (default USD) when no account is given', async () => {
@@ -158,7 +169,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
     );
 
     expect(result.isOk()).toBe(true);
-    const { model } = result._unsafeUnwrap().persist[0] as { model: { currency: string } };
+    const { model } = findTransactionPersistable(result._unsafeUnwrap().persist) as { model: { currency: string } };
     expect(model.currency).toBe('USD');
   });
 
@@ -178,7 +189,9 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
     );
 
     expect(result.isOk()).toBe(true);
-    const { model } = result._unsafeUnwrap().persist[0] as { model: { refs: { categoryId?: string } } };
+    const { model } = findTransactionPersistable(result._unsafeUnwrap().persist) as {
+      model: { refs: { categoryId?: string } };
+    };
     expect(model.refs.categoryId).toBe('cat-transport');
   });
 
@@ -197,7 +210,9 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
       TransactionSource.enum.mcp,
     );
 
-    const { model } = result._unsafeUnwrap().persist[0] as { model: { refs: { merchantKey?: string } } };
+    const { model } = findTransactionPersistable(result._unsafeUnwrap().persist) as {
+      model: { refs: { merchantKey?: string } };
+    };
     expect(model.refs.merchantKey).toBe('uber');
   });
 
@@ -210,12 +225,28 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
       TransactionSource.enum.mcp,
     );
 
-    expect(result._unsafeUnwrap().persist[0]).toMatchObject({
+    expect(findTransactionPersistable(result._unsafeUnwrap().persist)).toMatchObject({
       model: { refs: { merchantKey: 'ze padaria' } },
     });
   });
 
-  it('on a description that normalizes to nothing, leaves merchantKey undefined, not empty', async () => {
+  it('emits a merchant insert ordered before the transaction insert (rule 5 — FK order)', async () => {
+    const deps = makeDeps();
+
+    const result = await addAccountExpense(
+      deps,
+      { description: 'Ze Padaria #123', amount: 15, idempotencyKey: 'classify-merchant-persistable' },
+      TransactionSource.enum.mcp,
+    );
+
+    const { persist } = result._unsafeUnwrap();
+    expect(persist).toEqual([
+      { op: PersistOp.enum.insert, entity: 'merchant', model: { key: 'ze padaria' } },
+      expect.objectContaining({ op: PersistOp.enum.insert, entity: 'transaction' }),
+    ]);
+  });
+
+  it('on a description that normalizes to nothing, emits no merchant Persistable', async () => {
     const deps = makeDeps();
 
     const result = await addAccountExpense(
@@ -224,7 +255,9 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
       TransactionSource.enum.mcp,
     );
 
-    const { model } = result._unsafeUnwrap().persist[0] as { model: { refs: { merchantKey?: string } } };
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toHaveLength(1);
+    const { model } = outcome.persist[0] as { model: { refs: { merchantKey?: string } } };
     expect(model.refs.merchantKey).toBeUndefined();
   });
 
@@ -242,8 +275,12 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
       TransactionSource.enum.mcp,
     );
 
-    const expenseModel = expenseResult._unsafeUnwrap().persist[0] as { model: { type: string } };
-    const incomeModel = incomeResult._unsafeUnwrap().persist[0] as { model: { type: string } };
+    const expenseModel = findTransactionPersistable(expenseResult._unsafeUnwrap().persist) as {
+      model: { type: string };
+    };
+    const incomeModel = findTransactionPersistable(incomeResult._unsafeUnwrap().persist) as {
+      model: { type: string };
+    };
     expect(expenseModel.model.type).toBe('expense');
     expect(incomeModel.model.type).toBe('income');
   });
@@ -257,9 +294,9 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
       TransactionSource.enum.mcp,
     );
     const outcome = result._unsafeUnwrap();
-    const { model: entity } = outcome.persist[0] as { model: MinimalEntity };
+    const { model: entity } = findTransactionPersistable(outcome.persist) as { model: MinimalEntity };
 
-    const response = resolveResponse(outcome, [{ applied: true, read: rawViewFor(entity) }]);
+    const response = resolveResponse(outcome, [{ entity: 'transaction', applied: true, read: rawViewFor(entity) }]);
     expect(response.created).toBe(true);
     expect(response.transaction.description).toBe('Groceries');
   });
@@ -281,7 +318,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
       currency: 'USD',
     });
 
-    const response = resolveResponse(outcome, [{ applied: false, read: existing }]);
+    const response = resolveResponse(outcome, [{ entity: 'transaction', applied: false, read: existing }]);
     expect(response.created).toBe(false);
     expect(response.transaction.description).toBe('Original replay target');
   });
@@ -391,11 +428,19 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
     const result = await updateAccountTransaction(deps, { id: 'tx-1', category: 'Transporte' });
 
     const outcome = result._unsafeUnwrap();
-    expect(outcome.persist).toHaveLength(2);
+    // Transaction update, then a merchant insert, then the learning-edge insert (FK: merchant
+    // precedes merchant_category) — both appended after the flow's own entity (rule 5).
+    expect(outcome.persist).toHaveLength(3);
+    expect(outcome.persist[0]).toMatchObject({ op: PersistOp.enum.update, entity: 'transaction' });
     expect(outcome.persist[1]).toEqual({
       op: PersistOp.enum.insert,
+      entity: 'merchant',
+      model: { key: 'uber' },
+    });
+    expect(outcome.persist[2]).toEqual({
+      op: PersistOp.enum.insert,
       entity: 'merchantCategory',
-      model: { merchantKey: 'uber', categoryId: 'cat-new' },
+      model: { merchantKey: 'uber', categoryId: 'cat-new', weightDelta: 1, origin: 'history' },
     });
     // response() is pure data-shaping — it must not itself perform any write.
     expect(typeof outcome.response).not.toBe('undefined');
@@ -541,11 +586,19 @@ describe('importAccountStatement — pure per-line plan for the shell (ADR-022 s
     const [expenseResult, incomeResult] = await Promise.all(plan.lines.map((line) => plan.flowFor(line)()));
 
     expect(expenseResult.isOk()).toBe(true);
-    const expenseModel = (expenseResult._unsafeUnwrap().persist[0] as { model: { type: string } }).model;
+    const expenseModel = (
+      findTransactionPersistable(expenseResult._unsafeUnwrap().persist) as {
+        model: { type: string };
+      }
+    ).model;
     expect(expenseModel.type).toBe('expense');
 
     expect(incomeResult.isOk()).toBe(true);
-    const incomeModel = (incomeResult._unsafeUnwrap().persist[0] as { model: { type: string } }).model;
+    const incomeModel = (
+      findTransactionPersistable(incomeResult._unsafeUnwrap().persist) as {
+        model: { type: string };
+      }
+    ).model;
     expect(incomeModel.type).toBe('income');
   });
 
@@ -566,7 +619,11 @@ describe('importAccountStatement — pure per-line plan for the shell (ADR-022 s
     const result = await plan.flowFor(plan.lines[0])();
 
     expect(result.isOk()).toBe(true);
-    const model = (result._unsafeUnwrap().persist[0] as { model: { refs: { accountId?: string } } }).model;
+    const model = (
+      findTransactionPersistable(result._unsafeUnwrap().persist) as {
+        model: { refs: { accountId?: string } };
+      }
+    ).model;
     expect(model.refs.accountId).toBe('acc-1');
   });
 });

@@ -215,9 +215,18 @@ the data on disk one join away. Named here as the fallback if the hook ever need
 
 ## Migration plan (phased — each behind the full gate)
 
-1. **Merchant entity + weight delta.** `MERCHANT_ENTITY_TAG` + applier; `weightDelta`/`origin` on the edge and
-   on both applier paths; both appliers stop writing `merchants`. `merchantCategoryApplier` becomes
-   single-table.
+1. **Merchant entity + weight delta (implemented).** `MERCHANT_ENTITY_TAG` + applier; `weightDelta`/`origin` on
+   the edge and on both applier paths; both appliers stop writing `merchants`. `merchantCategoryApplier` becomes
+   single-table. **Also landed as a prerequisite**: prepending a merchant `Persistable` ahead of a flow's own
+   transaction/learning-edge insert (FK order) broke `firstOutcome`/`lastOutcome`'s positional assumption the
+   moment the flow's own entity no longer led or trailed the batch predictably — see the trade-off this ADR
+   didn't originally scope in "Outcomes are addressed by entity tag" (`docs/architecture.md` § Write path).
+   Resolved by making `PersistOutcome` carry the `entity` tag of the `Persistable` it came from and replacing
+   `firstOutcome`/`lastOutcome` with `logic/persistence.ts`'s `outcomeFor(tag, outcomes)`, addressed by tag
+   rather than position — a small, mechanical, behavior-preserving refactor (`models/persistable.ts`,
+   `diplomat/db/effects.ts`, and the handful of call sites in `logic/transaction.ts` and
+   `controllers/creditCard/transaction.ts`), landed in the same change since step 1 is what needed it and the
+   footprint turned out too small to justify a separate PR.
 2. **Tag links to the core.** `transactionTag` entity + set-replace applier; name resolution and leniency into
    `logic/` against `deps.tags.list()`; `tagNames` off `TransactionEntity`; duplicate-path test updated for the
    overwrite semantic.
@@ -231,7 +240,7 @@ Order matters: 3 last, because its justification *is* the collapse.
 ## Action Items
 
 1. [ ] Review/accept this ADR.
-2. [ ] Step 1 — merchant entity + weight delta.
+2. [x] Step 1 — merchant entity + weight delta.
 3. [ ] Step 2 — tag links resolved in the core, overwrite-on-duplicate.
 4. [ ] Step 3 — generic idempotency; `transactionApplier` collapses to a registration.
 5. [ ] Record the applier invariant, its single-table proxy, and the `readBack` deviation in

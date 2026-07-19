@@ -10,7 +10,7 @@ import { categoriesRepo, categoryApplier } from '../../src/diplomat/db/repos/cat
 import { subCategoriesRepo } from '../../src/diplomat/db/repos/subCategories.js';
 import { creditCardApplier, creditCardsRepo } from '../../src/diplomat/db/repos/creditCards.js';
 import { dashboardApplier, dashboardsRepo } from '../../src/diplomat/db/repos/dashboards.js';
-import { merchantCategoryApplier, merchantsRepo } from '../../src/diplomat/db/repos/merchants.js';
+import { merchantApplier, merchantCategoryApplier, merchantsRepo } from '../../src/diplomat/db/repos/merchants.js';
 import { recurringRepo, recurringRuleApplier } from '../../src/diplomat/db/repos/recurring.js';
 import { settingsApplier, settingsRepo } from '../../src/diplomat/db/repos/settings.js';
 import { tagApplier, tagsRepo } from '../../src/diplomat/db/repos/tags.js';
@@ -23,7 +23,7 @@ import { BILL_ENTITY_TAG } from '../../src/models/bill.js';
 import { CATEGORY_ENTITY_TAG } from '../../src/models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from '../../src/models/creditCard.js';
 import { DASHBOARD_ENTITY_TAG } from '../../src/models/dashboard.js';
-import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../src/models/merchant.js';
+import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from '../../src/models/merchant.js';
 import { RECURRING_ENTITY_TAG } from '../../src/models/recurring.js';
 import { SETTINGS_ENTITY_TAG } from '../../src/models/locale.js';
 import { TAG_ENTITY_TAG } from '../../src/models/tag.js';
@@ -79,6 +79,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
   const applierRegistry: ApplierRegistry = {
     [ACCOUNT_ENTITY_TAG]: accountApplier,
     [TRANSACTION_ENTITY_TAG]: transactionApplier,
+    [MERCHANT_ENTITY_TAG]: merchantApplier,
     [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
     [BILL_ENTITY_TAG]: billApplier,
     [TAG_ENTITY_TAG]: tagApplier,

@@ -24,7 +24,7 @@ import { billApplier, billsRepo } from '../../../src/diplomat/db/repos/bills.js'
 import { categoryApplier } from '../../../src/diplomat/db/repos/categories.js';
 import { creditCardApplier, creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
 import { dashboardApplier, dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
-import { merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchants.js';
+import { merchantApplier, merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchants.js';
 import { settingsApplier, settingsRepo } from '../../../src/diplomat/db/repos/settings.js';
 import { tagApplier } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
@@ -57,7 +57,7 @@ import { CREDIT_CARD_ENTITY_TAG, type CreditCardEntity } from '../../../src/mode
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
 import { validation } from '../../../src/models/error.js';
 import { Locale, LocaleSource, SETTINGS_ENTITY_TAG, SETTINGS_SINGLETON_ID } from '../../../src/models/locale.js';
-import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../../src/models/merchant.js';
+import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } from '../../../src/models/persistable.js';
 import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
@@ -662,20 +662,32 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
     expect(read.description).toBe('Original');
   });
 
-  it('insert upserts the referenced merchant row', async () => {
-    const row = newTransactionRow({ merchantKey: `merchant-${randomUUID()}` });
+  it('insert applies the given merchantKey but no longer creates the merchants row itself (ADR-023)', async () => {
+    const merchantKey = `merchant-${randomUUID()}`;
+    await db.run(sql`INSERT INTO merchants (key) VALUES (${merchantKey})`);
+    const row = newTransactionRow({ merchantKey });
 
-    await runEffects(db, transactionRegistry, insertRow(row));
+    const result = await runEffects(db, transactionRegistry, insertRow(row));
 
-    const [merchantRow] = await db.all<{ key: string }>(sql`SELECT key FROM merchants WHERE key = ${row.merchantKey}`);
-    expect(merchantRow?.key).toBe(row.merchantKey);
+    expect(result.isOk()).toBe(true);
+    const [dbRow] = await db.all<{ merchant_key: string }>(
+      sql`SELECT merchant_key FROM transactions WHERE id = ${row.id}`,
+    );
+    expect(dbRow?.merchant_key).toBe(merchantKey);
   });
 
-  it('update upserts the referenced merchant row too, so a key introduced on update satisfies the FK', async () => {
+  it('insert fails on a merchantKey with no existing merchants row — the applier no longer creates one', async () => {
+    const row = newTransactionRow({ merchantKey: `merchant-${randomUUID()}` });
+
+    await expect(runEffects(db, transactionRegistry, insertRow(row))).rejects.toThrow();
+  });
+
+  it('update applies a newly-introduced merchantKey too, without creating the merchants row itself', async () => {
     const row = newTransactionRow();
     await runEffects(db, transactionRegistry, insertRow(row));
 
     const newMerchantKey = `merchant-${randomUUID()}`;
+    await db.run(sql`INSERT INTO merchants (key) VALUES (${newMerchantKey})`);
     const updated: TransactionRowEntity = { ...row, merchantKey: newMerchantKey };
     const result = await runEffects(db, transactionRegistry, () =>
       okAsync({
@@ -685,8 +697,6 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
     );
 
     expect(result.isOk()).toBe(true);
-    const [merchantRow] = await db.all<{ key: string }>(sql`SELECT key FROM merchants WHERE key = ${newMerchantKey}`);
-    expect(merchantRow?.key).toBe(newMerchantKey);
     const [dbRow] = await db.all<{ merchant_key: string }>(
       sql`SELECT merchant_key FROM transactions WHERE id = ${row.id}`,
     );
@@ -767,9 +777,72 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
   });
 });
 
-describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 2a)', () => {
+describe('merchantApplier — hand-written single-table applier for a key-only, no-version entity (ADR-023)', () => {
+  const merchantOnlyRegistry: ApplierRegistry = { [MERCHANT_ENTITY_TAG]: merchantApplier };
+
+  it('inserts a brand-new merchant normally', async () => {
+    const key = `merchant-${randomUUID()}`;
+
+    const result = await runEffects(db, merchantOnlyRegistry, () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: MERCHANT_ENTITY_TAG, model: { key } }] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT key FROM merchants WHERE key = ${key}`)).toEqual([{ key }]);
+  });
+
+  it('is idempotent on a repeat key — no error, no duplicate row', async () => {
+    const key = `merchant-${randomUUID()}`;
+    const insertMerchant = () =>
+      runEffects(db, merchantOnlyRegistry, () =>
+        okAsync({
+          persist: [{ op: PersistOp.enum.insert, entity: MERCHANT_ENTITY_TAG, model: { key } }] as Persistable[],
+          response: null,
+        }),
+      );
+
+    const first = await insertMerchant();
+    const second = await insertMerchant();
+
+    expect(first.isOk()).toBe(true);
+    expect(second.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT key FROM merchants WHERE key = ${key}`)).toEqual([{ key }]);
+  });
+
+  it('update is structurally unreachable — a merchant is only ever inserted', async () => {
+    await expect(
+      runEffects(db, merchantOnlyRegistry, () =>
+        okAsync({
+          persist: [
+            { op: PersistOp.enum.update, entity: MERCHANT_ENTITY_TAG, model: { key: 'unused', version: 0 } },
+          ] as Persistable[],
+          response: null,
+        }),
+      ),
+    ).rejects.toThrow('merchantApplier: update is unsupported');
+  });
+
+  it('delete is structurally unreachable — merchants are never removed', async () => {
+    await expect(
+      runEffects(db, merchantOnlyRegistry, () =>
+        okAsync({
+          persist: [
+            { op: PersistOp.enum.delete, entity: MERCHANT_ENTITY_TAG, id: 'unused', version: 0 },
+          ] as Persistable[],
+          response: null,
+        }),
+      ),
+    ).rejects.toThrow('merchantApplier: delete is unsupported');
+  });
+});
+
+describe('merchantCategoryApplier — upsert-increment mechanics, single-table (ADR-021 phase 2a / ADR-023)', () => {
   const merchantRegistry: ApplierRegistry = {
     [TRANSACTION_ENTITY_TAG]: transactionApplier,
+    [MERCHANT_ENTITY_TAG]: merchantApplier,
     [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
   };
 
@@ -779,34 +852,51 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
     return categoryId;
   };
 
-  it('insert creates the edge at weight 1 on a first correction', async () => {
+  // The applier no longer creates the referenced `merchants` row itself (ADR-023) — every test
+  // below that inserts a `merchant_category`/`transactions` row needing one seeds it directly,
+  // mirroring `seedCategory` above (fixture setup, never the code under test).
+  const seedMerchant = async (key: string): Promise<void> => {
+    await db.run(sql`INSERT INTO merchants (key) VALUES (${key})`);
+  };
+
+  it('insert applies the given weightDelta as the initial weight and the given origin (first correction)', async () => {
     const categoryId = await seedCategory();
     const merchantKey = `merchant-${randomUUID()}`;
+    await seedMerchant(merchantKey);
 
     const result = await runEffects(db, merchantRegistry, () =>
       okAsync({
         persist: [
-          { op: PersistOp.enum.insert, entity: MERCHANT_CATEGORY_ENTITY_TAG, model: { merchantKey, categoryId } },
+          {
+            op: PersistOp.enum.insert,
+            entity: MERCHANT_CATEGORY_ENTITY_TAG,
+            model: { merchantKey, categoryId, weightDelta: 1, origin: ClassificationMethod.enum.history },
+          },
         ] as Persistable[],
         response: null,
       }),
     );
 
     expect(result.isOk()).toBe(true);
-    const [edge] = await db.all<{ weight: number }>(
-      sql`SELECT weight FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
+    const [edge] = await db.all<{ weight: number; origin: string }>(
+      sql`SELECT weight, origin FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
     );
-    expect(edge?.weight).toBe(1);
+    expect(edge).toEqual({ weight: 1, origin: ClassificationMethod.enum.history });
   });
 
-  it('a repeat correction increments weight instead of failing on the composite-key conflict', async () => {
+  it('a repeat correction increments weight by its own delta, not a composite-key conflict', async () => {
     const categoryId = await seedCategory();
     const merchantKey = `merchant-${randomUUID()}`;
+    await seedMerchant(merchantKey);
     const insertEdge = () =>
       runEffects(db, merchantRegistry, () =>
         okAsync({
           persist: [
-            { op: PersistOp.enum.insert, entity: MERCHANT_CATEGORY_ENTITY_TAG, model: { merchantKey, categoryId } },
+            {
+              op: PersistOp.enum.insert,
+              entity: MERCHANT_CATEGORY_ENTITY_TAG,
+              model: { merchantKey, categoryId, weightDelta: 1, origin: ClassificationMethod.enum.history },
+            },
           ] as Persistable[],
           response: null,
         }),
@@ -822,9 +912,45 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
     expect(edge?.weight).toBe(2);
   });
 
+  it('applies the delta it is handed on both insert and conflict paths; origin is insert-only', async () => {
+    const categoryId = await seedCategory();
+    const merchantKey = `merchant-${randomUUID()}`;
+    await seedMerchant(merchantKey);
+    const insertEdge = (weightDelta: number, origin: 'rule' | 'history') =>
+      runEffects(db, merchantRegistry, () =>
+        okAsync({
+          persist: [
+            {
+              op: PersistOp.enum.insert,
+              entity: MERCHANT_CATEGORY_ENTITY_TAG,
+              model: { merchantKey, categoryId, weightDelta, origin },
+            },
+          ] as Persistable[],
+          response: null,
+        }),
+      );
+
+    // First observed as a rule match, weight 5.
+    await insertEdge(5, ClassificationMethod.enum.rule);
+    let [edge] = await db.all<{ weight: number; origin: string }>(
+      sql`SELECT weight, origin FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
+    );
+    expect(edge).toEqual({ weight: 5, origin: ClassificationMethod.enum.rule });
+
+    // A later user correction reinforces it as `history` — the delta lands, but `origin` is
+    // insert-only and is NOT overwritten on the conflict path (ADR-023 decision 2).
+    const result = await insertEdge(3, ClassificationMethod.enum.history);
+    expect(result.isOk()).toBe(true);
+    [edge] = await db.all<{ weight: number; origin: string }>(
+      sql`SELECT weight, origin FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
+    );
+    expect(edge).toEqual({ weight: 8, origin: ClassificationMethod.enum.rule });
+  });
+
   it('composes atomically with its transaction update: both roll back together on a stale version', async () => {
     const categoryId = await seedCategory();
     const merchantKey = `merchant-${randomUUID()}`;
+    await seedMerchant(merchantKey);
     const row: TransactionRowEntity = {
       id: randomUUID(),
       description: 'Coffee',
@@ -861,7 +987,11 @@ describe('merchantCategoryApplier — upsert-increment mechanics (ADR-021 phase 
       okAsync({
         persist: [
           { op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: staleUpdate },
-          { op: PersistOp.enum.insert, entity: MERCHANT_CATEGORY_ENTITY_TAG, model: { merchantKey, categoryId } },
+          {
+            op: PersistOp.enum.insert,
+            entity: MERCHANT_CATEGORY_ENTITY_TAG,
+            model: { merchantKey, categoryId, weightDelta: 1, origin: ClassificationMethod.enum.history },
+          },
         ] as Persistable[],
         response: null,
       }),

@@ -135,7 +135,7 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
     const outcome = result._unsafeUnwrap();
     const { model: entity } = outcome.persist[0] as { model: MinimalEntity };
 
-    const response = resolveResponse(outcome, [{ applied: true, read: rawViewFor(entity) }]);
+    const response = resolveResponse(outcome, [{ entity: 'transaction', applied: true, read: rawViewFor(entity) }]);
     expect(response.created).toBe(true);
     expect(response.transaction.amount).toBe(25);
   });
@@ -156,7 +156,7 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
       currency: 'BRL',
     });
 
-    const response = resolveResponse(outcome, [{ applied: false, read: existing }]);
+    const response = resolveResponse(outcome, [{ entity: 'transaction', applied: false, read: existing }]);
     expect(response.created).toBe(false);
     expect(response.transaction.amount).toBe(99);
   });
