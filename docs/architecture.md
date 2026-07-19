@@ -623,7 +623,9 @@ available alongside the server.
 - ADR-015: multi-write unit-of-work for transactional multi-step writes — **rejected** (superseded by ADR-016 before implementation)
 - ADR-016: domain/context boundaries — aggregate ownership (credit-card, account) over a shared transaction core
 - ADR-017: no god write flows — bounded-context ownership for every transaction mutation (extends ADR-016; step 1 [update/delete split] and step 2 [bulk split] both implemented — complete; ownership discriminator revised by ADR-020)
+- ADR-018: atomic bill payment via a transactional repo write — **superseded by ADR-021** before implementation (the atomicity it sought is generic in the shell, not a repo method)
 - ADR-019: minimal transaction core — aggregates `.extend` the shared movement schema up, never `.omit` it down (step 1 [schema compose-up] and step 2 [logic re-homing] both implemented — complete)
 - ADR-020: transaction ownership by account type, not structural field-presence (revises ADR-017's union rule; refines ADR-019 PR-2 — implemented)
 - ADR-021: functional core / imperative shell for the write path — controllers return the write as data (a `persist` batch) instead of performing it; a generic versioned unit of work applies it (supersedes ADR-018)
 - ADR-022: the shell's executor is a generic effect runner (`runEffects`/`runEffectsSequence`) rather than a DB-specific unit of work — persistence is one effect kind, response always produced, message dispatch a named future kind; runs either a single atomic unit or a sequence of independent units (renames/extends ADR-021)
+- ADR-023: an applier decides nothing and reads nothing in order to decide — merchant creation, tag resolution, and the learning weight/origin move into the core; idempotent-insert handling becomes registration config (extends ADR-021/ADR-022 — **proposed**)
