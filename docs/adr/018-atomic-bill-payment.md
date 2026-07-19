@@ -1,6 +1,8 @@
 # ADR-018: Atomic bill payment — the last within-aggregate multi-write, closed locally
 
-**Status:** Proposed · **Date:** 2026-07-11 · **Deciders:** Rafael · Closes the concurrency thread parked when
+**Status:** Superseded by **ADR-021** (before implementation — the atomicity sought here is generic in the
+imperative shell, not a transactional repo method) · **Date:** 2026-07-11 · **Deciders:** Rafael · Closes the
+concurrency thread parked when
 **ADR-015** (cross-cutting unit-of-work + optimistic versioning) was rejected in favor of the ADR-016/017
 boundary work. That work shrank the multi-write surface exactly as predicted; this ADR resolves the single
 residue.
