@@ -129,6 +129,31 @@ export const resolveEffectiveType = (
 export const deriveIdempotencyKey = (item: { date: string; description: string; amount: number }): string =>
   `${item.date}-${normalizeMerchant(item.description).replace(/\s+/g, '-') || 'tx'}-${item.amount.toFixed(2)}`;
 
+/** Minimal shape every statement line carries, regardless of aggregate — what defaulting adds
+ *  (date, idempotencyKey) before the aggregate binds the line to its own single-line flow. */
+export type StatementLine = { date?: string; description: string; amount: number; idempotencyKey?: string };
+
+/** A statement line with the runner's defaults applied, plus the whole import's own `rawInput`. */
+export type DefaultedStatementLine<Line extends StatementLine> = Line & {
+  date: string;
+  idempotencyKey: string;
+  rawInput?: string;
+};
+
+/** Defaults the fields shared by every statement line (date, idempotencyKey), and stamps the
+ *  whole import's own `rawInput` onto each — pure; `today` is the caller's already-resolved
+ *  `toIsoDate(deps.clock())`, since logic never reads the clock itself. */
+export const defaultStatementLines = <Line extends StatementLine>(
+  today: string,
+  lines: readonly Line[],
+  rawInput: string | undefined,
+): DefaultedStatementLine<Line>[] =>
+  lines.map((line) => {
+    const date = line.date ?? today;
+    const idempotencyKey = line.idempotencyKey ?? deriveIdempotencyKey({ ...line, date });
+    return { ...line, date, idempotencyKey, rawInput };
+  });
+
 export const LOW_CONFIDENCE_THRESHOLD = 0.6;
 
 /** Items the agent should surface to the user for category confirmation. */

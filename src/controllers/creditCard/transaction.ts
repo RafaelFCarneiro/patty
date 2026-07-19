@@ -22,6 +22,7 @@ import { toIsoDate } from '../../logic/period.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
+  defaultStatementLines,
   defaultStatusFor,
   viewFromOutcome,
 } from '../../logic/transaction.js';
@@ -53,7 +54,7 @@ import {
 } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveCardRef, resolveLegAccounts } from '../resolve.js';
-import { defaultStatementLines, type StatementImportPlan } from '../transaction/bulk.js';
+import type { StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
 /** True when a leg of the transaction is the card's own `credit` account (ADR-010/ADR-020) — a
@@ -209,7 +210,7 @@ export const importCardStatement = (
   input: ImportCardStatement,
   source: TransactionSource,
 ): StatementImportPlan<ImportCardStatementItem, ClassifiedUpsertResult> => {
-  const lines = defaultStatementLines(deps, input.items, input.rawInput);
+  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
   // Resolves locale once for the whole import rather than once per line: every line's flow reads
   // deps.locale() to build its localized response, and overriding it here to the same in-flight
   // promise (never re-invoked) keeps every item's labels consistent even if the process-level

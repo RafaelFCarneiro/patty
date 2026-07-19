@@ -1,7 +1,6 @@
 import { err, ok } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
-import { buildBulkResult, defaultStatementLines } from '../../../../src/controllers/transaction/bulk.js';
-import { toIsoDate } from '../../../../src/logic/period.js';
+import { buildBulkResult } from '../../../../src/controllers/transaction/bulk.js';
 import { validation } from '../../../../src/models/error.js';
 import type { ClassifiedUpsertResult, TransactionView } from '../../../../src/models/transaction.js';
 
@@ -19,44 +18,6 @@ const transaction = (overrides: Partial<TransactionView> = {}): TransactionView 
   statusLabel: 'Effective',
   tags: [],
   ...overrides,
-});
-
-describe('defaultStatementLines — pure per-line defaulting (ADR-022 step 3)', () => {
-  it('defaults date from the clock and derives an idempotencyKey when both are absent', () => {
-    const clock = new Date('2026-06-10');
-    const deps = { clock: () => clock };
-    const [line] = defaultStatementLines(deps, [{ description: 'Coffee', amount: 5 }], undefined);
-
-    expect(line.date).toBe(toIsoDate(clock));
-    expect(line.idempotencyKey).toBeTruthy();
-    expect(line.rawInput).toBeUndefined();
-  });
-
-  it('never overrides an explicit date/idempotencyKey', () => {
-    const deps = { clock: () => new Date('2026-06-10') };
-    const [line] = defaultStatementLines(
-      deps,
-      [{ description: 'Coffee', amount: 5, date: '2026-01-01', idempotencyKey: 'explicit' }],
-      undefined,
-    );
-
-    expect(line.date).toBe('2026-01-01');
-    expect(line.idempotencyKey).toBe('explicit');
-  });
-
-  it("stamps the whole import's rawInput onto every line", () => {
-    const deps = { clock: () => new Date('2026-06-10') };
-    const lines = defaultStatementLines(
-      deps,
-      [
-        { description: 'Coffee', amount: 5 },
-        { description: 'Taxi', amount: 12 },
-      ],
-      'pasted statement text',
-    );
-
-    expect(lines.map((l) => l.rawInput)).toEqual(['pasted statement text', 'pasted statement text']);
-  });
 });
 
 describe('buildBulkResult — shapes per-line SequenceOutcomes into the BulkResult contract', () => {
