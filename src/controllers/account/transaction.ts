@@ -62,8 +62,6 @@ const assertAccountOwnedLegs = (
 
 type MovementPlan = { entity: TransactionEntity; classification: ClassifyOutcome };
 
-/** Shared read-decide step for addAccountExpense/addAccountIncome: validates, resolves the
- *  account/category, and builds the transaction entity `addAccountMovement` (below) persists. */
 const planAccountMovement = (
   deps: Deps,
   input: AddAccountMovement,
@@ -153,12 +151,7 @@ export const addAccountIncome = (
 ): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> =>
   addAccountMovement(deps, input, MovementType.enum.income, source);
 
-/**
- * Import an account statement: single-source — every item belongs to the ONE account named in
- * `input.account` (or unattached if omitted), so there is no per-line account to resolve or route.
- * Each line's own `type` picks `addAccountExpense`/`addAccountIncome`; the shell runs the resulting
- * flows via `runEffectsSequence`. This module only decides; it never applies a write itself.
- */
+// Single-source: every item belongs to the ONE account named in `input.account` (or unattached).
 export const importAccountStatement = (
   deps: Deps,
   input: ImportAccountStatement,

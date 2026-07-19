@@ -239,7 +239,6 @@ describe('importCardStatement — pure per-line plan for the shell (ADR-022 step
     expect(plan.lines).toHaveLength(2);
     expect(plan.lines[0]).toMatchObject({ date: toIsoDate(clock), rawInput: 'pasted statement text' });
     expect(plan.lines[0].idempotencyKey).toBeTruthy();
-    // An explicit idempotencyKey/date is never overridden by the default.
     expect(plan.lines[1]).toMatchObject({ date: '2026-06-01', idempotencyKey: 'explicit-key' });
   });
 

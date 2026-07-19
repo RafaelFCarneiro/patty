@@ -117,9 +117,7 @@ type CardPurchasePlan = {
   cardId: string;
 };
 
-/** `addCardPurchase`'s read-decide step: validates, resolves the card and target bill cycle
- *  (rejecting a paid one), classifies, and builds the transaction entity — `billId` still unset,
- *  resolved against `existingBill` below. */
+// billId is left unset — addCardPurchase (below) resolves it against existingBill.
 const planCardPurchase = (
   deps: Deps,
   input: AddCardPurchase,
@@ -195,14 +193,9 @@ export const addCardPurchase = (
     return ok({ persist, response });
   });
 
-/**
- * Import a credit-card statement: single-source — every item is a purchase on the ONE card named
- * in `input.card`. Each line binds to `addCardPurchase`; the shell runs the resulting flows via
- * `runEffectsSequence`. Because the shell re-invokes each line's flow only after the previous line
- * committed, two lines landing on the same new bill cycle simply share it — the second line's
- * `planCardPurchase` read sees the first line's bill already there, no within-batch dedup needed.
- * This module only decides; it never applies a write itself.
- */
+// Single-source: every item is a purchase on the ONE card named in `input.card`. Because the
+// shell re-invokes each line's flow only after the previous line committed, two lines landing on
+// the same new bill cycle simply share it — no within-batch dedup needed.
 export const importCardStatement = (
   deps: Deps,
   input: ImportCardStatement,
