@@ -90,8 +90,6 @@ export const correlatedToCard = (cardId: string, accountId: string, alias = ''):
 
 export type TransactionsRepo = {
   getById: (id: string) => Promise<RawTransactionView | null>;
-  /** Flip status pending → effective. Returns null if the id does not exist. */
-  confirm: (id: string) => Promise<RawTransactionView | null>;
   /** Every transaction correlated to a credit card — card purchases (`creditCardId`) and any
    *  movement on its internal liability account (`fromAccountId`/`toAccountId`), including the
    *  bill-payment transfer. Version-carrying — `deleteCreditCard` decides which of these to remove
@@ -122,14 +120,6 @@ export type TransactionsRepo = {
 
 export const transactionsRepo = (db: Db): TransactionsRepo => ({
   getById: (id) => fetchTx(db, id),
-
-  confirm: async (id) => {
-    await db
-      .update(transactions)
-      .set({ status: TransactionStatus.enum.effective })
-      .where(sql`${transactions.id} = ${id} AND ${transactions.status} = ${TransactionStatus.enum.pending}`);
-    return fetchTx(db, id);
-  },
 
   findAllCorrelatedToCard: async (cardId, accountId) => {
     const rows = await db.all<Record<string, unknown>>(fullTxSelect(correlatedToCard(cardId, accountId, 't')));

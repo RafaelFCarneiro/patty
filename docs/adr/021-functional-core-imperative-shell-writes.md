@@ -12,8 +12,11 @@ phase 3d's own removal of `RecurringRepo.create`/`.advance`, which turned out to
 2026-07-16; phase 3c — bulk statement import (`import_card_statement`/`import_account_statement`) reusing the
 single-line flows verbatim via `runEffectsSequence` (ADR-022 step 3), and phase 3d's own removal of the last
 transaction-side write methods (`TransactionsRepo.create`/`.update`/`.delete`, `BillsRepo.ensureOpen`) — the last
-two grep-confirmed already dead from phase 2b — implemented 2026-07-18; **migration complete: `deps` exposes no
-write method for any entity this ADR covers**) · **Date:** 2026-07-12 ·
+two grep-confirmed already dead from phase 2b — implemented 2026-07-18; **final pass** — the three flows that sat
+outside the ledger domain this ADR scoped (`confirm_transaction`, reusing `transactionApplier`; `save_dashboard`,
+a new name-keyed `dashboardApplier`; `set_locale`, a new `settingsApplier`), closing the same violation
+(a controller calling a repo write method) wherever it still existed — implemented 2026-07-18; **migration
+complete: `deps` exposes no write method at all, for any entity in the codebase**) · **Date:** 2026-07-12 ·
 **Deciders:** Rafael · **Supersedes ADR-018** (atomic bill payment) and finally resolves the thread ADR-015
 opened. Adopts the principle documented in `docs/functional-core-imperative-shell.md` for every write flow.
 

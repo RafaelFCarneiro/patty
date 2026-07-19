@@ -14,11 +14,12 @@ import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
 import { healthRepo } from '../../../src/diplomat/db/repos/health.js';
 import { merchantsRepo } from '../../../src/diplomat/db/repos/merchants.js';
 import { recurringRepo } from '../../../src/diplomat/db/repos/recurring.js';
-import { settingsRepo } from '../../../src/diplomat/db/repos/settings.js';
+import { settingsApplier, settingsRepo } from '../../../src/diplomat/db/repos/settings.js';
 import { tagsRepo } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
+import { runEffects, type ApplierRegistry } from '../../../src/diplomat/db/effects.js';
 import { McpTransport } from '../../../src/config.js';
-import { Locale, LocaleSource } from '../../../src/models/locale.js';
+import { Locale, LocaleSource, SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
 import { listCategories } from '../../../src/controllers/categories.js';
 import { getPreferences, setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
@@ -28,11 +29,13 @@ const MIGRATIONS = fileURLToPath(new URL('../../../drizzle', import.meta.url));
 
 let tmpDir: string;
 let deps: Deps;
+let registry: ApplierRegistry;
+let db: ReturnType<typeof openDatabase>;
 
 describe('empty DB (ADR-008)', () => {
   beforeAll(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-empty-'));
-    const db = openDatabase({
+    db = openDatabase({
       DB_PATH: join(tmpDir, 'empty.db'),
       FINTRACK_DB_KEY: TEST_KEY,
       PORT: 0,
@@ -59,8 +62,8 @@ describe('empty DB (ADR-008)', () => {
         const row = await settingsR.getLocale();
         return row?.locale ?? Locale.enum.en;
       },
-      resetLocale: () => {},
     };
+    registry = { [SETTINGS_ENTITY_TAG]: settingsApplier };
   });
 
   afterAll(() => {
@@ -78,7 +81,8 @@ describe('empty DB (ADR-008)', () => {
   });
 
   it('inferred set_locale switches locale and stores inferred source', async () => {
-    const result = await setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred });
+    const flow = () => setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred });
+    const result = await runEffects(db, registry, flow);
     expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });
     const prefs = await getPreferences(deps);
     expect(prefs).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });

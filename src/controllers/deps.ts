@@ -32,7 +32,6 @@ export type Deps = {
   clock: () => Date;
   newId: () => string;
   locale: () => Promise<Locale>;
-  resetLocale: () => void;
 };
 
 /**

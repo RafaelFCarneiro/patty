@@ -6,6 +6,7 @@ import * as accountAdapters from '../../adapters/accounts.js';
 import * as billAdapters from '../../adapters/bills.js';
 import * as categoryAdapters from '../../adapters/categories.js';
 import * as creditCardAdapters from '../../adapters/creditCards.js';
+import * as dashboardAdapters from '../../adapters/dashboards.js';
 import * as recurringAdapters from '../../adapters/recurring.js';
 import * as tagAdapters from '../../adapters/tags.js';
 import * as transactionAdapters from '../../adapters/transactions.js';
@@ -747,7 +748,8 @@ export const buildRouteDefinitions = (
     responses: { 200: okResponse('Transaction confirmed', TransactionViewSchema), 404: notFound404 },
     handler: async (req, reply) => {
       const { id } = req.params as { id: string };
-      return send(reply, await confirmTransaction(deps, { id }));
+      const flow = () => confirmTransaction(deps, { id }).map(transactionAdapters.outcomeToDb);
+      return send(reply, await runEffects(flow));
     },
   },
   {
@@ -835,7 +837,8 @@ export const buildRouteDefinitions = (
     handler: async (req, reply) => {
       const wireIn = parse(SaveDashboardSchema, req.body, reply);
       if (!wireIn) return reply;
-      return send(reply, await saveDashboard(deps, wireIn.name, wireIn.html));
+      const flow = () => saveDashboard(deps, wireIn.name, wireIn.html).map(dashboardAdapters.outcomeToDb);
+      return send(reply, await runEffects(flow));
     },
   },
 

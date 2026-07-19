@@ -5,6 +5,12 @@ import { LibsqlError } from '@libsql/client';
 // `onConflictDoNothing` (scoped to `id`) and never throws in the first place.
 const SQLITE_UNIQUE_CONSTRAINT_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
 
+// SQLite reports a duplicate on a non-`id` PRIMARY KEY (e.g. `dashboards.name`) under this
+// distinct extended code — never `SQLITE_CONSTRAINT_UNIQUE`, which only covers a secondary
+// `UNIQUE`/`uniqueIndex` column. An entity keyed on something other than `id` (so it can't lean on
+// `versionedTableApplier`'s id-scoped `onConflictDoNothing`) needs this check instead.
+const SQLITE_PRIMARY_KEY_CONSTRAINT_CODE = 'SQLITE_CONSTRAINT_PRIMARYKEY';
+
 // A row referencing the one a versioned delete is removing was inserted after that delete's own
 // flow read its point-in-time state — the same kind of "the world changed since we read" race a
 // stale `version` reports, just surfaced by the FK check instead.
@@ -23,6 +29,11 @@ const matchesExtendedCode = (cause: unknown, extendedCode: string): boolean => {
  *  rethrow it as a `VersionConflict` instead of a raw 500. */
 export const isUniqueConstraintViolation = (cause: unknown): boolean =>
   matchesExtendedCode(cause, SQLITE_UNIQUE_CONSTRAINT_CODE);
+
+/** Same `.cause`-chain walk as `isUniqueConstraintViolation`, for a table keyed on a non-`id`
+ *  PRIMARY KEY (e.g. `dashboards.name`) — a concurrent first insert under the same key. */
+export const isPrimaryKeyConstraintViolation = (cause: unknown): boolean =>
+  matchesExtendedCode(cause, SQLITE_PRIMARY_KEY_CONSTRAINT_CODE);
 
 /** Same `.cause`-chain walk as `isUniqueConstraintViolation`, for a versioned delete that failed
  *  because some other row now references the one being removed. */

@@ -8,24 +8,26 @@ import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js
 import { bootstrap } from './diplomat/db/bootstrap.js';
 import { openDatabase } from './diplomat/db/driver.js';
 import { runEffects, runEffectsSequence, type ApplierRegistry } from './diplomat/db/effects.js';
+import { createLocaleResolver } from './diplomat/db/localeCache.js';
 import { accountApplier, accountsRepo } from './diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from './diplomat/db/repos/bills.js';
 import { categoriesRepo, categoryApplier } from './diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js';
 import { creditCardApplier, creditCardsRepo } from './diplomat/db/repos/creditCards.js';
-import { dashboardsRepo } from './diplomat/db/repos/dashboards.js';
+import { dashboardApplier, dashboardsRepo } from './diplomat/db/repos/dashboards.js';
 import { merchantCategoryApplier, merchantsRepo } from './diplomat/db/repos/merchants.js';
 import { recurringRepo, recurringRuleApplier } from './diplomat/db/repos/recurring.js';
-import { settingsRepo } from './diplomat/db/repos/settings.js';
+import { settingsApplier, settingsRepo } from './diplomat/db/repos/settings.js';
 import { tagApplier, tagsRepo } from './diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from './diplomat/db/repos/transactions.js';
 import { healthRepo } from './diplomat/db/repos/health.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
-import { Locale } from './models/locale.js';
 import { ACCOUNT_ENTITY_TAG } from './models/account.js';
 import { BILL_ENTITY_TAG } from './models/bill.js';
 import { CATEGORY_ENTITY_TAG } from './models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from './models/creditCard.js';
+import { DASHBOARD_ENTITY_TAG } from './models/dashboard.js';
+import { SETTINGS_ENTITY_TAG } from './models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from './models/merchant.js';
 import { RECURRING_ENTITY_TAG } from './models/recurring.js';
 import { TAG_ENTITY_TAG } from './models/tag.js';
@@ -48,11 +50,12 @@ const maybeStartSidecar = async (
   version: string,
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
+  resetLocale: () => void,
   config: Config,
 ): Promise<HttpSidecar | null> => {
   if (!config.FINTRACK_HTTP) return null;
   const { startHttpSidecar } = await loadServerModule();
-  return startHttpSidecar(deps, version, runEffects, runEffectsSequence, config.PORT);
+  return startHttpSidecar(deps, version, runEffects, runEffectsSequence, resetLocale, config.PORT);
 };
 
 const main = async (): Promise<void> => {
@@ -68,20 +71,7 @@ const main = async (): Promise<void> => {
   await bootstrap(db);
 
   const settingsR = settingsRepo(db);
-
-  let cachedLocale: Locale | null = null;
-
-  const resolveLocale = async (): Promise<Locale> => {
-    if (config.FINTRACK_LOCALE) return config.FINTRACK_LOCALE;
-    if (cachedLocale) return cachedLocale;
-    const row = await settingsR.getLocale();
-    cachedLocale = row?.locale ?? Locale.enum.en;
-    return cachedLocale;
-  };
-
-  const resetLocale = (): void => {
-    cachedLocale = null;
-  };
+  const localeResolver = createLocaleResolver(settingsR, config.FINTRACK_LOCALE);
 
   const deps: Deps = {
     accounts: accountsRepo(db),
@@ -98,8 +88,7 @@ const main = async (): Promise<void> => {
     transactions: transactionsRepo(db),
     clock: () => new Date(),
     newId: () => randomUUID(),
-    locale: resolveLocale,
-    resetLocale,
+    locale: localeResolver.locale,
   };
 
   // Every converted entity's applier, keyed by its own tag (ADR-021) — assembled once here, the
@@ -113,17 +102,32 @@ const main = async (): Promise<void> => {
     [CATEGORY_ENTITY_TAG]: categoryApplier,
     [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
     [RECURRING_ENTITY_TAG]: recurringRuleApplier,
+    [DASHBOARD_ENTITY_TAG]: dashboardApplier,
+    [SETTINGS_ENTITY_TAG]: settingsApplier,
   };
   const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
     runEffectsSequence(db, applierRegistry, items, flowFor);
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
-    const server = await connectStdio(deps, version, boundRunEffects, boundRunEffectsSequence);
+    const server = await connectStdio(
+      deps,
+      version,
+      boundRunEffects,
+      boundRunEffectsSequence,
+      localeResolver.resetLocale,
+    );
 
     // A bind failure inside startHttpSidecar is caught there and is never fatal — the stdio
     // connection above is the resilient primary (ADR-013 Decision 7).
-    const sidecar = await maybeStartSidecar(deps, version, boundRunEffects, boundRunEffectsSequence, config);
+    const sidecar = await maybeStartSidecar(
+      deps,
+      version,
+      boundRunEffects,
+      boundRunEffectsSequence,
+      localeResolver.resetLocale,
+      config,
+    );
 
     // 'close' commonly follows 'end' on stdin, and a client can also send SIGINT/SIGTERM around
     // the same disconnect — guard against shutdown() running (and double process.exit-ing) twice.
@@ -148,7 +152,7 @@ const main = async (): Promise<void> => {
   // sidecar, this is the only surface running — a bind failure here is fatal by design
   // (there is no stdio fallback to keep the process alive), handled below in main().catch.
   const { buildHttpApp } = await loadServerModule();
-  const app = buildHttpApp(deps, version, boundRunEffects, boundRunEffectsSequence);
+  const app = buildHttpApp(deps, version, boundRunEffects, boundRunEffectsSequence, localeResolver.resetLocale);
 
   // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.
   let shuttingDown = false;

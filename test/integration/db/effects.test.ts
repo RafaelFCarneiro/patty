@@ -13,6 +13,7 @@ import * as creditCardAdapters from '../../../src/adapters/creditCards.js';
 import * as transactionAdapters from '../../../src/adapters/transactions.js';
 import { payBill } from '../../../src/controllers/creditCard/bill.js';
 import { deleteCreditCard } from '../../../src/controllers/creditCard/creditCard.js';
+import { saveDashboard } from '../../../src/controllers/dashboards.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
@@ -21,6 +22,7 @@ import { accountApplier, accountsRepo } from '../../../src/diplomat/db/repos/acc
 import { billApplier, billsRepo } from '../../../src/diplomat/db/repos/bills.js';
 import { categoryApplier } from '../../../src/diplomat/db/repos/categories.js';
 import { creditCardApplier, creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
+import { dashboardApplier, dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchants.js';
 import { tagApplier } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
@@ -29,6 +31,7 @@ import {
   bills,
   categories,
   creditCards,
+  dashboards,
   merchantCategory,
   tags,
   transactionTags,
@@ -48,6 +51,7 @@ import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../sr
 import { BILL_ENTITY_TAG, BillStatus } from '../../../src/models/bill.js';
 import { CATEGORY_ENTITY_TAG, CategoryKind } from '../../../src/models/category.js';
 import { CREDIT_CARD_ENTITY_TAG, type CreditCardEntity } from '../../../src/models/creditCard.js';
+import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
 import { validation } from '../../../src/models/error.js';
 import { Locale } from '../../../src/models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../../src/models/merchant.js';
@@ -1096,7 +1100,6 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
       clock: () => new Date('2026-06-15'),
       newId: () => randomUUID(),
       locale: async () => Locale.enum.en,
-      resetLocale: () => {},
     };
 
     return { deps, cardName };
@@ -1204,6 +1207,105 @@ describe('tagApplier — name-uniqueness race surfaces as a generic conflict (AD
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
     expect(attempts).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
     expect(await db.all(sql`SELECT id FROM tags WHERE name = ${name}`)).toHaveLength(1); // no loser row landed
+  });
+});
+
+describe('dashboardApplier — name-PK race surfaces as a generic conflict, never a raw 500', () => {
+  const dashboardRegistry: ApplierRegistry = { [DASHBOARD_ENTITY_TAG]: dashboardApplier };
+
+  it('inserts a brand-new dashboard normally', async () => {
+    const name = `dash-${randomUUID()}`;
+    const result = await runEffects(db, dashboardRegistry, () =>
+      okAsync({
+        persist: [
+          {
+            op: PersistOp.enum.insert,
+            entity: DASHBOARD_ENTITY_TAG,
+            model: { name, html: '<html/>', updatedAt: '2026-01-01' },
+          },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT name FROM dashboards WHERE name = ${name}`)).toHaveLength(1);
+  });
+
+  it('a concurrent same-new-name race exhausts retries to the generic conflict error, never a raw 500', async () => {
+    // dashboards.name is the PRIMARY KEY itself (not a secondary UNIQUE column like tags.name), so
+    // a duplicate insert raises SQLITE_CONSTRAINT_PRIMARYKEY, a different extended code than the
+    // UNIQUE-column case tagApplier/billApplier recognize — this is the regression test for that.
+    const name = `dash-${randomUUID()}`;
+    await db.insert(dashboards).values({ name, html: '<html>winner</html>', updatedAt: '2026-01-01' });
+
+    let attempts = 0;
+    const flow = () => {
+      attempts += 1;
+      // A naive flow that never re-reads — always attempts a fresh insert of the same name.
+      return okAsync({
+        persist: [
+          {
+            op: PersistOp.enum.insert,
+            entity: DASHBOARD_ENTITY_TAG,
+            model: { name, html: '<html>loser</html>', updatedAt: '2026-01-02' },
+          },
+        ] as Persistable[],
+        response: null,
+      });
+    };
+
+    const result = await runEffects(db, dashboardRegistry, flow);
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    expect(attempts).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
+    const [row] = await db.all<{ html: string }>(sql`SELECT html FROM dashboards WHERE name = ${name}`);
+    expect(row?.html).toBe('<html>winner</html>'); // no loser row landed
+  });
+
+  it("saveDashboard's own retry re-reads and takes the update path when a concurrent first save races it", async () => {
+    const name = `dash-${randomUUID()}`;
+    const dashboardsR = dashboardsRepo(db);
+    const deps: Deps = {
+      dashboards: dashboardsR,
+      clock: () => new Date('2026-06-01T00:00:00.000Z'),
+      locale: async () => Locale.enum.en,
+    } as unknown as Deps;
+
+    let reads = 0;
+    // Simulates a concurrent first save of the same brand-new name landing between saveDashboard's
+    // own read (finding nothing, deciding "insert") and the shell applying that decision: the first
+    // read still reports "absent" (so saveDashboard decides insert), but the racer's row is already
+    // in place by the time the shell's `dashboardApplier.insert` runs, so that insert hits a real
+    // PRIMARYKEY conflict and the whole batch rolls back for a retry.
+    const racingDashboards: Deps['dashboards'] = {
+      ...dashboardsR,
+      findRawByName: async (n) => {
+        reads += 1;
+        const existing = await dashboardsR.findRawByName(n);
+        if (reads === 1 && !existing) {
+          await db.insert(dashboards).values({ name: n, html: '<html>racer</html>', updatedAt: '2026-05-01' });
+          return null; // this read itself still predates the race — the decision is already stale
+        }
+        return existing;
+      },
+    };
+    const racingDeps: Deps = { ...deps, dashboards: racingDashboards };
+
+    const result = await runEffects(db, dashboardRegistry, () => saveDashboard(racingDeps, name, '<html>mine</html>'));
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual({
+      name,
+      html: '<html>mine</html>',
+      updatedAt: '2026-06-01T00:00:00.000Z',
+    });
+    const rows = await db.all<{ html: string; version: number }>(
+      sql`SELECT html, version FROM dashboards WHERE name = ${name}`,
+    );
+    expect(rows).toHaveLength(1); // exactly one row — the racer's insert, then this flow's update
+    expect(rows[0]?.html).toBe('<html>mine</html>');
+    expect(rows[0]?.version).toBe(1); // version 0 (racer's insert) → 1 (this flow's update)
   });
 });
 
@@ -1552,7 +1654,6 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       clock: () => new Date('2026-06-15'),
       newId: () => randomUUID(),
       locale: async () => Locale.enum.en,
-      resetLocale: () => {},
     };
 
     return { deps, cardName, payerId };

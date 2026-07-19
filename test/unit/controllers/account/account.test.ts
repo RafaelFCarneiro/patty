@@ -22,7 +22,6 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   clock: () => new Date('2026-06-01'),
   newId: () => 'account-id-1',
   locale: async () => Locale.enum.en,
-  resetLocale: vi.fn(),
   ...overrides,
 });
 

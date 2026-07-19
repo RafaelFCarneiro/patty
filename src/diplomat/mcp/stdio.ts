@@ -9,8 +9,9 @@ export const connectStdio = async (
   version: string,
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
+  resetLocale: () => void,
 ): Promise<McpServer> => {
-  const server = buildMcpServer(deps, version, runEffects, runEffectsSequence);
+  const server = buildMcpServer(deps, version, runEffects, runEffectsSequence, resetLocale);
   await server.connect(new StdioServerTransport());
   return server;
 };

@@ -22,6 +22,19 @@ export type DashboardListItem = z.infer<typeof DashboardListItemSchema>;
 export const SaveDashboardSchema = DashboardSchema.pick({ name: true, html: true });
 export type SaveDashboard = z.infer<typeof SaveDashboardSchema>;
 
+// The dashboard aggregate owns its own entity tag (docs/functional-core-imperative-shell.md),
+// mirroring `models/account.ts`'s `ACCOUNT_ENTITY_TAG` — `models/persistable.ts` is generic over
+// any entity's tag/model and never lists this constant itself.
+export const DASHBOARD_ENTITY_TAG = 'dashboard';
+
+// The persistence-side entity: `Dashboard` plus the optimistic-concurrency `version` token. Never
+// sent over the wire — only `saveDashboard`'s read-decide step and `diplomat/db/repos/dashboards.ts`'s
+// `dashboardApplier` speak this shape.
+export const DashboardEntitySchema = DashboardSchema.extend({
+  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
+});
+export type DashboardEntity = z.infer<typeof DashboardEntitySchema>;
+
 export type DashboardError = NotFound<'dashboard'> | ValidationError;
 
 export const dashboardErrors = {
