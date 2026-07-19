@@ -535,7 +535,12 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     landing a clean update). `DashboardsRepo.upsert` (the `onConflictDoUpdate`) is deleted. `setLocale`
     (`controllers/settings.ts`) reads the singleton settings row and emits an `insert` (absent) or
     version-guarded `update` (present); `settings` fits the `id`/`version` convention despite being a singleton
-    (`id` is always `SETTINGS_SINGLETON_ID`), so its applier is a one-liner: `versionedTableApplier(settings)`.
+    (`id` is always `SETTINGS_SINGLETON_ID`). Unlike a random-UUID-keyed entity, though, an `id` collision on
+    insert here is a real concurrent-first-insert race, not a negligible chance event — the plain
+    `versionedTableApplier`'s `onConflictDoNothing` would silently no-op the loser's insert and let `setLocale`
+    report success without its value ever landing, so `settingsApplier` wraps `versionedTableApplier(settings)`
+    to check the insert outcome and rethrow `VersionConflict` on a no-op, the same false-success bug class as
+    `dashboardApplier`'s (regression-tested alongside it in `test/integration/db/effects.test.ts`).
     `SettingsRepo.setLocale` (the `onConflictDoUpdate`) is deleted. The process-level locale cache reset that
     used to be a second side effect the domain performed (`deps.resetLocale()`, called from inside `setLocale`
     after its write) moved to the shell — see the `resetLocale` wiring bullet above — and `resetLocale` is gone

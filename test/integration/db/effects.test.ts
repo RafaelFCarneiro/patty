@@ -14,6 +14,7 @@ import * as transactionAdapters from '../../../src/adapters/transactions.js';
 import { payBill } from '../../../src/controllers/creditCard/bill.js';
 import { deleteCreditCard } from '../../../src/controllers/creditCard/creditCard.js';
 import { saveDashboard } from '../../../src/controllers/dashboards.js';
+import { setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
@@ -24,6 +25,7 @@ import { categoryApplier } from '../../../src/diplomat/db/repos/categories.js';
 import { creditCardApplier, creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
 import { dashboardApplier, dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchants.js';
+import { settingsApplier, settingsRepo } from '../../../src/diplomat/db/repos/settings.js';
 import { tagApplier } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
 import {
@@ -33,6 +35,7 @@ import {
   creditCards,
   dashboards,
   merchantCategory,
+  settings,
   tags,
   transactionTags,
   transactions,
@@ -53,7 +56,7 @@ import { CATEGORY_ENTITY_TAG, CategoryKind } from '../../../src/models/category.
 import { CREDIT_CARD_ENTITY_TAG, type CreditCardEntity } from '../../../src/models/creditCard.js';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
 import { validation } from '../../../src/models/error.js';
-import { Locale } from '../../../src/models/locale.js';
+import { Locale, LocaleSource, SETTINGS_ENTITY_TAG, SETTINGS_SINGLETON_ID } from '../../../src/models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } from '../../../src/models/persistable.js';
@@ -1305,6 +1308,101 @@ describe('dashboardApplier — name-PK race surfaces as a generic conflict, neve
     );
     expect(rows).toHaveLength(1); // exactly one row — the racer's insert, then this flow's update
     expect(rows[0]?.html).toBe('<html>mine</html>');
+    expect(rows[0]?.version).toBe(1); // version 0 (racer's insert) → 1 (this flow's update)
+  });
+});
+
+describe("settingsApplier — a concurrent first insert on the singleton retries, doesn't silently no-op", () => {
+  const settingsRegistry: ApplierRegistry = { [SETTINGS_ENTITY_TAG]: settingsApplier };
+
+  it('inserts the singleton row normally when absent', async () => {
+    const result = await runEffects(db, settingsRegistry, () =>
+      okAsync({
+        persist: [
+          {
+            op: PersistOp.enum.insert,
+            entity: SETTINGS_ENTITY_TAG,
+            model: { id: SETTINGS_SINGLETON_ID, locale: Locale.enum.en, localeSource: LocaleSource.enum.explicit },
+          },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+    expect(result.isOk()).toBe(true);
+    const [row] = await db.all<{ locale: string }>(
+      sql`SELECT locale FROM settings WHERE id = ${SETTINGS_SINGLETON_ID}`,
+    );
+    expect(row?.locale).toBe(Locale.enum.en);
+  });
+
+  it('a concurrent first insert on the same singleton id retries rather than reporting a false success', async () => {
+    // versionedTableApplier's own insert scopes onConflictDoNothing to `id` — for a random-UUID
+    // entity that never actually collides, so this never fires. `settings.id` is always the same
+    // constant, so a genuine concurrent first-insert race silently no-ops here instead: without
+    // settingsApplier's own applied-check, the loser's flow would report success despite its value
+    // never landing. This asserts the wrapper turns that no-op into a retried conflict instead.
+    await db
+      .insert(settings)
+      .values({ id: SETTINGS_SINGLETON_ID, locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
+
+    let attempts = 0;
+    const flow = () => {
+      attempts += 1;
+      // A naive flow that never re-reads — always attempts a fresh insert of the singleton.
+      return okAsync({
+        persist: [
+          {
+            op: PersistOp.enum.insert,
+            entity: SETTINGS_ENTITY_TAG,
+            model: { id: SETTINGS_SINGLETON_ID, locale: Locale.enum.es, localeSource: LocaleSource.enum.explicit },
+          },
+        ] as Persistable[],
+        response: null,
+      });
+    };
+
+    const result = await runEffects(db, settingsRegistry, flow);
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    expect(attempts).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
+    const [row] = await db.all<{ locale: string }>(
+      sql`SELECT locale FROM settings WHERE id = ${SETTINGS_SINGLETON_ID}`,
+    );
+    expect(row?.locale).toBe(Locale.enum.pt); // the winner's value, never overwritten by the loser
+  });
+
+  it("setLocale's own retry re-reads and takes the update path when a concurrent first insert races it", async () => {
+    const settingsR = settingsRepo(db);
+    const deps = { settings: settingsR } as unknown as Deps;
+
+    let reads = 0;
+    const racingSettings: Deps['settings'] = {
+      getLocale: async () => {
+        reads += 1;
+        const existing = await settingsR.getLocale();
+        if (reads === 1 && !existing) {
+          await db
+            .insert(settings)
+            .values({ id: SETTINGS_SINGLETON_ID, locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });
+          return undefined; // this read itself still predates the race — the decision is already stale
+        }
+        return existing;
+      },
+    };
+    const racingDeps: Deps = { ...deps, settings: racingSettings };
+
+    const result = await runEffects(db, settingsRegistry, () =>
+      setLocale(racingDeps, { locale: Locale.enum.es, source: LocaleSource.enum.explicit }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.es, localeSource: LocaleSource.enum.explicit });
+    const rows = await db.all<{ locale: string; version: number }>(
+      sql`SELECT locale, version FROM settings WHERE id = ${SETTINGS_SINGLETON_ID}`,
+    );
+    expect(rows).toHaveLength(1); // exactly one row — the racer's insert, then this flow's update
+    expect(rows[0]?.locale).toBe(Locale.enum.es);
     expect(rows[0]?.version).toBe(1); // version 0 (racer's insert) → 1 (this flow's update)
   });
 });
