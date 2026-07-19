@@ -207,6 +207,22 @@ export const CreateTransactionSchema = z.object({
 });
 export type CreateTransaction = z.infer<typeof CreateTransactionSchema>;
 
+/** Minimal shape every statement line carries, regardless of aggregate — derived from
+ *  `CreateTransaction` rather than hand-retyped, since both aggregates' own statement-item schemas
+ *  (`ImportAccountStatementItemSchema`/`ImportCardStatementItemSchema`) already derive from this
+ *  same core schema, relaxing `idempotencyKey` to optional the same way those two do. Never
+ *  independently decoded — the real per-line data is always already one of those two concrete,
+ *  zod-validated item types by the time bulk import's shared defaulting step sees it; this is a
+ *  compile-time structural bound over them, not a competing model. */
+export type StatementLine = Pick<CreateTransaction, 'date' | 'description' | 'amount'> & { idempotencyKey?: string };
+
+/** A statement line with the runner's defaults applied, plus the whole import's own `rawInput`. */
+export type DefaultedStatementLine<Line extends StatementLine> = Line & {
+  date: string;
+  idempotencyKey: string;
+  rawInput?: string;
+};
+
 /** Shared base for the aggregate-specific update tools (ADR-017), mirroring how
  *  CreateTransactionSchema is the minimal shared base for add_card_purchase/add_account_expense/
  *  add_account_income (ADR-019) — `UpdateCardTransactionSchema` (models/creditCard.ts) and

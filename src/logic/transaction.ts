@@ -7,8 +7,10 @@ import type {
   Classification,
   ClassifiedUpsertResult,
   ClassifyOutcome,
+  DefaultedStatementLine,
   UpsertTransactionResult,
   SearchTransactions,
+  StatementLine,
   TransactionError,
   TransactionView,
   UpdateTransaction,
@@ -128,17 +130,6 @@ export const resolveEffectiveType = (
 /** Stable idempotency key derived from statement line: re-importing is a no-op. */
 export const deriveIdempotencyKey = (item: { date: string; description: string; amount: number }): string =>
   `${item.date}-${normalizeMerchant(item.description).replace(/\s+/g, '-') || 'tx'}-${item.amount.toFixed(2)}`;
-
-/** Minimal shape every statement line carries, regardless of aggregate — what defaulting adds
- *  (date, idempotencyKey) before the aggregate binds the line to its own single-line flow. */
-export type StatementLine = { date?: string; description: string; amount: number; idempotencyKey?: string };
-
-/** A statement line with the runner's defaults applied, plus the whole import's own `rawInput`. */
-export type DefaultedStatementLine<Line extends StatementLine> = Line & {
-  date: string;
-  idempotencyKey: string;
-  rawInput?: string;
-};
 
 /** Defaults the fields shared by every statement line (date, idempotencyKey), and stamps the
  *  whole import's own `rawInput` onto each — pure; `today` is the caller's already-resolved

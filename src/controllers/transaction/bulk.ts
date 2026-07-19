@@ -10,9 +10,9 @@ import type { Result, ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { summarizeBulkItems, toBulkItemResult } from '../../logic/transaction.js';
-import type { BulkItemResult, BulkResult, DefaultedStatementLine, StatementLine } from '../../logic/transaction.js';
+import type { BulkItemResult, BulkResult } from '../../logic/transaction.js';
 import type { FlowOutcome } from '../../models/persistable.js';
-import type { ClassifiedUpsertResult } from '../../models/transaction.js';
+import type { ClassifiedUpsertResult, DefaultedStatementLine, StatementLine } from '../../models/transaction.js';
 
 /** One line, deferred as a flow the shell can run through `runEffectsSequence` — the same shape
  *  `controllers/deps.ts`'s `RunEffects`/`RunEffectsSequence` already declare, just not invoked here. */
