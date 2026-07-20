@@ -25,11 +25,16 @@ describe('accountErrors (colocated domain error payloads)', () => {
   });
 
   it('typeImmutable / currencyImmutable* embed the transaction count', () => {
-    expect(accountErrors.typeImmutable(3)).toMatchObject({ code: 'validation' });
-    expect((accountErrors.typeImmutable(3) as { issues: string[] }).issues[0])
-      .toContain('3 transaction');
-    expect((accountErrors.currencyImmutableTransactions(2) as { issues: string[] }).issues[0])
-      .toContain('2 transaction');
+    const typeErr = accountErrors.typeImmutable(3);
+    expect(typeErr.code).toBe('validation');
+    if (typeErr.code === 'validation') {
+      expect(typeErr.issues[0]).toContain('3 transaction');
+    }
+    const currencyErr = accountErrors.currencyImmutableTransactions(2);
+    expect(currencyErr.code).toBe('validation');
+    if (currencyErr.code === 'validation') {
+      expect(currencyErr.issues[0]).toContain('2 transaction');
+    }
   });
 });
 

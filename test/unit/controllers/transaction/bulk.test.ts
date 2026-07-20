@@ -2,7 +2,7 @@ import { err, ok } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { buildBulkResult } from '../../../../src/controllers/transaction/bulk.js';
 import { validation } from '../../../../src/models/error.js';
-import type { ClassifiedUpsertResult, TransactionView } from '../../../../src/models/transaction.js';
+import { ClassificationMethod, type ClassifiedUpsertResult, type TransactionView } from '../../../../src/models/transaction.js';
 
 const txView = (overrides: Partial<TransactionView> = {}): TransactionView => ({
   id: 'tx-1',
@@ -16,7 +16,7 @@ const txView = (overrides: Partial<TransactionView> = {}): TransactionView => ({
   idempotencyKey: 'k1',
   typeLabel: 'Expense',
   statusLabel: 'Effective',
-  classification: { method: 'none', confidence: 0 },
+  classification: { method: ClassificationMethod.enum.none, confidence: 0 },
   tags: [],
   ...overrides,
 });
@@ -26,12 +26,12 @@ describe('buildBulkResult — shapes per-line SequenceOutcomes into the BulkResu
     const created: ClassifiedUpsertResult = {
       transaction: txView({ id: 'tx-created' }),
       created: true,
-      classification: { method: 'rule', confidence: 0.9 },
+      classification: { method: ClassificationMethod.enum.rule, confidence: 0.9 },
     };
     const duplicate: ClassifiedUpsertResult = {
       transaction: txView({ id: 'tx-dup' }),
       created: false,
-      classification: { method: 'none', confidence: 0 },
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
     };
 
     const result = buildBulkResult([ok(created), ok(duplicate)], [{ description: 'Coffee' }, { description: 'Taxi' }]);
@@ -45,7 +45,7 @@ describe('buildBulkResult — shapes per-line SequenceOutcomes into the BulkResu
     const lowConfidence: ClassifiedUpsertResult = {
       transaction: txView(),
       created: true,
-      classification: { method: 'none', confidence: 0 },
+      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
     };
 
     const result = buildBulkResult([ok(lowConfidence)], [{ description: 'Coffee' }]);
@@ -58,7 +58,7 @@ describe('buildBulkResult — shapes per-line SequenceOutcomes into the BulkResu
     const okItem: ClassifiedUpsertResult = {
       transaction: txView(),
       created: true,
-      classification: { method: 'rule', confidence: 0.9 },
+      classification: { method: ClassificationMethod.enum.rule, confidence: 0.9 },
     };
 
     const result = buildBulkResult(
