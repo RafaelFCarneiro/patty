@@ -217,8 +217,8 @@ instead of performing it; the diplomat shell **applies** it.
   `applyPersistable` stamps each outcome with the `entity` tag of the `Persistable` it came from — the one
   place that association is made, so an `EntityApplier` never needs to know its own tag to report it (its
   methods return an outcome *without* `entity`, typed as `Omit<PersistOutcome, 'entity'>`; the shell adds it).
-  `logic/persistence.ts`'s `outcomeFor(tag, outcomes)` (`R.find` under the hood) finds a flow's own outcome by
-  that tag: `update_account_transaction`/`update_card_transaction`/`add_card_purchase` all resolve
+  `logic/persistence.ts`'s `outcomeFor(tag, outcomes)` (`R.filter`, asserting exactly one match) finds a flow's
+  own outcome by that tag: `update_account_transaction`/`update_card_transaction`/`add_card_purchase` all resolve
   `outcomeFor(TRANSACTION_ENTITY_TAG, outcomes)` regardless of where the transaction `Persistable` sits in the
   batch — `buildTransactionView`/`buildUpsertResult` (`logic/transaction.ts`) call it internally, and
   `add_card_purchase`/`update_card_transaction` (`controllers/creditCard/transaction.ts`) call it directly.
