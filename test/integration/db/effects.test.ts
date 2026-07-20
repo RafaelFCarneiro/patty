@@ -832,7 +832,11 @@ describe('merchantApplier — hand-written single-table applier for a key-only, 
       runEffects(db, merchantOnlyRegistry, () =>
         okAsync({
           persist: [
-            { op: PersistOp.enum.update, entity: MERCHANT_ENTITY_TAG, model: { key: 'unused', version: 0 } } satisfies Persistable,
+            {
+              op: PersistOp.enum.update,
+              entity: MERCHANT_ENTITY_TAG,
+              model: { key: 'unused', version: 0 },
+            } satisfies Persistable,
           ] as Persistable[],
           response: null,
         }),

@@ -2,7 +2,8 @@ import { err, ok } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { buildBulkResult } from '../../../../src/controllers/transaction/bulk.js';
 import { validation } from '../../../../src/models/error.js';
-import { ClassificationMethod, type ClassifiedUpsertResult, type TransactionView } from '../../../../src/models/transaction.js';
+import { ClassificationMethod } from '../../../../src/models/transaction.js';
+import type { ClassifiedUpsertResult, TransactionView } from '../../../../src/models/transaction.js';
 
 const txView = (overrides: Partial<TransactionView> = {}): TransactionView => ({
   id: 'tx-1',
