@@ -812,6 +812,20 @@ describe('merchantApplier — hand-written single-table applier for a key-only, 
     expect(await db.all(sql`SELECT key FROM merchants WHERE key = ${key}`)).toEqual([{ key }]);
   });
 
+  it('reports applied:true on a fresh key and applied:false on a repeat, never faking either', async () => {
+    const key = `merchant-${randomUUID()}`;
+    const insertMerchant = () =>
+      runEffects(db, merchantOnlyRegistry, () =>
+        okAsync({
+          persist: [{ op: PersistOp.enum.insert, entity: MERCHANT_ENTITY_TAG, model: { key } }] as Persistable[],
+          response: (outcomes: PersistOutcome[]) => outcomes[0]?.applied,
+        }),
+      );
+
+    expect((await insertMerchant())._unsafeUnwrap()).toBe(true);
+    expect((await insertMerchant())._unsafeUnwrap()).toBe(false);
+  });
+
   it('update is structurally unreachable — a merchant is only ever inserted', async () => {
     await expect(
       runEffects(db, merchantOnlyRegistry, () =>

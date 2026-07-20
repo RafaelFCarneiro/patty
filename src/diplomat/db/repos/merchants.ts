@@ -40,8 +40,8 @@ export const merchantsRepo = (db: Db): MerchantsRepo => ({
 export const merchantApplier: EntityApplier = {
   insert: async (tx, model) => {
     const { key } = model as Merchant;
-    await tx.insert(merchants).values({ key }).onConflictDoNothing();
-    return { applied: true };
+    const result = await tx.insert(merchants).values({ key }).onConflictDoNothing();
+    return { applied: (result.rowsAffected ?? 0) > 0 };
   },
   update: async () => {
     throw new Error('merchantApplier: update is unsupported — a merchant is only ever inserted');

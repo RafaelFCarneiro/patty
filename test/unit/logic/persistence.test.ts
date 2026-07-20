@@ -80,6 +80,16 @@ describe("outcomeFor — resolves a flow's own outcome by entity tag, not batch 
       'outcomeFor: no persist outcome found for entity "account"',
     );
   });
+
+  it('throws when more than one outcome carries the requested tag, rather than silently picking one', () => {
+    const outcomes: PersistOutcome[] = [
+      { entity: ACCOUNT_ENTITY_TAG, applied: true },
+      { entity: ACCOUNT_ENTITY_TAG, applied: true },
+    ];
+    expect(() => outcomeFor(ACCOUNT_ENTITY_TAG, outcomes)).toThrow(
+      'outcomeFor: multiple persist outcomes found for entity "account"',
+    );
+  });
 });
 
 const WIDGET_TAG = 'widget';

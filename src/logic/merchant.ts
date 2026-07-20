@@ -40,16 +40,19 @@ export const resolveMerchantCorrection = (
 
 /** Prepends the merchant `Persistable` a transaction's own `merchantKey` implies —
  *  `transactions.merchant_key` FKs `merchants.key`, so the write order matters. */
-export const withMerchant = (persist: Persistable[], merchantKey: string | undefined): Persistable[] =>
-  merchantKey ? [insert({ entity: MERCHANT_ENTITY_TAG, model: { key: merchantKey } }), ...persist] : persist;
+export const withMerchant = (persist: readonly Persistable[], merchantKey: string | undefined): Persistable[] =>
+  merchantKey ? [insert({ entity: MERCHANT_ENTITY_TAG, model: { key: merchantKey } }), ...persist] : [...persist];
 
 /** Appends the merchant + learning-edge `Persistable`s a category correction implies, merchant
  *  first — `merchant_category.merchant_key` also FKs `merchants.key`. */
-export const withMerchantLearning = (persist: Persistable[], correction: MerchantCategoryEdge | null): Persistable[] =>
+export const withMerchantLearning = (
+  persist: readonly Persistable[],
+  correction: MerchantCategoryEdge | null,
+): Persistable[] =>
   correction
     ? [
         ...persist,
         insert({ entity: MERCHANT_ENTITY_TAG, model: { key: correction.merchantKey } }),
         insert({ entity: MERCHANT_CATEGORY_ENTITY_TAG, model: correction }),
       ]
-    : persist;
+    : [...persist];
