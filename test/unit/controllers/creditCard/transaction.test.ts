@@ -341,8 +341,8 @@ describe('updateCardTransaction / deleteCardTransaction — ownership by account
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    expect(error.code).toBe('validation');
-    expect((error as { issues: string[] }).issues[0]).toContain('update_account_transaction');
+    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
+    expect(error.issues[0]).toContain('update_account_transaction');
   });
 
   it('deleteCardTransaction rejects a tx with no credit leg, redirecting to delete_account_transaction', async () => {
@@ -357,8 +357,8 @@ describe('updateCardTransaction / deleteCardTransaction — ownership by account
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    expect(error.code).toBe('validation');
-    expect((error as { issues: string[] }).issues[0]).toContain('delete_account_transaction');
+    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
+    expect(error.issues[0]).toContain('delete_account_transaction');
   });
 });
 
@@ -380,8 +380,8 @@ describe('updateCardTransaction — account field (ADR-019 compose-up watchpoint
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    expect(error.code).toBe('validation');
-    expect((error as { issues: string[] }).issues[0]).toContain('cannot change the account of a card transaction');
+    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
+    expect(error.issues[0]).toContain('cannot change the account of a card transaction');
   });
 });
 
@@ -412,11 +412,11 @@ describe('updateCardTransaction / deleteCardTransaction — bill-payment transfe
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    expect(error.code).toBe('validation');
+    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
     // Rejected via the bill-process guard (paidBillImmutable), not transfer-type-immutable —
     // the card aggregate never runs guardTransferMutability (ADR-020 §3/§4).
-    expect((error as { issues: string[] }).issues[0]).toContain('revert_bill_payment');
-    expect((error as { issues: string[] }).issues[0]).not.toContain('cannot change the type of a transfer');
+    expect(error.issues[0]).toContain('revert_bill_payment');
+    expect(error.issues[0]).not.toContain('cannot change the type of a transfer');
   });
 
   it('deleteCardTransaction rejects it via the paid-bill immutability guard', async () => {
@@ -557,7 +557,9 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
     const result = await updateCardTransaction(deps, { id: 'tx-1', billMonth: 7, billYear: 2026 });
 
     expect(result.isErr()).toBe(true);
-    expect((result._unsafeUnwrapErr() as { issues: string[] }).issues[0]).toContain('revert_bill_payment');
+    const error560 = result._unsafeUnwrapErr();
+    if (error560.code !== 'validation') throw new Error(`expected validation, got ${error560.code}`);
+    expect(error560.issues[0]).toContain('revert_bill_payment');
   });
 
   it('rejects when the TARGET bill is paid', async () => {
@@ -574,7 +576,9 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
     const result = await updateCardTransaction(deps, { id: 'tx-1', billMonth: 7, billYear: 2026 });
 
     expect(result.isErr()).toBe(true);
-    expect((result._unsafeUnwrapErr() as { issues: string[] }).issues[0]).toContain('revert_bill_payment');
+    const error577 = result._unsafeUnwrapErr();
+    if (error577.code !== 'validation') throw new Error(`expected validation, got ${error577.code}`);
+    expect(error577.issues[0]).toContain('revert_bill_payment');
   });
 
   it("response() resolves the transaction's own outcome by entity tag, not batch position (ADR-023)", async () => {
@@ -754,6 +758,8 @@ describe('deleteCardTransaction — guards + is returned as data (ADR-021 phase 
     const result = await deleteCardTransaction(deps, { id: 'tx-1', confirm: true });
 
     expect(result.isErr()).toBe(true);
-    expect((result._unsafeUnwrapErr() as { issues: string[] }).issues[0]).toContain('revert_bill_payment');
+    const error757 = result._unsafeUnwrapErr();
+    if (error757.code !== 'validation') throw new Error(`expected validation, got ${error757.code}`);
+    expect(error757.issues[0]).toContain('revert_bill_payment');
   });
 });

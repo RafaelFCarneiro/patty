@@ -511,8 +511,8 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    expect(error.code).toBe('validation');
-    expect((error as { issues: string[] }).issues[0]).toContain('cannot change the type of a transfer');
+    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
+    expect(error.issues[0]).toContain('cannot change the type of a transfer');
   });
 
   it('rejects setting a category on a transfer', async () => {
@@ -525,8 +525,8 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    expect(error.code).toBe('validation');
-    expect((error as { issues: string[] }).issues[0]).toContain('cannot have a category');
+    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
+    expect(error.issues[0]).toContain('cannot have a category');
   });
 
   it('allows a non-category, non-type update on a transfer (e.g. amount), preserving its type', async () => {
