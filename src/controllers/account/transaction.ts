@@ -130,14 +130,14 @@ const addAccountMovement = (
     const { entity, classification } = yield* planAccountMovement(deps, input, type, source);
 
     const locale = await deps.locale();
-    const { persistable: tagPersistable, tags } = await resolveTagLinks(deps, entity.idempotencyKey, input.tags ?? []);
+    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
     const persist = [
       ...withMerchant([persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })], entity.refs.merchantKey),
-      tagPersistable,
+      ...(tagLinks ? [tagLinks.persistable] : []),
     ];
     const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
       const result = buildUpsertResult(outcomes, classification, locale);
-      return { ...result, transaction: { ...result.transaction, tags } };
+      return tagLinks ? { ...result, transaction: { ...result.transaction, tags: tagLinks.tags } } : result;
     };
     return ok({ persist, response });
   });
@@ -231,22 +231,18 @@ export const updateAccountTransaction = (
 
     const locale = await deps.locale();
     const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
-    const { persistable: tagPersistable, tags } = await resolveTagLinks(
-      deps,
-      entity.idempotencyKey,
-      input.tags ?? existing.tags,
-    );
+    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
     const persist: Persistable[] = [
       ...withMerchantLearning(
         [persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } })],
         merchantCorrection,
       ),
-      tagPersistable,
+      ...(tagLinks ? [tagLinks.persistable] : []),
     ];
-    const response = (outcomes: PersistOutcome[]): TransactionView => ({
-      ...buildTransactionView(outcomes, locale),
-      tags,
-    });
+    const response = (outcomes: PersistOutcome[]): TransactionView => {
+      const result = buildTransactionView(outcomes, locale);
+      return tagLinks ? { ...result, tags: tagLinks.tags } : result;
+    };
     return ok({ persist, response });
   });
 

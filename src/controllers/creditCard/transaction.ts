@@ -174,7 +174,7 @@ export const addCardPurchase = (
   safeTry(async function* () {
     const { entity, classification, billPeriod, existingBill, cardId } = yield* planCardPurchase(deps, input, source);
     const { billId, billPersistable } = resolveBillWrite(deps.newId, cardId, billPeriod, existingBill);
-    const { persistable: tagPersistable, tags } = await resolveTagLinks(deps, entity.idempotencyKey, input.tags ?? []);
+    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
 
     // Bill leads, transaction trails — its bill_id FK must resolve within the same batch.
     const persist: Persistable[] = [
@@ -188,13 +188,18 @@ export const addCardPurchase = (
         ],
         entity.refs.merchantKey,
       ),
-      tagPersistable,
+      ...(tagLinks ? [tagLinks.persistable] : []),
     ];
 
     const locale = await deps.locale();
     const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
       const outcome = persistence.outcomeFor(TRANSACTION_ENTITY_TAG, outcomes);
-      return { transaction: { ...viewFromOutcome(outcome, locale), tags }, created: outcome.applied, classification };
+      const view = viewFromOutcome(outcome, locale);
+      return {
+        transaction: tagLinks ? { ...view, tags: tagLinks.tags } : view,
+        created: outcome.applied,
+        classification,
+      };
     };
     return ok({ persist, response });
   });
@@ -308,22 +313,18 @@ export const updateCardTransaction = (
     };
 
     const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
-    const { persistable: tagPersistable, tags } = await resolveTagLinks(
-      deps,
-      entity.idempotencyKey,
-      input.tags ?? existing.tags,
-    );
+    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
     const persist: Persistable[] = [
       ...withMerchantLearning(billPersistables, merchantCorrection),
       persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } }),
-      tagPersistable,
+      ...(tagLinks ? [tagLinks.persistable] : []),
     ];
 
     const locale = await deps.locale();
-    const response = (outcomes: PersistOutcome[]): TransactionView => ({
-      ...viewFromOutcome(persistence.outcomeFor(TRANSACTION_ENTITY_TAG, outcomes), locale),
-      tags,
-    });
+    const response = (outcomes: PersistOutcome[]): TransactionView => {
+      const view = viewFromOutcome(persistence.outcomeFor(TRANSACTION_ENTITY_TAG, outcomes), locale);
+      return tagLinks ? { ...view, tags: tagLinks.tags } : view;
+    };
     return ok({ persist, response });
   });
 

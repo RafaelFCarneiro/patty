@@ -83,14 +83,16 @@ export const resolveLegAccounts = (
 
 export type TagLinksResolution = { persistable: Persistable; tags: string[] };
 
-// The caller passes its already-merged desired set (a create's `input.tags ?? []`, an update's
-// `input.tags ?? existing.tags`). Never fails — an unmatched name is dropped, not an error — so
-// this is a plain Promise rather than a ResultAsync, unlike this module's other resolvers.
+// `undefined` (the caller's `input.tags` omitted) means "leave tags alone" — returns null, no
+// Persistable, no deps.tags.list() read: a create/update that never mentions tags shouldn't pay
+// for one. Never fails otherwise — an unmatched name is dropped, not an error — so this is a
+// plain Promise rather than a ResultAsync, unlike this module's other resolvers.
 export const resolveTagLinks = async (
   deps: Deps,
   idempotencyKey: string,
-  tagNames: readonly string[],
-): Promise<TagLinksResolution> => {
+  tagNames: readonly string[] | undefined,
+): Promise<TagLinksResolution | null> => {
+  if (R.isNullish(tagNames)) return null;
   const allTags = await deps.tags.list();
   return {
     persistable: tagSetPersistable(idempotencyKey, resolveTagIds(tagNames, allTags)),

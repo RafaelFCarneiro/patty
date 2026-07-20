@@ -126,6 +126,14 @@ not.
    core already knows the matched set without reading anything back). See `docs/architecture.md`'s
    `transactionTag` entity bullet for the full account.
 
+   **Also as built: `resolveTagLinks` is conditional on `input.tags` actually being provided, not called
+   unconditionally on every create/update.** An initial implementation called it (and therefore `deps.tags.list()`
+   and a `transactionTagApplier` round trip) on every single write regardless of whether the caller ever
+   mentioned tags — measurably slower under bulk writes (a 120-row statement import pushed a CI hook past its
+   timeout) for no behavioral benefit, since a write that never mentions tags has nothing to overwrite. Omitted
+   `input.tags` now short-circuits to no read and no `Persistable`; the overwrite-on-duplicate semantic below
+   still holds whenever the resubmission actually includes a `tags` field.
+
 4. **Idempotent-insert handling moves from the applier to the generic mechanism.** Today `applyPersistable`
    explicitly disclaims it (*"Idempotent-duplicate handling is the applier's own concern"*); it becomes the
    engine's. `versionedTableApplier(table, { idempotencyColumn, readBack })` conflict-targets that column when

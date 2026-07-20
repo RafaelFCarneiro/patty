@@ -256,12 +256,15 @@ instead of performing it; the diplomat shell **applies** it.
   that doesn't match — leniency preserved by decision, with a test, rather than a side effect of a DB `inArray`
   missing (`transactionApplier`'s old `attachTags` did this as an infrastructure-level read). `TransactionEntity`
   no longer carries `tagNames`; `controllers/resolve.ts`'s `resolveTagLinks` builds the `TRANSACTION_TAG_ENTITY_TAG`
-  `Persistable` and is called unconditionally by every create/update flow that accepts a `tags` field
+  `Persistable`, called by every create/update flow that accepts a `tags` field
   (`add_account_expense`/`add_account_income`/`add_card_purchase`/`update_account_transaction`/
-  `update_card_transaction`) — appended after the flow's own transaction `Persistable` in the batch (its FK
-  needs the transactions row to exist). Flows with no `tags` field at all (`create_transfer`,
-  `apply_due_recurring`'s occurrence inserts, `pay_bill`'s transfer, `confirm_transaction`) emit no tag-set
-  `Persistable` — the applier no longer touches `transaction_tags`, so their tags are simply left alone.
+  `update_card_transaction`). `input.tags` omitted → `resolveTagLinks` returns `null`, no `deps.tags.list()` read
+  and no `Persistable` at all — a write that never mentions tags shouldn't pay for one, and existing tags are
+  left alone by construction (the applier no longer touches `transaction_tags` unless told to). `input.tags`
+  provided (even `[]`) → resolves and appends the `Persistable` after the flow's own transaction `Persistable`
+  in the batch (its FK needs the transactions row to exist). Flows with no `tags` field at all (`create_transfer`,
+  `apply_due_recurring`'s occurrence inserts, `pay_bill`'s transfer, `confirm_transaction`) never call
+  `resolveTagLinks`.
   **Addressed by `idempotencyKey`, not `transactionId`**: a create flow's own `entity.id` is a fresh
   `deps.newId()` mint on every invocation, so on a duplicate-idempotency-key resubmission it names a row that
   was never actually inserted (the transaction insert no-ops) — targeting it would FK-violate or silently touch
@@ -271,16 +274,18 @@ instead of performing it; the diplomat shell **applies** it.
   same kind of identity resolution `transactionApplier`'s own insert conflict-target/`fetchTxByIdempotencyKey`
   already perform for that entity (ADR-023 decision 4: "not a domain judgement"), so this stays consistent with
   "an applier writes exactly one table" (the proxy is about writes, not reads). **Behavior change, intended**:
-  because the tag-set write is now unconditional (not gated on whether the transaction insert itself applied,
-  the way the old `if (applied && entity.tagNames.length > 0)` gated `attachTags`), re-submitting a transaction
-  with the same idempotency key now overwrites its tag set instead of leaving the existing tags untouched.
-  **A second, related consequence**: `transactionApplier`'s own post-write read-back (`fetchTx`) runs
-  immediately after ITS OWN write — before the tag-set `Persistable`, later in the same batch, has applied — so
-  `PersistOutcome.read.tags` cannot reflect a same-batch tag write. Every affected flow's `response` therefore
-  composes `resolveTagLinks`'s own matched-name result onto the DB-round-tripped view (`{ ...viewFromOutcome(...),
-  tags }`) rather than trusting `outcome.read.tags` — the core already knows the matched set without reading
-  anything back (rule 6). This is scoped to step 2; step 3's generic `readBack` registration (not yet built) is
-  the eventual, more general answer to "outcome-dependent read reflecting the whole batch."
+  the tag-set write, when it happens, is not gated on whether the transaction insert itself applied (the way the
+  old `if (applied && entity.tagNames.length > 0)` gated `attachTags`) — re-submitting a transaction with the
+  same idempotency key **and an explicit `tags` field** now overwrites its tag set instead of leaving the
+  existing tags untouched. **A second, related consequence**: `transactionApplier`'s own post-write read-back
+  (`fetchTx`) runs immediately after ITS OWN write — before the tag-set `Persistable`, later in the same batch,
+  has applied — so `PersistOutcome.read.tags` cannot reflect a same-batch tag write. Every affected flow's
+  `response` therefore composes `resolveTagLinks`'s own matched-name result onto the DB-round-tripped view when
+  a resolution happened (`{ ...viewFromOutcome(...), tags }`), and leaves the DB-round-tripped view untouched
+  otherwise (its `tags` already reflects reality, since nothing wrote to `transaction_tags`) — the core already
+  knows the matched set without reading anything back (rule 6). This is scoped to step 2; step 3's generic
+  `readBack` registration (not yet built) is the eventual, more general answer to "outcome-dependent read
+  reflecting the whole batch."
 - **`payBill`/`revertBillPayment` (`controllers/creditCard/bill.ts`) — a plain (non-idempotency-aware)
   `response`, and an FK direction that reverses the batch order between the two flows.** Unlike the
   card-purchase flows, neither bill flow needs `PersistOutcome`-derived response shaping: both mint every id and
