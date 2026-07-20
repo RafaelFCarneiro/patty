@@ -835,7 +835,7 @@ describe('merchantApplier — hand-written single-table applier for a key-only, 
             {
               op: PersistOp.enum.update,
               entity: MERCHANT_ENTITY_TAG,
-              model: { key: 'unused', version: 0 },
+              model: { version: 0 },
             } satisfies Persistable,
           ] as Persistable[],
           response: null,
