@@ -135,8 +135,6 @@ const addAccountMovement = (
       ...withMerchant([persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })], entity.refs.merchantKey),
       tagPersistable,
     ];
-    // `tags` is composed onto the DB round-trip's view, not read off it — see resolveTagLinks's
-    // doc comment (the tag-set write applies later in the batch than this row's own read-back).
     const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
       const result = buildUpsertResult(outcomes, classification, locale);
       return { ...result, transaction: { ...result.transaction, tags } };
@@ -245,8 +243,6 @@ export const updateAccountTransaction = (
       ),
       tagPersistable,
     ];
-    // `tags` is composed onto the DB round-trip's view, not read off it — see resolveTagLinks's
-    // doc comment (the tag-set write applies later in the batch than this row's own read-back).
     const response = (outcomes: PersistOutcome[]): TransactionView => ({
       ...buildTransactionView(outcomes, locale),
       tags,

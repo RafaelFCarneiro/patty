@@ -192,8 +192,6 @@ export const addCardPurchase = (
     ];
 
     const locale = await deps.locale();
-    // `tags` is composed onto the DB round-trip's view, not read off it — see resolveTagLinks's
-    // doc comment (the tag-set write applies later in the batch than this row's own read-back).
     const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
       const outcome = persistence.outcomeFor(TRANSACTION_ENTITY_TAG, outcomes);
       return { transaction: { ...viewFromOutcome(outcome, locale), tags }, created: outcome.applied, classification };
@@ -322,8 +320,6 @@ export const updateCardTransaction = (
     ];
 
     const locale = await deps.locale();
-    // `tags` is composed onto the DB round-trip's view, not read off it — see resolveTagLinks's
-    // doc comment (the tag-set write applies later in the batch than this row's own read-back).
     const response = (outcomes: PersistOutcome[]): TransactionView => ({
       ...viewFromOutcome(persistence.outcomeFor(TRANSACTION_ENTITY_TAG, outcomes), locale),
       tags,

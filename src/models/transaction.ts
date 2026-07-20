@@ -108,9 +108,7 @@ export type Transaction = z.infer<typeof TransactionSchema>;
 // lists this constant itself.
 export const TRANSACTION_ENTITY_TAG = 'transaction';
 
-/** The domain entity a create/update flow assembles before handing it off as a `Persistable`
- *  (ADR-021). Distinct from `Transaction` for call-site clarity even though the shapes now match
- *  — tag links are their own `Persistable` (ADR-023 step 2, `logic/tag.ts`), not a field here. */
+// Same shape as Transaction, kept distinct for call-site clarity at every Persistable builder.
 export type TransactionEntity = Transaction;
 
 /** Read projection: Transaction with joined reference names (account, category, merchant, …). */

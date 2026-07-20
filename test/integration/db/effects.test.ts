@@ -599,10 +599,8 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
   });
 });
 
-// Row-shaped input (as `adapters/transactions.ts`'s `entityToDb` produces it) — the applier trusts
-// it as-is, same reasoning as `newAccount` above. Module-scope: shared by the `transactionApplier`
-// suite below and the `transactionTagApplier`/duplicate-insert suites, which build their own
-// registries mixing it with `transactionTagApplier`.
+// Row-shaped input (as `adapters/transactions.ts`'s `entityToDb` produces it) — the applier
+// trusts it as-is, same reasoning as `newAccount` above. Module-scope: shared by every suite below.
 const newTransactionRow = (overrides: Partial<TransactionRowEntity> = {}): TransactionRowEntity => ({
   id: randomUUID(),
   description: 'Test transaction',
@@ -899,11 +897,6 @@ describe('transactionApplier + transactionTagApplier — duplicate-insert tag se
     return rows.map((r) => r.name);
   };
 
-  // Mirrors what a controller's `persist` batch looks like since ADR-023 step 2: the transaction
-  // insert and its tag-set insert travel together, addressed by the shared `idempotencyKey` — not
-  // the transaction's own id, which is a fresh `deps.newId()` mint on every flow invocation and so
-  // (on a duplicate) never matches the row that actually ends up persisted (`models/
-  // transactionTag.ts`). Never conditioned on whether the transaction insert itself actually applied.
   const insertWithTags = (row: TransactionRowEntity, tagIds: string[]) => () =>
     okAsync({
       persist: [
@@ -927,16 +920,12 @@ describe('transactionApplier + transactionTagApplier — duplicate-insert tag se
     expect(firstResult.isOk()).toBe(true);
     expect(await readLinkedTagNames(original.id)).toHaveLength(1);
 
-    // Same idempotency key, but a brand-new (client-generated) id and a different tag set — exactly
-    // what a real replay looks like, since a create flow mints a fresh id on every invocation
-    // regardless of whether this turns out to be a duplicate. The transaction insert no-ops (its
-    // id never lands), but the tag-set insert resolves the REAL row by idempotencyKey and overwrites
-    // its tags regardless of the sibling insert's own outcome.
+    // Same idempotency key, but a fresh id — exactly what a real replay sends. The transaction
+    // insert no-ops; the tag-set insert still resolves the real row by idempotencyKey.
     const replay = newTransactionRow({ idempotencyKey: original.idempotencyKey, description: 'Replay attempt' });
     const replayResult = await runEffects(db, combinedRegistry, insertWithTags(replay, [secondTagId]));
 
     expect(replayResult.isOk()).toBe(true);
-    // The ORIGINAL row (replay.id never landed) now carries the replay's tags — the overwrite.
     expect(await readLinkedTagNames(original.id)).toEqual([secondTagName]);
     expect(await readLinkedTagNames(replay.id)).toEqual([]);
   });

@@ -81,29 +81,11 @@ export const resolveLegAccounts = (
     ),
   );
 
-/** What `resolveTagLinks` hands back to a create/update flow: the tag-set `Persistable` to add to
- *  its batch, plus the matched tag names the flow's own response should show — the flow composes
- *  `tags` onto its response itself (see the doc comment below for why). */
 export type TagLinksResolution = { persistable: Persistable; tags: string[] };
 
-/**
- * Resolves `tagNames` (a create's `input.tags ?? []`, or an update's `input.tags ?? existing.tags`
- * — the caller's already-merged desired set) into the transaction's tag-set `Persistable`
- * (ADR-023 step 2): matches names against the full tag list and replaces the set, silently
- * dropping any name that doesn't match (`logic/tag.ts`'s `resolveTagIds`/`resolveTagNames`).
- * Always resolves and always returns a `Persistable` — unconditional, like an update's old
- * `replaceTags` — never fails: unlike this module's other resolvers, an unmatched tag name is a
- * decided leniency, not an error, so this returns a plain `Promise` rather than a `ResultAsync`.
- * The `Persistable` is addressed by the transaction's `idempotencyKey`, not its own id — see
- * `models/transactionTag.ts` for why.
- *
- * Also returns the matched names for the flow's response to show directly, rather than trusting a
- * DB round-trip: `transactionTagApplier` applies later in the batch than `transactionApplier`'s
- * own read-back (`diplomat/db/repos/transactions.ts`'s `fetchTx`, called immediately after ITS OWN
- * write), so that read-back can't yet reflect a tag-set write still to come in the same batch. The
- * core already knows the matched set without reading anything back — rule 6 ("The response is the
- * core's, derived from the values it already holds").
- */
+// The caller passes its already-merged desired set (a create's `input.tags ?? []`, an update's
+// `input.tags ?? existing.tags`). Never fails — an unmatched name is dropped, not an error — so
+// this is a plain Promise rather than a ResultAsync, unlike this module's other resolvers.
 export const resolveTagLinks = async (
   deps: Deps,
   idempotencyKey: string,
