@@ -18,18 +18,23 @@ export const MAX_RUN_EFFECTS_ATTEMPTS = 3;
  *  inside that same transaction) can type its methods against it. */
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
+/** An applier's own outcome, before `applyPersistable` stamps its `Persistable`'s entity tag onto
+ *  it — an applier never states its own tag, since the same applier can be registered under
+ *  whatever tag the composition root chooses. */
+type ApplierOutcome = Omit<PersistOutcome, 'entity'>;
+
 /**
  * What an entity module supplies so this generic shell can apply a `Persistable` tagged with its
  * entity, without this file ever naming that entity. `insert`/`update` receive an already
  * db-row-shaped `model` — the model→row adaptation happens upstream, at the handler that calls
  * `runEffects`, never here — so `unknown` is deliberate: this file has no entity-specific row
- * type to name. Each method returns a `PersistOutcome`; `applied` drives this file's own
+ * type to name. Each method returns an `ApplierOutcome`; `applied` drives this file's own
  * retry/conflict decision (rule 4).
  */
 export type EntityApplier = {
-  insert: (tx: Tx, model: unknown) => Promise<PersistOutcome>;
-  update: (tx: Tx, model: unknown) => Promise<PersistOutcome>;
-  delete: (tx: Tx, id: string, version: number) => Promise<PersistOutcome>;
+  insert: (tx: Tx, model: unknown) => Promise<ApplierOutcome>;
+  update: (tx: Tx, model: unknown) => Promise<ApplierOutcome>;
+  delete: (tx: Tx, id: string, version: number) => Promise<ApplierOutcome>;
 };
 
 /** Every entity tag a converted flow might produce a `Persistable` for, mapped to how to apply
@@ -95,25 +100,28 @@ const resolveApplier = (registry: ApplierRegistry, entity: string): EntityApplie
 
 const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistable): Promise<PersistOutcome> => {
   const applier = resolveApplier(registry, p.entity);
-  switch (p.op) {
-    case PersistOp.enum.insert:
-      // Idempotent-duplicate handling is the applier's own concern — inserts never retry here.
-      return applier.insert(tx, p.model);
-    case PersistOp.enum.update: {
-      const outcome = await applier.update(tx, p.model);
-      if (!outcome.applied) throw new VersionConflict();
-      return outcome;
+  const outcome = await (async (): Promise<ApplierOutcome> => {
+    switch (p.op) {
+      case PersistOp.enum.insert:
+        // Idempotent-duplicate handling is the applier's own concern — inserts never retry here.
+        return applier.insert(tx, p.model);
+      case PersistOp.enum.update: {
+        const outcome = await applier.update(tx, p.model);
+        if (!outcome.applied) throw new VersionConflict();
+        return outcome;
+      }
+      case PersistOp.enum.delete: {
+        const outcome = await applier.delete(tx, p.id, p.version);
+        if (!outcome.applied) throw new VersionConflict();
+        return outcome;
+      }
+      default: {
+        const _exhaustive: never = p;
+        throw new Error(`runEffects: unhandled persistable op ${JSON.stringify(_exhaustive)}`);
+      }
     }
-    case PersistOp.enum.delete: {
-      const outcome = await applier.delete(tx, p.id, p.version);
-      if (!outcome.applied) throw new VersionConflict();
-      return outcome;
-    }
-    default: {
-      const _exhaustive: never = p;
-      throw new Error(`runEffects: unhandled persistable op ${JSON.stringify(_exhaustive)}`);
-    }
-  }
+  })();
+  return { ...outcome, entity: p.entity };
 };
 
 /** Applies the whole batch in one transaction, returning each outcome positionally parallel to

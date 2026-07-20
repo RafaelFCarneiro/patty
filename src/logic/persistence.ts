@@ -1,3 +1,4 @@
+import * as R from 'remeda';
 import {
   INITIAL_VERSION,
   PersistOp,
@@ -30,25 +31,20 @@ export const remove = <Tag extends string>(fields: { entity: Tag; id: string; ve
   ...fields,
 });
 
-/** Extracts the primary outcome — `persist[0]`'s — from a flow's idempotency-aware `response`
- *  function (`docs/functional-core-imperative-shell.md` rule 6): the entity the flow itself is
- *  about always leads the batch, even when composed with another entity's persistable afterward
- *  (rule 5 — e.g. `updateAccountTransaction` appending a merchant-learning edge). Throws rather
- *  than silently defaulting: an empty `outcomes` here would mean the flow's own `persist` batch and
- *  its `response` function have drifted out of sync — an internal invariant violation, not a
- *  domain outcome. */
-export const firstOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
-  const [outcome] = outcomes;
-  if (!outcome) throw new Error('firstOutcome: expected at least one persist outcome, got none');
-  return outcome;
-};
-
-/** `firstOutcome`'s counterpart for a flow whose own entity trails the batch instead of leading it
- *  (e.g. `addCardPurchase`/`updateCardTransaction`, whose transaction row FKs to a bill that must
- *  be written first). Same "drift is a bug, not a domain outcome" reasoning as `firstOutcome`. */
-export const lastOutcome = (outcomes: PersistOutcome[]): PersistOutcome => {
-  const outcome = outcomes[outcomes.length - 1];
-  if (!outcome) throw new Error('lastOutcome: expected at least one persist outcome, got none');
+/** Extracts a flow's own outcome — the one whose `entity` matches `tag` — from a flow's
+ *  idempotency-aware `response` function (`docs/functional-core-imperative-shell.md` rule 6).
+ *  Addressed by entity tag, not batch position, so composing another entity's write around it
+ *  (e.g. a merchant, ordered for its own FK) never changes which outcome resolves. Requires
+ *  exactly one match: a flow that ever emits more than one `Persistable` under the same tag (e.g.
+ *  `applyDueRecurring`'s per-occurrence inserts) can't use this — it needs its own outcome per
+ *  item, not "the" outcome, and resolves them positionally instead. Throws rather than silently
+ *  defaulting either way: `persist` and `response` having drifted out of sync is an internal
+ *  invariant violation, not a domain outcome. */
+export const outcomeFor = (tag: string, outcomes: PersistOutcome[]): PersistOutcome => {
+  const matches = R.filter(outcomes, (o) => o.entity === tag);
+  const [outcome] = matches;
+  if (!outcome) throw new Error(`outcomeFor: no persist outcome found for entity "${tag}"`);
+  if (matches.length > 1) throw new Error(`outcomeFor: multiple persist outcomes found for entity "${tag}"`);
   return outcome;
 };
 

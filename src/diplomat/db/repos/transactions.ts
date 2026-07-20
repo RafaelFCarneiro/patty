@@ -18,7 +18,7 @@ import { ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
 import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
-import { merchants, tags, transactionTags, transactions } from '../schema.js';
+import { tags, transactionTags, transactions } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
 import type { EntityApplier, Tx } from '../effects.js';
 
@@ -227,12 +227,12 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
 /**
  * The transaction entity's `EntityApplier` — hand-written rather than `versionedTableApplier`
  * because a transaction row has genuine extra mechanics: `insert` conflicts on `idempotency_key`
- * (not `id`); both `insert` and `update` upsert the referenced merchant — never assuming an
- * update's merchant key already has a satisfying `merchants` row, even though no current caller
- * actually changes it on update — and attach/replace the row's `transaction_tags`. Still
+ * (not `id`), and both `insert`/`update` attach/replace the row's `transaction_tags`. Still
  * persistence structure, not business logic — no bill/paid reasoning here. `model` arrives
  * already row-shaped (adaptation happens upstream, before `runEffects` ever sees the batch), so
- * this applier only ever writes the row it's handed, never adapts one.
+ * this applier only ever writes the row it's handed, never adapts one. It no longer upserts the
+ * referenced `merchants` row itself — that FK is satisfied by a separate `Persistable` the flow
+ * orders ahead of this one (`logic/merchant.ts`'s `withMerchant`).
  *
  * Both `insert` and `update` read the row back after writing so a flow's idempotency-aware
  * `response` can reflect the actually-persisted, display-joined view (account/category names, the
@@ -241,10 +241,6 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
 export const transactionApplier: EntityApplier = {
   insert: async (tx, model) => {
     const entity = model as TransactionRowEntity;
-
-    if (entity.merchantKey) {
-      await tx.insert(merchants).values({ key: entity.merchantKey }).onConflictDoNothing();
-    }
 
     const result = await tx
       .insert(transactions)
@@ -284,10 +280,6 @@ export const transactionApplier: EntityApplier = {
 
   update: async (tx, model) => {
     const entity = model as TransactionRowEntity & { id: string; version: number };
-
-    if (entity.merchantKey) {
-      await tx.insert(merchants).values({ key: entity.merchantKey }).onConflictDoNothing();
-    }
 
     const result = await tx
       .update(transactions)

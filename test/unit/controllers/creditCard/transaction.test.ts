@@ -169,7 +169,42 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
     expect(error.issues?.[0]).toContain('revert_bill_payment');
   });
 
-  it("response() resolves the LAST persist outcome (the transaction's, not the bill's)", async () => {
+  it('on a merchant match, emits a merchant insert ordered before the transaction insert (rule 5)', async () => {
+    const deps = makeDeps({
+      creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
+      bills: { findByCycle: async () => null } as unknown as Deps['bills'],
+      merchants: {
+        matchCandidates: async () => [
+          { merchantKey: 'uber', categoryId: 'cat-transport', categoryName: 'Transport', weight: 3, origin: 'rule' },
+        ],
+      } as unknown as Deps['merchants'],
+      newId: sequentialNewId(),
+    });
+
+    const result = await addCardPurchase(
+      deps,
+      {
+        description: 'Uber ride',
+        amount: 15,
+        type: 'expense',
+        date: '2026-06-15',
+        card: 'Test Card',
+        idempotencyKey: 'k-merchant',
+      },
+      TransactionSource.enum.mcp,
+    );
+
+    expect(result.isOk()).toBe(true);
+    const { persist } = result._unsafeUnwrap();
+    // Bill leads (its own FK reason); the merchant insert precedes the transaction it's on
+    // (transactions.merchant_key FKs merchants.key) — bill, merchant, transaction.
+    expect(persist).toHaveLength(3);
+    expect(persist[0]).toMatchObject({ op: PersistOp.enum.insert, entity: 'bill' });
+    expect(persist[1]).toEqual({ op: PersistOp.enum.insert, entity: 'merchant', model: { key: 'uber' } });
+    expect(persist[2]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });
+  });
+
+  it("response() resolves the transaction's own outcome by entity tag, regardless of position (ADR-023)", async () => {
     const deps = makeDeps({
       creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
       bills: { findByCycle: async () => null } as unknown as Deps['bills'],
@@ -191,8 +226,9 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
     const outcome = result._unsafeUnwrap();
     expect(typeof outcome.response).toBe('function');
 
-    const billOutcome: PersistOutcome = { applied: true };
+    const billOutcome: PersistOutcome = { entity: 'bill', applied: true };
     const txOutcome: PersistOutcome = {
+      entity: 'transaction',
       applied: true,
       read: {
         id: 'tx-new',
@@ -209,16 +245,22 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
         version: 0,
       } as RawTransactionView,
     };
-    const response = (
-      outcome.response as (outcomes: PersistOutcome[]) => { created: boolean; transaction: { id: string } }
-    )([billOutcome, txOutcome]);
-    expect(response.created).toBe(true);
-    expect(response.transaction.id).toBe('tx-new');
+    const responseFn = outcome.response as (outcomes: PersistOutcome[]) => {
+      created: boolean;
+      transaction: { id: string };
+    };
+
+    // The transaction's outcome resolves correctly whether it trails the batch (the real shape
+    // the shell produces for this flow) or leads it — proving resolution is by entity tag, never
+    // by position.
+    expect(responseFn([billOutcome, txOutcome]).transaction.id).toBe('tx-new');
+    expect(responseFn([txOutcome, billOutcome]).transaction.id).toBe('tx-new');
+    expect(responseFn([billOutcome, txOutcome]).created).toBe(true);
   });
 });
 
 describe('importCardStatement — pure per-line plan for the shell (ADR-022 step 3)', () => {
-  it('defaults date/idempotencyKey per line and stamps the whole import\'s rawInput onto each', () => {
+  it("defaults date/idempotencyKey per line and stamps the whole import's rawInput onto each", () => {
     const clock = new Date('2026-06-10');
     const deps = makeDeps({ clock: () => clock });
 
@@ -535,7 +577,7 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
     expect(result._unsafeUnwrapErr().issues?.[0]).toContain('revert_bill_payment');
   });
 
-  it("response() resolves the LAST persist outcome (the transaction's), not the first", async () => {
+  it("response() resolves the transaction's own outcome by entity tag, not batch position (ADR-023)", async () => {
     const currentBill = rawBill({ id: 'bill-1', month: 6, year: 2026, version: 2 });
     const targetBill = rawBill({ id: 'bill-2', month: 7, year: 2026, version: 5 });
     const deps = makeDeps({
@@ -549,10 +591,16 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
     const outcome = result._unsafeUnwrap();
     expect(typeof outcome.response).toBe('function');
 
-    const txOutcome: PersistOutcome = { applied: true, read: { ...cardOwnedTx, description: 'Reassigned' } };
+    const txOutcome: PersistOutcome = {
+      entity: 'transaction',
+      applied: true,
+      read: { ...cardOwnedTx, description: 'Reassigned' },
+    };
+    // The transaction's outcome trails the batch here (bill writes lead — see the persist-order
+    // test above), but resolution is by entity tag, so leading it would work identically too.
     const response = (outcome.response as (outcomes: PersistOutcome[]) => { description: string })([
-      { applied: true },
-      { applied: true },
+      { entity: 'bill', applied: true },
+      { entity: 'bill', applied: true },
       txOutcome,
     ]);
     expect(response.description).toBe('Reassigned');
@@ -575,13 +623,20 @@ describe('updateCardTransaction — merchant learning (ADR-021 rule 5)', () => {
 
     expect(result.isOk()).toBe(true);
     const { persist } = result._unsafeUnwrap();
-    expect(persist).toHaveLength(2);
+    // Merchant insert, then the learning-edge insert (FK: merchant precedes merchant_category),
+    // then the transaction update.
+    expect(persist).toHaveLength(3);
     expect(persist[0]).toEqual({
       op: PersistOp.enum.insert,
-      entity: 'merchantCategory',
-      model: { merchantKey: 'uber', categoryId: 'cat-new' },
+      entity: 'merchant',
+      model: { key: 'uber' },
     });
-    expect(persist[1]).toMatchObject({ op: PersistOp.enum.update, entity: 'transaction' });
+    expect(persist[1]).toEqual({
+      op: PersistOp.enum.insert,
+      entity: 'merchantCategory',
+      model: { merchantKey: 'uber', categoryId: 'cat-new', weightDelta: 1, origin: 'history' },
+    });
+    expect(persist[2]).toMatchObject({ op: PersistOp.enum.update, entity: 'transaction' });
   });
 
   it('does not append a merchant-learning Persistable when no category correction was given', async () => {
@@ -635,12 +690,15 @@ describe('updateCardTransaction — merchant learning (ADR-021 rule 5)', () => {
 
     expect(result.isOk()).toBe(true);
     const { persist } = result._unsafeUnwrap();
-    // Same-cycle reassignment dedupes to one bill touch: bill touch, merchant-learning insert,
-    // transaction update — in that order (transaction always last, see lastOutcome).
-    expect(persist).toHaveLength(3);
+    // Same-cycle reassignment dedupes to one bill touch: bill touch, merchant insert,
+    // merchant-learning insert, transaction update — in that order (the transaction's own outcome
+    // is resolved by entity tag, not position, but the merchant/edge writes still need this order
+    // for their own FKs).
+    expect(persist).toHaveLength(4);
     expect(persist[0]).toMatchObject({ op: PersistOp.enum.update, entity: 'bill' });
-    expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: 'merchantCategory' });
-    expect(persist[2]).toMatchObject({ op: PersistOp.enum.update, entity: 'transaction' });
+    expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: 'merchant' });
+    expect(persist[2]).toMatchObject({ op: PersistOp.enum.insert, entity: 'merchantCategory' });
+    expect(persist[3]).toMatchObject({ op: PersistOp.enum.update, entity: 'transaction' });
   });
 });
 

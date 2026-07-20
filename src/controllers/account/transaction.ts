@@ -9,7 +9,7 @@ import { guard, okOr } from '../../common/result.js';
 import { assertNonCreditType, guardTransferMutability, isAccountOwnedType } from '../../logic/account.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
 import { resolveCurrency } from '../../logic/money.js';
-import { normalizeMerchant, resolveMerchantCorrection } from '../../logic/merchant.js';
+import { normalizeMerchant, resolveMerchantCorrection, withMerchant, withMerchantLearning } from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import {
@@ -27,7 +27,6 @@ import {
   type ImportAccountStatementItem,
   type UpdateAccountTransaction,
 } from '../../models/account.js';
-import { MERCHANT_CATEGORY_ENTITY_TAG } from '../../models/merchant.js';
 import { type FlowOutcome, type Persistable } from '../../models/persistable.js';
 import {
   ClassificationMethod,
@@ -132,7 +131,10 @@ const addAccountMovement = (
     const { entity, classification } = yield* planAccountMovement(deps, input, type, source);
 
     const locale = await deps.locale();
-    const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
+    const persist = withMerchant(
+      [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })],
+      entity.refs.merchantKey,
+    );
     const response = buildUpsertResult(classification, locale);
     return ok({ persist, response });
   });
@@ -179,10 +181,9 @@ export const importAccountStatement = (
  * rejected with a redirect to `update_card_transaction` — then enforces transfer mutability, and
  * merges the result onto `existing` to build the full desired end-state entity the shell applies
  * as a version-guarded update. Merchant learning (a correction strengthens the merchant→category
- * association) is composed into the SAME `persist` batch as a `MERCHANT_CATEGORY_ENTITY_TAG`
- * insert (rule 5) — not a side effect performed from `response` — so it applies atomically with
- * the transaction update: it commits only when the update does, and never fires on a
- * version-conflict attempt that gets rolled back and retried.
+ * association) is composed into the SAME `persist` batch via `withMerchantLearning` — not a side
+ * effect performed from `response` — so it commits only when the update does, and never fires on
+ * a version-conflict attempt that gets rolled back and retried.
  */
 export const updateAccountTransaction = (
   deps: Deps,
@@ -227,13 +228,11 @@ export const updateAccountTransaction = (
     };
 
     const locale = await deps.locale();
-    const persist: Persistable[] = [
-      persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } }),
-    ];
     const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
-    if (merchantCorrection) {
-      persist.push(persistence.insert({ entity: MERCHANT_CATEGORY_ENTITY_TAG, model: merchantCorrection }));
-    }
+    const persist: Persistable[] = withMerchantLearning(
+      [persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } })],
+      merchantCorrection,
+    );
     const response = buildTransactionView(locale);
     return ok({ persist, response });
   });

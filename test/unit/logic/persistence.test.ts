@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { entityDbAdapter, insert, remove, update } from '../../../src/logic/persistence.js';
+import { entityDbAdapter, insert, outcomeFor, remove, update } from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { INITIAL_VERSION, PersistOp, type Persistable } from '../../../src/models/persistable.js';
+import { INITIAL_VERSION, PersistOp, type Persistable, type PersistOutcome } from '../../../src/models/persistable.js';
 
 const account: Account = {
   id: 'acc-1',
@@ -48,14 +48,59 @@ describe('logic/persistence — Persistable builders', () => {
   });
 });
 
+describe("outcomeFor — resolves a flow's own outcome by entity tag, not batch position (ADR-023)", () => {
+  it('finds the matching outcome regardless of where it sits in the batch', () => {
+    const outcomes: PersistOutcome[] = [
+      { entity: 'merchant', applied: true },
+      { entity: ACCOUNT_ENTITY_TAG, applied: true, read: { id: 'acc-1' } },
+      { entity: 'bill', applied: true },
+    ];
+    expect(outcomeFor(ACCOUNT_ENTITY_TAG, outcomes)).toEqual({
+      entity: ACCOUNT_ENTITY_TAG,
+      applied: true,
+      read: { id: 'acc-1' },
+    });
+  });
+
+  it('finds it whether it leads or trails the batch — position never matters', () => {
+    const leading: PersistOutcome[] = [
+      { entity: ACCOUNT_ENTITY_TAG, applied: true },
+      { entity: 'bill', applied: true },
+    ];
+    const trailing: PersistOutcome[] = [
+      { entity: 'bill', applied: true },
+      { entity: ACCOUNT_ENTITY_TAG, applied: true },
+    ];
+    expect(outcomeFor(ACCOUNT_ENTITY_TAG, leading).entity).toBe(ACCOUNT_ENTITY_TAG);
+    expect(outcomeFor(ACCOUNT_ENTITY_TAG, trailing).entity).toBe(ACCOUNT_ENTITY_TAG);
+  });
+
+  it('throws when no outcome carries the requested entity tag — a drift, not a domain outcome', () => {
+    expect(() => outcomeFor(ACCOUNT_ENTITY_TAG, [{ entity: 'bill', applied: true }])).toThrow(
+      'outcomeFor: no persist outcome found for entity "account"',
+    );
+  });
+
+  it('throws when more than one outcome carries the requested tag, rather than silently picking one', () => {
+    const outcomes: PersistOutcome[] = [
+      { entity: ACCOUNT_ENTITY_TAG, applied: true },
+      { entity: ACCOUNT_ENTITY_TAG, applied: true },
+    ];
+    expect(() => outcomeFor(ACCOUNT_ENTITY_TAG, outcomes)).toThrow(
+      'outcomeFor: multiple persist outcomes found for entity "account"',
+    );
+  });
+});
+
 const WIDGET_TAG = 'widget';
 type Widget = { id: string; color: string };
 type WidgetRow = Widget & { version: number; colorCode: string };
 
 // Deliberately not the identity function — proves modelToDb, not some inline shaping, does the work.
-const widgetToDb = vi.fn(
-  (model: Widget & { version: number }): WidgetRow => ({ ...model, colorCode: model.color.toUpperCase() }),
-);
+const widgetToDb = vi.fn((model: Widget & { version: number }): WidgetRow => ({
+  ...model,
+  colorCode: model.color.toUpperCase(),
+}));
 
 describe('entityDbAdapter', () => {
   it('insert: bakes in INITIAL_VERSION before handing the model to modelToDb', () => {

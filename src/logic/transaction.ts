@@ -17,9 +17,10 @@ import type {
 } from '../models/transaction.js';
 import type { RawTransactionView } from '../models/transaction.js';
 import type { PersistOutcome } from '../models/persistable.js';
-import { firstOutcome } from './persistence.js';
+import { outcomeFor } from './persistence.js';
 import {
   transactionErrors,
+  TRANSACTION_ENTITY_TAG,
   TransactionCursorSchema,
   TransactionSortField,
   TransactionStatus,
@@ -225,14 +226,13 @@ export function viewFromOutcome(...args: readonly unknown[]) {
   return purry(_viewFromOutcome, args);
 }
 
-/** `viewFromOutcome`, but for a flow that only ever has one persistable and so only ever cares
- *  about the first (and only) outcome — e.g. update_account_transaction, which has no `created`
- *  flag to derive (an update either lands or the whole unit of work fails as a `conflict` before
- *  any outcome is ever reported — rule 4 — so there's no duplicate-replay case to distinguish the
- *  way there is for an insert). Also the shape update_card_transaction will need once converted —
- *  phase 2b. */
+/** `viewFromOutcome`, resolved against the transaction's own outcome by entity tag — a flow like
+ *  `update_account_transaction`/`update_card_transaction` has no `created` flag to derive (an
+ *  update either lands or the whole unit of work fails as a `conflict` before any outcome is ever
+ *  reported — rule 4 — so there's no duplicate-replay case to distinguish the way there is for an
+ *  insert). */
 const _buildTransactionView = (outcomes: PersistOutcome[], locale: Locale): TransactionView =>
-  viewFromOutcome(firstOutcome(outcomes), locale);
+  viewFromOutcome(outcomeFor(TRANSACTION_ENTITY_TAG, outcomes), locale);
 
 export function buildTransactionView(outcomes: PersistOutcome[], locale: Locale): TransactionView;
 export function buildTransactionView(locale: Locale): (outcomes: PersistOutcome[]) => TransactionView;
@@ -255,7 +255,7 @@ const _buildUpsertResult = (
   classification: ClassifyOutcome | undefined,
   locale: Locale,
 ): UpsertTransactionResult => {
-  const outcome = firstOutcome(outcomes);
+  const outcome = outcomeFor(TRANSACTION_ENTITY_TAG, outcomes);
   return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied, classification };
 };
 
