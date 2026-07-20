@@ -65,7 +65,6 @@ export const createTransfer = (
       idempotencyKey: input.idempotencyKey,
       classification: { method: ClassificationMethod.enum.none, confidence: 0 },
       refs: { accountId: from.id, toAccountId: to.id },
-      tagNames: [],
     };
 
     const locale = await deps.locale();

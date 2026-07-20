@@ -92,7 +92,6 @@ describe('confirmTransaction — flips pending to effective as a functional-core
           idempotencyKey: pendingTx.idempotencyKey,
           classification: pendingTx.classification,
           refs: {},
-          tagNames: [],
           version: pendingTx.version,
         },
       },

@@ -26,7 +26,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   merchants: { matchCandidates: async () => [] } as unknown as Deps['merchants'],
   recurring: {} as Deps['recurring'],
   settings: {} as Deps['settings'],
-  tags: {} as Deps['tags'],
+  tags: { list: async () => [] } as unknown as Deps['tags'],
   transactions: {} as unknown as Deps['transactions'],
   clock: () => new Date('2026-06-01'),
   newId: () => 'test-id',
@@ -152,8 +152,9 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
-    // 'Lunch' normalizes to a non-empty merchant key, so a merchant insert precedes it (ADR-023).
-    expect(outcome.persist).toHaveLength(2);
+    // 'Lunch' normalizes to a non-empty merchant key, so a merchant insert precedes it (ADR-023);
+    // a tag-set insert always trails, even with no tags given (ADR-023 step 2).
+    expect(outcome.persist).toHaveLength(3);
     const tx = findTransactionPersistable(outcome.persist);
     expect(tx).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });
     expect((tx as { model: { currency: string } }).model.currency).toBe('BRL');
@@ -243,10 +244,15 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
     expect(persist).toEqual([
       { op: PersistOp.enum.insert, entity: 'merchant', model: { key: 'ze padaria' } },
       expect.objectContaining({ op: PersistOp.enum.insert, entity: 'transaction' }),
+      {
+        op: PersistOp.enum.insert,
+        entity: 'transactionTag',
+        model: { idempotencyKey: 'classify-merchant-persistable', tagIds: [] },
+      },
     ]);
   });
 
-  it('on a description that normalizes to nothing, emits no merchant Persistable', async () => {
+  it('on a description that normalizes to nothing, emits no merchant Persistable (tag-set still trails)', async () => {
     const deps = makeDeps();
 
     const result = await addAccountExpense(
@@ -256,7 +262,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
     );
 
     const outcome = result._unsafeUnwrap();
-    expect(outcome.persist).toHaveLength(1);
+    expect(outcome.persist).toHaveLength(2);
     const { model } = outcome.persist[0] as { model: { refs: { merchantKey?: string } } };
     expect(model.refs.merchantKey).toBeUndefined();
   });
@@ -324,6 +330,38 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
   });
 });
 
+describe('addAccountExpense — tag-set resolution (ADR-023 step 2)', () => {
+  it('resolves given tag names to ids against deps.tags.list(), dropping unmatched names', async () => {
+    const deps = makeDeps({
+      tags: {
+        list: async () => [
+          { id: 'tag-work', name: 'work' },
+          { id: 'tag-travel', name: 'travel' },
+        ],
+      } as unknown as Deps['tags'],
+    });
+
+    const result = await addAccountExpense(
+      deps,
+      {
+        description: 'Cash lunch',
+        amount: 20,
+        idempotencyKey: 'tags-resolve',
+        tags: ['work', 'does-not-exist'],
+      },
+      TransactionSource.enum.mcp,
+    );
+
+    const outcome = result._unsafeUnwrap();
+    const tagSet = outcome.persist.find((p) => p.entity === 'transactionTag');
+    expect(tagSet).toEqual({
+      op: PersistOp.enum.insert,
+      entity: 'transactionTag',
+      model: { idempotencyKey: 'tags-resolve', tagIds: ['tag-work'] },
+    });
+  });
+});
+
 const baseTx: RawTransactionView = {
   id: 'tx-1',
   description: 'Original',
@@ -385,10 +423,16 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
-    expect(outcome.persist).toHaveLength(1);
+    // Update, then a tag-set insert trailing unconditionally (ADR-023 step 2), even with no tags.
+    expect(outcome.persist).toHaveLength(2);
     const persisted = outcome.persist[0] as { op: string; model: { id: string; description: string; version: number } };
     expect(persisted.op).toBe(PersistOp.enum.update);
     expect(persisted.model).toMatchObject({ id: 'tx-1', description: 'Updated', version: baseTx.version });
+    expect(outcome.persist[1]).toEqual({
+      op: PersistOp.enum.insert,
+      entity: 'transactionTag',
+      model: { idempotencyKey: 'existing-key', tagIds: [] },
+    });
   });
 
   it('updateAccountTransaction leaves fields untouched when omitted, merging onto the existing row', async () => {
@@ -414,7 +458,7 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', description: 'No category change' });
 
-    expect(result._unsafeUnwrap().persist).toHaveLength(1);
+    expect(result._unsafeUnwrap().persist).toHaveLength(2);
   });
 
   it('composes a merchant-learning insert into the same atomic batch on a category correction (rule 5)', async () => {
@@ -429,8 +473,9 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
 
     const outcome = result._unsafeUnwrap();
     // Transaction update, then a merchant insert, then the learning-edge insert (FK: merchant
-    // precedes merchant_category) — both appended after the flow's own entity (rule 5).
-    expect(outcome.persist).toHaveLength(3);
+    // precedes merchant_category) — both appended after the flow's own entity (rule 5) — then the
+    // tag-set insert, which always trails (ADR-023 step 2).
+    expect(outcome.persist).toHaveLength(4);
     expect(outcome.persist[0]).toMatchObject({ op: PersistOp.enum.update, entity: 'transaction' });
     expect(outcome.persist[1]).toEqual({
       op: PersistOp.enum.insert,
@@ -441,6 +486,11 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
       op: PersistOp.enum.insert,
       entity: 'merchantCategory',
       model: { merchantKey: 'uber', categoryId: 'cat-new', weightDelta: 1, origin: 'history' },
+    });
+    expect(outcome.persist[3]).toEqual({
+      op: PersistOp.enum.insert,
+      entity: 'transactionTag',
+      model: { idempotencyKey: 'existing-key', tagIds: [] },
     });
     // response() is pure data-shaping — it must not itself perform any write.
     expect(typeof outcome.response).not.toBe('undefined');
@@ -456,7 +506,7 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', category: 'Transporte' });
 
-    expect(result._unsafeUnwrap().persist).toHaveLength(1);
+    expect(result._unsafeUnwrap().persist).toHaveLength(2);
   });
 
   it('deleteAccountTransaction returns an empty persist batch (no writes) for a dry run without confirm', async () => {
@@ -485,6 +535,64 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
       { op: PersistOp.enum.delete, entity: 'transaction', id: 'tx-1', version: baseTx.version },
     ]);
     expect(outcome.response).toMatchObject({ deleted: true });
+  });
+});
+
+describe('updateAccountTransaction — tag-set resolution (ADR-023 step 2)', () => {
+  it('falls back to the existing tag names when input.tags is omitted, then resolves them', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => ({ ...baseTx, tags: ['work'] }) } as unknown as Deps['transactions'],
+      tags: { list: async () => [{ id: 'tag-work', name: 'work' }] } as unknown as Deps['tags'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', description: 'Updated' });
+
+    const outcome = result._unsafeUnwrap();
+    const tagSet = outcome.persist.find((p) => p.entity === 'transactionTag');
+    expect(tagSet).toEqual({
+      op: PersistOp.enum.insert,
+      entity: 'transactionTag',
+      model: { idempotencyKey: 'existing-key', tagIds: ['tag-work'] },
+    });
+  });
+
+  it('replaces the tag set with input.tags when given, ignoring the existing set entirely', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => ({ ...baseTx, tags: ['work'] }) } as unknown as Deps['transactions'],
+      tags: {
+        list: async () => [
+          { id: 'tag-work', name: 'work' },
+          { id: 'tag-travel', name: 'travel' },
+        ],
+      } as unknown as Deps['tags'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', tags: ['travel'] });
+
+    const outcome = result._unsafeUnwrap();
+    const tagSet = outcome.persist.find((p) => p.entity === 'transactionTag');
+    expect(tagSet).toEqual({
+      op: PersistOp.enum.insert,
+      entity: 'transactionTag',
+      model: { idempotencyKey: 'existing-key', tagIds: ['tag-travel'] },
+    });
+  });
+
+  it('an explicit empty tags array clears the set, distinct from omitting it', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => ({ ...baseTx, tags: ['work'] }) } as unknown as Deps['transactions'],
+      tags: { list: async () => [{ id: 'tag-work', name: 'work' }] } as unknown as Deps['tags'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', tags: [] });
+
+    const outcome = result._unsafeUnwrap();
+    const tagSet = outcome.persist.find((p) => p.entity === 'transactionTag');
+    expect(tagSet).toEqual({
+      op: PersistOp.enum.insert,
+      entity: 'transactionTag',
+      model: { idempotencyKey: 'existing-key', tagIds: [] },
+    });
   });
 });
 

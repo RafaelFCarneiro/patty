@@ -92,7 +92,6 @@ const buildOccurrenceEntity = (
   idempotencyKey: recurringIdempotencyKey(rule.id, due),
   classification: { method: ClassificationMethod.enum.user, confidence: 1 },
   refs: { accountId: rule.accountId, categoryId: rule.categoryId },
-  tagNames: [],
 });
 
 /** `advance`'s model carries the rule's full desired end-state, not just `nextDue`, so the shell's

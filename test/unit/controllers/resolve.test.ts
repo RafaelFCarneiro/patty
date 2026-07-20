@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { resolveLegAccounts } from '../../../src/controllers/resolve.js';
+import { resolveLegAccounts, resolveTagLinks } from '../../../src/controllers/resolve.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { AccountType, type Account } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
+import { PersistOp } from '../../../src/models/persistable.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({
   id: 'acc-1',
@@ -65,5 +66,45 @@ describe('resolveLegAccounts (ADR-020 — neutral leg resolution, no ownership j
 
     expect(callCount).toBe(1);
     expect(result._unsafeUnwrap()).toEqual([account({ id: 'acc-1' })]);
+  });
+});
+
+describe('resolveTagLinks — the transaction tag-set Persistable + matched names (ADR-023 step 2)', () => {
+  const tagsDeps = (tags: Array<{ id: string; name: string }>): Deps =>
+    ({ tags: { list: async () => tags } }) as unknown as Deps;
+
+  it('resolves given names against deps.tags.list() into a tag-set insert, addressed by idempotencyKey', async () => {
+    const deps = tagsDeps([{ id: 'tag-work', name: 'work' }]);
+
+    const { persistable, tags } = await resolveTagLinks(deps, 'idem-1', ['work']);
+
+    expect(persistable).toEqual({
+      op: PersistOp.enum.insert,
+      entity: 'transactionTag',
+      model: { idempotencyKey: 'idem-1', tagIds: ['tag-work'] },
+    });
+    expect(tags).toEqual(['work']);
+  });
+
+  it('drops an unmatched name from both the persisted ids and the returned names', async () => {
+    const deps = tagsDeps([{ id: 'tag-work', name: 'work' }]);
+
+    const { persistable, tags } = await resolveTagLinks(deps, 'idem-1', ['work', 'does-not-exist']);
+
+    expect(persistable).toMatchObject({ model: { tagIds: ['tag-work'] } });
+    expect(tags).toEqual(['work']);
+  });
+
+  it('always returns a Persistable, even for an empty name list — a set-replace to "no tags"', async () => {
+    const deps = tagsDeps([{ id: 'tag-work', name: 'work' }]);
+
+    const { persistable, tags } = await resolveTagLinks(deps, 'idem-1', []);
+
+    expect(persistable).toEqual({
+      op: PersistOp.enum.insert,
+      entity: 'transactionTag',
+      model: { idempotencyKey: 'idem-1', tagIds: [] },
+    });
+    expect(tags).toEqual([]);
   });
 });

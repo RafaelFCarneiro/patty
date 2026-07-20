@@ -57,7 +57,7 @@ import {
   type TransactionView,
 } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
-import { resolveCardRef, resolveLegAccounts } from '../resolve.js';
+import { resolveCardRef, resolveLegAccounts, resolveTagLinks } from '../resolve.js';
 import type { StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
@@ -161,7 +161,6 @@ const planCardPurchase = (
         subCategoryId,
         merchantKey: classification.merchantKey,
       },
-      tagNames: input.tags ?? [],
     };
 
     return ok({ entity, classification, billPeriod, existingBill, cardId: card.id });
@@ -175,6 +174,7 @@ export const addCardPurchase = (
   safeTry(async function* () {
     const { entity, classification, billPeriod, existingBill, cardId } = yield* planCardPurchase(deps, input, source);
     const { billId, billPersistable } = resolveBillWrite(deps.newId, cardId, billPeriod, existingBill);
+    const { persistable: tagPersistable, tags } = await resolveTagLinks(deps, entity.idempotencyKey, input.tags ?? []);
 
     // Bill leads, transaction trails — its bill_id FK must resolve within the same batch.
     const persist: Persistable[] = [
@@ -188,12 +188,15 @@ export const addCardPurchase = (
         ],
         entity.refs.merchantKey,
       ),
+      tagPersistable,
     ];
 
     const locale = await deps.locale();
+    // `tags` is composed onto the DB round-trip's view, not read off it — see resolveTagLinks's
+    // doc comment (the tag-set write applies later in the batch than this row's own read-back).
     const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
       const outcome = persistence.outcomeFor(TRANSACTION_ENTITY_TAG, outcomes);
-      return { transaction: viewFromOutcome(outcome, locale), created: outcome.applied, classification };
+      return { transaction: { ...viewFromOutcome(outcome, locale), tags }, created: outcome.applied, classification };
     };
     return ok({ persist, response });
   });
@@ -304,18 +307,27 @@ export const updateCardTransaction = (
         subCategoryId,
         merchantKey: existing.merchant,
       },
-      tagNames: input.tags ?? existing.tags,
     };
 
     const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
+    const { persistable: tagPersistable, tags } = await resolveTagLinks(
+      deps,
+      entity.idempotencyKey,
+      input.tags ?? existing.tags,
+    );
     const persist: Persistable[] = [
       ...withMerchantLearning(billPersistables, merchantCorrection),
       persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } }),
+      tagPersistable,
     ];
 
     const locale = await deps.locale();
-    const response = (outcomes: PersistOutcome[]): TransactionView =>
-      viewFromOutcome(persistence.outcomeFor(TRANSACTION_ENTITY_TAG, outcomes), locale);
+    // `tags` is composed onto the DB round-trip's view, not read off it — see resolveTagLinks's
+    // doc comment (the tag-set write applies later in the batch than this row's own read-back).
+    const response = (outcomes: PersistOutcome[]): TransactionView => ({
+      ...viewFromOutcome(persistence.outcomeFor(TRANSACTION_ENTITY_TAG, outcomes), locale),
+      tags,
+    });
     return ok({ persist, response });
   });
 

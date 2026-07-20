@@ -90,10 +90,10 @@ not.
    this.
 
 3. **Tag links become their own entity, resolved by the core.** The core resolves names → ids and emits one
-   `TRANSACTION_TAG_ENTITY_TAG` `Persistable` carrying the full desired set (`{ transactionId, tagIds }`); its
-   applier makes `transaction_tags` match that set. Like `merchant_category`, this entity has no `id`/`version`
-   of its own — it is a link table, and the effect is a **set-replace** rather than a row `update`, which the
-   generic `Persistable` shape already accommodates.
+   `TRANSACTION_TAG_ENTITY_TAG` `Persistable` carrying the full desired set; its applier makes `transaction_tags`
+   match that set. Like `merchant_category`, this entity has no `id`/`version` of its own — it is a link table,
+   and the effect is a **set-replace** rather than a row `update`, which the generic `Persistable` shape already
+   accommodates.
 
    Set-replace is not the applier picking a diff strategy: the core states the exact desired end-state, exactly
    as an `update` states a row's desired end-state, and "make it so" is mechanical either way. What was a
@@ -107,6 +107,24 @@ not.
    **Leniency is preserved and becomes explicit**: unknown tag names are still dropped, but the core drops them,
    in `logic/`, with a test. This is behavior-preserving by decision, not by accident — the point is ownership,
    not a behavior change.
+
+   **As built, the `Persistable` carries `{ idempotencyKey, tagIds }`, not `{ transactionId, tagIds }`** — a
+   deviation from the shape sketched above, forced by a correctness gap this ADR's original text didn't
+   anticipate: a create flow's own `entity.id` is a fresh `deps.newId()` mint on *every* invocation (including
+   an internal version-conflict retry, which re-invokes the whole flow), so on a duplicate-idempotency-key
+   resubmission `entity.id` names a row that was never actually inserted — the transaction insert no-ops, and a
+   tag-set `Persistable` addressed by that id would either FK-violate `transaction_tags.transaction_id`
+   (non-empty set) or silently touch nothing (empty set), never reaching the row that actually persisted.
+   `idempotencyKey` is stable across every submission and mechanically resolves to the real row inside
+   `transactionTagApplier` (`SELECT id FROM transactions WHERE idempotency_key = ?`) — the same kind of identity
+   resolution `transactionApplier`'s own insert conflict-target/`fetchTxByIdempotencyKey` already perform for
+   that entity (decision 4 below: "not a domain judgement"), so it stays consistent with decision 6's proxy
+   ("an applier writes exactly one table" — about writes, not reads). A second, related consequence: because
+   `transactionApplier`'s own post-write read-back runs before this later `Persistable` applies in the same
+   batch, `PersistOutcome.read.tags` can't reflect the tag write — every affected flow's `response` composes the
+   core's own matched-name result onto the DB-round-tripped view instead of trusting that field (rule 6: the
+   core already knows the matched set without reading anything back). See `docs/architecture.md`'s
+   `transactionTag` entity bullet for the full account.
 
 4. **Idempotent-insert handling moves from the applier to the generic mechanism.** Today `applyPersistable`
    explicitly disclaims it (*"Idempotent-duplicate handling is the applier's own concern"*); it becomes the
@@ -227,9 +245,10 @@ the data on disk one join away. Named here as the fallback if the hook ever need
    `diplomat/db/effects.ts`, and the handful of call sites in `logic/transaction.ts` and
    `controllers/creditCard/transaction.ts`), landed in the same change since step 1 is what needed it and the
    footprint turned out too small to justify a separate PR.
-2. **Tag links to the core.** `transactionTag` entity + set-replace applier; name resolution and leniency into
-   `logic/` against `deps.tags.list()`; `tagNames` off `TransactionEntity`; duplicate-path test updated for the
-   overwrite semantic.
+2. **Tag links to the core (implemented).** `transactionTag` entity + set-replace applier; name resolution and
+   leniency into `logic/` against `deps.tags.list()`; `tagNames` off `TransactionEntity`; duplicate-path test
+   updated for the overwrite semantic. As built, addressed by `idempotencyKey` rather than `transactionId` — see
+   decision 3's "As built" note.
 3. **Generic idempotency + the collapse.** `versionedTableApplier` config; `transactionApplier` replaced by a
    registration; the "applier's own concern" comment removed; the FK-delete behavior change covered by a test.
    This step is what proves 1 and 2 landed — if the applier does not collapse, something is still deciding
@@ -241,7 +260,7 @@ Order matters: 3 last, because its justification *is* the collapse.
 
 1. [ ] Review/accept this ADR.
 2. [x] Step 1 — merchant entity + weight delta.
-3. [ ] Step 2 — tag links resolved in the core, overwrite-on-duplicate.
+3. [x] Step 2 — tag links resolved in the core, overwrite-on-duplicate.
 4. [ ] Step 3 — generic idempotency; `transactionApplier` collapses to a registration.
 5. [ ] Record the applier invariant, its single-table proxy, and the `readBack` deviation in
    `docs/architecture.md`.
