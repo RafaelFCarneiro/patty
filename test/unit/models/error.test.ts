@@ -57,20 +57,20 @@ describe('per-model error builders', () => {
   it('transactionErrors.categoryKindMismatch builds a hint phrased for the expense-kind remedy', () => {
     const err = transactionErrors.categoryKindMismatch('income', 'Food', 'expense');
     expect(err.code).toBe('category_kind_mismatch');
-    expect(err.hint).toContain('expense-only');
-    expect(err.hint).toContain('Food');
+    expect((err as { hint: string }).hint).toContain('expense-only');
+    expect((err as { hint: string }).hint).toContain('Food');
     // The remedy clause is tool-agnostic (add_account_expense/income have no `type` field to
     // "set") — grammar differs by branch ("an expense" vs bare "income"), so both need their own
     // assertion rather than relying on one branch to prove the other reads correctly.
-    expect(err.hint).toContain('record this as an expense instead');
+    expect((err as { hint: string }).hint).toContain('record this as an expense instead');
   });
 
   it('transactionErrors.categoryKindMismatch builds a hint phrased for the income-kind remedy', () => {
     const err = transactionErrors.categoryKindMismatch('expense', 'Salary', 'income');
     expect(err.code).toBe('category_kind_mismatch');
-    expect(err.hint).toContain('income-only');
-    expect(err.hint).toContain('Salary');
-    expect(err.hint).toContain('record this as income instead');
+    expect((err as { hint: string }).hint).toContain('income-only');
+    expect((err as { hint: string }).hint).toContain('Salary');
+    expect((err as { hint: string }).hint).toContain('record this as income instead');
   });
 
   it('cardErrors.duplicateName uses credit_card entity', () => {

@@ -4,7 +4,7 @@ import { buildBulkResult } from '../../../../src/controllers/transaction/bulk.js
 import { validation } from '../../../../src/models/error.js';
 import type { ClassifiedUpsertResult, TransactionView } from '../../../../src/models/transaction.js';
 
-const transaction = (overrides: Partial<TransactionView> = {}): TransactionView => ({
+const txView = (overrides: Partial<TransactionView> = {}): TransactionView => ({
   id: 'tx-1',
   description: 'Coffee',
   amount: 5,
@@ -16,6 +16,7 @@ const transaction = (overrides: Partial<TransactionView> = {}): TransactionView 
   idempotencyKey: 'k1',
   typeLabel: 'Expense',
   statusLabel: 'Effective',
+  classification: { method: 'none', confidence: 0 },
   tags: [],
   ...overrides,
 });
@@ -23,11 +24,15 @@ const transaction = (overrides: Partial<TransactionView> = {}): TransactionView 
 describe('buildBulkResult — shapes per-line SequenceOutcomes into the BulkResult contract', () => {
   it('reports created for a fresh insert and duplicate for a replay, in line order', () => {
     const created: ClassifiedUpsertResult = {
-      transaction: transaction({ id: 'tx-created' }),
+      transaction: txView({ id: 'tx-created' }),
       created: true,
       classification: { method: 'rule', confidence: 0.9 },
     };
-    const duplicate: ClassifiedUpsertResult = { transaction: transaction({ id: 'tx-dup' }), created: false };
+    const duplicate: ClassifiedUpsertResult = {
+      transaction: txView({ id: 'tx-dup' }),
+      created: false,
+      classification: { method: 'none', confidence: 0 },
+    };
 
     const result = buildBulkResult([ok(created), ok(duplicate)], [{ description: 'Coffee' }, { description: 'Taxi' }]);
 
@@ -38,7 +43,7 @@ describe('buildBulkResult — shapes per-line SequenceOutcomes into the BulkResu
 
   it('flags low-confidence classification as needs_review, not created', () => {
     const lowConfidence: ClassifiedUpsertResult = {
-      transaction: transaction(),
+      transaction: txView(),
       created: true,
       classification: { method: 'none', confidence: 0 },
     };
@@ -51,7 +56,7 @@ describe('buildBulkResult — shapes per-line SequenceOutcomes into the BulkResu
 
   it("carries a failed unit's AppError and description without disturbing sibling outcomes", () => {
     const okItem: ClassifiedUpsertResult = {
-      transaction: transaction(),
+      transaction: txView(),
       created: true,
       classification: { method: 'rule', confidence: 0.9 },
     };

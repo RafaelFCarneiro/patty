@@ -130,8 +130,8 @@ describe('MCP integration > transaction category locale', () => {
 
     await callTool(client, { name: 'set_locale', args: { locale: 'pt', source: 'explicit' } });
     const ptResult = (await searchTransactions(client, { text: 'Sub locale test' })) as SearchResult;
-    expect(ptResult[0].subCategoryId).toBe(sub.id);
-    expect(ptResult[0].subCategoryName).toBe('Groceries');
+    expect(ptResult[0]!.subCategoryId).toBe(sub.id);
+    expect(ptResult[0]!.subCategoryName).toBe('Groceries');
   });
 
   it('categoryNames map is not leaked to the client', async () => {

@@ -41,7 +41,7 @@ const account = (overrides: Partial<Account> = {}): Account => ({
  *  that did would mask a flow accidentally returning an async response instead of failing on it. */
 const resolveResponse = <T>(outcome: FlowOutcome<T>, outcomes: PersistOutcome[]): T => {
   const { response } = outcome;
-  return typeof response === 'function' ? response(outcomes) : response;
+  return typeof response === 'function' ? (response as (outcomes: PersistOutcome[]) => T)(outcomes) : response;
 };
 
 type MinimalEntity = { id: string; description: string; amount: number; currency: string };

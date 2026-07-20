@@ -84,6 +84,7 @@ beforeEach(async () => {
     FINTRACK_DB_KEY: TEST_KEY,
     PORT: 0,
     MCP_TRANSPORT: McpTransport.enum.http,
+    FINTRACK_HTTP: true,
   });
   await bootstrap(db);
   registry = { [ACCOUNT_ENTITY_TAG]: accountApplier };
@@ -832,7 +833,7 @@ describe('merchantApplier — hand-written single-table applier for a key-only, 
         okAsync({
           persist: [
             { op: PersistOp.enum.update, entity: MERCHANT_ENTITY_TAG, model: { key: 'unused', version: 0 } },
-          ] as Persistable[],
+          ] as unknown as Persistable[],
           response: null,
         }),
       ),

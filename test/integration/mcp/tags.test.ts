@@ -70,7 +70,7 @@ describe('MCP integration > tags', () => {
 
       const succeeded = results.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<unknown>[];
       expect(succeeded.length).toBe(1);
-      const tag = succeeded[0].value as { id?: string };
+      const tag = succeeded[0]!.value as { id?: string };
       ensure(tag.id, 'Tag id missing');
       createdTagIds.push(tag.id);
 

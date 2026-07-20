@@ -28,7 +28,8 @@ describe('MCP resource > fintrack://openapi', () => {
     expect(contents).toHaveLength(1);
     expect(contents[0]?.mimeType).toBe('application/json');
 
-    const doc = JSON.parse(contents[0]?.text as string) as { openapi: string; paths: Record<string, unknown> };
+    const raw = (contents[0] as { text: string }).text;
+    const doc = JSON.parse(raw) as { openapi: string; paths: Record<string, unknown> };
     expect(doc.openapi).toMatch(/^3\./);
     expect(Object.keys(doc.paths).length).toBeGreaterThan(0);
 

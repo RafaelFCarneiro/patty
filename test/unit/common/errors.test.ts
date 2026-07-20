@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { formatAppError, httpStatus, type AppError } from '../../../src/common/errors.js';
 import { ConflictErrorOut, NotFoundErrorOut, ValidationErrorOut } from '../../../src/wire/out/errors.js';
 
-const WIRE_SCHEMA_BY_STATUS: Record<number, typeof NotFoundErrorOut> = {
+const WIRE_SCHEMA_BY_STATUS: Record<
+  number,
+  typeof NotFoundErrorOut | typeof ConflictErrorOut | typeof ValidationErrorOut
+> = {
   404: NotFoundErrorOut,
   409: ConflictErrorOut,
   422: ValidationErrorOut,
@@ -176,7 +179,7 @@ describe('wire/out/errors.ts documents every AppError shape at its real httpStat
     ({ error, expectedStatus }) => {
       const schema = WIRE_SCHEMA_BY_STATUS[httpStatus(error)];
       expect(httpStatus(error)).toBe(expectedStatus);
-      expect(schema.safeParse({ error }).success).toBe(true);
+      expect(schema!.safeParse({ error }).success).toBe(true);
     },
   );
 });

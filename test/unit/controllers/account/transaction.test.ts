@@ -51,7 +51,7 @@ const account = (overrides: Partial<Account> = {}): Account => ({
  *  that did would mask a flow accidentally returning an async response instead of failing on it. */
 const resolveResponse = <T>(outcome: FlowOutcome<T>, outcomes: PersistOutcome[]): T => {
   const { response } = outcome;
-  return typeof response === 'function' ? response(outcomes) : response;
+  return typeof response === 'function' ? (response as (outcomes: PersistOutcome[]) => T)(outcomes) : response;
 };
 
 /** A fake persisted-and-joined view — what `transactionApplier` would hand back as a
@@ -275,10 +275,10 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
       TransactionSource.enum.mcp,
     );
 
-    const expenseModel = findTransactionPersistable(expenseResult._unsafeUnwrap().persist) as {
+    const expenseModel = findTransactionPersistable(expenseResult!._unsafeUnwrap().persist) as {
       model: { type: string };
     };
-    const incomeModel = findTransactionPersistable(incomeResult._unsafeUnwrap().persist) as {
+    const incomeModel = findTransactionPersistable(incomeResult!._unsafeUnwrap().persist) as {
       model: { type: string };
     };
     expect(expenseModel.model.type).toBe('expense');
@@ -357,7 +357,7 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
-    expect(error.issues?.[0]).toContain('update_card_transaction');
+    expect((error as { issues: string[] }).issues[0]).toContain('update_card_transaction');
   });
 
   it('deleteAccountTransaction rejects a tx with a credit leg, redirecting to delete_card_transaction', async () => {
@@ -373,7 +373,7 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
-    expect(error.issues?.[0]).toContain('delete_card_transaction');
+    expect((error as { issues: string[] }).issues[0]).toContain('delete_card_transaction');
   });
 
   it('updateAccountTransaction returns a version-guarded update Persistable carrying the merged patch', async () => {
@@ -512,7 +512,7 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
-    expect(error.issues?.[0]).toContain('cannot change the type of a transfer');
+    expect((error as { issues: string[] }).issues[0]).toContain('cannot change the type of a transfer');
   });
 
   it('rejects setting a category on a transfer', async () => {
@@ -526,7 +526,7 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
-    expect(error.issues?.[0]).toContain('cannot have a category');
+    expect((error as { issues: string[] }).issues[0]).toContain('cannot have a category');
   });
 
   it('allows a non-category, non-type update on a transfer (e.g. amount), preserving its type', async () => {
@@ -564,7 +564,7 @@ describe('importAccountStatement — pure per-line plan for the shell (ADR-022 s
 
     expect(plan.lines).toHaveLength(2);
     expect(plan.lines[0]).toMatchObject({ date: toIsoDate(clock), rawInput: 'pasted statement text' });
-    expect(plan.lines[0].idempotencyKey).toBeTruthy();
+    expect(plan.lines[0]!.idempotencyKey).toBeTruthy();
     expect(plan.lines[1]).toMatchObject({ date: '2026-05-01', idempotencyKey: 'explicit' });
   });
 
@@ -585,17 +585,17 @@ describe('importAccountStatement — pure per-line plan for the shell (ADR-022 s
 
     const [expenseResult, incomeResult] = await Promise.all(plan.lines.map((line) => plan.flowFor(line)()));
 
-    expect(expenseResult.isOk()).toBe(true);
+    expect(expenseResult!.isOk()).toBe(true);
     const expenseModel = (
-      findTransactionPersistable(expenseResult._unsafeUnwrap().persist) as {
+      findTransactionPersistable(expenseResult!._unsafeUnwrap().persist) as {
         model: { type: string };
       }
     ).model;
     expect(expenseModel.type).toBe('expense');
 
-    expect(incomeResult.isOk()).toBe(true);
+    expect(incomeResult!.isOk()).toBe(true);
     const incomeModel = (
-      findTransactionPersistable(incomeResult._unsafeUnwrap().persist) as {
+      findTransactionPersistable(incomeResult!._unsafeUnwrap().persist) as {
         model: { type: string };
       }
     ).model;
@@ -616,7 +616,7 @@ describe('importAccountStatement — pure per-line plan for the shell (ADR-022 s
       TransactionSource.enum.import,
     );
 
-    const result = await plan.flowFor(plan.lines[0])();
+    const result = await plan.flowFor(plan.lines[0]!)();
 
     expect(result.isOk()).toBe(true);
     const model = (

@@ -29,7 +29,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
  *  `runEffects` does post-commit, without a real database. */
 const resolveResponse = <T>(outcome: FlowOutcome<T>, outcomes: PersistOutcome[]): T => {
   const { response } = outcome;
-  return typeof response === 'function' ? response(outcomes) : response;
+  return typeof response === 'function' ? (response as (outcomes: PersistOutcome[]) => T)(outcomes) : response;
 };
 
 const pendingTx: RawTransactionView = {

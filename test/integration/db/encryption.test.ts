@@ -29,6 +29,7 @@ describe('openDatabase directory creation', () => {
       FINTRACK_DB_KEY: CORRECT_KEY,
       PORT: 3001,
       MCP_TRANSPORT: McpTransport.enum.http,
+      FINTRACK_HTTP: true,
     });
     await bootstrap(db);
   });
@@ -41,6 +42,7 @@ describe('encryption at rest', () => {
       FINTRACK_DB_KEY: CORRECT_KEY,
       PORT: 3001,
       MCP_TRANSPORT: McpTransport.enum.http,
+      FINTRACK_HTTP: true,
     });
     await bootstrap(db);
 
@@ -55,6 +57,7 @@ describe('encryption at rest', () => {
       FINTRACK_DB_KEY: CORRECT_KEY,
       PORT: 3001,
       MCP_TRANSPORT: McpTransport.enum.http,
+      FINTRACK_HTTP: true,
     });
     await bootstrap(db);
 
@@ -64,6 +67,7 @@ describe('encryption at rest', () => {
       FINTRACK_DB_KEY: WRONG_KEY,
       PORT: 3001,
       MCP_TRANSPORT: McpTransport.enum.http,
+      FINTRACK_HTTP: true,
     });
     await expect(wrongDb.query.currencies.findMany()).rejects.toThrow();
   });

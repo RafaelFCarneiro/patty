@@ -50,7 +50,7 @@ const category = (overrides: Partial<Category> = {}): Category => ({
  *  imperative-shell.md: flow tests assert on `{ persist, response }`). */
 const resolveResponse = <T>(outcome: FlowOutcome<T>, outcomes: PersistOutcome[]): T => {
   const { response } = outcome;
-  return typeof response === 'function' ? response(outcomes) : response;
+  return typeof response === 'function' ? (response as (outcomes: PersistOutcome[]) => T)(outcomes) : response;
 };
 
 describe('createRecurring — functional core (ADR-021 phase 3b)', () => {
