@@ -356,8 +356,8 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    expect(error.code).toBe('validation');
-    expect((error as { issues: string[] }).issues[0]).toContain('update_card_transaction');
+    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
+    expect(error.issues[0]).toContain('update_card_transaction');
   });
 
   it('deleteAccountTransaction rejects a tx with a credit leg, redirecting to delete_card_transaction', async () => {
@@ -372,8 +372,8 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    expect(error.code).toBe('validation');
-    expect((error as { issues: string[] }).issues[0]).toContain('delete_card_transaction');
+    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
+    expect(error.issues[0]).toContain('delete_card_transaction');
   });
 
   it('updateAccountTransaction returns a version-guarded update Persistable carrying the merged patch', async () => {

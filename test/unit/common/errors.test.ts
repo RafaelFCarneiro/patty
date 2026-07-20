@@ -179,7 +179,8 @@ describe('wire/out/errors.ts documents every AppError shape at its real httpStat
     ({ error, expectedStatus }) => {
       const schema = WIRE_SCHEMA_BY_STATUS[httpStatus(error)];
       expect(httpStatus(error)).toBe(expectedStatus);
-      expect(schema!.safeParse({ error }).success).toBe(true);
+      if (!schema) throw new Error(`no wire schema for status ${httpStatus(error)}`);
+      expect(schema.safeParse({ error }).success).toBe(true);
     },
   );
 });

@@ -165,8 +165,8 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    expect(error.code).toBe('validation');
-    expect((error as { issues: string[] }).issues[0]).toContain('revert_bill_payment');
+    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
+    expect(error.issues[0]).toContain('revert_bill_payment');
   });
 
   it('on a merchant match, emits a merchant insert ordered before the transaction insert (rule 5)', async () => {
@@ -432,8 +432,8 @@ describe('updateCardTransaction / deleteCardTransaction — bill-payment transfe
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    expect(error.code).toBe('validation');
-    expect((error as { issues: string[] }).issues[0]).toContain('revert_bill_payment');
+    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
+    expect(error.issues[0]).toContain('revert_bill_payment');
   });
 });
 
