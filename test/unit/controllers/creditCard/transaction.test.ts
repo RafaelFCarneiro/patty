@@ -18,6 +18,7 @@ import {
   type RawTransactionView,
   type TransactionView,
 } from '../../../../src/models/transaction.js';
+import type { ValidationError } from '../../../../src/models/error.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({
   id: 'acc-checking',
@@ -165,8 +166,8 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
-    expect(error.issues[0]).toContain('revert_bill_payment');
+    expect(error.code).toBe('validation');
+    expect((error as ValidationError).issues[0]).toContain('revert_bill_payment');
   });
 
   it('on a merchant match, emits a merchant insert ordered before the transaction insert (rule 5)', async () => {
@@ -341,8 +342,8 @@ describe('updateCardTransaction / deleteCardTransaction — ownership by account
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
-    expect(error.issues[0]).toContain('update_account_transaction');
+    expect(error.code).toBe('validation');
+    expect((error as ValidationError).issues[0]).toContain('update_account_transaction');
   });
 
   it('deleteCardTransaction rejects a tx with no credit leg, redirecting to delete_account_transaction', async () => {
@@ -357,8 +358,8 @@ describe('updateCardTransaction / deleteCardTransaction — ownership by account
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
-    expect(error.issues[0]).toContain('delete_account_transaction');
+    expect(error.code).toBe('validation');
+    expect((error as ValidationError).issues[0]).toContain('delete_account_transaction');
   });
 });
 
@@ -380,8 +381,8 @@ describe('updateCardTransaction — account field (ADR-019 compose-up watchpoint
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
-    expect(error.issues[0]).toContain('cannot change the account of a card transaction');
+    expect(error.code).toBe('validation');
+    expect((error as ValidationError).issues[0]).toContain('cannot change the account of a card transaction');
   });
 });
 
@@ -412,11 +413,11 @@ describe('updateCardTransaction / deleteCardTransaction — bill-payment transfe
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
+    expect(error.code).toBe('validation');
     // Rejected via the bill-process guard (paidBillImmutable), not transfer-type-immutable —
     // the card aggregate never runs guardTransferMutability (ADR-020 §3/§4).
-    expect(error.issues[0]).toContain('revert_bill_payment');
-    expect(error.issues[0]).not.toContain('cannot change the type of a transfer');
+    expect((error as ValidationError).issues[0]).toContain('revert_bill_payment');
+    expect((error as ValidationError).issues[0]).not.toContain('cannot change the type of a transfer');
   });
 
   it('deleteCardTransaction rejects it via the paid-bill immutability guard', async () => {
@@ -432,8 +433,8 @@ describe('updateCardTransaction / deleteCardTransaction — bill-payment transfe
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
-    expect(error.issues[0]).toContain('revert_bill_payment');
+    expect(error.code).toBe('validation');
+    expect((error as ValidationError).issues[0]).toContain('revert_bill_payment');
   });
 });
 
@@ -558,8 +559,8 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
 
     expect(result.isErr()).toBe(true);
     const error560 = result._unsafeUnwrapErr();
-    if (error560.code !== 'validation') throw new Error(`expected validation, got ${error560.code}`);
-    expect(error560.issues[0]).toContain('revert_bill_payment');
+    expect(error560.code).toBe('validation');
+    expect((error560 as ValidationError).issues[0]).toContain('revert_bill_payment');
   });
 
   it('rejects when the TARGET bill is paid', async () => {
@@ -577,8 +578,8 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
 
     expect(result.isErr()).toBe(true);
     const error577 = result._unsafeUnwrapErr();
-    if (error577.code !== 'validation') throw new Error(`expected validation, got ${error577.code}`);
-    expect(error577.issues[0]).toContain('revert_bill_payment');
+    expect(error577.code).toBe('validation');
+    expect((error577 as ValidationError).issues[0]).toContain('revert_bill_payment');
   });
 
   it("response() resolves the transaction's own outcome by entity tag, not batch position (ADR-023)", async () => {
@@ -759,7 +760,7 @@ describe('deleteCardTransaction — guards + is returned as data (ADR-021 phase 
 
     expect(result.isErr()).toBe(true);
     const error757 = result._unsafeUnwrapErr();
-    if (error757.code !== 'validation') throw new Error(`expected validation, got ${error757.code}`);
-    expect(error757.issues[0]).toContain('revert_bill_payment');
+    expect(error757.code).toBe('validation');
+    expect((error757 as ValidationError).issues[0]).toContain('revert_bill_payment');
   });
 });

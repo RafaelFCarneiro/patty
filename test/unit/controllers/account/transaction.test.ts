@@ -13,6 +13,7 @@ import { CurrencyCode } from '../../../../src/models/money.js';
 import type { FlowOutcome, Persistable, PersistOutcome } from '../../../../src/models/persistable.js';
 import { PersistOp } from '../../../../src/models/persistable.js';
 import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
+import type { ValidationError } from '../../../../src/models/error.js';
 import { Locale } from '../../../../src/models/locale.js';
 
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
@@ -356,8 +357,8 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
-    expect(error.issues[0]).toContain('update_card_transaction');
+    expect(error.code).toBe('validation');
+    expect((error as ValidationError).issues[0]).toContain('update_card_transaction');
   });
 
   it('deleteAccountTransaction rejects a tx with a credit leg, redirecting to delete_card_transaction', async () => {
@@ -372,8 +373,8 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
-    expect(error.issues[0]).toContain('delete_card_transaction');
+    expect(error.code).toBe('validation');
+    expect((error as ValidationError).issues[0]).toContain('delete_card_transaction');
   });
 
   it('updateAccountTransaction returns a version-guarded update Persistable carrying the merged patch', async () => {
@@ -511,8 +512,8 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
-    expect(error.issues[0]).toContain('cannot change the type of a transfer');
+    expect(error.code).toBe('validation');
+    expect((error as ValidationError).issues[0]).toContain('cannot change the type of a transfer');
   });
 
   it('rejects setting a category on a transfer', async () => {
@@ -525,8 +526,8 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
 
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
-    if (error.code !== 'validation') throw new Error(`expected validation, got ${error.code}`);
-    expect(error.issues[0]).toContain('cannot have a category');
+    expect(error.code).toBe('validation');
+    expect((error as ValidationError).issues[0]).toContain('cannot have a category');
   });
 
   it('allows a non-category, non-type update on a transfer (e.g. amount), preserving its type', async () => {
