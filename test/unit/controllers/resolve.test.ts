@@ -96,8 +96,14 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
     expect(tags).toEqual(['work']);
   });
 
-  it('always returns a Persistable, even for an empty name list — a set-replace to "no tags"', async () => {
-    const deps = tagsDeps([{ id: 'tag-work', name: 'work' }]);
+  it('an explicit empty name list clears tags without reading the tag catalog', async () => {
+    const deps = {
+      tags: {
+        list: () => {
+          throw new Error('must not read the tag catalog when tagNames is already empty');
+        },
+      },
+    } as unknown as Deps;
 
     const { persistable, tags } = await resolveTagLinks(deps, 'idem-1', []);
 
@@ -107,5 +113,17 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
       model: { idempotencyKey: 'idem-1', tagIds: [] },
     });
     expect(tags).toEqual([]);
+  });
+
+  it('returns null and reads nothing when tagNames is omitted — leave tags alone', async () => {
+    const deps = {
+      tags: {
+        list: () => {
+          throw new Error('must not read the tag catalog when tagNames is omitted');
+        },
+      },
+    } as unknown as Deps;
+
+    expect(await resolveTagLinks(deps, 'idem-1', undefined)).toBeNull();
   });
 });

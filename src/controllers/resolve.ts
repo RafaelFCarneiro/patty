@@ -93,6 +93,7 @@ export const resolveTagLinks = async (
   tagNames: readonly string[] | undefined,
 ): Promise<TagLinksResolution | null> => {
   if (R.isNullish(tagNames)) return null;
+  if (R.isEmpty(tagNames)) return { persistable: tagSetPersistable(idempotencyKey, []), tags: [] };
   const allTags = await deps.tags.list();
   return {
     persistable: tagSetPersistable(idempotencyKey, resolveTagIds(tagNames, allTags)),
