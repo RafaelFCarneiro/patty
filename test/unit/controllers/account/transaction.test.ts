@@ -13,6 +13,7 @@ import { CurrencyCode } from '../../../../src/models/money.js';
 import type { FlowOutcome, Persistable, PersistOutcome } from '../../../../src/models/persistable.js';
 import { PersistOp } from '../../../../src/models/persistable.js';
 import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from '../../../../src/models/transactionTag.js';
 import { Locale } from '../../../../src/models/locale.js';
 
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
@@ -26,7 +27,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   merchants: { matchCandidates: async () => [] } as unknown as Deps['merchants'],
   recurring: {} as Deps['recurring'],
   settings: {} as Deps['settings'],
-  tags: {} as Deps['tags'],
+  tags: { list: async () => [] } as unknown as Deps['tags'],
   transactions: {} as unknown as Deps['transactions'],
   clock: () => new Date('2026-06-01'),
   newId: () => 'test-id',
@@ -324,6 +325,57 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
   });
 });
 
+describe('addAccountExpense — tag-set resolution (ADR-023 step 2)', () => {
+  it('resolves given tag names to ids against deps.tags.list(), dropping unmatched names', async () => {
+    const deps = makeDeps({
+      tags: {
+        list: async () => [
+          { id: 'tag-work', name: 'work' },
+          { id: 'tag-travel', name: 'travel' },
+        ],
+      } as unknown as Deps['tags'],
+    });
+
+    const result = await addAccountExpense(
+      deps,
+      {
+        description: 'Cash lunch',
+        amount: 20,
+        idempotencyKey: 'tags-resolve',
+        tags: ['work', 'does-not-exist'],
+      },
+      TransactionSource.enum.mcp,
+    );
+
+    const outcome = result._unsafeUnwrap();
+    const tagSet = outcome.persist.find((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG);
+    expect(tagSet).toEqual({
+      op: PersistOp.enum.insert,
+      entity: TRANSACTION_TAG_ENTITY_TAG,
+      model: { idempotencyKey: 'tags-resolve', tagIds: ['tag-work'] },
+    });
+  });
+
+  it('omitting input.tags emits no tag-set Persistable and never reads the tag catalog', async () => {
+    const deps = makeDeps({
+      tags: {
+        list: () => {
+          throw new Error('must not read the tag catalog when input.tags is omitted');
+        },
+      } as unknown as Deps['tags'],
+    });
+
+    const result = await addAccountExpense(
+      deps,
+      { description: 'Cash lunch', amount: 20, idempotencyKey: 'no-tags-given' },
+      TransactionSource.enum.mcp,
+    );
+
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist.some((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG)).toBe(false);
+  });
+});
+
 const baseTx: RawTransactionView = {
   id: 'tx-1',
   description: 'Original',
@@ -385,6 +437,7 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
+    // input.tags omitted — no tag-set Persistable (ADR-023 step 2 leaves untouched tags alone).
     expect(outcome.persist).toHaveLength(1);
     const persisted = outcome.persist[0] as { op: string; model: { id: string; description: string; version: number } };
     expect(persisted.op).toBe(PersistOp.enum.update);
@@ -485,6 +538,63 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
       { op: PersistOp.enum.delete, entity: 'transaction', id: 'tx-1', version: baseTx.version },
     ]);
     expect(outcome.response).toMatchObject({ deleted: true });
+  });
+});
+
+describe('updateAccountTransaction — tag-set resolution (ADR-023 step 2)', () => {
+  it('omitting input.tags emits no tag-set Persistable — existing tags are left untouched', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => ({ ...baseTx, tags: ['work'] }) } as unknown as Deps['transactions'],
+      tags: {
+        list: () => {
+          throw new Error('must not read the tag catalog when input.tags is omitted');
+        },
+      } as unknown as Deps['tags'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', description: 'Updated' });
+
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist.some((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG)).toBe(false);
+  });
+
+  it('replaces the tag set with input.tags when given, ignoring the existing set entirely', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => ({ ...baseTx, tags: ['work'] }) } as unknown as Deps['transactions'],
+      tags: {
+        list: async () => [
+          { id: 'tag-work', name: 'work' },
+          { id: 'tag-travel', name: 'travel' },
+        ],
+      } as unknown as Deps['tags'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', tags: ['travel'] });
+
+    const outcome = result._unsafeUnwrap();
+    const tagSet = outcome.persist.find((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG);
+    expect(tagSet).toEqual({
+      op: PersistOp.enum.insert,
+      entity: TRANSACTION_TAG_ENTITY_TAG,
+      model: { idempotencyKey: 'existing-key', tagIds: ['tag-travel'] },
+    });
+  });
+
+  it('an explicit empty tags array clears the set, distinct from omitting it', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => ({ ...baseTx, tags: ['work'] }) } as unknown as Deps['transactions'],
+      tags: { list: async () => [{ id: 'tag-work', name: 'work' }] } as unknown as Deps['tags'],
+    });
+
+    const result = await updateAccountTransaction(deps, { id: 'tx-1', tags: [] });
+
+    const outcome = result._unsafeUnwrap();
+    const tagSet = outcome.persist.find((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG);
+    expect(tagSet).toEqual({
+      op: PersistOp.enum.insert,
+      entity: TRANSACTION_TAG_ENTITY_TAG,
+      model: { idempotencyKey: 'existing-key', tagIds: [] },
+    });
   });
 });
 

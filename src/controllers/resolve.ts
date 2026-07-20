@@ -4,10 +4,12 @@ import type { AppError } from '../common/errors.js';
 import { okOr } from '../common/result.js';
 import { buildSynonyms, resolveAndSort } from '../logic/category.js';
 import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js';
+import { resolveTagIds, resolveTagNames, tagSetPersistable } from '../logic/tag.js';
 import type { Account } from '../models/account.js';
 import type { Category, SubCategory } from '../models/category.js';
 import type { CreditCard } from '../models/creditCard.js';
 import { ambiguous, notFound } from '../models/error.js';
+import type { Persistable } from '../models/persistable.js';
 import type { TransactionView } from '../models/transaction.js';
 import type { Deps } from './deps.js';
 
@@ -78,3 +80,23 @@ export const resolveLegAccounts = (
       ),
     ),
   );
+
+export type TagLinksResolution = { persistable: Persistable; tags: string[] };
+
+// `undefined` (the caller's `input.tags` omitted) means "leave tags alone" — returns null, no
+// Persistable, no deps.tags.list() read: a create/update that never mentions tags shouldn't pay
+// for one. Never fails otherwise — an unmatched name is dropped, not an error — so this is a
+// plain Promise rather than a ResultAsync, unlike this module's other resolvers.
+export const resolveTagLinks = async (
+  deps: Deps,
+  idempotencyKey: string,
+  tagNames: readonly string[] | undefined,
+): Promise<TagLinksResolution | null> => {
+  if (R.isNullish(tagNames)) return null;
+  if (R.isEmpty(tagNames)) return { persistable: tagSetPersistable(idempotencyKey, []), tags: [] };
+  const allTags = await deps.tags.list();
+  return {
+    persistable: tagSetPersistable(idempotencyKey, resolveTagIds(tagNames, allTags)),
+    tags: resolveTagNames(tagNames, allTags),
+  };
+};

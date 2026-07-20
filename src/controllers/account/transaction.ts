@@ -27,7 +27,7 @@ import {
   type ImportAccountStatementItem,
   type UpdateAccountTransaction,
 } from '../../models/account.js';
-import { type FlowOutcome, type Persistable } from '../../models/persistable.js';
+import { type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import {
   ClassificationMethod,
   DELETE_TRANSACTION_CONFIRM_HINT,
@@ -43,7 +43,7 @@ import {
   type TransactionView,
 } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
-import { resolveAccountRef, resolveLegAccounts } from '../resolve.js';
+import { resolveAccountRef, resolveLegAccounts, resolveTagLinks } from '../resolve.js';
 import type { StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
@@ -111,7 +111,6 @@ const planAccountMovement = (
         subCategoryId,
         merchantKey,
       },
-      tagNames: input.tags ?? [],
     };
 
     return ok({ entity, classification });
@@ -131,11 +130,15 @@ const addAccountMovement = (
     const { entity, classification } = yield* planAccountMovement(deps, input, type, source);
 
     const locale = await deps.locale();
-    const persist = withMerchant(
-      [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })],
-      entity.refs.merchantKey,
-    );
-    const response = buildUpsertResult(classification, locale);
+    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
+    const persist = [
+      ...withMerchant([persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })], entity.refs.merchantKey),
+      ...(tagLinks ? [tagLinks.persistable] : []),
+    ];
+    const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
+      const result = buildUpsertResult(outcomes, classification, locale);
+      return tagLinks ? { ...result, transaction: { ...result.transaction, tags: tagLinks.tags } } : result;
+    };
     return ok({ persist, response });
   });
 
@@ -224,16 +227,22 @@ export const updateAccountTransaction = (
         subCategoryId,
         merchantKey: existing.merchant,
       },
-      tagNames: input.tags ?? existing.tags,
     };
 
     const locale = await deps.locale();
     const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
-    const persist: Persistable[] = withMerchantLearning(
-      [persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } })],
-      merchantCorrection,
-    );
-    const response = buildTransactionView(locale);
+    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
+    const persist: Persistable[] = [
+      ...withMerchantLearning(
+        [persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } })],
+        merchantCorrection,
+      ),
+      ...(tagLinks ? [tagLinks.persistable] : []),
+    ];
+    const response = (outcomes: PersistOutcome[]): TransactionView => {
+      const result = buildTransactionView(outcomes, locale);
+      return tagLinks ? { ...result, tags: tagLinks.tags } : result;
+    };
     return ok({ persist, response });
   });
 

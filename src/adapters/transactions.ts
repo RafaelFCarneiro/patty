@@ -94,7 +94,7 @@ export const modelToDb = (entity: Transaction): { props: TransactionDbProps; ref
 /** The row shape `transactionApplier` (`diplomat/db/repos/transactions.ts`) writes — `modelToDb`'s
  *  flat props/refs merged onto the actual `transactions` table column names (drizzle's
  *  `fromAccountId`/`creditCardId`/`subcategoryId`, not the entity's own `refs.accountId`/`cardId`/
- *  `subCategoryId`), plus `version` and the full desired `tagNames` set (ADR-021). */
+ *  `subCategoryId`), plus `version` (ADR-021). */
 export type TransactionRowEntity = TransactionDbProps & {
   fromAccountId: string | null;
   toAccountId: string | null;
@@ -104,12 +104,11 @@ export type TransactionRowEntity = TransactionDbProps & {
   subcategoryId: string | null;
   merchantKey: string | null;
   version: number;
-  tagNames: string[];
 };
 
 /** entity→row for the versioned unit of work (ADR-021) — the only transaction write path that
- *  needs `version`/`tagNames` on the wire-db row. Reuses `modelToDb` for the shared node
- *  properties/edge refs, then renames the refs onto their actual drizzle column names. */
+ *  needs `version` on the wire-db row. Reuses `modelToDb` for the shared node properties/edge
+ *  refs, then renames the refs onto their actual drizzle column names. */
 export const entityToDb = (entity: TransactionEntity & { version: number }): TransactionRowEntity => {
   const { props, refs } = modelToDb(entity);
   return {
@@ -122,7 +121,6 @@ export const entityToDb = (entity: TransactionEntity & { version: number }): Tra
     subcategoryId: refs.subCategoryId,
     merchantKey: refs.merchantKey,
     version: entity.version,
-    tagNames: entity.tagNames,
   };
 };
 

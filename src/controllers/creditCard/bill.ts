@@ -109,7 +109,6 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
       idempotencyKey: `billpay-${rawBill.id}`,
       classification: { method: ClassificationMethod.enum.none, confidence: 0 },
       refs: { accountId: payer.id, toAccountId: card.accountId, billId: rawBill.id },
-      tagNames: [],
     };
 
     // Transfer must be inserted before the bill update that points paymentTransactionId at its id.
