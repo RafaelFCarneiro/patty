@@ -206,8 +206,8 @@ describe('addLocalizedLabels', () => {
       subCategoryNames: { pt: 'Supermercado' },
     };
     const labeled = addLocalizedLabels(tx, Locale.enum.pt);
-    expect((labeled as Record<string, unknown>).categoryNames).toBeUndefined();
-    expect((labeled as Record<string, unknown>).subCategoryNames).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(labeled, 'categoryNames')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(labeled, 'subCategoryNames')).toBe(false);
   });
 
   it('leaves categoryName undefined when no category assigned', () => {
@@ -235,7 +235,7 @@ describe('addLocalizedLabels', () => {
     const mapper = addLocalizedLabels(Locale.enum.pt);
     const labeled = mapper(tx);
     expect(labeled.categoryName).toBe('Alimentação');
-    expect((labeled as Record<string, unknown>).categoryNames).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(labeled, 'categoryNames')).toBe(false);
   });
 });
 
