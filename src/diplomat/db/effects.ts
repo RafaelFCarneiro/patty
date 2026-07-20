@@ -19,8 +19,8 @@ export const MAX_RUN_EFFECTS_ATTEMPTS = 3;
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 /** An applier's own outcome, before `applyPersistable` stamps its `Persistable`'s entity tag onto
- *  it (ADR-023) — an applier never states its own tag, since the same applier can be registered
- *  under whatever tag the composition root chooses. */
+ *  it — an applier never states its own tag, since the same applier can be registered under
+ *  whatever tag the composition root chooses. */
 type ApplierOutcome = Omit<PersistOutcome, 'entity'>;
 
 /**
@@ -98,8 +98,6 @@ const resolveApplier = (registry: ApplierRegistry, entity: string): EntityApplie
   return applier;
 };
 
-/** Applies one `Persistable` and stamps its own entity tag onto the returned outcome (ADR-023) —
- *  the one place that association is made, so no applier needs to know its own tag to report it. */
 const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistable): Promise<PersistOutcome> => {
   const applier = resolveApplier(registry, p.entity);
   const outcome = await (async (): Promise<ApplierOutcome> => {

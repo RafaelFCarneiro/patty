@@ -19,15 +19,12 @@ export const normalizeMerchant = (description: string): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
-/** What a single user correction strengthens a merchant→category edge by (ADR-023 decision 2). */
 export const MERCHANT_LEARNING_WEIGHT_DELTA = 1;
 
 /** Resolves the merchant-learning edge worth writing for a category update — or `null` when
  *  there's nothing to learn from: no category was actually resolved, it matches what the
  *  transaction already had, or the transaction has no classified merchant at all. Shared by
- *  `updateAccountTransaction` and `updateCardTransaction` — decided once, not duplicated.
- *  `weightDelta`/`origin` are stated here, in the core, rather than hardcoded by the applier
- *  (ADR-023 decision 2) — today's values, `1` and `history`. */
+ *  `updateAccountTransaction` and `updateCardTransaction` — decided once, not duplicated. */
 export const resolveMerchantCorrection = (
   existing: { merchant?: string; categoryId?: string },
   newCategoryId: string | null | undefined,
@@ -41,17 +38,13 @@ export const resolveMerchantCorrection = (
   };
 };
 
-/** Prepends the merchant `Persistable` a transaction's own `merchantKey` implies (ADR-023 rule
- *  5) — `transactions.merchant_key` FKs `merchants.key`, so the merchant write must precede the
- *  transaction write in the batch — or returns `persist` unchanged when the entity carries no
- *  merchant key. Response resolution is by entity tag (`logic/persistence.ts`'s `outcomeFor`),
- *  never by position, so this ordering exists only to satisfy the FK. */
+/** Prepends the merchant `Persistable` a transaction's own `merchantKey` implies —
+ *  `transactions.merchant_key` FKs `merchants.key`, so the write order matters. */
 export const withMerchant = (persist: Persistable[], merchantKey: string | undefined): Persistable[] =>
   merchantKey ? [insert({ entity: MERCHANT_ENTITY_TAG, model: { key: merchantKey } }), ...persist] : persist;
 
-/** Appends the merchant + merchant-learning-edge `Persistable`s a category correction implies
- *  (ADR-023 rule 5) — the merchant precedes the edge (`merchant_category.merchant_key` FKs
- *  `merchants.key`) — or returns `persist` unchanged when there's nothing to learn. */
+/** Appends the merchant + learning-edge `Persistable`s a category correction implies, merchant
+ *  first — `merchant_category.merchant_key` also FKs `merchants.key`. */
 export const withMerchantLearning = (persist: Persistable[], correction: MerchantCategoryEdge | null): Persistable[] =>
   correction
     ? [

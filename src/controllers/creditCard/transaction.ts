@@ -176,10 +176,7 @@ export const addCardPurchase = (
     const { entity, classification, billPeriod, existingBill, cardId } = yield* planCardPurchase(deps, input, source);
     const { billId, billPersistable } = resolveBillWrite(deps.newId, cardId, billPeriod, existingBill);
 
-    // Bill leads, transaction trails (its bill_id FK must resolve within the same batch); a
-    // merchant Persistable (rule 5) is ordered before the transaction for the same reason
-    // (transactions.merchant_key FKs merchants.key) — response resolves the transaction's own
-    // outcome by entity tag, so neither ordering affects it.
+    // Bill leads, transaction trails — its bill_id FK must resolve within the same batch.
     const persist: Persistable[] = [
       billPersistable,
       ...withMerchant(
@@ -253,11 +250,9 @@ const resolveBillReassignment = (
   });
 
 /** Update a card transaction (ADR-020): rejects the wrong tool and the bill-payment transfer
- *  itself, settles any bill reassignment, and merges the remaining patch onto `existing`. Bill and
- *  merchant-learning writes precede the transaction `Persistable` for FK reasons; the response
- *  resolves the transaction's own outcome by entity tag regardless. Never reasons about transfer
- *  mutability — the only transfer this aggregate sees is blocked outright above, by bill-process
- *  policy. */
+ *  itself, settles any bill reassignment, and merges the remaining patch onto `existing`. Never
+ *  reasons about transfer mutability — the only transfer this aggregate sees is blocked outright
+ *  above, by bill-process policy. */
 export const updateCardTransaction = (
   deps: Deps,
   input: UpdateCardTransaction,

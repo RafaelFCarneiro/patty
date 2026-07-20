@@ -36,8 +36,7 @@ export const merchantsRepo = (db: Db): MerchantsRepo => ({
 });
 
 /** Hand-written rather than `versionedTableApplier` because `merchants` keys on `key` with no
- *  `version` (ADR-023 decision 1) — like `dashboards`, but simpler: only ever inserted,
- *  idempotently; `update`/`delete` are structurally unreachable for this entity. */
+ *  `version` — like `dashboards`, but simpler: only ever inserted, idempotently. */
 export const merchantApplier: EntityApplier = {
   insert: async (tx, model) => {
     const { key } = model as Merchant;
@@ -52,14 +51,9 @@ export const merchantApplier: EntityApplier = {
   },
 };
 
-/** Always an `insert` (no `id`/`version` — see `models/merchant.ts`) — `update`/`delete` are
- *  structurally unreachable for this entity. Single-table (ADR-023): applies exactly the
- *  `weightDelta`/`origin` the core handed it, and no longer creates the referenced `merchants`
- *  row itself — the flow's own `withMerchantLearning` (`logic/merchant.ts`) orders a
- *  `MERCHANT_ENTITY_TAG` insert ahead of this one in the batch. `origin` is set only on insert,
- *  never on the conflict path — deliberate, not implied by an omitted column (ADR-023 decision
- *  2): an edge first learned as `rule` stays `rule` no matter how many later corrections
- *  reinforce it. */
+/** Always an `insert` (no `id`/`version`) — `update`/`delete` are structurally unreachable. The
+ *  `set` below deliberately omits `origin`: it must stay insert-only, or an edge first learned as
+ *  `rule` would flip to `history` the next time a correction reinforces it. */
 export const merchantCategoryApplier: EntityApplier = {
   insert: async (tx, model) => {
     const { merchantKey, categoryId, weightDelta, origin } = model as MerchantCategoryEdge;

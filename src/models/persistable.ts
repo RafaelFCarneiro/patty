@@ -35,10 +35,9 @@ export type Persistable<Tag extends string = string, Model = unknown> =
  * is the entity's already-decoded model reflecting the existing row, so a flow whose response
  * depends on it doesn't have to re-read the database. `update`/`delete` are always
  * `applied: true` here — a stale `version` already fails as a `conflict` before any outcome is
- * reported (rule 4). `entity` is the tag of the `Persistable` this outcome came from (ADR-023) —
- * a flow's own `response` looks up its outcome by tag (`logic/persistence.ts`'s `outcomeFor`),
- * never by position, so composing another entity's `Persistable` into the same batch (rule 5)
- * never shifts which outcome a flow resolves.
+ * reported (rule 4). `entity` is the tag of the `Persistable` this outcome came from — a flow's
+ * own `response` looks up its outcome by tag (`logic/persistence.ts`'s `outcomeFor`), never by
+ * position.
  */
 export type PersistOutcome = { entity: string; applied: boolean; read?: unknown };
 

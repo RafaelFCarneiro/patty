@@ -131,9 +131,6 @@ const addAccountMovement = (
     const { entity, classification } = yield* planAccountMovement(deps, input, type, source);
 
     const locale = await deps.locale();
-    // A merchant Persistable (rule 5) is ordered before the transaction insert when the entity
-    // carries a merchant key — transactions.merchant_key FKs merchants.key; response resolution
-    // is by entity tag (logic/persistence.ts's outcomeFor), so this ordering exists only for the FK.
     const persist = withMerchant(
       [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })],
       entity.refs.merchantKey,
@@ -184,11 +181,9 @@ export const importAccountStatement = (
  * rejected with a redirect to `update_card_transaction` — then enforces transfer mutability, and
  * merges the result onto `existing` to build the full desired end-state entity the shell applies
  * as a version-guarded update. Merchant learning (a correction strengthens the merchant→category
- * association) is composed into the SAME `persist` batch (rule 5) via `withMerchantLearning`
- * (`logic/merchant.ts`) — a merchant insert and a `MERCHANT_CATEGORY_ENTITY_TAG` insert, both
- * appended after the transaction update — not a side effect performed from `response` — so it
- * applies atomically with the transaction update: it commits only when the update does, and never
- * fires on a version-conflict attempt that gets rolled back and retried.
+ * association) is composed into the SAME `persist` batch via `withMerchantLearning` — not a side
+ * effect performed from `response` — so it commits only when the update does, and never fires on
+ * a version-conflict attempt that gets rolled back and retried.
  */
 export const updateAccountTransaction = (
   deps: Deps,

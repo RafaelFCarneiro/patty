@@ -33,12 +33,10 @@ export const remove = <Tag extends string>(fields: { entity: Tag; id: string; ve
 
 /** Extracts a flow's own outcome — the one whose `entity` matches `tag` — from a flow's
  *  idempotency-aware `response` function (`docs/functional-core-imperative-shell.md` rule 6).
- *  Addressed by entity tag (ADR-023), not batch position: a flow's own `Persistable` can sit
- *  anywhere in the batch once another entity's write (e.g. a merchant, composed in per rule 5) is
- *  ordered around it for FK reasons, and this still finds the right one. Throws rather than
- *  silently defaulting: no outcome for `tag` here would mean the flow's own `persist` batch and
- *  its `response` function have drifted out of sync — an internal invariant violation, not a
- *  domain outcome. */
+ *  Addressed by entity tag, not batch position, so composing another entity's write around it
+ *  (e.g. a merchant, ordered for its own FK) never changes which outcome resolves. Throws rather
+ *  than silently defaulting: no outcome for `tag` would mean `persist` and `response` drifted out
+ *  of sync — an internal invariant violation, not a domain outcome. */
 export const outcomeFor = (tag: string, outcomes: PersistOutcome[]): PersistOutcome => {
   const outcome = R.find(outcomes, (o) => o.entity === tag);
   if (!outcome) throw new Error(`outcomeFor: no persist outcome found for entity "${tag}"`);

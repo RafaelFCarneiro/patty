@@ -226,12 +226,11 @@ export function viewFromOutcome(...args: readonly unknown[]) {
   return purry(_viewFromOutcome, args);
 }
 
-/** `viewFromOutcome`, resolved against the transaction's own outcome by entity tag (ADR-023) — a
- *  flow like `update_account_transaction`/`update_card_transaction` has no `created` flag to
- *  derive (an update either lands or the whole unit of work fails as a `conflict` before any
- *  outcome is ever reported — rule 4 — so there's no duplicate-replay case to distinguish the way
- *  there is for an insert), regardless of where the transaction's `Persistable` sits in a batch
- *  composed with a merchant-learning edge (rule 5). */
+/** `viewFromOutcome`, resolved against the transaction's own outcome by entity tag — a flow like
+ *  `update_account_transaction`/`update_card_transaction` has no `created` flag to derive (an
+ *  update either lands or the whole unit of work fails as a `conflict` before any outcome is ever
+ *  reported — rule 4 — so there's no duplicate-replay case to distinguish the way there is for an
+ *  insert). */
 const _buildTransactionView = (outcomes: PersistOutcome[], locale: Locale): TransactionView =>
   viewFromOutcome(outcomeFor(TRANSACTION_ENTITY_TAG, outcomes), locale);
 

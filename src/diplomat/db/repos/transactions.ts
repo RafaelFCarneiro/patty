@@ -231,9 +231,8 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
  * persistence structure, not business logic — no bill/paid reasoning here. `model` arrives
  * already row-shaped (adaptation happens upstream, before `runEffects` ever sees the batch), so
  * this applier only ever writes the row it's handed, never adapts one. It no longer upserts the
- * referenced `merchants` row itself (ADR-023) — `entity.merchantKey`'s FK is satisfied by a
- * `MERCHANT_ENTITY_TAG` `Persistable` the flow orders ahead of this one in the batch
- * (`logic/merchant.ts`'s `withMerchant`), never assumed to already exist.
+ * referenced `merchants` row itself — that FK is satisfied by a separate `Persistable` the flow
+ * orders ahead of this one (`logic/merchant.ts`'s `withMerchant`).
  *
  * Both `insert` and `update` read the row back after writing so a flow's idempotency-aware
  * `response` can reflect the actually-persisted, display-joined view (account/category names, the
