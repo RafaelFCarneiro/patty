@@ -4,6 +4,7 @@ import type { Deps } from '../../../src/controllers/deps.js';
 import { AccountType, type Account } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp } from '../../../src/models/persistable.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transactionTag.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({
   id: 'acc-1',
@@ -80,7 +81,7 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
 
     expect(persistable).toEqual({
       op: PersistOp.enum.insert,
-      entity: 'transactionTag',
+      entity: TRANSACTION_TAG_ENTITY_TAG,
       model: { idempotencyKey: 'idem-1', tagIds: ['tag-work'] },
     });
     expect(tags).toEqual(['work']);
@@ -102,7 +103,7 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
 
     expect(persistable).toEqual({
       op: PersistOp.enum.insert,
-      entity: 'transactionTag',
+      entity: TRANSACTION_TAG_ENTITY_TAG,
       model: { idempotencyKey: 'idem-1', tagIds: [] },
     });
     expect(tags).toEqual([]);

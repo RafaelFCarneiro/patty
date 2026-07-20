@@ -4,10 +4,13 @@ import type { Tag } from '../models/tag.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../models/transactionTag.js';
 import { insert } from './persistence.js';
 
+// `transaction_tags` keys on (transactionId, tagId) — a duplicate input name would otherwise
+// resolve to a duplicate id and violate that constraint on insert, so dedupe here.
 export const resolveTagIds = (names: readonly string[], allTags: readonly Tag[]): string[] => {
   const idByName = new Map(allTags.map((tag) => [tag.name, tag.id]));
   return R.pipe(
     names,
+    R.unique(),
     R.map((name) => idByName.get(name)),
     R.filter(R.isNonNullish),
   );
@@ -18,7 +21,7 @@ export const resolveTagIds = (names: readonly string[], allTags: readonly Tag[])
  *  in the same batch and so can't reflect it. */
 export const resolveTagNames = (names: readonly string[], allTags: readonly Tag[]): string[] => {
   const knownNames = new Set(allTags.map((tag) => tag.name));
-  return R.filter(names, (name) => knownNames.has(name));
+  return R.pipe(names, R.unique(), R.filter((name) => knownNames.has(name)));
 };
 
 export const tagSetPersistable = (idempotencyKey: string, tagIds: string[]): Persistable =>

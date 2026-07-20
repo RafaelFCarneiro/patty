@@ -29,6 +29,10 @@ describe('resolveTagIds — name→id resolution, leniency preserved by decision
   it('resolves to an empty list against an empty tag catalog', () => {
     expect(resolveTagIds(['work'], [])).toEqual([]);
   });
+
+  it('dedupes a repeated name to a single id — transaction_tags keys on (transactionId, tagId)', () => {
+    expect(resolveTagIds(['work', 'work'], allTags)).toEqual(['tag-work']);
+  });
 });
 
 describe('resolveTagNames — the matched-name projection a flow response shows directly', () => {
@@ -46,6 +50,10 @@ describe('resolveTagNames — the matched-name projection a flow response shows 
 
   it('resolves to an empty list for an empty name list', () => {
     expect(resolveTagNames([], allTags)).toEqual([]);
+  });
+
+  it('dedupes a repeated name, staying consistent with the deduped ids persisted', () => {
+    expect(resolveTagNames(['work', 'work'], allTags)).toEqual(['work']);
   });
 });
 

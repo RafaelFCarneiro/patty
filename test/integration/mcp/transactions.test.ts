@@ -784,6 +784,47 @@ describe('MCP integration > transactions', () => {
     }
   });
 
+  // A repeated name resolves to a repeated id, which would violate transaction_tags' composite
+  // (transaction_id, tag_id) primary key on insert if not deduped before the write.
+  it('add_account_expense with a duplicate tag name in the request does not error, and dedupes', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const account = `Duplicate Tag ${stamp}`;
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: account, type: 'checking', currency: 'BRL', initialBalance: 0 },
+      });
+
+      const tag = (await callTool(client, { name: 'create_tag', args: { name: `dup-tag-${stamp}` } })) as {
+        id?: string;
+      };
+      ensure(tag.id, 'Tag id missing');
+      createdTagIds.push(tag.id);
+
+      const created = (await callTool(client, {
+        name: 'add_account_expense',
+        args: {
+          description: `Duplicate tag tx ${stamp}`,
+          amount: 1,
+          account,
+          category: 'Other',
+          idempotencyKey: `dup-tag-${stamp}`,
+          tags: [`dup-tag-${stamp}`, `dup-tag-${stamp}`],
+        },
+      })) as { transaction?: { id?: string; tags?: string[] } };
+      const txId = created.transaction?.id;
+      ensure(txId, 'Transaction id missing');
+      createdTxIds.push(txId);
+
+      expect(created.transaction?.tags).toEqual([`dup-tag-${stamp}`]);
+    } finally {
+      await transport.close();
+    }
+  });
+
   // Regression guard: collect(DISTINCT tag.name) on an OPTIONAL MATCH returns []
   // (not [null]) for transactions with no TAGGED_WITH edges, because Cypher's
   // collect() skips nulls by design. This test confirms untagged transactions

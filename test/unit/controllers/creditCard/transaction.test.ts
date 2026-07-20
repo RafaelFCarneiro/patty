@@ -18,6 +18,7 @@ import {
   type RawTransactionView,
   type TransactionView,
 } from '../../../../src/models/transaction.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from '../../../../src/models/transactionTag.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({
   id: 'acc-checking',
@@ -110,7 +111,7 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
     expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });
     const txModel = (persist[1] as { model: { refs: { billId?: string } } }).model;
     expect(txModel.refs.billId).toBe(billModel.id);
-    expect(persist[2]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transactionTag' });
+    expect(persist[2]).toMatchObject({ op: PersistOp.enum.insert, entity: TRANSACTION_TAG_ENTITY_TAG });
   });
 
   it('on an existing open cycle, emits a version-guarded bill touch (not an insert)', async () => {
@@ -204,7 +205,7 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
     expect(persist[0]).toMatchObject({ op: PersistOp.enum.insert, entity: 'bill' });
     expect(persist[1]).toEqual({ op: PersistOp.enum.insert, entity: 'merchant', model: { key: 'uber' } });
     expect(persist[2]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });
-    expect(persist[3]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transactionTag' });
+    expect(persist[3]).toMatchObject({ op: PersistOp.enum.insert, entity: TRANSACTION_TAG_ENTITY_TAG });
   });
 
   it("response() resolves the transaction's own outcome by entity tag, regardless of position (ADR-023)", async () => {
@@ -473,7 +474,7 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
     const { persist } = result._unsafeUnwrap();
     expect(persist).toHaveLength(2);
     expect(persist[0]).toMatchObject({ op: PersistOp.enum.update, entity: 'transaction' });
-    expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transactionTag' });
+    expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: TRANSACTION_TAG_ENTITY_TAG });
   });
 
   it('reassigning to a different open target emits: target touch, current touch, transaction update', async () => {
@@ -507,7 +508,7 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
     expect(persist[2]).toMatchObject({ op: PersistOp.enum.update, entity: 'transaction' });
     const txModel = (persist[2] as { model: { refs: { billId?: string } } }).model;
     expect(txModel.refs.billId).toBe('bill-2');
-    expect(persist[3]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transactionTag' });
+    expect(persist[3]).toMatchObject({ op: PersistOp.enum.insert, entity: TRANSACTION_TAG_ENTITY_TAG });
   });
 
   it('reassigning onto a not-yet-existing target cycle emits a bill insert, not a touch', async () => {
@@ -642,7 +643,7 @@ describe('updateCardTransaction — merchant learning (ADR-021 rule 5)', () => {
       model: { merchantKey: 'uber', categoryId: 'cat-new', weightDelta: 1, origin: 'history' },
     });
     expect(persist[2]).toMatchObject({ op: PersistOp.enum.update, entity: 'transaction' });
-    expect(persist[3]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transactionTag' });
+    expect(persist[3]).toMatchObject({ op: PersistOp.enum.insert, entity: TRANSACTION_TAG_ENTITY_TAG });
   });
 
   it('does not append a merchant-learning Persistable when no category correction was given', async () => {
@@ -705,7 +706,7 @@ describe('updateCardTransaction — merchant learning (ADR-021 rule 5)', () => {
     expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: 'merchant' });
     expect(persist[2]).toMatchObject({ op: PersistOp.enum.insert, entity: 'merchantCategory' });
     expect(persist[3]).toMatchObject({ op: PersistOp.enum.update, entity: 'transaction' });
-    expect(persist[4]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transactionTag' });
+    expect(persist[4]).toMatchObject({ op: PersistOp.enum.insert, entity: TRANSACTION_TAG_ENTITY_TAG });
   });
 });
 

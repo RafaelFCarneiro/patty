@@ -13,6 +13,7 @@ import { CurrencyCode } from '../../../../src/models/money.js';
 import type { FlowOutcome, Persistable, PersistOutcome } from '../../../../src/models/persistable.js';
 import { PersistOp } from '../../../../src/models/persistable.js';
 import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from '../../../../src/models/transactionTag.js';
 import { Locale } from '../../../../src/models/locale.js';
 
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
@@ -246,7 +247,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
       expect.objectContaining({ op: PersistOp.enum.insert, entity: 'transaction' }),
       {
         op: PersistOp.enum.insert,
-        entity: 'transactionTag',
+        entity: TRANSACTION_TAG_ENTITY_TAG,
         model: { idempotencyKey: 'classify-merchant-persistable', tagIds: [] },
       },
     ]);
@@ -353,10 +354,10 @@ describe('addAccountExpense — tag-set resolution (ADR-023 step 2)', () => {
     );
 
     const outcome = result._unsafeUnwrap();
-    const tagSet = outcome.persist.find((p) => p.entity === 'transactionTag');
+    const tagSet = outcome.persist.find((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG);
     expect(tagSet).toEqual({
       op: PersistOp.enum.insert,
-      entity: 'transactionTag',
+      entity: TRANSACTION_TAG_ENTITY_TAG,
       model: { idempotencyKey: 'tags-resolve', tagIds: ['tag-work'] },
     });
   });
@@ -430,7 +431,7 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
     expect(persisted.model).toMatchObject({ id: 'tx-1', description: 'Updated', version: baseTx.version });
     expect(outcome.persist[1]).toEqual({
       op: PersistOp.enum.insert,
-      entity: 'transactionTag',
+      entity: TRANSACTION_TAG_ENTITY_TAG,
       model: { idempotencyKey: 'existing-key', tagIds: [] },
     });
   });
@@ -489,7 +490,7 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
     });
     expect(outcome.persist[3]).toEqual({
       op: PersistOp.enum.insert,
-      entity: 'transactionTag',
+      entity: TRANSACTION_TAG_ENTITY_TAG,
       model: { idempotencyKey: 'existing-key', tagIds: [] },
     });
     // response() is pure data-shaping — it must not itself perform any write.
@@ -548,10 +549,10 @@ describe('updateAccountTransaction — tag-set resolution (ADR-023 step 2)', () 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', description: 'Updated' });
 
     const outcome = result._unsafeUnwrap();
-    const tagSet = outcome.persist.find((p) => p.entity === 'transactionTag');
+    const tagSet = outcome.persist.find((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG);
     expect(tagSet).toEqual({
       op: PersistOp.enum.insert,
-      entity: 'transactionTag',
+      entity: TRANSACTION_TAG_ENTITY_TAG,
       model: { idempotencyKey: 'existing-key', tagIds: ['tag-work'] },
     });
   });
@@ -570,10 +571,10 @@ describe('updateAccountTransaction — tag-set resolution (ADR-023 step 2)', () 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', tags: ['travel'] });
 
     const outcome = result._unsafeUnwrap();
-    const tagSet = outcome.persist.find((p) => p.entity === 'transactionTag');
+    const tagSet = outcome.persist.find((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG);
     expect(tagSet).toEqual({
       op: PersistOp.enum.insert,
-      entity: 'transactionTag',
+      entity: TRANSACTION_TAG_ENTITY_TAG,
       model: { idempotencyKey: 'existing-key', tagIds: ['tag-travel'] },
     });
   });
@@ -587,10 +588,10 @@ describe('updateAccountTransaction — tag-set resolution (ADR-023 step 2)', () 
     const result = await updateAccountTransaction(deps, { id: 'tx-1', tags: [] });
 
     const outcome = result._unsafeUnwrap();
-    const tagSet = outcome.persist.find((p) => p.entity === 'transactionTag');
+    const tagSet = outcome.persist.find((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG);
     expect(tagSet).toEqual({
       op: PersistOp.enum.insert,
-      entity: 'transactionTag',
+      entity: TRANSACTION_TAG_ENTITY_TAG,
       model: { idempotencyKey: 'existing-key', tagIds: [] },
     });
   });
