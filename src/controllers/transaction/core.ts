@@ -116,7 +116,6 @@ export const confirmTransaction = (
         subCategoryId: existing.subCategoryId,
         merchantKey: existing.merchant,
       },
-      tagNames: existing.tags,
     };
 
     const persist: Persistable[] = [

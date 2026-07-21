@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, eq, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import * as transactionAdapters from '../../../adapters/transactions.js';
 import type { TransactionRowEntity } from '../../../adapters/transactions.js';
@@ -18,7 +18,7 @@ import { ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions
 import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
 import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
-import { tags, transactionTags, transactions } from '../schema.js';
+import { transactions } from '../schema.js';
 import { fullTxSelect } from '../transactionSelect.js';
 import type { EntityApplier, Tx } from '../effects.js';
 
@@ -42,21 +42,6 @@ const fetchTx = async (db: Executor, id: string): Promise<RawTransactionView | n
 const fetchTxByIdempotencyKey = async (db: Executor, idempotencyKey: string): Promise<RawTransactionView | null> => {
   const [row] = await db.all<Record<string, unknown>>(fullTxSelect(sql`t.idempotency_key = ${idempotencyKey}`));
   return row ? transactionAdapters.dbToModel(row) : null;
-};
-
-const attachTags = async (db: Executor, txId: string, tagNames: string[]): Promise<void> => {
-  if (tagNames.length === 0) return;
-  const matches = await db.select({ id: tags.id }).from(tags).where(inArray(tags.name, tagNames));
-  if (matches.length === 0) return;
-  await db
-    .insert(transactionTags)
-    .values(matches.map((tag) => ({ transactionId: txId, tagId: tag.id })))
-    .onConflictDoNothing({ target: [transactionTags.transactionId, transactionTags.tagId] });
-};
-
-const replaceTags = async (db: Executor, txId: string, tagNames: string[]): Promise<void> => {
-  await db.delete(transactionTags).where(eq(transactionTags.transactionId, txId));
-  await attachTags(db, txId, tagNames);
 };
 
 /** Tiebreaker (t.id) follows `dir` — one uniform direction across the composite key, which is
@@ -227,16 +212,18 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
 /**
  * The transaction entity's `EntityApplier` — hand-written rather than `versionedTableApplier`
  * because a transaction row has genuine extra mechanics: `insert` conflicts on `idempotency_key`
- * (not `id`), and both `insert`/`update` attach/replace the row's `transaction_tags`. Still
- * persistence structure, not business logic — no bill/paid reasoning here. `model` arrives
- * already row-shaped (adaptation happens upstream, before `runEffects` ever sees the batch), so
- * this applier only ever writes the row it's handed, never adapts one. It no longer upserts the
- * referenced `merchants` row itself — that FK is satisfied by a separate `Persistable` the flow
- * orders ahead of this one (`logic/merchant.ts`'s `withMerchant`).
+ * (not `id`), and both `insert`/`update` read the row back after writing. Still persistence
+ * structure, not business logic — no bill/paid reasoning here. `model` arrives already row-shaped
+ * (adaptation happens upstream, before `runEffects` ever sees the batch), so this applier only
+ * ever writes the row it's handed, never adapts one. It writes only the `transactions` table: it
+ * no longer upserts the referenced `merchants` row (that FK is satisfied by a separate
+ * `Persistable` the flow orders ahead of this one, `logic/merchant.ts`'s `withMerchant`), and it no
+ * longer touches `transaction_tags` (the tag set is its own `Persistable`, applied by
+ * `transactionTagApplier` — ADR-023 step 2).
  *
  * Both `insert` and `update` read the row back after writing so a flow's idempotency-aware
- * `response` can reflect the actually-persisted, display-joined view (account/category names, the
- * tag rows that actually matched by name) without a second read of its own.
+ * `response` can reflect the actually-persisted, display-joined view (account/category names)
+ * without a second read of its own.
  */
 export const transactionApplier: EntityApplier = {
   insert: async (tx, model) => {
@@ -270,7 +257,6 @@ export const transactionApplier: EntityApplier = {
       .onConflictDoNothing({ target: transactions.idempotencyKey });
 
     const applied = (result.rowsAffected ?? 0) > 0;
-    if (applied && entity.tagNames.length > 0) await attachTags(tx, entity.id, entity.tagNames);
 
     // Duplicate: this entity.id was never inserted — the existing row (by idempotency key) is
     // what's actually persisted, and what an idempotency-aware flow's response must reflect.
@@ -308,7 +294,6 @@ export const transactionApplier: EntityApplier = {
     const applied = (result.rowsAffected ?? 0) > 0;
     if (!applied) return { applied: false };
 
-    await replaceTags(tx, entity.id, entity.tagNames);
     const view = await fetchTx(tx, entity.id);
     return { applied: true, read: expectPresent(view, rowNotFoundAfterWrite('transactions', 'update')) };
   },

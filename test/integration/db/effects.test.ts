@@ -28,6 +28,7 @@ import { merchantApplier, merchantCategoryApplier } from '../../../src/diplomat/
 import { settingsApplier, settingsRepo } from '../../../src/diplomat/db/repos/settings.js';
 import { tagApplier } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
+import { transactionTagApplier } from '../../../src/diplomat/db/repos/transactionTags.js';
 import {
   accounts,
   bills,
@@ -69,6 +70,7 @@ import {
   TransactionType,
   type Transaction,
 } from '../../../src/models/transaction.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transactionTag.js';
 import type { TransactionRowEntity } from '../../../src/adapters/transactions.js';
 
 const TEST_KEY = 'e'.repeat(64);
@@ -598,42 +600,41 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
   });
 });
 
-describe('transactionApplier — custom mechanics beyond the id/version convention (ADR-021 phase 2a)', () => {
-  const transactionRegistry: ApplierRegistry = { [TRANSACTION_ENTITY_TAG]: transactionApplier };
+// Row-shaped input (as `adapters/transactions.ts`'s `entityToDb` produces it) — the applier
+// trusts it as-is, same reasoning as `newAccount` above. Module-scope: shared by every suite below.
+const newTransactionRow = (overrides: Partial<TransactionRowEntity> = {}): TransactionRowEntity => ({
+  id: randomUUID(),
+  description: 'Test transaction',
+  amount: 10,
+  type: TransactionType.enum.expense,
+  status: TransactionStatus.enum.effective,
+  date: '2026-06-01',
+  currency: CurrencyCode.enum.BRL,
+  source: TransactionSource.enum.mcp,
+  idempotencyKey: `idem-${randomUUID()}`,
+  classificationMethod: ClassificationMethod.enum.none,
+  confidence: 0,
+  rawInput: null,
+  note: null,
+  fromAccountId: null,
+  toAccountId: null,
+  creditCardId: null,
+  billId: null,
+  categoryId: null,
+  subcategoryId: null,
+  merchantKey: null,
+  version: 0,
+  ...overrides,
+});
 
-  // Row-shaped input (as `adapters/transactions.ts`'s `entityToDb` produces it) — the applier
-  // trusts it as-is, same reasoning as `newAccount` above.
-  const newTransactionRow = (overrides: Partial<TransactionRowEntity> = {}): TransactionRowEntity => ({
-    id: randomUUID(),
-    description: 'Test transaction',
-    amount: 10,
-    type: TransactionType.enum.expense,
-    status: TransactionStatus.enum.effective,
-    date: '2026-06-01',
-    currency: CurrencyCode.enum.BRL,
-    source: TransactionSource.enum.mcp,
-    idempotencyKey: `idem-${randomUUID()}`,
-    classificationMethod: ClassificationMethod.enum.none,
-    confidence: 0,
-    rawInput: null,
-    note: null,
-    fromAccountId: null,
-    toAccountId: null,
-    creditCardId: null,
-    billId: null,
-    categoryId: null,
-    subcategoryId: null,
-    merchantKey: null,
-    version: 0,
-    tagNames: [],
-    ...overrides,
+const insertRow = (model: TransactionRowEntity) => () =>
+  okAsync({
+    persist: [{ op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model }] as Persistable[],
+    response: (outcomes: PersistOutcome[]) => outcomes[0],
   });
 
-  const insertRow = (model: TransactionRowEntity) => () =>
-    okAsync({
-      persist: [{ op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model }] as Persistable[],
-      response: (outcomes: PersistOutcome[]) => outcomes[0],
-    });
+describe('transactionApplier — custom mechanics beyond the id/version convention (ADR-021 phase 2a)', () => {
+  const transactionRegistry: ApplierRegistry = { [TRANSACTION_ENTITY_TAG]: transactionApplier };
 
   it('insert reports applied:true and reads back the persisted, joined view for a brand-new transaction', async () => {
     const row = newTransactionRow();
@@ -704,29 +705,11 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
     expect(dbRow?.merchant_key).toBe(newMerchantKey);
   });
 
-  it('insert attaches only the tag names that already exist as rows, silently dropping the rest', async () => {
-    const existingTagId = randomUUID();
-    const existingTagName = `Tag ${existingTagId}`;
-    await db.insert(tags).values({ id: existingTagId, name: existingTagName, version: 0 });
-
-    const row = newTransactionRow({ tagNames: [existingTagName, 'does-not-exist'] });
+  it('update is version-guarded: bumps version on a matching version, never touching transaction_tags', async () => {
+    const row = newTransactionRow();
     await runEffects(db, transactionRegistry, insertRow(row));
 
-    const attached = await db.all<{ name: string }>(sql`
-      SELECT tg.name FROM transaction_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tt.transaction_id = ${row.id}
-    `);
-    expect(attached.map((r) => r.name)).toEqual([existingTagName]);
-  });
-
-  it('update is version-guarded: replaces tags and bumps version on a matching version', async () => {
-    const tagId = randomUUID();
-    const tagName = `Tag ${tagId}`;
-    await db.insert(tags).values({ id: tagId, name: tagName, version: 0 });
-
-    const row = newTransactionRow({ tagNames: [tagName] });
-    await runEffects(db, transactionRegistry, insertRow(row));
-
-    const updated: TransactionRowEntity = { ...row, description: 'Renamed', tagNames: [] };
+    const updated: TransactionRowEntity = { ...row, description: 'Renamed' };
     const result = await runEffects(db, transactionRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: updated }] as Persistable[],
@@ -739,9 +722,6 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
       sql`SELECT description, version FROM transactions WHERE id = ${row.id}`,
     );
     expect(dbRow).toEqual({ description: 'Renamed', version: row.version + 1 });
-
-    const remainingTags = await db.all(sql`SELECT * FROM transaction_tags WHERE transaction_id = ${row.id}`);
-    expect(remainingTags).toHaveLength(0);
   });
 
   it('update rolls back and surfaces the generic conflict error on a stale version', async () => {
@@ -775,6 +755,180 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
 
     expect(result.isOk()).toBe(true);
     expect(await db.all(sql`SELECT id FROM transactions WHERE id = ${row.id}`)).toHaveLength(0);
+  });
+});
+
+describe('transactionTagApplier — set-replace mechanics, resolved by idempotencyKey (ADR-023 step 2)', () => {
+  const tagLinksRegistry: ApplierRegistry = {
+    [TRANSACTION_ENTITY_TAG]: transactionApplier,
+    [TRANSACTION_TAG_ENTITY_TAG]: transactionTagApplier,
+  };
+
+  const seedTag = async (name: string): Promise<string> => {
+    const id = randomUUID();
+    await db.insert(tags).values({ id, name, version: 0 });
+    return id;
+  };
+
+  const readLinkedTagNames = async (transactionId: string): Promise<string[]> => {
+    const rows = await db.all<{ name: string }>(sql`
+      SELECT tg.name FROM transaction_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tt.transaction_id = ${transactionId}
+    `);
+    return rows.map((r) => r.name);
+  };
+
+  const insertTagSet = (idempotencyKey: string, tagIds: string[]) => () =>
+    okAsync({
+      persist: [
+        { op: PersistOp.enum.insert, entity: TRANSACTION_TAG_ENTITY_TAG, model: { idempotencyKey, tagIds } },
+      ] as Persistable[],
+      response: null,
+    });
+
+  it('attaches the given tag ids for a transaction, resolving the row by its idempotencyKey', async () => {
+    const row = newTransactionRow();
+    await runEffects(db, tagLinksRegistry, insertRow(row));
+    const tagId = await seedTag(`Tag ${randomUUID()}`);
+
+    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, [tagId]));
+
+    expect(result.isOk()).toBe(true);
+    expect(await readLinkedTagNames(row.id)).toHaveLength(1);
+  });
+
+  it('is a set-replace: re-applying with a different set removes the old links, not just adds new ones', async () => {
+    const row = newTransactionRow();
+    await runEffects(db, tagLinksRegistry, insertRow(row));
+    const firstTagId = await seedTag(`Tag ${randomUUID()}`);
+    const secondTagName = `Tag ${randomUUID()}`;
+    const secondTagId = await seedTag(secondTagName);
+
+    await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, [firstTagId]));
+    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, [secondTagId]));
+
+    expect(result.isOk()).toBe(true);
+    expect(await readLinkedTagNames(row.id)).toEqual([secondTagName]);
+  });
+
+  it('an empty tag id set clears every existing link', async () => {
+    const row = newTransactionRow();
+    await runEffects(db, tagLinksRegistry, insertRow(row));
+    const tagId = await seedTag(`Tag ${randomUUID()}`);
+    await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, [tagId]));
+
+    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, []));
+
+    expect(result.isOk()).toBe(true);
+    expect(await readLinkedTagNames(row.id)).toEqual([]);
+  });
+
+  it('throws a clear error when no transaction row exists for the given idempotencyKey', async () => {
+    await expect(runEffects(db, tagLinksRegistry, insertTagSet(`idem-${randomUUID()}`, []))).rejects.toThrow(
+      'no row found for idempotencyKey',
+    );
+  });
+
+  it('update is structurally unreachable — every write to this entity is an insert (set-replace)', async () => {
+    await expect(
+      runEffects(db, tagLinksRegistry, () =>
+        okAsync({
+          persist: [
+            {
+              op: PersistOp.enum.update,
+              entity: TRANSACTION_TAG_ENTITY_TAG,
+              model: { idempotencyKey: 'unused', tagIds: [], version: 0 },
+            },
+          ] as Persistable[],
+          response: null,
+        }),
+      ),
+    ).rejects.toThrow('transactionTagApplier: update is unsupported');
+  });
+
+  it('delete is structurally unreachable — links are removed via the transaction cascade', async () => {
+    await expect(
+      runEffects(db, tagLinksRegistry, () =>
+        okAsync({
+          persist: [
+            { op: PersistOp.enum.delete, entity: TRANSACTION_TAG_ENTITY_TAG, id: 'unused', version: 0 },
+          ] as Persistable[],
+          response: null,
+        }),
+      ),
+    ).rejects.toThrow('transactionTagApplier: delete is unsupported');
+  });
+
+  it('deleting the transaction still cascades its links, once the applier no longer manages them itself', async () => {
+    const row = newTransactionRow();
+    await runEffects(db, tagLinksRegistry, insertRow(row));
+    const tagId = await seedTag(`Tag ${randomUUID()}`);
+    await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, [tagId]));
+    expect(await readLinkedTagNames(row.id)).toHaveLength(1);
+
+    const result = await runEffects(db, tagLinksRegistry, () =>
+      okAsync({
+        persist: [
+          { op: PersistOp.enum.delete, entity: TRANSACTION_ENTITY_TAG, id: row.id, version: row.version },
+        ] as Persistable[],
+        response: null,
+      }),
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(await db.all(sql`SELECT 1 FROM transaction_tags WHERE transaction_id = ${row.id}`)).toHaveLength(0);
+  });
+});
+
+describe('transactionApplier + transactionTagApplier — duplicate-insert tag semantics (ADR-023 step 2)', () => {
+  const combinedRegistry: ApplierRegistry = {
+    [TRANSACTION_ENTITY_TAG]: transactionApplier,
+    [TRANSACTION_TAG_ENTITY_TAG]: transactionTagApplier,
+  };
+
+  const seedTag = async (name: string): Promise<string> => {
+    const id = randomUUID();
+    await db.insert(tags).values({ id, name, version: 0 });
+    return id;
+  };
+
+  const readLinkedTagNames = async (transactionId: string): Promise<string[]> => {
+    const rows = await db.all<{ name: string }>(sql`
+      SELECT tg.name FROM transaction_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tt.transaction_id = ${transactionId}
+    `);
+    return rows.map((r) => r.name);
+  };
+
+  const insertWithTags = (row: TransactionRowEntity, tagIds: string[]) => () =>
+    okAsync({
+      persist: [
+        { op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model: row },
+        {
+          op: PersistOp.enum.insert,
+          entity: TRANSACTION_TAG_ENTITY_TAG,
+          model: { idempotencyKey: row.idempotencyKey, tagIds },
+        },
+      ] as Persistable[],
+      response: null,
+    });
+
+  it('a duplicate idempotency-key submission overwrites the tag set (behavior change, ADR-023)', async () => {
+    const firstTagId = await seedTag(`Tag ${randomUUID()}`);
+    const secondTagName = `Tag ${randomUUID()}`;
+    const secondTagId = await seedTag(secondTagName);
+
+    const original = newTransactionRow({ description: 'Original' });
+    const firstResult = await runEffects(db, combinedRegistry, insertWithTags(original, [firstTagId]));
+    expect(firstResult.isOk()).toBe(true);
+    expect(await readLinkedTagNames(original.id)).toHaveLength(1);
+
+    // Same idempotency key, but a fresh id — exactly what a real replay sends. The transaction
+    // insert no-ops; the tag-set insert still resolves the real row by idempotencyKey.
+    const replay = newTransactionRow({ idempotencyKey: original.idempotencyKey, description: 'Replay attempt' });
+    const replayResult = await runEffects(db, combinedRegistry, insertWithTags(replay, [secondTagId]));
+
+    expect(replayResult.isOk()).toBe(true);
+    expect(await readLinkedTagNames(original.id)).toEqual([secondTagName]);
+    expect(await readLinkedTagNames(replay.id)).toEqual([]);
   });
 });
 
@@ -992,7 +1146,6 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
       subcategoryId: null,
       merchantKey,
       version: 0,
-      tagNames: [],
     };
     await runEffects(db, merchantRegistry, () =>
       okAsync({

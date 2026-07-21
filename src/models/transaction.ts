@@ -108,14 +108,8 @@ export type Transaction = z.infer<typeof TransactionSchema>;
 // lists this constant itself.
 export const TRANSACTION_ENTITY_TAG = 'transaction';
 
-/** The transaction `Persistable`'s model vocabulary (ADR-021): the domain entity plus the one
- *  extra field its `EntityApplier` (`diplomat/db/repos/transactions.ts`'s `transactionApplier`)
- *  needs to shape the write — the full desired tag-name set. `tagNames` is persistence structure
- *  (which rows the applier attaches/replaces in `transaction_tags`), not a business decision, so
- *  it lives on the entity rather than as a second argument threaded alongside it. No `version`
- *  here — a `Persistable`'s `insert` model never carries one (`models/persistable.ts`); `update`'s
- *  gains it automatically via the shared `Model & { version: number }` intersection. */
-export type TransactionEntity = Transaction & { tagNames: string[] };
+// Same shape as Transaction, kept distinct for call-site clarity at every Persistable builder.
+export type TransactionEntity = Transaction;
 
 /** Read projection: Transaction with joined reference names (account, category, merchant, …). */
 export const TransactionViewSchema = z.object({

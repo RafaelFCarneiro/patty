@@ -15,6 +15,7 @@ import { recurringRepo, recurringRuleApplier } from '../../src/diplomat/db/repos
 import { settingsApplier, settingsRepo } from '../../src/diplomat/db/repos/settings.js';
 import { tagApplier, tagsRepo } from '../../src/diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../../src/diplomat/db/repos/transactions.js';
+import { transactionTagApplier } from '../../src/diplomat/db/repos/transactionTags.js';
 import { healthRepo } from '../../src/diplomat/db/repos/health.js';
 import { createLocaleResolver } from '../../src/diplomat/db/localeCache.js';
 import { McpTransport } from '../../src/config.js';
@@ -28,6 +29,7 @@ import { RECURRING_ENTITY_TAG } from '../../src/models/recurring.js';
 import { SETTINGS_ENTITY_TAG } from '../../src/models/locale.js';
 import { TAG_ENTITY_TAG } from '../../src/models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from '../../src/models/transactionTag.js';
 import { buildHttpApp } from '../../src/server.js';
 import { runEffects, runEffectsSequence, type ApplierRegistry } from '../../src/diplomat/db/effects.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
@@ -80,6 +82,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
   const applierRegistry: ApplierRegistry = {
     [ACCOUNT_ENTITY_TAG]: accountApplier,
     [TRANSACTION_ENTITY_TAG]: transactionApplier,
+    [TRANSACTION_TAG_ENTITY_TAG]: transactionTagApplier,
     [MERCHANT_ENTITY_TAG]: merchantApplier,
     [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
     [BILL_ENTITY_TAG]: billApplier,

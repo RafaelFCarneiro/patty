@@ -19,6 +19,7 @@ import {
   type TransactionView,
 } from '../../../../src/models/transaction.js';
 import type { ValidationError } from '../../../../src/models/error.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from '../../../../src/models/transactionTag.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({
   id: 'acc-checking',
@@ -40,7 +41,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   merchants: { matchCandidates: async () => [] } as unknown as Deps['merchants'],
   recurring: {} as Deps['recurring'],
   settings: {} as Deps['settings'],
-  tags: {} as Deps['tags'],
+  tags: { list: async () => [] } as unknown as Deps['tags'],
   transactions: {} as Deps['transactions'],
   clock: () => new Date('2026-06-01'),
   newId: () => 'test-id',
@@ -257,6 +258,66 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
     expect(responseFn([billOutcome, txOutcome]).transaction.id).toBe('tx-new');
     expect(responseFn([txOutcome, billOutcome]).transaction.id).toBe('tx-new');
     expect(responseFn([billOutcome, txOutcome]).created).toBe(true);
+  });
+});
+
+describe('addCardPurchase — tag-set resolution (ADR-023 step 2)', () => {
+  it('resolves given tag names into a trailing tag-set Persistable', async () => {
+    const deps = makeDeps({
+      creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
+      bills: { findByCycle: async () => null } as unknown as Deps['bills'],
+      tags: { list: async () => [{ id: 'tag-work', name: 'work' }] } as unknown as Deps['tags'],
+      newId: sequentialNewId(),
+    });
+
+    const result = await addCardPurchase(
+      deps,
+      {
+        description: 'Tagged purchase',
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-15',
+        card: 'Test Card',
+        idempotencyKey: 'k-tags',
+        tags: ['work'],
+      },
+      TransactionSource.enum.mcp,
+    );
+
+    const { persist } = result._unsafeUnwrap();
+    expect(persist.find((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG)).toEqual({
+      op: PersistOp.enum.insert,
+      entity: TRANSACTION_TAG_ENTITY_TAG,
+      model: { idempotencyKey: 'k-tags', tagIds: ['tag-work'] },
+    });
+  });
+
+  it('omitting tags emits no tag-set Persistable and never reads the tag catalog', async () => {
+    const deps = makeDeps({
+      creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
+      bills: { findByCycle: async () => null } as unknown as Deps['bills'],
+      tags: {
+        list: () => {
+          throw new Error('must not read the tag catalog when tags is omitted');
+        },
+      } as unknown as Deps['tags'],
+    });
+
+    const result = await addCardPurchase(
+      deps,
+      {
+        description: 'Untagged purchase',
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-15',
+        card: 'Test Card',
+        idempotencyKey: 'k-no-tags',
+      },
+      TransactionSource.enum.mcp,
+    );
+
+    const { persist } = result._unsafeUnwrap();
+    expect(persist.some((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG)).toBe(false);
   });
 });
 
@@ -704,6 +765,42 @@ describe('updateCardTransaction — merchant learning (ADR-021 rule 5)', () => {
     expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: 'merchant' });
     expect(persist[2]).toMatchObject({ op: PersistOp.enum.insert, entity: 'merchantCategory' });
     expect(persist[3]).toMatchObject({ op: PersistOp.enum.update, entity: 'transaction' });
+  });
+});
+
+describe('updateCardTransaction — tag-set resolution (ADR-023 step 2)', () => {
+  it('omitting tags emits no tag-set Persistable and never reads the tag catalog', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => cardOwnedTx } as unknown as Deps['transactions'],
+      accounts: creditAccountsById as unknown as Deps['accounts'],
+      tags: {
+        list: () => {
+          throw new Error('must not read the tag catalog when tags is omitted');
+        },
+      } as unknown as Deps['tags'],
+    });
+
+    const result = await updateCardTransaction(deps, { id: 'tx-1', amount: 42 });
+
+    const { persist } = result._unsafeUnwrap();
+    expect(persist.some((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG)).toBe(false);
+  });
+
+  it('resolves given tag names into a trailing tag-set Persistable', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => cardOwnedTx } as unknown as Deps['transactions'],
+      accounts: creditAccountsById as unknown as Deps['accounts'],
+      tags: { list: async () => [{ id: 'tag-work', name: 'work' }] } as unknown as Deps['tags'],
+    });
+
+    const result = await updateCardTransaction(deps, { id: 'tx-1', tags: ['work'] });
+
+    const { persist } = result._unsafeUnwrap();
+    expect(persist.find((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG)).toEqual({
+      op: PersistOp.enum.insert,
+      entity: TRANSACTION_TAG_ENTITY_TAG,
+      model: { idempotencyKey: cardOwnedTx.idempotencyKey, tagIds: ['tag-work'] },
+    });
   });
 });
 

@@ -20,6 +20,7 @@ import { recurringRepo, recurringRuleApplier } from './diplomat/db/repos/recurri
 import { settingsApplier, settingsRepo } from './diplomat/db/repos/settings.js';
 import { tagApplier, tagsRepo } from './diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from './diplomat/db/repos/transactions.js';
+import { transactionTagApplier } from './diplomat/db/repos/transactionTags.js';
 import { healthRepo } from './diplomat/db/repos/health.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { ACCOUNT_ENTITY_TAG } from './models/account.js';
@@ -32,6 +33,7 @@ import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from './models/merc
 import { RECURRING_ENTITY_TAG } from './models/recurring.js';
 import { TAG_ENTITY_TAG } from './models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from './models/transaction.js';
+import { TRANSACTION_TAG_ENTITY_TAG } from './models/transactionTag.js';
 import type { HttpSidecar } from './server.js';
 
 const require = createRequire(import.meta.url);
@@ -96,6 +98,7 @@ const main = async (): Promise<void> => {
   const applierRegistry: ApplierRegistry = {
     [ACCOUNT_ENTITY_TAG]: accountApplier,
     [TRANSACTION_ENTITY_TAG]: transactionApplier,
+    [TRANSACTION_TAG_ENTITY_TAG]: transactionTagApplier,
     [MERCHANT_ENTITY_TAG]: merchantApplier,
     [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
     [BILL_ENTITY_TAG]: billApplier,
