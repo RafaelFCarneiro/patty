@@ -130,14 +130,18 @@ const addAccountMovement = (
     const { entity, classification } = yield* planAccountMovement(deps, input, type, source);
 
     const locale = await deps.locale();
-    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
+    const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
     const persist = [
       ...withMerchant([persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })], entity.refs.merchantKey),
       ...(tagLinks ? [tagLinks.persistable] : []),
     ];
     const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
       const result = buildUpsertResult(outcomes, classification, locale);
-      return tagLinks ? { ...result, transaction: { ...result.transaction, tags: tagLinks.tags } } : result;
+      // On a duplicate replay (`created: false`) the tag set no-op'd — the read-back view's own
+      // tags already reflect the surviving row, so the matched names must not overwrite them.
+      return tagLinks && result.created
+        ? { ...result, transaction: { ...result.transaction, tags: tagLinks.tags } }
+        : result;
     };
     return ok({ persist, response });
   });
@@ -231,7 +235,7 @@ export const updateAccountTransaction = (
 
     const locale = await deps.locale();
     const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
-    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
+    const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
     const persist: Persistable[] = [
       ...withMerchantLearning(
         [persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } })],

@@ -58,19 +58,19 @@ describe('resolveTagNames — the matched-name projection a flow response shows 
 });
 
 describe('tagSetPersistable — builds the transaction tag-set insert (ADR-023 decision 3)', () => {
-  it('builds an insert Persistable carrying the idempotency key and resolved tag ids', () => {
-    expect(tagSetPersistable('idem-1', ['tag-work'])).toEqual({
+  it('builds an insert Persistable carrying the transaction id and resolved tag ids', () => {
+    expect(tagSetPersistable('tx-1', ['tag-work'])).toEqual({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_TAG_ENTITY_TAG,
-      model: { idempotencyKey: 'idem-1', tagIds: ['tag-work'] },
+      model: { transactionId: 'tx-1', tagIds: ['tag-work'] },
     });
   });
 
   it('builds one even with an empty tag set — a set-replace to "no tags", not skipped', () => {
-    expect(tagSetPersistable('idem-1', [])).toEqual({
+    expect(tagSetPersistable('tx-1', [])).toEqual({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_TAG_ENTITY_TAG,
-      model: { idempotencyKey: 'idem-1', tagIds: [] },
+      model: { transactionId: 'tx-1', tagIds: [] },
     });
   });
 });

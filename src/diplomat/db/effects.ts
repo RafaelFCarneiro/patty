@@ -42,49 +42,105 @@ export type EntityApplier = {
  *  lists an entity itself. */
 export type ApplierRegistry = Record<string, EntityApplier>;
 
-/** An `id` + `version` column shape, matching what 8 of the 9 mutable tables already use —
- *  `dashboards` keys on `name` instead, so it needs its own hand-written `EntityApplier`. */
+/** An `id` + `version` column shape, matching most mutable tables — a table outside the
+ *  convention (`dashboards` keys on `name`; the link/key-only tables carry no `id`/`version` at
+ *  all) hand-writes its own `EntityApplier` instead. */
 type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteColumn };
+
+/** An entity's own post-write projection, supplied at registration: invoked after a successful
+ *  insert/update with the id of the row that actually persisted (on an idempotent duplicate, the
+ *  surviving row's — never the discarded mint), returning the decoded view that lands on
+ *  `PersistOutcome.read`. The one sanctioned entity-supplied hook performing a read inside the
+ *  engine — a recorded deviation from FC/IS rules 3/6 (`docs/architecture.md` § Write path); a
+ *  second entity-supplied hook is the signal this design is wrong (ADR-023 option D). */
+export type ReadBack = (tx: Tx, id: string) => Promise<unknown>;
+
+type VersionedTableConfig<T extends VersionedTable> = {
+  /** The row field (drizzle column property name) carrying the entity's caller-supplied
+   *  idempotency key, opting it into the engine's generic idempotency treatment: when a row
+   *  carries a value here, `insert` conflict-targets this column — the dedup contract "a row with
+   *  this key already exists" makes the existing row the outcome. Distinct from, and never merged
+   *  with, the id-scoped conflict target: that one is a structural retry guard, not idempotency
+   *  (ADR-023). */
+  idempotencyColumn?: Extract<keyof T, string>;
+  readBack?: ReadBack;
+};
 
 /**
  * Builds an `EntityApplier` for any table following the `id`/`version` convention. Two mechanics
- * worth knowing: `insert`'s `onConflictDoNothing` is scoped to the `id` conflict target only, so a
- * genuine violation of some other unique column (e.g. `tags.name`) still surfaces as a real error
- * instead of being swallowed as a same-id retry; and the next `version` is computed here in
- * application code from the row's own field, never a SQL-side `version + 1` the database
- * evaluates on its own.
+ * worth knowing: `insert`'s `onConflictDoNothing` is scoped to a single conflict target (the
+ * registered idempotency column when the row carries a key, else `id`), so a genuine violation of
+ * any other unique column (e.g. `tags.name`) still surfaces as a real error instead of being
+ * swallowed as a same-id retry; and the next `version` is computed here in application code from
+ * the row's own field, never a SQL-side `version + 1` the database evaluates on its own.
  */
-export const versionedTableApplier = <T extends VersionedTable>(table: T): EntityApplier => ({
-  insert: async (tx, model) => {
-    const result = await tx
-      .insert(table)
-      .values(model as never)
-      .onConflictDoNothing({ target: table.id });
-    return { applied: (result.rowsAffected ?? 0) > 0 };
-  },
+export const versionedTableApplier = <T extends VersionedTable>(
+  table: T,
+  config: VersionedTableConfig<T> = {},
+): EntityApplier => {
+  const { idempotencyColumn, readBack } = config;
+  const keyColumn = idempotencyColumn ? (table[idempotencyColumn] as AnySQLiteColumn) : undefined;
 
-  update: async (tx, model) => {
-    const row = model as Record<string, unknown> & { id: string; version: number };
-    const values = R.omit(row, ['id', 'version']);
-    const result = await tx
-      .update(table)
-      .set({ ...values, version: row.version + 1 } as never)
-      .where(and(eq(table.id, row.id), eq(table.version, row.version)));
-    return { applied: (result.rowsAffected ?? 0) > 0 };
-  },
+  const keyOf = (row: Record<string, unknown>): string | undefined => {
+    if (!idempotencyColumn) return undefined;
+    const value = row[idempotencyColumn];
+    // A nullish key means "no idempotency for this row" — never a conflict target (SQL NULLs
+    // don't conflict, which would silently disable the id guard too).
+    return typeof value === 'string' ? value : undefined;
+  };
 
-  delete: async (tx, id, version) => {
-    try {
-      const result = await tx.delete(table).where(and(eq(table.id, id), eq(table.version, version)));
-      return { applied: (result.rowsAffected ?? 0) > 0 };
-    } catch (cause) {
-      // A row referencing this one was inserted after the flow's read — the same "world changed"
-      // condition a stale version reports, just surfaced by the FK check instead.
-      if (isForeignKeyConstraintViolation(cause)) throw new VersionConflict();
-      throw cause;
-    }
-  },
-});
+  // The engine's one idempotency read: which row already holds the key a just-conflicted insert
+  // carried. Runs inside the same transaction as the no-op'd insert, so absence is an invariant
+  // violation, not an expected miss.
+  const findSurvivingRowId = async (tx: Tx, column: AnySQLiteColumn, key: string): Promise<string> => {
+    const [row] = await tx.select({ id: table.id }).from(table).where(eq(column, key));
+    if (!row) throw new Error(`runEffects: no surviving row holds idempotency key "${key}" after a duplicate insert`);
+    return row.id as string;
+  };
+
+  return {
+    insert: async (tx, model) => {
+      const row = model as Record<string, unknown> & { id: string };
+      const key = keyOf(row);
+      const result = await tx
+        .insert(table)
+        .values(row as never)
+        .onConflictDoNothing({ target: key !== undefined && keyColumn ? keyColumn : table.id });
+      const applied = (result.rowsAffected ?? 0) > 0;
+      if (!readBack) return { applied };
+
+      // On an idempotent duplicate the persisted row is the one already holding the key — the
+      // minted `row.id` was never inserted, so the projection must read the survivor instead.
+      const persistedId =
+        applied || key === undefined || !keyColumn ? row.id : await findSurvivingRowId(tx, keyColumn, key);
+      return { applied, read: await readBack(tx, persistedId) };
+    },
+
+    update: async (tx, model) => {
+      const row = model as Record<string, unknown> & { id: string; version: number };
+      const values = R.omit(row, ['id', 'version']);
+      const result = await tx
+        .update(table)
+        .set({ ...values, version: row.version + 1 } as never)
+        .where(and(eq(table.id, row.id), eq(table.version, row.version)));
+      const applied = (result.rowsAffected ?? 0) > 0;
+      if (!applied || !readBack) return { applied };
+      return { applied, read: await readBack(tx, row.id) };
+    },
+
+    delete: async (tx, id, version) => {
+      try {
+        const result = await tx.delete(table).where(and(eq(table.id, id), eq(table.version, version)));
+        return { applied: (result.rowsAffected ?? 0) > 0 };
+      } catch (cause) {
+        // A row referencing this one was inserted after the flow's read — the same "world changed"
+        // condition a stale version reports, just surfaced by the FK check instead.
+        if (isForeignKeyConstraintViolation(cause)) throw new VersionConflict();
+        throw cause;
+      }
+    },
+  };
+};
 
 /** Signals "roll back the whole batch and re-invoke the flow for a fresh read/decision" up
  *  through `db.transaction`'s rejection; caught by `applyBatch`, never leaks past `runEffects`.
@@ -103,17 +159,18 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
   const outcome = await (async (): Promise<ApplierOutcome> => {
     switch (p.op) {
       case PersistOp.enum.insert:
-        // Idempotent-duplicate handling is the applier's own concern — inserts never retry here.
+        // An idempotent-duplicate no-op reports `applied: false` — inserts never retry here; the
+        // duplicate treatment itself is the engine's, declared per entity (`idempotencyColumn`).
         return applier.insert(tx, p.model);
       case PersistOp.enum.update: {
-        const outcome = await applier.update(tx, p.model);
-        if (!outcome.applied) throw new VersionConflict();
-        return outcome;
+        const updateOutcome = await applier.update(tx, p.model);
+        if (!updateOutcome.applied) throw new VersionConflict();
+        return updateOutcome;
       }
       case PersistOp.enum.delete: {
-        const outcome = await applier.delete(tx, p.id, p.version);
-        if (!outcome.applied) throw new VersionConflict();
-        return outcome;
+        const deleteOutcome = await applier.delete(tx, p.id, p.version);
+        if (!deleteOutcome.applied) throw new VersionConflict();
+        return deleteOutcome;
       }
       default: {
         const _exhaustive: never = p;

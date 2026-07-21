@@ -174,7 +174,7 @@ export const addCardPurchase = (
   safeTry(async function* () {
     const { entity, classification, billPeriod, existingBill, cardId } = yield* planCardPurchase(deps, input, source);
     const { billId, billPersistable } = resolveBillWrite(deps.newId, cardId, billPeriod, existingBill);
-    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
+    const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
 
     // Bill leads, transaction trails — its bill_id FK must resolve within the same batch.
     const persist: Persistable[] = [
@@ -196,7 +196,9 @@ export const addCardPurchase = (
       const outcome = persistence.outcomeFor(TRANSACTION_ENTITY_TAG, outcomes);
       const view = viewFromOutcome(outcome, locale);
       return {
-        transaction: tagLinks ? { ...view, tags: tagLinks.tags } : view,
+        // On a duplicate replay the tag set no-op'd — the read-back view's own tags already
+        // reflect the surviving row, so the matched names must not overwrite them.
+        transaction: tagLinks && outcome.applied ? { ...view, tags: tagLinks.tags } : view,
         created: outcome.applied,
         classification,
       };
@@ -313,7 +315,7 @@ export const updateCardTransaction = (
     };
 
     const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
-    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
+    const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
     const persist: Persistable[] = [
       ...withMerchantLearning(billPersistables, merchantCorrection),
       persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } }),

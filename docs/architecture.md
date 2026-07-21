@@ -148,15 +148,44 @@ instead of performing it; the diplomat shell **applies** it.
   `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?` (the new version computed in
   application code from the row's own `version` field — never a SQL-side `version + 1` expression; same rule
   as `runEffects` below) — identical for any table keyed by an `id` column with a `version` column, which
-  is 8 of the 9 mutable tables (`dashboards` keys on `name` instead). Rather than hand-write that per entity,
+  is most of the mutable tables (`dashboards` keys on `name` instead; `merchants`, `merchant_category`, and
+  `transaction_tags` carry no `id`/`version` at all). Rather than hand-write that per entity,
   `versionedTableApplier(table)` builds a complete `EntityApplier` from just the drizzle table reference —
-  `diplomat/db/repos/accounts.ts`'s `accountApplier` is `versionedTableApplier(accounts)`, a one-liner. An
-  entity whose table doesn't fit the convention (e.g. `dashboards`) still hand-writes its own `EntityApplier`
-  against this same interface — `diplomat/db/repos/transactions.ts`'s `transactionApplier` is the
-  first example: a transaction row's storage shape has genuine extra mechanics beyond `id`/`version`
-  (`insert` conflicts on `idempotency_key`, not `id`; both `insert`/`update` attach/replace `transaction_tags`)
-  — still persistence structure, not business logic, just too much for the generic factory to cover. It no
-  longer upserts the referenced `merchants` row itself (ADR-023) — see the `merchant` entity bullet below.
+  `diplomat/db/repos/accounts.ts`'s `accountApplier` is `versionedTableApplier(accounts)`, a one-liner. It also
+  takes optional registration config, `versionedTableApplier(table, { idempotencyColumn, readBack })` —
+  `diplomat/db/repos/transactions.ts`'s `transactionApplier` is
+  `versionedTableApplier(transactions, { idempotencyColumn: 'idempotencyKey', readBack })` (ADR-023 decision 5:
+  the formerly hand-written applier collapsed to a registration once the merchant upsert, the tag handling, and
+  the idempotency mechanics had all left it — see the two bullets below and the `merchant`/`transactionTag`
+  entity bullets). An entity whose table doesn't fit the `id`/`version` convention at all (`dashboards`,
+  `merchants`, `merchant_category`, `transaction_tags`) still hand-writes its own `EntityApplier` against this
+  same interface.
+- **The applier invariant (ADR-023 decision 6): an applier decides nothing and performs no reads at all.**
+  Every value an applier persists was chosen by the core; every entity it touches was named by the core as its
+  own `Persistable`; hand-written or factory-built, it performs the mechanical write and nothing else. The
+  mechanically checkable proxy is **an applier writes exactly one table** — grep-able in review; the proxy is
+  not the rule (a single-table applier could still smuggle in a decision or a read, and that would still be a
+  violation). All twelve registered appliers satisfy both.
+- **The engine's generic idempotency treatment (ADR-023 decision 4).** Idempotency is a caller-supplied dedup
+  contract — "if a row with this key already exists, the existing row is the outcome" — and treating it is the
+  engine's, declared by registration (`idempotencyColumn`), never per-applier code. When a row carries a value
+  in the registered column, `insert` conflict-targets that column, a duplicate no-ops with `applied: false`,
+  and the engine's own machinery resolves which row survived (one generic `SELECT id … WHERE <column> = ?`) so
+  the registered `readBack` below always reads the row that actually persisted. This is **distinct from, and
+  never merged with**, the id-scoped `onConflictDoNothing({ target: table.id })` a key-less insert falls back
+  to — that one is a structural same-id retry guard, not idempotency. The key currently rides on entity models
+  as an ordinary column (`transactions.idempotency_key`) — a pragmatic compromise, not a modeling statement;
+  its honest home is the `Persistable` envelope (tracked as
+  [#134](https://github.com/RafaelFCarneiro/fintrack/issues/134)).
+- **The `readBack` deviation (ADR-023 decision 4).** An entity may register a post-write projection —
+  `transactions` supplies one reading the display-joined view via `fetchTx` — invoked after a successful
+  insert/update with the id of the row that actually persisted (on an idempotent duplicate, the surviving
+  row's — never the discarded mint; no by-id/by-key branch in the hook itself), landing on
+  `PersistOutcome.read`. This is a projection read executed inside the engine, **capped at one hook**, and it
+  is *not* sanctioned by `docs/functional-core-imperative-shell.md` (rule 6 permits an outcome-dependent
+  response, not an in-engine projection read; rule 3 has translation at the boundary before the engine sees
+  the batch) — it is recorded here as the project's deliberate deviation. A second entity-supplied hook is the
+  signal to switch to ADR-023 option D (the core builds the full response itself).
 - **`versionedTableApplier`'s `delete` — a foreign-key violation is the same race a stale version reports, just
   caught later**: a flow that emits a version-guarded `delete` (e.g. `deleteCreditCard`) decided what else needs
   removing from a point-in-time read; if some other row starts referencing the one being deleted after that read
@@ -248,8 +277,8 @@ instead of performing it; the diplomat shell **applies** it.
   `weight = weight + weightDelta` on conflict, never touching `origin` on the conflict path (deliberate,
   ADR-023 decision 2: an edge first learned as `rule` stays `rule` no matter how many later corrections
   reinforce it).
-- **The `transactionTag` entity (ADR-023, migration step 2) — a set-replace link, addressed by
-  `idempotencyKey`, not the transaction's own id.** `transaction_tags` gets its own hand-written
+- **The `transactionTag` entity (ADR-023, migration steps 2–3) — a set-replace link addressed by the flow's
+  own transaction id.** `transaction_tags` gets its own hand-written
   `EntityApplier` (`diplomat/db/repos/transactionTags.ts`'s `transactionTagApplier`) — no `id`/`version`, every
   write an `insert` op, like `merchantCategoryApplier`. The core resolves tag names → ids itself:
   `logic/tag.ts`'s `resolveTagIds` matches `input.tags` against `deps.tags.list()` and silently drops any name
@@ -265,27 +294,24 @@ instead of performing it; the diplomat shell **applies** it.
   in the batch (its FK needs the transactions row to exist). Flows with no `tags` field at all (`create_transfer`,
   `apply_due_recurring`'s occurrence inserts, `pay_bill`'s transfer, `confirm_transaction`) never call
   `resolveTagLinks`.
-  **Addressed by `idempotencyKey`, not `transactionId`**: a create flow's own `entity.id` is a fresh
-  `deps.newId()` mint on every invocation, so on a duplicate-idempotency-key resubmission it names a row that
-  was never actually inserted (the transaction insert no-ops) — targeting it would FK-violate or silently touch
-  nothing. `idempotencyKey` is stable across every submission (including an internal version-conflict retry,
-  which re-invokes the whole flow and mints yet another fresh id) and mechanically resolves to whichever row
-  actually persisted, via a `SELECT ... WHERE idempotency_key = ?` inside `transactionTagApplier` itself — the
-  same kind of identity resolution `transactionApplier`'s own insert conflict-target/`fetchTxByIdempotencyKey`
-  already perform for that entity (ADR-023 decision 4: "not a domain judgement"), so this stays consistent with
-  "an applier writes exactly one table" (the proxy is about writes, not reads). **Behavior change, intended**:
-  the tag-set write, when it happens, is not gated on whether the transaction insert itself applied (the way the
-  old `if (applied && entity.tagNames.length > 0)` gated `attachTags`) — re-submitting a transaction with the
-  same idempotency key **and an explicit `tags` field** now overwrites its tag set instead of leaving the
-  existing tags untouched. **A second, related consequence**: `transactionApplier`'s own post-write read-back
-  (`fetchTx`) runs immediately after ITS OWN write — before the tag-set `Persistable`, later in the same batch,
-  has applied — so `PersistOutcome.read.tags` cannot reflect a same-batch tag write. Every affected flow's
-  `response` therefore composes `resolveTagLinks`'s own matched-name result onto the DB-round-tripped view when
-  a resolution happened (`{ ...viewFromOutcome(...), tags }`), and leaves the DB-round-tripped view untouched
-  otherwise (its `tags` already reflects reality, since nothing wrote to `transaction_tags`) — the core already
-  knows the matched set without reading anything back (rule 6). This is scoped to step 2; step 3's generic
-  `readBack` registration (not yet built) is the eventual, more general answer to "outcome-dependent read
-  reflecting the whole batch."
+  **The duplicate-replay no-op (ADR-023 step 3)**: the set is addressed by the flow's own `entity.id` — the
+  minted id on a create, the read row's id on an update. A create flow's `entity.id` is a fresh `deps.newId()`
+  mint on every invocation, so on a duplicate-idempotency-key resubmission it names a row that was never
+  actually inserted (the transaction insert no-ops). `transactionTagApplier` performs zero reads (ADR-023
+  decision 6): it applies the set to the given id — links inserted first, stale links deleted second — and
+  translates an FK miss on the link insert (the duplicate-replay signature: the addressed row doesn't exist)
+  into an `applied: false` no-op, the same error-translation class as `billApplier`'s cycle-uniqueness rethrow.
+  Insert-first ordering means a set that can't apply has removed nothing. **A duplicate replay therefore never
+  touches the surviving row's tags** — first-write-wins, like the rest of the row; this restores the pre-ADR-023
+  semantic that step 2's `idempotencyKey`-addressed interim (which overwrote tags on replay, via a resolving
+  `SELECT` inside the applier) had traded away. **A related consequence**: the transaction write's own
+  post-write projection (`readBack`, above) runs immediately after ITS OWN write — before the tag-set
+  `Persistable`, later in the same batch, has applied — so `PersistOutcome.read.tags` cannot reflect a
+  same-batch tag write. Every affected flow's `response` therefore composes `resolveTagLinks`'s own
+  matched-name result onto the DB-round-tripped view **only when its transaction write actually applied**
+  (`created`/`outcome.applied`); on a duplicate the set no-op'd and the read-back view's own `tags` already
+  reflect the surviving row — the core knows the matched set without reading anything back (rule 6), so this
+  composition is the design, not a stopgap.
 - **`payBill`/`revertBillPayment` (`controllers/creditCard/bill.ts`) — a plain (non-idempotency-aware)
   `response`, and an FK direction that reverses the batch order between the two flows.** Unlike the
   card-purchase flows, neither bill flow needs `PersistOutcome`-derived response shaping: both mint every id and
@@ -696,4 +722,4 @@ available alongside the server.
 - ADR-020: transaction ownership by account type, not structural field-presence (revises ADR-017's union rule; refines ADR-019 PR-2 — implemented)
 - ADR-021: functional core / imperative shell for the write path — controllers return the write as data (a `persist` batch) instead of performing it; a generic versioned unit of work applies it (supersedes ADR-018)
 - ADR-022: the shell's executor is a generic effect runner (`runEffects`/`runEffectsSequence`) rather than a DB-specific unit of work — persistence is one effect kind, response always produced, message dispatch a named future kind; runs either a single atomic unit or a sequence of independent units (renames/extends ADR-021)
-- ADR-023: an applier decides nothing and reads nothing in order to decide — merchant creation, tag resolution, and the learning weight/origin move into the core; idempotent-insert handling becomes registration config (extends ADR-021/ADR-022 — **proposed**; step 1 [merchant entity + weight delta] implemented, also landed outcome-addressing-by-entity-tag as a prerequisite refactor; step 2 [tag links resolved in the core, addressed by idempotencyKey] implemented; step 3 [generic idempotency + the `transactionApplier` collapse] outstanding)
+- ADR-023: an applier decides nothing and performs no reads at all — merchant creation, tag resolution, and the learning weight/origin move into the core; idempotency treatment becomes the engine's, declared by registration config (extends ADR-021/ADR-022 — **accepted**; step 1 [merchant entity + weight delta] implemented, also landed outcome-addressing-by-entity-tag as a prerequisite refactor; step 2 [tag links resolved in the core] implemented; step 3 [generic idempotency + the `transactionApplier` collapse; tag set re-addressed by transactionId with keep-existing-on-duplicate; invariant sharpened to "no reads at all"] implemented)

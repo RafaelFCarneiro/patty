@@ -24,5 +24,5 @@ export const resolveTagNames = (names: readonly string[], allTags: readonly Tag[
   return R.pipe(names, R.unique(), R.filter((name) => knownNames.has(name)));
 };
 
-export const tagSetPersistable = (idempotencyKey: string, tagIds: string[]): Persistable =>
-  insert({ entity: TRANSACTION_TAG_ENTITY_TAG, model: { idempotencyKey, tagIds } });
+export const tagSetPersistable = (transactionId: string, tagIds: string[]): Persistable =>
+  insert({ entity: TRANSACTION_TAG_ENTITY_TAG, model: { transactionId, tagIds } });
