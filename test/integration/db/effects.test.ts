@@ -836,7 +836,7 @@ describe('transactionTagApplier — set-replace mechanics, resolved by idempoten
             {
               op: PersistOp.enum.update,
               entity: TRANSACTION_TAG_ENTITY_TAG,
-              model: { idempotencyKey: 'unused', tagIds: [], version: 0 },
+              model: { version: 0 },
             },
           ] as Persistable[],
           response: null,
