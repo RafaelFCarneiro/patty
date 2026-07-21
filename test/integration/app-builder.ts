@@ -46,10 +46,11 @@ export type AppContext = {
 
 export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promise<AppContext> => {
   const db = openDatabase({
-    DB_PATH: opts?.dbPath ?? (inject('DB_PATH') as string),
+    DB_PATH: opts?.dbPath ?? (inject('DB_PATH' as never) as string),
     FINTRACK_DB_KEY: TEST_ENCRYPTION_KEY,
     PORT: opts?.port ?? 0,
     MCP_TRANSPORT: McpTransport.enum.http,
+    FINTRACK_HTTP: true,
   });
 
   await bootstrap(db);

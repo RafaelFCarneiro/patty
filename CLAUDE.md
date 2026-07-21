@@ -29,7 +29,7 @@ npm run build           # tsc (tsconfig.build.json)
 npm start               # node dist/main.js
 npm run lint            # eslint (style/quality smell rules — part of the gate)
 npm test                # vitest run (unit tests under test/unit)
-npm run typecheck       # tsc --noEmit (includes tests)
+npm run typecheck       # tsc --noEmit -p tsconfig.test.json (includes tests)
 npm run test:integration # in-process libSQL DB, no Docker required
 npm run test:all        # unit + integration
 npm run mcp:inspect     # MCP Inspector — connect to http://127.0.0.1:3001/mcp

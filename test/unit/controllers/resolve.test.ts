@@ -77,7 +77,10 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
   it('resolves given names against deps.tags.list() into a tag-set insert, addressed by idempotencyKey', async () => {
     const deps = tagsDeps([{ id: 'tag-work', name: 'work' }]);
 
-    const { persistable, tags } = await resolveTagLinks(deps, 'idem-1', ['work']);
+    const resolved = await resolveTagLinks(deps, 'idem-1', ['work']);
+    expect(resolved).not.toBeNull();
+    if (!resolved) return;
+    const { persistable, tags } = resolved;
 
     expect(persistable).toEqual({
       op: PersistOp.enum.insert,
@@ -90,7 +93,10 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
   it('drops an unmatched name from both the persisted ids and the returned names', async () => {
     const deps = tagsDeps([{ id: 'tag-work', name: 'work' }]);
 
-    const { persistable, tags } = await resolveTagLinks(deps, 'idem-1', ['work', 'does-not-exist']);
+    const resolved = await resolveTagLinks(deps, 'idem-1', ['work', 'does-not-exist']);
+    expect(resolved).not.toBeNull();
+    if (!resolved) return;
+    const { persistable, tags } = resolved;
 
     expect(persistable).toMatchObject({ model: { tagIds: ['tag-work'] } });
     expect(tags).toEqual(['work']);
@@ -105,7 +111,10 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
       },
     } as unknown as Deps;
 
-    const { persistable, tags } = await resolveTagLinks(deps, 'idem-1', []);
+    const resolved = await resolveTagLinks(deps, 'idem-1', []);
+    expect(resolved).not.toBeNull();
+    if (!resolved) return;
+    const { persistable, tags } = resolved;
 
     expect(persistable).toEqual({
       op: PersistOp.enum.insert,

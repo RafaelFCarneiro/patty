@@ -7,13 +7,19 @@ describe('dbToModel', () => {
       name: 'overview',
       html: '<html></html>',
       updatedAt: '2026-01-01T00:00:00.000Z',
+      version: 0,
     });
     expect(dashboard).toEqual({ name: 'overview', html: '<html></html>', updatedAt: '2026-01-01T00:00:00.000Z' });
   });
 
   it('throws when name is an empty string', () => {
     expect(() =>
-      dashboardAdapters.dbToModel({ name: '', html: '<html></html>', updatedAt: '2026-01-01T00:00:00.000Z' }),
+      dashboardAdapters.dbToModel({
+        name: '',
+        html: '<html></html>',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        version: 0,
+      }),
     ).toThrow();
   });
 });

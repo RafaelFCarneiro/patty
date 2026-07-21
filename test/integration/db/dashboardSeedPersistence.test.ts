@@ -31,6 +31,7 @@ const openOpts = () => ({
   FINTRACK_DB_KEY: TEST_KEY,
   PORT: 3001,
   MCP_TRANSPORT: McpTransport.enum.http,
+  FINTRACK_HTTP: true,
 });
 
 describe('dashboard seed persistence across restart (ADR-008 onConflictDoNothing)', () => {

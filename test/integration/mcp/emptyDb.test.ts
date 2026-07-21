@@ -11,6 +11,7 @@ import { billsRepo } from '../../../src/diplomat/db/repos/bills.js';
 import { categoriesRepo } from '../../../src/diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from '../../../src/diplomat/db/repos/subCategories.js';
 import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
+import { dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { healthRepo } from '../../../src/diplomat/db/repos/health.js';
 import { merchantsRepo } from '../../../src/diplomat/db/repos/merchants.js';
 import { recurringRepo } from '../../../src/diplomat/db/repos/recurring.js';
@@ -40,6 +41,7 @@ describe('empty DB (ADR-008)', () => {
       FINTRACK_DB_KEY: TEST_KEY,
       PORT: 0,
       MCP_TRANSPORT: McpTransport.enum.stdio,
+      FINTRACK_HTTP: true,
     });
     await migrate(db, { migrationsFolder: MIGRATIONS });
 
@@ -50,6 +52,7 @@ describe('empty DB (ADR-008)', () => {
       categories: categoriesRepo(db),
       subCategories: subCategoriesRepo(db),
       creditCards: creditCardsRepo(db),
+      dashboards: dashboardsRepo(db),
       health: healthRepo(db),
       merchants: merchantsRepo(db),
       recurring: recurringRepo(db),

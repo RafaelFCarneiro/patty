@@ -912,7 +912,7 @@ describe('GET /api/transactions', () => {
     const { items: txs } = res.json() as { items: Array<{ subCategoryName?: string; description?: string }> };
     const filtered = txs.filter((t) => t.subCategoryName === 'SearchSub');
     expect(filtered.length).toBeGreaterThanOrEqual(1);
-    expect(filtered[0].description).toBe('With sub filter');
+    expect(filtered[0]!.description).toBe('With sub filter');
   });
 
   it('rejects invalid date (422)', async () => {

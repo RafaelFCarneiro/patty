@@ -444,7 +444,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
         text: `OffPaid purchase ${stamp}`,
         limit: 10,
       })) as Array<{ id?: string }>;
-      expect(stillThere.some((tx) => tx.id === purchase.transaction.id)).toBe(true);
+      expect(stillThere.some((tx) => tx.id === purchase.transaction!.id)).toBe(true);
     } finally {
       await transport.close();
     }

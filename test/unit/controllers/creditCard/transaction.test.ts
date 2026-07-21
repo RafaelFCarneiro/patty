@@ -18,6 +18,7 @@ import {
   type RawTransactionView,
   type TransactionView,
 } from '../../../../src/models/transaction.js';
+import type { ValidationError } from '../../../../src/models/error.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../../../src/models/transactionTag.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({
@@ -167,7 +168,7 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
-    expect(error.issues?.[0]).toContain('revert_bill_payment');
+    expect((error as ValidationError).issues[0]).toContain('revert_bill_payment');
   });
 
   it('on a merchant match, emits a merchant insert ordered before the transaction insert (rule 5)', async () => {
@@ -340,7 +341,7 @@ describe('importCardStatement — pure per-line plan for the shell (ADR-022 step
 
     expect(plan.lines).toHaveLength(2);
     expect(plan.lines[0]).toMatchObject({ date: toIsoDate(clock), rawInput: 'pasted statement text' });
-    expect(plan.lines[0].idempotencyKey).toBeTruthy();
+    expect(plan.lines[0]!.idempotencyKey).toBeTruthy();
     expect(plan.lines[1]).toMatchObject({ date: '2026-06-01', idempotencyKey: 'explicit-key' });
   });
 
@@ -360,7 +361,7 @@ describe('importCardStatement — pure per-line plan for the shell (ADR-022 step
       TransactionSource.enum.import,
     );
 
-    const result = await plan.flowFor(plan.lines[0])();
+    const result = await plan.flowFor(plan.lines[0]!)();
 
     expect(result.isOk()).toBe(true);
     const { persist } = result._unsafeUnwrap();
@@ -403,7 +404,7 @@ describe('updateCardTransaction / deleteCardTransaction — ownership by account
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
-    expect(error.issues?.[0]).toContain('update_account_transaction');
+    expect((error as ValidationError).issues[0]).toContain('update_account_transaction');
   });
 
   it('deleteCardTransaction rejects a tx with no credit leg, redirecting to delete_account_transaction', async () => {
@@ -419,7 +420,7 @@ describe('updateCardTransaction / deleteCardTransaction — ownership by account
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
-    expect(error.issues?.[0]).toContain('delete_account_transaction');
+    expect((error as ValidationError).issues[0]).toContain('delete_account_transaction');
   });
 });
 
@@ -442,7 +443,7 @@ describe('updateCardTransaction — account field (ADR-019 compose-up watchpoint
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
-    expect(error.issues?.[0]).toContain('cannot change the account of a card transaction');
+    expect((error as ValidationError).issues[0]).toContain('cannot change the account of a card transaction');
   });
 });
 
@@ -476,8 +477,8 @@ describe('updateCardTransaction / deleteCardTransaction — bill-payment transfe
     expect(error.code).toBe('validation');
     // Rejected via the bill-process guard (paidBillImmutable), not transfer-type-immutable —
     // the card aggregate never runs guardTransferMutability (ADR-020 §3/§4).
-    expect(error.issues?.[0]).toContain('revert_bill_payment');
-    expect(error.issues?.[0]).not.toContain('cannot change the type of a transfer');
+    expect((error as ValidationError).issues[0]).toContain('revert_bill_payment');
+    expect((error as ValidationError).issues[0]).not.toContain('cannot change the type of a transfer');
   });
 
   it('deleteCardTransaction rejects it via the paid-bill immutability guard', async () => {
@@ -494,7 +495,7 @@ describe('updateCardTransaction / deleteCardTransaction — bill-payment transfe
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
-    expect(error.issues?.[0]).toContain('revert_bill_payment');
+    expect((error as ValidationError).issues[0]).toContain('revert_bill_payment');
   });
 });
 
@@ -618,7 +619,9 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
     const result = await updateCardTransaction(deps, { id: 'tx-1', billMonth: 7, billYear: 2026 });
 
     expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().issues?.[0]).toContain('revert_bill_payment');
+    const error560 = result._unsafeUnwrapErr();
+    expect(error560.code).toBe('validation');
+    expect((error560 as ValidationError).issues[0]).toContain('revert_bill_payment');
   });
 
   it('rejects when the TARGET bill is paid', async () => {
@@ -635,7 +638,9 @@ describe('updateCardTransaction — bill reassignment is returned as data (ADR-0
     const result = await updateCardTransaction(deps, { id: 'tx-1', billMonth: 7, billYear: 2026 });
 
     expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().issues?.[0]).toContain('revert_bill_payment');
+    const error577 = result._unsafeUnwrapErr();
+    expect(error577.code).toBe('validation');
+    expect((error577 as ValidationError).issues[0]).toContain('revert_bill_payment');
   });
 
   it("response() resolves the transaction's own outcome by entity tag, not batch position (ADR-023)", async () => {
@@ -851,6 +856,8 @@ describe('deleteCardTransaction — guards + is returned as data (ADR-021 phase 
     const result = await deleteCardTransaction(deps, { id: 'tx-1', confirm: true });
 
     expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().issues?.[0]).toContain('revert_bill_payment');
+    const error757 = result._unsafeUnwrapErr();
+    expect(error757.code).toBe('validation');
+    expect((error757 as ValidationError).issues[0]).toContain('revert_bill_payment');
   });
 });

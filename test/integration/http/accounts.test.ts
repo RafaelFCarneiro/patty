@@ -364,9 +364,9 @@ describe('GET /api/accounts/balances', () => {
     const res = await inject({ method: 'GET', url: '/api/accounts/balances?account=BalanceAcct' });
     expect(res.statusCode).toBe(200);
     const balances = res.json() as Array<{ balance: number; income: number; expenses: number }>;
-    expect(balances[0].balance).toBe(1300);
-    expect(balances[0].income).toBe(500);
-    expect(balances[0].expenses).toBe(200);
+    expect(balances[0]!.balance).toBe(1300);
+    expect(balances[0]!.income).toBe(500);
+    expect(balances[0]!.expenses).toBe(200);
   });
 
   it('pending excluded from balance, included in projectedBalance', async () => {

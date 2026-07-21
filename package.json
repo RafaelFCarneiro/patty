@@ -42,7 +42,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:all": "npm test && npm run test:integration",
     "test:watch": "vitest --config vitest.unit.config.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "mcp:inspect": "npx @modelcontextprotocol/inspector"
   },
   "ntl": {

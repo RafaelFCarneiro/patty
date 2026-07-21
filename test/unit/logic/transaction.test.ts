@@ -44,7 +44,7 @@ describe('deriveIdempotencyKey', () => {
 
 describe('defaultStatementLines — pure per-line defaulting (ADR-022 step 3)', () => {
   it('defaults date to the caller-resolved today and derives an idempotencyKey when both are absent', () => {
-    const [line] = defaultStatementLines('2026-06-10', [{ description: 'Coffee', amount: 5 }], undefined);
+    const line = defaultStatementLines('2026-06-10', [{ description: 'Coffee', amount: 5 }], undefined)[0]!;
 
     expect(line.date).toBe('2026-06-10');
     expect(line.idempotencyKey).toBeTruthy();
@@ -52,11 +52,11 @@ describe('defaultStatementLines — pure per-line defaulting (ADR-022 step 3)', 
   });
 
   it('never overrides an explicit date/idempotencyKey', () => {
-    const [line] = defaultStatementLines(
+    const line = defaultStatementLines(
       '2026-06-10',
       [{ description: 'Coffee', amount: 5, date: '2026-01-01', idempotencyKey: 'explicit' }],
       undefined,
-    );
+    )[0]!;
 
     expect(line.date).toBe('2026-01-01');
     expect(line.idempotencyKey).toBe('explicit');
@@ -206,8 +206,8 @@ describe('addLocalizedLabels', () => {
       subCategoryNames: { pt: 'Supermercado' },
     };
     const labeled = addLocalizedLabels(tx, Locale.enum.pt);
-    expect(labeled.categoryNames).toBeUndefined();
-    expect(labeled.subCategoryNames).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(labeled, 'categoryNames')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(labeled, 'subCategoryNames')).toBe(false);
   });
 
   it('leaves categoryName undefined when no category assigned', () => {
@@ -235,7 +235,7 @@ describe('addLocalizedLabels', () => {
     const mapper = addLocalizedLabels(Locale.enum.pt);
     const labeled = mapper(tx);
     expect(labeled.categoryName).toBe('Alimentação');
-    expect(labeled.categoryNames).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(labeled, 'categoryNames')).toBe(false);
   });
 });
 

@@ -86,6 +86,7 @@ beforeEach(async () => {
     FINTRACK_DB_KEY: TEST_KEY,
     PORT: 0,
     MCP_TRANSPORT: McpTransport.enum.http,
+    FINTRACK_HTTP: true,
   });
   await bootstrap(db);
   registry = { [ACCOUNT_ENTITY_TAG]: accountApplier };
@@ -835,7 +836,7 @@ describe('transactionTagApplier — set-replace mechanics, resolved by idempoten
             {
               op: PersistOp.enum.update,
               entity: TRANSACTION_TAG_ENTITY_TAG,
-              model: { idempotencyKey: 'unused', tagIds: [], version: 0 },
+              model: { version: 0 },
             },
           ] as Persistable[],
           response: null,
@@ -985,7 +986,11 @@ describe('merchantApplier — hand-written single-table applier for a key-only, 
       runEffects(db, merchantOnlyRegistry, () =>
         okAsync({
           persist: [
-            { op: PersistOp.enum.update, entity: MERCHANT_ENTITY_TAG, model: { key: 'unused', version: 0 } },
+            {
+              op: PersistOp.enum.update,
+              entity: MERCHANT_ENTITY_TAG,
+              model: { version: 0 },
+            } satisfies Persistable,
           ] as Persistable[],
           response: null,
         }),

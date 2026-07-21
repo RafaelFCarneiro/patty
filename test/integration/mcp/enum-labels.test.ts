@@ -58,7 +58,7 @@ describe('MCP integration > localized enum labels', () => {
       args: { account: accountName },
     })) as AccountBalance[];
     expect(balances).toHaveLength(1);
-    expect(balances[0].typeLabel).toBe('Checking');
+    expect(balances[0]!.typeLabel).toBe('Checking');
   });
 
   it('list_categories returns English kindLabel', async () => {
@@ -170,8 +170,8 @@ describe('MCP integration > localized enum labels', () => {
 
     const txs = (await searchTransactions(client, { account: accountName, limit: 1 })) as TransactionView[];
     expect(txs.length).toBeGreaterThan(0);
-    expect(txs[0].typeLabel).toBe('Despesa');
-    expect(txs[0].statusLabel).toBe('Efetivada');
+    expect(txs[0]!.typeLabel).toBe('Despesa');
+    expect(txs[0]!.statusLabel).toBe('Efetivada');
   });
 
   it('set_locale to es switches labels to Spanish', async () => {
