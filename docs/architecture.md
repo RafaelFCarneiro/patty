@@ -447,8 +447,7 @@ instead of performing it; the diplomat shell **applies** it.
   (`addAccountMovementViaRepo`, `addCardPurchaseViaRepo`, and the `deps.bills.ensureOpen`/`deps.transactions.create`
   write methods they were the last callers of) are deleted, along with `TransactionsRepo.update`/`.delete` —
   grep-confirmed to already have zero remaining callers once checked, the same precedent above.
-  `TransactionsRepo` now exposes only reads (`getById`/`findAllCorrelatedToCard`/`search`/`count`/`aggregate`/
-  `summaryRows`/`pendingBalanceParts`) — `confirm` (the last raw write method on this repo) was removed once
+  `TransactionsRepo` now exposes only reads — `confirm` (the last raw write method on this repo) was removed once
   `confirm_transaction` itself converted (see below): the "only confirm a pending transaction" rule that used to
   live as a SQL `AND status = 'pending'` predicate now lives in the domain, and the shell's version guard alone
   covers the concurrent-confirm race.
@@ -648,12 +647,9 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     after its write) moved to the shell — see the `resetLocale` wiring bullet above — and `resetLocale` is gone
     from `Deps` entirely.
     **`deps` now exposes no write method at all, unconditionally — not for "every entity this migration
-    covers", for every entity in the system.** `TransactionsRepo` keeps only `getById`/`findAllCorrelatedToCard`/
-    `search`/`count`/`aggregate`/`summaryRows`/`pendingBalanceParts`; `DashboardsRepo` keeps only `get`/
-    `findVersionByName`/`list`; `SettingsRepo` keeps only `getLocale`; `BillsRepo` keeps only its four read
-    methods.
-    No repo interface in the codebase exposes a write method, and no domain rule survives as a SQL predicate in
-    a repo.
+    covers", for every entity in the system.** Every repo is read-only: it exposes queries (e.g.
+    `TransactionsRepo.search`, `BillsRepo.findById`) and nothing that mutates. No repo interface in the codebase
+    exposes a write method, and no domain rule survives as a SQL predicate in a repo.
 
 ## Tool surface
 
