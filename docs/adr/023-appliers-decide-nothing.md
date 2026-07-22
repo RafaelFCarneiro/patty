@@ -133,7 +133,7 @@ not.
    the transaction write's `applied`/`created` flag, which review caught as an insufficient proxy: an FK miss
    on the link insert also fires when a referenced tag is deleted concurrently between resolution and the
    batch committing, a case the transaction's own outcome can't see). On any no-op — duplicate replay or a
-   genuine race — the read-back view's own `tags` are left alone. See `docs/architecture.md`'s
+   genuine race — the read-back view's own `tags` are left alone. See `docs/write-path.md`'s
    `transactionTag` entity bullet for the full account.
 
    **Also as built: `resolveTagLinks` is conditional on `input.tags` actually being provided, not called
@@ -163,7 +163,7 @@ not.
    This concession is **not covered by the canonical doc** and must not be presented as if it were: FC/IS rule 6
    permits an outcome-dependent *response* computed from the shell's outcome flag, not a display-joined
    projection read back inside the engine, and rule 3 has translation happening at the boundary *before* the
-   engine sees the batch. Recorded as a project-specific deviation in `docs/architecture.md` (see Consequences),
+   engine sees the batch. Recorded as a project-specific deviation in `docs/write-path.md` (see Consequences),
    not smuggled in as compliance.
 
 5. **The payoff: `transactionApplier` collapses to a registration.** With 1, 3 and 4 landed, nothing
@@ -188,7 +188,7 @@ not.
    trip the proxy while deciding nothing. The engine's own read — the registered `readBack` hook, fed on a
    duplicate by the engine's surviving-row lookup (decision 4) — is not an applier read: it is generic
    machinery an entity opts into by registration, and the recorded deviation that caps it lives in
-   `docs/architecture.md`. Reviewers check the rule; the proxy is what makes a regression visible in a diff.
+   `docs/write-path.md`. Reviewers check the rule; the proxy is what makes a regression visible in a diff.
 
 ## Options Considered
 
@@ -248,8 +248,10 @@ the data on disk one join away. Named here as the fallback if the hook ever need
   - **Transaction delete under a foreign key** (decision 5): raw FK error → bounded retry → generic `conflict`.
 - **Batch sizes grow**: a classified transaction write now carries up to three `Persistable`s (merchant,
   transaction, tag set) where it carried one. Same transaction, same round trip; more explicit.
-- **Docs**: `docs/architecture.md`'s write-path section records the applier invariant (and its single-table
-  proxy), the new entities, and the `readBack` deviation from FC/IS rules 3/6.
+- **Docs**: the applier invariant (and its single-table proxy) is recorded in `docs/architecture.md`'s
+  § Write path guardrails; the new entities and the `readBack` deviation from FC/IS rules 3/6 live in
+  `docs/write-path.md`. (The full write-path mechanics were later split out of `docs/architecture.md` into
+  `docs/write-path.md`; these pointers reflect the current location.)
   `docs/functional-core-imperative-shell.md` needs no change for the *applier-decides-nothing* half — rule 3
   already says handlers "never encode a business process" and that adding an entity is registration — but it
   does not sanction `readBack`, which is why that lands as a recorded project deviation rather than a claim of
@@ -262,7 +264,7 @@ the data on disk one join away. Named here as the fallback if the hook ever need
    single-table. **Also landed as a prerequisite**: prepending a merchant `Persistable` ahead of a flow's own
    transaction/learning-edge insert (FK order) broke `firstOutcome`/`lastOutcome`'s positional assumption the
    moment the flow's own entity no longer led or trailed the batch predictably — see the trade-off this ADR
-   didn't originally scope in "Outcomes are addressed by entity tag" (`docs/architecture.md` § Write path).
+   didn't originally scope in "Outcomes are addressed by entity tag" (`docs/write-path.md` § Outcomes and responses).
    Resolved by making `PersistOutcome` carry the `entity` tag of the `Persistable` it came from and replacing
    `firstOutcome`/`lastOutcome` with `logic/persistence.ts`'s `outcomeFor(tag, outcomes)`, addressed by tag
    rather than position — a small, mechanical, behavior-preserving refactor (`models/persistable.ts`,
@@ -289,5 +291,5 @@ Order matters: 3 last, because its justification *is* the collapse.
 2. [x] Step 1 — merchant entity + weight delta.
 3. [x] Step 2 — tag links resolved in the core, overwrite-on-duplicate.
 4. [x] Step 3 — generic idempotency; `transactionApplier` collapses to a registration.
-5. [x] Record the applier invariant, its single-table proxy, and the `readBack` deviation in
-   `docs/architecture.md`.
+5. [x] Record the applier invariant and its single-table proxy in `docs/architecture.md`'s § Write path
+   guardrails, and the new entities and `readBack` deviation in `docs/write-path.md`.
