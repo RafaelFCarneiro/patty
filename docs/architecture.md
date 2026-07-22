@@ -336,14 +336,14 @@ instead of performing it; the diplomat shell **applies** it.
   same checked-and-removed precedent every other converted entity's write methods followed). `revertBillPayment`'s
   `tryFindPaymentTransaction` returns `null` both when
   the bill never had a payment transfer and when `paymentTransactionId` no longer resolves (e.g. a concurrent
-  `delete_credit_card` removed it in the window between `revertBillPayment`'s own un-batched reads — that flow is
-  still repo-driven, not yet on ADR-021's version-guarded shell); either way the batch just carries the bill
-  update alone, nothing to delete. If the bill itself was also concurrently deleted, that update's own version
-  guard fails at apply time and the shell's retry resolves it to a clean `unknown_bill` instead of a 500 — no
-  throw needed for what would otherwise be a legitimate, if narrow, race. `BillsRepo` exposes only reads
-  (`get`/`findByCycle`/`findById`/`findAllByCard`) — no write method at all. `ensureOpen` (the last one) was
-  removed once `import_card_statement` — its last caller — converted to reuse `addCardPurchase`'s own
-  `billApplier`-based insert-or-touch decision instead (ADR-022 step 3).
+  `delete_credit_card` removed it in the window between the flow's own injected reads); either way the batch just
+  carries the version-guarded bill update alone, with no transaction removal appended. If the bill itself was
+  also concurrently deleted, that update's own version guard fails at apply time and the shell's retry resolves
+  it to a clean `unknown_bill` instead of a 500 — no throw needed for what would otherwise be a legitimate, if
+  narrow, race. `BillsRepo` is read-only, like every repo (ADR-021): it exposes reads such as `findById` and no
+  write method at all. `ensureOpen` (the last write method) was removed once `import_card_statement` — its last
+  caller — converted to reuse `addCardPurchase`'s own `billApplier`-based insert-or-touch decision instead
+  (ADR-022 step 3).
 - **Simple entity CRUD flows — including two entity-agnostic cascade appliers and a two-entity
   batch pattern.** `update_account`/`delete_account` need no applier of their own (`accountApplier` already
   covers them) — just a version-carrying read (`accountsRepo.findRawById`). Three new
