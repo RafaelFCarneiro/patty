@@ -78,6 +78,7 @@ Before changing architecture-related code, read:
 - `docs/architecture.md` (as-built project architecture, invariants, dependency direction)
 - `docs/diplomatic-architecture.md` (core Diplomat concepts) — **read the file itself**, not just the "Diplomat alignment in this project" summary in `docs/architecture.md`
 - `docs/functional-core-imperative-shell.md` (the core/shell split — the domain returns effects as data, the shell executes them; canonical/agnostic, mandatory alongside `docs/diplomatic-architecture.md` for any change that adds or touches a write flow)
+- `docs/write-path.md` (the full as-built write-path mechanics — the effect runner, the applier catalogue, outcome/response shaping, per-flow notes; **mandatory before writing or changing any write-path code**. `docs/architecture.md` § Write path carries only the always-loaded guardrails and points here for the rest; project-specific, not canonical)
 - `docs/code-style.md` (controller/logic/adapters implementation patterns)
 - `docs/code-quality.md` (constants over literals, naming, single responsibility, no magic values) — same rule: read the file itself; this is reinforced as self-review item 1 above, not optional
 
