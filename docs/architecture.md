@@ -336,14 +336,14 @@ instead of performing it; the diplomat shell **applies** it.
   same checked-and-removed precedent every other converted entity's write methods followed). `revertBillPayment`'s
   `tryFindPaymentTransaction` returns `null` both when
   the bill never had a payment transfer and when `paymentTransactionId` no longer resolves (e.g. a concurrent
-  `delete_credit_card` removed it in the window between `revertBillPayment`'s own un-batched reads — that flow is
-  still repo-driven, not yet on ADR-021's version-guarded shell); either way the batch just carries the bill
-  update alone, nothing to delete. If the bill itself was also concurrently deleted, that update's own version
-  guard fails at apply time and the shell's retry resolves it to a clean `unknown_bill` instead of a 500 — no
-  throw needed for what would otherwise be a legitimate, if narrow, race. `BillsRepo` exposes only reads
-  (`get`/`findByCycle`/`findById`/`findAllByCard`) — no write method at all. `ensureOpen` (the last one) was
-  removed once `import_card_statement` — its last caller — converted to reuse `addCardPurchase`'s own
-  `billApplier`-based insert-or-touch decision instead (ADR-022 step 3).
+  `delete_credit_card` removed it in the window between the flow's own injected reads); either way the batch just
+  carries the version-guarded bill update alone, with no transaction removal appended. If the bill itself was
+  also concurrently deleted, that update's own version guard fails at apply time and the shell's retry resolves
+  it to a clean `unknown_bill` instead of a 500 — no throw needed for what would otherwise be a legitimate, if
+  narrow, race. `BillsRepo` is read-only, like every repo (ADR-021): it exposes reads such as `findById` and no
+  write method at all. `ensureOpen` (the last write method) was removed once `import_card_statement` — its last
+  caller — converted to reuse `addCardPurchase`'s own `billApplier`-based insert-or-touch decision instead
+  (ADR-022 step 3).
 - **Simple entity CRUD flows — including two entity-agnostic cascade appliers and a two-entity
   batch pattern.** `update_account`/`delete_account` need no applier of their own (`accountApplier` already
   covers them) — just a version-carrying read (`accountsRepo.findRawById`). Three new
@@ -447,8 +447,7 @@ instead of performing it; the diplomat shell **applies** it.
   (`addAccountMovementViaRepo`, `addCardPurchaseViaRepo`, and the `deps.bills.ensureOpen`/`deps.transactions.create`
   write methods they were the last callers of) are deleted, along with `TransactionsRepo.update`/`.delete` —
   grep-confirmed to already have zero remaining callers once checked, the same precedent above.
-  `TransactionsRepo` now exposes only reads (`getById`/`findAllCorrelatedToCard`/`search`/`count`/`aggregate`/
-  `summaryRows`/`pendingBalanceParts`) — `confirm` (the last raw write method on this repo) was removed once
+  `TransactionsRepo` now exposes only reads — `confirm` (the last raw write method on this repo) was removed once
   `confirm_transaction` itself converted (see below): the "only confirm a pending transaction" rule that used to
   live as a SQL `AND status = 'pending'` predicate now lives in the domain, and the shell's version guard alone
   covers the concurrent-confirm race.
@@ -648,12 +647,9 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     after its write) moved to the shell — see the `resetLocale` wiring bullet above — and `resetLocale` is gone
     from `Deps` entirely.
     **`deps` now exposes no write method at all, unconditionally — not for "every entity this migration
-    covers", for every entity in the system.** `TransactionsRepo` keeps only `getById`/`findAllCorrelatedToCard`/
-    `search`/`count`/`aggregate`/`summaryRows`/`pendingBalanceParts`; `DashboardsRepo` keeps only `get`/
-    `findVersionByName`/`list`; `SettingsRepo` keeps only `getLocale`; `BillsRepo` keeps only its four read
-    methods.
-    No repo interface in the codebase exposes a write method, and no domain rule survives as a SQL predicate in
-    a repo.
+    covers", for every entity in the system.** Every repo is read-only: it exposes queries (e.g.
+    `TransactionsRepo.search`, `BillsRepo.findById`) and nothing that mutates. No repo interface in the codebase
+    exposes a write method, and no domain rule survives as a SQL predicate in a repo.
 
 ## Tool surface
 
