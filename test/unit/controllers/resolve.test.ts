@@ -70,14 +70,14 @@ describe('resolveLegAccounts (ADR-020 — neutral leg resolution, no ownership j
   });
 });
 
-describe('resolveTagLinks — the transaction tag-set Persistable + matched names (ADR-023 step 2)', () => {
+describe('resolveTagLinks — the transaction tag-set Persistable + matched names (ADR-023 steps 2–3)', () => {
   const tagsDeps = (tags: Array<{ id: string; name: string }>): Deps =>
     ({ tags: { list: async () => tags } }) as unknown as Deps;
 
-  it('resolves given names against deps.tags.list() into a tag-set insert, addressed by idempotencyKey', async () => {
+  it('resolves given names into a tag-set insert addressed by the transaction id', async () => {
     const deps = tagsDeps([{ id: 'tag-work', name: 'work' }]);
 
-    const resolved = await resolveTagLinks(deps, 'idem-1', ['work']);
+    const resolved = await resolveTagLinks(deps, 'tx-1', ['work']);
     expect(resolved).not.toBeNull();
     if (!resolved) return;
     const { persistable, tags } = resolved;
@@ -85,7 +85,7 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
     expect(persistable).toEqual({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_TAG_ENTITY_TAG,
-      model: { idempotencyKey: 'idem-1', tagIds: ['tag-work'] },
+      model: { transactionId: 'tx-1', tagIds: ['tag-work'] },
     });
     expect(tags).toEqual(['work']);
   });
@@ -93,7 +93,7 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
   it('drops an unmatched name from both the persisted ids and the returned names', async () => {
     const deps = tagsDeps([{ id: 'tag-work', name: 'work' }]);
 
-    const resolved = await resolveTagLinks(deps, 'idem-1', ['work', 'does-not-exist']);
+    const resolved = await resolveTagLinks(deps, 'tx-1', ['work', 'does-not-exist']);
     expect(resolved).not.toBeNull();
     if (!resolved) return;
     const { persistable, tags } = resolved;
@@ -111,7 +111,7 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
       },
     } as unknown as Deps;
 
-    const resolved = await resolveTagLinks(deps, 'idem-1', []);
+    const resolved = await resolveTagLinks(deps, 'tx-1', []);
     expect(resolved).not.toBeNull();
     if (!resolved) return;
     const { persistable, tags } = resolved;
@@ -119,7 +119,7 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
     expect(persistable).toEqual({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_TAG_ENTITY_TAG,
-      model: { idempotencyKey: 'idem-1', tagIds: [] },
+      model: { transactionId: 'tx-1', tagIds: [] },
     });
     expect(tags).toEqual([]);
   });
@@ -133,6 +133,6 @@ describe('resolveTagLinks — the transaction tag-set Persistable + matched name
       },
     } as unknown as Deps;
 
-    expect(await resolveTagLinks(deps, 'idem-1', undefined)).toBeNull();
+    expect(await resolveTagLinks(deps, 'tx-1', undefined)).toBeNull();
   });
 });

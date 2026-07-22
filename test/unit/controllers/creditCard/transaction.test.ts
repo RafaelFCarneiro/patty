@@ -288,8 +288,57 @@ describe('addCardPurchase — tag-set resolution (ADR-023 step 2)', () => {
     expect(persist.find((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG)).toEqual({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_TAG_ENTITY_TAG,
-      model: { idempotencyKey: 'k-tags', tagIds: ['tag-work'] },
+      // Addressed by the flow's own minted transaction id (sequentialNewId's first mint).
+      model: { transactionId: 'id-0', tagIds: ['tag-work'] },
     });
+  });
+
+  it("a duplicate replay's response keeps the surviving row's tags, not the replay's matched names", async () => {
+    const deps = makeDeps({
+      creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
+      bills: { findByCycle: async () => null } as unknown as Deps['bills'],
+      tags: { list: async () => [{ id: 'tag-work', name: 'work' }] } as unknown as Deps['tags'],
+      newId: sequentialNewId(),
+    });
+
+    const result = await addCardPurchase(
+      deps,
+      {
+        description: 'Replay attempt',
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-15',
+        card: 'Test Card',
+        idempotencyKey: 'k-replay-tags',
+        tags: ['work'],
+      },
+      TransactionSource.enum.mcp,
+    );
+    const outcome = result._unsafeUnwrap();
+
+    // The shell reports the duplicate: the insert no-op'd, the replay's tag set no-op'd with it
+    // (its minted id was never inserted), and the read-back view is the surviving row — whose own
+    // tags are untouched (ADR-023 step 3).
+    const surviving = {
+      ...cardOwnedTx,
+      id: 'existing-id',
+      description: 'Original',
+      tags: ['finance'],
+    };
+    const responseFn = outcome.response as (outcomes: PersistOutcome[]) => {
+      created: boolean;
+      transaction: { tags?: string[] };
+    };
+    // The tag-set Persistable no-op'd too — this is what the overlay gate must key off, not the
+    // transaction's own applied flag.
+    const response = responseFn([
+      { entity: 'bill', applied: true },
+      { entity: 'transaction', applied: false, read: surviving },
+      { entity: TRANSACTION_TAG_ENTITY_TAG, applied: false },
+    ]);
+
+    expect(response.created).toBe(false);
+    expect(response.transaction.tags).toEqual(['finance']);
   });
 
   it('omitting tags emits no tag-set Persistable and never reads the tag catalog', async () => {
@@ -799,7 +848,7 @@ describe('updateCardTransaction — tag-set resolution (ADR-023 step 2)', () => 
     expect(persist.find((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG)).toEqual({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_TAG_ENTITY_TAG,
-      model: { idempotencyKey: cardOwnedTx.idempotencyKey, tagIds: ['tag-work'] },
+      model: { transactionId: cardOwnedTx.id, tagIds: ['tag-work'] },
     });
   });
 });

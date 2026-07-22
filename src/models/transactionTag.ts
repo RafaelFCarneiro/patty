@@ -1,7 +1,8 @@
-/** No `id`/`version` — a link table like `merchant_category`. Addressed by `idempotencyKey`, not
- *  `transactionId`: a create flow's own `entity.id` is a fresh mint on every call, so on a
- *  duplicate-idempotency-key resubmission it names a row that was never inserted —
- *  `idempotencyKey` reliably resolves to whichever row actually persisted. */
+/** No `id`/`version` — a link table like `merchant_category`. `transactionId` is the flow's own
+ *  `entity.id`: the minted id on a create, the read row's id on an update. On a
+ *  duplicate-idempotency-key replay the minted id was never inserted, so the set addresses a row
+ *  that doesn't exist and the applier no-ops — a duplicate replay never touches tags, matching the
+ *  first-write-wins treatment the rest of the row already gets (ADR-023 step 3). */
 export const TRANSACTION_TAG_ENTITY_TAG = 'transactionTag';
 
-export type TransactionTagSet = { idempotencyKey: string; tagIds: string[] };
+export type TransactionTagSet = { transactionId: string; tagIds: string[] };

@@ -12,6 +12,7 @@ import { resolveCurrency } from '../../logic/money.js';
 import { normalizeMerchant, resolveMerchantCorrection, withMerchant, withMerchantLearning } from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
+import { overlayResolvedTags } from '../../logic/tag.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
@@ -130,14 +131,16 @@ const addAccountMovement = (
     const { entity, classification } = yield* planAccountMovement(deps, input, type, source);
 
     const locale = await deps.locale();
-    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
+    const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
     const persist = [
       ...withMerchant([persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })], entity.refs.merchantKey),
       ...(tagLinks ? [tagLinks.persistable] : []),
     ];
     const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
       const result = buildUpsertResult(outcomes, classification, locale);
-      return tagLinks ? { ...result, transaction: { ...result.transaction, tags: tagLinks.tags } } : result;
+      return tagLinks
+        ? { ...result, transaction: overlayResolvedTags(result.transaction, tagLinks.tags, outcomes) }
+        : result;
     };
     return ok({ persist, response });
   });
@@ -231,7 +234,7 @@ export const updateAccountTransaction = (
 
     const locale = await deps.locale();
     const merchantCorrection = resolveMerchantCorrection(existing, categoryId);
-    const tagLinks = await resolveTagLinks(deps, entity.idempotencyKey, input.tags);
+    const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
     const persist: Persistable[] = [
       ...withMerchantLearning(
         [persistence.update({ entity: TRANSACTION_ENTITY_TAG, model: { ...entity, version: existing.version } })],
@@ -241,7 +244,7 @@ export const updateAccountTransaction = (
     ];
     const response = (outcomes: PersistOutcome[]): TransactionView => {
       const result = buildTransactionView(outcomes, locale);
-      return tagLinks ? { ...result, tags: tagLinks.tags } : result;
+      return tagLinks ? overlayResolvedTags(result, tagLinks.tags, outcomes) : result;
     };
     return ok({ persist, response });
   });

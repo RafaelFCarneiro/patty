@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { resolveTagIds, resolveTagNames, tagSetPersistable } from '../../../src/logic/tag.js';
-import { PersistOp } from '../../../src/models/persistable.js';
+import { overlayResolvedTags, resolveTagIds, resolveTagNames, tagSetPersistable } from '../../../src/logic/tag.js';
+import { PersistOp, type PersistOutcome } from '../../../src/models/persistable.js';
 import type { Tag } from '../../../src/models/tag.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transactionTag.js';
 
@@ -58,19 +58,40 @@ describe('resolveTagNames — the matched-name projection a flow response shows 
 });
 
 describe('tagSetPersistable — builds the transaction tag-set insert (ADR-023 decision 3)', () => {
-  it('builds an insert Persistable carrying the idempotency key and resolved tag ids', () => {
-    expect(tagSetPersistable('idem-1', ['tag-work'])).toEqual({
+  it('builds an insert Persistable carrying the transaction id and resolved tag ids', () => {
+    expect(tagSetPersistable('tx-1', ['tag-work'])).toEqual({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_TAG_ENTITY_TAG,
-      model: { idempotencyKey: 'idem-1', tagIds: ['tag-work'] },
+      model: { transactionId: 'tx-1', tagIds: ['tag-work'] },
     });
   });
 
   it('builds one even with an empty tag set — a set-replace to "no tags", not skipped', () => {
-    expect(tagSetPersistable('idem-1', [])).toEqual({
+    expect(tagSetPersistable('tx-1', [])).toEqual({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_TAG_ENTITY_TAG,
-      model: { idempotencyKey: 'idem-1', tagIds: [] },
+      model: { transactionId: 'tx-1', tagIds: [] },
     });
+  });
+});
+
+describe('overlayResolvedTags — gated on the tag-set outcome, never the transaction write\'s (review fix)', () => {
+  it('overlays the matched names when the tag-set Persistable applied', () => {
+    const outcomes: PersistOutcome[] = [{ entity: TRANSACTION_TAG_ENTITY_TAG, applied: true }];
+    expect(overlayResolvedTags({ tags: ['stale'] }, ['work'], outcomes)).toEqual({ tags: ['work'] });
+  });
+
+  it('leaves the view untouched when the tag set no-op\'d — whatever the reason', () => {
+    // Covers both a duplicate replay AND a tag deleted concurrently between resolution and the
+    // batch committing: `transactionTagApplier` reports `applied: false` for either, and this
+    // must not be read as "these names are attached" regardless of cause.
+    const outcomes: PersistOutcome[] = [{ entity: TRANSACTION_TAG_ENTITY_TAG, applied: false }];
+    expect(overlayResolvedTags({ tags: ['surviving'] }, ['work'], outcomes)).toEqual({ tags: ['surviving'] });
+  });
+
+  it('throws if no tag-set outcome is in the batch — a batch-composition bug, never silent', () => {
+    expect(() => overlayResolvedTags({ tags: [] }, ['work'], [])).toThrow(
+      'no persist outcome found for entity "transactionTag"',
+    );
   });
 });

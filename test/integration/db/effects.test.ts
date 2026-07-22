@@ -600,6 +600,58 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
   });
 });
 
+describe('engine idempotency treatment — declared by registration, generic over any entity (ADR-023 step 3)', () => {
+  const KEYED_TAG = 'keyedEntity';
+
+  // `tags` doubles as an arbitrary keyed table here: registering `name` as the idempotency column
+  // exercises the generic treatment with no transaction-specific machinery in sight. `readBack`
+  // just echoes the id it was handed, so tests can assert WHICH row the engine resolved.
+  const keyedRegistry: ApplierRegistry = {
+    [KEYED_TAG]: versionedTableApplier(tags, { idempotencyColumn: 'name', readBack: async (_tx, id) => id }),
+  };
+
+  const insertKeyed = (model: { id: string; name: string; version: number }) => () =>
+    okAsync({
+      persist: [{ op: PersistOp.enum.insert, entity: KEYED_TAG, model }] as Persistable[],
+      response: (outcomes: PersistOutcome[]) => outcomes[0],
+    });
+
+  it('a fresh insert under a new key applies normally, reading back its own minted id', async () => {
+    const model = { id: randomUUID(), name: `Key ${randomUUID()}`, version: 0 };
+
+    const result = await runEffects(db, keyedRegistry, insertKeyed(model));
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toMatchObject({ applied: true, read: model.id });
+  });
+
+  it('a duplicate-key insert no-ops with applied:false and reads back the SURVIVING row id', async () => {
+    const original = { id: randomUUID(), name: `Key ${randomUUID()}`, version: 0 };
+    await runEffects(db, keyedRegistry, insertKeyed(original));
+
+    // Same key, fresh id — the existing row is the outcome, never a conflict or a second row.
+    const replay = { id: randomUUID(), name: original.name, version: 0 };
+    const result = await runEffects(db, keyedRegistry, insertKeyed(replay));
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toMatchObject({ applied: false, read: original.id });
+    expect(await db.all(sql`SELECT id FROM tags WHERE name = ${original.name}`)).toEqual([{ id: original.id }]);
+  });
+
+  it('the id guard stays separate: a same-id insert under a DIFFERENT key still raises', async () => {
+    const original = { id: randomUUID(), name: `Key ${randomUUID()}`, version: 0 };
+    await runEffects(db, keyedRegistry, insertKeyed(original));
+
+    // With a key present the conflict target is the idempotency column, so an id collision is NOT
+    // absorbed as a structural same-id retry — the two guards never merge. (The reverse — an
+    // entity with no idempotency config no-oping a same-id retry — is asserted independently in
+    // the runEffects suite above.)
+    await expect(
+      runEffects(db, keyedRegistry, insertKeyed({ id: original.id, name: `Key ${randomUUID()}`, version: 0 })),
+    ).rejects.toThrow();
+  });
+});
+
 // Row-shaped input (as `adapters/transactions.ts`'s `entityToDb` produces it) — the applier
 // trusts it as-is, same reasoning as `newAccount` above. Module-scope: shared by every suite below.
 const newTransactionRow = (overrides: Partial<TransactionRowEntity> = {}): TransactionRowEntity => ({
@@ -633,7 +685,7 @@ const insertRow = (model: TransactionRowEntity) => () =>
     response: (outcomes: PersistOutcome[]) => outcomes[0],
   });
 
-describe('transactionApplier — custom mechanics beyond the id/version convention (ADR-021 phase 2a)', () => {
+describe('transactionApplier — collapsed to a versionedTableApplier registration (ADR-023 step 3)', () => {
   const transactionRegistry: ApplierRegistry = { [TRANSACTION_ENTITY_TAG]: transactionApplier };
 
   it('insert reports applied:true and reads back the persisted, joined view for a brand-new transaction', async () => {
@@ -756,9 +808,46 @@ describe('transactionApplier — custom mechanics beyond the id/version conventi
     expect(result.isOk()).toBe(true);
     expect(await db.all(sql`SELECT id FROM transactions WHERE id = ${row.id}`)).toHaveLength(0);
   });
+
+  it('a delete blocked by a bill-payment FK retries bounded, then surfaces the generic conflict', async () => {
+    const row = newTransactionRow();
+    await runEffects(db, transactionRegistry, insertRow(row));
+    const { cardId } = await insertCreditCardWithAccount();
+    await db.insert(bills).values({
+      id: randomUUID(),
+      creditCardId: cardId,
+      month: 6,
+      year: 2026,
+      closeDate: '2026-06-28',
+      dueDate: '2026-07-05',
+      status: BillStatus.enum.paid,
+      paymentTransactionId: row.id,
+      version: 0,
+    });
+
+    let calls = 0;
+    const flow = () => {
+      calls += 1;
+      return okAsync({
+        persist: [
+          { op: PersistOp.enum.delete, entity: TRANSACTION_ENTITY_TAG, id: row.id, version: row.version },
+        ] as Persistable[],
+        response: null,
+      });
+    };
+    const result = await runEffects(db, transactionRegistry, flow);
+
+    // Before the collapse the bespoke delete had no error handling and this FK violation surfaced
+    // as a raw throw; the generic applier treats it as the same "world changed" condition a stale
+    // version reports (bounded retry → generic conflict) — the intended behavior change.
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    expect(calls).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
+    expect(await db.all(sql`SELECT id FROM transactions WHERE id = ${row.id}`)).toHaveLength(1);
+  });
 });
 
-describe('transactionTagApplier — set-replace mechanics, resolved by idempotencyKey (ADR-023 step 2)', () => {
+describe('transactionTagApplier — set-replace addressed by the transaction id (ADR-023 steps 2–3)', () => {
   const tagLinksRegistry: ApplierRegistry = {
     [TRANSACTION_ENTITY_TAG]: transactionApplier,
     [TRANSACTION_TAG_ENTITY_TAG]: transactionTagApplier,
@@ -777,22 +866,23 @@ describe('transactionTagApplier — set-replace mechanics, resolved by idempoten
     return rows.map((r) => r.name);
   };
 
-  const insertTagSet = (idempotencyKey: string, tagIds: string[]) => () =>
+  const insertTagSet = (transactionId: string, tagIds: string[]) => () =>
     okAsync({
       persist: [
-        { op: PersistOp.enum.insert, entity: TRANSACTION_TAG_ENTITY_TAG, model: { idempotencyKey, tagIds } },
+        { op: PersistOp.enum.insert, entity: TRANSACTION_TAG_ENTITY_TAG, model: { transactionId, tagIds } },
       ] as Persistable[],
-      response: null,
+      response: (outcomes: PersistOutcome[]) => outcomes[0]?.applied,
     });
 
-  it('attaches the given tag ids for a transaction, resolving the row by its idempotencyKey', async () => {
+  it('attaches the given tag ids to the addressed transaction row', async () => {
     const row = newTransactionRow();
     await runEffects(db, tagLinksRegistry, insertRow(row));
     const tagId = await seedTag(`Tag ${randomUUID()}`);
 
-    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, [tagId]));
+    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.id, [tagId]));
 
     expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe(true);
     expect(await readLinkedTagNames(row.id)).toHaveLength(1);
   });
 
@@ -803,8 +893,8 @@ describe('transactionTagApplier — set-replace mechanics, resolved by idempoten
     const secondTagName = `Tag ${randomUUID()}`;
     const secondTagId = await seedTag(secondTagName);
 
-    await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, [firstTagId]));
-    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, [secondTagId]));
+    await runEffects(db, tagLinksRegistry, insertTagSet(row.id, [firstTagId]));
+    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.id, [secondTagId]));
 
     expect(result.isOk()).toBe(true);
     expect(await readLinkedTagNames(row.id)).toEqual([secondTagName]);
@@ -814,18 +904,27 @@ describe('transactionTagApplier — set-replace mechanics, resolved by idempoten
     const row = newTransactionRow();
     await runEffects(db, tagLinksRegistry, insertRow(row));
     const tagId = await seedTag(`Tag ${randomUUID()}`);
-    await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, [tagId]));
+    await runEffects(db, tagLinksRegistry, insertTagSet(row.id, [tagId]));
 
-    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, []));
+    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.id, []));
 
     expect(result.isOk()).toBe(true);
     expect(await readLinkedTagNames(row.id)).toEqual([]);
   });
 
-  it('throws a clear error when no transaction row exists for the given idempotencyKey', async () => {
-    await expect(runEffects(db, tagLinksRegistry, insertTagSet(`idem-${randomUUID()}`, []))).rejects.toThrow(
-      'no row found for idempotencyKey',
-    );
+  it("a set addressing a row that doesn't exist no-ops with applied:false, touching no other row's links", async () => {
+    // The duplicate-replay signature: the minted id was never inserted. The FK miss is translated
+    // to a no-op, never a raw error — and the batch as a whole still commits.
+    const bystander = newTransactionRow();
+    await runEffects(db, tagLinksRegistry, insertRow(bystander));
+    const tagId = await seedTag(`Tag ${randomUUID()}`);
+    await runEffects(db, tagLinksRegistry, insertTagSet(bystander.id, [tagId]));
+
+    const result = await runEffects(db, tagLinksRegistry, insertTagSet(`never-inserted-${randomUUID()}`, [tagId]));
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe(false);
+    expect(await readLinkedTagNames(bystander.id)).toHaveLength(1);
   });
 
   it('update is structurally unreachable — every write to this entity is an insert (set-replace)', async () => {
@@ -862,7 +961,7 @@ describe('transactionTagApplier — set-replace mechanics, resolved by idempoten
     const row = newTransactionRow();
     await runEffects(db, tagLinksRegistry, insertRow(row));
     const tagId = await seedTag(`Tag ${randomUUID()}`);
-    await runEffects(db, tagLinksRegistry, insertTagSet(row.idempotencyKey, [tagId]));
+    await runEffects(db, tagLinksRegistry, insertTagSet(row.id, [tagId]));
     expect(await readLinkedTagNames(row.id)).toHaveLength(1);
 
     const result = await runEffects(db, tagLinksRegistry, () =>
@@ -879,7 +978,7 @@ describe('transactionTagApplier — set-replace mechanics, resolved by idempoten
   });
 });
 
-describe('transactionApplier + transactionTagApplier — duplicate-insert tag semantics (ADR-023 step 2)', () => {
+describe('transactionApplier + transactionTagApplier — duplicate-insert tag semantics (ADR-023 step 3)', () => {
   const combinedRegistry: ApplierRegistry = {
     [TRANSACTION_ENTITY_TAG]: transactionApplier,
     [TRANSACTION_TAG_ENTITY_TAG]: transactionTagApplier,
@@ -898,6 +997,8 @@ describe('transactionApplier + transactionTagApplier — duplicate-insert tag se
     return rows.map((r) => r.name);
   };
 
+  // The real flow shape: the tag set addresses the flow's own minted `entity.id` and trails the
+  // transaction insert in the batch.
   const insertWithTags = (row: TransactionRowEntity, tagIds: string[]) => () =>
     okAsync({
       persist: [
@@ -905,29 +1006,30 @@ describe('transactionApplier + transactionTagApplier — duplicate-insert tag se
         {
           op: PersistOp.enum.insert,
           entity: TRANSACTION_TAG_ENTITY_TAG,
-          model: { idempotencyKey: row.idempotencyKey, tagIds },
+          model: { transactionId: row.id, tagIds },
         },
       ] as Persistable[],
       response: null,
     });
 
-  it('a duplicate idempotency-key submission overwrites the tag set (behavior change, ADR-023)', async () => {
-    const firstTagId = await seedTag(`Tag ${randomUUID()}`);
-    const secondTagName = `Tag ${randomUUID()}`;
-    const secondTagId = await seedTag(secondTagName);
+  it("a duplicate idempotency-key replay leaves the surviving row's tags untouched", async () => {
+    const firstTagName = `Tag ${randomUUID()}`;
+    const firstTagId = await seedTag(firstTagName);
+    const secondTagId = await seedTag(`Tag ${randomUUID()}`);
 
     const original = newTransactionRow({ description: 'Original' });
     const firstResult = await runEffects(db, combinedRegistry, insertWithTags(original, [firstTagId]));
     expect(firstResult.isOk()).toBe(true);
-    expect(await readLinkedTagNames(original.id)).toHaveLength(1);
+    expect(await readLinkedTagNames(original.id)).toEqual([firstTagName]);
 
     // Same idempotency key, but a fresh id — exactly what a real replay sends. The transaction
-    // insert no-ops; the tag-set insert still resolves the real row by idempotencyKey.
+    // insert no-ops, the replay's minted id is never inserted, and the tag set addressing it
+    // no-ops on the FK miss: first-write-wins, same as the rest of the row.
     const replay = newTransactionRow({ idempotencyKey: original.idempotencyKey, description: 'Replay attempt' });
     const replayResult = await runEffects(db, combinedRegistry, insertWithTags(replay, [secondTagId]));
 
     expect(replayResult.isOk()).toBe(true);
-    expect(await readLinkedTagNames(original.id)).toEqual([secondTagName]);
+    expect(await readLinkedTagNames(original.id)).toEqual([firstTagName]);
     expect(await readLinkedTagNames(replay.id)).toEqual([]);
   });
 });

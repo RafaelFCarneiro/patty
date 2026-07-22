@@ -86,17 +86,19 @@ export type TagLinksResolution = { persistable: Persistable; tags: string[] };
 // `undefined` (the caller's `input.tags` omitted) means "leave tags alone" — returns null, no
 // Persistable, no deps.tags.list() read: a create/update that never mentions tags shouldn't pay
 // for one. Never fails otherwise — an unmatched name is dropped, not an error — so this is a
-// plain Promise rather than a ResultAsync, unlike this module's other resolvers.
+// plain Promise rather than a ResultAsync, unlike this module's other resolvers. `transactionId`
+// is the flow's own `entity.id`; on a duplicate-idempotency replay the applier no-ops on it
+// (models/transactionTag.ts), so a duplicate never touches the surviving row's tags.
 export const resolveTagLinks = async (
   deps: Deps,
-  idempotencyKey: string,
+  transactionId: string,
   tagNames: readonly string[] | undefined,
 ): Promise<TagLinksResolution | null> => {
   if (R.isNullish(tagNames)) return null;
-  if (R.isEmpty(tagNames)) return { persistable: tagSetPersistable(idempotencyKey, []), tags: [] };
+  if (R.isEmpty(tagNames)) return { persistable: tagSetPersistable(transactionId, []), tags: [] };
   const allTags = await deps.tags.list();
   return {
-    persistable: tagSetPersistable(idempotencyKey, resolveTagIds(tagNames, allTags)),
+    persistable: tagSetPersistable(transactionId, resolveTagIds(tagNames, allTags)),
     tags: resolveTagNames(tagNames, allTags),
   };
 };

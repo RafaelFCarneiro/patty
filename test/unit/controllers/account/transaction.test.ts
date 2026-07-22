@@ -353,7 +353,8 @@ describe('addAccountExpense — tag-set resolution (ADR-023 step 2)', () => {
     expect(tagSet).toEqual({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_TAG_ENTITY_TAG,
-      model: { idempotencyKey: 'tags-resolve', tagIds: ['tag-work'] },
+      // Addressed by the flow's own minted transaction id (makeDeps' newId stub).
+      model: { transactionId: 'test-id', tagIds: ['tag-work'] },
     });
   });
 
@@ -374,6 +375,58 @@ describe('addAccountExpense — tag-set resolution (ADR-023 step 2)', () => {
 
     const outcome = result._unsafeUnwrap();
     expect(outcome.persist.some((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG)).toBe(false);
+  });
+
+  it("a fresh insert's response overlays the matched tag names onto the read-back view", async () => {
+    const deps = makeDeps({
+      tags: { list: async () => [{ id: 'tag-travel', name: 'travel' }] } as unknown as Deps['tags'],
+    });
+
+    const result = await addAccountExpense(
+      deps,
+      { description: 'Groceries', amount: 30, idempotencyKey: 'fresh-tags', tags: ['travel'] },
+      TransactionSource.enum.mcp,
+    );
+    const outcome = result._unsafeUnwrap();
+    const { model: entity } = findTransactionPersistable(outcome.persist) as { model: MinimalEntity };
+
+    // The read-back runs before the tag set applies, so its view can't show the fresh links —
+    // the overlay is what surfaces them. Gated on the tag set's OWN outcome, not the transaction's.
+    const response = resolveResponse(outcome, [
+      { entity: 'transaction', applied: true, read: rawViewFor(entity) },
+      { entity: TRANSACTION_TAG_ENTITY_TAG, applied: true },
+    ]);
+    expect(response.created).toBe(true);
+    expect(response.transaction.tags).toEqual(['travel']);
+  });
+
+  it("a duplicate replay's response keeps the surviving row's tags, not the replay's matched names", async () => {
+    const deps = makeDeps({
+      tags: { list: async () => [{ id: 'tag-travel', name: 'travel' }] } as unknown as Deps['tags'],
+    });
+
+    const result = await addAccountExpense(
+      deps,
+      { description: 'Groceries', amount: 30, idempotencyKey: 'replay-tags', tags: ['travel'] },
+      TransactionSource.enum.mcp,
+    );
+    const outcome = result._unsafeUnwrap();
+    // The shell reports the duplicate: the insert no-op'd, the replay's tag set no-op'd with it
+    // (its minted id was never inserted), and the read-back view is the surviving row — whose own
+    // tags are untouched (ADR-023 step 3).
+    const surviving = {
+      ...rawViewFor({ id: 'existing-id', description: 'Original', amount: 5, type: 'expense', currency: 'BRL' }),
+      tags: ['finance'],
+    };
+
+    // The tag-set Persistable no-op'd too (the replay's minted id was never inserted) — this is
+    // what the overlay gate must key off, not the transaction's own applied flag.
+    const response = resolveResponse(outcome, [
+      { entity: 'transaction', applied: false, read: surviving },
+      { entity: TRANSACTION_TAG_ENTITY_TAG, applied: false },
+    ]);
+    expect(response.created).toBe(false);
+    expect(response.transaction.tags).toEqual(['finance']);
   });
 });
 
@@ -577,7 +630,7 @@ describe('updateAccountTransaction — tag-set resolution (ADR-023 step 2)', () 
     expect(tagSet).toEqual({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_TAG_ENTITY_TAG,
-      model: { idempotencyKey: 'existing-key', tagIds: ['tag-travel'] },
+      model: { transactionId: 'tx-1', tagIds: ['tag-travel'] },
     });
   });
 
@@ -594,7 +647,7 @@ describe('updateAccountTransaction — tag-set resolution (ADR-023 step 2)', () 
     expect(tagSet).toEqual({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_TAG_ENTITY_TAG,
-      model: { idempotencyKey: 'existing-key', tagIds: [] },
+      model: { transactionId: 'tx-1', tagIds: [] },
     });
   });
 });
