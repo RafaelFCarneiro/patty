@@ -79,456 +79,184 @@ These three live with the domain entity in `models/`, not scattered across contr
   - `dbToModel`
 - In call sites, prefer namespace imports for clarity, e.g. `import * as transactionAdapters from '../adapters/transactions.js'` then `transactionAdapters.modelToDb(...)`.
 
-## Write path: functional core / imperative shell (ADR-021/ADR-022)
+## Write path: functional core / imperative shell (ADR-021 / ADR-022 / ADR-023)
 
-**Current state:** every write flow in the codebase is converted (ADR-021 phases 1–3c complete, plus
-`confirm_transaction`/`save_dashboard`/`set_locale` — the three flows that sat outside the ledger domain and were
-picked up in a final pass once the rest had landed). `deps` exposes **no write method at all, unconditionally** —
-controllers only ever decide and return effects; the domain is structurally incapable of writing. Migration history
-lives in ADR-021/ADR-022, not here.
+**Current state:** every write flow is converted. `deps` exposes **no write method at all** — controllers only
+decide and return effects; the domain is structurally incapable of writing. This section is the as-built
+*shape*; the *why* and the migration history live in **ADR-021** (functional core / imperative shell),
+**ADR-022** (the effect runner), and **ADR-023** (appliers decide nothing). Read those before changing this
+machinery.
 
-The shape, per `docs/functional-core-imperative-shell.md`: a controller **decides** and returns the write as data
-instead of performing it; the diplomat shell **applies** it.
-
-The rest of this section is organized by concern, following that data as it crosses the boundary: what a
-controller returns (**the core's contract**), how a domain model becomes a row (**the boundary adaptation**),
-what runs the resulting effects (**the effect runner**), how each entity's write is actually performed
-(**appliers**), what the shell reports back (**outcomes and responses**), and finally the individual flows that
-compose these pieces (**per-flow notes**).
+Per `docs/functional-core-imperative-shell.md`: a controller **decides** and returns the write as data; the
+diplomat shell **applies** it. Organized below by concern — the core's contract, the boundary adaptation, the
+effect runner, appliers, outcomes, and the per-flow notes.
 
 ### The core's contract — what a controller returns
 
-- **`Persistable` / `PersistOp`** (`src/models/persistable.ts`): **entity-agnostic.** `Persistable<Tag extends
-  string = string, Model = unknown>` is generic over the entity's own tag + model rather than a closed union
-  enumerating every entity — this file never imports a specific entity's model, and never needs editing as
-  more flows are converted. `PersistOp` is a named enum (`insert`/`update`/`delete` — constants over literals)
-  shared across every entity. Each entity module owns its own tag: `models/account.ts`'s
-  `ACCOUNT_ENTITY_TAG = 'account'`. A converted controller returns
-  `ResultAsync<{ persist: Persistable[]; response: T }, AppError>` instead of `ResultAsync<T, AppError>` —
-  composed with `safeTry` exactly as before, it just stops calling `deps.<x>.create` and instead builds a
-  `Persistable` from the model it already holds, via the generic builders in `logic/persistence.ts`
-  (`insert`/`update`/`remove` — also entity-agnostic; one place every converted controller constructs the
-  tagged shape from, and, being generic over `Tag`/`Model`, never needs a new case as more entities convert).
-- **`version`**: every mutable entity table carries `version INTEGER NOT NULL DEFAULT 0` (see § Relational
-  schema) — an optimistic-concurrency token, internal to the persistence side only, never exposed on the
-  entity's public model/wire shape (`Account`/`AccountSchema`). It is **not** part of an `insert`
-  `Persistable`'s model either: a brand-new row's version is always the same structural constant
-  (`INITIAL_VERSION`, exported from `models/persistable.ts`) — nothing the core decides, so the core never
-  states it, and the entity's own diplomat-edge adapter supplies it once, at the handler, right where it
-  shapes the insert row (see below). Only `update`/`delete` carry a real, varying `version` (the value the
-  core read), via the persistence-side type (`AccountEntity`/`AccountEntitySchema` in `models/account.ts`,
-  `Account` + `version`). Because an insert's model is already the plain `Account`, a converted create flow's
-  response is that same model — no stripping needed.
+- **A converted controller returns `ResultAsync<{ persist: Persistable[]; response: T }, AppError>`** (not
+  `ResultAsync<T>`), composed with `safeTry` as before — it just builds `Persistable`s instead of calling
+  `deps.<x>.create`. Builders: `logic/persistence.ts`'s `insert`/`update`/`remove`.
+- **`Persistable` / `PersistOp`** (`models/persistable.ts`) are **entity-agnostic** — `Persistable<Tag, Model>`
+  generic over the entity's own tag + model, never a closed union; this file never imports a specific entity.
+  `PersistOp` is a named enum (`insert`/`update`/`delete`). Each entity module owns its own tag constant
+  (e.g. `models/account.ts`'s `ACCOUNT_ENTITY_TAG`).
+- **`version`** — every mutable table carries `version INTEGER NOT NULL DEFAULT 0` (§ Relational schema): an
+  optimistic-concurrency token, persistence-side only, never on the public model/wire shape. An `insert`
+  `Persistable`'s model omits it (a new row is always `INITIAL_VERSION`, `models/persistable.ts`); only
+  `update`/`delete` carry the real read `version`, via the persistence-side type (`AccountEntity` = `Account`
+  + `version`).
 
 ### From model to row — the boundary adaptation
 
-- **The model→row adaptation happens once, explicitly, at the diplomat handler — never inside `diplomat/db`.**
-  A converted controller's `Persistable`s carry domain models (`Account`/`AccountEntity`); by the time
-  `runEffects` applies them, they must already be db rows. The MCP/REST handler that calls `runEffects`
-  does that conversion itself, mapping the controller's `FlowOutcome` through the entity's own `outcomeToDb`
-  (`adapters/accounts.ts`, built from just `modelToDb` via `logic/persistence.ts`'s `entityDbAdapter` — see
-  below) *before* handing the flow to `runEffects` — e.g.
-  `createAccount(deps, model).map(accountAdapters.outcomeToDb)`. `runEffects(flow)` itself is still called
-  with one argument, exactly as before; only what `flow` produces changed. This keeps `modelToDb` calls
-  where the rest of the codebase already expects adapter calls to live — at the boundary, explicit at the
-  call site — rather than hidden inside `diplomat/db`.
-- **`entityDbAdapter`** (`src/logic/persistence.ts`) — the diplomat-edge counterpart to
-  `versionedTableApplier` below, factored out for the same reason: every entity's `persistableToDb`/
-  `outcomeToDb` pair followed the identical op-switch shape by hand (no-op on a foreign entity tag;
-  `insert` bakes in `INITIAL_VERSION` before shaping the row; `update` shapes the already-versioned model;
-  `delete` carries no model to shape). `entityDbAdapter(entityTag, modelToDb)` builds that pair from just
-  the entity's own `modelToDb`, so an adapter module (`adapters/accounts.ts`, `adapters/categories.ts`, …)
-  supplies `modelToDb` and one line —
-  `export const { persistableToDb, outcomeToDb } = entityDbAdapter(ACCOUNT_ENTITY_TAG, modelToDb)` — instead
-  of hand-writing the switch. An entity whose domain model already matches its row shape 1:1 once versioned
-  (`tags`) still supplies a `modelToDb` — the identity function — rather than skipping the factory, so
-  every entity's adapter follows the same one-line shape. Not every entity fits: `adapters/bills.ts` calls
-  `modelToDb` the same way for `insert` and `update`, but a bill's `update` genuinely needs
-  `paymentTransactionId: undefined` (leave the column unchanged) to mean something different from `null`
-  (clear it) — the uniform factory can't express that asymmetry, so `bills` keeps its own hand-written
-  `persistableToDb`/`outcomeToDb`, unchanged by this factory.
+- **Model→row adaptation happens once, at the diplomat handler — never inside `diplomat/db`.** A `Persistable`
+  carries domain models; the MCP/REST handler maps the controller's `FlowOutcome` through the entity's own
+  `outcomeToDb` *before* calling `runEffects` — e.g. `createAccount(deps, model).map(accountAdapters.outcomeToDb)`.
+  `runEffects(flow)` still takes one argument.
+- **`entityDbAdapter(entityTag, modelToDb)`** (`logic/persistence.ts`) builds an entity's `persistableToDb`/
+  `outcomeToDb` pair from just its `modelToDb`, so each adapter module is one line; an entity whose model matches
+  its row 1:1 (`tags`) supplies the identity `modelToDb`. Exception: `adapters/bills.ts` hand-writes its own,
+  because a bill `update` needs `paymentTransactionId: undefined` (leave the column unchanged) to differ from
+  `null` (clear it) — an asymmetry the uniform factory can't express.
 
 ### The effect runner — the engine
 
-- **`runEffects`** (`src/diplomat/db/effects.ts`, `diplomat/db` — the only place that touches `Db` for a
-  converted flow) is the shell's generic **effect runner** (ADR-022): `runEffects(db, registry, flow)`
-  invokes `flow` and executes the effects it returns. Effect kinds: **persistence** — the `persist` batch,
-  applied in one `db.transaction` by dispatching each already row-shaped `Persistable` through the `registry`
-  (insert honors `onConflictDoNothing`, left to each applier's own discretion; `update`/`delete` apply
-  `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?`, with the new version computed in
-  application code from the row's `version` — never an opaque `version + 1` SQL expression the database
-  evaluates on its own); **response** — `flow`'s returned value, always produced. Message dispatch (an
-  outbox, notifications) is a named future effect kind — not built yet. A version-guarded persistence op that
-  affects zero rows rolls back the whole batch and re-invokes `flow` — a fresh read, a fresh decision — up to
-  a bounded number of attempts, then surfaces the generic `conflict` `AppError` (`models/error.ts`; no
-  business payload by design). This is `runEffects`'s **single-atomic-unit** mode: one `persist` batch, one
-  transaction, all-or-nothing. `runEffectsSequence(db, registry, items, flowFor)` is the shell's second mode
-  (ADR-022): each item's flow — freshly built by `flowFor`, not invoked until the runner reaches that item —
-  runs through the same `attempt`/retry primitive as the atomic mode, so retry semantics never diverge
-  between the two. Each unit gets its **own transaction**, applied **in order**; item *i+1*'s flow is only
-  invoked once item *i* has committed (or been recorded as failed), so it reads whatever item *i* just wrote
-  — this is what lets bulk import's per-line flows reuse the single-transaction flows verbatim, with no
-  cross-unit coordination. A unit's own version conflict retries **only that unit**, bounded the same way as
-  the atomic mode; a unit's domain error, or its own exhausted retries, is recorded as `Err` and the sequence
-  **continues** to the next item — partial success. The runner returns one `SequenceOutcome<T>` (a plain
-  neverthrow `Result<T, AppError>`) per item, positionally parallel to `items`, so a caller shapes a
-  partial-success response without casting.
-- **`EntityApplier` / `ApplierRegistry`** (`src/diplomat/db/effects.ts`): **entity-agnostic** — the generic
-  engine dispatches an already row-shaped `Persistable` to `registry[p.entity]` and calls that applier's
-  `insert`/`update`/`delete`; it never names a specific entity, never imports a specific entity's `modelToDb`
-  adapter or drizzle table, and — critically — never needs a new `case` as more entities convert. The
-  `ApplierRegistry` (`Record<string, EntityApplier>`) is assembled once, at the composition root (`main.ts`,
-  `test/integration/app-builder.ts`), from each entity's applier keyed by its own tag constant, and bound into
-  the `RunEffects` closure alongside `Db`.
-- **Wiring**: `controllers/deps.ts` exports the `RunEffects` function type (`(flow) => ResultAsync<T, AppError>`)
-  — the shape the shell's edges depend on — but it is **not** a field on `Deps`; `Deps` is handed to
-  controllers, and a `RunEffects` runner is shell-only (only `diplomat/mcp`/`diplomat/http` handlers call it,
-  wrapping a controller invocation), so a controller can never reach for it and apply its own writes.
-  `main.ts` (and `test/integration/app-builder.ts`) construct the one `RunEffects` bound to the real `Db` and
-  the `ApplierRegistry`, and thread it alongside `deps` through `connectStdio`/`buildMcpServer`/
-  `buildHttpApp`/`registerRoutes`/`registerMcpRoute` to the handlers that call a converted controller.
-- **`resetLocale` is shell-only bookkeeping, threaded the same way `RunEffects` is, never a field on `Deps`.**
-  `diplomat/db/localeCache.ts`'s `createLocaleResolver(settingsRepo, configLocale?)` builds the process-level
-  locale cache: `locale()` becomes `Deps.locale` (a read, per rule 2); `resetLocale()` clears the cache and is
-  threaded alongside `runEffects`/`runEffectsSequence` through `connectStdio`/`buildMcpServer`/`buildHttpApp`/
-  `registerMcpRoute` to the one handler that needs it — `set_locale` (`diplomat/mcp/server.ts`), which calls it
-  only after `runEffects` reports the `setLocale` write committed. This is infrastructure bookkeeping attached
-  to a write, not a domain-declared effect (rule 7's kinds are write/response/dispatch) — the domain never
-  triggers it.
-
+- **`runEffects(db, registry, flow)`** (`diplomat/db/effects.ts` — the only place that touches `Db` for a
+  converted flow) invokes `flow` and executes the effects it returns. **Single-atomic-unit** mode: the `persist`
+  batch applied in one `db.transaction`, each row-shaped `Persistable` dispatched by `p.entity` through the
+  `registry`; **response** always produced; message dispatch is a named-but-unbuilt future effect kind.
+  `update`/`delete` apply `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?` — the new
+  version computed in application code, **never** a SQL-side `version + 1`. A version-guarded op affecting zero
+  rows rolls back the whole batch and re-invokes `flow` (fresh read → fresh decision), bounded, then surfaces
+  the generic `conflict` `AppError` (`models/error.ts`, no business payload).
+- **`runEffectsSequence(db, registry, items, flowFor)`** — the second mode: each item's flow (built by `flowFor`,
+  invoked only when the runner reaches it) runs through the same `attempt`/retry primitive, in its **own
+  transaction**, in order. Item *i+1* sees item *i*'s committed writes — which is why bulk import reuses the
+  single-line flows verbatim. A unit's version conflict retries only that unit; a domain error or exhausted
+  retries is recorded as `Err` and the sequence **continues** (partial success). Returns one `SequenceOutcome<T>`
+  (`Result<T, AppError>`) per item, positionally parallel to `items`.
+- **`EntityApplier` / `ApplierRegistry`** (`diplomat/db/effects.ts`) — the engine dispatches a row-shaped
+  `Persistable` to `registry[p.entity]`; it never names an entity and never needs a new `case` as entities
+  convert. The `ApplierRegistry` is assembled once at the composition root (`main.ts`,
+  `test/integration/app-builder.ts`).
+- **`RunEffects` is shell-only, never a field on `Deps`.** `controllers/deps.ts` exports the type, but only the
+  `diplomat/mcp`/`diplomat/http` handlers hold an instance — a controller cannot reach it to apply its own
+  writes. `resetLocale` (locale-cache invalidation, `diplomat/db/localeCache.ts`) is threaded the same shell-only
+  way to the one handler that needs it (`set_locale`), called only after the write commits — infrastructure
+  bookkeeping attached to a write, not a domain-declared effect.
 
 ### Appliers — the mechanical write
 
-- **The applier invariant (ADR-023 decision 6): an applier decides nothing and performs no reads at all.**
-  Every value an applier persists was chosen by the core; every entity it touches was named by the core as its
-  own `Persistable`; hand-written or factory-built, it performs the mechanical write and nothing else. The
-  mechanically checkable proxy is **an applier writes exactly one table** — grep-able in review; the proxy is
-  not the rule (a single-table applier could still smuggle in a decision or a read, and that would still be a
-  violation). All twelve registered appliers satisfy both.
-- **`versionedTableApplier`** (`src/diplomat/db/effects.ts`): once the model→row adaptation moved to the
-  handler (above), an `EntityApplier`'s `insert`/`update`/`delete` became pure mechanics — cast the row, run
-  `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?` (the new version computed in
-  application code from the row's own `version` field — never a SQL-side `version + 1` expression; same rule
-  as `runEffects` under § The effect runner above) — identical for any table keyed by an `id` column with a
-  `version` column, which
-  is most of the mutable tables (`dashboards` keys on `name` instead; `merchants`, `merchant_category`, and
-  `transaction_tags` carry no `id`/`version` at all). Rather than hand-write that per entity,
-  `versionedTableApplier(table)` builds a complete `EntityApplier` from just the drizzle table reference —
-  `diplomat/db/repos/accounts.ts`'s `accountApplier` is `versionedTableApplier(accounts)`, a one-liner. It also
-  takes optional registration config, `versionedTableApplier(table, { idempotencyColumn, readBack })` —
-  `diplomat/db/repos/transactions.ts`'s `transactionApplier` is
-  `versionedTableApplier(transactions, { idempotencyColumn: 'idempotencyKey', readBack })` (ADR-023 decision 5:
-  the formerly hand-written applier collapsed to a registration once the merchant upsert, the tag handling, and
-  the idempotency mechanics had all left it — see the generic-idempotency and `readBack` bullets under
-  § Outcomes and responses, and the `merchant`/`transactionTag` entity bullets below). An entity whose table doesn't fit the `id`/`version` convention at all (`dashboards`,
-  `merchants`, `merchant_category`, `transaction_tags`) still hand-writes its own `EntityApplier` against this
-  same interface.
-- **`versionedTableApplier`'s `delete` — a foreign-key violation is the same race a stale version reports, just
-  caught later**: a flow that emits a version-guarded `delete` (e.g. `deleteCreditCard`) decided what else needs
-  removing from a point-in-time read; if some other row starts referencing the one being deleted after that read
-  but before the batch applies (a concurrent write lands in the gap — e.g. a new `add_card_purchase` on the card
-  a `delete_credit_card` is mid-flight on), the FK check on the `delete` itself fails. `versionedTableApplier`
-  recognizes that one violation (`LibsqlError.extendedCode === 'SQLITE_CONSTRAINT_FOREIGNKEY'`, via
-  `diplomat/db/sqliteErrors.ts`'s `isForeignKeyConstraintViolation` — the same `.cause`-chain walk
-  `isUniqueConstraintViolation` below uses) and rethrows it as `VersionConflict`, rolling back and re-invoking the
-  flow (rule 4) instead of surfacing a raw throw: a fresh read now sees the new row and folds it into the cascade.
-  Applies to every entity built from the factory, not just credit cards — any versioned delete can hit this same
-  race.
-- **`billApplier` — a genuine non-`id` uniqueness conflict on insert, surfaced as a retry, not swallowed**
-  (`diplomat/db/repos/bills.ts`): `bills` fits the `id`/`version` convention for `update`/`delete`
-  (built from `versionedTableApplier` directly), but a bill is *created* by upsert-by-cycle
-  (`UNIQUE(creditCardId, month, year)`), not by `id` — `add_card_purchase` mints a speculative id for what it
-  believes is a brand-new cycle, and a concurrent first purchase on the same cycle can race it (two inserts,
-  different ids, same cycle). `versionedTableApplier`'s own `onConflictDoNothing` is scoped to the `id` target
-  only, so it does not swallow that race; SQLite raises a genuine unique-constraint error instead. `billApplier`
-  recognizes exactly that one violation (via `LibsqlError.extendedCode === 'SQLITE_CONSTRAINT_UNIQUE'` — a
-  bill's `id` collision never reaches this point, since `onConflictDoNothing` already absorbs it, so any other
-  unique-constraint violation on a bill insert can only be this one) and rethrows
-  it as `runEffects`'s own `VersionConflict` — exported from `diplomat/db/effects.ts` for exactly this
-  case — rolling back the whole batch and re-invoking the flow (rule 4): a fresh read of `findByCycle` now sees
-  the winner's row, and the domain emits a version-guarded *touch* of it instead of a second insert. Any other
-  error still propagates unchanged. This is the only entity whose `insert` needs anything beyond the generic
-  mechanics — `update`/`delete` are plain `versionedTableApplier`.
-- **The `merchant` entity (ADR-023, migration step 1).** `merchants` is key-only, no `version` — like
-  `dashboards`, it needs its own hand-written `EntityApplier` (`diplomat/db/repos/merchants.ts`'s
-  `merchantApplier`) rather than `versionedTableApplier`, but simpler: `insert` (idempotent
-  `onConflictDoNothing`) is the only reachable operation. Neither `transactionApplier` nor
-  `merchantCategoryApplier` creates a `merchants` row on the entity's behalf anymore — every flow whose
-  decision implies a merchant (a classified transaction insert, a learning edge) emits its own
-  `MERCHANT_ENTITY_TAG` `Persistable`, ordered ahead of whatever references it in the same batch (rule 5), via
-  `logic/merchant.ts`'s `withMerchant` (`add_account_expense`/`add_account_income`/`add_card_purchase`'s own
-  transaction insert) and `withMerchantLearning` (`update_account_transaction`/`update_card_transaction`'s
-  learning-edge insert). `merchantCategoryApplier` is now genuinely single-table: `MerchantCategoryEdge` carries
-  `weightDelta`/`origin` (typed `MerchantOrigin = Extract<ClassificationMethod, 'rule' | 'history'>`), chosen by
-  `resolveMerchantCorrection` (today's values, `1` and `history`, now stated in `logic/`, not hardcoded in the
-  applier) — the applier applies `weight: weightDelta`/`origin` on insert and
-  `weight = weight + weightDelta` on conflict, never touching `origin` on the conflict path (deliberate,
-  ADR-023 decision 2: an edge first learned as `rule` stays `rule` no matter how many later corrections
-  reinforce it).
-- **The `transactionTag` entity (ADR-023, migration steps 2–3) — a set-replace link addressed by the flow's
-  own transaction id.** `transaction_tags` gets its own hand-written
-  `EntityApplier` (`diplomat/db/repos/transactionTags.ts`'s `transactionTagApplier`) — no `id`/`version`, every
-  write an `insert` op, like `merchantCategoryApplier`. The core resolves tag names → ids itself:
-  `logic/tag.ts`'s `resolveTagIds` matches `input.tags` against `deps.tags.list()` and silently drops any name
-  that doesn't match — leniency preserved by decision, with a test, rather than a side effect of a DB `inArray`
-  missing (`transactionApplier`'s old `attachTags` did this as an infrastructure-level read). `TransactionEntity`
-  no longer carries `tagNames`; `controllers/resolve.ts`'s `resolveTagLinks` builds the `TRANSACTION_TAG_ENTITY_TAG`
-  `Persistable`, called by every create/update flow that accepts a `tags` field
-  (`add_account_expense`/`add_account_income`/`add_card_purchase`/`update_account_transaction`/
-  `update_card_transaction`). `input.tags` omitted → `resolveTagLinks` returns `null`, no `deps.tags.list()` read
-  and no `Persistable` at all — a write that never mentions tags shouldn't pay for one, and existing tags are
-  left alone by construction (the applier no longer touches `transaction_tags` unless told to). `input.tags`
-  provided (even `[]`) → resolves and appends the `Persistable` after the flow's own transaction `Persistable`
-  in the batch (its FK needs the transactions row to exist). Flows with no `tags` field at all (`create_transfer`,
-  `apply_due_recurring`'s occurrence inserts, `pay_bill`'s transfer, `confirm_transaction`) never call
-  `resolveTagLinks`.
-  **The duplicate-replay no-op (ADR-023 step 3)**: the set is addressed by the flow's own `entity.id` — the
-  minted id on a create, the read row's id on an update. A create flow's `entity.id` is a fresh `deps.newId()`
-  mint on every invocation, so on a duplicate-idempotency-key resubmission it names a row that was never
-  actually inserted (the transaction insert no-ops). `transactionTagApplier` performs zero reads (ADR-023
-  decision 6): it applies the set to the given id — links inserted first, stale links deleted second — and
-  translates an FK miss on the link insert (the duplicate-replay signature: the addressed row doesn't exist)
-  into an `applied: false` no-op, the same error-translation class as `billApplier`'s cycle-uniqueness rethrow.
-  Insert-first ordering means a set that can't apply has removed nothing. **A duplicate replay therefore never
-  touches the surviving row's tags** — first-write-wins, like the rest of the row; this restores the pre-ADR-023
-  semantic that step 2's `idempotencyKey`-addressed interim (which overwrote tags on replay, via a resolving
-  `SELECT` inside the applier) had traded away. **A related consequence**: the transaction write's own
-  post-write projection (`readBack`, under § Outcomes and responses below) runs immediately after ITS OWN
-  write — before the tag-set
-  `Persistable`, later in the same batch, has applied — so `PersistOutcome.read.tags` cannot reflect a
-  same-batch tag write. Every affected flow's `response` therefore composes `resolveTagLinks`'s own
-  matched-name result onto the DB-round-tripped view via `logic/tag.ts`'s `overlayResolvedTags`, gated on
-  **the tag-set `Persistable`'s own outcome** (`outcomeFor(TRANSACTION_TAG_ENTITY_TAG, outcomes).applied`) —
-  **not** the transaction write's `created`/`applied` flag, which the two create flows used as a proxy until
-  review caught it: `transactionTagApplier` reports `applied: false` for *any* FK miss on the link insert, and
-  that covers more than the duplicate-replay case — a tag deleted concurrently between `resolveTagLinks`'
-  name resolution and the batch committing FK-misses on `tag_id` the same way. Proxying off the transaction's
-  outcome would then report the locally-resolved names as attached even though nothing was written. Reading
-  the tag set's own outcome is correct for every no-op reason at once: when it didn't apply, the read-back
-  view's own `tags` — whatever they actually are — are left alone. The engine still never reads anything back
-  for this (rule 6): `overlayResolvedTags` only branches on a flag the shell already reported.
+- **The invariant (ADR-023): an applier decides nothing and performs no reads at all.** Every value it persists
+  was chosen by the core; every entity it touches was named by the core. Grep-able proxy: **an applier writes
+  exactly one table** (the proxy is not the rule — a single-table applier could still smuggle in a decision or a
+  read). All registered appliers satisfy it.
+- **`versionedTableApplier(table, { idempotencyColumn?, readBack? })`** (`diplomat/db/effects.ts`) builds a
+  complete `EntityApplier` from a drizzle table for any `id`+`version` table — `accountApplier` is
+  `versionedTableApplier(accounts)`; `transactionApplier` is
+  `versionedTableApplier(transactions, { idempotencyColumn: 'idempotencyKey', readBack })` (ADR-023: the
+  once-bespoke applier collapsed to a registration). Tables outside the `id`/`version` convention hand-write
+  their own `EntityApplier` against the same interface: `dashboards` (keys on `name`), and the `id`/`version`-less
+  `merchants`, `merchant_category`, `transaction_tags`.
+- **FK violation on a versioned `delete` → `VersionConflict`.** A row acquiring a referrer between the flow's
+  read and its apply is the same "world changed" race a stale version reports; `versionedTableApplier` catches
+  `isForeignKeyConstraintViolation` (`diplomat/db/sqliteErrors.ts`) and rethrows `VersionConflict` so the flow
+  retries. (Rationale: ADR-021.)
+- **`billApplier`** (`diplomat/db/repos/bills.ts`) — `update`/`delete` are plain `versionedTableApplier`, but a
+  bill is *created* by upsert-on-cycle (`UNIQUE(creditCardId, month, year)`), not by `id`, so the id-scoped
+  `onConflictDoNothing` doesn't swallow a same-cycle race; `billApplier` rethrows the
+  `isUniqueConstraintViolation` (`diplomat/db/sqliteErrors.ts`) as `VersionConflict` and the flow retries,
+  touching the winning cycle. `tagApplier` mirrors this exactly for `tags.name`'s `UNIQUE` (retry → the domain's
+  own name check returns `duplicate_name`). (Rationale: ADR-021.)
+- **The `merchant` entity** — key-only, hand-written `merchantApplier` (insert-only, `onConflictDoNothing`).
+  Every flow whose decision implies a merchant emits its own `MERCHANT_ENTITY_TAG` `Persistable` ahead of
+  whatever references it, via `logic/merchant.ts`'s `withMerchant` (transaction inserts) and
+  `withMerchantLearning` (learning edges) — neither `transactionApplier` nor `merchantCategoryApplier` creates a
+  merchant row anymore. `merchantCategoryApplier` (`MERCHANT_CATEGORY_ENTITY_TAG`) is single-table:
+  `MerchantCategoryEdge` carries `weightDelta`/`origin` (`MerchantOrigin = Extract<ClassificationMethod, 'rule' |
+  'history'>`) chosen by `resolveMerchantCorrection`; the applier applies `weight: weightDelta`/`origin` on
+  insert and `weight = weight + weightDelta` on conflict, never touching `origin` on the conflict path
+  (ADR-023 decision 2).
+- **The `transactionTag` entity** — hand-written `transactionTagApplier` (`diplomat/db/repos/transactionTags.ts`):
+  no `id`/`version`, a **set-replace** addressed by the flow's own transaction id, zero reads. The core resolves
+  names → ids in `logic/tag.ts`'s `resolveTagIds` (matches `input.tags` against `deps.tags.list()`, silently
+  dropping misses — leniency by decision, with a test). `controllers/resolve.ts`'s `resolveTagLinks` builds the
+  `TRANSACTION_TAG_ENTITY_TAG` `Persistable`: `input.tags` omitted → `null` (no read, no `Persistable`, existing
+  tags untouched); provided (even `[]`) → appended after the transaction `Persistable` (its FK needs the
+  transactions row). **Duplicate-replay is a no-op**: on a duplicate idempotency key the transaction insert
+  no-ops, the tag set's FK miss becomes `applied: false`, and the surviving row's tags are left alone
+  (first-write-wins). Because `readBack` runs before the tag set applies, each flow overlays `resolveTagLinks`'
+  matched names via `logic/tag.ts`'s `overlayResolvedTags`, gated on the **tag set's own** outcome
+  (`outcomeFor(TRANSACTION_TAG_ENTITY_TAG, outcomes).applied`) — not the transaction's. (Full reasoning:
+  ADR-023 decision 3 / step 3.)
 
 ### Outcomes and responses
 
-- **The engine's generic idempotency treatment (ADR-023 decision 4).** Idempotency is a caller-supplied dedup
-  contract — "if a row with this key already exists, the existing row is the outcome" — and treating it is the
-  engine's, declared by registration (`idempotencyColumn`), never per-applier code. When a row carries a value
-  in the registered column, `insert` conflict-targets that column, a duplicate no-ops with `applied: false`,
-  and the engine's own machinery resolves which row survived (one generic `SELECT id … WHERE <column> = ?`) so
-  the registered `readBack` below always reads the row that actually persisted. This is **distinct from, and
-  never merged with**, the id-scoped `onConflictDoNothing({ target: table.id })` a key-less insert falls back
-  to — that one is a structural same-id retry guard, not idempotency. The key currently rides on entity models
-  as an ordinary column (`transactions.idempotency_key`) — a pragmatic compromise, not a modeling statement;
-  its honest home is the `Persistable` envelope (tracked as
-  [#134](https://github.com/RafaelFCarneiro/fintrack/issues/134)).
-- **The `readBack` deviation (ADR-023 decision 4).** An entity may register a post-write projection —
-  `transactions` supplies one reading the display-joined view via `fetchTx` — invoked after a successful
-  insert/update with the id of the row that actually persisted (on an idempotent duplicate, the surviving
-  row's — never the discarded mint; no by-id/by-key branch in the hook itself), landing on
-  `PersistOutcome.read`. This is a projection read executed inside the engine, **capped at one hook**, and it
-  is *not* sanctioned by `docs/functional-core-imperative-shell.md` (rule 6 permits an outcome-dependent
-  response, not an in-engine projection read; rule 3 has translation at the boundary before the engine sees
-  the batch) — it is recorded here as the project's deliberate deviation. A second entity-supplied hook is the
-  signal to switch to ADR-023 option D (the core builds the full response itself).
-- **`PersistOutcome` and idempotency-aware responses** (`models/persistable.ts`, rule 6): the shell reports back
-  what actually happened when it applied each `Persistable` — chiefly, for `insert`, whether the row actually
-  landed (`applied`) or was skipped as an idempotent duplicate, plus the entity's own already-decoded `read` of
-  what is now actually persisted (e.g. the existing row on a duplicate), and the `entity` tag of the
-  `Persistable` it came from (ADR-023 — see the next bullet). A `FlowOutcome.response` is normally
-  just the plain, core-derived value; an idempotency-aware flow instead hands back a **pure, sync** function of
-  the batch's `PersistOutcome[]`, which `runEffects` calls once applied — `response` stays data-shaping
-  only, deliberately never a place a flow performs I/O of its own (rule 1). `add_account_expense`/
-  `add_account_income`/`create_transfer`'s `created` flag is the first user; this is the mechanism bulk import
-  reuses for its own per-item created/duplicate outcomes. A flow that needs a *further* write (e.g.
-  `update_account_transaction`'s merchant-learning off a category correction) puts that write in `persist` too
-  — composed into the same atomic batch (rule 5) via its own minimal entities
-  (`models/merchant.ts`'s `MERCHANT_ENTITY_TAG`/`MERCHANT_CATEGORY_ENTITY_TAG` — see the `merchant` entity bullet
-  under § Appliers above) — rather than reaching for a side effect in `response`. Because `response` is pure
-  (a function of `PersistOutcome[]` plus whatever plain values the flow closes over — `locale`, `classification`),
-  the mechanical part — cast `PersistOutcome.read` back to `RawTransactionView`, localize it — lives in
-  `logic/transaction.ts` as named, independently unit-tested functions: `viewFromOutcome` builds a bare
-  `TransactionView` from one outcome (the model — no `created`/`classification` envelope), and `buildUpsertResult`
-  builds `models/transaction.ts`'s `UpsertTransactionResult` (`{ transaction, created, classification? }` — the
-  one result shape every insert-shaped flow returns: `create_transfer` uses it with `classification: undefined`,
-  `add_account_expense`/`add_account_income` with a real one — `ClassifiedUpsertResult` names the
-  classification-required narrowing those two actually return). Naming deliberately avoids "response" — these
-  build/format a model, not an HTTP/MCP response; a further envelope around the shell's outcome is genuine
-  *controller* orchestration when one is needed, not something to push into `logic/` or an adapter (an adapter
-  can't do it: `created` only exists inside the `PersistOutcome` the flow's own `response` closure sees, never
-  after `runEffects` resolves, which is the only point an adapter could run). Each of these is `purry`'d
-  (data-last curried on the non-`outcomes` args — `docs/code-quality.md`'s dual-calling convention, same as
-  `addLocalizedLabels`), so e.g. `buildUpsertResult(classification, locale)` **is** the `(outcomes) => T`
-  function `FlowOutcome.response` wants — every converted flow assigns it directly, no wrapping arrow at any
-  call site.
-- **Outcomes are addressed by entity tag, never by batch position (ADR-023).** `diplomat/db/effects.ts`'s
-  `applyPersistable` stamps each outcome with the `entity` tag of the `Persistable` it came from — the one
-  place that association is made, so an `EntityApplier` never needs to know its own tag to report it (its
-  methods return an outcome *without* `entity`, typed as `Omit<PersistOutcome, 'entity'>`; the shell adds it).
-  `logic/persistence.ts`'s `outcomeFor(tag, outcomes)` (`R.filter`, asserting exactly one match) finds a flow's
-  own outcome by that tag: `update_account_transaction`/`update_card_transaction`/`add_card_purchase` all resolve
-  `outcomeFor(TRANSACTION_ENTITY_TAG, outcomes)` regardless of where the transaction `Persistable` sits in the
-  batch — `buildTransactionView`/`buildUpsertResult` (`logic/transaction.ts`) call it internally, and
-  `add_card_purchase`/`update_card_transaction` (`controllers/creditCard/transaction.ts`) call it directly.
-  This replaced an earlier `firstOutcome`/`lastOutcome` pair keyed to "the flow's own entity leads the batch"
-  vs. "trails it" — positional addressing that broke the moment a `Persistable` needed to be *prepended* ahead
-  of a flow's own entity, which a merchant insert does (`transactions.merchant_key`/
-  `merchant_category.merchant_key` both FK `merchants.key`, so `logic/merchant.ts`'s
-  `withMerchant`/`withMerchantLearning` — see the `merchant` entity bullet under § Appliers above — order a
-  `MERCHANT_ENTITY_TAG` insert ahead of whatever references it). Tag-addressing lets that ordering satisfy FK
-  constraints without touching response resolution. `payBill`/`revertBillPayment` don't need this — a plain,
-  non-outcome-dependent `response` — and `applyDueRecurring` still resolves its own occurrences with a
-  positional `R.zip` slice of `outcomes` rather than `outcomeFor`, which stays correct because nothing is ever
-  prepended ahead of its `TRANSACTION_ENTITY_TAG` inserts (recurring rules carry no merchant classification).
+- **`PersistOutcome`** (`models/persistable.ts`) — what the shell reports per `Persistable`: `applied` (did the
+  insert land, or no-op as an idempotent duplicate), the entity's already-decoded `read` of what is now
+  persisted, and the `entity` tag. A `FlowOutcome.response` is normally the plain core-derived value; an
+  idempotency-aware flow instead returns a **pure, sync** function of `PersistOutcome[]` that `runEffects` calls
+  once applied (`response` never performs I/O — rule 1). First users: `add_account_expense`/`add_account_income`/
+  `create_transfer`'s `created` flag; bulk import reuses the same contract per item. Response-shaping helpers
+  live in `logic/transaction.ts` (`viewFromOutcome`; `buildUpsertResult` → `UpsertTransactionResult` /
+  `ClassifiedUpsertResult`), `purry`'d so that e.g. `buildUpsertResult(classification, locale)` **is** the
+  `(outcomes) => T` a flow assigns directly.
+- **Outcomes are addressed by entity tag, never by batch position** (ADR-023). `applyPersistable` stamps each
+  outcome with its source `entity`; `logic/persistence.ts`'s `outcomeFor(tag, outcomes)` (asserting exactly one
+  match) finds a flow's own outcome regardless of batch position — needed because a merchant insert is
+  *prepended* ahead of the transaction that FKs it. Exception: `applyDueRecurring` slices `outcomes`
+  positionally (`R.zip`), safe because nothing is ever prepended ahead of its transaction inserts.
+- **The generic idempotency treatment** (ADR-023 decision 4). Registration-declared (`idempotencyColumn`), never
+  per-applier code: when a row carries a value there, `insert` conflict-targets that column, a duplicate no-ops
+  with `applied: false`, and the engine resolves which row survived (one generic `SELECT id … WHERE <column> = ?`)
+  so `readBack` reads the persisted row. Distinct from the id-scoped `onConflictDoNothing({ target: table.id })`
+  a key-less insert falls back to (a structural same-id guard, not idempotency). The key rides on entity models
+  as an ordinary column today; its honest home is the `Persistable` envelope
+  ([#134](https://github.com/RafaelFCarneiro/fintrack/issues/134)).
+- **The `readBack` deviation** (ADR-023 decision 4). An entity may register a post-write projection —
+  `transactions` reads the display-joined view via `fetchTx` — landing on `PersistOutcome.read`. This is a
+  projection read executed **inside the engine**, **capped at one hook**, and is *not* sanctioned by FC/IS
+  (rule 6 permits an outcome-dependent response, not an in-engine read) — recorded here as the project's
+  deliberate deviation. A second such hook is the signal to switch to ADR-023 option D (the core builds the full
+  response itself).
 
 ### Per-flow notes
 
-- **Simple entity CRUD flows — including two entity-agnostic cascade appliers and a two-entity
-  batch pattern.** `update_account`/`delete_account` need no applier of their own (`accountApplier` already
-  covers them) — just a version-carrying read (`accountsRepo.findRawById`). Three new
-  entities converted, each owning its own tag (`models/tag.ts`'s `TAG_ENTITY_TAG`, `models/category.ts`'s
-  `CATEGORY_ENTITY_TAG`, `models/creditCard.ts`'s `CREDIT_CARD_ENTITY_TAG`):
-  - **`tagApplier`** (`diplomat/db/repos/tags.ts`) mirrors `billApplier`'s pattern exactly: `tags.name` carries
-    its own `UNIQUE` constraint the domain's own pre-check (`assertTagNameAvailable`) only guards the common
-    case, so a concurrent same-name create can raise a genuine non-`id` unique-constraint violation
-    `versionedTableApplier`'s `onConflictDoNothing` (scoped to `id`) doesn't swallow; `tagApplier` recognizes it
-    and rethrows as `VersionConflict`, rolling back and retrying — on retry the domain's own name check now sees
-    the committed row and returns `duplicate_name` instead of a raw 500. The shared cause-chain-walking check
-    (`LibsqlError.extendedCode === 'SQLITE_CONSTRAINT_UNIQUE'`) moved out of `bills.ts` into
-    `diplomat/db/sqliteErrors.ts`'s `isUniqueConstraintViolation`, so both appliers share one implementation.
-    `deleteTag` is by id (no name resolution) and stays idempotent-by-design: a missing id returns
-    `{ deleted: false }` on an *empty* `persist` batch (no write) rather than an error — unchanged pre-ADR-021
-    behavior (mirrors `deleteAccountTransaction`'s dry-run shape).
-  - **`categoryApplier`** (`diplomat/db/repos/categories.ts`) is shared by both a top-level category and a
-    sub-category — same `categories` table, `parentId` set or not, one `CATEGORY_ENTITY_TAG` — and is plain
-    `versionedTableApplier(categories)`, no mechanics beyond the ordinary convention. It once purged dependent
-    `merchant_category` rows itself before the row delete (`merchant_category.category_id` has no `ON DELETE`
-    action, so a plain delete would otherwise violate the FK while a learned association still pointed at the
-    category) — the repo hand-implementing a referential-integrity mechanic that belongs to the schema, the same
-    layering slip `creditCardApplier` (below) had. Unlike that case, this cleanup is *pure mechanics* with zero
-    decision in it — no reads, no branching, always the identical unconditional cascade whenever a category
-    disappears (the domain's own `isCategoryUnreferenced` guard already deliberately leaves merchant learning
-    out of what *blocks* a delete — deleting a category is meant to also clear its learned classifications,
-    re-learnable later — so there was never a decision for the domain to make here). That makes it structurally
-    identical to `transaction_tags.transaction_id`'s `ON DELETE CASCADE` — an association row with no
-    independent meaning once its owner is gone — so it now lives there too:
-    `merchant_category.category_id` references `categories.id` with `{ onDelete: 'cascade' }`
-    (migration `drizzle/0010_category_merchant_association_cascade.sql`).
-  - **`creditCardApplier`** (`diplomat/db/repos/creditCards.ts`) is plain `versionedTableApplier(creditCards)` —
-    no cascade of its own. An earlier version of this applier read the card's own `accountId` back and
-    cascade-deleted every correlated bill/transaction/tag itself, mirroring the pre-ADR-021 `deleteCard` repo
-    method's own cascade. That was the repo deciding a business question — "what happens when a card is
-    deleted" (hard-delete vs. a future soft-delete/archive is exactly the kind of call that should be able to
-    change without touching the persistence layer) — the ADR-015/018 smell ADR-021 exists to remove, recurring
-    one layer down; fixed before shipping. **The cascade decision now lives in the domain.**
-    `deleteCreditCard` (`controllers/creditCard/creditCard.ts`) reads every bill (`billsRepo.findAllByCard`) and
-    transaction (`transactionsRepo.findAllCorrelatedToCard`) correlated to the card and emits their own
-    `update`/`delete` `Persistable`s explicitly. "Correlated to a card" (a purchase on it, or any movement on its
-    own internal liability account) is itself one predicate, `diplomat/db/repos/transactions.ts`'s
-    `correlatedToCard` — exported from the transactions repo since every column it reads
-    (`credit_card_id`, `from_account_id`, `to_account_id`) is a transactions-table column, and reused by
-    `creditCardsRepo.countCorrelated`'s dry-run counts, so the definition lives in one place rather than
-    two copies of the same SQL. In
-    FK-safe order: a bill with a payment transfer has a
-    **circular reference** with it (`bills.payment_transaction_id` → the transfer; the transfer's own `bill_id`
-    → the bill; libsql enforces foreign keys, no `ON DELETE` action on either column) — that one reference is
-    cleared first (`update`, `paymentTransactionId: null`), then every correlated transaction is removed
-    (`transaction_tags` cascades via its own `ON DELETE CASCADE` — a genuine DB mechanic declared in the schema,
-    not a business decision, so it stays outside the `Persistable` batch entirely), then every bill, then the
-    card, then its internal liability account. A bill this batch already cleared is removed at the version the
-    shell will have bumped it to by the time that delete applies in the same transaction (`bill.version + 1` —
-    computed by the domain from the same deterministic rule the shell itself uses, rule 4) — carrying the
-    version read at decision-time would target a row the update already moved past, a false version conflict.
-    `deleteCreditCard`'s batch is therefore variable-length: `[...bill-clears, ...transaction removals, ...bill
-    removals, remove creditCard, remove account]` — a genuine multi-entity composition (rule 5), not the
-    two-entity batch an earlier version of this flow got away with by pushing the correlated-row cleanup into
-    the applier. `createCreditCard` stays a **two-entity insert batch** — `[insert account, insert creditCard]`,
-    account first since the card row's `accountId` is a `NOT NULL` FK into it.
-  - MCP/REST handlers compose the entity's own `outcomeToDb` per batch member, same as `add_card_purchase`'s
-    bill+transaction pattern: `create_credit_card` maps through `accountAdapters.outcomeToDb` and
-    `creditCardAdapters.outcomeToDb`; `delete_credit_card`'s larger batch maps through all four —
-    `creditCardAdapters`, `accountAdapters`, `billAdapters`, and `adapters/transactions.ts`'s `outcomeToDb`.
-- **`payBill`/`revertBillPayment` (`controllers/creditCard/bill.ts`) — a plain (non-idempotency-aware)
-  `response`, and an FK direction that reverses the batch order between the two flows.** Unlike the
-  card-purchase flows, neither bill flow needs `PersistOutcome`-derived response shaping: both mint every id and
-  read every field the response needs *before* the batch is built (a fresh `newId()` transfer id for `payBill`,
-  the already-read `RawBill` for both), so `response` is the plain value `buildPaidBillWrite`/
-  `buildClosedBillWrite` return alongside the `Persistable`, not a function of the outcomes. Batch order is FK-
-  direction-driven, and the two flows go opposite ways: `payBill`'s positive-total batch is `[transfer insert,
-  bill update]` — the transfer must exist before the bill update that points `payment_transaction_id` at it;
-  `revertBillPayment`'s batch is `[bill update, transfer remove]` — the reverse — since `bills
-  .payment_transaction_id` (no `ON DELETE` action) must be cleared before the transfer row it references can be
-  deleted, and libsql enforces foreign keys by default. `BillEntity.paymentTransactionId` therefore distinguishes
-  `undefined` (leave the column unchanged — drizzle's `.set()` drops `undefined`-valued keys) from `null`
-  (explicitly clear it, `revertBillPayment`'s own case) — the same undefined-vs-null convention the now-removed
-  `TransactionsRepo.update`'s `subCategoryId` refs param used to establish (ADR-022 step 3 removed
-  `TransactionsRepo.create`/`.update`/`.delete` — grep-confirmed zero remaining callers, production or test, the
-  same checked-and-removed precedent every other converted entity's write methods followed). `revertBillPayment`'s
-  `tryFindPaymentTransaction` returns `null` both when
-  the bill never had a payment transfer and when `paymentTransactionId` no longer resolves (e.g. a concurrent
-  `delete_credit_card` removed it in the window between the flow's own injected reads); either way the batch just
-  carries the version-guarded bill update alone, with no transaction removal appended. If the bill itself was
-  also concurrently deleted, that update's own version guard fails at apply time and the shell's retry resolves
-  it to a clean `unknown_bill` instead of a 500 — no throw needed for what would otherwise be a legitimate, if
-  narrow, race. `BillsRepo` is read-only, like every repo (ADR-021): it exposes reads such as `findById` and no
-  write method at all. `ensureOpen` (the last write method) was removed once `import_card_statement` — its last
-  caller — converted to reuse `addCardPurchase`'s own `billApplier`-based insert-or-touch decision instead
-  (ADR-022 step 3).
-- **Recurring flows.** `create_recurring` needed a new entity (`models/recurring.ts`'s
-  `RECURRING_ENTITY_TAG`, `RecurringRuleEntitySchema` carrying `version`, kept off the wire-facing
-  `RecurringRuleSchema`/`RecurringRuleViewSchema` the same way `AccountEntitySchema` stays off `AccountSchema`)
-  and a new `recurringRuleApplier` — plain `versionedTableApplier(recurringRules)`, no mechanics beyond the
-  ordinary convention (the row shape already matches the table 1:1). `createRecurring` is a one-entity insert
-  batch, response built from the already-resolved account/category (rule 6, no read-back). `applyDueRecurring`
-  is the meatier conversion: it reads every due rule (`recurringRepo.due`, now version-carrying), computes each
-  rule's occurrences (bounded at `MAX_RECURRING_OCCURRENCES_PER_RUN` = 36) and its advanced `nextDue` in the
-  domain, and emits **one merged batch for every due rule** — every occurrence as a `TRANSACTION_ENTITY_TAG`
-  insert (via the same `transactionApplier`) followed by every rule's own version-guarded
-  `RECURRING_ENTITY_TAG` update (`advance`) — applied atomically. This is a deliberate atomicity-granularity
-  choice: the pre-ADR-021 code advanced each rule independently (a failure partway through could leave some
-  rules advanced and others not); the FC/IS version retries the *whole* run on any version conflict, which is
-  safe because `recurringIdempotencyKey`'s `rec-<ruleId>-<date>` keys make re-materialization a no-op — an
-  already-created occurrence is never duplicated by a retry. `ApplyDueResult`'s `applied`/`count` are shaped
-  from the shell's per-insert outcomes (the same idempotency-outcome contract, `viewFromOutcome`) —
-  never inferred by the domain. `recurringRepo.create`/`.advance` had no remaining caller once both flows
-  converted — grep-confirmed zero callers (production or test) — and were removed in this same change, the same
-  checked-and-removed precedent that the CRUD entities set.
-- **Bulk statement import (ADR-022 step 3) — a sequence of independent units, not one atomic batch.** Unlike
-  every flow above, an import is inherently partial-success: one bad or conflicting line must not roll back the
-  rest. `import_card_statement`/`import_account_statement` (`controllers/creditCard/transaction.ts`/
-  `controllers/account/transaction.ts`) default every line via `bulk.ts`'s `defaultStatementLines`, then return a
-  `StatementImportPlan` — the defaulted lines plus a `flowFor` closure that binds one line to the aggregate's own
-  single-line flow (`addCardPurchase`, or `addAccountExpense`/`addAccountIncome` picked by the line's own `type`)
-  **unchanged**, no bespoke write path. The MCP/REST handler runs `plan.flowFor` through `runEffectsSequence`
-  (§ Write path above), then shapes the returned `SequenceOutcome<ClassifiedUpsertResult>[]` back into the
-  existing `BulkResult` via `bulk.ts`'s `buildBulkResult` (rule 6, generalized to per-unit: created vs. duplicate
-  from each line's own idempotency outcome, `needs_review` from its own classification confidence — a domain
-  decision, not an apply outcome — and a failed line's `AppError` as that item's error). **The old within-batch
-  bill-cycle "dedup" is gone, not reimplemented**: because `runEffectsSequence` re-invokes line *i+1*'s flow only
-  after line *i* has committed (option B, ADR-022 decision 4), two lines landing on the same brand-new cycle
-  simply share it — the second line's `planCardPurchase` read sees the bill the first line's flow just inserted.
-  This converts the last unconverted write flow in the ledger domain — every write flow in that domain now
-  returns effects as data; none apply their own writes. The legacy repo-write paths this replaced
-  (`addAccountMovementViaRepo`, `addCardPurchaseViaRepo`, and the `deps.bills.ensureOpen`/`deps.transactions.create`
-  write methods they were the last callers of) are deleted, along with `TransactionsRepo.update`/`.delete` —
-  grep-confirmed to already have zero remaining callers once checked, the same precedent above.
-  `TransactionsRepo` now exposes only reads — `confirm` (the last raw write method on this repo) was removed once
-  `confirm_transaction` itself converted (see below): the "only confirm a pending transaction" rule that used to
-  live as a SQL `AND status = 'pending'` predicate now lives in the domain, and the shell's version guard alone
-  covers the concurrent-confirm race.
-- **Merchant key is always stored, matched or not** (`controllers/account/transaction.ts`'s `planAccountMovement`):
-  `pickClassification` (`logic/classify.ts`) only returns a `merchantKey` when it found a match, since a matched
-  key is the (possibly partial) `merchant_category` key substring-matched against, not the transaction's own
-  description — reusing it keeps a later correction reinforcing that same generalized key rather than
-  fragmenting it. On no match there is nothing to reuse, but the transaction still needs *some* merchant key
-  stored on its row, or a later category correction (`resolveMerchantCorrection`) has nothing to attach to — it
-  can only ever strengthen a merchant the transaction is already linked to. `planAccountMovement` falls back to
-  the full `normalizeMerchant(description)` in that case (empty-string guarded, since that can't back a
-  `merchants` FK row). This closes a real gap: before this fallback existed, a brand-new
-  merchant's first correction was silently dropped — `merchant_key` stayed `null` on
-  the row, so `resolveMerchantCorrection`/the old `strengthenFromTransaction` had nothing to key off. The
-  identical gap still exists in `add_card_purchase` (its own `planCardPurchase` uses
-  `classification.merchantKey` as-is, with no fallback) — the FC/IS conversion deliberately left this
-  behavior unchanged; tracked as [#115](https://github.com/RafaelFCarneiro/fintrack/issues/115).
+- **Simple CRUD.** `update_account`/`delete_account` reuse `accountApplier` (just a version-carrying read,
+  `accountsRepo.findRawById`). `categoryApplier` (shared by category and sub-category, one `CATEGORY_ENTITY_TAG`)
+  and `recurringRuleApplier` are plain `versionedTableApplier`. `deleteTag`/`deleteAccountTransaction` are
+  idempotent-by-design: a missing id returns `{ deleted: false }` on an empty `persist` batch, no write.
+- **Cascades live in the schema or the domain, never the applier.** `merchant_category.category_id` and
+  `transaction_tags.transaction_id` are `ON DELETE CASCADE` in the schema (association rows with no independent
+  meaning once their owner is gone). The credit-card cascade is a **domain decision**: `deleteCreditCard`
+  (`controllers/creditCard/creditCard.ts`) reads every correlated bill and transaction (`billsRepo.findAllByCard`,
+  `transactionsRepo.findAllCorrelatedToCard` — the `correlatedToCard` predicate lives in the transactions repo,
+  reused by `creditCardsRepo.countCorrelated`) and emits their `Persistable`s in FK-safe order:
+  `[...bill payment-clears, ...transaction removals, ...bill removals, remove creditCard, remove account]`. A bill
+  this batch already cleared is removed at `bill.version + 1` (the version the shell will have bumped it to by the
+  time that delete applies). `createCreditCard` is the mirror two-entity insert `[account, creditCard]`.
+  (History — why the applier no longer cascades: ADR-021 / ADR-023.)
+- **`payBill`/`revertBillPayment`** (`controllers/creditCard/bill.ts`) — plain `response` (both mint and read
+  everything the response needs before building the batch). FK direction reverses the batch order between them:
+  `payBill`'s positive-total batch = `[transfer insert, bill update]` (the bill points `payment_transaction_id`
+  at the transfer; a non-positive total has no transfer, so the batch is just `[bill update]`);
+  `revertBillPayment` = `[bill update clearing the pointer, transfer remove]`. `BillEntity.paymentTransactionId`
+  distinguishes `undefined` (leave unchanged) from `null` (clear). `BillsRepo` is read-only like every repo.
+- **Recurring.** `applyDueRecurring` reads every due rule, computes each rule's occurrences (bounded
+  `MAX_RECURRING_OCCURRENCES_PER_RUN = 36`) and `nextDue` in the domain, and emits **one atomic batch** — every
+  occurrence (`TRANSACTION_ENTITY_TAG` insert) plus each rule's version-guarded `advance` — retried whole on any
+  conflict, safe because `rec-<ruleId>-<date>` idempotency keys make re-materialization a no-op. A deliberate
+  atomicity granularity, in contrast to bulk import.
+- **Bulk import** (ADR-022) — a **sequence of independent units** (partial success): one bad or conflicting line
+  must not roll back the rest. `import_card_statement`/`import_account_statement` default each line via `bulk.ts`
+  and return a `StatementImportPlan` (lines + a `flowFor` binding each line to the aggregate's own single-line
+  flow — `addCardPurchase`, or `addAccountExpense`/`addAccountIncome` by the line's `type` — unchanged); the
+  handler runs it through `runEffectsSequence` and shapes the `SequenceOutcome[]` into `BulkResult` (`bulk.ts`'s
+  `buildBulkResult`; `needs_review` from each line's own classification confidence). No within-batch cycle dedup —
+  line *i+1* reads the bill line *i* just committed.
+- **Merchant key is always stored, matched or not** (`planAccountMovement`): when classification found no
+  merchant, it falls back to `normalizeMerchant(description)` (empty-string guarded) so a later category
+  correction (`resolveMerchantCorrection`) has a merchant to attach to. `add_card_purchase` still lacks this
+  fallback ([#115](https://github.com/RafaelFCarneiro/fintrack/issues/115)).
 ## Relational schema (as built)
 
 Database: encrypted libSQL file (`fintrack.db`) opened via `@libsql/client` (async) with `drizzle-orm/libsql`. Schema defined in `src/diplomat/db/schema.ts`; migrations generated by `drizzle-kit` and applied at startup via `migrate()`. Key `from @napi-rs/keyring` (ADR-005); `FINTRACK_DB_KEY` env var overrides for CI/headless.
