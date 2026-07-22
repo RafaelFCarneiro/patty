@@ -308,10 +308,16 @@ instead of performing it; the diplomat shell **applies** it.
   post-write projection (`readBack`, above) runs immediately after ITS OWN write — before the tag-set
   `Persistable`, later in the same batch, has applied — so `PersistOutcome.read.tags` cannot reflect a
   same-batch tag write. Every affected flow's `response` therefore composes `resolveTagLinks`'s own
-  matched-name result onto the DB-round-tripped view **only when its transaction write actually applied**
-  (`created`/`outcome.applied`); on a duplicate the set no-op'd and the read-back view's own `tags` already
-  reflect the surviving row — the core knows the matched set without reading anything back (rule 6), so this
-  composition is the design, not a stopgap.
+  matched-name result onto the DB-round-tripped view via `logic/tag.ts`'s `overlayResolvedTags`, gated on
+  **the tag-set `Persistable`'s own outcome** (`outcomeFor(TRANSACTION_TAG_ENTITY_TAG, outcomes).applied`) —
+  **not** the transaction write's `created`/`applied` flag, which the two create flows used as a proxy until
+  review caught it: `transactionTagApplier` reports `applied: false` for *any* FK miss on the link insert, and
+  that covers more than the duplicate-replay case — a tag deleted concurrently between `resolveTagLinks`'
+  name resolution and the batch committing FK-misses on `tag_id` the same way. Proxying off the transaction's
+  outcome would then report the locally-resolved names as attached even though nothing was written. Reading
+  the tag set's own outcome is correct for every no-op reason at once: when it didn't apply, the read-back
+  view's own `tags` — whatever they actually are — are left alone. The engine still never reads anything back
+  for this (rule 6): `overlayResolvedTags` only branches on a flag the shell already reported.
 - **`payBill`/`revertBillPayment` (`controllers/creditCard/bill.ts`) — a plain (non-idempotency-aware)
   `response`, and an FK direction that reverses the batch order between the two flows.** Unlike the
   card-purchase flows, neither bill flow needs `PersistOutcome`-derived response shaping: both mint every id and

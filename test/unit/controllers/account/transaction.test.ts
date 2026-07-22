@@ -391,8 +391,11 @@ describe('addAccountExpense — tag-set resolution (ADR-023 step 2)', () => {
     const { model: entity } = findTransactionPersistable(outcome.persist) as { model: MinimalEntity };
 
     // The read-back runs before the tag set applies, so its view can't show the fresh links —
-    // the overlay is what surfaces them.
-    const response = resolveResponse(outcome, [{ entity: 'transaction', applied: true, read: rawViewFor(entity) }]);
+    // the overlay is what surfaces them. Gated on the tag set's OWN outcome, not the transaction's.
+    const response = resolveResponse(outcome, [
+      { entity: 'transaction', applied: true, read: rawViewFor(entity) },
+      { entity: TRANSACTION_TAG_ENTITY_TAG, applied: true },
+    ]);
     expect(response.created).toBe(true);
     expect(response.transaction.tags).toEqual(['travel']);
   });
@@ -416,7 +419,12 @@ describe('addAccountExpense — tag-set resolution (ADR-023 step 2)', () => {
       tags: ['finance'],
     };
 
-    const response = resolveResponse(outcome, [{ entity: 'transaction', applied: false, read: surviving }]);
+    // The tag-set Persistable no-op'd too (the replay's minted id was never inserted) — this is
+    // what the overlay gate must key off, not the transaction's own applied flag.
+    const response = resolveResponse(outcome, [
+      { entity: 'transaction', applied: false, read: surviving },
+      { entity: TRANSACTION_TAG_ENTITY_TAG, applied: false },
+    ]);
     expect(response.created).toBe(false);
     expect(response.transaction.tags).toEqual(['finance']);
   });

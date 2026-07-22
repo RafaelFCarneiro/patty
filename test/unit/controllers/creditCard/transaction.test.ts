@@ -329,9 +329,12 @@ describe('addCardPurchase — tag-set resolution (ADR-023 step 2)', () => {
       created: boolean;
       transaction: { tags?: string[] };
     };
+    // The tag-set Persistable no-op'd too — this is what the overlay gate must key off, not the
+    // transaction's own applied flag.
     const response = responseFn([
       { entity: 'bill', applied: true },
       { entity: 'transaction', applied: false, read: surviving },
+      { entity: TRANSACTION_TAG_ENTITY_TAG, applied: false },
     ]);
 
     expect(response.created).toBe(false);

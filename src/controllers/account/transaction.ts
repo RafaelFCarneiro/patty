@@ -12,6 +12,7 @@ import { resolveCurrency } from '../../logic/money.js';
 import { normalizeMerchant, resolveMerchantCorrection, withMerchant, withMerchantLearning } from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
+import { overlayResolvedTags } from '../../logic/tag.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
@@ -137,10 +138,8 @@ const addAccountMovement = (
     ];
     const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
       const result = buildUpsertResult(outcomes, classification, locale);
-      // On a duplicate replay (`created: false`) the tag set no-op'd — the read-back view's own
-      // tags already reflect the surviving row, so the matched names must not overwrite them.
-      return tagLinks && result.created
-        ? { ...result, transaction: { ...result.transaction, tags: tagLinks.tags } }
+      return tagLinks
+        ? { ...result, transaction: overlayResolvedTags(result.transaction, tagLinks.tags, outcomes) }
         : result;
     };
     return ok({ persist, response });
@@ -245,7 +244,7 @@ export const updateAccountTransaction = (
     ];
     const response = (outcomes: PersistOutcome[]): TransactionView => {
       const result = buildTransactionView(outcomes, locale);
-      return tagLinks ? { ...result, tags: tagLinks.tags } : result;
+      return tagLinks ? overlayResolvedTags(result, tagLinks.tags, outcomes) : result;
     };
     return ok({ persist, response });
   });

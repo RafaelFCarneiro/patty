@@ -128,8 +128,12 @@ not.
    class as `billApplier`'s cycle-uniqueness rethrow, not a read and not a decision. Two related consequences
    for a flow's `response`: `PersistOutcome.read.tags` still can't reflect a same-batch tag write (the
    transaction's own read-back runs first), so the flow composes its matched-name result onto the
-   DB-round-tripped view — but **only when its transaction write actually applied**; on a duplicate the set
-   no-op'd and the read-back view's own `tags` already reflect the surviving row. See `docs/architecture.md`'s
+   DB-round-tripped view — but **only when the tag-set `Persistable`'s OWN outcome reports `applied: true`**
+   (`logic/tag.ts`'s `overlayResolvedTags`, checking `outcomeFor(TRANSACTION_TAG_ENTITY_TAG, outcomes)` — not
+   the transaction write's `applied`/`created` flag, which review caught as an insufficient proxy: an FK miss
+   on the link insert also fires when a referenced tag is deleted concurrently between resolution and the
+   batch committing, a case the transaction's own outcome can't see). On any no-op — duplicate replay or a
+   genuine race — the read-back view's own `tags` are left alone. See `docs/architecture.md`'s
    `transactionTag` entity bullet for the full account.
 
    **Also as built: `resolveTagLinks` is conditional on `input.tags` actually being provided, not called
