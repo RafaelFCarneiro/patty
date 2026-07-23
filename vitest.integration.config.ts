@@ -5,10 +5,8 @@ export default defineConfig({
     name: 'integration',
     include: ['test/integration/**/*.test.ts'],
     testTimeout: 30_000,
-    // Matches testTimeout — a `beforeAll` that seeds fixture data over real MCP round-trips (e.g.
-    // pagination.test.ts's 120-row import) can take as long as a test body; the 10s Vitest default
-    // left it with near-zero margin under ordinary CI runner variance (observed 9.5-10.1s even on
-    // green runs), causing intermittent "Hook timed out" failures unrelated to the code under test.
+    // Matches testTimeout — some beforeAll hooks seed fixtures over real MCP round-trips and were
+    // running right up against Vitest's 10s default, causing intermittent unrelated timeouts.
     hookTimeout: 30_000,
     reporters: ['default', 'verbose'],
     globalSetup: 'test/integration/setup.ts',

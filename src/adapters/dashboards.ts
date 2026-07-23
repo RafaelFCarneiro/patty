@@ -16,8 +16,8 @@ export const dbToModel = (row: DashboardRow): Dashboard =>
 export const dbToListItem = (row: Pick<DashboardRow, 'name' | 'updatedAt'>): DashboardListItem =>
   DashboardListItemSchema.parse({ name: row.name, updatedAt: row.updatedAt });
 
-/** Read variant carrying `id`/`version` — for `saveDashboard`'s update path and rename, which need
- *  the `id` to build a version-guarded `Persistable`. */
+/** Read variant carrying `id`/`version` — for `findByName`'s full-row read, which rename needs to
+ *  build a version-guarded `Persistable`. */
 export const dbToEntity = (row: DashboardRow): DashboardEntity =>
   DashboardEntitySchema.parse({
     id: row.id,

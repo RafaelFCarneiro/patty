@@ -12,8 +12,6 @@ export type DashboardRef = { id: string; version: number };
 
 export type DashboardsRepo = {
   get: (name: string) => Promise<Dashboard | null>;
-  // Version-only read — saveDashboard only needs presence + id + version to decide insert vs.
-  // update, never the html, so this avoids pulling that on every save.
   findRefByName: (name: string) => Promise<DashboardRef | null>;
   // Full-row read (incl. html) — for rename, which must re-emit the whole row under a new name.
   findByName: (name: string) => Promise<DashboardEntity | null>;

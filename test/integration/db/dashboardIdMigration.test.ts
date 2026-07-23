@@ -22,9 +22,8 @@ beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-dashboard-migration-'));
   dbPath = join(tmpDir, 'migration.db');
 
-  // A copy of the real migrations folder with migration 0011 (and its journal entry) removed —
-  // simulates a DB left at the schema version just before the id-normalization migration, i.e.
-  // `dashboards` still keyed on `name` (PRIMARY KEY), no `id` column.
+  // A copy of the real migrations folder with 0011's journal entry removed, so migrating against
+  // it stops one version short — simulating a DB that predates id-normalization.
   preMigrationFolder = join(tmpDir, 'pre-0011-migrations');
   cpSync(REAL_MIGRATIONS_FOLDER, preMigrationFolder, { recursive: true });
   const journalPath = join(preMigrationFolder, 'meta', '_journal.json');
@@ -50,8 +49,6 @@ describe('migration 0011 — dashboards id normalization', () => {
     const db = openDatabase(openOpts());
     await migrate(db, { migrationsFolder: preMigrationFolder });
 
-    // A legacy row, written the pre-migration way — at this schema version `dashboards` has no
-    // `id` column at all, `name` is the PRIMARY KEY.
     await db.run(
       sql`INSERT INTO dashboards (name, html, updated_at, version) VALUES ('legacy', '<html>old</html>', '2026-01-01', 0)`,
     );
@@ -67,14 +64,12 @@ describe('migration 0011 — dashboards id normalization', () => {
     expect(rows[0]?.updated_at).toBe('2026-01-01');
     expect(rows[0]?.version).toBe(0);
 
-    // `name` stays UNIQUE post-migration (it used to be the PRIMARY KEY) — a duplicate still fails.
     await expect(
       db.run(
         sql`INSERT INTO dashboards (id, name, html, updated_at, version) VALUES (${randomUUID()}, 'legacy', '<html>dup</html>', '2026-01-02', 0)`,
       ),
     ).rejects.toThrow();
 
-    // save/list/get behave identically post-migration (behavior-preserving) — id never surfaces.
     const repo = dashboardsRepo(db);
     expect(await repo.get('legacy')).toEqual({ name: 'legacy', html: '<html>old</html>', updatedAt: '2026-01-01' });
     expect(await repo.list()).toEqual([{ name: 'legacy', updatedAt: '2026-01-01' }]);
