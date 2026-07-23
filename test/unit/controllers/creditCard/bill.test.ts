@@ -214,6 +214,9 @@ describe('payBill — the write is returned as data, not performed (ADR-021 phas
   const today = toIsoDate(clockDate);
   const pastDate = toIsoDate(new Date(2026, 5, 10));
   const futureDate = toIsoDate(new Date(2026, 5, 16));
+  const rejectedPaymentDateReadsVersion = () => {
+    throw new Error('must not read version for a rejected paymentDate — no write to build');
+  };
 
   it('an explicit past paymentDate dates the transfer then, effective', async () => {
     const bill = rawBill();
@@ -256,9 +259,7 @@ describe('payBill — the write is returned as data, not performed (ADR-021 phas
     const deps = makeDeps({
       bills: {
         get: async () => billWithItems(),
-        findById: async () => {
-          throw new Error('must not read version for a rejected paymentDate — no write to build');
-        },
+        findById: rejectedPaymentDateReadsVersion,
       } as unknown as Deps['bills'],
       clock: () => clockDate,
     });
@@ -279,9 +280,7 @@ describe('payBill — the write is returned as data, not performed (ADR-021 phas
     const deps = makeDeps({
       bills: {
         get: async () => billWithItems({ transactions: [billItem({ type: 'income', amount: 30 })] }),
-        findById: async () => {
-          throw new Error('must not read version for a rejected paymentDate — no write to build');
-        },
+        findById: rejectedPaymentDateReadsVersion,
       } as unknown as Deps['bills'],
       clock: () => clockDate,
     });
