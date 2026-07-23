@@ -19,7 +19,13 @@ import {
 } from '../../controllers/account/account.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
-import { deleteDashboard, getDashboard, listDashboards, saveDashboard } from '../../controllers/dashboards.js';
+import {
+  deleteDashboard,
+  getDashboard,
+  listDashboards,
+  renameDashboard,
+  saveDashboard,
+} from '../../controllers/dashboards.js';
 import {
   createCategory,
   createSubCategory,
@@ -54,7 +60,12 @@ import { createTransfer } from '../../controllers/account/transfer.js';
 import { AccountBalanceSchema, AccountSchema } from '../../models/account.js';
 import { AggregateResultSchema } from '../../models/aggregate.js';
 import { BillSchema } from '../../models/bill.js';
-import { DashboardListItemSchema, DashboardSchema, SaveDashboardSchema } from '../../models/dashboard.js';
+import {
+  DashboardListItemSchema,
+  DashboardSchema,
+  RenameDashboardSchema,
+  SaveDashboardSchema,
+} from '../../models/dashboard.js';
 import { CategorySchema, SubCategorySchema } from '../../models/category.js';
 import { CreditCardSchema } from '../../models/creditCard.js';
 import { RecurringRuleViewSchema } from '../../models/recurring.js';
@@ -120,6 +131,7 @@ const conflict409 = okResponse('Conflict', ConflictErrorOut);
 const nameParam = NameParamSchema;
 const idParam = IdParamSchema;
 const confirmQuery = ConfirmQuerySchema;
+const renameDashboardBody = RenameDashboardSchema.pick({ newName: true });
 
 // OpenAPI grouping tags — each repeats across several routes below, so named once here
 // rather than copy-pasted (code-quality.md "Constants over literals").
@@ -851,6 +863,26 @@ export const buildRouteDefinitions = (
     handler: async (req, reply) => {
       const { name } = req.params as { name: string };
       const flow = () => deleteDashboard(deps, name).map(dashboardAdapters.outcomeToDb);
+      return send(reply, await runEffects(flow));
+    },
+  },
+  {
+    method: 'post',
+    path: '/api/dashboards/:name/rename',
+    tags: [RouteTag.dashboards],
+    summary: 'Rename a dashboard',
+    request: { params: nameParam, body: jsonBody(renameDashboardBody) },
+    responses: {
+      200: okResponse('Dashboard renamed', DashboardSchema),
+      404: notFound404,
+      409: conflict409,
+      422: validation422,
+    },
+    handler: async (req, reply) => {
+      const { name } = req.params as { name: string };
+      const wireIn = parse(renameDashboardBody, req.body, reply);
+      if (!wireIn) return reply;
+      const flow = () => renameDashboard(deps, name, wireIn.newName).map(dashboardAdapters.outcomeToDb);
       return send(reply, await runEffects(flow));
     },
   },

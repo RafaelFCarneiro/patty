@@ -13,6 +13,9 @@ const fetchStoredHtml = async (name: string): Promise<string> => {
   return body.html;
 };
 
+const fetchUiStatus = async (name: string): Promise<number> =>
+  (await fetch(new URL(`/ui/${name}`, new URL(mcpUrl).origin))).status;
+
 describe('MCP integration > dashboards', () => {
   it('save_dashboard upserts and list_dashboards includes it without the html blob', async () => {
     const stamp = Date.now();
@@ -112,6 +115,81 @@ describe('MCP integration > dashboards', () => {
         args: { name: 'dashboard-does-not-exist' },
       })) as { deleted?: boolean };
       expect(result.deleted).toBe(false);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('rename_dashboard preserves content, serves /ui/:newName, and 404s /ui/:name', async () => {
+    const stamp = Date.now();
+    const name = `mcp-dash-rename-${stamp}`;
+    const newName = `mcp-dash-renamed-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'save_dashboard', args: { name, html: '<html><body>keep me</body></html>' } });
+
+      const renamed = (await callTool(client, {
+        name: 'rename_dashboard',
+        args: { name, newName },
+      })) as { name?: string; html?: string };
+      expect(renamed.name).toBe(newName);
+      expect(renamed.html).toBe('<html><body>keep me</body></html>');
+
+      expect(await fetchUiStatus(newName)).toBe(200);
+      expect(await fetchUiStatus(name)).toBe(404);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('rename_dashboard returns unknown_dashboard when the current name does not exist', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const { error } = (await callToolError(client, {
+        name: 'rename_dashboard',
+        args: { name: 'dashboard-does-not-exist', newName: 'whatever' },
+      })) as { error: { code: string } };
+      expect(error.code).toBe('unknown_dashboard');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('rename_dashboard rejects a newName already in use', async () => {
+    const stamp = Date.now();
+    const nameA = `mcp-dash-rename-a-${stamp}`;
+    const nameB = `mcp-dash-rename-b-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'save_dashboard', args: { name: nameA, html: '<html></html>' } });
+      await callTool(client, { name: 'save_dashboard', args: { name: nameB, html: '<html></html>' } });
+
+      const { error } = (await callToolError(client, {
+        name: 'rename_dashboard',
+        args: { name: nameA, newName: nameB },
+      })) as { error: { code: string } };
+      expect(error.code).toBe('duplicate_name');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('rename_dashboard to its own current name is a no-op, not a duplicate_name error', async () => {
+    const stamp = Date.now();
+    const name = `mcp-dash-rename-self-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'save_dashboard', args: { name, html: '<html></html>' } });
+
+      const result = (await callTool(client, {
+        name: 'rename_dashboard',
+        args: { name, newName: name },
+      })) as { name?: string };
+      expect(result.name).toBe(name);
     } finally {
       await transport.close();
     }

@@ -42,6 +42,12 @@ The goal: **the agent authors the presentation (the shell); the data stays live 
      hard if it were the latter.) Name-keyed storage also allows several dashboards (`overview`, `cards`,
      `month-review`) overridden independently, and `updated_at`/version history enables "revert my dashboard."
      Serve with no-cache headers so a regenerated dashboard isn't masked by a stale browser copy.
+     **Amendment (Feature Design 013):** the `dashboards` entity gained a surrogate `id` primary key; `name`
+     is now a `UNIQUE` handle rather than the primary key itself. This is an evolution, not a reversal — `name`
+     remains the identifier every consumer-facing surface uses (`/ui/:name`, `save_dashboard`/`list_dashboards`/
+     `delete_dashboard`/`rename_dashboard`); `id` is internal-only, exactly like the optimistic-concurrency
+     `version` token, and exists solely so a dashboard's identity can survive a rename (delete_dashboard,
+     rename_dashboard). See `docs/architecture.md` § Dashboards / `/ui` surface for the as-built mechanics.
 3. **Generated dashboards are data-less HTML shells.** The agent produces layout/charts/styling only; the page
    fetches from the documented endpoints on load and renders. **No data, no secrets, ever embedded** in the
    file — the non-negotiable rule. This makes dashboards always-fresh (real-time principle) and privacy-safe

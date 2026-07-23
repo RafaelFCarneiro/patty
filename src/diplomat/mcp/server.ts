@@ -18,7 +18,7 @@ import {
 } from '../../controllers/account/transaction.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
-import { deleteDashboard, listDashboards, saveDashboard } from '../../controllers/dashboards.js';
+import { deleteDashboard, listDashboards, renameDashboard, saveDashboard } from '../../controllers/dashboards.js';
 import {
   createCategory,
   createSubCategory,
@@ -62,7 +62,7 @@ import { CreateCategorySchema, CreateSubCategorySchema } from '../../wire/in/cat
 import { Locale, LocaleSource } from '../../models/locale.js';
 import { AccountType } from '../../models/account.js';
 import { BillQuerySchema, PayBillSchema } from '../../models/bill.js';
-import { SaveDashboardSchema } from '../../models/dashboard.js';
+import { RenameDashboardSchema, SaveDashboardSchema } from '../../models/dashboard.js';
 import { CreateRecurringSchema } from '../../wire/in/recurring.js';
 import {
   AddCardPurchaseSchema,
@@ -812,6 +812,21 @@ export const buildMcpServer = (
     },
     async (args) => {
       const flow = () => deleteDashboard(deps, args.name).map(dashboardAdapters.outcomeToDb);
+      return fromResult(await runEffects(flow));
+    },
+  );
+
+  server.registerTool(
+    'rename_dashboard',
+    {
+      title: 'Rename dashboard',
+      description:
+        'Rename a dashboard, preserving its content and identity. GET /ui/:newName serves it afterward; ' +
+        'GET /ui/:name (the old name) 404s.',
+      inputSchema: RenameDashboardSchema.shape,
+    },
+    async (args) => {
+      const flow = () => renameDashboard(deps, args.name, args.newName).map(dashboardAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
   );

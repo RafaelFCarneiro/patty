@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { deleteDashboard, getDashboard, listDashboards, saveDashboard } from '../../../src/controllers/dashboards.js';
+import {
+  deleteDashboard,
+  getDashboard,
+  listDashboards,
+  renameDashboard,
+  saveDashboard,
+} from '../../../src/controllers/dashboards.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
-import type { Dashboard, DashboardListItem } from '../../../src/models/dashboard.js';
+import type { Dashboard, DashboardEntity, DashboardListItem } from '../../../src/models/dashboard.js';
 import { PersistOp } from '../../../src/models/persistable.js';
 
 const FIXED_CLOCK = new Date('2026-07-02T12:00:00.000Z');
@@ -106,6 +112,73 @@ describe('deleteDashboard', () => {
     const outcome = result._unsafeUnwrap();
     expect(outcome.persist).toEqual([]);
     expect(outcome.response).toEqual({ deleted: false });
+  });
+});
+
+describe('renameDashboard', () => {
+  const existingEntity = (overrides: Partial<DashboardEntity> = {}): DashboardEntity => ({
+    id: 'dash-existing',
+    name: 'overview',
+    html: '<html>mine</html>',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    version: 3,
+    ...overrides,
+  });
+
+  it('emits a version-guarded update preserving id/html and returns the renamed dashboard', async () => {
+    const deps = makeDeps({ findByName: vi.fn(async () => existingEntity()) });
+
+    const result = await renameDashboard(deps, 'overview', 'renamed');
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    const dashboard: Dashboard = { name: 'renamed', html: '<html>mine</html>', updatedAt: FIXED_CLOCK.toISOString() };
+    expect(outcome.response).toEqual(dashboard);
+    expect(outcome.persist).toEqual([
+      {
+        op: PersistOp.enum.update,
+        entity: DASHBOARD_ENTITY_TAG,
+        model: { ...dashboard, id: 'dash-existing', version: 3 },
+      },
+    ]);
+  });
+
+  it('returns unknown_dashboard when the current name does not exist', async () => {
+    const deps = makeDeps({ findByName: vi.fn(async () => null) });
+
+    const result = await renameDashboard(deps, 'missing', 'renamed');
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'unknown_dashboard', query: 'missing', candidates: [] });
+    expect(deps.dashboards.findRefByName).not.toHaveBeenCalled();
+  });
+
+  it('returns duplicate_name when newName is already taken, without touching the repo for a write', async () => {
+    const deps = makeDeps({
+      findByName: vi.fn(async () => existingEntity()),
+      findRefByName: vi.fn(async () => ({ id: 'other-dash', version: 0 })),
+    });
+
+    const result = await renameDashboard(deps, 'overview', 'taken');
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'duplicate_name', entity: 'dashboard', name: 'taken' });
+  });
+
+  it('is a no-op when newName is the current name, skipping the duplicate-name check entirely', async () => {
+    const deps = makeDeps({ findByName: vi.fn(async () => existingEntity()) });
+
+    const result = await renameDashboard(deps, 'overview', 'overview');
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([]);
+    expect(outcome.response).toEqual({
+      name: 'overview',
+      html: '<html>mine</html>',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(deps.dashboards.findRefByName).not.toHaveBeenCalled();
   });
 });
 
