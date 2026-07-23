@@ -1,7 +1,7 @@
 # Feature Design 013: Dashboard id-normalization + delete + rename
 
 **Type:** Feature design (a feature + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress (Phase 1 done) · **Date:** 2026-07-22 · Extends the dashboard domain (**ADR-013**).
+**Implementation status:** In progress (Phases 1-2 done) · **Date:** 2026-07-22 · Extends the dashboard domain (**ADR-013**).
 Follows the idempotent-delete pattern of `deleteTag` and the versioned-entity-with-unique-secondary-key applier
 pattern of `tagApplier`/`billApplier`.
 

@@ -55,6 +55,7 @@ describe('GET /api/openapi.json', () => {
     expect(doc.paths['/api/dashboards']?.get).toBeDefined();
     expect(doc.paths['/api/dashboards']?.post).toBeDefined();
     expect(doc.paths['/api/dashboards/{name}']?.get).toBeDefined();
+    expect(doc.paths['/api/dashboards/{name}']?.delete).toBeDefined();
 
     const liveList = await inject({ method: 'GET', url: '/api/dashboards' });
     expect(liveList.statusCode).toBe(200);

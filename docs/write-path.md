@@ -152,8 +152,9 @@ effect runner, appliers, outcomes, and the per-flow notes.
 
 - **Simple CRUD.** `update_account`/`delete_account` reuse `accountApplier` (just a version-carrying read,
   `accountsRepo.findRawById`). `categoryApplier` (shared by category and sub-category, one `CATEGORY_ENTITY_TAG`)
-  and `recurringRuleApplier` are plain `versionedTableApplier`. `deleteTag`/`deleteAccountTransaction` are
-  idempotent-by-design: a missing id returns `{ deleted: false }` on an empty `persist` batch, no write.
+  and `recurringRuleApplier` are plain `versionedTableApplier`. `deleteTag`/`deleteAccountTransaction`/
+  `deleteDashboard` are idempotent-by-design: a missing id (or, for `deleteDashboard`, name — resolved to an id
+  via `findRefByName`) returns `{ deleted: false }` on an empty `persist` batch, no write.
 - **Cascades live in the schema or the domain, never the applier.** `merchant_category.category_id` and
   `transaction_tags.transaction_id` are `ON DELETE CASCADE` in the schema (association rows with no independent
   meaning once their owner is gone). The credit-card cascade is a **domain decision**: `deleteCreditCard`
