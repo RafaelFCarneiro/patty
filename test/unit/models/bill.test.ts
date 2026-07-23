@@ -98,6 +98,18 @@ describe('PayBillSchema (model — extends BillQuerySchema)', () => {
   it('rejects empty account string', () => {
     expect(PayBillSchema.safeParse({ card: 'Nubank', month: 6, year: 2025, account: '' }).success).toBe(false);
   });
+
+  it('accepts with paymentDate', () => {
+    expect(
+      PayBillSchema.safeParse({ card: 'Nubank', month: 6, year: 2025, paymentDate: '2025-06-15' }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a malformed paymentDate', () => {
+    expect(
+      PayBillSchema.safeParse({ card: 'Nubank', month: 6, year: 2025, paymentDate: '06/15/2025' }).success,
+    ).toBe(false);
+  });
 });
 
 describe('Wire BillQuery (REST boundary — coerces strings)', () => {

@@ -10,5 +10,6 @@ export type BillQuery = z.infer<typeof BillQuery>;
 
 export const PayBill = BillQuery.extend({
   account: PayBillSchema.shape.account,
+  paymentDate: PayBillSchema.shape.paymentDate,
 });
 export type PayBill = z.infer<typeof PayBill>;

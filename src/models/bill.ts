@@ -65,6 +65,7 @@ export type BillQuery = z.infer<typeof BillQuerySchema>;
 
 export const PayBillSchema = BillQuerySchema.extend({
   account: z.string().min(1).optional().describe('Paying account name (overrides card default)'),
+  paymentDate: IsoDate.optional().describe('Date the payment occurred (defaults to today); must not be in the future'),
 });
 export type PayBill = z.infer<typeof PayBillSchema>;
 
@@ -81,4 +82,8 @@ export const billErrors = {
     code: 'validation',
     issues: ['no paying account: pass `account` or set `paymentAccount` on the card'],
   } satisfies BillError,
+  futurePaymentDate: (date: string): BillError => ({
+    code: 'validation',
+    issues: [`payment date ${date} is in the future: a bill payment records a payment that already occurred`],
+  }),
 };

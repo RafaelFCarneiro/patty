@@ -97,6 +97,55 @@ describe('MCP integration > bill payment (Design 003)', () => {
     }
   });
 
+  it('pay_bill with an explicit past paymentDate dates the transfer then; future paymentDate rejected', async () => {
+    const dateCardName = `Date Card ${stamp}`;
+    const dateBankName = `Date Bank ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: dateBankName, type: 'checking', currency: 'BRL', initialBalance: 1000 },
+      });
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: dateCardName, closingDay: 28, dueDay: 5, currency: 'BRL', paymentAccount: dateBankName },
+      });
+      await callTool(client, {
+        name: 'add_card_purchase',
+        args: {
+          description: `Date purchase ${stamp}`,
+          amount: 60,
+          type: 'expense',
+          date: today,
+          card: dateCardName,
+          idempotencyKey: `date-purchase-${stamp}`,
+        },
+      });
+
+      const tomorrow = toIsoDate(new Date(pinned.getTime() + 24 * 60 * 60 * 1000));
+      const futureErr = (await callToolError(client, {
+        name: 'pay_bill',
+        args: { card: dateCardName, month, year, paymentDate: tomorrow },
+      })) as { error?: { code?: string } };
+      expect(futureErr.error?.code).toBe('validation');
+
+      const yesterday = toIsoDate(new Date(pinned.getTime() - 24 * 60 * 60 * 1000));
+      await callTool(client, {
+        name: 'pay_bill',
+        args: { card: dateCardName, month, year, paymentDate: yesterday },
+      });
+
+      const [transfer] = await searchTransactions(client, { text: `Bill payment: ${dateCardName}`, limit: 10 });
+      expect((transfer as { date?: string; status?: string }).date).toBe(yesterday);
+      expect((transfer as { date?: string; status?: string }).status).toBe('effective');
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('pay_bill without account and without card default returns validation error', async () => {
     const noDefaultCard = `NoDefault Card ${stamp}`;
     const { client, transport } = makeClient();
