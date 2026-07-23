@@ -7,6 +7,7 @@ import type { BillWithItems } from '../../../../src/diplomat/db/repos/bills.js';
 import type { CreditCard } from '../../../../src/models/creditCard.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
 import { Locale } from '../../../../src/models/locale.js';
+import { toIsoDate } from '../../../../src/logic/period.js';
 import { PersistOp } from '../../../../src/models/persistable.js';
 import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
 
@@ -202,6 +203,93 @@ describe('payBill — the write is returned as data, not performed (ADR-021 phas
       month: 6,
       year: 2026,
       account: 'Checking',
+      source: TransactionSource.enum.mcp,
+    });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  const clockDate = new Date(2026, 5, 15); // local-time constructor — avoids UTC/local drift
+  const today = toIsoDate(clockDate);
+  const pastDate = toIsoDate(new Date(2026, 5, 10));
+  const futureDate = toIsoDate(new Date(2026, 5, 16));
+  const rejectedPaymentDateReadsVersion = () => {
+    throw new Error('must not read version for a rejected paymentDate — no write to build');
+  };
+
+  it('an explicit past paymentDate dates the transfer then, effective', async () => {
+    const bill = rawBill();
+    const deps = makeDeps({
+      bills: { get: async () => billWithItems(), findById: async () => bill } as unknown as Deps['bills'],
+      clock: () => clockDate,
+    });
+
+    const result = await payBill(deps, {
+      card: 'Test Card',
+      month: 6,
+      year: 2026,
+      paymentDate: pastDate,
+      source: TransactionSource.enum.mcp,
+    });
+
+    expect(result.isOk()).toBe(true);
+    const { persist } = result._unsafeUnwrap();
+    const txModel = (persist[0] as { model: { date: string; status: string } }).model;
+    expect(txModel.date).toBe(pastDate);
+    expect(txModel.status).toBe('effective');
+  });
+
+  it('an omitted paymentDate defaults to today (the clock date)', async () => {
+    const bill = rawBill();
+    const deps = makeDeps({
+      bills: { get: async () => billWithItems(), findById: async () => bill } as unknown as Deps['bills'],
+      clock: () => clockDate,
+    });
+
+    const result = await payBill(deps, { card: 'Test Card', month: 6, year: 2026, source: TransactionSource.enum.mcp });
+
+    expect(result.isOk()).toBe(true);
+    const { persist } = result._unsafeUnwrap();
+    const txModel = (persist[0] as { model: { date: string } }).model;
+    expect(txModel.date).toBe(today);
+  });
+
+  it('rejects a future paymentDate before reading the bill version to build any write', async () => {
+    const deps = makeDeps({
+      bills: {
+        get: async () => billWithItems(),
+        findById: rejectedPaymentDateReadsVersion,
+      } as unknown as Deps['bills'],
+      clock: () => clockDate,
+    });
+
+    const result = await payBill(deps, {
+      card: 'Test Card',
+      month: 6,
+      year: 2026,
+      paymentDate: futureDate,
+      source: TransactionSource.enum.mcp,
+    });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('rejects a future paymentDate even when the bill total is non-positive (no transfer branch)', async () => {
+    const deps = makeDeps({
+      bills: {
+        get: async () => billWithItems({ transactions: [billItem({ type: 'income', amount: 30 })] }),
+        findById: rejectedPaymentDateReadsVersion,
+      } as unknown as Deps['bills'],
+      clock: () => clockDate,
+    });
+
+    const result = await payBill(deps, {
+      card: 'Test Card',
+      month: 6,
+      year: 2026,
+      paymentDate: futureDate,
       source: TransactionSource.enum.mcp,
     });
 

@@ -73,6 +73,10 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
       return ok({ persist: [], response: existing.bill });
     }
 
+    const today = toIsoDate(deps.clock());
+    const date = input.paymentDate ?? today;
+    yield* guard(date <= today, billErrors.futurePaymentDate(date));
+
     const total = computeBillTotal(existing.transactions);
     const rawBill = yield* okOr(
       await deps.bills.findById(existing.bill.id),
@@ -95,15 +99,14 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
     yield* guard(assertNonCreditType(payer.type), accountErrors.creditPaymentRejected);
     yield* guard(assertCurrencyMatch(payer, card), accountErrors.currencyMismatch(card.currency, payer.currency));
 
-    const today = toIsoDate(deps.clock());
     const txId = deps.newId();
     const transferEntity: TransactionEntity = {
       id: txId,
       description: `Bill payment: ${card.name} ${String(input.month).padStart(2, '0')}/${input.year}`,
       amount: total,
       type: TransactionType.enum.transfer,
-      status: defaultStatusFor(today, today),
-      date: today,
+      status: defaultStatusFor(date, today),
+      date,
       currency: card.currency,
       source: input.source,
       idempotencyKey: `billpay-${rawBill.id}`,
