@@ -125,14 +125,15 @@ describe('MCP integration > bill payment (Design 003)', () => {
         },
       });
 
-      const tomorrow = toIsoDate(new Date(pinned.getTime() + 24 * 60 * 60 * 1000));
+      // Calendar-day arithmetic (not +/- 24h in ms), so a DST transition can't leave the ISO date unchanged.
+      const tomorrow = toIsoDate(new Date(pinned.getFullYear(), pinned.getMonth(), pinned.getDate() + 1));
       const futureErr = (await callToolError(client, {
         name: 'pay_bill',
         args: { card: dateCardName, month, year, paymentDate: tomorrow },
       })) as { error?: { code?: string } };
       expect(futureErr.error?.code).toBe('validation');
 
-      const yesterday = toIsoDate(new Date(pinned.getTime() - 24 * 60 * 60 * 1000));
+      const yesterday = toIsoDate(new Date(pinned.getFullYear(), pinned.getMonth(), pinned.getDate() - 1));
       await callTool(client, {
         name: 'pay_bill',
         args: { card: dateCardName, month, year, paymentDate: yesterday },
