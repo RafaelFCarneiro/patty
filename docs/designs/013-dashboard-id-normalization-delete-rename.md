@@ -168,9 +168,9 @@ Preserving identity across a name change is exactly what the surrogate `id` is f
 - **`/ui/:name` regression (hard requirement)**: an HTTP-level integration test (Fastify `inject`) — save a
   dashboard, `GET /ui/:name` → `200` + the exact `html`, and `GET /api/dashboards/:name` → the `Dashboard` — must
   pass **unchanged before and after Phase 1**. After Phase 3, `GET /ui/:newName` serves the renamed dashboard and
-  `GET /ui/:oldName` → `404`. NB: the `/ui`//`/api` routes currently have **no** integration coverage
-  ([#21](https://github.com/RafaelFCarneiro/fintrack/issues/21)); this is the focused first test that closes part
-  of that gap and is the mechanical guarantee behind "keep `/ui/:name` working."
+  `GET /ui/:oldName` → `404`. This coverage already exists (`test/integration/http/dashboards.test.ts`, added
+  alongside the original `/ui` surface and closing [#21](https://github.com/RafaelFCarneiro/fintrack/issues/21));
+  Phase 1's job is to confirm it keeps passing unchanged, not to add it.
 - **Applier**: concurrent same-new-name save → unique-name conflict → `VersionConflict` → retry resolves to an
   update of the winner (mirror `tagApplier`'s race test).
 - **Delete**: present → `{ deleted: true }` and the row is gone; unknown name → `{ deleted: false }`, no write;
@@ -190,9 +190,9 @@ Migration `0011` (add `id` PK, `name` UNIQUE, backfill UUIDs). `DashboardEntity`
 add `findByName(name): DashboardEntity`. `saveDashboard` mints `id` on insert / carries `{id, version}` on
 update. `dashboardApplier` → `{ ...versionedTableApplier(dashboards), insert: <unique-name-conflict wrapper> }`;
 delete the `isPrimaryKeyConstraintViolation` path. Update `docs/architecture.md` schema + `docs/write-path.md`.
-**Add the `/ui/:name` + `/api/dashboards/:name` regression test (Testing, above) and confirm it passes — the
-hard requirement that the UI route is unaffected. `get(name)`, the `name` lookup, and the `html` column must not
-be touched.**
+**Confirm the existing `/ui/:name` + `/api/dashboards/:name` regression test (Testing, above) still passes
+unchanged — the hard requirement that the UI route is unaffected. `get(name)`, the `name` lookup, and the `html`
+column must not be touched.**
 
 ### Phase 2 — `delete_dashboard`
 `deleteDashboard(deps, name)` (mirror `deleteTag`, idempotent) + the `delete_dashboard` MCP tool + `docs/mcp-tools.md`.
