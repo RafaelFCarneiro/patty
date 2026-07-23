@@ -34,7 +34,12 @@ import {
   listCategories,
   listSubCategories,
 } from '../../controllers/categories.js';
-import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCard/creditCard.js';
+import {
+  createCreditCard,
+  deleteCreditCard,
+  listCreditCards,
+  updateCreditCard,
+} from '../../controllers/creditCard/creditCard.js';
 import {
   addCardPurchase,
   deleteCardTransaction,
@@ -504,6 +509,29 @@ export const buildRouteDefinitions = (
           .map(accountAdapters.outcomeToDb)
           .map(creditCardAdapters.outcomeToDb);
       return send(reply, await runEffects(flow), 201);
+    },
+  },
+  {
+    method: 'patch',
+    path: '/api/credit-cards/:name',
+    tags: [RouteTag.creditCards],
+    summary: 'Update credit card',
+    request: { params: nameParam, body: jsonBody(wireInCreditCards.UpdateCreditCardSchema.omit({ name: true })) },
+    responses: {
+      200: okResponse('Credit card updated', CreditCardSchema),
+      404: notFound404,
+      409: conflict409,
+      422: validation422,
+    },
+    handler: async (req, reply) => {
+      const { name } = req.params as { name: string };
+      const wireIn = parse(wireInCreditCards.UpdateCreditCardSchema, { ...(req.body ?? {}), name }, reply);
+      if (!wireIn) return reply;
+      const flow = () =>
+        updateCreditCard(deps, creditCardAdapters.updateWireInToModel(wireIn))
+          .map(accountAdapters.outcomeToDb)
+          .map(creditCardAdapters.outcomeToDb);
+      return send(reply, await runEffects(flow));
     },
   },
   {

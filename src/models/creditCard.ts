@@ -50,6 +50,23 @@ export const CreateCreditCardSchema = CreditCardSchema.omit({
 });
 export type CreateCreditCard = z.infer<typeof CreateCreditCardSchema>;
 
+/** Card-aggregate update schema (mirrors `UpdateAccountSchema`, Feature Design 007): identifies the
+ *  card by its current `name`; `newName` renames it. `currency` is fixed once a card exists — it's
+ *  baked into the card's internal account and every existing transaction's denormalized currency —
+ *  so it's the one `CreditCardSchema` field omitted outright rather than made optional. */
+export const UpdateCreditCardSchema = CreditCardSchema.omit({
+  id: true,
+  currency: true,
+  accountId: true,
+  paymentAccountId: true,
+})
+  .partial({ closingDay: true, dueDay: true })
+  .extend({
+    newName: z.string().min(1).optional().describe('New card name'),
+    paymentAccount: z.string().min(1).optional().describe('New default paying account name for bill payment'),
+  });
+export type UpdateCreditCard = z.infer<typeof UpdateCreditCardSchema>;
+
 /** Natural input for a credit-card purchase (ADR-016): the transaction core's minimal
  *  `CreateTransactionSchema` (ADR-019) plus `card` (required — the card's own internal liability
  *  account is always the destination) and bill-assignment (`billMonth`/`billYear`) — both are

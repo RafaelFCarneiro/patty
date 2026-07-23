@@ -6,12 +6,15 @@ import {
   type CreditCardEntity,
   type ImportCardStatement,
   type UpdateCardTransaction,
+  type UpdateCreditCard,
 } from '../models/creditCard.js';
 import * as persistence from '../logic/persistence.js';
 import type { CreditCardRow } from '../wire/db/creditCards.js';
 import type * as wireIn from '../wire/in/creditCards.js';
 
 export const wireInToModel = (input: wireIn.CreateCreditCard): CreateCreditCard => input;
+
+export const updateWireInToModel = (input: wireIn.UpdateCreditCard): UpdateCreditCard => input;
 
 export const addCardPurchaseWireInToModel = (input: wireIn.AddCardPurchase): AddCardPurchase => input;
 

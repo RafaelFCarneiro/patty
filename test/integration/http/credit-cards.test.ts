@@ -57,6 +57,144 @@ describe('POST /api/credit-cards', () => {
   });
 });
 
+describe('PATCH /api/credit-cards/:name', () => {
+  it('renames a card and its internal account atomically (200)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Rename Me', closingDay: 10, dueDay: 20, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'PATCH',
+      url: '/api/credit-cards/Rename%20Me',
+      payload: { newName: 'Renamed Card' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe('Renamed Card');
+
+    const cards = await inject({ method: 'GET', url: '/api/credit-cards' });
+    const cardNames = (cards.json() as Array<{ name: string }>).map((c) => c.name);
+    expect(cardNames).toContain('Renamed Card');
+    expect(cardNames).not.toContain('Rename Me');
+
+    const accounts = await inject({ method: 'GET', url: '/api/accounts?type=credit' });
+    const accountNames = (accounts.json() as Array<{ name: string }>).map((a) => a.name);
+    expect(accountNames).toContain('Card: Renamed Card');
+    expect(accountNames).not.toContain('Card: Rename Me');
+  });
+
+  it('rejects a duplicate new name (409)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Existing Card', closingDay: 10, dueDay: 20, currency: 'USD' },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Card To Rename', closingDay: 10, dueDay: 20, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'PATCH',
+      url: '/api/credit-cards/Card%20To%20Rename',
+      payload: { newName: 'Existing Card' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toHaveProperty('error.code', 'duplicate_name');
+  });
+
+  it('updates limit/closingDay/dueDay without touching the internal account (200)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Field Update Card', closingDay: 10, dueDay: 20, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'PATCH',
+      url: '/api/credit-cards/Field%20Update%20Card',
+      payload: { limit: 3000, closingDay: 15, dueDay: 25 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ limit: 3000, closingDay: 15, dueDay: 25, name: 'Field Update Card' });
+
+    const accounts = await inject({ method: 'GET', url: '/api/accounts?type=credit' });
+    const accountNames = (accounts.json() as Array<{ name: string }>).map((a) => a.name);
+    expect(accountNames).toContain('Card: Field Update Card');
+  });
+
+  it('a closingDay change leaves an already-computed bill unchanged (200)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Bill Boundary Card', closingDay: 28, dueDay: 5, currency: 'USD' },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards/purchases',
+      payload: {
+        description: 'Boundary purchase',
+        amount: 20,
+        type: 'expense',
+        date: '2026-06-05',
+        card: 'Bill Boundary Card',
+        idempotencyKey: 'boundary-purchase',
+      },
+    });
+    const before = await inject({ method: 'GET', url: '/api/bills?card=Bill Boundary Card&month=6&year=2026' });
+    const closeDateBefore = before.json().bill.closeDate as string;
+    const dueDateBefore = before.json().bill.dueDate as string;
+
+    const patch = await inject({
+      method: 'PATCH',
+      url: '/api/credit-cards/Bill%20Boundary%20Card',
+      payload: { closingDay: 10, dueDay: 20 },
+    });
+    expect(patch.statusCode).toBe(200);
+
+    const after = await inject({ method: 'GET', url: '/api/bills?card=Bill Boundary Card&month=6&year=2026' });
+    expect(after.json().bill.closeDate).toBe(closeDateBefore);
+    expect(after.json().bill.dueDate).toBe(dueDateBefore);
+  });
+
+  it('rejects a credit account as paymentAccount (422) — the #4 regression, alongside create/pay', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Guard Update Card', closingDay: 10, dueDay: 20, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'PATCH',
+      url: '/api/credit-cards/Guard%20Update%20Card',
+      payload: { paymentAccount: 'Card: Guard Update Card' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toHaveProperty('error.code', 'validation');
+  });
+
+  it('returns 404 for unknown card', async () => {
+    const res = await inject({
+      method: 'PATCH',
+      url: '/api/credit-cards/nonexistent-card-xyz',
+      payload: { limit: 100 },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects invalid body (422)', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/credit-cards',
+      payload: { name: 'Invalid Body Card', closingDay: 10, dueDay: 20, currency: 'USD' },
+    });
+    const res = await inject({
+      method: 'PATCH',
+      url: '/api/credit-cards/Invalid%20Body%20Card',
+      payload: { closingDay: 40 },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+});
+
 describe('POST /api/credit-cards/purchases', () => {
   it('records a purchase and joins the cycle bill (201)', async () => {
     await inject({

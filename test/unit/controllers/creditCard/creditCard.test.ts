@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createCreditCard, deleteCreditCard } from '../../../../src/controllers/creditCard/creditCard.js';
+import {
+  createCreditCard,
+  deleteCreditCard,
+  updateCreditCard,
+} from '../../../../src/controllers/creditCard/creditCard.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus, type RawBill } from '../../../../src/models/bill.js';
@@ -30,13 +34,18 @@ const account = (overrides: Partial<Account> = {}): Account => ({
   ...overrides,
 });
 
+// limit/paymentAccountId default to explicit `undefined` (present keys), matching how the
+// production adapter (`adapters/creditCards.ts`'s `dbToEntity`) always shapes them via `?? undefined`
+// — `updateCreditCard`'s no-op detection (`R.isDeepEqual`) is key-presence-sensitive, unlike `toEqual`.
 const card = (overrides: Partial<CreditCard> = {}): CreditCard => ({
   id: 'card-existing',
   name: 'Nubank',
   currency: CurrencyCode.enum.BRL,
   closingDay: 10,
   dueDay: 20,
+  limit: undefined,
   accountId: 'acc-card-internal',
+  paymentAccountId: undefined,
   ...overrides,
 });
 
@@ -149,6 +158,26 @@ describe('createCreditCard — functional core, two-entity batch (ADR-021 phase 
       accounts: {
         findByName: async () => null,
         list: async () => [account({ currency: CurrencyCode.enum.USD })],
+      } as unknown as Deps['accounts'],
+    });
+
+    const result = await createCreditCard(deps, {
+      name: 'Nubank',
+      currency: CurrencyCode.enum.BRL,
+      closingDay: 10,
+      dueDay: 20,
+      paymentAccount: 'Checking',
+    });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('rejects a credit account as paymentAccount (the #4 guard, alongside pay_bill/update_credit_card)', async () => {
+    const deps = makeDeps({
+      accounts: {
+        findByName: async () => null,
+        list: async () => [account({ type: AccountType.enum.credit })],
       } as unknown as Deps['accounts'],
     });
 
@@ -293,5 +322,163 @@ describe('deleteCreditCard — functional core, two-entity batch (ADR-021 phase 
       { op: PersistOp.enum.delete, entity: CREDIT_CARD_ENTITY_TAG, id: 'card-existing', version: 7 },
       { op: PersistOp.enum.delete, entity: ACCOUNT_ENTITY_TAG, id: 'acc-card-internal', version: 4 },
     ]);
+  });
+});
+
+describe('updateCreditCard — functional core, a rename cascades to the internal account (Design 014 phase C)', () => {
+  const cardDeps = (overrides: Partial<Deps> = {}): Deps =>
+    makeDeps({
+      creditCards: {
+        findByName: async () => null,
+        list: async () => [card()],
+        findRawById: async () => ({ ...card(), version: 7 }) as CreditCardEntity,
+      } as unknown as Deps['creditCards'],
+      accounts: {
+        findByName: async () => null,
+        findRawById: async () =>
+          ({ ...account({ id: 'acc-card-internal', name: 'Card: Nubank' }), version: 4 }) as AccountEntity,
+      } as unknown as Deps['accounts'],
+      ...overrides,
+    });
+
+  it('a plain field update (limit/closingDay/dueDay) emits just [creditCard update], no account write', async () => {
+    const deps = cardDeps();
+
+    const result = await updateCreditCard(deps, { name: 'Nubank', limit: 5000, closingDay: 15, dueDay: 25 });
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([
+      {
+        op: PersistOp.enum.update,
+        entity: CREDIT_CARD_ENTITY_TAG,
+        model: { ...card(), limit: 5000, closingDay: 15, dueDay: 25, version: 7 },
+      },
+    ]);
+    expect(outcome.response).toEqual({ ...card(), limit: 5000, closingDay: 15, dueDay: 25 });
+  });
+
+  it('a rename emits [account update, creditCard update] — both renamed under Card: <newName>', async () => {
+    const deps = cardDeps();
+
+    const result = await updateCreditCard(deps, { name: 'Nubank', newName: 'Nubank Platinum' });
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([
+      {
+        op: PersistOp.enum.update,
+        entity: ACCOUNT_ENTITY_TAG,
+        model: { ...account({ id: 'acc-card-internal', name: 'Card: Nubank Platinum' }), version: 4 },
+      },
+      {
+        op: PersistOp.enum.update,
+        entity: CREDIT_CARD_ENTITY_TAG,
+        model: { ...card(), name: 'Nubank Platinum', version: 7 },
+      },
+    ]);
+    expect(outcome.response).toEqual({ ...card(), name: 'Nubank Platinum' });
+  });
+
+  it('rejects a duplicate new card name before any write', async () => {
+    const deps = cardDeps({
+      creditCards: {
+        findByName: async () => card({ id: 'other-card', name: 'Existing' }),
+        list: async () => [card()],
+      } as unknown as Deps['creditCards'],
+    });
+
+    const result = await updateCreditCard(deps, { name: 'Nubank', newName: 'Existing' });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'duplicate_name', entity: 'credit_card', name: 'Existing' });
+  });
+
+  it('a case-only rename skips the duplicate-name guard and still renames both entities', async () => {
+    const deps = cardDeps({
+      creditCards: {
+        // A naive case-insensitive findByName would "find" the card itself — proving the guard is
+        // skipped (not merely satisfied) is the point of throwing instead of returning a value.
+        findByName: async () => {
+          throw new Error('card duplicate-name guard must not run for a case-only rename');
+        },
+        list: async () => [card()],
+        findRawById: async () => ({ ...card(), version: 7 }) as CreditCardEntity,
+      } as unknown as Deps['creditCards'],
+      accounts: {
+        findByName: async () => {
+          throw new Error('account duplicate-name guard must not run for a case-only rename');
+        },
+        findRawById: async () =>
+          ({ ...account({ id: 'acc-card-internal', name: 'Card: Nubank' }), version: 4 }) as AccountEntity,
+      } as unknown as Deps['accounts'],
+    });
+
+    const result = await updateCreditCard(deps, { name: 'Nubank', newName: 'nubank' });
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toHaveLength(2);
+    expect((outcome.persist[0] as { model: { name: string } }).model.name).toBe('Card: nubank');
+    expect((outcome.persist[1] as { model: { name: string } }).model.name).toBe('nubank');
+  });
+
+  it('resolves paymentAccount by name and rejects a currency mismatch', async () => {
+    const deps = cardDeps({
+      accounts: {
+        findByName: async () => null,
+        list: async () => [account({ currency: CurrencyCode.enum.USD })],
+        findRawById: async () =>
+          ({ ...account({ id: 'acc-card-internal', name: 'Card: Nubank' }), version: 4 }) as AccountEntity,
+      } as unknown as Deps['accounts'],
+    });
+
+    const result = await updateCreditCard(deps, { name: 'Nubank', paymentAccount: 'Checking' });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('a valid paymentAccount resolves and sets paymentAccountId', async () => {
+    const deps = cardDeps({
+      accounts: {
+        findByName: async () => null,
+        list: async () => [account({ id: 'acc-payer-2', name: 'Savings' })],
+        findRawById: async () =>
+          ({ ...account({ id: 'acc-card-internal', name: 'Card: Nubank' }), version: 4 }) as AccountEntity,
+      } as unknown as Deps['accounts'],
+    });
+
+    const result = await updateCreditCard(deps, { name: 'Nubank', paymentAccount: 'Savings' });
+
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().response).toMatchObject({ paymentAccountId: 'acc-payer-2' });
+  });
+
+  it('rejects a credit account as paymentAccount (the #4 regression, alongside create/pay)', async () => {
+    const deps = cardDeps({
+      accounts: {
+        findByName: async () => null,
+        list: async () => [account({ type: AccountType.enum.credit })],
+        findRawById: async () =>
+          ({ ...account({ id: 'acc-card-internal', name: 'Card: Nubank' }), version: 4 }) as AccountEntity,
+      } as unknown as Deps['accounts'],
+    });
+
+    const result = await updateCreditCard(deps, { name: 'Nubank', paymentAccount: 'Checking' });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('an update that changes nothing is a no-op: empty persist, the current card as response', async () => {
+    const deps = cardDeps();
+
+    const result = await updateCreditCard(deps, { name: 'Nubank' });
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([]);
+    expect(outcome.response).toEqual(card());
   });
 });
