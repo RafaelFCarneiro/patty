@@ -252,9 +252,37 @@ describe('payBill — the write is returned as data, not performed (ADR-021 phas
     expect(txModel.date).toBe(today);
   });
 
-  it('rejects a future paymentDate before building any write', async () => {
+  it('rejects a future paymentDate before reading the bill version to build any write', async () => {
     const deps = makeDeps({
-      bills: { get: async () => billWithItems(), findById: async () => rawBill() } as unknown as Deps['bills'],
+      bills: {
+        get: async () => billWithItems(),
+        findById: async () => {
+          throw new Error('must not read version for a rejected paymentDate — no write to build');
+        },
+      } as unknown as Deps['bills'],
+      clock: () => clockDate,
+    });
+
+    const result = await payBill(deps, {
+      card: 'Test Card',
+      month: 6,
+      year: 2026,
+      paymentDate: futureDate,
+      source: TransactionSource.enum.mcp,
+    });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('validation');
+  });
+
+  it('rejects a future paymentDate even when the bill total is non-positive (no transfer branch)', async () => {
+    const deps = makeDeps({
+      bills: {
+        get: async () => billWithItems({ transactions: [billItem({ type: 'income', amount: 30 })] }),
+        findById: async () => {
+          throw new Error('must not read version for a rejected paymentDate — no write to build');
+        },
+      } as unknown as Deps['bills'],
       clock: () => clockDate,
     });
 

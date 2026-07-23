@@ -73,6 +73,10 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
       return ok({ persist: [], response: existing.bill });
     }
 
+    const today = toIsoDate(deps.clock());
+    const date = input.paymentDate ?? today;
+    yield* guard(date <= today, billErrors.futurePaymentDate(date));
+
     const total = computeBillTotal(existing.transactions);
     const rawBill = yield* okOr(
       await deps.bills.findById(existing.bill.id),
@@ -94,10 +98,6 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
 
     yield* guard(assertNonCreditType(payer.type), accountErrors.creditPaymentRejected);
     yield* guard(assertCurrencyMatch(payer, card), accountErrors.currencyMismatch(card.currency, payer.currency));
-
-    const today = toIsoDate(deps.clock());
-    const date = input.paymentDate ?? today;
-    yield* guard(date <= today, billErrors.futurePaymentDate(date));
 
     const txId = deps.newId();
     const transferEntity: TransactionEntity = {
