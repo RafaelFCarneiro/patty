@@ -174,7 +174,8 @@ export const recurringRules = sqliteTable('recurring_rules', {
 });
 
 export const dashboards = sqliteTable('dashboards', {
-  name: text('name').primaryKey(),
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
   html: text('html').notNull(),
   updatedAt: text('updated_at').notNull(),
   version: integer('version').notNull().default(0),

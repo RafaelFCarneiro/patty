@@ -1617,7 +1617,7 @@ describe('tagApplier — name-uniqueness race surfaces as a generic conflict (AD
   });
 });
 
-describe('dashboardApplier — name-PK race surfaces as a generic conflict, never a raw 500', () => {
+describe('dashboardApplier — name-uniqueness race surfaces as a generic conflict, never a raw 500', () => {
   const dashboardRegistry: ApplierRegistry = { [DASHBOARD_ENTITY_TAG]: dashboardApplier };
 
   it('inserts a brand-new dashboard normally', async () => {
@@ -1628,33 +1628,35 @@ describe('dashboardApplier — name-PK race surfaces as a generic conflict, neve
           {
             op: PersistOp.enum.insert,
             entity: DASHBOARD_ENTITY_TAG,
-            model: { name, html: '<html/>', updatedAt: '2026-01-01' },
+            model: { id: randomUUID(), name, html: '<html/>', updatedAt: '2026-01-01' },
           },
         ] as Persistable[],
         response: null,
       }),
     );
     expect(result.isOk()).toBe(true);
-    expect(await db.all(sql`SELECT name FROM dashboards WHERE name = ${name}`)).toHaveLength(1);
+    expect(await db.all(sql`SELECT id FROM dashboards WHERE name = ${name}`)).toHaveLength(1);
   });
 
   it('a concurrent same-new-name race exhausts retries to the generic conflict error, never a raw 500', async () => {
-    // dashboards.name is the PRIMARY KEY itself (not a secondary UNIQUE column like tags.name), so
-    // a duplicate insert raises SQLITE_CONSTRAINT_PRIMARYKEY, a different extended code than the
-    // UNIQUE-column case tagApplier/billApplier recognize — this is the regression test for that.
+    // Now that `id` is the primary key and `name` is a secondary UNIQUE column (like tags.name), a
+    // concurrent first save of the same brand-new name mints two different ids, both insert, and
+    // the second raises SQLITE_CONSTRAINT_UNIQUE — the same race tagApplier/billApplier recognize.
     const name = `dash-${randomUUID()}`;
-    await db.insert(dashboards).values({ name, html: '<html>winner</html>', updatedAt: '2026-01-01' });
+    await db
+      .insert(dashboards)
+      .values({ id: randomUUID(), name, html: '<html>winner</html>', updatedAt: '2026-01-01' });
 
     let attempts = 0;
     const flow = () => {
       attempts += 1;
-      // A naive flow that never re-reads — always attempts a fresh insert of the same name.
+      // A naive flow that never re-reads — always mints its own speculative id for the same name.
       return okAsync({
         persist: [
           {
             op: PersistOp.enum.insert,
             entity: DASHBOARD_ENTITY_TAG,
-            model: { name, html: '<html>loser</html>', updatedAt: '2026-01-02' },
+            model: { id: randomUUID(), name, html: '<html>loser</html>', updatedAt: '2026-01-02' },
           },
         ] as Persistable[],
         response: null,
@@ -1666,8 +1668,9 @@ describe('dashboardApplier — name-PK race surfaces as a generic conflict, neve
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
     expect(attempts).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
-    const [row] = await db.all<{ html: string }>(sql`SELECT html FROM dashboards WHERE name = ${name}`);
-    expect(row?.html).toBe('<html>winner</html>'); // no loser row landed
+    const rows = await db.all<{ html: string }>(sql`SELECT html FROM dashboards WHERE name = ${name}`);
+    expect(rows).toHaveLength(1); // no loser row landed
+    expect(rows[0]?.html).toBe('<html>winner</html>');
   });
 
   it("saveDashboard's own retry re-reads and takes the update path when a concurrent first save races it", async () => {
@@ -1676,6 +1679,7 @@ describe('dashboardApplier — name-PK race surfaces as a generic conflict, neve
     const deps: Deps = {
       dashboards: dashboardsR,
       clock: () => new Date('2026-06-01T00:00:00.000Z'),
+      newId: () => randomUUID(),
       locale: async () => Locale.enum.en,
     } as unknown as Deps;
 
@@ -1684,17 +1688,19 @@ describe('dashboardApplier — name-PK race surfaces as a generic conflict, neve
     // own read (finding nothing, deciding "insert") and the shell applying that decision: the first
     // read still reports "absent" (so saveDashboard decides insert), but the racer's row is already
     // in place by the time the shell's `dashboardApplier.insert` runs, so that insert hits a real
-    // PRIMARYKEY conflict and the whole batch rolls back for a retry.
+    // UNIQUE conflict on `name` and the whole batch rolls back for a retry.
     const racingDashboards: Deps['dashboards'] = {
       ...dashboardsR,
-      findVersionByName: async (n) => {
+      findRefByName: async (n) => {
         reads += 1;
-        const existingVersion = await dashboardsR.findVersionByName(n);
-        if (reads === 1 && existingVersion === null) {
-          await db.insert(dashboards).values({ name: n, html: '<html>racer</html>', updatedAt: '2026-05-01' });
+        const existingRef = await dashboardsR.findRefByName(n);
+        if (reads === 1 && existingRef === null) {
+          await db
+            .insert(dashboards)
+            .values({ id: randomUUID(), name: n, html: '<html>racer</html>', updatedAt: '2026-05-01' });
           return null; // this read itself still predates the race — the decision is already stale
         }
-        return existingVersion;
+        return existingRef;
       },
     };
     const racingDeps: Deps = { ...deps, dashboards: racingDashboards };

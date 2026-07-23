@@ -78,6 +78,13 @@
       "when": 1784165848746,
       "tag": "0010_category_merchant_association_cascade",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1784760614478,
+      "tag": "0011_dashboard_id_normalization",
+      "breakpoints": true
     }
   ]
 }

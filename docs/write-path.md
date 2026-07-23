@@ -78,8 +78,10 @@ effect runner, appliers, outcomes, and the per-flow notes.
   `versionedTableApplier(accounts)`; `transactionApplier` is
   `versionedTableApplier(transactions, { idempotencyColumn: 'idempotencyKey', readBack })` (ADR-023: the
   once-bespoke applier collapsed to a registration). Tables outside the `id`/`version` convention hand-write
-  their own `EntityApplier` against the same interface: `dashboards` (keys on `name`), and the `id`/`version`-less
-  `merchants`, `merchant_category`, `transaction_tags`.
+  their own `EntityApplier` against the same interface: the `id`/`version`-less `merchants`, `merchant_category`,
+  `transaction_tags`. `dashboards` used to key on `name` itself and hand-write its applier this way too; Feature
+  Design 013 Phase 1 normalized it to `id`/`version` with `name UNIQUE`, moving it into the
+  versioned-entity-with-unique-secondary-key family below instead.
 - **FK violation on a versioned `delete` → `VersionConflict`.** A row acquiring a referrer between the flow's
   read and its apply is the same "world changed" race a stale version reports; `versionedTableApplier` catches
   `isForeignKeyConstraintViolation` (`diplomat/db/sqliteErrors.ts`) and rethrows `VersionConflict` so the flow
@@ -89,7 +91,11 @@ effect runner, appliers, outcomes, and the per-flow notes.
   `onConflictDoNothing` doesn't swallow a same-cycle race; `billApplier` rethrows the
   `isUniqueConstraintViolation` (`diplomat/db/sqliteErrors.ts`) as `VersionConflict` and the flow retries,
   touching the winning cycle. `tagApplier` mirrors this exactly for `tags.name`'s `UNIQUE` (retry → the domain's
-  own name check returns `duplicate_name`). (Rationale: ADR-021.)
+  own name check returns `duplicate_name`). `dashboardApplier` (`diplomat/db/repos/dashboards.ts`) is the same
+  wrapper again for `dashboards.name`'s `UNIQUE` (Feature Design 013 Phase 1 — `dashboards` used to key on `name`
+  itself and hand-write its own `EntityApplier`; normalizing to a surrogate `id` PK with `name UNIQUE` let it
+  join this family instead): a concurrent first save of a brand-new name mints two ids, both insert, and the
+  second's `SQLITE_CONSTRAINT_UNIQUE` retries the same way. (Rationale: ADR-021.)
 - **The `merchant` entity** — key-only, hand-written `merchantApplier` (insert-only, `onConflictDoNothing`).
   Every flow whose decision implies a merchant emits its own `MERCHANT_ENTITY_TAG` `Persistable` ahead of
   whatever references it, via `logic/merchant.ts`'s `withMerchant` (transaction inserts) and
