@@ -48,6 +48,13 @@ export const renameDashboard = (
 ): ResultAsync<FlowOutcome<Dashboard>, AppError> =>
   safeTry(async function* () {
     const entity = yield* okOr(await deps.dashboards.findByName(name), dashboardErrors.notFound(name));
+
+    // Renaming to the current name is a no-op — same idempotent spirit as deleteDashboard, and it
+    // sidesteps the duplicate-name guard, which would otherwise see the entity's own row and reject
+    // it as if `newName` belonged to someone else (mirrors updateAccount's newName-vs-current check).
+    if (newName === entity.name) {
+      return ok({ persist: [], response: { name: entity.name, html: entity.html, updatedAt: entity.updatedAt } });
+    }
     yield* guard(!(await deps.dashboards.findRefByName(newName)), dashboardErrors.duplicateName(newName));
 
     const dashboard: Dashboard = { name: newName, html: entity.html, updatedAt: deps.clock().toISOString() };

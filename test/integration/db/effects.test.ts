@@ -13,7 +13,7 @@ import * as creditCardAdapters from '../../../src/adapters/creditCards.js';
 import * as transactionAdapters from '../../../src/adapters/transactions.js';
 import { payBill } from '../../../src/controllers/creditCard/bill.js';
 import { deleteCreditCard } from '../../../src/controllers/creditCard/creditCard.js';
-import { saveDashboard } from '../../../src/controllers/dashboards.js';
+import { renameDashboard, saveDashboard } from '../../../src/controllers/dashboards.js';
 import { setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
@@ -1735,6 +1735,48 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
     expect(rows).toHaveLength(1); // exactly one row — the racer's insert, then this flow's update
     expect(rows[0]?.html).toBe('<html>mine</html>');
     expect(rows[0]?.version).toBe(1); // version 0 (racer's insert) → 1 (this flow's update)
+  });
+
+  it("renameDashboard's update retries on a concurrent newName claim and surfaces duplicate_name", async () => {
+    // Unlike saveDashboard's update (which only ever rewrites a row's own name back to itself),
+    // renameDashboard's update is the one flow that changes `name` to a value it doesn't already
+    // own — so a concurrent writer claiming that same `newName` mid-flight raises the identical
+    // UNIQUE race `dashboardApplier.update`'s wrapper now catches (mirroring `insert`'s wrapper).
+    const name = `dash-${randomUUID()}`;
+    const newName = `dash-${randomUUID()}`;
+    await db.insert(dashboards).values({ id: randomUUID(), name, html: '<html>mine</html>', updatedAt: '2026-01-01' });
+    const dashboardsR = dashboardsRepo(db);
+
+    let racerReads = 0;
+    const racingDashboards: Deps['dashboards'] = {
+      ...dashboardsR,
+      findRefByName: async (n) => {
+        const existingRef = await dashboardsR.findRefByName(n);
+        if (n !== newName) return existingRef;
+        racerReads += 1;
+        if (racerReads === 1 && existingRef === null) {
+          await db
+            .insert(dashboards)
+            .values({ id: randomUUID(), name: newName, html: '<html>racer</html>', updatedAt: '2026-05-01' });
+          return null; // this read itself still predates the race — the decision is already stale
+        }
+        return existingRef;
+      },
+    };
+    const deps: Deps = {
+      dashboards: racingDashboards,
+      clock: () => new Date('2026-06-01T00:00:00.000Z'),
+      locale: async () => Locale.enum.en,
+    } as unknown as Deps;
+
+    const result = await runEffects(db, dashboardRegistry, () => renameDashboard(deps, name, newName));
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'duplicate_name', entity: 'dashboard', name: newName });
+    const [original] = await db.all<{ html: string; version: number }>(
+      sql`SELECT html, version FROM dashboards WHERE name = ${name}`,
+    );
+    expect(original).toEqual({ html: '<html>mine</html>', version: 0 }); // untouched — the retried update never landed
   });
 });
 

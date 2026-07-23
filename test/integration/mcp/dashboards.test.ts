@@ -176,4 +176,22 @@ describe('MCP integration > dashboards', () => {
       await transport.close();
     }
   });
+
+  it('rename_dashboard to its own current name is a no-op, not a duplicate_name error', async () => {
+    const stamp = Date.now();
+    const name = `mcp-dash-rename-self-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'save_dashboard', args: { name, html: '<html></html>' } });
+
+      const result = (await callTool(client, {
+        name: 'rename_dashboard',
+        args: { name, newName: name },
+      })) as { name?: string };
+      expect(result.name).toBe(name);
+    } finally {
+      await transport.close();
+    }
+  });
 });

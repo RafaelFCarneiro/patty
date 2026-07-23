@@ -164,6 +164,22 @@ describe('renameDashboard', () => {
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'duplicate_name', entity: 'dashboard', name: 'taken' });
   });
+
+  it('is a no-op when newName is the current name, skipping the duplicate-name check entirely', async () => {
+    const deps = makeDeps({ findByName: vi.fn(async () => existingEntity()) });
+
+    const result = await renameDashboard(deps, 'overview', 'overview');
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([]);
+    expect(outcome.response).toEqual({
+      name: 'overview',
+      html: '<html>mine</html>',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(deps.dashboards.findRefByName).not.toHaveBeenCalled();
+  });
 });
 
 describe('listDashboards', () => {

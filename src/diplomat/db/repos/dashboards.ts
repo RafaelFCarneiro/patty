@@ -55,12 +55,23 @@ const versionedDashboardApplier = versionedTableApplier(dashboards);
  *  `onConflictDoNothing` doesn't swallow. Recognized and rethrown as `VersionConflict`, rolling
  *  back and retrying — the retry's own `findRefByName` then sees the committed row and takes the
  *  update path instead of racing another insert. Structurally identical to `tagApplier`
- *  (`diplomat/db/repos/tags.ts`). `update`/`delete` stay plain. */
+ *  (`diplomat/db/repos/tags.ts`). `update` gets the same wrapper — `renameDashboard` is the one flow
+ *  that changes `name` on an existing row, so a concurrent claim of the same `newName` can raise the
+ *  identical `UNIQUE` violation there too; without it, the violation would surface as a raw
+ *  exception instead of retrying into a clean `duplicate_name`. `delete` stays plain. */
 export const dashboardApplier: EntityApplier = {
   ...versionedDashboardApplier,
   insert: async (tx, model) => {
     try {
       return await versionedDashboardApplier.insert(tx, model);
+    } catch (cause) {
+      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
+      throw cause;
+    }
+  },
+  update: async (tx, model) => {
+    try {
+      return await versionedDashboardApplier.update(tx, model);
     } catch (cause) {
       if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
       throw cause;
