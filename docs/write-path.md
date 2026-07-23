@@ -155,9 +155,12 @@ effect runner, appliers, outcomes, and the per-flow notes.
   and `recurringRuleApplier` are plain `versionedTableApplier`. `deleteTag`/`deleteAccountTransaction`/
   `deleteDashboard` are idempotent-by-design: a missing id (or, for `deleteDashboard`, name — resolved to an id
   via `findRefByName`) returns `{ deleted: false }` on an empty `persist` batch, no write. `renameDashboard`
-  reuses `dashboardApplier`'s plain `update` mechanics unchanged — a version-guarded rewrite of the whole row
-  under a new `name`, same `id`; its own `duplicate_name` guard (a pre-check, not a race the applier needs to
-  catch) is what distinguishes it from a generic `saveDashboard` update.
+  is a version-guarded rewrite of the whole row under a new `name`, same `id` — its own `duplicate_name`
+  pre-check is the fast path, but it's the first flow whose `update` changes `dashboards.name` to a value it
+  doesn't already hold, so `dashboardApplier.update` also wraps `isUniqueConstraintViolation` into
+  `VersionConflict` (the same treatment `insert` already had), and the retry's own pre-check is what turns
+  that into a clean `duplicate_name` rather than an uncaught exception. A same-name rename is a no-op (empty
+  `persist`), skipping the guard entirely — renaming something to what it's already called can't collide.
 - **Cascades live in the schema or the domain, never the applier.** `merchant_category.category_id` and
   `transaction_tags.transaction_id` are `ON DELETE CASCADE` in the schema (association rows with no independent
   meaning once their owner is gone). The credit-card cascade is a **domain decision**: `deleteCreditCard`
