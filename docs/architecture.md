@@ -254,7 +254,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 
 ## Tool surface
 
-43 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
+44 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
 
 **Transport:** controlled by `MCP_TRANSPORT` (zod enum, `config.ts`). Default is **`stdio`** — the client spawns the process; no port, no Fastify. Set `MCP_TRANSPORT=http` to start the Fastify server (REST + streamable HTTP MCP on `PORT`). Both transports connect the same `buildMcpServer(deps, version)` core; no domain code moves. (ADR-007)
 
@@ -288,6 +288,14 @@ never on the wire and never a tool argument. `save_dashboard` (MCP tool) / `POST
 Phase 2), mirroring `delete_tag`: `deleteDashboard` (`controllers/dashboards.ts`) reads `findRefByName`; absent →
 `{ deleted: false }` on an empty `persist` batch, no write; present → a version-guarded `remove` `Persistable`
 and `{ deleted: true }`. Never an error either way — `GET /ui/:name` simply 404s afterward.
+
+`rename_dashboard` (MCP tool) / `POST /api/dashboards/:name/rename` (REST) — the capability the surrogate `id`
+unlocks (Feature Design 013 Phase 3): `renameDashboard` (`controllers/dashboards.ts`) reads the full entity via
+`findByName` (`unknown_dashboard` if absent), guards `newName` is free via `findRefByName`
+(`dashboardErrors.duplicateName` if taken — a clean expected failure rather than surfacing through the
+applier's own unique-conflict retry), then emits a version-guarded `update` carrying the same `id` and `html`,
+the new `name`, and a bumped `updatedAt`. `GET /ui/:newName` serves it immediately; `GET /ui/:name` (the old
+name) 404s — the handle moved, the identity didn't.
 
 Before persisting, `saveDashboard` (`controllers/dashboards.ts`) runs `findHtmlValidationIssues` (`logic/dashboard.ts`, pure) and rejects with `validation` (422) if it fails: no `<!doctype html>`/`<html>` root element, or an inline `<script>` that fails to *compile* (via Node's `vm.Script` — checked, never executed, so this can't itself run untrusted code). This is a narrow render-ability check, not sanitization: it exists because there was previously nothing stopping a broken save (e.g. a JS syntax error) from silently overwriting a working dashboard with no version history to recover from — full HTML sanitization remains explicitly out of scope for this local single-user app (ADR-013 Phase A). A rejected save never reads `dashboards.findRefByName` or decides a `Persistable`, so the previously stored
 dashboard is untouched (`docs/write-path.md` — `saveDashboard` is FC/IS: it decides an insert/update as data, never

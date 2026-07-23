@@ -39,6 +39,27 @@ export const deleteDashboard = (deps: Deps, name: string): ResultAsync<FlowOutco
     return ok({ persist, response: { deleted: true } });
   });
 
+/** Preserves the entity's `id` across the rename, unlike `saveDashboard` under a new name (which
+ *  would mint a fresh `id` for what the caller means as the same dashboard). */
+export const renameDashboard = (
+  deps: Deps,
+  name: string,
+  newName: string,
+): ResultAsync<FlowOutcome<Dashboard>, AppError> =>
+  safeTry(async function* () {
+    const entity = yield* okOr(await deps.dashboards.findByName(name), dashboardErrors.notFound(name));
+    yield* guard(!(await deps.dashboards.findRefByName(newName)), dashboardErrors.duplicateName(newName));
+
+    const dashboard: Dashboard = { name: newName, html: entity.html, updatedAt: deps.clock().toISOString() };
+    const persist = [
+      persistence.update({
+        entity: DASHBOARD_ENTITY_TAG,
+        model: { ...dashboard, id: entity.id, version: entity.version },
+      }),
+    ];
+    return ok({ persist, response: dashboard });
+  });
+
 export const listDashboards = (deps: Deps): Promise<DashboardListItem[]> => deps.dashboards.list();
 
 export const getDashboard = (deps: Deps, name: string): ResultAsync<Dashboard, AppError> =>

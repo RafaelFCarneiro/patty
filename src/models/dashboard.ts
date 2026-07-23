@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Id } from './id.js';
-import { validation, type NotFound, type ValidationError } from './error.js';
+import { validation, type DuplicateName, type NotFound, type ValidationError } from './error.js';
 
 // A generous ceiling for a self-contained, data-less HTML shell (the baseline template is ~23KB)
 // — bounds worst-case DB growth and the cost of the render-ability check's vm.Script compile step
@@ -23,6 +23,12 @@ export type DashboardListItem = z.infer<typeof DashboardListItemSchema>;
 export const SaveDashboardSchema = DashboardSchema.pick({ name: true, html: true });
 export type SaveDashboard = z.infer<typeof SaveDashboardSchema>;
 
+export const RenameDashboardSchema = z.object({
+  name: DashboardSchema.shape.name.describe('Current dashboard name'),
+  newName: DashboardSchema.shape.name.describe('New dashboard name'),
+});
+export type RenameDashboard = z.infer<typeof RenameDashboardSchema>;
+
 export const DASHBOARD_ENTITY_TAG = 'dashboard';
 
 export const DashboardEntitySchema = DashboardSchema.extend({
@@ -31,9 +37,10 @@ export const DashboardEntitySchema = DashboardSchema.extend({
 });
 export type DashboardEntity = z.infer<typeof DashboardEntitySchema>;
 
-export type DashboardError = NotFound<'dashboard'> | ValidationError;
+export type DashboardError = NotFound<'dashboard'> | DuplicateName<'dashboard'> | ValidationError;
 
 export const dashboardErrors = {
   notFound: (name: string): DashboardError => ({ code: 'unknown_dashboard', query: name, candidates: [] }),
   invalidHtml: (issues: string[]): DashboardError => validation(issues),
+  duplicateName: (name: string): DashboardError => ({ code: 'duplicate_name', entity: 'dashboard', name }),
 };
