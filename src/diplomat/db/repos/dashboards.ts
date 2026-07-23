@@ -1,16 +1,20 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import * as dashboardAdapters from '../../../adapters/dashboards.js';
-import type { Dashboard, DashboardListItem } from '../../../models/dashboard.js';
+import type { Dashboard, DashboardEntity, DashboardListItem } from '../../../models/dashboard.js';
 import type { Db } from '../driver.js';
 import { dashboards } from '../schema.js';
-import { isPrimaryKeyConstraintViolation } from '../sqliteErrors.js';
-import { VersionConflict, type EntityApplier } from '../effects.js';
+import { isUniqueConstraintViolation } from '../sqliteErrors.js';
+import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
+
+/** Just enough to build a `Persistable` — presence + `id` + `version`, never the (potentially
+ *  ~500KB) `html`. */
+export type DashboardRef = { id: string; version: number };
 
 export type DashboardsRepo = {
   get: (name: string) => Promise<Dashboard | null>;
-  // Version-only read — saveDashboard only needs presence + version to decide insert vs. update,
-  // never the (potentially ~500KB) html, so this avoids pulling that on every save.
-  findVersionByName: (name: string) => Promise<number | null>;
+  findRefByName: (name: string) => Promise<DashboardRef | null>;
+  // Full-row read (incl. html) — for rename, which must re-emit the whole row under a new name.
+  findByName: (name: string) => Promise<DashboardEntity | null>;
   list: () => Promise<DashboardListItem[]>;
 };
 
@@ -20,13 +24,18 @@ export const dashboardsRepo = (db: Db): DashboardsRepo => ({
     return row ? dashboardAdapters.dbToModel(row) : null;
   },
 
-  findVersionByName: async (name) => {
+  findRefByName: async (name) => {
     const [row] = await db
-      .select({ version: dashboards.version })
+      .select({ id: dashboards.id, version: dashboards.version })
       .from(dashboards)
       .where(eq(dashboards.name, name))
       .limit(1);
-    return row?.version ?? null;
+    return row ?? null;
+  },
+
+  findByName: async (name) => {
+    const [row] = await db.select().from(dashboards).where(eq(dashboards.name, name)).limit(1);
+    return row ? dashboardAdapters.dbToEntity(row) : null;
   },
 
   list: async () => {
@@ -38,34 +47,23 @@ export const dashboardsRepo = (db: Db): DashboardsRepo => ({
   },
 });
 
-// Hand-written rather than `versionedTableApplier` because `dashboards` keys on `name`, not `id`.
-// A concurrent first save of the same name raises `SQLITE_CONSTRAINT_PRIMARYKEY` — NOT
-// `SQLITE_CONSTRAINT_UNIQUE`, since `name` is the primary key rather than a secondary unique
-// column — so it needs `isPrimaryKeyConstraintViolation`, not `isUniqueConstraintViolation`
-// (`tagApplier`'s check). Rethrown as `VersionConflict` to roll back and retry.
+const versionedDashboardApplier = versionedTableApplier(dashboards);
+
+/** `dashboards.name` has its own `UNIQUE` constraint now that `id` is the primary key — a
+ *  concurrent first save of the same brand-new name mints two different ids, both insert, and the
+ *  second raises a real `SQLITE_CONSTRAINT_UNIQUE` `versionedTableApplier`'s id-scoped
+ *  `onConflictDoNothing` doesn't swallow. Recognized and rethrown as `VersionConflict`, rolling
+ *  back and retrying — the retry's own `findRefByName` then sees the committed row and takes the
+ *  update path instead of racing another insert. Structurally identical to `tagApplier`
+ *  (`diplomat/db/repos/tags.ts`). `update`/`delete` stay plain. */
 export const dashboardApplier: EntityApplier = {
+  ...versionedDashboardApplier,
   insert: async (tx, model) => {
-    const row = model as { name: string; html: string; updatedAt: string };
     try {
-      const result = await tx.insert(dashboards).values(row);
-      return { applied: (result.rowsAffected ?? 0) > 0 };
+      return await versionedDashboardApplier.insert(tx, model);
     } catch (cause) {
-      if (isPrimaryKeyConstraintViolation(cause)) throw new VersionConflict();
+      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
       throw cause;
     }
-  },
-
-  update: async (tx, model) => {
-    const row = model as { name: string; html: string; updatedAt: string; version: number };
-    const result = await tx
-      .update(dashboards)
-      .set({ html: row.html, updatedAt: row.updatedAt, version: row.version + 1 })
-      .where(and(eq(dashboards.name, row.name), eq(dashboards.version, row.version)));
-    return { applied: (result.rowsAffected ?? 0) > 0 };
-  },
-
-  delete: async (tx, name, version) => {
-    const result = await tx.delete(dashboards).where(and(eq(dashboards.name, name), eq(dashboards.version, version)));
-    return { applied: (result.rowsAffected ?? 0) > 0 };
   },
 };

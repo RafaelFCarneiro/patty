@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Id } from './id.js';
 import { validation, type NotFound, type ValidationError } from './error.js';
 
 // A generous ceiling for a self-contained, data-less HTML shell (the baseline template is ~23KB)
@@ -25,6 +26,7 @@ export type SaveDashboard = z.infer<typeof SaveDashboardSchema>;
 export const DASHBOARD_ENTITY_TAG = 'dashboard';
 
 export const DashboardEntitySchema = DashboardSchema.extend({
+  id: Id.describe('internal; never on wire/out'),
   version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
 });
 export type DashboardEntity = z.infer<typeof DashboardEntitySchema>;

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import * as R from 'remeda';
@@ -43,12 +44,18 @@ const seedCategories = async (db: Db): Promise<void> => {
     .onConflictDoNothing();
 };
 
-// Seeded once (onConflictDoNothing on the `name` PK); a later save_dashboard upsert overrides it
-// and survives future boots — bootstrap never re-seeds over a dashboard that already exists.
+// Seeded once (onConflictDoNothing on the `name` UNIQUE constraint); a later save_dashboard
+// upsert overrides it and survives future boots — bootstrap never re-seeds over a dashboard that
+// already exists. The minted id is discarded on that conflict path, same as any other insert.
 const seedDashboards = async (db: Db): Promise<void> => {
   await db
     .insert(dashboards)
-    .values({ name: DEFAULT_DASHBOARD_NAME, html: DEFAULT_DASHBOARD_HTML, updatedAt: new Date().toISOString() })
+    .values({
+      id: randomUUID(),
+      name: DEFAULT_DASHBOARD_NAME,
+      html: DEFAULT_DASHBOARD_HTML,
+      updatedAt: new Date().toISOString(),
+    })
     .onConflictDoNothing();
 };
 

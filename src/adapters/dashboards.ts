@@ -1,5 +1,6 @@
 import {
   DASHBOARD_ENTITY_TAG,
+  DashboardEntitySchema,
   DashboardListItemSchema,
   DashboardSchema,
   type Dashboard,
@@ -14,6 +15,17 @@ export const dbToModel = (row: DashboardRow): Dashboard =>
 
 export const dbToListItem = (row: Pick<DashboardRow, 'name' | 'updatedAt'>): DashboardListItem =>
   DashboardListItemSchema.parse({ name: row.name, updatedAt: row.updatedAt });
+
+/** Read variant carrying `id`/`version` — for `findByName`'s full-row read, which rename needs to
+ *  build a version-guarded `Persistable`. */
+export const dbToEntity = (row: DashboardRow): DashboardEntity =>
+  DashboardEntitySchema.parse({
+    id: row.id,
+    name: row.name,
+    html: row.html,
+    updatedAt: row.updatedAt,
+    version: row.version,
+  });
 
 // Identity: a versioned Dashboard is already row-shaped.
 export const modelToDb = (entity: DashboardEntity): DashboardRow => entity;

@@ -140,7 +140,8 @@ recurring_rules     (id PK, description, amount, type, period, next_due, currenc
 
 settings            (id PK DEFAULT 'singleton', locale: en|es|pt DEFAULT en,
                      locale_source: default|inferred|explicit DEFAULT default, version)
-dashboards          (name PK, html, updated_at, version — ADR-013 Phase A; see § Dashboards / `/ui` surface)
+dashboards          (id PK, name UNIQUE, html, updated_at, version — ADR-013 Phase A, id normalized in
+                     Feature Design 013 Phase 1; see § Dashboards / `/ui` surface)
 
 transactions_fts    VIRTUAL TABLE fts5(description, content='transactions')
                     — kept in sync via INSERT/UPDATE/DELETE triggers
@@ -219,20 +220,21 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     no-op with an empty `persist`; missing → `notFound`) and reuses the existing `transactionApplier` — no new
     applier needed. `TransactionsRepo.confirm` (the `UPDATE ... WHERE status = 'pending'` SQL predicate) is
     deleted; the rule now lives in the domain, and the shell's version guard alone covers the race.
-    `saveDashboard` (`controllers/dashboards.ts`) reads `dashboards.findVersionByName` — a version-only read,
-    since presence + version is all the decision needs, never the (potentially ~500KB) `html` a full-row read
-    would pull on every save — and emits an `insert` (absent) or a version-guarded `update` (present) — still
-    upsert-by-name from the caller's perspective. `dashboards`
-    keys on `name`, not `id` (`docs/write-path.md`), so its `EntityApplier` (`diplomat/db/repos/dashboards.ts`'s
-    `dashboardApplier`) is hand-written rather than `versionedTableApplier`: `name` being the primary key
-    itself (not a secondary `UNIQUE` column like `tags.name`) means a concurrent first save of a brand new
-    name raises `SQLITE_CONSTRAINT_PRIMARYKEY`, a distinct extended code from the `SQLITE_CONSTRAINT_UNIQUE`
-    `tagApplier`/`billApplier` recognize — `diplomat/db/sqliteErrors.ts`'s `isPrimaryKeyConstraintViolation`
-    matches this one specifically. `dashboardApplier` recognizes it and rethrows as `VersionConflict` (the
-    same pattern otherwise), rolling back and re-invoking `saveDashboard` — the retry re-reads, finds the row
-    the race just inserted, and takes the update path instead of racing another insert (regression-tested in
-    `test/integration/db/effects.test.ts`'s `dashboardApplier` describe block, including the actual retry
-    landing a clean update). `DashboardsRepo.upsert` (the `onConflictDoUpdate`) is deleted. `setLocale`
+    `saveDashboard` (`controllers/dashboards.ts`) reads `dashboards.findRefByName` — an id + version-only read,
+    since presence + those two is all the decision needs, never the (potentially ~500KB) `html` a full-row read
+    would pull on every save — and emits an `insert` (absent, minting `id: deps.newId()`) or a version-guarded
+    `update` (present, carrying the read `id`/`version`) — still upsert-by-name from the caller's perspective.
+    `dashboards` originally keyed on `name` itself; Feature Design 013 Phase 1 normalized it to a surrogate `id`
+    PK with `name UNIQUE` (`id` is internal-only, exactly like `version` — never on the wire/out `Dashboard`
+    shape; see § Dashboards / `/ui` surface), so its `EntityApplier` (`diplomat/db/repos/dashboards.ts`'s
+    `dashboardApplier`) is now `versionedTableApplier` wrapped the same way as `tagApplier`/`billApplier`: a
+    concurrent first save of a brand-new name mints two different ids, both insert, and the second raises
+    `SQLITE_CONSTRAINT_UNIQUE` on `name` — `dashboardApplier` recognizes it (`isUniqueConstraintViolation`,
+    `diplomat/db/sqliteErrors.ts`) and rethrows as `VersionConflict`, rolling back and re-invoking
+    `saveDashboard` — the retry re-reads, finds the row the race just inserted, and takes the update path
+    instead of racing another insert (regression-tested in `test/integration/db/effects.test.ts`'s
+    `dashboardApplier` describe block, including the actual retry landing a clean update). `DashboardsRepo.upsert`
+    (the `onConflictDoUpdate`) is deleted. `setLocale`
     (`controllers/settings.ts`) reads the singleton settings row and emits an `insert` (absent) or
     version-guarded `update` (present); `settings` fits the `id`/`version` convention despite being a singleton
     (`id` is always `SETTINGS_SINGLETON_ID`). Unlike a random-UUID-keyed entity, though, an `id` collision on
@@ -278,15 +280,17 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 ## Dashboards / `/ui` surface (ADR-013 Phase A/B)
 
-The `dashboards` table (`name` PK, `html`, `updated_at`) stores agent-authored HTML shells, keyed by name — `save_dashboard` (MCP tool) / `POST /api/dashboards` (REST) is an **upsert**: saving to an existing name replaces its content immediately, no rebuild, restart, or migration. `GET /ui/:name` (mounted by `registerRoutes` in `diplomat/http/routes.ts`, same Fastify instance as `/api`, so it rides the HTTP sidecar per ADR-013 Decision 7) returns the currently-stored HTML as `text/html; charset=utf-8` with `cache-control: no-cache` — a regenerated dashboard is never masked by a stale browser copy. Absent name → `unknown_dashboard` (404).
+The `dashboards` table (`id` PK, `name` UNIQUE, `html`, `updated_at`) stores agent-authored HTML shells, keyed by
+name for every consumer-facing surface — `id` is a surrogate identity, internal only (Feature Design 013 Phase 1),
+never on the wire and never a tool argument. `save_dashboard` (MCP tool) / `POST /api/dashboards` (REST) is an **upsert**: saving to an existing name replaces its content immediately, no rebuild, restart, or migration. `GET /ui/:name` (mounted by `registerRoutes` in `diplomat/http/routes.ts`, same Fastify instance as `/api`, so it rides the HTTP sidecar per ADR-013 Decision 7) returns the currently-stored HTML as `text/html; charset=utf-8` with `cache-control: no-cache` — a regenerated dashboard is never masked by a stale browser copy. Absent name → `unknown_dashboard` (404).
 
-Before persisting, `saveDashboard` (`controllers/dashboards.ts`) runs `findHtmlValidationIssues` (`logic/dashboard.ts`, pure) and rejects with `validation` (422) if it fails: no `<!doctype html>`/`<html>` root element, or an inline `<script>` that fails to *compile* (via Node's `vm.Script` — checked, never executed, so this can't itself run untrusted code). This is a narrow render-ability check, not sanitization: it exists because there was previously nothing stopping a broken save (e.g. a JS syntax error) from silently overwriting a working dashboard with no version history to recover from — full HTML sanitization remains explicitly out of scope for this local single-user app (ADR-013 Phase A). A rejected save never reads `dashboards.findVersionByName` or decides a `Persistable`, so the previously stored
+Before persisting, `saveDashboard` (`controllers/dashboards.ts`) runs `findHtmlValidationIssues` (`logic/dashboard.ts`, pure) and rejects with `validation` (422) if it fails: no `<!doctype html>`/`<html>` root element, or an inline `<script>` that fails to *compile* (via Node's `vm.Script` — checked, never executed, so this can't itself run untrusted code). This is a narrow render-ability check, not sanitization: it exists because there was previously nothing stopping a broken save (e.g. a JS syntax error) from silently overwriting a working dashboard with no version history to recover from — full HTML sanitization remains explicitly out of scope for this local single-user app (ADR-013 Phase A). A rejected save never reads `dashboards.findRefByName` or decides a `Persistable`, so the previously stored
 dashboard is untouched (`docs/write-path.md` — `saveDashboard` is FC/IS: it decides an insert/update as data, never
 writes directly).
 
 `/ui/:name` is deliberately **not** part of the `/api` OpenAPI document: that document exists to give an agent correct `fetch()` shapes for the JSON data API (§ OpenAPI contract above), and `/ui` is a browser-facing HTML page, not a JSON contract. Management of dashboards (list/get/save) does have REST parity under `/api/dashboards*` and is documented in the OpenAPI spec like every other route.
 
-A baseline dashboard (name `overview`) is seeded via `src/diplomat/db/seed/dashboards.ts` at bootstrap (ADR-008 seed isolation — consumed only by `diplomat/db/bootstrap.ts`, never imported by the domain), so `GET /ui/overview` resolves on a fresh install even before the agent has generated anything. Seeding uses `onConflictDoNothing` on the `name` primary key, so a `save_dashboard` override survives future restarts — bootstrap never re-seeds over a dashboard that already exists.
+A baseline dashboard (name `overview`) is seeded via `src/diplomat/db/seed/dashboards.ts` at bootstrap (ADR-008 seed isolation — consumed only by `diplomat/db/bootstrap.ts`, never imported by the domain), so `GET /ui/overview` resolves on a fresh install even before the agent has generated anything. Seeding uses `onConflictDoNothing` on the `name` UNIQUE constraint, so a `save_dashboard` override survives future restarts — bootstrap never re-seeds over a dashboard that already exists.
 
 **(Phase B)** The seed is a single self-contained HTML string — layout, CSS, and vanilla JS all inline, with Chart.js loaded from a CDN as the only external resource. It renders income/expenses/balance, spending-by-category (chart + table), accounts & balances, recurring rules, and recent transactions, one block per currency, plus a clearly-labeled "coming soon" placeholder for installment projections (no endpoint exists yet — Phase C). On `DOMContentLoaded` it issues same-origin `fetch('/api/...')` calls against the routes documented at `GET /api/openapi.json` (`/api/summary`, `/api/aggregate`, `/api/accounts/balances`, `/api/recurring`, `/api/transactions`) and renders whatever comes back, using the localized labels the API already returns (`typeLabel`, `categoryName`, `periodLabel`, …) rather than hardcoding vocabulary. Every section has its own loading/empty/error state, so a slow or failing endpoint degrades one card instead of blanking the page. **The template embeds zero financial data or secrets** — this is the ADR-013 non-negotiable, and `test/integration/http/dashboardTemplate.test.ts` is a regression guard: it asserts the served HTML contains the expected `fetch()` calls, contains no inline-data-blob patterns (e.g. `const spending = [...]`), references no external host besides the Chart.js CDN, and that every fetched path exists in the live OpenAPI document.
 

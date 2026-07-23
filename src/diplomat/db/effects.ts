@@ -43,8 +43,8 @@ export type EntityApplier = {
 export type ApplierRegistry = Record<string, EntityApplier>;
 
 /** An `id` + `version` column shape, matching most mutable tables — a table outside the
- *  convention (`dashboards` keys on `name`; the link/key-only tables carry no `id`/`version` at
- *  all) hand-writes its own `EntityApplier` instead. */
+ *  convention (the link/key-only tables carry no `id`/`version` at all) hand-writes its own
+ *  `EntityApplier` instead. */
 type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteColumn };
 
 /** An entity's own post-write projection, supplied at registration: invoked after a successful

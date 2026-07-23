@@ -5,6 +5,9 @@ export default defineConfig({
     name: 'integration',
     include: ['test/integration/**/*.test.ts'],
     testTimeout: 30_000,
+    // Matches testTimeout — some beforeAll hooks seed fixtures over real MCP round-trips and were
+    // running right up against Vitest's 10s default, causing intermittent unrelated timeouts.
+    hookTimeout: 30_000,
     reporters: ['default', 'verbose'],
     globalSetup: 'test/integration/setup.ts',
     setupFiles: ['test/integration/mcp/setup.ts'],
