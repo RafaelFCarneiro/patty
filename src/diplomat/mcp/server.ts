@@ -314,7 +314,9 @@ export const buildMcpServer = (
       description:
         'Pay a credit card bill. Creates a canonical transfer (payer account → card internal account) ' +
         'for the full bill total, then marks the bill paid. Idempotent — re-calling on a paid bill is a no-op. ' +
-        'Paying account resolution: explicit `account` → card default `paymentAccount` → error.',
+        'Paying account resolution: explicit `account` → card default `paymentAccount` → error. ' +
+        'Optional `paymentDate` (defaults to today) records when the payment occurred; it must not be in the ' +
+        'future — the payment transfer is always effective and dated on/before today.',
       inputSchema: PayBillSchema.shape,
     },
     async (args) => {
