@@ -1617,6 +1617,22 @@ describe('tagApplier — name-uniqueness race surfaces as a generic conflict (AD
   });
 });
 
+describe('dashboardsRepo.findByName — full-row read for rename (Feature Design 013 phase 1)', () => {
+  it('returns the full entity, including id/version/html, for an existing dashboard', async () => {
+    const id = randomUUID();
+    const name = `dash-${randomUUID()}`;
+    await db.insert(dashboards).values({ id, name, html: '<html>full</html>', updatedAt: '2026-01-01', version: 2 });
+
+    const entity = await dashboardsRepo(db).findByName(name);
+
+    expect(entity).toEqual({ id, name, html: '<html>full</html>', updatedAt: '2026-01-01', version: 2 });
+  });
+
+  it('returns null for an unknown name', async () => {
+    expect(await dashboardsRepo(db).findByName(`dash-${randomUUID()}`)).toBeNull();
+  });
+});
+
 describe('dashboardApplier — name-uniqueness race surfaces as a generic conflict, never a raw 500', () => {
   const dashboardRegistry: ApplierRegistry = { [DASHBOARD_ENTITY_TAG]: dashboardApplier };
 

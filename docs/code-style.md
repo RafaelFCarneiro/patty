@@ -154,8 +154,11 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   `versionedTableApplier(table)` (`diplomat/db/effects.ts`) instead. `accountApplier` is
   `versionedTableApplier(accounts)`, nothing more: once the model→row adaptation moved to the handler (above),
   an applier's `insert`/`update`/`delete` became identical mechanics for every table shaped that way (cast the
-  row, write it, guard on `version`). Only hand-write a custom `EntityApplier` for a table that doesn't fit —
-  `dashboards` keys on `name` rather than `id`, so it will need one when converted.
+  row, write it, guard on `version`). A table with a secondary `UNIQUE` column beyond `id` (`tags.name`,
+  `dashboards.name`) still uses `versionedTableApplier` for `update`/`delete`, wrapping only `insert` to catch
+  the `UNIQUE` race and rethrow `VersionConflict` (`tagApplier`/`dashboardApplier`). Only hand-write a fully
+  custom `EntityApplier` for a table that doesn't fit the convention at all (no `id`/`version`, e.g. the
+  key-only link tables).
 - Composition (a flow that orchestrates another controller) **merges** `persist` arrays — take the called
   controller's `persist`, add your own, return the merged batch; don't apply either separately.
 - A converted controller's `deps` still exposes reads (`deps.<x>.list/find/...`) — the purity boundary is
