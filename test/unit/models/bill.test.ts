@@ -141,4 +141,17 @@ describe('Wire PayBill (REST boundary — coerces strings)', () => {
       expect(result.data.account).toBe('Itaú');
     }
   });
+
+  it('accepts a valid ISO paymentDate', () => {
+    const result = WirePayBill.safeParse({ card: 'Nubank', month: '6', year: '2025', paymentDate: '2025-06-15' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.paymentDate).toBe('2025-06-15');
+    }
+  });
+
+  it('rejects a malformed paymentDate', () => {
+    const result = WirePayBill.safeParse({ card: 'Nubank', month: '6', year: '2025', paymentDate: '06/15/2025' });
+    expect(result.success).toBe(false);
+  });
 });
