@@ -254,7 +254,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 
 ## Tool surface
 
-41 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
+43 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
 
 **Transport:** controlled by `MCP_TRANSPORT` (zod enum, `config.ts`). Default is **`stdio`** — the client spawns the process; no port, no Fastify. Set `MCP_TRANSPORT=http` to start the Fastify server (REST + streamable HTTP MCP on `PORT`). Both transports connect the same `buildMcpServer(deps, version)` core; no domain code moves. (ADR-007)
 
@@ -283,6 +283,11 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 The `dashboards` table (`id` PK, `name` UNIQUE, `html`, `updated_at`) stores agent-authored HTML shells, keyed by
 name for every consumer-facing surface — `id` is a surrogate identity, internal only (Feature Design 013 Phase 1),
 never on the wire and never a tool argument. `save_dashboard` (MCP tool) / `POST /api/dashboards` (REST) is an **upsert**: saving to an existing name replaces its content immediately, no rebuild, restart, or migration. `GET /ui/:name` (mounted by `registerRoutes` in `diplomat/http/routes.ts`, same Fastify instance as `/api`, so it rides the HTTP sidecar per ADR-013 Decision 7) returns the currently-stored HTML as `text/html; charset=utf-8` with `cache-control: no-cache` — a regenerated dashboard is never masked by a stale browser copy. Absent name → `unknown_dashboard` (404).
+
+`delete_dashboard` (MCP tool) / `DELETE /api/dashboards/:name` (REST) — idempotent-by-design (Feature Design 013
+Phase 2), mirroring `delete_tag`: `deleteDashboard` (`controllers/dashboards.ts`) reads `findRefByName`; absent →
+`{ deleted: false }` on an empty `persist` batch, no write; present → a version-guarded `remove` `Persistable`
+and `{ deleted: true }`. Never an error either way — `GET /ui/:name` simply 404s afterward.
 
 Before persisting, `saveDashboard` (`controllers/dashboards.ts`) runs `findHtmlValidationIssues` (`logic/dashboard.ts`, pure) and rejects with `validation` (422) if it fails: no `<!doctype html>`/`<html>` root element, or an inline `<script>` that fails to *compile* (via Node's `vm.Script` — checked, never executed, so this can't itself run untrusted code). This is a narrow render-ability check, not sanitization: it exists because there was previously nothing stopping a broken save (e.g. a JS syntax error) from silently overwriting a working dashboard with no version history to recover from — full HTML sanitization remains explicitly out of scope for this local single-user app (ADR-013 Phase A). A rejected save never reads `dashboards.findRefByName` or decides a `Persistable`, so the previously stored
 dashboard is untouched (`docs/write-path.md` — `saveDashboard` is FC/IS: it decides an insert/update as data, never

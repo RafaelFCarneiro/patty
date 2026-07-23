@@ -18,7 +18,7 @@ import {
 } from '../../controllers/account/transaction.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
-import { listDashboards, saveDashboard } from '../../controllers/dashboards.js';
+import { deleteDashboard, listDashboards, saveDashboard } from '../../controllers/dashboards.js';
 import {
   createCategory,
   createSubCategory,
@@ -801,6 +801,19 @@ export const buildMcpServer = (
       inputSchema: {},
     },
     async () => json(await listDashboards(deps)),
+  );
+
+  server.registerTool(
+    'delete_dashboard',
+    {
+      title: 'Delete dashboard',
+      description: 'Delete a dashboard by name. Idempotent — deleting an already-absent name is not an error.',
+      inputSchema: { name: z.string().min(1).describe('Dashboard name') },
+    },
+    async (args) => {
+      const flow = () => deleteDashboard(deps, args.name).map(dashboardAdapters.outcomeToDb);
+      return fromResult(await runEffects(flow));
+    },
   );
 
   server.registerTool(

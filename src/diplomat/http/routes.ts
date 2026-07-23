@@ -19,7 +19,7 @@ import {
 } from '../../controllers/account/account.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
-import { getDashboard, listDashboards, saveDashboard } from '../../controllers/dashboards.js';
+import { deleteDashboard, getDashboard, listDashboards, saveDashboard } from '../../controllers/dashboards.js';
 import {
   createCategory,
   createSubCategory,
@@ -838,6 +838,19 @@ export const buildRouteDefinitions = (
       const wireIn = parse(SaveDashboardSchema, req.body, reply);
       if (!wireIn) return reply;
       const flow = () => saveDashboard(deps, wireIn.name, wireIn.html).map(dashboardAdapters.outcomeToDb);
+      return send(reply, await runEffects(flow));
+    },
+  },
+  {
+    method: 'delete',
+    path: '/api/dashboards/:name',
+    tags: [RouteTag.dashboards],
+    summary: 'Delete dashboard',
+    request: { params: nameParam },
+    responses: { 200: okResponse('Dashboard deleted', DeletedOut) },
+    handler: async (req, reply) => {
+      const { name } = req.params as { name: string };
+      const flow = () => deleteDashboard(deps, name).map(dashboardAdapters.outcomeToDb);
       return send(reply, await runEffects(flow));
     },
   },

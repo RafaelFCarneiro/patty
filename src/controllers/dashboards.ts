@@ -28,6 +28,17 @@ export const saveDashboard = (deps: Deps, name: string, html: string): ResultAsy
     return ok({ persist, response: dashboard });
   });
 
+/** Delete by name is idempotent-by-design — a missing dashboard returns `{ deleted: false }` rather
+ *  than an error, with an empty `persist` batch (no write). Mirrors `deleteTag`. */
+export const deleteDashboard = (deps: Deps, name: string): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>
+  safeTry(async function* () {
+    const ref = await deps.dashboards.findRefByName(name);
+    if (!ref) return ok({ persist: [], response: { deleted: false } });
+
+    const persist = [persistence.remove({ entity: DASHBOARD_ENTITY_TAG, id: ref.id, version: ref.version })];
+    return ok({ persist, response: { deleted: true } });
+  });
+
 export const listDashboards = (deps: Deps): Promise<DashboardListItem[]> => deps.dashboards.list();
 
 export const getDashboard = (deps: Deps, name: string): ResultAsync<Dashboard, AppError> =>

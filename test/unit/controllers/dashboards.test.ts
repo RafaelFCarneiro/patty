@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getDashboard, listDashboards, saveDashboard } from '../../../src/controllers/dashboards.js';
+import { deleteDashboard, getDashboard, listDashboards, saveDashboard } from '../../../src/controllers/dashboards.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
 import type { Dashboard, DashboardListItem } from '../../../src/models/dashboard.js';
@@ -80,6 +80,32 @@ describe('saveDashboard', () => {
     expect(error.code).toBe('validation');
     expect((error as { issues: string[] }).issues.some((issue) => issue.includes('syntax error'))).toBe(true);
     expect(deps.dashboards.findRefByName).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleteDashboard', () => {
+  it('returns a version-guarded remove Persistable when the dashboard exists', async () => {
+    const deps = makeDeps({ findRefByName: vi.fn(async () => ({ id: 'dash-existing', version: 4 })) });
+
+    const result = await deleteDashboard(deps, 'overview');
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([
+      { op: PersistOp.enum.delete, entity: DASHBOARD_ENTITY_TAG, id: 'dash-existing', version: 4 },
+    ]);
+    expect(outcome.response).toEqual({ deleted: true });
+  });
+
+  it('returns deleted:false with an empty batch when the name does not exist (idempotent)', async () => {
+    const deps = makeDeps();
+
+    const result = await deleteDashboard(deps, 'missing');
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([]);
+    expect(outcome.response).toEqual({ deleted: false });
   });
 });
 

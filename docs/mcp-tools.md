@@ -293,15 +293,16 @@ Free-form labels attached to transactions (e.g. "work", "travel", "reembolsável
 
 Attach tags at write time via the `tags` array on `add_card_purchase` / `add_account_expense` / `add_account_income` (statement-import items omit `tags` — bulk import classifies automatically).
 
-## save_dashboard / list_dashboards
+## save_dashboard / list_dashboards / delete_dashboard
 
 LLM-generated local dashboards over the HTTP API (ADR-013). A dashboard is a self-contained HTML shell stored by name and served live at `GET /ui/:name`. The seeded `overview` dashboard is the Phase B baseline data-less template (fetch-on-load, no inline data). `skills/dashboard-building/SKILL.md` is the guardrail checklist an agent follows to build or adapt a dashboard from this template without violating the no-inline-data rule — read the contract (`fintrack://openapi`), map sections to real endpoints, and self-check against the hard rules before calling `save_dashboard`.
 
 - `save_dashboard`: `name`, `html` (required). **Upsert** — saving to an existing name replaces it immediately, no rebuild/restart. **CRITICAL**: the HTML must never embed financial data, secrets, or tokens — render layout/styling only and `fetch()` data client-side from `/api` on load (read the `fintrack://openapi` resource for the contract), so the dashboard is always live and safe to share. Returns the stored `{ name, html, updatedAt }`.
   - **Rejected (`validation`, 422) if the HTML can't possibly render**: no `<!doctype html>`/`<html>` root element, or an inline `<script>` with a JS syntax error (checked by compiling it, never executing it). This is a cheap render-ability check, not sanitization or a full HTML validator — full sanitization is out of scope for this local single-user app (ADR-013 Phase A). A rejected save leaves the previously stored dashboard untouched.
 - `list_dashboards`: no input — returns all dashboards as `{ name, updatedAt }` (HTML omitted).
+- `delete_dashboard`: `name` (required). **Idempotent** — an already-absent name is not an error, returns `{ deleted: false }` (same shape as `delete_tag`). Present → deletes it and returns `{ deleted: true }`; `GET /ui/:name` 404s afterward.
 
-REST mirror: `GET /api/dashboards` (list, HTML omitted), `GET /api/dashboards/:name` (JSON, `unknown_dashboard` if absent), `POST /api/dashboards` (upsert, same validation and 422 as above). The browser-facing serving route is `GET /ui/:name` — returns the stored HTML as `text/html; charset=utf-8` with no-cache headers (404 `unknown_dashboard` if absent); it is not part of the `/api` JSON contract and does not appear in the OpenAPI document. The Phase B baseline dashboard (`overview`) is seeded on first boot; `save_dashboard` overrides it permanently.
+REST mirror: `GET /api/dashboards` (list, HTML omitted), `GET /api/dashboards/:name` (JSON, `unknown_dashboard` if absent), `POST /api/dashboards` (upsert, same validation and 422 as above), `DELETE /api/dashboards/:name` (idempotent, always `200 { deleted }`). The browser-facing serving route is `GET /ui/:name` — returns the stored HTML as `text/html; charset=utf-8` with no-cache headers (404 `unknown_dashboard` if absent); it is not part of the `/api` JSON contract and does not appear in the OpenAPI document. The Phase B baseline dashboard (`overview`) is seeded on first boot; `save_dashboard` overrides it permanently.
 
 ## set_locale / get_preferences
 

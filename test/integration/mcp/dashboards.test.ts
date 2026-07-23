@@ -83,4 +83,37 @@ describe('MCP integration > dashboards', () => {
       await transport.close();
     }
   });
+
+  it('delete_dashboard removes the dashboard and it no longer appears in list', async () => {
+    const stamp = Date.now();
+    const name = `mcp-dash-del-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'save_dashboard', args: { name, html: '<html></html>' } });
+
+      const result = (await callTool(client, { name: 'delete_dashboard', args: { name } })) as { deleted?: boolean };
+      expect(result.deleted).toBe(true);
+
+      const list = (await callTool(client, { name: 'list_dashboards', args: {} })) as Array<Record<string, unknown>>;
+      expect(list.some((d) => d.name === name)).toBe(false);
+      // already deleted — no need to clean up
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('delete_dashboard returns deleted:false for a non-existent name', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const result = (await callTool(client, {
+        name: 'delete_dashboard',
+        args: { name: 'dashboard-does-not-exist' },
+      })) as { deleted?: boolean };
+      expect(result.deleted).toBe(false);
+    } finally {
+      await transport.close();
+    }
+  });
 });

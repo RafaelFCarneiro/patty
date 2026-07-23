@@ -123,3 +123,21 @@ describe('GET /api/dashboards/:name', () => {
     expect(res.json()).toHaveProperty('error.code', 'unknown_dashboard');
   });
 });
+
+describe('DELETE /api/dashboards/:name', () => {
+  it('deletes a dashboard, and /ui/:name 404s afterward', async () => {
+    await inject({ method: 'POST', url: '/api/dashboards', payload: { name: 'del-test', html: '<html></html>' } });
+    const res = await inject({ method: 'DELETE', url: '/api/dashboards/del-test' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('deleted', true);
+
+    const ui = await inject({ method: 'GET', url: '/ui/del-test' });
+    expect(ui.statusCode).toBe(404);
+  });
+
+  it('returns deleted:false for an unknown name', async () => {
+    const res = await inject({ method: 'DELETE', url: '/api/dashboards/does-not-exist' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('deleted', false);
+  });
+});
