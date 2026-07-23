@@ -1738,10 +1738,6 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
   });
 
   it("renameDashboard's update retries on a concurrent newName claim and surfaces duplicate_name", async () => {
-    // Unlike saveDashboard's update (which only ever rewrites a row's own name back to itself),
-    // renameDashboard's update is the one flow that changes `name` to a value it doesn't already
-    // own — so a concurrent writer claiming that same `newName` mid-flight raises the identical
-    // UNIQUE race `dashboardApplier.update`'s wrapper now catches (mirroring `insert`'s wrapper).
     const name = `dash-${randomUUID()}`;
     const newName = `dash-${randomUUID()}`;
     await db.insert(dashboards).values({ id: randomUUID(), name, html: '<html>mine</html>', updatedAt: '2026-01-01' });
