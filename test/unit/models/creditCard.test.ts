@@ -61,11 +61,11 @@ describe('UpdateCreditCardSchema — identifies by name, currency omitted (Desig
     expect(result.success).toBe(true);
   });
 
-  it('strips currency — fixed once a card exists, not part of this schema at all', () => {
+  it('accepts currency structurally — kept reachable so the controller can reject it explicitly', () => {
     const result = UpdateCreditCardSchema.safeParse({ name: 'Nubank', currency: 'USD' });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data).not.toHaveProperty('currency');
+      expect(result.data.currency).toBe('USD');
     }
   });
 

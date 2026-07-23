@@ -471,6 +471,28 @@ describe('updateCreditCard — functional core, a rename cascades to the interna
     expect(result._unsafeUnwrapErr().code).toBe('validation');
   });
 
+  it('rejects a currency field before touching any resolution or write — currency is fixed at creation', async () => {
+    const deps = cardDeps({
+      creditCards: {
+        findByName: async () => {
+          throw new Error('must not check name availability when currency is rejected first');
+        },
+        list: async () => [card()],
+        findRawById: async () => {
+          throw new Error('must not read version when currency is rejected first');
+        },
+      } as unknown as Deps['creditCards'],
+    });
+
+    const result = await updateCreditCard(deps, { name: 'Nubank', currency: CurrencyCode.enum.USD });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({
+      code: 'validation',
+      issues: ["cannot change a credit card's currency; it is fixed at creation"],
+    });
+  });
+
   it('an update that changes nothing is a no-op: empty persist, the current card as response', async () => {
     const deps = cardDeps();
 

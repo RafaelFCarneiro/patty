@@ -178,6 +178,7 @@ export const createCreditCard = (deps: Deps, input: CreateCreditCard): ResultAsy
 export const updateCreditCard = (deps: Deps, input: UpdateCreditCard): ResultAsync<FlowOutcome<CreditCard>, AppError> =>
   safeTry(async function* () {
     const card = yield* resolveCardRef(deps, input.name);
+    yield* guard(!R.isNonNullish(input.currency), cardErrors.currencyChangeRejected);
 
     if (isCardRename(card.name, input.newName)) {
       yield* guard(await assertCardNameAvailable(deps, input.newName), cardErrors.duplicateName(input.newName));
