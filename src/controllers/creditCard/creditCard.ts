@@ -169,14 +169,11 @@ export const createCreditCard = (deps: Deps, input: CreateCreditCard): ResultAsy
   });
 
 /**
- * Update a credit card (mirrors `updateAccount`, Feature Design 007). A rename cascades to the
- * card's internal account (ADR-010: named `Card: {name}`) as a two-entity update batch — the
- * account-availability guard only runs for a genuine (not case-only) rename, since a case-only
- * rename's target name always case-insensitively matches the account's own current name and would
- * otherwise self-collide. `paymentAccount` reuses `createCreditCard`'s exact non-credit/currency
- * guard (the #4 regression this design closes). `limit`/`closingDay`/`dueDay` are plain field
- * updates — a `closingDay`/`dueDay` change applies to future bill cycles only; existing `bills`
- * rows keep their own computed `closeDate`/`dueDate`, untouched here.
+ * Update a credit card (mirrors `updateAccount`, Feature Design 007): a rename cascades to the
+ * card's internal account (`isCardRename` above) as a two-entity update batch. `paymentAccount`
+ * reuses `createCreditCard`'s exact non-credit/currency guard (the #4 regression this design
+ * closes). A `closingDay`/`dueDay` change applies to future bill cycles only — existing `bills`
+ * rows keep their own already-computed `closeDate`/`dueDate`.
  */
 export const updateCreditCard = (deps: Deps, input: UpdateCreditCard): ResultAsync<FlowOutcome<CreditCard>, AppError> =>
   safeTry(async function* () {

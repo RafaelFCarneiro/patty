@@ -164,7 +164,6 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
         args: { name: guardCard, closingDay: 28, dueDay: 5, currency: 'BRL' },
       });
 
-      // create_credit_card: rejects a credit account as its own paymentAccount at creation.
       const createErr = (await callToolError(client, {
         name: 'create_credit_card',
         args: {
@@ -189,14 +188,12 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
         },
       });
 
-      // pay_bill: rejects a credit account as the explicit paying account.
       const payErr = (await callToolError(client, {
         name: 'pay_bill',
         args: { card: guardCard, month, year, account: `Card: ${guardCard}` },
       })) as { error?: { code?: string } };
       expect(payErr.error?.code).toBe('validation');
 
-      // update_credit_card: rejects a credit account as the new default paymentAccount.
       const updateErr = (await callToolError(client, {
         name: 'update_credit_card',
         args: { name: guardCard, paymentAccount: `Card: ${guardCard}` },
