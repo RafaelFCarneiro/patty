@@ -177,7 +177,7 @@ effect runner, appliers, outcomes, and the per-flow notes.
   under `Card: {newName}`, alongside the card's own version-guarded update. A non-rename update (`limit`/
   `closingDay`/`dueDay`/`paymentAccount` only) emits just the card update; an update that changes nothing emits an
   empty `persist` (`R.isDeepEqual` against the freshly-read entity, same idiom as `updateAccount`). The
-  account-name-availability guard only runs for a genuine (case-changing-or-more) rename — `logic/creditCard.ts`'s
+  account-name-availability guard only runs for a genuine (more-than-case-only) rename — `logic/creditCard.ts`'s
   `isCardRename` type-predicate decides this the same way `updateAccount` already does for the card's own name —
   because a case-only rename's target internal-account name always case-insensitively matches the account's
   *own* current name, and would otherwise self-collide against itself in `findByName`.

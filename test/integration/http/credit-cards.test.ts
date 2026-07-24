@@ -140,7 +140,10 @@ describe('PATCH /api/credit-cards/:name', () => {
         idempotencyKey: 'boundary-purchase',
       },
     });
-    const before = await inject({ method: 'GET', url: '/api/bills?card=Bill Boundary Card&month=6&year=2026' });
+    const before = await inject({
+      method: 'GET',
+      url: `/api/bills?card=${encodeURIComponent('Bill Boundary Card')}&month=6&year=2026`,
+    });
     const closeDateBefore = before.json().bill.closeDate as string;
     const dueDateBefore = before.json().bill.dueDate as string;
 
@@ -151,7 +154,10 @@ describe('PATCH /api/credit-cards/:name', () => {
     });
     expect(patch.statusCode).toBe(200);
 
-    const after = await inject({ method: 'GET', url: '/api/bills?card=Bill Boundary Card&month=6&year=2026' });
+    const after = await inject({
+      method: 'GET',
+      url: `/api/bills?card=${encodeURIComponent('Bill Boundary Card')}&month=6&year=2026`,
+    });
     expect(after.json().bill.closeDate).toBe(closeDateBefore);
     expect(after.json().bill.dueDate).toBe(dueDateBefore);
   });
