@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { callTool, deleteTransactions, makeClient, searchTransactions } from './helpers.js';
+import { callTool, callToolError, deleteTransactions, makeClient, searchTransactions } from './helpers.js';
 
 describe('MCP integration > pending transactions', () => {
   let createdTxIds: string[] = [];
@@ -159,6 +159,137 @@ describe('MCP integration > pending transactions', () => {
       if (!pastId) throw new Error('missing past tx id');
       createdTxIds.push(pastId);
       expect(pastTx.transaction?.status).toBe('effective');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('confirm-with-edit corrects amount/date on an account movement and flips it effective', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+      const accountName = await freshAccount(client, stamp + 2);
+
+      const pending = (await callTool(client, {
+        name: 'add_account_expense',
+        args: {
+          description: `PTEST EDIT ${stamp}`,
+          amount: 100,
+          date: '2026-01-10',
+          account: accountName,
+          status: 'pending',
+          idempotencyKey: `ptest-edit-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } };
+      const id = pending.transaction?.id;
+      if (!id) throw new Error('missing pending tx id');
+      createdTxIds.push(id);
+
+      const confirmed = (await callTool(client, {
+        name: 'confirm_transaction',
+        args: { id, amount: 150, date: '2026-01-12' },
+      })) as { status?: string; amount?: number; date?: string };
+      expect(confirmed.status).toBe('effective');
+      expect(confirmed.amount).toBe(150);
+      expect(confirmed.date).toBe('2026-01-12');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('confirm-with-edit is rejected for a transfer; a plain confirm of the same transfer still works', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+      const fromAccount = await freshAccount(client, stamp + 3);
+      const toAccount = await freshAccount(client, stamp + 4);
+
+      const transfer = (await callTool(client, {
+        name: 'create_transfer',
+        args: {
+          from: fromAccount,
+          to: toAccount,
+          amount: 50,
+          date: '2026-01-10',
+          status: 'pending',
+          idempotencyKey: `ptest-transfer-edit-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } };
+      const id = transfer.transaction?.id;
+      if (!id) throw new Error('missing transfer tx id');
+      createdTxIds.push(id);
+
+      const editErr = (await callToolError(client, {
+        name: 'confirm_transaction',
+        args: { id, amount: 999 },
+      })) as { error?: { code?: string; issues?: string[] } };
+      expect(editErr.error?.code).toBe('validation');
+      expect(editErr.error?.issues?.[0]).toContain('update_account_transaction');
+
+      const confirmed = (await callTool(client, {
+        name: 'confirm_transaction',
+        args: { id },
+      })) as { status?: string; amount?: number };
+      expect(confirmed.status).toBe('effective');
+      expect(confirmed.amount).toBe(50);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('rejects confirming to a future date, whether via an explicit edit or the existing date', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+      const accountName = await freshAccount(client, stamp + 5);
+
+      const pastPending = (await callTool(client, {
+        name: 'add_account_expense',
+        args: {
+          description: `PTEST FUTURE EDIT ${stamp}`,
+          amount: 10,
+          date: '2026-01-10',
+          account: accountName,
+          status: 'pending',
+          idempotencyKey: `ptest-future-edit-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } };
+      const pastPendingId = pastPending.transaction?.id;
+      if (!pastPendingId) throw new Error('missing pending tx id');
+      createdTxIds.push(pastPendingId);
+
+      const futureEditErr = (await callToolError(client, {
+        name: 'confirm_transaction',
+        args: { id: pastPendingId, date: '2099-01-01' },
+      })) as { error?: { code?: string } };
+      expect(futureEditErr.error?.code).toBe('validation');
+
+      const futurePending = (await callTool(client, {
+        name: 'add_account_expense',
+        args: {
+          description: `PTEST FUTURE EXISTING ${stamp}`,
+          amount: 10,
+          date: '2099-01-01',
+          account: accountName,
+          idempotencyKey: `ptest-future-existing-${stamp}`,
+        },
+      })) as { transaction?: { id?: string; status?: string } };
+      const futurePendingId = futurePending.transaction?.id;
+      if (!futurePendingId) throw new Error('missing future pending tx id');
+      createdTxIds.push(futurePendingId);
+      expect(futurePending.transaction?.status).toBe('pending');
+
+      const plainConfirmErr = (await callToolError(client, {
+        name: 'confirm_transaction',
+        args: { id: futurePendingId },
+      })) as { error?: { code?: string } };
+      expect(plainConfirmErr.error?.code).toBe('validation');
     } finally {
       await transport.close();
     }

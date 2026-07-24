@@ -117,6 +117,11 @@ export const nextCursorAfter = (
 
 // ─── Transfer row kind (ADR-019/ADR-020: policy lives in the account context; the row kind stays core) ───
 
+/** Transfers and bill-payment transactions are exactly `type === 'transfer'` (ADR-002) — a
+ *  core-visible fact needing no ownership resolution, unlike transfer *mutation policy*
+ *  (`guardTransferMutability`), which stays in the account context (ADR-020). */
+export const isTransfer = (t: Pick<TransactionView, 'type'>): boolean => t.type === TransactionType.enum.transfer;
+
 /** The effective movement type after applying an update, or undefined for transfers. */
 export const resolveEffectiveType = (
   existing: Pick<TransactionView, 'type'>,

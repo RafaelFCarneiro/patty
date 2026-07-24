@@ -7,6 +7,7 @@ import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import * as persistence from '../../logic/persistence.js';
+import { toIsoDate } from '../../logic/period.js';
 import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
@@ -14,6 +15,7 @@ import {
   hasCategory,
   hasSubCategory,
   isCategoryKindAllowed,
+  isTransfer,
   resolveEffectiveType,
 } from '../../logic/transaction.js';
 import {
@@ -22,7 +24,9 @@ import {
   transactionErrors,
   type CategoryFields,
   type CategorySelection,
+  type ConfirmTransaction,
   type MovementType,
+  type RawTransactionView,
   type TransactionEntity,
   type TransactionView,
   type UpdateTransaction,
@@ -81,9 +85,46 @@ export const resolveCategorySelection = (
     () => okAsync(null),
   );
 
+/** Field mapping from the shell's `RawTransactionView` read to the plain `TransactionEntity` an
+ *  `update` `Persistable` carries — `confirmTransaction` overrides `amount`/`date`/`status` on top
+ *  of this. */
+const entityFromExisting = (existing: RawTransactionView): TransactionEntity => ({
+  id: existing.id,
+  description: existing.description,
+  amount: existing.amount,
+  type: existing.type,
+  status: existing.status,
+  date: existing.date,
+  currency: existing.currency,
+  source: existing.source,
+  idempotencyKey: existing.idempotencyKey,
+  classification: existing.classification,
+  rawInput: existing.rawInput,
+  note: existing.note,
+  refs: {
+    accountId: existing.accountId,
+    toAccountId: existing.toAccountId,
+    cardId: existing.cardId,
+    billId: existing.billId,
+    categoryId: existing.categoryId,
+    subCategoryId: existing.subCategoryId,
+    merchantKey: existing.merchant,
+  },
+});
+
+/**
+ * Flips a `pending` transaction to `effective`, optionally correcting `amount`/`date` in the same
+ * call (Design 014 phase B). A thin core flow, not a delegation to `updateAccountTransaction`/
+ * `updateCardTransaction` — this module must never import the aggregates (dependency table), so it
+ * can't reach their guards. Immutability is enforced directly via `isTransfer` (core-visible,
+ * ADR-002): editing amount/date is rejected for a transfer/bill-payment, but a plain status-only
+ * confirm of one is still fine. The future-date guard applies regardless of whether an edit was
+ * supplied — `date` resolves to the (possibly already future-dated) existing date otherwise — since
+ * an `effective` transaction's date must never be in the future (the invariant this phase adds).
+ */
 export const confirmTransaction = (
   deps: Deps,
-  input: { id: string },
+  input: ConfirmTransaction,
 ): ResultAsync<FlowOutcome<TransactionView>, AppError> =>
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
@@ -94,28 +135,17 @@ export const confirmTransaction = (
       return ok({ persist: [], response: addLocalizedLabels(existing, locale) });
     }
 
+    const hasEdit = input.amount !== undefined || input.date !== undefined;
+    yield* guard(!(hasEdit && isTransfer(existing)), transactionErrors.confirmEditNotAllowedForTransfer);
+
+    const date = input.date ?? existing.date;
+    yield* guard(date <= toIsoDate(deps.clock()), transactionErrors.cannotConfirmFutureDated(date));
+
     const entity: TransactionEntity = {
-      id: existing.id,
-      description: existing.description,
-      amount: existing.amount,
-      type: existing.type,
+      ...entityFromExisting(existing),
+      amount: input.amount ?? existing.amount,
+      date,
       status: TransactionStatus.enum.effective,
-      date: existing.date,
-      currency: existing.currency,
-      source: existing.source,
-      idempotencyKey: existing.idempotencyKey,
-      classification: existing.classification,
-      rawInput: existing.rawInput,
-      note: existing.note,
-      refs: {
-        accountId: existing.accountId,
-        toAccountId: existing.toAccountId,
-        cardId: existing.cardId,
-        billId: existing.billId,
-        categoryId: existing.categoryId,
-        subCategoryId: existing.subCategoryId,
-        merchantKey: existing.merchant,
-      },
     };
 
     const persist: Persistable[] = [

@@ -22,6 +22,7 @@ import {
   hasCategory,
   hasSubCategory,
   isCategoryKindAllowed,
+  isTransfer,
   needsReview,
   nextCursorAfter,
   resolveCursorKey,
@@ -82,6 +83,17 @@ describe('needsReview', () => {
     expect(needsReview({ method: 'history', confidence: 0.55 })).toBe(true);
     expect(needsReview({ method: 'rule', confidence: 0.8 })).toBe(false);
     expect(needsReview({ method: 'user', confidence: 1 })).toBe(false);
+  });
+});
+
+describe('isTransfer', () => {
+  it('is true for a transfer', () => {
+    expect(isTransfer({ type: 'transfer' })).toBe(true);
+  });
+
+  it('is false for an expense/income movement', () => {
+    expect(isTransfer({ type: 'expense' })).toBe(false);
+    expect(isTransfer({ type: 'income' })).toBe(false);
   });
 });
 

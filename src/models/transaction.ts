@@ -243,6 +243,22 @@ export const UpdateTransactionSchema = z.object({
 });
 export type UpdateTransaction = z.infer<typeof UpdateTransactionSchema>;
 
+/** Confirm input (Design 014 phase B): flips a `pending` transaction to `effective`, optionally
+ *  correcting `amount`/`date` in the same call — the only edit surface confirm exposes (reclassifying
+ *  stays `update_*`'s job). Both fields are rejected on a transfer/bill-payment (`isTransfer`,
+ *  `logic/transaction.ts`); a plain status-only confirm of one is still fine. */
+export const ConfirmTransactionSchema = z.object({
+  id: z.string().min(1).describe('Transaction id (from search_transactions with status: "pending")'),
+  amount: Money.optional().describe(
+    'Corrected amount, applied together with the confirm — account/card movements only, rejected for a transfer/bill-payment',
+  ),
+  date: IsoDate.optional().describe(
+    'Corrected date (YYYY-MM-DD), applied together with the confirm — account/card movements only, rejected for a ' +
+      'transfer/bill-payment; the resolved date (this, or the existing date if omitted) must not be in the future',
+  ),
+});
+export type ConfirmTransaction = z.infer<typeof ConfirmTransactionSchema>;
+
 /** Delete input shape (ADR-017): identical for delete_card_transaction and delete_account_transaction
  *  — delete carries zero aggregate-specific data, so unlike update it has no per-aggregate variant. */
 export const DeleteTransactionSchema = z.object({
@@ -384,6 +400,18 @@ export const transactionErrors = {
   invalidCursor: {
     code: 'validation',
     issues: ['cursor is malformed, stale, or does not match the requested sort/dir — start a fresh first page'],
+  } satisfies TransactionError,
+  // Design 014 phase B: the effective ⇒ not-future-dated invariant, enforced at confirm.
+  cannotConfirmFutureDated: (date: string): TransactionError => ({
+    code: 'validation',
+    issues: [`cannot confirm: ${date} is in the future — an effective transaction's date is never in the future`],
+  }),
+  confirmEditNotAllowedForTransfer: {
+    code: 'validation',
+    issues: [
+      "cannot edit amount/date of a transfer or bill-payment transaction at confirm — correct a transfer's " +
+        'amount/date via update_account_transaction, a bill payment via pay_bill/revert_bill_payment, then confirm',
+    ],
   } satisfies TransactionError,
   // ADR-017 ownership guard: raised by whichever of the four aggregate-specific update/delete tools
   // was called on a transaction it does not own — a guard, not a dispatcher (the caller re-addresses

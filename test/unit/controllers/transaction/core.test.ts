@@ -3,7 +3,7 @@ import { confirmTransaction } from '../../../../src/controllers/transaction/core
 import type { Deps } from '../../../../src/controllers/deps.js';
 import type { FlowOutcome, PersistOutcome } from '../../../../src/models/persistable.js';
 import { PersistOp } from '../../../../src/models/persistable.js';
-import { TransactionStatus, type RawTransactionView } from '../../../../src/models/transaction.js';
+import { TransactionStatus, TransactionType, type RawTransactionView } from '../../../../src/models/transaction.js';
 import { Locale } from '../../../../src/models/locale.js';
 
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
@@ -19,7 +19,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],
   transactions: {} as unknown as Deps['transactions'],
-  clock: () => new Date('2026-06-01'),
+  clock: () => new Date('2026-06-15'),
   newId: () => 'test-id',
   locale: async () => Locale.enum.en,
   ...overrides,
@@ -38,7 +38,7 @@ const pendingTx: RawTransactionView = {
   amount: 10,
   type: 'expense',
   status: 'pending',
-  date: '2026-06-15',
+  date: '2026-06-01',
   currency: 'USD',
   source: 'mcp',
   idempotencyKey: 'existing-key',
@@ -47,7 +47,15 @@ const pendingTx: RawTransactionView = {
   version: 3,
 };
 
-describe('confirmTransaction — flips pending to effective as a functional-core flow', () => {
+const pendingTransferTx: RawTransactionView = {
+  ...pendingTx,
+  id: 'tx-transfer',
+  type: TransactionType.enum.transfer,
+  accountId: 'acc-from',
+  toAccountId: 'acc-to',
+};
+
+describe('confirmTransaction — flips pending to effective as a functional-core flow (Design 014 phase B)', () => {
   it('errors unknown_transaction when the id does not exist', async () => {
     const deps = makeDeps({ transactions: { getById: async () => null } as unknown as Deps['transactions'] });
 
@@ -108,5 +116,75 @@ describe('confirmTransaction — flips pending to effective as a functional-core
     const response = resolveResponse(outcome, [{ entity: 'transaction', applied: true, read: persistedView }]);
     expect(response.status).toBe(TransactionStatus.enum.effective);
     expect(response.id).toBe('tx-1');
+  });
+
+  it('confirm-with-edit on an account/card movement applies amount/date and flips to effective', async () => {
+    const deps = makeDeps({ transactions: { getById: async () => pendingTx } as unknown as Deps['transactions'] });
+
+    const result = await confirmTransaction(deps, { id: 'tx-1', amount: 25, date: '2026-06-10' });
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([
+      {
+        op: PersistOp.enum.update,
+        entity: 'transaction',
+        model: expect.objectContaining({
+          amount: 25,
+          date: '2026-06-10',
+          status: TransactionStatus.enum.effective,
+        }),
+      },
+    ]);
+  });
+
+  it('rejects an amount/date edit on a transfer/bill-payment transaction (immutability)', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => pendingTransferTx } as unknown as Deps['transactions'],
+    });
+
+    const result = await confirmTransaction(deps, { id: 'tx-transfer', amount: 999 });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
+  });
+
+  it('a plain status-only confirm of a transfer/bill-payment transaction is still allowed', async () => {
+    const deps = makeDeps({
+      transactions: { getById: async () => pendingTransferTx } as unknown as Deps['transactions'],
+    });
+
+    const result = await confirmTransaction(deps, { id: 'tx-transfer' });
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([
+      {
+        op: PersistOp.enum.update,
+        entity: 'transaction',
+        model: expect.objectContaining({ status: TransactionStatus.enum.effective, date: pendingTransferTx.date }),
+      },
+    ]);
+  });
+
+  it('rejects confirming to a future date via an explicit edit', async () => {
+    const deps = makeDeps({ transactions: { getById: async () => pendingTx } as unknown as Deps['transactions'] });
+
+    const result = await confirmTransaction(deps, { id: 'tx-1', date: '2026-06-16' });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
+  });
+
+  it('rejects a plain confirm whose existing date is already in the future', async () => {
+    const futureDatedTx = { ...pendingTx, date: '2026-06-20' };
+    const deps = makeDeps({
+      transactions: { getById: async () => futureDatedTx } as unknown as Deps['transactions'],
+    });
+
+    const result = await confirmTransaction(deps, { id: 'tx-1' });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
   });
 });
