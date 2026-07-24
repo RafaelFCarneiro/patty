@@ -200,8 +200,9 @@ effect runner, appliers, outcomes, and the per-flow notes.
   The future-date guard (`transactionErrors.cannotConfirmFutureDated`, invariant 20 in `docs/architecture.md`)
   resolves `date` as `input.date ?? existing.date` and applies unconditionally — so a plain confirm (no edit at
   all) of a transaction whose *existing* date already sits in the future is rejected too, not only an explicit
-  future `date` edit. `entityFromExisting` (a tiny local, not exported) is the `RawTransactionView` →
-  `TransactionEntity` field mapping confirm already inlined before this phase, extracted so the
+  future `date` edit. `entityFromExisting` (`logic/transaction.ts`) is the `RawTransactionView` →
+  `TransactionEntity` field mapping confirm already inlined before this phase, extracted as a pure logic
+  function — not a controller-local helper, since it's a plain data transform with no I/O — so the
   `amount`/`date`/`status` overrides on top of it read as the diff they are.
 - **Recurring.** `applyDueRecurring` reads every due rule, computes each rule's occurrences (bounded
   `MAX_RECURRING_OCCURRENCES_PER_RUN = 36`) and `nextDue` in the domain, and emits **one atomic batch** — every

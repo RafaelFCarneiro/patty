@@ -12,6 +12,7 @@ import {
   addLocalizedLabels,
   assertExclusiveCategorySubCategory,
   buildTransactionView,
+  entityFromExisting,
   hasCategory,
   hasSubCategory,
   isCategoryKindAllowed,
@@ -26,7 +27,6 @@ import {
   type CategorySelection,
   type ConfirmTransaction,
   type MovementType,
-  type RawTransactionView,
   type TransactionEntity,
   type TransactionView,
   type UpdateTransaction,
@@ -85,42 +85,13 @@ export const resolveCategorySelection = (
     () => okAsync(null),
   );
 
-/** Field mapping from the shell's `RawTransactionView` read to the plain `TransactionEntity` an
- *  `update` `Persistable` carries — `confirmTransaction` overrides `amount`/`date`/`status` on top
- *  of this. */
-const entityFromExisting = (existing: RawTransactionView): TransactionEntity => ({
-  id: existing.id,
-  description: existing.description,
-  amount: existing.amount,
-  type: existing.type,
-  status: existing.status,
-  date: existing.date,
-  currency: existing.currency,
-  source: existing.source,
-  idempotencyKey: existing.idempotencyKey,
-  classification: existing.classification,
-  rawInput: existing.rawInput,
-  note: existing.note,
-  refs: {
-    accountId: existing.accountId,
-    toAccountId: existing.toAccountId,
-    cardId: existing.cardId,
-    billId: existing.billId,
-    categoryId: existing.categoryId,
-    subCategoryId: existing.subCategoryId,
-    merchantKey: existing.merchant,
-  },
-});
-
 /**
  * Flips a `pending` transaction to `effective`, optionally correcting `amount`/`date` in the same
- * call (Design 014 phase B). A thin core flow, not a delegation to `updateAccountTransaction`/
- * `updateCardTransaction` — this module must never import the aggregates (dependency table), so it
- * can't reach their guards. Immutability is enforced directly via `isTransfer` (core-visible,
- * ADR-002): editing amount/date is rejected for a transfer/bill-payment, but a plain status-only
- * confirm of one is still fine. The future-date guard applies regardless of whether an edit was
- * supplied — `date` resolves to the (possibly already future-dated) existing date otherwise — since
- * an `effective` transaction's date must never be in the future (the invariant this phase adds).
+ * call (Design 014 phase B) — a thin core flow rather than a delegation to `updateAccountTransaction`/
+ * `updateCardTransaction`, whose guards this module can't reach. Immutability is enforced directly
+ * via `isTransfer`: editing amount/date is rejected for a transfer/bill-payment, but a plain
+ * status-only confirm of one is still fine. The future-date guard applies regardless of whether an
+ * edit was supplied — `date` resolves to the (possibly already future-dated) existing date otherwise.
  */
 export const confirmTransaction = (
   deps: Deps,

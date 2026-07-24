@@ -11,6 +11,7 @@ import type {
   UpsertTransactionResult,
   SearchTransactions,
   StatementLine,
+  TransactionEntity,
   TransactionError,
   TransactionView,
   UpdateTransaction,
@@ -130,6 +131,32 @@ export const resolveEffectiveType = (
   const resolved = input.type ?? existing.type;
   return resolved !== TransactionType.enum.transfer ? resolved : undefined;
 };
+
+/** `RawTransactionView` → plain `TransactionEntity`, for a flow (`confirmTransaction`) that builds
+ *  its `update` `Persistable` by overriding a few fields on top of the existing row. */
+export const entityFromExisting = (existing: RawTransactionView): TransactionEntity => ({
+  id: existing.id,
+  description: existing.description,
+  amount: existing.amount,
+  type: existing.type,
+  status: existing.status,
+  date: existing.date,
+  currency: existing.currency,
+  source: existing.source,
+  idempotencyKey: existing.idempotencyKey,
+  classification: existing.classification,
+  rawInput: existing.rawInput,
+  note: existing.note,
+  refs: {
+    accountId: existing.accountId,
+    toAccountId: existing.toAccountId,
+    cardId: existing.cardId,
+    billId: existing.billId,
+    categoryId: existing.categoryId,
+    subCategoryId: existing.subCategoryId,
+    merchantKey: existing.merchant,
+  },
+});
 
 // ─── Bulk ─────────────────────────────────────────────────────────────────────
 
