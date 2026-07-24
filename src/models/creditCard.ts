@@ -50,6 +50,32 @@ export const CreateCreditCardSchema = CreditCardSchema.omit({
 });
 export type CreateCreditCard = z.infer<typeof CreateCreditCardSchema>;
 
+/** Card-aggregate update schema (mirrors `UpdateAccountSchema`, Feature Design 007): identifies the
+ *  card by its current `name`; `newName` renames it. `currency` is fixed once a card exists — it's
+ *  baked into the card's internal account and every existing transaction's denormalized currency —
+ *  so, like `UpdateCardTransactionSchema`'s `account` field, it's kept reachable (not omitted) so
+ *  the controller can reject it with a helpful `cardErrors.currencyChangeRejected` rather than have
+ *  it silently stripped by zod's default unknown-key behavior. */
+export const UpdateCreditCardSchema = CreditCardSchema.omit({
+  id: true,
+  currency: true,
+  accountId: true,
+  paymentAccountId: true,
+})
+  .partial({ closingDay: true, dueDay: true })
+  .extend({
+    currency: CreditCardSchema.shape.currency
+      .optional()
+      .describe(
+        "Rejected: a card's currency is fixed at creation. Sending this field returns a validation " +
+          'error rather than silently no-oping — present only so that error can be raised, not because ' +
+          'the currency is changeable',
+      ),
+    newName: z.string().min(1).optional().describe('New card name'),
+    paymentAccount: z.string().min(1).optional().describe('New default paying account name for bill payment'),
+  });
+export type UpdateCreditCard = z.infer<typeof UpdateCreditCardSchema>;
+
 /** Natural input for a credit-card purchase (ADR-016): the transaction core's minimal
  *  `CreateTransactionSchema` (ADR-019) plus `card` (required — the card's own internal liability
  *  account is always the destination) and bill-assignment (`billMonth`/`billYear`) — both are
@@ -169,5 +195,9 @@ export const cardErrors = {
   accountChangeRejectedForCard: {
     code: 'validation',
     issues: ["cannot change the account of a card transaction; it is always funded by the card's own internal account"],
+  } satisfies CardError,
+  currencyChangeRejected: {
+    code: 'validation',
+    issues: ["cannot change a credit card's currency; it is fixed at creation"],
   } satisfies CardError,
 };

@@ -151,6 +151,59 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
     }
   });
 
+  it('the #4 regression: create/pay/update all reject a credit account as paymentAccount/account', async () => {
+    const guardCard = `Guard Card ${stamp}`;
+    const otherCard = `Other Guard Card ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: guardCard, closingDay: 28, dueDay: 5, currency: 'BRL' },
+      });
+
+      const createErr = (await callToolError(client, {
+        name: 'create_credit_card',
+        args: {
+          name: otherCard,
+          closingDay: 28,
+          dueDay: 5,
+          currency: 'BRL',
+          paymentAccount: `Card: ${guardCard}`,
+        },
+      })) as { error?: { code?: string } };
+      expect(createErr.error?.code).toBe('validation');
+
+      await callTool(client, {
+        name: 'add_card_purchase',
+        args: {
+          description: `Guard purchase ${stamp}`,
+          amount: 30,
+          type: 'expense',
+          date: today,
+          card: guardCard,
+          idempotencyKey: `guard-purchase-${stamp}`,
+        },
+      });
+
+      const payErr = (await callToolError(client, {
+        name: 'pay_bill',
+        args: { card: guardCard, month, year, account: `Card: ${guardCard}` },
+      })) as { error?: { code?: string } };
+      expect(payErr.error?.code).toBe('validation');
+
+      const updateErr = (await callToolError(client, {
+        name: 'update_credit_card',
+        args: { name: guardCard, paymentAccount: `Card: ${guardCard}` },
+      })) as { error?: { code?: string } };
+      expect(updateErr.error?.code).toBe('validation');
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('spending summary is unchanged — card purchase counts as expense, no double-count', async () => {
     const localCard = `Summary Card ${stamp}`;
     const { client, transport } = makeClient();

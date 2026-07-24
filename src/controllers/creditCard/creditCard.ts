@@ -1,8 +1,10 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
+import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import { assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
 import { billEntityFrom } from '../../logic/bill.js';
+import { internalAccountNameFor, isCardRename } from '../../logic/creditCard.js';
 import * as persistence from '../../logic/persistence.js';
 import { accountErrors, ACCOUNT_ENTITY_TAG, AccountType, type Account } from '../../models/account.js';
 import { BILL_ENTITY_TAG, type RawBill } from '../../models/bill.js';
@@ -12,6 +14,8 @@ import {
   DELETE_CREDIT_CARD_CONFIRM_HINT,
   type CreateCreditCard,
   type CreditCard,
+  type CreditCardEntity,
+  type UpdateCreditCard,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
 import type { FlowOutcome, Persistable } from '../../models/persistable.js';
@@ -84,7 +88,7 @@ export const deleteCreditCard = (
           dryRun: true as const,
           wouldDelete: {
             card: card.name,
-            account: `Card: ${card.name}`,
+            account: internalAccountNameFor(card.name),
             transactions: counts.transactions,
             bills: counts.bills,
           },
@@ -132,7 +136,7 @@ export const createCreditCard = (deps: Deps, input: CreateCreditCard): ResultAsy
       paymentAccountId = paymentAccount.id;
     }
 
-    const internalAccountName = `Card: ${input.name}`;
+    const internalAccountName = internalAccountNameFor(input.name);
     yield* guard(
       await assertAccountNameAvailable(deps, internalAccountName),
       accountErrors.duplicateName(internalAccountName),
@@ -162,4 +166,65 @@ export const createCreditCard = (deps: Deps, input: CreateCreditCard): ResultAsy
       persistence.insert({ entity: CREDIT_CARD_ENTITY_TAG, model: card }),
     ];
     return ok({ persist, response: card });
+  });
+
+/**
+ * Update a credit card (mirrors `updateAccount`, Feature Design 007): a rename cascades to the
+ * card's internal account (`isCardRename` above) as a two-entity update batch. `paymentAccount`
+ * reuses `createCreditCard`'s exact non-credit/currency guard (the #4 regression this design
+ * closes). A `closingDay`/`dueDay` change applies to future bill cycles only — existing `bills`
+ * rows keep their own already-computed `closeDate`/`dueDate`.
+ */
+export const updateCreditCard = (deps: Deps, input: UpdateCreditCard): ResultAsync<FlowOutcome<CreditCard>, AppError> =>
+  safeTry(async function* () {
+    const card = yield* resolveCardRef(deps, input.name);
+    yield* guard(!R.isNonNullish(input.currency), cardErrors.currencyChangeRejected);
+
+    if (isCardRename(card.name, input.newName)) {
+      yield* guard(await assertCardNameAvailable(deps, input.newName), cardErrors.duplicateName(input.newName));
+    }
+
+    let paymentAccountId = card.paymentAccountId;
+    if (input.paymentAccount) {
+      const paymentAccount = yield* resolveAccountRef(deps, input.paymentAccount);
+      yield* guard(assertNonCreditType(paymentAccount.type), accountErrors.creditPaymentRejected);
+      yield* guard(
+        assertCurrencyMatch({ currency: card.currency }, paymentAccount),
+        cardErrors.currencyMismatch(card.currency, paymentAccount.currency),
+      );
+      paymentAccountId = paymentAccount.id;
+    }
+
+    const rawCard = yield* okOr(await deps.creditCards.findRawById(card.id), notFound('card', card.id, []));
+    const cardEntity: CreditCardEntity = {
+      ...rawCard,
+      name: input.newName ?? rawCard.name,
+      closingDay: input.closingDay ?? rawCard.closingDay,
+      dueDay: input.dueDay ?? rawCard.dueDay,
+      limit: input.limit ?? rawCard.limit,
+      paymentAccountId,
+    };
+
+    const persist: Persistable[] = [];
+    if (cardEntity.name !== rawCard.name) {
+      const newInternalAccountName = internalAccountNameFor(cardEntity.name);
+      if (isCardRename(rawCard.name, input.newName)) {
+        yield* guard(
+          await assertAccountNameAvailable(deps, newInternalAccountName),
+          accountErrors.duplicateName(newInternalAccountName),
+        );
+      }
+      const rawAccount = yield* okOr(
+        await deps.accounts.findRawById(card.accountId),
+        notFound('account', card.accountId, []),
+      );
+      persist.push(
+        persistence.update({ entity: ACCOUNT_ENTITY_TAG, model: { ...rawAccount, name: newInternalAccountName } }),
+      );
+    }
+    if (!R.isDeepEqual(cardEntity, rawCard)) {
+      persist.push(persistence.update({ entity: CREDIT_CARD_ENTITY_TAG, model: cardEntity }));
+    }
+
+    return ok({ persist, response: R.omit(cardEntity, ['version']) });
   });

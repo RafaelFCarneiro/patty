@@ -29,7 +29,12 @@ import {
 } from '../../controllers/categories.js';
 import { getPreferences, setLocale } from '../../controllers/settings.js';
 import { getStatus } from '../../controllers/status.js';
-import { createCreditCard, deleteCreditCard, listCreditCards } from '../../controllers/creditCard/creditCard.js';
+import {
+  createCreditCard,
+  deleteCreditCard,
+  listCreditCards,
+  updateCreditCard,
+} from '../../controllers/creditCard/creditCard.js';
 import {
   addCardPurchase,
   deleteCardTransaction,
@@ -69,6 +74,7 @@ import {
   CreateCreditCardSchema,
   ImportCardStatementSchema,
   UpdateCardTransactionSchema,
+  UpdateCreditCardSchema,
 } from '../../wire/in/creditCards.js';
 import {
   bulkResultToWireOut,
@@ -270,6 +276,27 @@ export const buildMcpServer = (
     'list_credit_cards',
     { title: 'List credit cards', description: 'List all credit cards.', inputSchema: {} },
     async () => json(await listCreditCards(deps)),
+  );
+
+  server.registerTool(
+    'update_credit_card',
+    {
+      title: 'Update credit card',
+      description:
+        'Update a credit card. name identifies the card; newName renames it — the card\'s internal account ' +
+        '(named "Card: {name}", ADR-010) is renamed in the same atomic write. limit/closingDay/dueDay are plain ' +
+        'field updates (a closingDay/dueDay change only applies to future bill cycles; existing bills keep their ' +
+        'own computed dates). paymentAccount is resolved and validated exactly like create_credit_card/pay_bill: ' +
+        'rejected if it is a credit account or its currency does not match the card.',
+      inputSchema: UpdateCreditCardSchema.shape,
+    },
+    async (args) => {
+      const flow = () =>
+        updateCreditCard(deps, creditCardAdapters.updateWireInToModel(args))
+          .map(accountAdapters.outcomeToDb)
+          .map(creditCardAdapters.outcomeToDb);
+      return fromResult(await runEffects(flow));
+    },
   );
 
   server.registerTool(

@@ -171,6 +171,16 @@ effect runner, appliers, outcomes, and the per-flow notes.
   this batch already cleared is removed at `bill.version + 1` (the version the shell will have bumped it to by the
   time that delete applies). `createCreditCard` is the mirror two-entity insert `[account, creditCard]`.
   (History — why the applier no longer cascades: ADR-021 / ADR-023.)
+- **`updateCreditCard`** (`controllers/creditCard/creditCard.ts`, Feature Design 014 phase C, mirrors
+  `updateAccount`) — a rename (`newName`) is a two-entity `update` batch, `[account, creditCard]` (same order as
+  `createCreditCard`'s insert): the card's internal account is re-read via `accountsRepo.findRawById` and re-emitted
+  under `Card: {newName}`, alongside the card's own version-guarded update. A non-rename update (`limit`/
+  `closingDay`/`dueDay`/`paymentAccount` only) emits just the card update; an update that changes nothing emits an
+  empty `persist` (`R.isDeepEqual` against the freshly-read entity, same idiom as `updateAccount`). The
+  account-name-availability guard only runs for a genuine (more-than-case-only) rename — `logic/creditCard.ts`'s
+  `isCardRename` type-predicate decides this the same way `updateAccount` already does for the card's own name —
+  because a case-only rename's target internal-account name always case-insensitively matches the account's
+  *own* current name, and would otherwise self-collide against itself in `findByName`.
 - **`payBill`/`revertBillPayment`** (`controllers/creditCard/bill.ts`) — plain `response` (both mint and read
   everything the response needs before building the batch). FK direction reverses the batch order between them:
   `payBill`'s positive-total batch = `[transfer insert, bill update]` (the bill points `payment_transaction_id`

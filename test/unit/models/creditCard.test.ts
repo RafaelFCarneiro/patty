@@ -3,6 +3,7 @@ import {
   AddCardPurchaseSchema,
   cardErrors,
   UpdateCardTransactionSchema,
+  UpdateCreditCardSchema,
 } from '../../../src/models/creditCard.js';
 
 const baseCreate = {
@@ -40,6 +41,36 @@ describe('UpdateCardTransactionSchema — composes up from the minimal core (ADR
   it('rejects a truly foreign field (.strict())', () => {
     const result = UpdateCardTransactionSchema.safeParse({ id: 'tx-1', notAField: true });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('UpdateCreditCardSchema — identifies by name, currency rejected at update (Design 014 phase C)', () => {
+  it('accepts just the identifying name (no-op update)', () => {
+    expect(UpdateCreditCardSchema.safeParse({ name: 'Nubank' }).success).toBe(true);
+  });
+
+  it('accepts newName, limit, closingDay, dueDay, paymentAccount together', () => {
+    const result = UpdateCreditCardSchema.safeParse({
+      name: 'Nubank',
+      newName: 'Nubank Platinum',
+      limit: 5000,
+      closingDay: 15,
+      dueDay: 25,
+      paymentAccount: 'Checking',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts currency structurally — kept reachable so the controller can reject it explicitly', () => {
+    const result = UpdateCreditCardSchema.safeParse({ name: 'Nubank', currency: 'USD' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.currency).toBe('USD');
+    }
+  });
+
+  it('rejects a missing identifying name', () => {
+    expect(UpdateCreditCardSchema.safeParse({ newName: 'Nubank Platinum' }).success).toBe(false);
   });
 });
 
