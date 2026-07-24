@@ -410,7 +410,7 @@ export const transactionErrors = {
     code: 'validation',
     issues: [
       "cannot edit amount/date of a transfer or bill-payment transaction at confirm — correct a transfer's " +
-        'amount/date via update_account_transaction, a bill payment via pay_bill/revert_bill_payment, then confirm',
+        `amount/date via ${TransactionTool.updateAccountTransaction}, a bill payment via pay_bill/revert_bill_payment, then confirm`,
     ],
   } satisfies TransactionError,
   // ADR-017 ownership guard: raised by whichever of the four aggregate-specific update/delete tools
