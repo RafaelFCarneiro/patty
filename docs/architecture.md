@@ -251,6 +251,16 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     covers", for every entity in the system.** Every repo is read-only: it exposes queries (e.g.
     `TransactionsRepo.search`, `BillsRepo.findById`) and nothing that mutates. No repo interface in the codebase
     exposes a write method, and no domain rule survives as a SQL predicate in a repo.
+20. **An `effective` transaction's date is never in the future** (Feature Design 014). Enforced at `pay_bill`
+    (phase A: the payment transfer's date must be on or before today) and `confirm_transaction` (phase B: the
+    resolved date — the given `date`, or the existing date if omitted — must be on or before today,
+    `transactionErrors.cannotConfirmFutureDated`). The date-aware create default already respects this
+    structurally (a future-dated create with no explicit `status` defaults to `pending`, never `effective`) — a
+    caller who explicitly passes `status: effective` with a future `date` on a create/import tool is not guarded
+    by this invariant (a known gap, deliberately out of this design's scope). Confirm additionally rejects editing
+    `amount`/`date` on a transfer or bill-payment transaction (`isTransfer`, `logic/transaction.ts` — core-visible
+    via `type === 'transfer'`, ADR-002); a plain status-only confirm of one is still allowed, since it makes no
+    date claim of its own.
 
 ## Tool surface
 

@@ -727,7 +727,8 @@ describe('POST /api/transactions/:id/confirm', () => {
     const createRes = await inject({
       method: 'POST',
       url: '/api/accounts/expenses',
-      payload: { description: 'Pending', amount: 5, date: '2099-01-01', idempotencyKey: 'pend-1' },
+      // Explicit status: 'pending' (not a future date) — confirming must not be future-dated (Design 014).
+      payload: { description: 'Pending', amount: 5, date: '2020-01-01', status: 'pending', idempotencyKey: 'pend-1' },
     });
     const id = createRes.json().transaction.id;
     const res = await inject({ method: 'POST', url: `/api/transactions/${id}/confirm` });
@@ -739,7 +740,13 @@ describe('POST /api/transactions/:id/confirm', () => {
     const createRes = await inject({
       method: 'POST',
       url: '/api/accounts/expenses',
-      payload: { description: 'Reconfirm', amount: 5, date: '2099-01-01', idempotencyKey: 'reconfirm-1' },
+      payload: {
+        description: 'Reconfirm',
+        amount: 5,
+        date: '2020-01-01',
+        status: 'pending',
+        idempotencyKey: 'reconfirm-1',
+      },
     });
     const id = createRes.json().transaction.id;
     await inject({ method: 'POST', url: `/api/transactions/${id}/confirm` });
@@ -751,6 +758,76 @@ describe('POST /api/transactions/:id/confirm', () => {
   it('returns 404 for unknown transaction', async () => {
     const res = await inject({ method: 'POST', url: '/api/transactions/00000000-0000-0000-0000-000000000000/confirm' });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('confirm-with-edit corrects amount/date and flips it effective (200)', async () => {
+    const createRes = await inject({
+      method: 'POST',
+      url: '/api/accounts/expenses',
+      payload: { description: 'Edit', amount: 5, date: '2020-01-01', status: 'pending', idempotencyKey: 'edit-1' },
+    });
+    const id = createRes.json().transaction.id;
+    const res = await inject({
+      method: 'POST',
+      url: `/api/transactions/${id}/confirm`,
+      payload: { amount: 12, date: '2020-01-05' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: 'effective', amount: 12, date: '2020-01-05' });
+  });
+
+  it('rejects a future-dated confirm (422)', async () => {
+    const createRes = await inject({
+      method: 'POST',
+      url: '/api/accounts/expenses',
+      payload: { description: 'Future', amount: 5, date: '2020-01-01', status: 'pending', idempotencyKey: 'future-1' },
+    });
+    const id = createRes.json().transaction.id;
+    const res = await inject({
+      method: 'POST',
+      url: `/api/transactions/${id}/confirm`,
+      payload: { date: '2099-01-01' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toHaveProperty('error.code', 'validation');
+  });
+
+  it('rejects an amount/date edit on a transfer (422); a plain confirm of the same transfer still works', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'Confirm Transfer From', type: 'checking', currency: 'USD', initialBalance: 0 },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'Confirm Transfer To', type: 'checking', currency: 'USD', initialBalance: 0 },
+    });
+    const transferRes = await inject({
+      method: 'POST',
+      url: '/api/transfers',
+      payload: {
+        from: 'Confirm Transfer From',
+        to: 'Confirm Transfer To',
+        amount: 20,
+        date: '2020-01-01',
+        status: 'pending',
+        idempotencyKey: 'transfer-confirm-edit-1',
+      },
+    });
+    const id = transferRes.json().transaction.id;
+
+    const editRes = await inject({
+      method: 'POST',
+      url: `/api/transactions/${id}/confirm`,
+      payload: { amount: 999 },
+    });
+    expect(editRes.statusCode).toBe(422);
+    expect(editRes.json()).toHaveProperty('error.code', 'validation');
+
+    const plainRes = await inject({ method: 'POST', url: `/api/transactions/${id}/confirm` });
+    expect(plainRes.statusCode).toBe(200);
+    expect(plainRes.json()).toMatchObject({ status: 'effective', amount: 20 });
   });
 });
 

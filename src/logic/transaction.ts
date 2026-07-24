@@ -11,6 +11,7 @@ import type {
   UpsertTransactionResult,
   SearchTransactions,
   StatementLine,
+  TransactionEntity,
   TransactionError,
   TransactionView,
   UpdateTransaction,
@@ -117,6 +118,11 @@ export const nextCursorAfter = (
 
 // ─── Transfer row kind (ADR-019/ADR-020: policy lives in the account context; the row kind stays core) ───
 
+/** Transfers and bill-payment transactions are exactly `type === 'transfer'` (ADR-002) — a
+ *  core-visible fact needing no ownership resolution, unlike transfer *mutation policy*
+ *  (`guardTransferMutability`), which stays in the account context (ADR-020). */
+export const isTransfer = (t: Pick<TransactionView, 'type'>): boolean => t.type === TransactionType.enum.transfer;
+
 /** The effective movement type after applying an update, or undefined for transfers. */
 export const resolveEffectiveType = (
   existing: Pick<TransactionView, 'type'>,
@@ -125,6 +131,32 @@ export const resolveEffectiveType = (
   const resolved = input.type ?? existing.type;
   return resolved !== TransactionType.enum.transfer ? resolved : undefined;
 };
+
+/** `RawTransactionView` → plain `TransactionEntity`, for a flow (`confirmTransaction`) that builds
+ *  its `update` `Persistable` by overriding a few fields on top of the existing row. */
+export const entityFromExisting = (existing: RawTransactionView): TransactionEntity => ({
+  id: existing.id,
+  description: existing.description,
+  amount: existing.amount,
+  type: existing.type,
+  status: existing.status,
+  date: existing.date,
+  currency: existing.currency,
+  source: existing.source,
+  idempotencyKey: existing.idempotencyKey,
+  classification: existing.classification,
+  rawInput: existing.rawInput,
+  note: existing.note,
+  refs: {
+    accountId: existing.accountId,
+    toAccountId: existing.toAccountId,
+    cardId: existing.cardId,
+    billId: existing.billId,
+    categoryId: existing.categoryId,
+    subCategoryId: existing.subCategoryId,
+    merchantKey: existing.merchant,
+  },
+});
 
 // ─── Bulk ─────────────────────────────────────────────────────────────────────
 

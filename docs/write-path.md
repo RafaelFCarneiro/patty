@@ -187,6 +187,23 @@ effect runner, appliers, outcomes, and the per-flow notes.
   at the transfer; a non-positive total has no transfer, so the batch is just `[bill update]`);
   `revertBillPayment` = `[bill update clearing the pointer, transfer remove]`. `BillEntity.paymentTransactionId`
   distinguishes `undefined` (leave unchanged) from `null` (clear). `BillsRepo` is read-only like every repo.
+- **`confirmTransaction`** (`controllers/transaction/core.ts`, Feature Design 014 phase B) now routes an edit
+  (`amount`/`date`) plus the status flip through a single version-guarded `update`, instead of hand-rebuilding the
+  entity with only `status` overridden. It stays a thin core flow, not a delegation to
+  `updateAccountTransaction`/`updateCardTransaction` — this module must never import the aggregates (dependency
+  table), so their guards (`assertAccountOwnedLegs`, `guardTransferMutability`, the bill-payment block) are
+  unreachable from here. Immutability is enforced directly instead, via the core-visible `isTransfer`
+  (`logic/transaction.ts`, `type === 'transfer'`, ADR-002): an edit is rejected when the transaction is a
+  transfer or bill-payment (`transactionErrors.confirmEditNotAllowedForTransfer`), but a plain status-only
+  confirm of one still goes through — this is marginally stricter than `update_account_transaction` (which
+  permits editing a *regular* transfer's amount), a deliberate trade documented in the design rather than a gap.
+  The future-date guard (`transactionErrors.cannotConfirmFutureDated`, invariant 20 in `docs/architecture.md`)
+  resolves `date` as `input.date ?? existing.date` and applies unconditionally — so a plain confirm (no edit at
+  all) of a transaction whose *existing* date already sits in the future is rejected too, not only an explicit
+  future `date` edit. `entityFromExisting` (`logic/transaction.ts`) is the `RawTransactionView` →
+  `TransactionEntity` field mapping confirm already inlined before this phase, extracted as a pure logic
+  function — not a controller-local helper, since it's a plain data transform with no I/O — so the
+  `amount`/`date`/`status` overrides on top of it read as the diff they are.
 - **Recurring.** `applyDueRecurring` reads every due rule, computes each rule's occurrences (bounded
   `MAX_RECURRING_OCCURRENCES_PER_RUN = 36`) and `nextDue` in the domain, and emits **one atomic batch** — every
   occurrence (`TRANSACTION_ENTITY_TAG` insert) plus each rule's version-guarded `advance` — retried whole on any

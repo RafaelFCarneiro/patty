@@ -6,6 +6,7 @@ import type { Account, AccountError, AccountReferences } from '../models/account
 import type { Locale } from '../models/locale.js';
 import { TransactionType } from '../models/transaction.js';
 import type { TransactionView, UpdateTransaction } from '../models/transaction.js';
+import { isTransfer } from './transaction.js';
 
 export const filterByType =
   (type?: AccountType) =>
@@ -54,7 +55,6 @@ export const isAccountOwnedType = (type: AccountType): boolean => ACCOUNT_OWNED_
 // transfer (the bill-payment transfer) is blocked outright by its own bill-process guard and never
 // reaches this check.
 
-const isTransfer = (t: Pick<TransactionView, 'type'>) => t.type === TransactionType.enum.transfer;
 const wouldBeTransfer = (existing: Pick<TransactionView, 'type'>, input: Pick<UpdateTransaction, 'type'>) =>
   (input.type ?? existing.type) === TransactionType.enum.transfer;
 const hasCategoryInput = (input: Pick<UpdateTransaction, 'category' | 'subCategory'>) =>

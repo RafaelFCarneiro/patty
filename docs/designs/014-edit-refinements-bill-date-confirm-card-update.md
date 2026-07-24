@@ -1,7 +1,7 @@
 # Feature Design 014: Edit refinements — bill payment date, confirm-with-edit, credit-card update
 
 **Type:** Feature design (a batch of small lifecycle/edit gaps found in testing) · **Design status:** Accepted ·
-**Implementation status:** In progress (Phases A, C done) · **Date:** 2026-07-22 · Touches the bill, transaction, and credit-card
+**Implementation status:** Done (Phases A, B, C) · **Date:** 2026-07-22 · Touches the bill, transaction, and credit-card
 domains. Respects **ADR-010** (credit accounts are card-managed), **ADR-020** (ownership by account type,
 transfer/bill-payment immutability), and the effective-only balance invariant (**Feature Design 001**).
 

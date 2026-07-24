@@ -784,11 +784,19 @@ export const buildRouteDefinitions = (
     path: '/api/transactions/:id/confirm',
     tags: [RouteTag.transactions],
     summary: 'Confirm (clear) a pending transaction',
-    request: { params: idParam },
-    responses: { 200: okResponse('Transaction confirmed', TransactionViewSchema), 404: notFound404 },
+    request: { params: idParam, body: jsonBody(wireInTransactions.ConfirmTransactionSchema.omit({ id: true })) },
+    responses: {
+      200: okResponse('Transaction confirmed', TransactionViewSchema),
+      404: notFound404,
+      409: conflict409,
+      422: validation422,
+    },
     handler: async (req, reply) => {
       const { id } = req.params as { id: string };
-      const flow = () => confirmTransaction(deps, { id }).map(transactionAdapters.outcomeToDb);
+      const wireIn = parse(wireInTransactions.ConfirmTransactionSchema, { ...(req.body ?? {}), id }, reply);
+      if (!wireIn) return reply;
+      const flow = () =>
+        confirmTransaction(deps, transactionAdapters.confirmWireInToModel(wireIn)).map(transactionAdapters.outcomeToDb);
       return send(reply, await runEffects(flow));
     },
   },

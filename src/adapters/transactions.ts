@@ -6,7 +6,12 @@ import {
   type TransactionEntity,
 } from '../models/transaction.js';
 import { LocalizedNamesSchema } from '../models/category.js';
-import type { ClassifiedUpsertResult, DeleteTransactionResult, SearchTransactions } from '../models/transaction.js';
+import type {
+  ClassifiedUpsertResult,
+  ConfirmTransaction,
+  DeleteTransactionResult,
+  SearchTransactions,
+} from '../models/transaction.js';
 import type { BulkItemResult } from '../logic/transaction.js';
 import type { AppError } from '../common/errors.js';
 import * as persistence from '../logic/persistence.js';
@@ -129,6 +134,8 @@ export const { persistableToDb, outcomeToDb } = persistence.entityDbAdapter(TRAN
 // ─── wire/in→model ───────────────────────────────────────────────────────────
 
 export const searchWireInToModel = (input: wireIn.SearchTransactionsInput): SearchTransactions => input;
+
+export const confirmWireInToModel = (input: wireIn.ConfirmTransaction): ConfirmTransaction => input;
 
 // ─── model→wire/out ──────────────────────────────────────────────────────────
 

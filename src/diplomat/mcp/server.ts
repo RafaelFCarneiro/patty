@@ -59,6 +59,7 @@ import { SortDirection } from '../../models/page.js';
 import {
   TransactionSource,
   TransactionTool,
+  ConfirmTransactionSchema,
   DeleteTransactionSchema,
   SearchTransactionsSchema,
   TransactionSortField,
@@ -422,10 +423,11 @@ export const buildMcpServer = (
       description:
         'Mark a pending transaction as effective (cleared). ' +
         'Pending transactions are excluded from balances and spending summaries; confirming one makes it count. ' +
+        'Optionally correct amount/date in the same call — account/card movements only, rejected for a ' +
+        'transfer/bill-payment (a plain status-only confirm of one is still fine). The resolved date (the ' +
+        'given date, or the existing date if omitted) must not be in the future. ' +
         'If the transaction is already effective, this is a no-op.',
-      inputSchema: {
-        id: z.string().min(1).describe('Transaction id (from search_transactions with status: "pending")'),
-      },
+      inputSchema: ConfirmTransactionSchema.shape,
     },
     async (args) => {
       const flow = () => confirmTransaction(deps, args).map(outcomeToDb);

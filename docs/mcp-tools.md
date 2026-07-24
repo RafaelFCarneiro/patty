@@ -68,7 +68,7 @@ Input: `card` (name), `month`, `year`. Returns the fatura: `bill` (`status: open
 
 ## pay_bill
 
-Input: `card`, `month`, `year`, optional `account` (paying account name override), optional `paymentDate` (`YYYY-MM-DD`, defaults to today). Creates a **canonical transfer** (paying account → card internal account) for the full bill total, then marks the bill `paid` and links the transfer via `paymentTransactionId` (ADR-010, Design 011). The paying account is resolved as: explicit `account` → card's default `paymentAccount` → `validation` error. Same-currency only. The payment transfer is always dated `paymentDate` (or today) and always `effective` — a bill payment records a payment that already occurred, so `paymentDate` must not be in the future (rejected with `validation`); this is Design 014's goal of an `effective` transaction never being future-dated, enforced here and (Phase B) at `confirm_transaction` — other tools that accept an explicit `status` are unaffected. Idempotent: re-calling on a paid bill is a no-op. If total ≤ 0, marks paid with no transfer (`paymentTransactionId` stays absent). Errors: `unknown_bill`, `unknown_card`, `unknown_account`, `validation` (no payer, currency mismatch, credit payer, future `paymentDate`).
+Input: `card`, `month`, `year`, optional `account` (paying account name override), optional `paymentDate` (`YYYY-MM-DD`, defaults to today). Creates a **canonical transfer** (paying account → card internal account) for the full bill total, then marks the bill `paid` and links the transfer via `paymentTransactionId` (ADR-010, Design 011). The paying account is resolved as: explicit `account` → card's default `paymentAccount` → `validation` error. Same-currency only. The payment transfer is always dated `paymentDate` (or today) and always `effective` — a bill payment records a payment that already occurred, so `paymentDate` must not be in the future (rejected with `validation`); this is the invariant that an `effective` transaction's date is never in the future (Design 014), also enforced at `confirm_transaction` — other tools that accept an explicit `status` are unaffected (see `docs/architecture.md`'s invariant 20). Idempotent: re-calling on a paid bill is a no-op. If total ≤ 0, marks paid with no transfer (`paymentTransactionId` stays absent). Errors: `unknown_bill`, `unknown_card`, `unknown_account`, `validation` (no payer, currency mismatch, credit payer, future `paymentDate`).
 
 ## revert_bill_payment
 
@@ -90,11 +90,13 @@ Input: `card` (name), `confirm` (default false). Hard delete: removes the card, 
 
 Flip a `pending` transaction to `effective`. Once effective, the transaction counts toward balances and spending summaries. If the transaction is already `effective`, this is a no-op (returns the existing transaction unchanged). Returns the transaction with `typeLabel` and `statusLabel`.
 
-Input: `id` (required — use `search_transactions` with `status: "pending"` to find pending transactions).
+**Confirm-with-edit** (Design 014 phase B): optional `amount`/`date` correct a pending estimate in the same call, applied together with the status flip. Allowed only for an account/card movement — editing `amount`/`date` on a **transfer or bill-payment** transaction is rejected (`transactionErrors.confirmEditNotAllowedForTransfer`, pointing at `update_account_transaction` for a transfer or `pay_bill`/`revert_bill_payment` for a bill payment); a plain status-only confirm of one is still fine, since it makes no date claim of its own. The resolved date — the given `date`, or the existing date if omitted — must not be in the future (`transactionErrors.cannotConfirmFutureDated`): an `effective` transaction's date is never in the future (`docs/architecture.md` invariant 20), so a plain confirm of a transaction whose *existing* date is already future-dated is rejected too, not just an explicit future `date` edit. Reclassifying (category/subCategory/tags/note) is not part of confirm — use `update_account_transaction`/`update_card_transaction` for that.
 
-REST mirror: `POST /api/transactions/:id/confirm`.
+Input: `id` (required — use `search_transactions` with `status: "pending"` to find pending transactions), optional `amount`, `date` (`YYYY-MM-DD`).
 
-Errors: `unknown_transaction`.
+REST mirror: `POST /api/transactions/:id/confirm` (body: `amount`/`date`, both optional).
+
+Errors: `unknown_transaction`, `validation` (edit rejected for a transfer/bill-payment, future-dated confirm).
 
 ## update_card_transaction / delete_card_transaction, update_account_transaction / delete_account_transaction
 

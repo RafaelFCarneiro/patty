@@ -19,9 +19,11 @@ import {
   buildUpsertResult,
   defaultStatementLines,
   deriveIdempotencyKey,
+  entityFromExisting,
   hasCategory,
   hasSubCategory,
   isCategoryKindAllowed,
+  isTransfer,
   needsReview,
   nextCursorAfter,
   resolveCursorKey,
@@ -82,6 +84,17 @@ describe('needsReview', () => {
     expect(needsReview({ method: 'history', confidence: 0.55 })).toBe(true);
     expect(needsReview({ method: 'rule', confidence: 0.8 })).toBe(false);
     expect(needsReview({ method: 'user', confidence: 1 })).toBe(false);
+  });
+});
+
+describe('isTransfer', () => {
+  it('is true for a transfer', () => {
+    expect(isTransfer({ type: 'transfer' })).toBe(true);
+  });
+
+  it('is false for an expense/income movement', () => {
+    expect(isTransfer({ type: 'expense' })).toBe(false);
+    expect(isTransfer({ type: 'income' })).toBe(false);
   });
 });
 
@@ -236,6 +249,53 @@ describe('addLocalizedLabels', () => {
     const labeled = mapper(tx);
     expect(labeled.categoryName).toBe('Alimentação');
     expect(Object.prototype.hasOwnProperty.call(labeled, 'categoryNames')).toBe(false);
+  });
+});
+
+describe('entityFromExisting — RawTransactionView → TransactionEntity (Design 014 phase B)', () => {
+  it('maps every field confirmTransaction builds its update entity on top of', () => {
+    const tx: RawTransactionView = {
+      ...baseTx,
+      accountId: 'acc-1',
+      toAccountId: 'acc-2',
+      cardId: 'card-1',
+      billId: 'bill-1',
+      categoryId: 'cat-food',
+      subCategoryId: 'subcat-1',
+      merchant: 'merchant-key',
+      rawInput: 'coffee 10 bucks',
+      note: 'a note',
+    };
+
+    expect(entityFromExisting(tx)).toEqual({
+      id: tx.id,
+      description: tx.description,
+      amount: tx.amount,
+      type: tx.type,
+      status: tx.status,
+      date: tx.date,
+      currency: tx.currency,
+      source: tx.source,
+      idempotencyKey: tx.idempotencyKey,
+      classification: tx.classification,
+      rawInput: tx.rawInput,
+      note: tx.note,
+      refs: {
+        accountId: 'acc-1',
+        toAccountId: 'acc-2',
+        cardId: 'card-1',
+        billId: 'bill-1',
+        categoryId: 'cat-food',
+        subCategoryId: 'subcat-1',
+        merchantKey: 'merchant-key',
+      },
+    });
+  });
+
+  it('drops version, tags, and localized-label/name fields — not part of TransactionEntity', () => {
+    const entity = entityFromExisting(baseTx);
+    expect(entity).not.toHaveProperty('version');
+    expect(entity).not.toHaveProperty('tags');
   });
 });
 
