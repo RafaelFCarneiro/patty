@@ -44,7 +44,7 @@ describe('UpdateCardTransactionSchema — composes up from the minimal core (ADR
   });
 });
 
-describe('UpdateCreditCardSchema — identifies by name, currency omitted (Design 014 phase C)', () => {
+describe('UpdateCreditCardSchema — identifies by name, currency rejected at update (Design 014 phase C)', () => {
   it('accepts just the identifying name (no-op update)', () => {
     expect(UpdateCreditCardSchema.safeParse({ name: 'Nubank' }).success).toBe(true);
   });

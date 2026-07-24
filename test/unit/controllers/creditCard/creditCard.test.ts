@@ -8,6 +8,7 @@ import type { Deps } from '../../../../src/controllers/deps.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus, type RawBill } from '../../../../src/models/bill.js';
 import {
+  cardErrors,
   CREDIT_CARD_ENTITY_TAG,
   DELETE_CREDIT_CARD_CONFIRM_HINT,
   type CreditCard,
@@ -487,10 +488,7 @@ describe('updateCreditCard — functional core, a rename cascades to the interna
     const result = await updateCreditCard(deps, { name: 'Nubank', currency: CurrencyCode.enum.USD });
 
     expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr()).toEqual({
-      code: 'validation',
-      issues: ["cannot change a credit card's currency; it is fixed at creation"],
-    });
+    expect(result._unsafeUnwrapErr()).toEqual(cardErrors.currencyChangeRejected);
   });
 
   it('an update that changes nothing is a no-op: empty persist, the current card as response', async () => {
