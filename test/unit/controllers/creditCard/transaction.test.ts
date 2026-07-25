@@ -33,6 +33,7 @@ const account = (overrides: Partial<Account> = {}): Account => ({
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   accounts: { findById: async () => null } as unknown as Deps['accounts'],
   bills: {} as Deps['bills'],
+  budgets: {} as Deps['budgets'],
   categories: {} as Deps['categories'],
   subCategories: {} as Deps['subCategories'],
   creditCards: {} as Deps['creditCards'],

@@ -11,6 +11,7 @@ import { runEffects, runEffectsSequence, type ApplierRegistry } from './diplomat
 import { createLocaleResolver } from './diplomat/db/localeCache.js';
 import { accountApplier, accountsRepo } from './diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from './diplomat/db/repos/bills.js';
+import { budgetApplier, budgetsRepo } from './diplomat/db/repos/budgets.js';
 import { categoriesRepo, categoryApplier } from './diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js';
 import { creditCardApplier, creditCardsRepo } from './diplomat/db/repos/creditCards.js';
@@ -25,6 +26,7 @@ import { healthRepo } from './diplomat/db/repos/health.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { ACCOUNT_ENTITY_TAG } from './models/account.js';
 import { BILL_ENTITY_TAG } from './models/bill.js';
+import { BUDGET_ENTITY_TAG } from './models/budget.js';
 import { CATEGORY_ENTITY_TAG } from './models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from './models/creditCard.js';
 import { DASHBOARD_ENTITY_TAG } from './models/dashboard.js';
@@ -78,6 +80,7 @@ const main = async (): Promise<void> => {
   const deps: Deps = {
     accounts: accountsRepo(db),
     bills: billsRepo(db),
+    budgets: budgetsRepo(db),
     categories: categoriesRepo(db),
     subCategories: subCategoriesRepo(db),
     creditCards: creditCardsRepo(db),
@@ -102,6 +105,7 @@ const main = async (): Promise<void> => {
     [MERCHANT_ENTITY_TAG]: merchantApplier,
     [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
     [BILL_ENTITY_TAG]: billApplier,
+    [BUDGET_ENTITY_TAG]: budgetApplier,
     [TAG_ENTITY_TAG]: tagApplier,
     [CATEGORY_ENTITY_TAG]: categoryApplier,
     [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,

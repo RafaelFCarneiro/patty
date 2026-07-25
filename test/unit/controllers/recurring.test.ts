@@ -13,6 +13,7 @@ import { TRANSACTION_ENTITY_TAG, type RawTransactionView } from '../../../src/mo
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   accounts: { list: async () => [] } as unknown as Deps['accounts'],
   bills: {} as Deps['bills'],
+  budgets: {} as Deps['budgets'],
   categories: { list: async () => [] } as unknown as Deps['categories'],
   subCategories: {} as Deps['subCategories'],
   creditCards: {} as Deps['creditCards'],

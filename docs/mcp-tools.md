@@ -3,7 +3,7 @@
 Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All tools share these conventions:
 
 - **Natural inputs**: `account`, `card`, `category`, and `subCategory` take names (case/accent-insensitive, partial match allowed). Resolution failures return structured errors the agent can self-correct from.
-- **Errors**: `{ "error": { "code": "...", ... } }` with `isError: true`. Codes: `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `unknown_sub_category`, `ambiguous_sub_category`, `unknown_card`, `ambiguous_card`, `unknown_transaction`, `unknown_bill`, `unknown_dashboard`, `duplicate_name`, `in_use`, `category_kind_mismatch`, `validation`. Ambiguous/unknown errors include `candidates` (names) to retry with.
+- **Errors**: `{ "error": { "code": "...", ... } }` with `isError: true`. Codes: `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `unknown_sub_category`, `ambiguous_sub_category`, `unknown_card`, `ambiguous_card`, `unknown_transaction`, `unknown_bill`, `unknown_dashboard`, `unknown_budget`, `duplicate_name`, `duplicate_budget`, `not_expense_category`, `in_use`, `category_kind_mismatch`, `validation`. Ambiguous/unknown errors include `candidates` (names) to retry with.
 - **Currency**: BRL or USD; from the account/card when one is linked, else the `currency` field, else USD. Summaries group per currency, never converting.
 - **Dates**: `YYYY-MM-DD`.
 - **Localized labels**: read views include `*Label` fields — localized display labels for fixed enum values, resolved at read time via the active locale (Design 006). The enum value itself (`type`, `status`, `kind`, `period`) is stable identity; the `*Label` is derived display only. Switching locale reflows all labels with no migration. See per-tool details below.
@@ -298,6 +298,31 @@ Free-form labels attached to transactions (e.g. "work", "travel", "reembolsável
 - `delete_tag`: `id` (required). Removes the tag and all its transaction associations.
 
 Attach tags at write time via the `tags` array on `add_card_purchase` / `add_account_expense` / `add_account_income` (statement-import items omit `tags` — bulk import classifies automatically).
+
+## create_budget / update_budget / delete_budget / list_budgets
+
+Feature Design 015 phase 1: a recurring monthly spending limit on a category or sub-category, in one currency. No
+measurement yet — `get_budget_status` (spend-vs-limit) lands in phase 2.
+
+- `create_budget`: exactly one of `category`/`subCategory` (required — resolved by name like every other
+  category reference), `currency`, `limit` (positive), `period` (optional, defaults to `monthly` — the only
+  period for now). A **category** budget rolls up its sub-categories' spend (the envelope behavior, once phase 2
+  lands): sub-category transactions carry the parent's `category_id`. A **sub-category** budget measures only
+  its own spend, and also counts toward its parent's budget if one exists. Returns `{ id, category, subCategory?,
+  currency, limit, period }` — `subCategory` is present only when the budget targets a sub-category.
+  Errors: `unknown_category`/`ambiguous_category`/`unknown_sub_category`/`ambiguous_sub_category` (name
+  resolution), `validation` (neither or both of `category`/`subCategory` given), `not_expense_category` (an
+  income-kind category can't be budgeted — a budget caps spending), `duplicate_budget` (a budget already exists
+  for this exact target/currency/period — use `update_budget` instead).
+- `update_budget`: `id` (required, from `create_budget`/`list_budgets`), `limit`/`period` (optional — only
+  provided fields change). The target and currency are fixed at creation and can't be changed. Error:
+  `unknown_budget`.
+- `delete_budget`: `id` (required). **Idempotent** — an already-absent id is not an error, returns
+  `{ deleted: false }` (same shape as `delete_tag`).
+- `list_budgets`: no input — returns all budgets (the limits themselves, no spend) as `{ id, category,
+  subCategory?, currency, limit, period }`.
+
+No REST mirror yet (MCP-only for phase 1).
 
 ## save_dashboard / list_dashboards / delete_dashboard / rename_dashboard
 

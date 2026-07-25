@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
 import { accountsRepo } from '../../../src/diplomat/db/repos/accounts.js';
 import { billsRepo } from '../../../src/diplomat/db/repos/bills.js';
+import { budgetsRepo } from '../../../src/diplomat/db/repos/budgets.js';
 import { categoriesRepo } from '../../../src/diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from '../../../src/diplomat/db/repos/subCategories.js';
 import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
@@ -49,6 +50,7 @@ describe('empty DB (ADR-008)', () => {
     deps = {
       accounts: accountsRepo(db),
       bills: billsRepo(db),
+      budgets: budgetsRepo(db),
       categories: categoriesRepo(db),
       subCategories: subCategoriesRepo(db),
       creditCards: creditCardsRepo(db),

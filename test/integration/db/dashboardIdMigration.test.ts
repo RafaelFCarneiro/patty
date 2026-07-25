@@ -17,6 +17,21 @@ const MIGRATION_0011_TAG = '0011_dashboard_id_normalization';
 let tmpDir: string;
 let dbPath: string;
 let preMigrationFolder: string;
+let through0011Folder: string;
+
+/** Rewrites `folder`'s journal in place, keeping only entries up to (and, if `dropLast`, excluding)
+ *  `MIGRATION_0011_TAG` — drizzle's migrator (`libsql/migrator.js`) applies a migration whenever its
+ *  journal `when` timestamp is newer than the single latest-applied row it tracks, so it never
+ *  backfills an older skipped entry once a *later*-dated one has already been recorded. Truncating
+ *  both migrate() passes to "through 0011" keeps this test's skip-then-reapply trick correct
+ *  regardless of how many migrations (like Feature Design 015's `budgets` table) land after 0011. */
+const truncateJournalThrough0011 = (folder: string, dropLast: boolean): void => {
+  const journalPath = join(folder, 'meta', '_journal.json');
+  const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: Array<{ tag: string }> };
+  const cutoff = journal.entries.findIndex((entry) => entry.tag === MIGRATION_0011_TAG);
+  journal.entries = journal.entries.slice(0, dropLast ? cutoff : cutoff + 1);
+  writeFileSync(journalPath, JSON.stringify(journal, null, 2));
+};
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-dashboard-migration-'));
@@ -26,10 +41,13 @@ beforeEach(() => {
   // it stops one version short — simulating a DB that predates id-normalization.
   preMigrationFolder = join(tmpDir, 'pre-0011-migrations');
   cpSync(REAL_MIGRATIONS_FOLDER, preMigrationFolder, { recursive: true });
-  const journalPath = join(preMigrationFolder, 'meta', '_journal.json');
-  const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: Array<{ tag: string }> };
-  journal.entries = journal.entries.filter((entry) => entry.tag !== MIGRATION_0011_TAG);
-  writeFileSync(journalPath, JSON.stringify(journal, null, 2));
+  truncateJournalThrough0011(preMigrationFolder, true);
+
+  // A copy truncated to end at 0011 (inclusive) — any migration after 0011 (e.g. `budgets`) is
+  // irrelevant to this test and, per the note above, must not be present for the second migrate().
+  through0011Folder = join(tmpDir, 'through-0011-migrations');
+  cpSync(REAL_MIGRATIONS_FOLDER, through0011Folder, { recursive: true });
+  truncateJournalThrough0011(through0011Folder, false);
 });
 
 afterEach(() => {
@@ -53,7 +71,7 @@ describe('migration 0011 — dashboards id normalization', () => {
       sql`INSERT INTO dashboards (name, html, updated_at, version) VALUES ('legacy', '<html>old</html>', '2026-01-01', 0)`,
     );
 
-    await migrate(db, { migrationsFolder: REAL_MIGRATIONS_FOLDER });
+    await migrate(db, { migrationsFolder: through0011Folder });
 
     const rows = await db.all<{ id: string; name: string; html: string; updated_at: string; version: number }>(
       sql`SELECT id, name, html, updated_at, version FROM dashboards WHERE name = 'legacy'`,

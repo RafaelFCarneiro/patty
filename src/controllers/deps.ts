@@ -4,6 +4,7 @@ import type { FlowOutcome } from '../models/persistable.js';
 import type { Locale } from '../models/locale.js';
 import type { AccountsRepo } from '../diplomat/db/repos/accounts.js';
 import type { BillsRepo } from '../diplomat/db/repos/bills.js';
+import type { BudgetsRepo } from '../diplomat/db/repos/budgets.js';
 import type { CategoriesRepo } from '../diplomat/db/repos/categories.js';
 import type { SubCategoriesRepo } from '../diplomat/db/repos/subCategories.js';
 import type { CreditCardsRepo } from '../diplomat/db/repos/creditCards.js';
@@ -19,6 +20,7 @@ import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js';
 export type Deps = {
   accounts: AccountsRepo;
   bills: BillsRepo;
+  budgets: BudgetsRepo;
   categories: CategoriesRepo;
   subCategories: SubCategoriesRepo;
   creditCards: CreditCardsRepo;

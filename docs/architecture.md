@@ -137,6 +137,9 @@ tags                (id PK, name UNIQUE, version)
 bills               (id PK, credit_card_id FK, month, year, close_date, due_date,
                      status: open|closed|paid, payment_transaction_id FK→transactions?, version —
                      UNIQUE(credit_card_id, month, year))
+budgets             (id PK, category_id FK→categories — the budgeted node itself, a top-level
+                     category or sub-category, limit_amount, currency FK, period: monthly, version —
+                     UNIQUE(category_id, currency, period); Feature Design 015 phase 1)
 transactions        (id PK, description, amount, type: expense|income|transfer,
                      status: pending|effective DEFAULT effective,
                      date, currency, source: mcp|rest|import, idempotency_key UNIQUE,
@@ -272,10 +275,21 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     `amount`/`date` on a transfer or bill-payment transaction (`isTransfer`, `logic/transaction.ts` — core-visible
     via `type === 'transfer'`, ADR-002); a plain status-only confirm of one is still allowed, since it makes no
     date claim of its own.
+21. **Budgets are keyed by (target, currency, period) — no cross-currency total, no rollover**
+    (Feature Design 015 phase 1, the first entity built entirely on the FC/IS write path from
+    scratch rather than migrated). A budget's `category_id` is the budgeted node's own id — a
+    top-level category or sub-category, both rows in `categories` — so `UNIQUE(category_id,
+    currency, period)` needs no nullable discriminator; measurement can still tell top from sub via
+    the target's own `parent_id`. Only an expense-eligible category may be budgeted (`kind` is
+    `expense` or `both`; a pure `income`-kind target is rejected, `budgetErrors.notExpenseCategory`)
+    — a budget caps spending. Each period is measured independently; there is no unused-budget
+    carryover. `create_budget`/`update_budget`/`delete_budget`/`list_budgets` manage the limits
+    themselves; the unified spent-vs-limit measurement (`get_budget_status`, effective-only,
+    no-transfer, same-currency, category rolls up its sub-categories) is Feature Design 015 phase 2.
 
 ## Tool surface
 
-44 MCP tools (contract: `docs/mcp-tools.md`) and mirror REST routes, both thin over the same controllers. Client connections: `docs/mcp-clients.md`.
+49 MCP tools (contract: `docs/mcp-tools.md`), most mirrored as REST routes, both thin over the same controllers — `create_budget`/`update_budget`/`delete_budget`/`list_budgets` (Feature Design 015 phase 1) are MCP-only for now, no REST mirror yet. Client connections: `docs/mcp-clients.md`.
 
 **Transport:** controlled by `MCP_TRANSPORT` (zod enum, `config.ts`). Default is **`stdio`** — the client spawns the process; no port, no Fastify. Set `MCP_TRANSPORT=http` to start the Fastify server (REST + streamable HTTP MCP on `PORT`). Both transports connect the same `buildMcpServer(deps, version)` core; no domain code moves. (ADR-007)
 

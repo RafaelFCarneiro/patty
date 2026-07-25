@@ -1541,6 +1541,7 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     const deps: Deps = {
       accounts: accountsR,
       bills: billsR,
+      budgets: {} as Deps['budgets'],
       categories: {} as Deps['categories'],
       subCategories: {} as Deps['subCategories'],
       creditCards: creditCardsR,
@@ -2250,6 +2251,7 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
     const deps: Deps = {
       accounts: accountsR,
       bills: billsR,
+      budgets: {} as Deps['budgets'],
       categories: {} as Deps['categories'],
       subCategories: {} as Deps['subCategories'],
       creditCards: creditCardsR,

@@ -11,6 +11,7 @@ import {
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
+import { BudgetPeriod } from '../../models/budget.js';
 import { Locale, LocaleSource } from '../../models/locale.js';
 import { RecurringPeriod } from '../../models/recurring.js';
 import { ClassificationMethod, TransactionStatus } from '../../models/transaction.js';
@@ -180,6 +181,25 @@ export const dashboards = sqliteTable('dashboards', {
   updatedAt: text('updated_at').notNull(),
   version: integer('version').notNull().default(0),
 });
+
+export const budgets = sqliteTable(
+  'budgets',
+  {
+    id: text('id').primaryKey(),
+    // The budgeted node's own id — a top-level category or sub-category (both rows in
+    // `categories`); one column, so `UNIQUE` needs no nullable discriminator (Feature Design 015).
+    categoryId: text('category_id')
+      .notNull()
+      .references(() => categories.id),
+    currency: text('currency')
+      .notNull()
+      .references(() => currencies.code),
+    limitAmount: real('limit_amount').notNull(),
+    period: text('period', { enum: BudgetPeriod.options }).notNull().default(BudgetPeriod.enum.monthly),
+    version: integer('version').notNull().default(0),
+  },
+  (t) => [uniqueIndex('budgets_category_currency_period').on(t.categoryId, t.currency, t.period)],
+);
 
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
