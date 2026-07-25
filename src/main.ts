@@ -69,7 +69,7 @@ const main = async (): Promise<void> => {
 
   const config = loadConfig();
 
-  const db = openDatabase(config);
+  const db = await openDatabase(config);
   await bootstrap(db);
 
   const settingsR = settingsRepo(db);

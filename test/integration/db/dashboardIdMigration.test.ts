@@ -46,7 +46,7 @@ const openOpts = () => ({
 
 describe('migration 0011 — dashboards id normalization', () => {
   it('backfills a stable UUID id for a pre-existing name-keyed row, preserving content and name UNIQUE', async () => {
-    const db = openDatabase(openOpts());
+    const db = await openDatabase(openOpts());
     await migrate(db, { migrationsFolder: preMigrationFolder });
 
     await db.run(

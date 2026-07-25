@@ -50,7 +50,13 @@ effect runner, appliers, outcomes, and the per-flow notes.
   `update`/`delete` apply `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?` — the new
   version computed in application code, **never** a SQL-side `version + 1`. A version-guarded op affecting zero
   rows rolls back the whole batch and re-invokes `flow` (fresh read → fresh decision), bounded, then surfaces
-  the generic `conflict` `AppError` (`models/error.ts`, no business payload).
+  the generic `conflict` `AppError` (`models/error.ts`, no business payload). **The retry loop covers two
+  distinct classes (ADR-024): `VersionConflict` (logical — a stale read)** and **`SQLITE_BUSY` (physical — a
+  contended writer, classified by `isSqliteBusy` in `diplomat/db/sqliteErrors.ts` on the driver error's base
+  `.code`, covering `SQLITE_BUSY` and the more specific `SQLITE_BUSY_SNAPSHOT`)**; `applyBatch` catches either
+  and treats them identically — roll back, re-invoke, same `MAX_RUN_EFFECTS_ATTEMPTS` budget. `busy_timeout`
+  (`diplomat/db/driver.ts`) already absorbs the common case by having the driver wait for the lock instead of
+  throwing; this retry is the bounded defense-in-depth for contention that outlives that timeout.
 - **`runEffectsSequence(db, registry, items, flowFor)`** — the second mode: each item's flow (built by `flowFor`,
   invoked only when the runner reaches it) runs through the same `attempt`/retry primitive, in its **own
   transaction**, in order. Item *i+1* sees item *i*'s committed writes — which is why bulk import reuses the

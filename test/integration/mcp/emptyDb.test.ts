@@ -31,12 +31,12 @@ const MIGRATIONS = fileURLToPath(new URL('../../../drizzle', import.meta.url));
 let tmpDir: string;
 let deps: Deps;
 let registry: ApplierRegistry;
-let db: ReturnType<typeof openDatabase>;
+let db: Awaited<ReturnType<typeof openDatabase>>;
 
 describe('empty DB (ADR-008)', () => {
   beforeAll(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-empty-'));
-    db = openDatabase({
+    db = await openDatabase({
       DB_PATH: join(tmpDir, 'empty.db'),
       FINTRACK_DB_KEY: TEST_KEY,
       PORT: 0,

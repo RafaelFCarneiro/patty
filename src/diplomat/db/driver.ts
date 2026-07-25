@@ -14,6 +14,13 @@ export type Db = LibSQLDatabase<typeof schema>;
 const KEYCHAIN_SERVICE = 'fintrack';
 const KEYCHAIN_ACCOUNT = 'db-encryption-key';
 
+// ADR-024: WAL lets readers (the HTTP sidecar) proceed without blocking the single writer, instead
+// of rollback-journal's mutual blocking. busy_timeout makes a contended writer wait for the lock
+// instead of throwing SQLITE_BUSY immediately — the common case for stdio spawned per client
+// (ADR-007) when more than one is connected to the same file at once.
+const JOURNAL_MODE_WAL = 'WAL';
+const BUSY_TIMEOUT_MS = 5000;
+
 const resolveEncryptionKey = (config: Config): string => {
   // Env-var override: CI, headless, or manual recovery (ADR-005). We log that we are in
   // env-var mode (never the key value itself) so the weaker posture is visible.
@@ -43,16 +50,30 @@ const resolveEncryptionKey = (config: Config): string => {
   }
 };
 
+/** Best-effort: WAL is verified to work with libSQL's encryption-at-rest in this project's target
+ *  environments, but a build lacking WAL support degrades to busy_timeout + retry alone (ADR-024
+ *  Consequences) rather than failing the whole DB open. */
+const enableWal = async (client: ReturnType<typeof createClient>): Promise<void> => {
+  try {
+    await client.execute(`PRAGMA journal_mode = ${JOURNAL_MODE_WAL}`);
+  } catch (cause) {
+    console.warn('fintrack: WAL journal mode unavailable; falling back to busy_timeout + retry only.', cause);
+  }
+};
+
 /**
  * Open the encrypted libSQL database and return a Drizzle client.
  * The encryption key comes from FINTRACK_DB_KEY or the OS keychain (generated on first
  * run); throws if neither is available so the DB is never opened unencrypted.
  */
-export const openDatabase = (config: Config): Db => {
+export const openDatabase = async (config: Config): Promise<Db> => {
   const encryptionKey = resolveEncryptionKey(config);
   // mode 0o700 applies only when the directory is first created; pre-existing directories
   // keep their current permissions (Node does not retroactively tighten them).
   mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 });
   const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey });
+  await enableWal(client);
+  // busy_timeout is per-connection (ADR-024), so it is asserted unconditionally on every open.
+  await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
   return drizzle(client, { schema });
 };
