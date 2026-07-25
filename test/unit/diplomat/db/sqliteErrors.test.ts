@@ -6,23 +6,28 @@ import {
   isUniqueConstraintViolation,
 } from '../../../../src/diplomat/db/sqliteErrors.js';
 
+const sqliteBusy = (extendedCode?: string) => new LibsqlError('database is locked', 'SQLITE_BUSY', extendedCode);
+const uniqueConstraintViolation = () =>
+  new LibsqlError('UNIQUE constraint failed', 'SQLITE_CONSTRAINT', 'SQLITE_CONSTRAINT_UNIQUE');
+const foreignKeyConstraintViolation = () =>
+  new LibsqlError('FOREIGN KEY constraint failed', 'SQLITE_CONSTRAINT', 'SQLITE_CONSTRAINT_FOREIGNKEY');
+
 describe('isSqliteBusy (ADR-024)', () => {
   it('classifies a plain SQLITE_BUSY (busy_timeout exhausted) as busy', () => {
-    expect(isSqliteBusy(new LibsqlError('database is locked', 'SQLITE_BUSY'))).toBe(true);
+    expect(isSqliteBusy(sqliteBusy())).toBe(true);
   });
 
   it('classifies the more specific SQLITE_BUSY_SNAPSHOT (WAL checkpoint starvation) as busy — same base code', () => {
-    expect(isSqliteBusy(new LibsqlError('database is locked', 'SQLITE_BUSY', 'SQLITE_BUSY_SNAPSHOT'))).toBe(true);
+    expect(isSqliteBusy(sqliteBusy('SQLITE_BUSY_SNAPSHOT'))).toBe(true);
   });
 
   it('walks the .cause chain — drizzle wraps the driver error one level deep', () => {
-    const wrapped = new Error('query failed', { cause: new LibsqlError('database is locked', 'SQLITE_BUSY') });
+    const wrapped = new Error('query failed', { cause: sqliteBusy() });
     expect(isSqliteBusy(wrapped)).toBe(true);
   });
 
   it('does not misclassify an unrelated constraint violation as busy', () => {
-    const cause = new LibsqlError('UNIQUE constraint failed', 'SQLITE_CONSTRAINT', 'SQLITE_CONSTRAINT_UNIQUE');
-    expect(isSqliteBusy(cause)).toBe(false);
+    expect(isSqliteBusy(uniqueConstraintViolation())).toBe(false);
   });
 
   it('does not misclassify a plain non-libsql error', () => {
@@ -34,14 +39,14 @@ describe('isSqliteBusy (ADR-024)', () => {
 // cross-classify a case that belongs to one of the others.
 describe('isSqliteBusy does not overlap the existing constraint-violation checks', () => {
   it('a unique-constraint violation is unique, not busy or foreign-key', () => {
-    const cause = new LibsqlError('UNIQUE constraint failed', 'SQLITE_CONSTRAINT', 'SQLITE_CONSTRAINT_UNIQUE');
+    const cause = uniqueConstraintViolation();
     expect(isUniqueConstraintViolation(cause)).toBe(true);
     expect(isSqliteBusy(cause)).toBe(false);
     expect(isForeignKeyConstraintViolation(cause)).toBe(false);
   });
 
   it('a foreign-key violation is foreign-key, not busy or unique', () => {
-    const cause = new LibsqlError('FOREIGN KEY constraint failed', 'SQLITE_CONSTRAINT', 'SQLITE_CONSTRAINT_FOREIGNKEY');
+    const cause = foreignKeyConstraintViolation();
     expect(isForeignKeyConstraintViolation(cause)).toBe(true);
     expect(isSqliteBusy(cause)).toBe(false);
     expect(isUniqueConstraintViolation(cause)).toBe(false);

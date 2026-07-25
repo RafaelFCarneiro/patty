@@ -57,7 +57,10 @@ const enableWal = async (client: ReturnType<typeof createClient>): Promise<void>
   try {
     await client.execute(`PRAGMA journal_mode = ${JOURNAL_MODE_WAL}`);
   } catch (cause) {
-    console.warn('fintrack: WAL journal mode unavailable; falling back to busy_timeout + retry only.', cause);
+    // Not necessarily a WAL-support gap — could equally be a wrong key or a corrupt file, both of
+    // which still surface their own real error on the next query. Worded neutrally rather than
+    // diagnosing a cause this catch can't actually distinguish.
+    console.warn('fintrack: could not enable WAL journal mode; continuing with busy_timeout + retry only.', cause);
   }
 };
 
