@@ -36,7 +36,7 @@ const openOpts = () => ({
 
 describe('dashboard seed persistence across restart (ADR-008 onConflictDoNothing)', () => {
   it('re-running bootstrap on an existing DB does not revert a save_dashboard override', async () => {
-    const firstDb = openDatabase(openOpts());
+    const firstDb = await openDatabase(openOpts());
     await bootstrap(firstDb);
 
     const overriddenHtml = '<html><body>my custom dashboard</body></html>';
@@ -50,7 +50,7 @@ describe('dashboard seed persistence across restart (ADR-008 onConflictDoNothing
     expect(result.isOk()).toBe(true);
 
     // Simulate a restart: reopen the same file and bootstrap again.
-    const secondDb = openDatabase(openOpts());
+    const secondDb = await openDatabase(openOpts());
     await bootstrap(secondDb);
 
     const after = await dashboardsRepo(secondDb).get('overview');

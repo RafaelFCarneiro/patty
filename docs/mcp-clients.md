@@ -121,6 +121,16 @@ The sidecar binds `127.0.0.1` only — never the LAN. This API has no auth (loca
 never reachable from other devices on your network, only from this machine. Use `127.0.0.1` in the URL, not
 `localhost` — some resolvers prefer IPv6 (`::1`), which this server does not bind.
 
+## Multiple clients at once (dogfooding)
+
+Stdio servers are spawned **per client connection** (ADR-007): running Desktop and Cowork/Code together, or
+reconnecting a client without its first server exiting, means two `fintrack` processes hold two separate
+connections to the same `fintrack.db` file. FinTrack makes this graceful rather than fatal (ADR-024) — WAL mode
+plus a `busy_timeout` on every connection means a contended writer waits for the lock instead of throwing, and
+`runEffects` bounded-retries any `SQLITE_BUSY` that outlives the timeout — but it is still two writers on one
+file. For heavy multi-client use, prefer the single shared **HTTP transport** below instead: one process, one
+connection, no cross-process contention at all.
+
 ## HTTP transport (opt-in, `MCP_TRANSPORT=http`)
 
 Start the server explicitly before connecting:

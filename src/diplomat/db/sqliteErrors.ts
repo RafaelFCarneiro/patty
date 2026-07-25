@@ -10,9 +10,21 @@ const SQLITE_UNIQUE_CONSTRAINT_CODE = 'SQLITE_CONSTRAINT_UNIQUE';
 // stale `version` reports, just surfaced by the FK check instead.
 const SQLITE_FOREIGN_KEY_CONSTRAINT_CODE = 'SQLITE_CONSTRAINT_FOREIGNKEY';
 
+// The base result code shared by every busy variant (plain SQLITE_BUSY, and the more specific
+// SQLITE_BUSY_SNAPSHOT/SQLITE_BUSY_RECOVERY WAL raises under checkpoint starvation) — matched on
+// `.code`, not `.extendedCode`, so all of them are caught by one check (ADR-024).
+const SQLITE_BUSY_CODE = 'SQLITE_BUSY';
+
 const matchesExtendedCode = (cause: unknown, extendedCode: string): boolean => {
   for (let current = cause; current instanceof Error; current = current.cause) {
     if (current instanceof LibsqlError) return current.extendedCode === extendedCode;
+  }
+  return false;
+};
+
+const matchesCode = (cause: unknown, code: string): boolean => {
+  for (let current = cause; current instanceof Error; current = current.cause) {
+    if (current instanceof LibsqlError) return current.code === code;
   }
   return false;
 };
@@ -28,3 +40,9 @@ export const isUniqueConstraintViolation = (cause: unknown): boolean =>
  *  because some other row now references the one being removed. */
 export const isForeignKeyConstraintViolation = (cause: unknown): boolean =>
   matchesExtendedCode(cause, SQLITE_FOREIGN_KEY_CONSTRAINT_CODE);
+
+/** Same `.cause`-chain walk, matched on the base `.code` so every busy variant is covered by one
+ *  check. A transient physical lock-contention condition (busy_timeout exhausted, or a WAL
+ *  checkpoint-starvation snapshot conflict) — `applyBatch` (`diplomat/db/effects.ts`) treats it as
+ *  retryable the same way it treats a `VersionConflict` (ADR-024). */
+export const isSqliteBusy = (cause: unknown): boolean => matchesCode(cause, SQLITE_BUSY_CODE);

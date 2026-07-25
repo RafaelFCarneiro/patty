@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { LibsqlError } from '@libsql/client';
 import { sql } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -81,7 +82,7 @@ let registry: ApplierRegistry;
 
 beforeEach(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-uow-'));
-  db = openDatabase({
+  db = await openDatabase({
     DB_PATH: join(tmpDir, 'uow.db'),
     FINTRACK_DB_KEY: TEST_KEY,
     PORT: 0,
@@ -405,6 +406,52 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ created: false });
+  });
+});
+
+describe('runEffects — SQLITE_BUSY treated as a retryable physical conflict, bounded (ADR-024)', () => {
+  // A raw driver error, not a real lock — proves the classification/retry path without needing a
+  // second real connection to contend for the lock.
+  const sqliteBusy = () => new LibsqlError('database is locked', 'SQLITE_BUSY');
+
+  it('rolls back, re-invokes the flow, and succeeds once the lock clears — same recovery as a conflict', async () => {
+    let calls = 0;
+    const flakyApplier: EntityApplier = {
+      ...accountApplier,
+      insert: async (tx, model) => {
+        calls += 1;
+        if (calls === 1) throw sqliteBusy();
+        return accountApplier.insert(tx, model);
+      },
+    };
+    const flakyRegistry: ApplierRegistry = { [ACCOUNT_ENTITY_TAG]: flakyApplier };
+    const model = newAccount();
+
+    const result = await runEffects(db, flakyRegistry, insertOne(model));
+
+    expect(result.isOk()).toBe(true);
+    expect(calls).toBe(2); // failed on the first attempt, committed on the retry
+    expect(await readIds(model.id)).toHaveLength(1);
+  });
+
+  it('exhausts retries and surfaces the generic conflict error when SQLITE_BUSY never clears', async () => {
+    let calls = 0;
+    const alwaysBusyApplier: EntityApplier = {
+      ...accountApplier,
+      insert: async () => {
+        calls += 1;
+        throw sqliteBusy();
+      },
+    };
+    const busyRegistry: ApplierRegistry = { [ACCOUNT_ENTITY_TAG]: alwaysBusyApplier };
+    const model = newAccount();
+
+    const result = await runEffects(db, busyRegistry, insertOne(model));
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
+    expect(calls).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
+    expect(await readIds(model.id)).toHaveLength(0); // every attempt rolled back — never committed
   });
 });
 

@@ -6,7 +6,7 @@ import type { AppError } from '../../common/errors.js';
 import { conflict } from '../../models/error.js';
 import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import type { Db } from './driver.js';
-import { isForeignKeyConstraintViolation } from './sqliteErrors.js';
+import { isForeignKeyConstraintViolation, isSqliteBusy } from './sqliteErrors.js';
 
 // A version conflict re-invokes `flow` for a fresh read → fresh decision
 // (docs/functional-core-imperative-shell.md rule 4), up to this many attempts total. Exported so
@@ -182,8 +182,8 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
 };
 
 /** Applies the whole batch in one transaction, returning each outcome positionally parallel to
- *  `persist` — empty on a version conflict, since the transaction already rolled back. An empty
- *  batch (a dry-run preview flow) skips `db.transaction` entirely. */
+ *  `persist` — empty on a version conflict or a busy physical lock, since the transaction already
+ *  rolled back. An empty batch (a dry-run preview flow) skips `db.transaction` entirely. */
 const applyBatch = async (
   db: Db,
   registry: ApplierRegistry,
@@ -198,7 +198,10 @@ const applyBatch = async (
     });
     return { applied: true, outcomes };
   } catch (cause) {
-    if (cause instanceof VersionConflict) return { applied: false, outcomes: [] };
+    // SQLITE_BUSY (busy_timeout exhausted, or a WAL checkpoint-starvation snapshot conflict) is
+    // physical contention, not a logical version conflict — but the recovery is identical: roll
+    // back and re-invoke the flow for a fresh read (ADR-024).
+    if (cause instanceof VersionConflict || isSqliteBusy(cause)) return { applied: false, outcomes: [] };
     throw cause;
   }
 };
@@ -224,9 +227,9 @@ const attempt = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>, attemptsLe
  * `persist` batch it returns in one `db.transaction` by dispatching each `Persistable` to the
  * `registry`'s applier for its entity, and returns `flow`'s `response`. Entity-agnostic — only the
  * `registry` (built once at the composition root) knows which entity is which. A version conflict
- * rolls back the whole batch and re-invokes `flow`, up to `MAX_RUN_EFFECTS_ATTEMPTS` times, before
- * surfacing the generic `conflict` error. This is the single-atomic-unit mode — the "unit of
- * work" mode.
+ * or a busy physical lock (`SQLITE_BUSY`, ADR-024) rolls back the whole batch and re-invokes
+ * `flow`, up to `MAX_RUN_EFFECTS_ATTEMPTS` times, before surfacing the generic `conflict` error.
+ * This is the single-atomic-unit mode — the "unit of work" mode.
  */
 export const runEffects = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>): ResultAsync<T, AppError> =>
   attempt(db, registry, flow, MAX_RUN_EFFECTS_ATTEMPTS);
