@@ -52,10 +52,21 @@ const resolveEncryptionKey = (config: Config): string => {
 
 /** Best-effort: WAL is verified to work with libSQL's encryption-at-rest in this project's target
  *  environments, but a build lacking WAL support degrades to busy_timeout + retry alone (ADR-024
- *  Consequences) rather than failing the whole DB open. */
-const enableWal = async (client: ReturnType<typeof createClient>): Promise<void> => {
+ *  Consequences) rather than failing the whole DB open. `PRAGMA journal_mode = WAL` does not throw
+ *  when WAL can't be applied — SQLite silently keeps the prior mode and reports it back in the
+ *  result row — so the applied mode is checked explicitly, not just the thrown-exception path.
+ *  Exported so the silent-fallback path (unreachable through `openDatabase`'s always-file-backed
+ *  `DB_PATH`) has direct unit coverage against a real in-memory client. */
+export const enableWal = async (client: ReturnType<typeof createClient>): Promise<void> => {
   try {
-    await client.execute(`PRAGMA journal_mode = ${JOURNAL_MODE_WAL}`);
+    const result = await client.execute(`PRAGMA journal_mode = ${JOURNAL_MODE_WAL}`);
+    const appliedMode = result.rows[0]?.journal_mode;
+    if (typeof appliedMode !== 'string' || appliedMode.toUpperCase() !== JOURNAL_MODE_WAL) {
+      console.warn(
+        `fintrack: WAL journal mode was not applied (sqlite reports "${String(appliedMode)}"); ` +
+          'continuing with busy_timeout + retry only.',
+      );
+    }
   } catch (cause) {
     // Not necessarily a WAL-support gap — could equally be a wrong key or a corrupt file, both of
     // which still surface their own real error on the next query. Worded neutrally rather than
