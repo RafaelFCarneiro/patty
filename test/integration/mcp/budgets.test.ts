@@ -1,5 +1,6 @@
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { callTool, callToolError, ensure, makeClient } from './helpers.js';
+import { callTool, callToolError, deleteTransactions, ensure, makeClient } from './helpers.js';
 
 type Budget = {
   id?: string;
@@ -10,9 +11,26 @@ type Budget = {
   period?: string;
 };
 
+type BudgetStatusLine = {
+  id?: string;
+  subCategory?: string;
+  currency?: string;
+  limit?: number;
+  spent?: number;
+  remaining?: number;
+  pct?: number;
+};
+
+type BudgetStatusGroup = { category?: string; lines?: BudgetStatusLine[] };
+type BudgetStatus = { period?: { month?: number; year?: number }; categories?: BudgetStatusGroup[] };
+
 const createdBudgetIds: string[] = [];
+const createdTxIds: string[] = [];
 
 afterEach(async () => {
+  await deleteTransactions([...createdTxIds]);
+  createdTxIds.length = 0;
+
   if (!createdBudgetIds.length) return;
   const { client, transport } = makeClient();
   try {
@@ -29,6 +47,22 @@ afterEach(async () => {
     createdBudgetIds.length = 0;
   }
 });
+
+/** Today's month/year — every fixture transaction below is dated today (the default), so a
+ *  `get_budget_status` call for this period always sees them without passing explicit dates. */
+const TODAY = new Date();
+const THIS_MONTH = { month: TODAY.getMonth() + 1, year: TODAY.getFullYear() };
+
+/** add_account_expense returns `{ transaction, created, classification }` — this unwraps to just
+ *  the id every fixture below needs, and registers it for the afterEach cleanup. */
+const addExpense = async (client: Client, args: Record<string, unknown>): Promise<string> => {
+  const result = (await callTool(client, { name: 'add_account_expense', args })) as {
+    transaction?: { id?: string };
+  };
+  ensure(result.transaction?.id, 'add_account_expense: transaction id missing');
+  createdTxIds.push(result.transaction.id);
+  return result.transaction.id;
+};
 
 describe('MCP integration > budgets', () => {
   it('create_budget on a top-level category returns the resolved category and limit', async () => {
@@ -247,6 +281,188 @@ describe('MCP integration > budgets', () => {
         args: { id: 'budget-does-not-exist' },
       })) as { deleted?: boolean };
       expect(result.deleted).toBe(false);
+    } finally {
+      await transport.close();
+    }
+  });
+});
+
+describe('MCP integration > get_budget_status', () => {
+  const findGroup = (status: BudgetStatus, category: string): BudgetStatusGroup | undefined =>
+    status.categories?.find((g) => g.category === category);
+
+  it('a category budget rolls up sub-category spend; a sub-category budget measures only its own', async () => {
+    const stamp = Date.now();
+    const categoryName = `Status-Cat-${stamp}`;
+    const subCategoryName = `Status-Sub-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const category = (await callTool(client, { name: 'create_category', args: { name: categoryName } })) as {
+        id?: string;
+      };
+      ensure(category.id, 'category id missing');
+      await callTool(client, { name: 'create_sub_category', args: { name: subCategoryName, parentId: category.id } });
+
+      const categoryBudget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: categoryName, currency: 'BRL', limit: 1000 },
+      })) as Budget;
+      ensure(categoryBudget.id, 'category budget id missing');
+      createdBudgetIds.push(categoryBudget.id);
+
+      const subBudget = (await callTool(client, {
+        name: 'create_budget',
+        args: { subCategory: subCategoryName, currency: 'BRL', limit: 200 },
+      })) as Budget;
+      ensure(subBudget.id, 'sub-category budget id missing');
+      createdBudgetIds.push(subBudget.id);
+
+      await addExpense(client, {
+        description: 'direct category spend',
+        amount: 300,
+        category: categoryName,
+        currency: 'BRL',
+        idempotencyKey: `status-direct-${stamp}`,
+      });
+
+      await addExpense(client, {
+        description: 'sub-category spend',
+        amount: 150,
+        subCategory: subCategoryName,
+        currency: 'BRL',
+        idempotencyKey: `status-sub-${stamp}`,
+      });
+
+      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const group = findGroup(status, categoryName);
+      ensure(group, `no status group for ${categoryName}`);
+
+      const categoryLine = group.lines?.find((l) => l.subCategory === undefined);
+      const subLine = group.lines?.find((l) => l.subCategory === subCategoryName);
+      expect(categoryLine).toMatchObject({ spent: 450, remaining: 550 }); // rollup: 300 + 150
+      expect(subLine).toMatchObject({ spent: 150, remaining: 50 }); // its own spend only, not 450
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('isolates spend per currency — a BRL budget ignores a USD expense in the same category', async () => {
+    const stamp = Date.now();
+    const categoryName = `Status-Currency-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+
+      const budget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: categoryName, currency: 'BRL', limit: 500 },
+      })) as Budget;
+      ensure(budget.id, 'budget id missing');
+      createdBudgetIds.push(budget.id);
+
+      await addExpense(client, {
+        description: 'USD spend, should not count toward the BRL budget',
+        amount: 999,
+        category: categoryName,
+        currency: 'USD',
+        idempotencyKey: `status-usd-${stamp}`,
+      });
+
+      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const group = findGroup(status, categoryName);
+      ensure(group, `no status group for ${categoryName}`);
+      expect(group.lines?.[0]).toMatchObject({ currency: 'BRL', spent: 0, remaining: 500 });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('excludes pending transactions — only effective spend counts', async () => {
+    const stamp = Date.now();
+    const categoryName = `Status-Pending-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+
+      const budget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: categoryName, currency: 'BRL', limit: 500 },
+      })) as Budget;
+      ensure(budget.id, 'budget id missing');
+      createdBudgetIds.push(budget.id);
+
+      await addExpense(client, {
+        description: 'pending spend, should not count',
+        amount: 400,
+        category: categoryName,
+        currency: 'BRL',
+        status: 'pending',
+        idempotencyKey: `status-pending-${stamp}`,
+      });
+
+      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const group = findGroup(status, categoryName);
+      ensure(group, `no status group for ${categoryName}`);
+      expect(group.lines?.[0]).toMatchObject({ spent: 0, remaining: 500 });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('reports over-budget as negative remaining and pct > 1, never an error', async () => {
+    const stamp = Date.now();
+    const categoryName = `Status-Over-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+
+      const budget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: categoryName, currency: 'BRL', limit: 100 },
+      })) as Budget;
+      ensure(budget.id, 'budget id missing');
+      createdBudgetIds.push(budget.id);
+
+      await addExpense(client, {
+        description: 'over budget spend',
+        amount: 250,
+        category: categoryName,
+        currency: 'BRL',
+        idempotencyKey: `status-over-${stamp}`,
+      });
+
+      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const group = findGroup(status, categoryName);
+      ensure(group, `no status group for ${categoryName}`);
+      expect(group.lines?.[0]).toMatchObject({ spent: 250, remaining: -150, pct: 2.5 });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('reports spent: 0 for a budget with no matching transactions this period', async () => {
+    const stamp = Date.now();
+    const categoryName = `Status-Empty-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+
+      const budget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: categoryName, currency: 'BRL', limit: 500 },
+      })) as Budget;
+      ensure(budget.id, 'budget id missing');
+      createdBudgetIds.push(budget.id);
+
+      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const group = findGroup(status, categoryName);
+      ensure(group, `no status group for ${categoryName}`);
+      expect(group.lines?.[0]).toMatchObject({ spent: 0, remaining: 500, pct: 0 });
     } finally {
       await transport.close();
     }

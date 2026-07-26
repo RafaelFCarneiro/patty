@@ -75,6 +75,37 @@ export const UpdateBudgetSchema = z.object({
 });
 export type UpdateBudget = z.infer<typeof UpdateBudgetSchema>;
 
+/** A budget with its measured spend for one period (`get_budget_status`, Feature Design 015 phase
+ *  2) — the flat, ungrouped shape a repo row adapts to, before `logic/budget.ts`'s
+ *  `groupStatusByCategory` reshapes it into the grouped-by-category response. */
+export const BudgetStatusEntrySchema = BudgetViewSchema.extend({
+  spent: z
+    .number()
+    .describe('Sum of effective, non-transfer, same-currency spend against this target in the period'),
+});
+export type BudgetStatusEntry = z.infer<typeof BudgetStatusEntrySchema>;
+
+/** One budget's status within its category group — `category` is lifted to the group itself
+ *  (`BudgetStatusGroupSchema`), so a line only needs `subCategory` to distinguish a sub-category's
+ *  own line from its parent category's. */
+export const BudgetStatusLineSchema = BudgetStatusEntrySchema.omit({ category: true }).extend({
+  remaining: z.number().describe('limit - spent; negative when over budget'),
+  pct: z.number().describe('spent / limit; exceeds 1 when over budget'),
+});
+export type BudgetStatusLine = z.infer<typeof BudgetStatusLineSchema>;
+
+/** One coherent unit per category (Feature Design 015's "no cross-currency total" decision): every
+ *  budget targeting this category or one of its sub-categories, as per-currency/per-target lines —
+ *  never summed across currencies or across category/sub-category. */
+export const BudgetStatusGroupSchema = z.object({
+  category: z.string().min(1).describe('Top-level category name'),
+  lines: z
+    .array(BudgetStatusLineSchema)
+    .min(1)
+    .describe("This category's own budget (if any) and/or each of its sub-categories' own budgets"),
+});
+export type BudgetStatusGroup = z.infer<typeof BudgetStatusGroupSchema>;
+
 export type BudgetError =
   | NotFound<'budget'>
   | ValidationError

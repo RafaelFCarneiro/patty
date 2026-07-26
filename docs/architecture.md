@@ -276,20 +276,30 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     via `type === 'transfer'`, ADR-002); a plain status-only confirm of one is still allowed, since it makes no
     date claim of its own.
 21. **Budgets are keyed by (target, currency, period) — no cross-currency total, no rollover**
-    (Feature Design 015 phase 1, the first entity built entirely on the FC/IS write path from
-    scratch rather than migrated). A budget's `category_id` is the budgeted node's own id — a
-    top-level category or sub-category, both rows in `categories` — so `UNIQUE(category_id,
-    currency, period)` needs no nullable discriminator; measurement can still tell top from sub via
-    the target's own `parent_id`. Only an expense-eligible category may be budgeted (`kind` is
+    (Feature Design 015, the first entity built entirely on the FC/IS write path from scratch
+    rather than migrated). A budget's `category_id` is the budgeted node's own id — a top-level
+    category or sub-category, both rows in `categories` — so `UNIQUE(category_id, currency,
+    period)` needs no nullable discriminator; measurement can still tell top from sub via the
+    target's own `parent_id`. Only an expense-eligible category may be budgeted (`kind` is
     `expense` or `both`; a pure `income`-kind target is rejected, `budgetErrors.notExpenseCategory`)
     — a budget caps spending. Each period is measured independently; there is no unused-budget
-    carryover. `create_budget`/`update_budget`/`delete_budget`/`list_budgets` manage the limits
-    themselves; the unified spent-vs-limit measurement (`get_budget_status`, effective-only,
-    no-transfer, same-currency, category rolls up its sub-categories) is Feature Design 015 phase 2.
+    carryover. `create_budget`/`update_budget`/`delete_budget`/`list_budgets` (phase 1) manage the
+    limits themselves. **The measurement invariant (phase 2, `get_budget_status(month, year)`):**
+    for a budget targeting node `T`, `spent` sums `amount` over transactions that are `status =
+    'effective'`, `type != 'transfer'`, `currency = budget.currency`, dated in the month, and
+    either `category_id = T` (`T` a top-level category — this is what rolls up sub-category spend
+    for free, since a sub-category transaction's `category_id` is always its parent's) or
+    `subcategory_id = T` (`T` a sub-category — its own spend alone). The same reused invariants
+    `aggregate_spending`/`get_spending_summary` already filter on, not a bespoke predicate — so a
+    sub-category transaction counts toward both its own budget and its parent's, when both exist.
+    `remaining` (limit − spent) and `pct` (spent / limit) can go negative / exceed 1 — over-budget
+    is reported, never an error. The response groups every budget by its top-level category name
+    (per-currency and per-sub-category lines read as one coherent unit; still no cross-currency
+    total — that needs FX, the deferred PLAN open question).
 
 ## Tool surface
 
-49 MCP tools (contract: `docs/mcp-tools.md`), most mirrored as REST routes, both thin over the same controllers — `create_budget`/`update_budget`/`delete_budget`/`list_budgets` (Feature Design 015 phase 1) are MCP-only for now, no REST mirror yet. Client connections: `docs/mcp-clients.md`.
+50 MCP tools (contract: `docs/mcp-tools.md`), most mirrored as REST routes, both thin over the same controllers — the 5 budget tools (Feature Design 015) are MCP-only for now, no REST mirror yet. Client connections: `docs/mcp-clients.md`.
 
 **Transport:** controlled by `MCP_TRANSPORT` (zod enum, `config.ts`). Default is **`stdio`** — the client spawns the process; no port, no Fastify. Set `MCP_TRANSPORT=http` to start the Fastify server (REST + streamable HTTP MCP on `PORT`). Both transports connect the same `buildMcpServer(deps, version)` core; no domain code moves. (ADR-007)
 

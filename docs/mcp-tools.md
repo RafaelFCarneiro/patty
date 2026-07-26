@@ -299,17 +299,16 @@ Free-form labels attached to transactions (e.g. "work", "travel", "reembolsável
 
 Attach tags at write time via the `tags` array on `add_card_purchase` / `add_account_expense` / `add_account_income` (statement-import items omit `tags` — bulk import classifies automatically).
 
-## create_budget / update_budget / delete_budget / list_budgets
+## create_budget / update_budget / delete_budget / list_budgets / get_budget_status
 
-Feature Design 015 phase 1: a recurring monthly spending limit on a category or sub-category, in one currency. No
-measurement yet — `get_budget_status` (spend-vs-limit) lands in phase 2.
+Feature Design 015: a recurring monthly spending limit on a category or sub-category, in one currency.
 
 - `create_budget`: exactly one of `category`/`subCategory` (required — resolved by name like every other
   category reference), `currency`, `limit` (positive), `period` (optional, defaults to `monthly` — the only
-  period for now). A **category** budget rolls up its sub-categories' spend (the envelope behavior, once phase 2
-  lands): sub-category transactions carry the parent's `category_id`. A **sub-category** budget measures only
-  its own spend, and also counts toward its parent's budget if one exists. Returns `{ id, category, subCategory?,
-  currency, limit, period }` — `subCategory` is present only when the budget targets a sub-category.
+  period for now). A **category** budget rolls up its sub-categories' spend (the envelope behavior): sub-category
+  transactions carry the parent's `category_id`. A **sub-category** budget measures only its own spend, and also
+  counts toward its parent's budget if one exists. Returns `{ id, category, subCategory?, currency, limit,
+  period }` — `subCategory` is present only when the budget targets a sub-category.
   Errors: `unknown_category`/`ambiguous_category`/`unknown_sub_category`/`ambiguous_sub_category` (name
   resolution), `validation` (neither or both of `category`/`subCategory` given), `not_expense_category` (an
   income-kind category can't be budgeted — a budget caps spending), `duplicate_budget` (a budget already exists
@@ -321,8 +320,16 @@ measurement yet — `get_budget_status` (spend-vs-limit) lands in phase 2.
   `{ deleted: false }` (same shape as `delete_tag`).
 - `list_budgets`: no input — returns all budgets (the limits themselves, no spend) as `{ id, category,
   subCategory?, currency, limit, period }`.
+- `get_budget_status`: `month` (1–12), `year` — spend-vs-limit for every budget in that month, reusing the same
+  effective-only / non-transfer / same-currency invariants `aggregate_spending`/`get_spending_summary` filter on
+  (not a bespoke predicate). Returns `{ period: { month, year }, categories: [{ category, lines: [{ id,
+  subCategory?, currency, limit, period, spent, remaining, pct }] }] }` — grouped by top-level category name, so
+  a category's own budget and each of its sub-categories' own budgets read as one coherent unit; per-currency
+  lines are never combined (no cross-currency total — that needs FX, the deferred PLAN open question).
+  `remaining` (limit − spent) and `pct` (spent / limit) can go negative / exceed 1 when over budget — over-budget
+  is reported, never an error. A month with no matching transactions reports `spent: 0` for every budget.
 
-No REST mirror yet (MCP-only for phase 1).
+No REST mirror yet (MCP-only).
 
 ## save_dashboard / list_dashboards / delete_dashboard / rename_dashboard
 

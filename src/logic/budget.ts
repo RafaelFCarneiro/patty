@@ -1,5 +1,13 @@
+import * as R from 'remeda';
 import { CategoryKind } from '../models/category.js';
-import type { Budget, BudgetTarget, BudgetView } from '../models/budget.js';
+import type {
+  Budget,
+  BudgetStatusEntry,
+  BudgetStatusGroup,
+  BudgetStatusLine,
+  BudgetTarget,
+  BudgetView,
+} from '../models/budget.js';
 
 /** A category-or-sub-category-by-name selection, budget's own minimal shape (unlike transactions'
  *  `CategoryFields`, a target is required — never both unset). */
@@ -35,3 +43,31 @@ export const toView = (
   category: target.category,
   subCategory: target.subCategory,
 });
+
+/** Derives `remaining`/`pct` from a measured entry — pure arithmetic, no rounding called for by
+ *  Feature Design 015 (over-budget is reported as-is, never clamped or flagged as an error). */
+const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => ({
+  id: entry.id,
+  currency: entry.currency,
+  limit: entry.limit,
+  period: entry.period,
+  subCategory: entry.subCategory,
+  spent: entry.spent,
+  remaining: entry.limit - entry.spent,
+  pct: entry.spent / entry.limit,
+});
+
+/** Groups flat per-budget entries into one unit per category (Feature Design 015: "no
+ *  cross-currency total" — a category's per-currency and per-sub-category lines read as one
+ *  coherent unit, never summed together). Mirrors `logic/summary.ts`'s `summarize` /
+ *  `logic/aggregate.ts`'s `shapeAggregateResult` grouping idiom. */
+export const groupStatusByCategory = (entries: readonly BudgetStatusEntry[]): BudgetStatusGroup[] =>
+  R.pipe(
+    entries,
+    R.groupBy((e) => e.category),
+    R.entries(),
+    R.map(([category, categoryEntries]): BudgetStatusGroup => ({
+      category,
+      lines: R.map(categoryEntries, toStatusLine),
+    })),
+  );
