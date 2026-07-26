@@ -238,6 +238,17 @@ describe('updateBudget — functional core', () => {
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'unknown_budget', query: 'nonexistent', candidates: [] });
   });
+
+  it('reports unknown_category if the stored categoryId matches no category or sub-category', async () => {
+    // Can't happen under the FK-enforced invariant (a stored categoryId always references a live
+    // node) — this only exercises describeCategoryTarget's own mapped-error fallback.
+    const deps = makeDeps({
+      budgets: { findById: async () => budgetEntity({ categoryId: 'cat-ghost' }) } as unknown as Deps['budgets'],
+    });
+    const result = await updateBudget(deps, { id: 'budget-existing', limit: 700 });
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'unknown_category', query: 'cat-ghost', candidates: [] });
+  });
 });
 
 describe('deleteBudget — functional core', () => {

@@ -50,20 +50,27 @@ const resolveBudgetTarget = (
 
 /** `findById` only carries the budgeted node's id (`categoryId`), never its display name —
  *  `updateBudget`'s response still needs one, so this re-derives it the same way `createBudget`'s
- *  in-memory `resolveBudgetTarget` result already has it, without re-resolving by name. */
-const describeCategoryTarget = async (
+ *  in-memory `resolveBudgetTarget` result already has it, without re-resolving by name. A miss
+ *  (the id matches neither a category nor a sub-category) can't happen under the FK-enforced
+ *  invariant that a stored `categoryId` always references a live node — but the failure is
+ *  nameable, so it's mapped to the same `unknown_category` `AppError` every other category lookup
+ *  raises, not an unstructured throw. */
+const describeCategoryTarget = (
   deps: Deps,
   categoryId: string,
-): Promise<Pick<BudgetTarget, 'category' | 'subCategory'>> => {
-  const top = await deps.categories.list();
-  const category = R.find(top, (c) => c.id === categoryId);
-  if (category) return { category: category.name };
+): ResultAsync<Pick<BudgetTarget, 'category' | 'subCategory'>, AppError> =>
+  safeTry(async function* () {
+    const categories = await deps.categories.list();
+    const category = R.find(categories, (c) => c.id === categoryId);
+    if (category) return ok({ category: category.name });
 
-  const subCategories = await deps.subCategories.list();
-  const subCategory = R.find(subCategories, (s) => s.id === categoryId);
-  if (!subCategory) throw new Error(`describeCategoryTarget: no category or sub-category found for id "${categoryId}"`);
-  return { category: subCategory.parentName, subCategory: subCategory.name };
-};
+    const subCategories = await deps.subCategories.list();
+    const subCategory = yield* okOr(
+      R.find(subCategories, (s) => s.id === categoryId),
+      notFound('category', categoryId, []),
+    );
+    return ok({ category: subCategory.parentName, subCategory: subCategory.name });
+  });
 
 export const createBudget = (deps: Deps, input: CreateBudget): ResultAsync<FlowOutcome<BudgetView>, AppError> =>
   safeTry(async function* () {
@@ -102,7 +109,7 @@ export const updateBudget = (deps: Deps, input: UpdateBudget): ResultAsync<FlowO
       ? []
       : [persistence.update({ entity: BUDGET_ENTITY_TAG, model: entity })];
 
-    const target = await describeCategoryTarget(deps, existing.categoryId);
+    const target = yield* describeCategoryTarget(deps, existing.categoryId);
     return ok({ persist, response: toView(entity, target) });
   });
 
