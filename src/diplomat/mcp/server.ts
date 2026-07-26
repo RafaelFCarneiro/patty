@@ -817,7 +817,8 @@ export const buildMcpServer = (
         "sub-categories' spend (the envelope behavior); a sub-category budget measures only its own spend, " +
         "and also counts toward its parent's budget if one exists. Rejected for an income-kind category " +
         '(a budget caps spending). Rejected as a duplicate if this exact (target, currency, period) already ' +
-        'has a budget — use update_budget instead. Use get_budget_status to see spend-vs-limit.',
+        'has a budget — use update_budget instead. Spend-vs-limit measurement (get_budget_status) is not ' +
+        'available yet — a future tool.',
       inputSchema: CreateBudgetSchema.shape,
     },
     async (args) => {
@@ -857,7 +858,8 @@ export const buildMcpServer = (
     {
       title: 'List budgets',
       description:
-        'List all budgets (the limits themselves, no spend) — use get_budget_status for spend-vs-limit.',
+        'List all budgets (the limits themselves, no spend). Spend-vs-limit measurement (get_budget_status) ' +
+        'is not available yet — a future tool.',
       inputSchema: {},
     },
     async () => json(await listBudgets(deps)),
