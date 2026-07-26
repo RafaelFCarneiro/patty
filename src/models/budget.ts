@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { CategoryKind } from './category.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
 import type { NotFound, ValidationError } from './error.js';
@@ -40,6 +41,11 @@ export const BudgetViewSchema = BudgetSchema.omit({ categoryId: true }).extend({
     .describe('Sub-category name, present only when this budget targets a sub-category rather than its parent'),
 });
 export type BudgetView = z.infer<typeof BudgetViewSchema>;
+
+/** A budgeted node resolved by name (`controllers/budgets.ts`'s `resolveBudgetTarget`) or
+ *  re-derived from an existing entity's `categoryId` (`describeCategoryTarget`) — carries just
+ *  enough to guard eligibility and build a `BudgetView`, never persisted itself. */
+export type BudgetTarget = { id: string; category: string; subCategory?: string; kind: CategoryKind };
 
 // `.describe()` is domain information. Defaults split by intent: integrity defaults live here
 // (`period` is required — a real value the domain always needs); quality-of-life convenience

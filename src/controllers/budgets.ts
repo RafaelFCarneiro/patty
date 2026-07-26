@@ -2,14 +2,14 @@ import { errAsync, ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
-import { hasCategory, hasExactlyOneTarget, hasSubCategory, isExpenseEligible } from '../logic/budget.js';
+import { hasCategory, hasExactlyOneTarget, hasSubCategory, isExpenseEligible, toView } from '../logic/budget.js';
 import * as persistence from '../logic/persistence.js';
-import type { CategoryKind } from '../models/category.js';
 import {
   budgetErrors,
   BUDGET_ENTITY_TAG,
   type Budget,
   type BudgetEntity,
+  type BudgetTarget,
   type BudgetView,
   type CreateBudget,
   type UpdateBudget,
@@ -19,8 +19,6 @@ import type { FlowOutcome } from '../models/persistable.js';
 import type { Deps } from './deps.js';
 import { resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
 
-type ResolvedTarget = { id: string; category: string; subCategory?: string; kind: CategoryKind };
-
 /** Resolves the budgeted node by name — a top-level category or sub-category — reusing the same
  *  `resolveCategoryRef`/`resolveSubCategoryRef` transactions resolve through (`controllers/
  *  resolve.ts`), dispatched the same way `resolveCategorySelection` (`controllers/transaction/
@@ -28,7 +26,7 @@ type ResolvedTarget = { id: string; category: string; subCategory?: string; kind
 const resolveBudgetTarget = (
   deps: Deps,
   input: { category?: string; subCategory?: string },
-): ResultAsync<ResolvedTarget, AppError> =>
+): ResultAsync<BudgetTarget, AppError> =>
   R.conditional(
     input,
     [
@@ -47,7 +45,7 @@ const resolveBudgetTarget = (
     ],
     // Unreachable once `hasExactlyOneTarget` has guarded the caller — kept so `R.conditional` stays
     // exhaustive rather than throwing on a missing match.
-    () => errAsync<ResolvedTarget, AppError>(budgetErrors.targetRequired),
+    () => errAsync<BudgetTarget, AppError>(budgetErrors.targetRequired),
   );
 
 /** `findById` only carries the budgeted node's id (`categoryId`), never its display name —
@@ -56,7 +54,7 @@ const resolveBudgetTarget = (
 const describeCategoryTarget = async (
   deps: Deps,
   categoryId: string,
-): Promise<{ category: string; subCategory?: string }> => {
+): Promise<Pick<BudgetTarget, 'category' | 'subCategory'>> => {
   const top = await deps.categories.list();
   const category = R.find(top, (c) => c.id === categoryId);
   if (category) return { category: category.name };
@@ -66,15 +64,6 @@ const describeCategoryTarget = async (
   if (!subCategory) throw new Error(`describeCategoryTarget: no category or sub-category found for id "${categoryId}"`);
   return { category: subCategory.parentName, subCategory: subCategory.name };
 };
-
-const toView = (budget: Pick<Budget, 'id' | 'currency' | 'limit' | 'period'>, target: { category: string; subCategory?: string }): BudgetView => ({
-  id: budget.id,
-  currency: budget.currency,
-  limit: budget.limit,
-  period: budget.period,
-  category: target.category,
-  subCategory: target.subCategory,
-});
 
 export const createBudget = (deps: Deps, input: CreateBudget): ResultAsync<FlowOutcome<BudgetView>, AppError> =>
   safeTry(async function* () {

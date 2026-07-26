@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { hasExactlyOneTarget, isExpenseEligible } from '../../../src/logic/budget.js';
+import { hasExactlyOneTarget, isExpenseEligible, toView } from '../../../src/logic/budget.js';
 import { CategoryKind } from '../../../src/models/category.js';
+import { BudgetPeriod, type Budget } from '../../../src/models/budget.js';
+import { CurrencyCode } from '../../../src/models/money.js';
 
 describe('hasExactlyOneTarget', () => {
   it('is true when only category is given', () => {
@@ -31,5 +33,37 @@ describe('isExpenseEligible', () => {
 
   it('rejects a pure income-kind category', () => {
     expect(isExpenseEligible(CategoryKind.enum.income)).toBe(false);
+  });
+});
+
+describe('toView', () => {
+  const budget: Budget = {
+    id: 'budget-1',
+    categoryId: 'cat-food',
+    currency: CurrencyCode.enum.BRL,
+    limit: 500,
+    period: BudgetPeriod.enum.monthly,
+  };
+
+  it('combines the budget with a top-level category target, omitting subCategory', () => {
+    expect(toView(budget, { category: 'Food' })).toEqual({
+      id: 'budget-1',
+      currency: CurrencyCode.enum.BRL,
+      limit: 500,
+      period: BudgetPeriod.enum.monthly,
+      category: 'Food',
+      subCategory: undefined,
+    });
+  });
+
+  it('combines the budget with a sub-category target', () => {
+    expect(toView(budget, { category: 'Food', subCategory: 'Restaurants' })).toEqual({
+      id: 'budget-1',
+      currency: CurrencyCode.enum.BRL,
+      limit: 500,
+      period: BudgetPeriod.enum.monthly,
+      category: 'Food',
+      subCategory: 'Restaurants',
+    });
   });
 });
