@@ -29,6 +29,7 @@ const truncateJournalThrough0011 = (folder: string, dropLast: boolean): void => 
   const journalPath = join(folder, 'meta', '_journal.json');
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: Array<{ tag: string }> };
   const cutoff = journal.entries.findIndex((entry) => entry.tag === MIGRATION_0011_TAG);
+  if (cutoff === -1) throw new Error(`${MIGRATION_0011_TAG} not found in ${journalPath} — has it been renamed?`);
   journal.entries = journal.entries.slice(0, dropLast ? cutoff : cutoff + 1);
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 };
