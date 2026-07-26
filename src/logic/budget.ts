@@ -29,9 +29,6 @@ export const hasExactlyOneTarget = (input: BudgetTargetFields): boolean => hasCa
  *  transactions; only a pure `income`-kind category is rejected. */
 export const isExpenseEligible = (kind: CategoryKind): boolean => kind !== CategoryKind.enum.income;
 
-/** Combines a budget with its resolved target's display names into the response shape — pure data
- *  reshaping, whether the target was just resolved by name (`createBudget`) or re-derived from an
- *  existing entity (`updateBudget`'s `describeCategoryTarget`). */
 export const toView = (
   budget: Pick<Budget, 'id' | 'currency' | 'limit' | 'period'>,
   target: Pick<BudgetTarget, 'category' | 'subCategory'>,
@@ -44,8 +41,7 @@ export const toView = (
   subCategory: target.subCategory,
 });
 
-/** Derives `remaining`/`pct` from a measured entry — pure arithmetic, no rounding called for by
- *  Feature Design 015 (over-budget is reported as-is, never clamped or flagged as an error). */
+/** Over-budget is reported as-is — `remaining`/`pct` are never clamped or flagged as an error. */
 const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => ({
   id: entry.id,
   currency: entry.currency,
@@ -57,10 +53,8 @@ const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => ({
   pct: entry.spent / entry.limit,
 });
 
-/** Groups flat per-budget entries into one unit per category (Feature Design 015: "no
- *  cross-currency total" — a category's per-currency and per-sub-category lines read as one
- *  coherent unit, never summed together). Mirrors `logic/summary.ts`'s `summarize` /
- *  `logic/aggregate.ts`'s `shapeAggregateResult` grouping idiom. */
+/** Per-currency and per-sub-category lines read as one coherent unit, never summed together (no
+ *  cross-currency total). Mirrors `logic/summary.ts`'s `summarize` grouping idiom. */
 export const groupStatusByCategory = (entries: readonly BudgetStatusEntry[]): BudgetStatusGroup[] =>
   R.pipe(
     entries,

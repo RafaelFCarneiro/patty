@@ -29,10 +29,8 @@ import type { BudgetStatusOut } from '../wire/out/budgets.js';
 import type { Deps } from './deps.js';
 import { resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
 
-/** Resolves the budgeted node by name — a top-level category or sub-category — reusing the same
- *  `resolveCategoryRef`/`resolveSubCategoryRef` transactions resolve through (`controllers/
- *  resolve.ts`), dispatched the same way `resolveCategorySelection` (`controllers/transaction/
- *  core.ts`) dispatches, but always required: budgets have no "leave unset" meaning. */
+/** Resolves the budgeted node by name — reuses the same `resolveCategoryRef`/`resolveSubCategoryRef`
+ *  transactions resolve through, but always required: budgets have no "leave unset" meaning. */
 const resolveBudgetTarget = (
   deps: Deps,
   input: { category?: string; subCategory?: string },
@@ -136,8 +134,8 @@ export const deleteBudget = (deps: Deps, id: string): ResultAsync<FlowOutcome<{ 
 
 export const listBudgets = (deps: Deps): Promise<BudgetView[]> => deps.budgets.list();
 
-/** Read flow (Feature Design 015 phase 2) — no name resolution, no write, so a plain async
- *  function rather than `ResultAsync`, mirroring `getSpendingSummary` (`controllers/summary.ts`). */
+/** No name resolution, no write, so a plain async function rather than `ResultAsync`, mirroring
+ *  `getSpendingSummary` (`controllers/summary.ts`). */
 export const getBudgetStatus = async (deps: Deps, period: Period): Promise<BudgetStatusOut> => {
   const { from, to } = periodRange(period);
   const entries = await deps.budgets.status(from, to);

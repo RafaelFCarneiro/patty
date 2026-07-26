@@ -10,9 +10,8 @@ export type BudgetPeriod = z.infer<typeof BudgetPeriod>;
 // Entity tag for this aggregate's `Persistable`s.
 export const BUDGET_ENTITY_TAG = 'budget';
 
-/** Write-shape: the budgeted node's own id (a top-level category or sub-category — both rows in
- *  `categories`), never a display name. `limit` is this module's own vocabulary for the `limit_amount`
- *  column (adapters/budgets.ts maps the rename). */
+/** `limit` is this module's own vocabulary for the `limit_amount` column — `adapters/budgets.ts`
+ *  maps the rename. */
 export const BudgetSchema = z.object({
   id: Id.describe('Unique budget identifier'),
   categoryId: Id.describe("The budgeted node's id — a top-level category or sub-category (categories.id)"),
@@ -42,9 +41,7 @@ export const BudgetViewSchema = BudgetSchema.omit({ categoryId: true }).extend({
 });
 export type BudgetView = z.infer<typeof BudgetViewSchema>;
 
-/** A budgeted node resolved by name (`controllers/budgets.ts`'s `resolveBudgetTarget`) or
- *  re-derived from an existing entity's `categoryId` (`describeCategoryTarget`) — carries just
- *  enough to guard eligibility and build a `BudgetView`, never persisted itself. */
+/** A resolved budgeted node — enough to guard eligibility and build a `BudgetView`; never persisted itself. */
 export type BudgetTarget = { id: string; category: string; subCategory?: string; kind: CategoryKind };
 
 // `.describe()` is domain information. Defaults split by intent: integrity defaults live here
@@ -75,13 +72,12 @@ export const UpdateBudgetSchema = z.object({
 });
 export type UpdateBudget = z.infer<typeof UpdateBudgetSchema>;
 
-/** A budget with its measured spend for one period (`get_budget_status`, Feature Design 015 phase
- *  2) — the flat, ungrouped shape a repo row adapts to, before `logic/budget.ts`'s
- *  `groupStatusByCategory` reshapes it into the grouped-by-category response. */
+/** The flat, ungrouped shape a repo row adapts to — `logic/budget.ts`'s `groupStatusByCategory`
+ *  reshapes it into the grouped-by-category response. */
 export const BudgetStatusEntrySchema = BudgetViewSchema.extend({
   spent: z
     .number()
-    .describe('Sum of effective, non-transfer, same-currency spend against this target in the period'),
+    .describe('Sum of effective, expense-only, same-currency spend against this target in the period'),
 });
 export type BudgetStatusEntry = z.infer<typeof BudgetStatusEntrySchema>;
 
