@@ -6,6 +6,7 @@ import { bootstrap } from '../../src/diplomat/db/bootstrap.js';
 import { openDatabase } from '../../src/diplomat/db/driver.js';
 import { accountApplier, accountsRepo } from '../../src/diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from '../../src/diplomat/db/repos/bills.js';
+import { budgetApplier, budgetsRepo } from '../../src/diplomat/db/repos/budgets.js';
 import { categoriesRepo, categoryApplier } from '../../src/diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from '../../src/diplomat/db/repos/subCategories.js';
 import { creditCardApplier, creditCardsRepo } from '../../src/diplomat/db/repos/creditCards.js';
@@ -21,6 +22,7 @@ import { createLocaleResolver } from '../../src/diplomat/db/localeCache.js';
 import { McpTransport } from '../../src/config.js';
 import { ACCOUNT_ENTITY_TAG } from '../../src/models/account.js';
 import { BILL_ENTITY_TAG } from '../../src/models/bill.js';
+import { BUDGET_ENTITY_TAG } from '../../src/models/budget.js';
 import { CATEGORY_ENTITY_TAG } from '../../src/models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from '../../src/models/creditCard.js';
 import { DASHBOARD_ENTITY_TAG } from '../../src/models/dashboard.js';
@@ -61,6 +63,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
   const deps: Deps = {
     accounts: accountsRepo(db),
     bills: billsRepo(db),
+    budgets: budgetsRepo(db),
     categories: categoriesRepo(db),
     subCategories: subCategoriesRepo(db),
     creditCards: creditCardsRepo(db),
@@ -86,6 +89,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     [MERCHANT_ENTITY_TAG]: merchantApplier,
     [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
     [BILL_ENTITY_TAG]: billApplier,
+    [BUDGET_ENTITY_TAG]: budgetApplier,
     [TAG_ENTITY_TAG]: tagApplier,
     [CATEGORY_ENTITY_TAG]: categoryApplier,
     [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,

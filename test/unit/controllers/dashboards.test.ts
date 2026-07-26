@@ -23,6 +23,7 @@ const makeDeps = (overrides?: Partial<Deps['dashboards']>): Deps => ({
   },
   accounts: {} as Deps['accounts'],
   bills: {} as Deps['bills'],
+  budgets: {} as Deps['budgets'],
   categories: {} as Deps['categories'],
   subCategories: {} as Deps['subCategories'],
   creditCards: {} as Deps['creditCards'],

@@ -30,6 +30,7 @@ const subCategory = (overrides: Partial<SubCategory> = {}): SubCategory => ({
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   accounts: {} as Deps['accounts'],
   bills: {} as Deps['bills'],
+  budgets: {} as Deps['budgets'],
   categories: {
     list: async () => [category()],
     countReferences: async () => ({ transactions: 0, recurring: 0, subCategories: 0 }),

@@ -101,7 +101,14 @@ effect runner, appliers, outcomes, and the per-flow notes.
   wrapper again for `dashboards.name`'s `UNIQUE` (Feature Design 013 Phase 1 — `dashboards` used to key on `name`
   itself and hand-write its own `EntityApplier`; normalizing to a surrogate `id` PK with `name UNIQUE` let it
   join this family instead): a concurrent first save of a brand-new name mints two ids, both insert, and the
-  second's `SQLITE_CONSTRAINT_UNIQUE` retries the same way. (Rationale: ADR-021.)
+  second's `SQLITE_CONSTRAINT_UNIQUE` retries the same way. (Rationale: ADR-021.) `budgetApplier`
+  (`diplomat/db/repos/budgets.ts`, Feature Design 015 phase 1 — the first entity built entirely on the FC/IS write
+  path from scratch) joins the same family: `budgets` has the secondary `UNIQUE(category_id, currency, period)`
+  beyond `createBudget`'s own pre-check (`findByTarget`, which only guards the common case), so a concurrent
+  create of the same target races into a real `SQLITE_CONSTRAINT_UNIQUE` the id-scoped `onConflictDoNothing`
+  doesn't swallow; `budgetApplier` rethrows it as `VersionConflict` and the flow retries, the retry's own
+  `findByTarget` then returning `duplicate_budget`. `update`/`delete` stay plain — neither touches the
+  target/currency/period key.
 - **The `merchant` entity** — key-only, hand-written `merchantApplier` (insert-only, `onConflictDoNothing`).
   Every flow whose decision implies a merchant emits its own `MERCHANT_ENTITY_TAG` `Persistable` ahead of
   whatever references it, via `logic/merchant.ts`'s `withMerchant` (transaction inserts) and
@@ -167,6 +174,12 @@ effect runner, appliers, outcomes, and the per-flow notes.
   `VersionConflict` (the same treatment `insert` already had), and the retry's own pre-check is what turns
   that into a clean `duplicate_name` rather than an uncaught exception. A same-name rename is a no-op (empty
   `persist`), skipping the guard entirely — renaming something to what it's already called can't collide.
+- **Budgets** (`controllers/budgets.ts`, Feature Design 015 phase 1). `createBudget` resolves the target by name
+  (`resolveCategoryRef`/`resolveSubCategoryRef`, `controllers/resolve.ts` — the same resolvers transactions
+  resolve through), guards it is expense-eligible and not a duplicate `(category_id, currency, period)`, and
+  mints an `insert`. `updateBudget` is a version-guarded rewrite of `limit`/`period` (a `budgetsRepo.findById`
+  read); a patch that changes nothing is a no-op (empty `persist`, same idiom as `updateAccount`). `deleteBudget`
+  is idempotent-by-design like `deleteTag` — a missing id returns `{ deleted: false }` on an empty batch.
 - **Cascades live in the schema or the domain, never the applier.** `merchant_category.category_id` and
   `transaction_tags.transaction_id` are `ON DELETE CASCADE` in the schema (association rows with no independent
   meaning once their owner is gone). The credit-card cascade is a **domain decision**: `deleteCreditCard`

@@ -1,5 +1,6 @@
 import type { AccountError } from '../models/account.js';
 import type { BillError } from '../models/bill.js';
+import type { BudgetError } from '../models/budget.js';
 import type { CategoryError } from '../models/category.js';
 import type { CardError } from '../models/creditCard.js';
 import type { DashboardError } from '../models/dashboard.js';
@@ -15,6 +16,7 @@ export type AppError =
   | CardError
   | TransactionError
   | BillError
+  | BudgetError
   | TagError
   | LocaleError
   | DashboardError
@@ -31,6 +33,7 @@ export const formatAppError = (e: AppError): string => {
     case 'unknown_card':
     case 'ambiguous_card':
     case 'unknown_dashboard':
+    case 'unknown_budget':
       return `${e.code}: "${e.query}" (candidates: ${e.candidates.join(', ')})`;
     case 'validation':
       return `${e.code}: ${e.issues.join(', ')}`;
@@ -46,6 +49,10 @@ export const formatAppError = (e: AppError): string => {
       return `${e.code}: ${e.id}`;
     case 'unknown_bill':
       return `${e.code}: ${e.card} ${e.year}-${String(e.month).padStart(2, '0')}`;
+    case 'not_expense_category':
+      return `${e.code}: "${e.category}" is not an expense-eligible category`;
+    case 'duplicate_budget':
+      return `${e.code}: ${e.category}${e.subCategory ? `/${e.subCategory}` : ''} (${e.currency}, ${e.period})`;
     case 'conflict':
       return `${e.code}: concurrent update, please retry`;
     default: {
@@ -64,16 +71,19 @@ export const httpStatus = (e: AppError): number => {
     case 'unknown_transaction':
     case 'unknown_bill':
     case 'unknown_dashboard':
+    case 'unknown_budget':
       return 404;
     case 'ambiguous_account':
     case 'ambiguous_category':
     case 'ambiguous_sub_category':
     case 'ambiguous_card':
     case 'duplicate_name':
+    case 'duplicate_budget':
     case 'in_use':
     case 'conflict':
       return 409;
     case 'category_kind_mismatch':
+    case 'not_expense_category':
       return 422;
     case 'validation':
       return 422;

@@ -85,6 +85,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
       ({ ...account({ id: 'acc-card-internal', name: 'Card: Nubank' }), version: 0 }) as AccountEntity,
   } as unknown as Deps['accounts'],
   bills: { findAllByCard: async () => [] } as unknown as Deps['bills'],
+  budgets: {} as Deps['budgets'],
   categories: {} as Deps['categories'],
   subCategories: {} as Deps['subCategories'],
   creditCards: {
