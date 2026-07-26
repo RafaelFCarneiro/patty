@@ -67,6 +67,7 @@ import {
 } from '../../models/transaction.js';
 import { CreateCategorySchema, CreateSubCategorySchema } from '../../wire/in/categories.js';
 import { Locale, LocaleSource } from '../../models/locale.js';
+import { PeriodSchema } from '../../models/date.js';
 import { AccountType } from '../../models/account.js';
 import { BillQuerySchema, PayBillSchema } from '../../models/bill.js';
 import { RenameDashboardSchema, SaveDashboardSchema } from '../../models/dashboard.js';
@@ -874,10 +875,7 @@ export const buildMcpServer = (
         "sub-categories' spend, a sub-category budget measures only its own (and also counts toward its " +
         'parent\'s, if the parent has a budget too). `remaining` (limit - spent) and `pct` (spent / limit) ' +
         'can go negative / exceed 1 when over budget — over-budget is reported, never an error.',
-      inputSchema: {
-        month: z.number().int().min(1).max(12),
-        year: z.number().int().min(2000).max(2100),
-      },
+      inputSchema: PeriodSchema.shape,
     },
     async (args) => json(await getBudgetStatus(deps, args)),
   );

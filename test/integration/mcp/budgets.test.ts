@@ -412,6 +412,64 @@ describe('MCP integration > get_budget_status', () => {
     }
   });
 
+  it('excludes transfers from spend, same predicate every other summary/aggregate query uses', async () => {
+    const stamp = Date.now();
+    const categoryName = `Status-Transfer-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+
+      const budget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: categoryName, currency: 'BRL', limit: 500 },
+      })) as Budget;
+      ensure(budget.id, 'budget id missing');
+      createdBudgetIds.push(budget.id);
+
+      const fromAccount = (await callTool(client, {
+        name: 'create_account',
+        args: { name: `Transfer-From-${stamp}`, type: 'checking', currency: 'BRL' },
+      })) as { id?: string; name?: string };
+      const toAccount = (await callTool(client, {
+        name: 'create_account',
+        args: { name: `Transfer-To-${stamp}`, type: 'checking', currency: 'BRL' },
+      })) as { id?: string; name?: string };
+      ensure(fromAccount.name, 'from account name missing');
+      ensure(toAccount.name, 'to account name missing');
+
+      const transfer = (await callTool(client, {
+        name: 'create_transfer',
+        args: {
+          from: fromAccount.name,
+          to: toAccount.name,
+          amount: 1000,
+          idempotencyKey: `status-transfer-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } };
+      ensure(transfer.transaction?.id, 'transfer transaction id missing');
+      createdTxIds.push(transfer.transaction.id);
+
+      // Direct expense in the budgeted category, unaffected by the unrelated transfer above.
+      await addExpense(client, {
+        description: 'unrelated category spend',
+        amount: 100,
+        category: categoryName,
+        currency: 'BRL',
+        idempotencyKey: `status-transfer-spend-${stamp}`,
+      });
+
+      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const group = findGroup(status, categoryName);
+      ensure(group, `no status group for ${categoryName}`);
+      // A transfer carries no category, so it can never match a budget's category/subcategory —
+      // this asserts spent isn't inflated by the transfer's amount regardless (e.g. via a join bug).
+      expect(group.lines?.[0]).toMatchObject({ spent: 100, remaining: 400 });
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('reports over-budget as negative remaining and pct > 1, never an error', async () => {
     const stamp = Date.now();
     const categoryName = `Status-Over-${stamp}`;

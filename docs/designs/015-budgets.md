@@ -3,8 +3,7 @@
 **Type:** Feature design (a capability + technical assessment) · **Design status:** Accepted ·
 **Implementation status:** In progress — Phase 1 (`feat/budgets-crud`) done (merged, PR #147), Phase 2
 (`feat/budget-status`) in review (PR open, not yet merged) · **Date:** 2026-07-25 · PLAN Phase 3 (insights). The
-**first
-brand-new entity built entirely on the FC/IS write path** (ADR-021→023) — a greenfield validation that the
+**first brand-new entity built entirely on the FC/IS write path** (ADR-021→023) — a greenfield validation that the
 pattern works for an entity added from scratch, not migrated. Respects the effective-only + per-currency
 invariants (Feature Design 001; `docs/architecture.md`).
 
