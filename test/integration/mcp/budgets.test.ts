@@ -48,10 +48,13 @@ afterEach(async () => {
   }
 });
 
-/** Today's month/year — every fixture transaction below is dated today (the default), so a
- *  `get_budget_status` call for this period always sees them without passing explicit dates. */
-const TODAY = new Date();
-const THIS_MONTH = { month: TODAY.getMonth() + 1, year: TODAY.getFullYear() };
+/** A fixed date/period for every `get_budget_status` fixture below — always in the past, so it
+ *  never drifts and never races the wall clock (a `new Date()`-derived "this month" computed once
+ *  at module load can fall on the wrong side of a month boundary from a transaction whose own
+ *  date-aware default resolves moments later). Every fixture transaction in that describe block
+ *  passes `date: STATUS_DATE` explicitly rather than relying on "today". */
+const STATUS_DATE = '2026-01-15';
+const STATUS_PERIOD = { month: 1, year: 2026 };
 
 /** add_account_expense returns `{ transaction, created, classification }` — this unwraps to just
  *  the id every fixture below needs, and registers it for the afterEach cleanup. */
@@ -60,6 +63,17 @@ const addExpense = async (client: Client, args: Record<string, unknown>): Promis
     transaction?: { id?: string };
   };
   ensure(result.transaction?.id, 'add_account_expense: transaction id missing');
+  createdTxIds.push(result.transaction.id);
+  return result.transaction.id;
+};
+
+/** Same shape as `addExpense`, for `add_account_income` — used by the `both`-kind-category test,
+ *  which needs both an expense and an income transaction on the same budgeted category. */
+const addIncome = async (client: Client, args: Record<string, unknown>): Promise<string> => {
+  const result = (await callTool(client, { name: 'add_account_income', args })) as {
+    transaction?: { id?: string };
+  };
+  ensure(result.transaction?.id, 'add_account_income: transaction id missing');
   createdTxIds.push(result.transaction.id);
   return result.transaction.id;
 };
@@ -323,6 +337,7 @@ describe('MCP integration > get_budget_status', () => {
         amount: 300,
         category: categoryName,
         currency: 'BRL',
+        date: STATUS_DATE,
         idempotencyKey: `status-direct-${stamp}`,
       });
 
@@ -331,10 +346,11 @@ describe('MCP integration > get_budget_status', () => {
         amount: 150,
         subCategory: subCategoryName,
         currency: 'BRL',
+        date: STATUS_DATE,
         idempotencyKey: `status-sub-${stamp}`,
       });
 
-      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
       const group = findGroup(status, categoryName);
       ensure(group, `no status group for ${categoryName}`);
 
@@ -367,10 +383,11 @@ describe('MCP integration > get_budget_status', () => {
         amount: 999,
         category: categoryName,
         currency: 'USD',
+        date: STATUS_DATE,
         idempotencyKey: `status-usd-${stamp}`,
       });
 
-      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
       const group = findGroup(status, categoryName);
       ensure(group, `no status group for ${categoryName}`);
       expect(group.lines?.[0]).toMatchObject({ currency: 'BRL', spent: 0, remaining: 500 });
@@ -400,10 +417,11 @@ describe('MCP integration > get_budget_status', () => {
         category: categoryName,
         currency: 'BRL',
         status: 'pending',
+        date: STATUS_DATE,
         idempotencyKey: `status-pending-${stamp}`,
       });
 
-      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
       const group = findGroup(status, categoryName);
       ensure(group, `no status group for ${categoryName}`);
       expect(group.lines?.[0]).toMatchObject({ spent: 0, remaining: 500 });
@@ -444,6 +462,7 @@ describe('MCP integration > get_budget_status', () => {
           from: fromAccount.name,
           to: toAccount.name,
           amount: 1000,
+          date: STATUS_DATE,
           idempotencyKey: `status-transfer-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
@@ -456,14 +475,55 @@ describe('MCP integration > get_budget_status', () => {
         amount: 100,
         category: categoryName,
         currency: 'BRL',
+        date: STATUS_DATE,
         idempotencyKey: `status-transfer-spend-${stamp}`,
       });
 
-      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
       const group = findGroup(status, categoryName);
       ensure(group, `no status group for ${categoryName}`);
       // A transfer carries no category, so it can never match a budget's category/subcategory —
       // this asserts spent isn't inflated by the transfer's amount regardless (e.g. via a join bug).
+      expect(group.lines?.[0]).toMatchObject({ spent: 100, remaining: 400 });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('excludes income from spend on a both-kind category — a spending cap is never inflated by income', async () => {
+    const stamp = Date.now();
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+
+      const budget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: 'Investments', currency: 'BRL', limit: 500 },
+      })) as Budget;
+      ensure(budget.id, 'budget id missing');
+      createdBudgetIds.push(budget.id);
+
+      await addIncome(client, {
+        description: 'dividend received, should not count as spend',
+        amount: 2000,
+        category: 'Investments',
+        currency: 'BRL',
+        date: STATUS_DATE,
+        idempotencyKey: `status-investment-income-${stamp}`,
+      });
+
+      await addExpense(client, {
+        description: 'money moved into the investment, the actual spend',
+        amount: 100,
+        category: 'Investments',
+        currency: 'BRL',
+        date: STATUS_DATE,
+        idempotencyKey: `status-investment-expense-${stamp}`,
+      });
+
+      const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
+      const group = findGroup(status, 'Investments');
+      ensure(group, 'no status group for Investments');
       expect(group.lines?.[0]).toMatchObject({ spent: 100, remaining: 400 });
     } finally {
       await transport.close();
@@ -490,10 +550,11 @@ describe('MCP integration > get_budget_status', () => {
         amount: 250,
         category: categoryName,
         currency: 'BRL',
+        date: STATUS_DATE,
         idempotencyKey: `status-over-${stamp}`,
       });
 
-      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
       const group = findGroup(status, categoryName);
       ensure(group, `no status group for ${categoryName}`);
       expect(group.lines?.[0]).toMatchObject({ spent: 250, remaining: -150, pct: 2.5 });
@@ -517,7 +578,7 @@ describe('MCP integration > get_budget_status', () => {
       ensure(budget.id, 'budget id missing');
       createdBudgetIds.push(budget.id);
 
-      const status = (await callTool(client, { name: 'get_budget_status', args: THIS_MONTH })) as BudgetStatus;
+      const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
       const group = findGroup(status, categoryName);
       ensure(group, `no status group for ${categoryName}`);
       expect(group.lines?.[0]).toMatchObject({ spent: 0, remaining: 500, pct: 0 });

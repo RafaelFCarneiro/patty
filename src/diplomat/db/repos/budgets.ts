@@ -21,16 +21,21 @@ const BUDGET_VIEW_SELECT = sql`
 `;
 
 /** For a period `[from, to)` (Feature Design 015 phase 2): each budget's spend, joined against
- *  transactions that are `effective`, non-`transfer`, same-currency as the budget, dated in range,
- *  and matched to the target the same way `status`'s own JOIN condition below decides — reusing
- *  the invariants `aggregate`/`summaryRows` (this same repo file's siblings) already filter on,
- *  not a bespoke predicate. `COALESCE(SUM(t.amount), 0)` is what makes an empty month `spent: 0`
- *  rather than a missing row (the LEFT JOIN still yields one row per budget with no match).
- *  `node.parent_id IS NULL` (a top-level target) matches on `t.category_id` — which rolls up
- *  sub-category spend for free, since a sub-category transaction's `category_id` is always set to
- *  its parent — while a sub-category target matches only `t.subcategory_id`, its own spend alone
- *  (and independently of the parent's own condition, so the same transaction counts toward both a
- *  sub-category's budget and its parent's, when both exist). */
+ *  transactions that are `effective`, **`expense`-typed** (never `income` or `transfer`),
+ *  same-currency as the budget, dated in range, and matched to the target the same way `status`'s
+ *  own JOIN condition below decides. Deliberately `type = expense`, not just `!= transfer`: a
+ *  budget can target a `both`-kind category (`isExpenseEligible`, `logic/budget.ts` — only pure
+ *  `income`-kind is rejected), and `aggregate`/`summaryRows` (this same repo file's siblings) keep
+ *  `type` as an explicit output dimension for their own caller/shaping layer to separate income
+ *  from expense — `spent` here is a single collapsed scalar with no such dimension, so the filter
+ *  has to make the expense-only cut itself, or an income transaction booked to a `both`-kind
+ *  category would inflate a spending cap. `COALESCE(SUM(t.amount), 0)` is what makes an empty
+ *  month `spent: 0` rather than a missing row (the LEFT JOIN still yields one row per budget with
+ *  no match). `node.parent_id IS NULL` (a top-level target) matches on `t.category_id` — which
+ *  rolls up sub-category spend for free, since a sub-category transaction's `category_id` is
+ *  always set to its parent — while a sub-category target matches only `t.subcategory_id`, its own
+ *  spend alone (and independently of the parent's own condition, so the same transaction counts
+ *  toward both a sub-category's budget and its parent's, when both exist). */
 const BUDGET_STATUS_SELECT = (from: string, to: string) => sql`
   SELECT b.id, b.currency, b.limit_amount, b.period,
          node.name AS node_name, node.parent_id AS node_parent_id, parent.name AS parent_name,
@@ -41,7 +46,7 @@ const BUDGET_STATUS_SELECT = (from: string, to: string) => sql`
   LEFT JOIN transactions t
     ON t.currency = b.currency
     AND t.status = ${TransactionStatus.enum.effective}
-    AND t.type != ${TransactionType.enum.transfer}
+    AND t.type = ${TransactionType.enum.expense}
     AND t.date >= ${from} AND t.date < ${to}
     AND (
       (node.parent_id IS NULL AND t.category_id = b.category_id)

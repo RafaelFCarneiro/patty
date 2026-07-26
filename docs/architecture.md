@@ -286,12 +286,18 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     carryover. `create_budget`/`update_budget`/`delete_budget`/`list_budgets` (phase 1) manage the
     limits themselves. **The measurement invariant (phase 2, `get_budget_status(month, year)`):**
     for a budget targeting node `T`, `spent` sums `amount` over transactions that are `status =
-    'effective'`, `type != 'transfer'`, `currency = budget.currency`, dated in the month, and
+    'effective'`, `type = 'expense'`, `currency = budget.currency`, dated in the month, and
     either `category_id = T` (`T` a top-level category — this is what rolls up sub-category spend
     for free, since a sub-category transaction's `category_id` is always its parent's) or
-    `subcategory_id = T` (`T` a sub-category — its own spend alone). The same reused invariants
-    `aggregate_spending`/`get_spending_summary` already filter on, not a bespoke predicate — so a
-    sub-category transaction counts toward both its own budget and its parent's, when both exist.
+    `subcategory_id = T` (`T` a sub-category — its own spend alone). Effective-only reuses the
+    invariant `aggregate_spending`/`get_spending_summary` already filter on; **`type = 'expense'`,
+    not merely `!= 'transfer'`, is budgets' own addition** — a `both`-kind category is a legitimate
+    target (only pure `income` is rejected, above), and unlike `aggregate_spending`/
+    `get_spending_summary` (which keep `type` as an explicit output dimension their callers/shaping
+    code separates), `spent` here is one collapsed scalar with no such dimension, so an income
+    transaction booked to a `both`-kind category must be excluded at the filter itself or it would
+    inflate a spending cap. A sub-category transaction counts toward both its own budget and its
+    parent's, when both exist.
     `remaining` (limit − spent) and `pct` (spent / limit) can go negative / exceed 1 — over-budget
     is reported, never an error. The response groups every budget by its top-level category name
     (per-currency and per-sub-category lines read as one coherent unit; still no cross-currency

@@ -320,9 +320,10 @@ Feature Design 015: a recurring monthly spending limit on a category or sub-cate
   `{ deleted: false }` (same shape as `delete_tag`).
 - `list_budgets`: no input — returns all budgets (the limits themselves, no spend) as `{ id, category,
   subCategory?, currency, limit, period }`.
-- `get_budget_status`: `month` (1–12), `year` — spend-vs-limit for every budget in that month, reusing the same
-  effective-only / non-transfer / same-currency invariants `aggregate_spending`/`get_spending_summary` filter on
-  (not a bespoke predicate). Returns `{ period: { month, year }, categories: [{ category, lines: [{ id,
+- `get_budget_status`: `month` (1–12), `year` — spend-vs-limit for every budget in that month. `spent` is
+  effective, `expense`-typed (never `income` or `transfer` — a `both`-kind category is budgetable, so income
+  booked to one is excluded rather than inflating the cap), same-currency spend. Returns `{ period: { month, year },
+  categories: [{ category, lines: [{ id,
   subCategory?, currency, limit, period, spent, remaining, pct }] }] }` — grouped by top-level category name, so
   a category's own budget and each of its sub-categories' own budgets read as one coherent unit; per-currency
   lines are never combined (no cross-currency total — that needs FX, the deferred PLAN open question).
