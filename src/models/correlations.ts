@@ -2,15 +2,12 @@ import { z } from 'zod';
 import { PeriodSchema } from './date.js';
 import { CurrencyCode } from './money.js';
 
-/** Analysis modes for `find_correlations` (Feature Design 016) — one mode added per PR
- *  (A: `spending_shifts`). `analysis` discriminates both the input and the output union, mirroring
- *  `aggregate_spending`'s `groupBy`: the dynamic shape is chosen only from this whitelisted enum,
- *  never free-form (ADR-011). */
+/** Analysis modes for `find_correlations` (Feature Design 016) — one mode added per PR (A:
+ *  `spending_shifts`). Whitelisted enum, mirroring `aggregate_spending`'s `groupBy` (ADR-011). */
 export const FindCorrelationsAnalysis = z.enum(['spending_shifts']);
 export type FindCorrelationsAnalysis = z.infer<typeof FindCorrelationsAnalysis>;
 
-// QoL defaults (not invariants) applied at the MCP boundary — mirrors aggregate_spending's
-// metric/sort/limit defaults (`diplomat/mcp/server.ts`).
+// QoL defaults applied at the MCP boundary, not baked into the schema — mirrors aggregate_spending.
 export const DEFAULT_BASELINE_MONTHS = 3;
 export const DEFAULT_MIN_DELTA_PCT = 20;
 

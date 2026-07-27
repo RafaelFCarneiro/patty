@@ -15,8 +15,7 @@ export const SubCategoryRowSchema = z.object({
   kind: z.string(),
 });
 
-/** Shared by every raw SQL row that joins in a category's localized `names` JSON column
- *  (aggregate/summary/correlations queries) — decodes the stored JSON string, or `null` when the
- *  join found no category or the category is user-created (`names` is `null` on those rows). */
+/** Decodes a joined category's `names` JSON column — `null` when the join found no category or
+ *  the category is user-created. Shared by aggregate/summary/correlations queries. */
 export const parseCategoryNames = (raw: string | null): Record<string, string> | null =>
   raw ? LocalizedNamesSchema.parse(JSON.parse(raw)) : null;

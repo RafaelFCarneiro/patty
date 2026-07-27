@@ -266,9 +266,8 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
       ensure(transfer.transaction?.id, 'transfer transaction id missing');
       createdTxIds.push(transfer.transaction.id);
 
-      // A transfer carries no category (CreateTransferSchema has no category field), so it can
-      // never join to this category — this asserts current isn't inflated regardless (e.g. via a
-      // future join/filter bug), the same regression guard budgets.test.ts's own transfer test is.
+      // A transfer carries no category, so it can never join to this one — regression guard
+      // against a future join/filter bug, mirroring budgets.test.ts's own transfer-exclusion test.
       await addExpense(client, {
         description: 'unrelated category spend',
         amount: 100,
