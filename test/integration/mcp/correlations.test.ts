@@ -234,6 +234,63 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
     }
   });
 
+  it('excludes transfers from current, same predicate every other summary/aggregate query uses', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Transfer-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+
+      const fromAccount = (await callTool(client, {
+        name: 'create_account',
+        args: { name: `Corr-Transfer-From-${stamp}`, type: 'checking', currency: 'BRL' },
+      })) as { name?: string };
+      const toAccount = (await callTool(client, {
+        name: 'create_account',
+        args: { name: `Corr-Transfer-To-${stamp}`, type: 'checking', currency: 'BRL' },
+      })) as { name?: string };
+      ensure(fromAccount.name, 'from account name missing');
+      ensure(toAccount.name, 'to account name missing');
+
+      const transfer = (await callTool(client, {
+        name: 'create_transfer',
+        args: {
+          from: fromAccount.name,
+          to: toAccount.name,
+          amount: 1000,
+          date: CURRENT_DATE,
+          idempotencyKey: `corr-transfer-${stamp}`,
+        },
+      })) as { transaction?: { id?: string } };
+      ensure(transfer.transaction?.id, 'transfer transaction id missing');
+      createdTxIds.push(transfer.transaction.id);
+
+      // A transfer carries no category (CreateTransferSchema has no category field), so it can
+      // never join to this category — this asserts current isn't inflated regardless (e.g. via a
+      // future join/filter bug), the same regression guard budgets.test.ts's own transfer test is.
+      await addExpense(client, {
+        description: 'unrelated category spend',
+        amount: 100,
+        category: categoryName,
+        currency: 'BRL',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-transfer-spend-${stamp}`,
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'spending_shifts', ...REFERENCE, minDeltaPct: 0 },
+      })) as FindCorrelationsResult;
+
+      const shift = findShift(result, categoryName);
+      ensure(shift, `no shift for ${categoryName}`);
+      expect(shift.current).toBe(100);
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('excludes income from current on a both-kind category — a spend shift is never inflated by income', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
