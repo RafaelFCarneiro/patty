@@ -30,6 +30,17 @@ describe('shapeSpendingShifts', () => {
     expect(shift).toMatchObject({ current: 500, baseline: 0, deltaPct: null, direction: 'up' });
   });
 
+  it('does not misclassify a tiny nonzero baseline as brand-new after rounding to 0.00', () => {
+    // baselineTotal 0.01 over 3 months -> raw baseline ~0.00333, which *rounds* to 0.00 for display
+    // but must not be treated as "no baseline spend" (deltaPct: null) — the divide-by-zero decision
+    // has to use the unrounded value.
+    const [shift] = shapeSpendingShifts([row({ current: 100, baselineTotal: 0.01 })], 3, 0, Locale.enum.en);
+    expect(shift?.baseline).toBe(0);
+    expect(shift?.deltaPct).not.toBeNull();
+    expect(shift?.deltaPct).toBeGreaterThan(1000);
+    expect(shift?.direction).toBe('up');
+  });
+
   it('filters out shifts below minDeltaPct', () => {
     // baseline = 900/3 = 300; current = 320 -> deltaPct ~ 6.67%, below a 20% threshold
     const shifts = shapeSpendingShifts([row({ current: 320, baselineTotal: 900 })], 3, 20, Locale.enum.en);

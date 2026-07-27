@@ -14,16 +14,19 @@ const passesThreshold = (deltaPct: number | null, minDeltaPct: number): boolean 
   deltaPct === null || Math.abs(deltaPct) >= minDeltaPct;
 
 const toSpendingShift = (row: SpendingShiftDbRow, baselineMonths: number, locale: Locale): SpendingShift => {
-  const baseline = roundMoney(row.baselineTotal / baselineMonths);
-  const current = roundMoney(row.current);
-  const deltaPct = baseline === 0 ? null : roundMoney(((current - baseline) / baseline) * 100);
+  // Decide null/direction/deltaPct off the unrounded baseline — rounding first could turn a real
+  // (if tiny) baseline into a false 0.00, misclassifying it as brand-new.
+  const rawBaseline = row.baselineTotal / baselineMonths;
+  const deltaPct = rawBaseline === 0 ? null : roundMoney(((row.current - rawBaseline) / rawBaseline) * 100);
   const direction =
-    deltaPct === null || current >= baseline ? SpendingShiftDirection.enum.up : SpendingShiftDirection.enum.down;
+    deltaPct === null || row.current >= rawBaseline
+      ? SpendingShiftDirection.enum.up
+      : SpendingShiftDirection.enum.down;
   return {
     category: localizeCategoryName(row.category, row.categoryNames, locale) ?? row.category,
     currency: row.currency,
-    current,
-    baseline,
+    current: roundMoney(row.current),
+    baseline: roundMoney(rawBaseline),
     deltaPct,
     direction,
   };
