@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { categories } from '../../diplomat/db/schema.js';
+import { LocalizedNamesSchema } from '../../models/category.js';
 
 // Category row from a Drizzle select — derived from schema.ts (single source of truth).
 export type CategoryRow = typeof categories.$inferSelect;
@@ -13,3 +14,8 @@ export const SubCategoryRowSchema = z.object({
   parent_name: z.string(),
   kind: z.string(),
 });
+
+/** Decodes a joined category's `names` JSON column — `null` when the join found no category or
+ *  the category is user-created. Shared by aggregate/summary/correlations queries. */
+export const parseCategoryNames = (raw: string | null): Record<string, string> | null =>
+  raw ? LocalizedNamesSchema.parse(JSON.parse(raw)) : null;

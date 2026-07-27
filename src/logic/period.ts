@@ -18,6 +18,16 @@ export const hasDateRange = (input: PeriodInput): boolean => isNonNullish(input.
 
 export const assertHasPeriodOrRange = (input: PeriodInput): boolean => hasPeriod(input) || hasDateRange(input);
 
+/** `[from, to)` for the `baselineMonths` immediately preceding `period`, chaining directly into
+ *  `periodRange(period).from` with no gap or overlap. Month-index arithmetic avoids `Date`/timezone. */
+export const baselineRange = (period: Period, baselineMonths: number): DateRange => {
+  const { from: to } = periodRange(period);
+  const monthIndex = period.year * 12 + (period.month - 1) - baselineMonths;
+  const year = Math.floor(monthIndex / 12);
+  const month = monthIndex - year * 12 + 1;
+  return { from: `${year}-${pad(month)}-01`, to };
+};
+
 export const resolveDateRange = (input: PeriodInput): NullableDateRange => {
   const range = hasPeriod(input) ? periodRange({ month: input.month!, year: input.year! }) : null;
   return {

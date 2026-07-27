@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assertHasPeriodOrRange,
+  baselineRange,
   hasPeriod,
   hasDateRange,
   periodRange,
@@ -14,6 +15,24 @@ describe('periodRange', () => {
 
   it('rolls over December', () => {
     expect(periodRange({ month: 12, year: 2026 })).toEqual({ from: '2026-12-01', to: '2027-01-01' });
+  });
+});
+
+describe('baselineRange', () => {
+  it('chains directly into the reference period, no gap and no overlap', () => {
+    expect(baselineRange({ month: 7, year: 2026 }, 3)).toEqual({ from: '2026-04-01', to: '2026-07-01' });
+  });
+
+  it('rolls back across a year boundary', () => {
+    expect(baselineRange({ month: 2, year: 2026 }, 3)).toEqual({ from: '2025-11-01', to: '2026-02-01' });
+  });
+
+  it('rolls back multiple years for a large window', () => {
+    expect(baselineRange({ month: 1, year: 2026 }, 24)).toEqual({ from: '2024-01-01', to: '2026-01-01' });
+  });
+
+  it('handles a one-month window', () => {
+    expect(baselineRange({ month: 6, year: 2026 }, 1)).toEqual({ from: '2026-05-01', to: '2026-06-01' });
   });
 });
 

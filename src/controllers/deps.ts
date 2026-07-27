@@ -7,6 +7,7 @@ import type { BillsRepo } from '../diplomat/db/repos/bills.js';
 import type { BudgetsRepo } from '../diplomat/db/repos/budgets.js';
 import type { CategoriesRepo } from '../diplomat/db/repos/categories.js';
 import type { SubCategoriesRepo } from '../diplomat/db/repos/subCategories.js';
+import type { CorrelationsRepo } from '../diplomat/db/repos/correlations.js';
 import type { CreditCardsRepo } from '../diplomat/db/repos/creditCards.js';
 import type { DashboardsRepo } from '../diplomat/db/repos/dashboards.js';
 import type { HealthRepo } from '../diplomat/db/repos/health.js';
@@ -23,6 +24,7 @@ export type Deps = {
   budgets: BudgetsRepo;
   categories: CategoriesRepo;
   subCategories: SubCategoriesRepo;
+  correlations: CorrelationsRepo;
   creditCards: CreditCardsRepo;
   dashboards: DashboardsRepo;
   health: HealthRepo;

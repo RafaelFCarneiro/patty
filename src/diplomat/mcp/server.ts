@@ -18,6 +18,7 @@ import {
 } from '../../controllers/account/transaction.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
 import { createBudget, deleteBudget, getBudgetStatus, listBudgets, updateBudget } from '../../controllers/budgets.js';
+import { findCorrelations } from '../../controllers/correlations.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
 import { deleteDashboard, listDashboards, renameDashboard, saveDashboard } from '../../controllers/dashboards.js';
 import {
@@ -56,6 +57,13 @@ import {
   AggregateSpendingSchema,
   type ResolvedAggregateSpending,
 } from '../../models/aggregate.js';
+import {
+  DEFAULT_BASELINE_MONTHS,
+  DEFAULT_MIN_DELTA_PCT,
+  FindCorrelationsSchema,
+  NEW_CATEGORY_ALWAYS_SURFACED_NOTE,
+  type ResolvedFindCorrelations,
+} from '../../models/correlations.js';
 import { SortDirection } from '../../models/page.js';
 import {
   TransactionSource,
@@ -570,6 +578,29 @@ export const buildMcpServer = (
       },
     },
     async (args) => fromResult(await aggregateSpending(deps, args as ResolvedAggregateSpending)),
+  );
+
+  server.registerTool(
+    'find_correlations',
+    {
+      title: 'Find correlations',
+      description:
+        'Analysis tool over spending patterns, discriminated by `analysis` (Feature Design 016 — more modes ' +
+        'land in later phases). `spending_shifts`: what is up or down vs a trailing baseline, per (category, ' +
+        'currency) — "what\'s driving the change" this month. `current` is the reference month\'s effective, ' +
+        'expense-only total; `baseline` is the average monthly total over the preceding `baselineMonths`; ' +
+        '`deltaPct` is the percentage change, `null` for a brand-new category with no baseline spend at all ' +
+        '(reported with `direction: "up"`, not a divide-by-zero). Only categories at or above `minDeltaPct` ' +
+        `are returned; ${NEW_CATEGORY_ALWAYS_SURFACED_NOTE}. Results are sorted by ` +
+        '|deltaPct| descending. Sub-category spend rolls up into its parent category, same as ' +
+        'aggregate_spending/budgets. Per-currency — BRL and USD are never mixed.',
+      inputSchema: {
+        ...FindCorrelationsSchema.shape,
+        baselineMonths: FindCorrelationsSchema.shape.baselineMonths.default(DEFAULT_BASELINE_MONTHS),
+        minDeltaPct: FindCorrelationsSchema.shape.minDeltaPct.default(DEFAULT_MIN_DELTA_PCT),
+      },
+    },
+    async (args) => json(await findCorrelations(deps, args as ResolvedFindCorrelations)),
   );
 
   server.registerTool(

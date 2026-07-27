@@ -41,6 +41,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
     listByParent: async () => [subCategory()],
     countReferences: async () => ({ transactions: 0, recurring: 0, subCategories: 0 }),
   } as unknown as Deps['subCategories'],
+  correlations: {} as Deps['correlations'],
   creditCards: {} as Deps['creditCards'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],

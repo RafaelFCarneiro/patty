@@ -1,11 +1,10 @@
 import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
+import { roundMoney } from './money.js';
 import { AggregateGroupBy, AggregateSort, type AggregateRow, type CurrencyBlock } from '../models/aggregate.js';
 import type { CurrencyCode } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
 import type { AggregateDbRow } from '../wire/db/aggregate.js';
-
-const roundMoney = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
 
 const UNCATEGORIZED_KEY = 'uncategorized';
 const uncategorizedLabels: Record<Locale, string> = {
