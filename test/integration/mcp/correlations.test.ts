@@ -582,6 +582,10 @@ describe('MCP integration > find_correlations (budget_fit)', () => {
       const line = result.budgeted?.find((b) => b.subCategory === subCategoryName);
       ensure(line, `no budgeted line for sub-category ${subCategoryName}`);
       expect(line).toMatchObject({ category: parentName, baseline: 100, verdict: 'unrealistic' });
+      // The sub-category's spend rolls up to the parent's category_id, so the parent itself has a
+      // baseline too — but it's already covered by the sub-category's own budget, so it must not
+      // also show up as a separate "unbudgeted" suggestion.
+      expect(findUnbudgeted(result, parentName)).toBeUndefined();
     } finally {
       await transport.close();
     }
