@@ -1,5 +1,13 @@
+import * as R from 'remeda';
 import { CategoryKind } from '../models/category.js';
-import type { Budget, BudgetTarget, BudgetView } from '../models/budget.js';
+import type {
+  Budget,
+  BudgetStatusEntry,
+  BudgetStatusGroup,
+  BudgetStatusLine,
+  BudgetTarget,
+  BudgetView,
+} from '../models/budget.js';
 
 /** A category-or-sub-category-by-name selection, budget's own minimal shape (unlike transactions'
  *  `CategoryFields`, a target is required — never both unset). */
@@ -21,9 +29,6 @@ export const hasExactlyOneTarget = (input: BudgetTargetFields): boolean => hasCa
  *  transactions; only a pure `income`-kind category is rejected. */
 export const isExpenseEligible = (kind: CategoryKind): boolean => kind !== CategoryKind.enum.income;
 
-/** Combines a budget with its resolved target's display names into the response shape — pure data
- *  reshaping, whether the target was just resolved by name (`createBudget`) or re-derived from an
- *  existing entity (`updateBudget`'s `describeCategoryTarget`). */
 export const toView = (
   budget: Pick<Budget, 'id' | 'currency' | 'limit' | 'period'>,
   target: Pick<BudgetTarget, 'category' | 'subCategory'>,
@@ -35,3 +40,34 @@ export const toView = (
   category: target.category,
   subCategory: target.subCategory,
 });
+
+/** Over-budget is reported as-is — `remaining`/`pct` are never clamped or flagged as an error. */
+const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => ({
+  id: entry.id,
+  currency: entry.currency,
+  limit: entry.limit,
+  period: entry.period,
+  subCategory: entry.subCategory,
+  spent: entry.spent,
+  remaining: entry.limit - entry.spent,
+  pct: entry.spent / entry.limit,
+});
+
+/** Per-currency and per-sub-category lines read as one coherent unit, never summed together (no
+ *  cross-currency total). Sorted explicitly (mirrors `logic/summary.ts`'s `summarize` /
+ *  `logic/aggregate.ts`'s `shapeAggregateResult`) rather than relying on the repo query's own
+ *  ordering, so the response is deterministic regardless of row order in. */
+export const groupStatusByCategory = (entries: readonly BudgetStatusEntry[]): BudgetStatusGroup[] =>
+  R.pipe(
+    entries,
+    R.groupBy((e) => e.category),
+    R.entries(),
+    R.map(([category, categoryEntries]): BudgetStatusGroup => {
+      const lines: BudgetStatusLine[] = R.map(categoryEntries, toStatusLine);
+      return {
+        category,
+        lines: R.sortBy(lines, [(l) => l.subCategory ?? '', 'asc'], [(l) => l.currency, 'asc']),
+      };
+    }),
+    R.sortBy((group) => group.category),
+  );

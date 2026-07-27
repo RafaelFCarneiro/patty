@@ -82,6 +82,51 @@ describe('dbToView', () => {
   });
 });
 
+describe('dbToStatusEntry', () => {
+  it('shows the top-level category and carries spend when node_parent_id is null', () => {
+    const entry = budgetAdapters.dbToStatusEntry({
+      id: 'budget-1',
+      currency: CurrencyCode.enum.BRL,
+      limit_amount: 500,
+      period: BudgetPeriod.enum.monthly,
+      node_name: 'Food',
+      node_parent_id: null,
+      parent_name: null,
+      spent: 320,
+    });
+    expect(entry).toEqual({
+      id: 'budget-1',
+      currency: CurrencyCode.enum.BRL,
+      limit: 500,
+      period: BudgetPeriod.enum.monthly,
+      category: 'Food',
+      spent: 320,
+    });
+  });
+
+  it('shows category+subCategory and carries spend when node_parent_id is set', () => {
+    const entry = budgetAdapters.dbToStatusEntry({
+      id: 'budget-2',
+      currency: CurrencyCode.enum.BRL,
+      limit_amount: 100,
+      period: BudgetPeriod.enum.monthly,
+      node_name: 'Restaurants',
+      node_parent_id: 'cat-food',
+      parent_name: 'Food',
+      spent: 0,
+    });
+    expect(entry).toEqual({
+      id: 'budget-2',
+      currency: CurrencyCode.enum.BRL,
+      limit: 100,
+      period: BudgetPeriod.enum.monthly,
+      category: 'Food',
+      subCategory: 'Restaurants',
+      spent: 0,
+    });
+  });
+});
+
 const entity: BudgetEntity = {
   id: 'budget-1',
   categoryId: 'cat-food',

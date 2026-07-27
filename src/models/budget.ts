@@ -10,9 +10,8 @@ export type BudgetPeriod = z.infer<typeof BudgetPeriod>;
 // Entity tag for this aggregate's `Persistable`s.
 export const BUDGET_ENTITY_TAG = 'budget';
 
-/** Write-shape: the budgeted node's own id (a top-level category or sub-category — both rows in
- *  `categories`), never a display name. `limit` is this module's own vocabulary for the `limit_amount`
- *  column (adapters/budgets.ts maps the rename). */
+/** `limit` is this module's own vocabulary for the `limit_amount` column — `adapters/budgets.ts`
+ *  maps the rename. */
 export const BudgetSchema = z.object({
   id: Id.describe('Unique budget identifier'),
   categoryId: Id.describe("The budgeted node's id — a top-level category or sub-category (categories.id)"),
@@ -42,9 +41,7 @@ export const BudgetViewSchema = BudgetSchema.omit({ categoryId: true }).extend({
 });
 export type BudgetView = z.infer<typeof BudgetViewSchema>;
 
-/** A budgeted node resolved by name (`controllers/budgets.ts`'s `resolveBudgetTarget`) or
- *  re-derived from an existing entity's `categoryId` (`describeCategoryTarget`) — carries just
- *  enough to guard eligibility and build a `BudgetView`, never persisted itself. */
+/** A resolved budgeted node — enough to guard eligibility and build a `BudgetView`; never persisted itself. */
 export type BudgetTarget = { id: string; category: string; subCategory?: string; kind: CategoryKind };
 
 // `.describe()` is domain information. Defaults split by intent: integrity defaults live here
@@ -74,6 +71,36 @@ export const UpdateBudgetSchema = z.object({
   period: BudgetPeriod.optional().describe('New period'),
 });
 export type UpdateBudget = z.infer<typeof UpdateBudgetSchema>;
+
+/** The flat, ungrouped shape a repo row adapts to — `logic/budget.ts`'s `groupStatusByCategory`
+ *  reshapes it into the grouped-by-category response. */
+export const BudgetStatusEntrySchema = BudgetViewSchema.extend({
+  spent: z
+    .number()
+    .describe('Sum of effective, expense-only, same-currency spend against this target in the period'),
+});
+export type BudgetStatusEntry = z.infer<typeof BudgetStatusEntrySchema>;
+
+/** One budget's status within its category group — `category` is lifted to the group itself
+ *  (`BudgetStatusGroupSchema`), so a line only needs `subCategory` to distinguish a sub-category's
+ *  own line from its parent category's. */
+export const BudgetStatusLineSchema = BudgetStatusEntrySchema.omit({ category: true }).extend({
+  remaining: z.number().describe('limit - spent; negative when over budget'),
+  pct: z.number().describe('spent / limit; exceeds 1 when over budget'),
+});
+export type BudgetStatusLine = z.infer<typeof BudgetStatusLineSchema>;
+
+/** One coherent unit per category (Feature Design 015's "no cross-currency total" decision): every
+ *  budget targeting this category or one of its sub-categories, as per-currency/per-target lines —
+ *  never summed across currencies or across category/sub-category. */
+export const BudgetStatusGroupSchema = z.object({
+  category: z.string().min(1).describe('Top-level category name'),
+  lines: z
+    .array(BudgetStatusLineSchema)
+    .min(1)
+    .describe("This category's own budget (if any) and/or each of its sub-categories' own budgets"),
+});
+export type BudgetStatusGroup = z.infer<typeof BudgetStatusGroupSchema>;
 
 export type BudgetError =
   | NotFound<'budget'>

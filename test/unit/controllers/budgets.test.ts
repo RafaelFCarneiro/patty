@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { createBudget, deleteBudget, listBudgets, updateBudget } from '../../../src/controllers/budgets.js';
+import {
+  createBudget,
+  deleteBudget,
+  getBudgetStatus,
+  listBudgets,
+  updateBudget,
+} from '../../../src/controllers/budgets.js';
 import type { Deps } from '../../../src/controllers/deps.js';
-import { BUDGET_ENTITY_TAG, BudgetPeriod, type BudgetEntity, type BudgetView } from '../../../src/models/budget.js';
+import {
+  BUDGET_ENTITY_TAG,
+  BudgetPeriod,
+  type BudgetEntity,
+  type BudgetStatusEntry,
+  type BudgetView,
+} from '../../../src/models/budget.js';
 import type { Category, SubCategory } from '../../../src/models/category.js';
 import { CategoryKind } from '../../../src/models/category.js';
 import { Locale } from '../../../src/models/locale.js';
@@ -288,5 +300,57 @@ describe('listBudgets', () => {
     };
     const deps = makeDeps({ budgets: { list: async () => [view] } as unknown as Deps['budgets'] });
     expect(await listBudgets(deps)).toEqual([view]);
+  });
+});
+
+describe('getBudgetStatus', () => {
+  it('converts month/year to the [from, to) range status is queried with, and groups the result', async () => {
+    const statusEntry: BudgetStatusEntry = {
+      id: 'budget-1',
+      category: 'Food',
+      currency: CurrencyCode.enum.BRL,
+      limit: 500,
+      period: BudgetPeriod.enum.monthly,
+      spent: 200,
+    };
+    let calledWith: [string, string] | undefined;
+    const deps = makeDeps({
+      budgets: {
+        status: async (from: string, to: string) => {
+          calledWith = [from, to];
+          return [statusEntry];
+        },
+      } as unknown as Deps['budgets'],
+    });
+
+    const result = await getBudgetStatus(deps, { month: 7, year: 2026 });
+
+    expect(calledWith).toEqual(['2026-07-01', '2026-08-01']);
+    expect(result).toEqual({
+      period: { month: 7, year: 2026 },
+      categories: [
+        {
+          category: 'Food',
+          lines: [
+            {
+              id: 'budget-1',
+              currency: CurrencyCode.enum.BRL,
+              limit: 500,
+              period: BudgetPeriod.enum.monthly,
+              subCategory: undefined,
+              spent: 200,
+              remaining: 300,
+              pct: 0.4,
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('returns an empty categories array when there are no budgets', async () => {
+    const deps = makeDeps({ budgets: { status: async () => [] } as unknown as Deps['budgets'] });
+    const result = await getBudgetStatus(deps, { month: 1, year: 2026 });
+    expect(result).toEqual({ period: { month: 1, year: 2026 }, categories: [] });
   });
 });

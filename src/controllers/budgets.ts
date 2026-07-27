@@ -2,8 +2,17 @@ import { errAsync, ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
-import { hasCategory, hasExactlyOneTarget, hasSubCategory, isExpenseEligible, toView } from '../logic/budget.js';
+import {
+  groupStatusByCategory,
+  hasCategory,
+  hasExactlyOneTarget,
+  hasSubCategory,
+  isExpenseEligible,
+  toView,
+} from '../logic/budget.js';
+import { periodRange } from '../logic/period.js';
 import * as persistence from '../logic/persistence.js';
+import type { Period } from '../models/date.js';
 import {
   budgetErrors,
   BUDGET_ENTITY_TAG,
@@ -16,13 +25,12 @@ import {
 } from '../models/budget.js';
 import { notFound } from '../models/error.js';
 import type { FlowOutcome } from '../models/persistable.js';
+import type { BudgetStatusOut } from '../wire/out/budgets.js';
 import type { Deps } from './deps.js';
 import { resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
 
-/** Resolves the budgeted node by name — a top-level category or sub-category — reusing the same
- *  `resolveCategoryRef`/`resolveSubCategoryRef` transactions resolve through (`controllers/
- *  resolve.ts`), dispatched the same way `resolveCategorySelection` (`controllers/transaction/
- *  core.ts`) dispatches, but always required: budgets have no "leave unset" meaning. */
+/** Resolves the budgeted node by name — reuses the same `resolveCategoryRef`/`resolveSubCategoryRef`
+ *  transactions resolve through, but always required: budgets have no "leave unset" meaning. */
 const resolveBudgetTarget = (
   deps: Deps,
   input: { category?: string; subCategory?: string },
@@ -125,3 +133,11 @@ export const deleteBudget = (deps: Deps, id: string): ResultAsync<FlowOutcome<{ 
   });
 
 export const listBudgets = (deps: Deps): Promise<BudgetView[]> => deps.budgets.list();
+
+/** No name resolution, no write, so a plain async function rather than `ResultAsync`, mirroring
+ *  `getSpendingSummary` (`controllers/summary.ts`). */
+export const getBudgetStatus = async (deps: Deps, period: Period): Promise<BudgetStatusOut> => {
+  const { from, to } = periodRange(period);
+  const entries = await deps.budgets.status(from, to);
+  return { period, categories: groupStatusByCategory(entries) };
+};

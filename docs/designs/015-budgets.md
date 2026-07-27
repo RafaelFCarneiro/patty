@@ -1,9 +1,9 @@
 # Feature Design 015: Budgets — per-category / per-currency monthly limits
 
 **Type:** Feature design (a capability + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress — Phase 1 (`feat/budgets-crud`) in review (PR open, not yet merged),
-Phase 2 (`feat/budget-status`) not started · **Date:** 2026-07-25 · PLAN Phase 3 (insights). The **first
-brand-new entity built entirely on the FC/IS write path** (ADR-021→023) — a greenfield validation that the
+**Implementation status:** In progress — Phase 1 (`feat/budgets-crud`) done (merged, PR #147), Phase 2
+(`feat/budget-status`) in review (PR open, not yet merged) · **Date:** 2026-07-25 · PLAN Phase 3 (insights). The
+**first brand-new entity built entirely on the FC/IS write path** (ADR-021→023) — a greenfield validation that the
 pattern works for an entity added from scratch, not migrated. Respects the effective-only + per-currency
 invariants (Feature Design 001; `docs/architecture.md`).
 
@@ -61,12 +61,17 @@ sub by the target's own `parentId`.)*
 ### Measurement — how `spent` is computed (must reconcile with `aggregate_spending`)
 
 For a budget targeting node `T` in month `[from, to)`, `spent` = sum of `amount` over transactions that are
-**`status = 'effective'`**, **`type != 'transfer'`**, **`currency = budget.currency`**, dated in the month, and:
+**`status = 'effective'`**, **`type = 'expense'`**, **`currency = budget.currency`**, dated in the month, and:
 
 - **`T` is a top-level category** → `category_id = T` (rolls up sub-categories — matches `aggregate_spending`).
 - **`T` is a sub-category** (`T.parentId` set) → `subcategory_id = T`.
 
-Reuse the existing effective-only / no-transfer predicates (the invariants), not a bespoke filter. `get_budget_status`
+`type = 'expense'`, not merely `!= 'transfer'`: a `both`-kind category is a legitimate budget target (only pure
+`income`-kind is rejected — see the expense-eligibility guard below), and `aggregate_spending`/`get_spending_summary`
+keep `type` as an explicit output dimension their own callers/shaping code separate income from expense by — `spent`
+here is one collapsed scalar with no such dimension, so an income transaction booked to a `both`-kind category would
+otherwise inflate a spending cap. Reuse the existing effective-only predicate (the invariant), not a bespoke filter;
+the expense-only cut is budgets' own addition on top of it. `get_budget_status`
 returns one entry per budget — `{ target (name, kind), currency, limit, spent, remaining: limit - spent,
 pct: spent/limit }` — **grouped by category**, so multiple per-currency budgets on the same category read as one
 coherent unit (per-currency lines under each category). No cross-currency total is produced. Over-budget
@@ -116,7 +121,7 @@ dashboard applier joined, so it's a known shape, not new machinery.
 
 ## Docs to update (in the owning phase)
 
-- `docs/architecture.md` — `budgets` in the schema; a budget-measurement invariant (effective-only, no-transfer,
+- `docs/architecture.md` — `budgets` in the schema; a budget-measurement invariant (effective-only, expense-only,
   same-currency, category rolls up sub-categories) next to the effective-only balance invariant.
 - `docs/write-path.md` — the `budget` entity applier (tag/bill family) in the applier catalogue.
 - `docs/mcp-tools.md` — `create_budget`/`update_budget`/`delete_budget`/`list_budgets`/`get_budget_status`.
@@ -130,8 +135,9 @@ dashboard applier joined, so it's a known shape, not new machinery.
   (version-guarded); delete idempotent (unknown id → `{ deleted: false }`); concurrent same-target create →
   unique-conflict → retry → `duplicate` (mirror `tagApplier` race test).
 - **Status**: category budget includes sub-category spend; sub-category budget measures only its own; per-currency
-  isolation (BRL budget ignores USD spend); effective-only + transfers excluded; over-budget reported; empty month
-  → `spent: 0`; spend under a sub counts toward both its budget and the parent's.
+  isolation (BRL budget ignores USD spend); effective-only + transfers excluded + income excluded on a `both`-kind
+  category; over-budget reported; empty month → `spent: 0`; spend under a sub counts toward both its budget and
+  the parent's.
 
 ## Implementation prompt
 
@@ -147,7 +153,7 @@ duplicate check); `controllers/budgets.ts` (`create`/`update`/`delete`/`list`, r
 `docs/architecture.md` (schema), `docs/write-path.md` (applier), `docs/mcp-tools.md`.
 
 ### Phase 2 — `feat/budget-status`
-`get_budget_status(month, year)` — a read flow summing effective / non-transfer / same-currency spend per budget
+`get_budget_status(month, year)` — a read flow summing effective / expense-only / same-currency spend per budget
 with the top-vs-sub target branch, reusing the existing month-range + effective-only predicates; the
 `BudgetStatus` result shape; `get_budget_status` tool; the budget-measurement invariant in `docs/architecture.md`;
 `docs/mcp-tools.md`; PLAN Phase 3 checkbox.

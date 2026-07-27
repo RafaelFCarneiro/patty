@@ -199,8 +199,11 @@ Fastify + zod scaffold with diplomat layout; local libSQL + migrations + seed (c
 ### Phase 2 — Classification loop + bulk input ✅ (2026-06-11)
 Merchant normalization logic; `merchant_category` weight learning from corrections; `create_transactions_bulk`; credit cards with `bills` lifecycle (open → closed → paid) + recurring rules; transfers (ADR-002), sub-categories, tags, derived balances. **Exit:** paste a statement → classified transactions with confidence flags; corrections improve future classification.
 
-### Phase 3 — Insights + analysis (next)
-`aggregate_spending`, `find_correlations` (SQL recursive CTEs / window functions), budgets, goals, saved views; MCP resources + prompts; monthly-review and import-statement skills. **Exit:** "how was my spending vs budget, and what's driving the change?" answered with composed queries; views persist.
+### Phase 3 — Insights + analysis (in progress)
+`aggregate_spending`, `find_correlations` (SQL recursive CTEs / window functions), budgets ✅ (Feature Design 015 —
+`create_budget`/`update_budget`/`delete_budget`/`list_budgets`/`get_budget_status`), goals, saved views; MCP
+resources + prompts; monthly-review and import-statement skills. **Exit:** "how was my spending vs budget, and
+what's driving the change?" answered with composed queries; views persist.
 
 ### Phase 4 — Surfaces & hardening
 Minimal web frontend rendering saved views; activate owner columns for multi-user groundwork; OFX/CSV importers behind an interface (Open Finance Brasil / Pluggy later); e2e against MCP transport. Multi-user/hosted would also reopen the auth + safety-guard work intentionally deferred for the local-first first release.

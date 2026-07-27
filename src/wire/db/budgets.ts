@@ -18,3 +18,9 @@ export const BudgetViewRowSchema = z.object({
   node_parent_id: z.string().nullable(),
   parent_name: z.string().nullable(),
 });
+
+// Same target-joined shape as BudgetViewRowSchema, plus the period's measured spend
+// (diplomat/db/repos/budgets.ts's `status` query) — no `version`, a status read never guards a write.
+export const BudgetStatusRowSchema = BudgetViewRowSchema.omit({ version: true }).extend({
+  spent: z.number(),
+});

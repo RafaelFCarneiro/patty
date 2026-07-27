@@ -17,7 +17,7 @@ import {
   updateAccountTransaction,
 } from '../../controllers/account/transaction.js';
 import { aggregateSpending } from '../../controllers/aggregate.js';
-import { createBudget, deleteBudget, listBudgets, updateBudget } from '../../controllers/budgets.js';
+import { createBudget, deleteBudget, getBudgetStatus, listBudgets, updateBudget } from '../../controllers/budgets.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
 import { deleteDashboard, listDashboards, renameDashboard, saveDashboard } from '../../controllers/dashboards.js';
 import {
@@ -67,6 +67,7 @@ import {
 } from '../../models/transaction.js';
 import { CreateCategorySchema, CreateSubCategorySchema } from '../../wire/in/categories.js';
 import { Locale, LocaleSource } from '../../models/locale.js';
+import { PeriodSchema } from '../../models/date.js';
 import { AccountType } from '../../models/account.js';
 import { BillQuerySchema, PayBillSchema } from '../../models/bill.js';
 import { RenameDashboardSchema, SaveDashboardSchema } from '../../models/dashboard.js';
@@ -817,8 +818,7 @@ export const buildMcpServer = (
         "sub-categories' spend (the envelope behavior); a sub-category budget measures only its own spend, " +
         "and also counts toward its parent's budget if one exists. Rejected for an income-kind category " +
         '(a budget caps spending). Rejected as a duplicate if this exact (target, currency, period) already ' +
-        'has a budget — use update_budget instead. Spend-vs-limit measurement (get_budget_status) is not ' +
-        'available yet — a future tool.',
+        'has a budget — use update_budget instead. Use get_budget_status to see spend-vs-limit.',
       inputSchema: CreateBudgetSchema.shape,
     },
     async (args) => {
@@ -857,12 +857,28 @@ export const buildMcpServer = (
     'list_budgets',
     {
       title: 'List budgets',
-      description:
-        'List all budgets (the limits themselves, no spend). Spend-vs-limit measurement (get_budget_status) ' +
-        'is not available yet — a future tool.',
+      description: 'List all budgets (the limits themselves, no spend) — use get_budget_status for spend-vs-limit.',
       inputSchema: {},
     },
     async () => json(await listBudgets(deps)),
+  );
+
+  server.registerTool(
+    'get_budget_status',
+    {
+      title: 'Get budget status',
+      description:
+        'Spend-vs-limit for every budget in a month (Feature Design 015 phase 2) — grouped by top-level ' +
+        'category so a category\'s own budget and each of its sub-categories\' own budgets read as one ' +
+        'coherent unit; no cross-currency total (per-currency lines, BRL and USD never mixed). `spent` sums ' +
+        'effective, expense-only, same-currency transactions in the month (income and transfers never count, ' +
+        "even on a both-kind category); a category budget rolls up its sub-categories' spend, a sub-category " +
+        'budget measures only its own (and also counts toward its ' +
+        'parent\'s, if the parent has a budget too). `remaining` (limit - spent) and `pct` (spent / limit) ' +
+        'can go negative / exceed 1 when over budget — over-budget is reported, never an error.',
+      inputSchema: PeriodSchema.shape,
+    },
+    async (args) => json(await getBudgetStatus(deps, args)),
   );
 
   server.registerTool(
