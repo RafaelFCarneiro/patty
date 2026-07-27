@@ -91,4 +91,13 @@ describe('findCorrelations — spending_shifts', () => {
     const result = await findCorrelations(deps, input());
     expect(result.shifts[0]).toMatchObject({ category: 'Alimentação', deltaPct: null, direction: 'up' });
   });
+
+  it('fails loudly instead of returning undefined for an analysis the switch does not handle', async () => {
+    // Can't happen through the MCP boundary (zod restricts `analysis` to the whitelisted enum) —
+    // exercises the runtime `assertNeverAnalysis` guard directly, the twin of the compile-time
+    // exhaustiveness check (a case is TS2366-enforced for every real `FindCorrelationsAnalysis` member).
+    const deps = makeDeps();
+    const bogusInput = { ...input(), analysis: 'not_a_real_analysis' } as unknown as ResolvedFindCorrelations;
+    await expect(findCorrelations(deps, bogusInput)).rejects.toThrow(/unhandled analysis/);
+  });
 });
