@@ -61,6 +61,7 @@ import {
   DEFAULT_BASELINE_MONTHS,
   DEFAULT_MIN_DELTA_PCT,
   FindCorrelationsSchema,
+  NEW_CATEGORY_ALWAYS_SURFACED_NOTE,
   type ResolvedFindCorrelations,
 } from '../../models/correlations.js';
 import { SortDirection } from '../../models/page.js';
@@ -590,7 +591,7 @@ export const buildMcpServer = (
         'expense-only total; `baseline` is the average monthly total over the preceding `baselineMonths`; ' +
         '`deltaPct` is the percentage change, `null` for a brand-new category with no baseline spend at all ' +
         '(reported with `direction: "up"`, not a divide-by-zero). Only categories at or above `minDeltaPct` ' +
-        'are returned, except brand-new categories which are always included; results are sorted by ' +
+        `are returned; ${NEW_CATEGORY_ALWAYS_SURFACED_NOTE}. Results are sorted by ` +
         '|deltaPct| descending. Sub-category spend rolls up into its parent category, same as ' +
         'aggregate_spending/budgets. Per-currency — BRL and USD are never mixed.',
       inputSchema: {

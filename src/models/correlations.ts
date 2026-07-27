@@ -11,6 +11,11 @@ export type FindCorrelationsAnalysis = z.infer<typeof FindCorrelationsAnalysis>;
 export const DEFAULT_BASELINE_MONTHS = 3;
 export const DEFAULT_MIN_DELTA_PCT = 20;
 
+// Shared between minDeltaPct's own field description below and the tool's registered description
+// (diplomat/mcp/server.ts), so the two can't drift apart.
+export const NEW_CATEGORY_ALWAYS_SURFACED_NOTE =
+  'a brand-new category with no baseline spend at all is always surfaced regardless of this threshold';
+
 export const FindCorrelationsSchema = z.object({
   analysis: FindCorrelationsAnalysis.describe('Which correlation analysis to run'),
   month: PeriodSchema.shape.month.describe(
@@ -30,7 +35,7 @@ export const FindCorrelationsSchema = z.object({
     .optional()
     .describe(
       `Only surface categories whose |deltaPct| is at least this percentage (default ${DEFAULT_MIN_DELTA_PCT}); ` +
-        'a brand-new category with no baseline spend at all is always surfaced regardless of this threshold',
+        NEW_CATEGORY_ALWAYS_SURFACED_NOTE,
     ),
 });
 export type FindCorrelations = z.infer<typeof FindCorrelationsSchema>;
