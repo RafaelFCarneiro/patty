@@ -2,12 +2,14 @@
 
 **Type:** Feature design (a capability + technical assessment) · **Design status:** Accepted ·
 **Implementation status:** In progress (Phase A done — `spending_shifts`) · **Date:** 2026-07-25 · PLAN Phase 3 (insights) — the "differentiator"
-analysis tool. **Read-only** (no entity, no write flow); safe dynamic SQL via the ADR-011 whitelist pattern;
-respects the effective-only + per-currency invariants.
+analysis tool. **Read-only** (no entity, no write flow); a later phase with a caller-selected SQL shape (e.g. a
+groupBy-style dimension) would reuse the ADR-011 whitelist pattern — Phase A's query shape is fixed, so it needs
+no fragment map; respects the effective-only + per-currency invariants.
 
 > **Implementation status**: `Not started` · `In progress` · `Done` · `Blocked`.
-> **Three sequential PRs**, one analysis each, off `main`: `feat/correlations-spending-shifts` (A) →
-> `feat/correlations-recurring-candidates` (B) → `feat/correlations-merchant-concentration` (C).
+> **Four sequential PRs**, one analysis each, off `main`: `feat/correlations-spending-shifts` (A) →
+> `feat/correlations-recurring-candidates` (B) → `feat/correlations-merchant-concentration` (C) →
+> `feat/correlations-budget-fit` (D).
 
 ## Context
 
@@ -23,7 +25,7 @@ categories dropped — the fuzziest signal, least actionable, "same-day basket" 
 - **D. Budget fit** — does each budget make sense against the actual spending pattern, and what would a realistic
   limit be. Correlates the shift analysis (A) with the budgets entity (Design 015).
 
-All three are **read-only** over `transactions` (which carry `merchant_key`, `category_id`, `subcategory_id`,
+All four are **read-only** over `transactions` (which carry `merchant_key`, `category_id`, `subcategory_id`,
 `date`, `amount`, `currency`, `type`, `status`), reusing the effective-only / `type = 'expense'` / no-transfer
 predicates so figures reconcile with `aggregate_spending`/`get_spending_summary`, and grouped **per currency**
 (no cross-currency mixing).
