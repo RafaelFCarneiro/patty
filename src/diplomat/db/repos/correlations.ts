@@ -9,7 +9,7 @@ import type { Db } from '../driver.js';
  *  sub-category transaction's `category_id` is always its parent's, so sub-category spend rolls up
  *  for free. */
 const SPENDING_SHIFTS_SELECT = (baselineFrom: string, currentFrom: string, currentTo: string) => sql`
-  SELECT c.id AS category_id, c.name AS category, c.names AS category_names, t.currency,
+  SELECT c.name AS category, c.names AS category_names, t.currency,
          SUM(CASE WHEN t.date >= ${currentFrom} THEN t.amount ELSE 0 END) AS current,
          SUM(CASE WHEN t.date < ${currentFrom} THEN t.amount ELSE 0 END) AS baseline_total
   FROM transactions t
