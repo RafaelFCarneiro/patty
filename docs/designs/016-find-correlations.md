@@ -1,7 +1,7 @@
 # Feature Design 016: `find_correlations` — spending shifts, recurring candidates, merchant concentration
 
 **Type:** Feature design (a capability + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress (Phase A done — `spending_shifts`) · **Date:** 2026-07-25 · PLAN Phase 3 (insights) — the "differentiator"
+**Implementation status:** In progress (Phase A done — `spending_shifts`; Phase D done — `budget_fit`) · **Date:** 2026-07-25 · PLAN Phase 3 (insights) — the "differentiator"
 analysis tool. **Read-only** (no entity, no write flow); a later phase with a caller-selected SQL shape (e.g. a
 groupBy-style dimension) would reuse the ADR-011 whitelist pattern — Phase A's query shape is fixed, so it needs
 no fragment map; respects the effective-only + per-currency invariants.
@@ -169,10 +169,20 @@ best-effort rule-exclusion; result shaped for `create_recurring`; docs.
 ### Phase C — `feat/correlations-merchant-concentration`
 `merchant_concentration` mode: the per-category top-merchant + cumulative-share query; result shape; docs.
 
-### Phase D — `feat/correlations-budget-fit`
+### Phase D — `feat/correlations-budget-fit` ✅ Done
 `budget_fit` mode: reuse A's baseline, join budgets (`list`), per-currency verdicts + `suggestedLimit` for
 existing budgets and unbudgeted-significant-spend suggestions; result shape; docs. Read-only — no budget writes
 here (the AI applies suggestions via `create_budget`/`update_budget`). Depends on Phase A.
+
+**As built:** the query lives in `correlationsRepo.budgetFit` (`diplomat/db/repos/correlations.ts`), joining
+`budgets`/`categories`/`transactions` via a `budgetTargetMatch` predicate extracted from `budgetsRepo.status`
+(shared so the two measurement queries can't drift — mirrors `transactionsRepo.correlatedToCard`), with the same
+current/baseline conditional-SUM split as Phase A's query. "Unbudgeted" materiality is `baseline > 0` (an
+established trailing spend pattern) — no separate threshold param, since the design's Params list didn't name
+one beyond `slackPct`/`overPct`. The design left the over-budget verdict's name undecided ("tight/unrealistic")
+— resolved to a single `unrealistic` verdict (three total: `realistic`/`unrealistic`/`generous`). `suggestedLimit`
+is `baseline * 1.10` (`SUGGESTED_LIMIT_MARGIN_PCT`), applied uniformly regardless of verdict, per the design's
+"baseline plus a small margin" phrasing.
 
 ### Finish (every push, every phase)
 Run the Definition of Done (CLAUDE.md): the self-review pass + the gate

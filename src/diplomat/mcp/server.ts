@@ -60,6 +60,8 @@ import {
 import {
   DEFAULT_BASELINE_MONTHS,
   DEFAULT_MIN_DELTA_PCT,
+  DEFAULT_OVER_PCT,
+  DEFAULT_SLACK_PCT,
   FindCorrelationsSchema,
   NEW_CATEGORY_ALWAYS_SURFACED_NOTE,
   type ResolvedFindCorrelations,
@@ -593,11 +595,21 @@ export const buildMcpServer = (
         '(reported with `direction: "up"`, not a divide-by-zero). Only categories at or above `minDeltaPct` ' +
         `are returned; ${NEW_CATEGORY_ALWAYS_SURFACED_NOTE}. Results are sorted by ` +
         '|deltaPct| descending. Sub-category spend rolls up into its parent category, same as ' +
-        'aggregate_spending/budgets. Per-currency — BRL and USD are never mixed.',
+        'aggregate_spending/budgets. Per-currency — BRL and USD are never mixed. ' +
+        '`budget_fit`: closes the loop between insights and budgets — read-only, apply a suggestion yourself ' +
+        'via create_budget/update_budget. `budgeted` has one line per existing budget: `baseline` (same ' +
+        'trailing-average definition as spending_shifts) compared to the budget\'s own `limit` yields a ' +
+        '`verdict` — "realistic" (baseline within tolerance of limit), "unrealistic" (baseline materially ' +
+        'over limit — consistently over-budget, use `overPct`), or "generous" (baseline well under limit, ' +
+        'use `slackPct`) — plus a `suggestedLimit` (baseline plus a small margin) you can pass straight to ' +
+        'update_budget. `unbudgeted` lists categories with an established (nonzero baseline) spend pattern ' +
+        'but no budget at all, each with a `suggestedLimit` ready for create_budget.',
       inputSchema: {
         ...FindCorrelationsSchema.shape,
         baselineMonths: FindCorrelationsSchema.shape.baselineMonths.default(DEFAULT_BASELINE_MONTHS),
         minDeltaPct: FindCorrelationsSchema.shape.minDeltaPct.default(DEFAULT_MIN_DELTA_PCT),
+        slackPct: FindCorrelationsSchema.shape.slackPct.default(DEFAULT_SLACK_PCT),
+        overPct: FindCorrelationsSchema.shape.overPct.default(DEFAULT_OVER_PCT),
       },
     },
     async (args) => json(await findCorrelations(deps, args as ResolvedFindCorrelations)),

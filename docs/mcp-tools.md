@@ -220,9 +220,8 @@ REST mirror: `GET /api/aggregate?groupBy=category&month=6&year=2026`.
 ## find_correlations
 
 Feature Design 016: one tool over spending-pattern analyses, discriminated by `analysis` (a whitelisted enum,
-mirroring `aggregate_spending`'s `groupBy`). Additive across phases — only `spending_shifts` exists so far
-(`recurring_candidates`, `merchant_concentration`, `budget_fit` land in later phases). Read-only: no entity, no
-write flow.
+mirroring `aggregate_spending`'s `groupBy`). Additive across phases — `spending_shifts` and `budget_fit` exist so
+far (`recurring_candidates`, `merchant_concentration` land in later phases). Read-only: no entity, no write flow.
 
 ### spending_shifts
 
@@ -259,6 +258,45 @@ Sorted by `|deltaPct|` descending; brand-new-spend categories (`deltaPct: null`)
 **Safety:** the query shape is fixed (no caller-selected dimension); all filter values (dates, thresholds) are
 parameter-bound, never concatenated into SQL — the same discipline as ADR-011 without needing a whitelist
 fragment map, since there is no structural choice to whitelist.
+
+### budget_fit
+
+Closes the loop between insights and budgets: does each budget's limit make sense against actual spending, and
+what would a realistic limit be. **Read-only** — apply a suggestion yourself via `create_budget`/`update_budget`;
+this mode never writes.
+
+**Input:**
+- `analysis: "budget_fit"` (required)
+- `month`, `year` (required): the reference period
+- `baselineMonths` (default `3`): same trailing-average definition as `spending_shifts`
+- `slackPct` (default `20`): how far below the limit the baseline can sit before the verdict is `"generous"`
+- `overPct` (default `20`): how far above the limit the baseline can sit before the verdict is `"unrealistic"`
+
+**Computation:** `budgeted` has one line per existing budget — `baseline` is measured against the budget's own
+target the same way `get_budget_status` measures `spent` (a category budget rolls up its sub-categories; a
+sub-category budget measures only its own spend), split into a current-month/trailing-baseline pair like
+`spending_shifts`. `verdict` compares `baseline` to `limit`: `"realistic"` (within `[1 - slackPct%, 1 + overPct%]`
+of the limit), `"unrealistic"` (baseline materially over the limit — consistently over-budget), or `"generous"`
+(baseline well under the limit). Every line also carries a `suggestedLimit` (`baseline` plus a 10% margin, not
+the bare average, since a limit set exactly at the average would be exceeded by any normal month-to-month
+variance) — pass it straight to `update_budget`. `unbudgeted` lists top-level categories with an established
+(nonzero) baseline spend pattern and no budget covering them at all (whether directly or via a sub-category
+budget), each with a `suggestedLimit` ready for `create_budget`. A one-off current-month blip with no baseline
+track record is never suggested. Per-currency throughout — a BRL budget is measured only against BRL spend.
+
+**Output:**
+```jsonc
+{ "analysis": "budget_fit", "month": 6, "year": 2026,
+  "budgeted": [
+    { "id": "budget-1", "category": "Alimentação", "currency": "BRL", "limit": 500.0,
+      "current": 640.0, "baseline": 720.0, "verdict": "unrealistic", "suggestedLimit": 792.0 },
+    { "id": "budget-2", "category": "Lazer", "currency": "BRL", "limit": 800.0,
+      "current": 90.0, "baseline": 100.0, "verdict": "generous", "suggestedLimit": 110.0 }
+  ],
+  "unbudgeted": [
+    { "category": "Transporte", "currency": "BRL", "baseline": 340.0, "suggestedLimit": 374.0 }
+  ] }
+```
 
 No REST mirror yet (MCP-only, mirrors the budget tools).
 
