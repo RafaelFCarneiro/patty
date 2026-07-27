@@ -5,13 +5,14 @@ import {
   BudgetFitVerdict,
   SpendingShiftDirection,
   SUGGESTED_LIMIT_MARGIN_PCT,
+  type BudgetFitInput,
   type BudgetFitLine,
   type SpendingShift,
+  type SpendingShiftInput,
   type UnbudgetedSpend,
 } from '../models/correlations.js';
 import type { Locale } from '../models/locale.js';
 import type { CurrencyCode } from '../models/money.js';
-import type { BudgetFitDbRow, SpendingShiftDbRow } from '../wire/db/correlations.js';
 
 /** A shift with no measurable baseline (brand-new spend) has no percentage to compare against
  *  `minDeltaPct`, but is always the most notable kind of shift — sorts as maximally significant. */
@@ -21,7 +22,7 @@ const shiftMagnitude = (deltaPct: number | null): number =>
 const passesThreshold = (deltaPct: number | null, minDeltaPct: number): boolean =>
   deltaPct === null || Math.abs(deltaPct) >= minDeltaPct;
 
-const toSpendingShift = (row: SpendingShiftDbRow, baselineMonths: number, locale: Locale): SpendingShift => {
+const toSpendingShift = (row: SpendingShiftInput, baselineMonths: number, locale: Locale): SpendingShift => {
   // Decide null/direction/deltaPct off the unrounded baseline — rounding first could turn a real
   // (if tiny) baseline into a false 0.00, misclassifying it as brand-new.
   const rawBaseline = row.baselineTotal / baselineMonths;
@@ -41,7 +42,7 @@ const toSpendingShift = (row: SpendingShiftDbRow, baselineMonths: number, locale
 };
 
 export const shapeSpendingShifts = (
-  rows: readonly SpendingShiftDbRow[],
+  rows: readonly SpendingShiftInput[],
   baselineMonths: number,
   minDeltaPct: number,
   locale: Locale,
@@ -62,27 +63,24 @@ const verdictFor = (baseline: number, limit: number, slackPct: number, overPct: 
   return BudgetFitVerdict.enum.realistic;
 };
 
-/** A budget's target is either the node itself (`node_parent_id` null — a top-level category) or a
- *  sub-category of it — mirrors `adapters/budgets.ts`'s `dbToView`/`dbToStatusEntry`. `parent_name!`
- *  is safe: `isSubCategory` true means `node.parent_id` is set, and a category's `parent_id` is a
+/** A budget's target is either the node itself (`nodeParentId` null — a top-level category) or a
+ *  sub-category of it — mirrors `adapters/budgets.ts`'s `dbToView`/`dbToStatusEntry`. `parentName!`
+ *  is safe: `isSubCategory` true means `nodeParentId` is set, and a category's `parent_id` is a
  *  self-referencing FK that can never point at a deleted row (`delete_category` blocks deleting a
  *  category any sub-category still references), so the `LEFT JOIN parent` always matches here. */
-const resolveBudgetTargetNames = (
-  row: BudgetFitDbRow,
-  locale: Locale,
-): { category: string; subCategory?: string } => {
-  const isSubCategory = row.node_parent_id !== null;
-  const nodeName = localizeCategoryName(row.node_name, row.nodeNames, locale) ?? row.node_name;
+const resolveBudgetTargetNames = (row: BudgetFitInput, locale: Locale): { category: string; subCategory?: string } => {
+  const isSubCategory = row.nodeParentId !== null;
+  const nodeName = localizeCategoryName(row.nodeName, row.nodeNames, locale) ?? row.nodeName;
   return {
     category: isSubCategory
-      ? (localizeCategoryName(row.parent_name, row.parentNames, locale) ?? row.parent_name!)
+      ? (localizeCategoryName(row.parentName, row.parentNames, locale) ?? row.parentName!)
       : nodeName,
     subCategory: isSubCategory ? nodeName : undefined,
   };
 };
 
 const toBudgetFitLine = (
-  row: BudgetFitDbRow,
+  row: BudgetFitInput,
   baselineMonths: number,
   slackPct: number,
   overPct: number,
@@ -102,7 +100,7 @@ const toBudgetFitLine = (
 };
 
 export const shapeBudgetFitLines = (
-  rows: readonly BudgetFitDbRow[],
+  rows: readonly BudgetFitInput[],
   baselineMonths: number,
   slackPct: number,
   overPct: number,
@@ -122,7 +120,7 @@ const budgetedKey = (category: string, currency: CurrencyCode): string => `${cat
  *  sub-category budget's line (whose `category` is already resolved to its parent) still excludes
  *  the parent category from this list. */
 export const shapeUnbudgetedSpend = (
-  shiftRows: readonly SpendingShiftDbRow[],
+  shiftRows: readonly SpendingShiftInput[],
   budgeted: readonly BudgetFitLine[],
   baselineMonths: number,
   locale: Locale,

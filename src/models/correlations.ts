@@ -92,6 +92,19 @@ export const SpendingShiftSchema = z.object({
 });
 export type SpendingShift = z.infer<typeof SpendingShiftSchema>;
 
+/** What `logic/correlations.ts`'s `shapeSpendingShifts` needs per row — structurally matches (but
+ *  is not the same declaration as) `SpendingShiftDbRow` (`wire/db/correlations.ts`); the repo's
+ *  already-decoded rows satisfy this shape without any explicit conversion. Declared here, not in
+ *  `logic/`, so the pure shaping functions depend on `models/` only, never `wire/db` (see #150 for
+ *  the fuller adapter-layer follow-up this sidesteps for now). */
+export type SpendingShiftInput = {
+  category: string;
+  categoryNames: Record<string, string> | null;
+  currency: CurrencyCode;
+  current: number;
+  baselineTotal: number;
+};
+
 export const SpendingShiftsResultSchema = z.object({
   analysis: z.literal(FindCorrelationsAnalysis.enum.spending_shifts),
   month: PeriodSchema.shape.month,
@@ -127,6 +140,21 @@ export const BudgetFitLineSchema = z.object({
   suggestedLimit: z.number().describe('A more realistic limit given actual spend: baseline plus a small margin'),
 });
 export type BudgetFitLine = z.infer<typeof BudgetFitLineSchema>;
+
+/** What `logic/correlations.ts`'s `shapeBudgetFitLines` needs per row — same rationale as
+ *  `SpendingShiftInput` above; structurally matches `BudgetFitDbRow` (`wire/db/correlations.ts`). */
+export type BudgetFitInput = {
+  id: string;
+  currency: CurrencyCode;
+  limit: number;
+  nodeName: string;
+  nodeNames: Record<string, string> | null;
+  nodeParentId: string | null;
+  parentName: string | null;
+  parentNames: Record<string, string> | null;
+  current: number;
+  baselineTotal: number;
+};
 
 export const UnbudgetedSpendSchema = z.object({
   category: z.string().min(1).describe('Top-level category name with material spend but no budget at all'),

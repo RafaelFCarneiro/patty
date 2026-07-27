@@ -17,9 +17,9 @@ const row = (overrides: Partial<SpendingShiftDbRow> = {}): SpendingShiftDbRow =>
 const budgetRow = (overrides: Partial<BudgetFitDbRow> = {}): BudgetFitDbRow => ({
   id: 'budget-1',
   currency: CurrencyCode.enum.BRL,
-  node_name: 'Food',
-  node_parent_id: null,
-  parent_name: null,
+  nodeName: 'Food',
+  nodeParentId: null,
+  parentName: null,
   nodeNames: null,
   parentNames: null,
   current: 0,
@@ -134,7 +134,7 @@ describe('shapeBudgetFitLines', () => {
 
   it('reports a sub-category budget under its parent category name', () => {
     const [line] = shapeBudgetFitLines(
-      [budgetRow({ node_name: 'Restaurants', node_parent_id: 'cat-food', parent_name: 'Food' })],
+      [budgetRow({ nodeName: 'Restaurants', nodeParentId: 'cat-food', parentName: 'Food' })],
       3,
       20,
       20,
@@ -160,7 +160,7 @@ describe('shapeBudgetFitLines', () => {
 
   it('localizes the category name via the names map for the given locale', () => {
     const [line] = shapeBudgetFitLines(
-      [budgetRow({ node_name: 'Food', nodeNames: { pt: 'Alimentação' } })],
+      [budgetRow({ nodeName: 'Food', nodeNames: { pt: 'Alimentação' } })],
       3,
       20,
       20,

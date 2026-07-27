@@ -114,9 +114,9 @@ const budgetFitInput = (overrides: Partial<ResolvedFindCorrelations> = {}): Reso
 const budgetRow = (overrides: Partial<BudgetFitDbRow> = {}): BudgetFitDbRow => ({
   id: 'budget-1',
   currency: CurrencyCode.enum.BRL,
-  node_name: 'Food',
-  node_parent_id: null,
-  parent_name: null,
+  nodeName: 'Food',
+  nodeParentId: null,
+  parentName: null,
   nodeNames: null,
   parentNames: null,
   current: 0,
@@ -204,9 +204,9 @@ describe('findCorrelations — budget_fit', () => {
       correlations: {
         budgetFit: async () => [
           budgetRow({
-            node_name: 'Restaurants',
-            node_parent_id: 'cat-food',
-            parent_name: 'Food',
+            nodeName: 'Restaurants',
+            nodeParentId: 'cat-food',
+            parentName: 'Food',
             limit: 300,
             baselineTotal: 900,
           }),
