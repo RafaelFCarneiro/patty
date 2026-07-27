@@ -88,6 +88,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   budgets: {} as Deps['budgets'],
   categories: {} as Deps['categories'],
   subCategories: {} as Deps['subCategories'],
+  correlations: {} as Deps['correlations'],
   creditCards: {
     findByName: async () => null,
     countCorrelated: async () => ({ transactions: 0, bills: 0 }),

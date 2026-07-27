@@ -11,6 +11,7 @@ import { billsRepo } from '../../../src/diplomat/db/repos/bills.js';
 import { budgetsRepo } from '../../../src/diplomat/db/repos/budgets.js';
 import { categoriesRepo } from '../../../src/diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from '../../../src/diplomat/db/repos/subCategories.js';
+import { correlationsRepo } from '../../../src/diplomat/db/repos/correlations.js';
 import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
 import { dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { healthRepo } from '../../../src/diplomat/db/repos/health.js';
@@ -53,6 +54,7 @@ describe('empty DB (ADR-008)', () => {
       budgets: budgetsRepo(db),
       categories: categoriesRepo(db),
       subCategories: subCategoriesRepo(db),
+      correlations: correlationsRepo(db),
       creditCards: creditCardsRepo(db),
       dashboards: dashboardsRepo(db),
       health: healthRepo(db),

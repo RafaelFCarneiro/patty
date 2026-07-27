@@ -9,6 +9,7 @@ import { billApplier, billsRepo } from '../../src/diplomat/db/repos/bills.js';
 import { budgetApplier, budgetsRepo } from '../../src/diplomat/db/repos/budgets.js';
 import { categoriesRepo, categoryApplier } from '../../src/diplomat/db/repos/categories.js';
 import { subCategoriesRepo } from '../../src/diplomat/db/repos/subCategories.js';
+import { correlationsRepo } from '../../src/diplomat/db/repos/correlations.js';
 import { creditCardApplier, creditCardsRepo } from '../../src/diplomat/db/repos/creditCards.js';
 import { dashboardApplier, dashboardsRepo } from '../../src/diplomat/db/repos/dashboards.js';
 import { merchantApplier, merchantCategoryApplier, merchantsRepo } from '../../src/diplomat/db/repos/merchants.js';
@@ -66,6 +67,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     budgets: budgetsRepo(db),
     categories: categoriesRepo(db),
     subCategories: subCategoriesRepo(db),
+    correlations: correlationsRepo(db),
     creditCards: creditCardsRepo(db),
     dashboards: dashboardsRepo(db),
     health: healthRepo(db),

@@ -217,6 +217,51 @@ Flexible spending aggregation: group transactions by a chosen dimension, measure
 
 REST mirror: `GET /api/aggregate?groupBy=category&month=6&year=2026`.
 
+## find_correlations
+
+Feature Design 016: one tool over spending-pattern analyses, discriminated by `analysis` (a whitelisted enum,
+mirroring `aggregate_spending`'s `groupBy`). Additive across phases — only `spending_shifts` exists so far
+(`recurring_candidates`, `merchant_concentration`, `budget_fit` land in later phases). Read-only: no entity, no
+write flow.
+
+### spending_shifts
+
+"What's driving the change" — what's up or down vs a trailing baseline, per `(category, currency)`.
+
+**Input:**
+- `analysis: "spending_shifts"` (required)
+- `month`, `year` (required): the reference period
+- `baselineMonths` (default `3`): trailing window size in months averaged into the baseline
+- `minDeltaPct` (default `20`): only surface categories whose `|deltaPct|` is at least this percentage; a
+  brand-new category with no baseline spend at all is always surfaced regardless of this threshold
+
+**Computation:** per `(category, currency)`, `current` = the reference month's effective, expense-only total;
+`baseline` = the average monthly effective expense total over the preceding `baselineMonths`; `deltaPct` =
+`(current - baseline) / baseline * 100`, or `null` when there is no baseline spend at all (a brand-new category
+— reported with `direction: "up"`, not a divide-by-zero). A category with baseline spend but nothing this
+month (`current: 0`) is a legitimate `down` shift. Sub-category spend rolls up into its parent category, same
+as `aggregate_spending`/budgets (a sub-category transaction's `category_id` is always its parent's). Only
+`effective`, `expense`-typed transactions count — pending, income, and transfers never do, even on a
+`both`-kind category.
+
+**Output:**
+```jsonc
+{ "analysis": "spending_shifts", "month": 6, "year": 2026,
+  "shifts": [
+    { "category": "Alimentação", "currency": "BRL", "current": 1200.0, "baseline": 800.0,
+      "deltaPct": 50.0, "direction": "up" },
+    { "category": "New Hobby", "currency": "BRL", "current": 300.0, "baseline": 0,
+      "deltaPct": null, "direction": "up" }
+  ] }
+```
+Sorted by `|deltaPct|` descending; brand-new-spend categories (`deltaPct: null`) sort first.
+
+**Safety:** the query shape is fixed (no caller-selected dimension); all filter values (dates, thresholds) are
+parameter-bound, never concatenated into SQL — the same discipline as ADR-011 without needing a whitelist
+fragment map, since there is no structural choice to whitelist.
+
+No REST mirror yet (MCP-only, mirrors the budget tools).
+
 ## get_spending_summary
 
 Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `balance`, `byCategory` (sorted by total desc). Currencies are never mixed or converted.

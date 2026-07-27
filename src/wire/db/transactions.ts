@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { LocalizedNamesSchema } from '../../models/category.js';
 import { CurrencyCode } from '../../models/money.js';
 import { MovementType, TransactionSortField, TransactionStatus } from '../../models/transaction.js';
 import type { transactions } from '../../diplomat/db/schema.js';
+import { parseCategoryNames } from './categories.js';
 
 // Inferred Drizzle select type — the canonical shape of a transactions row.
 export type TransactionRow = typeof transactions.$inferSelect;
@@ -81,9 +81,6 @@ export const ORDER_BY_COLUMN: Record<TransactionSortField, string> = {
   [TransactionSortField.enum.date]: 't.date',
   [TransactionSortField.enum.amount]: 't.amount',
 };
-
-const parseCategoryNames = (raw: string | null): Record<string, string> | null =>
-  raw ? LocalizedNamesSchema.parse(JSON.parse(raw)) : null;
 
 export const SummaryRowSchema = z
   .object({

@@ -1,6 +1,7 @@
 import * as R from 'remeda';
 import { purry } from 'remeda';
 import { localizeCategoryName } from './category.js';
+import { roundMoney } from './money.js';
 import type { CurrencyCode } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
 import type { CurrencySummary, SummaryRow } from '../models/summary.js';
@@ -11,8 +12,6 @@ const uncategorizedLabels: Record<Locale, string> = {
   pt: 'Sem categoria',
   es: 'Sin categoría',
 };
-
-const roundMoney = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
 
 const sumOf = (rows: readonly SummaryRow[], type: TransactionType): number =>
   roundMoney(

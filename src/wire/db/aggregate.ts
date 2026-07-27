@@ -1,9 +1,6 @@
 import { z } from 'zod';
-import { LocalizedNamesSchema } from '../../models/category.js';
 import { CurrencyCode } from '../../models/money.js';
-
-const parseCategoryNames = (raw: string | null): Record<string, string> | null =>
-  raw ? LocalizedNamesSchema.parse(JSON.parse(raw)) : null;
+import { parseCategoryNames } from './categories.js';
 
 export const AggregateDbRowSchema = z
   .object({

@@ -18,6 +18,18 @@ export const hasDateRange = (input: PeriodInput): boolean => isNonNullish(input.
 
 export const assertHasPeriodOrRange = (input: PeriodInput): boolean => hasPeriod(input) || hasDateRange(input);
 
+/** `[from, to)` for the `baselineMonths` immediately preceding `period` — half-open, and its `to`
+ *  is exactly `periodRange(period).from`, so the baseline and reference windows chain with no gap
+ *  and no overlap. Proleptic month-index arithmetic (`year*12 + (month-1)`) avoids `Date`/timezone
+ *  entirely, consistent with the rest of this module. */
+export const baselineRange = (period: Period, baselineMonths: number): DateRange => {
+  const { from: to } = periodRange(period);
+  const monthIndex = period.year * 12 + (period.month - 1) - baselineMonths;
+  const year = Math.floor(monthIndex / 12);
+  const month = monthIndex - year * 12 + 1;
+  return { from: `${year}-${pad(month)}-01`, to };
+};
+
 export const resolveDateRange = (input: PeriodInput): NullableDateRange => {
   const range = hasPeriod(input) ? periodRange({ month: input.month!, year: input.year! }) : null;
   return {
