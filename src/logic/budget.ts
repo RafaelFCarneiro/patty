@@ -54,14 +54,20 @@ const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => ({
 });
 
 /** Per-currency and per-sub-category lines read as one coherent unit, never summed together (no
- *  cross-currency total). Mirrors `logic/summary.ts`'s `summarize` grouping idiom. */
+ *  cross-currency total). Sorted explicitly (mirrors `logic/summary.ts`'s `summarize` /
+ *  `logic/aggregate.ts`'s `shapeAggregateResult`) rather than relying on the repo query's own
+ *  ordering, so the response is deterministic regardless of row order in. */
 export const groupStatusByCategory = (entries: readonly BudgetStatusEntry[]): BudgetStatusGroup[] =>
   R.pipe(
     entries,
     R.groupBy((e) => e.category),
     R.entries(),
-    R.map(([category, categoryEntries]): BudgetStatusGroup => ({
-      category,
-      lines: R.map(categoryEntries, toStatusLine),
-    })),
+    R.map(([category, categoryEntries]): BudgetStatusGroup => {
+      const lines: BudgetStatusLine[] = R.map(categoryEntries, toStatusLine);
+      return {
+        category,
+        lines: R.sortBy(lines, [(l) => l.subCategory ?? '', 'asc'], [(l) => l.currency, 'asc']),
+      };
+    }),
+    R.sortBy((group) => group.category),
   );

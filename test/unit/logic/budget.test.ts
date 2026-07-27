@@ -139,4 +139,28 @@ describe('groupStatusByCategory', () => {
   it('returns an empty array for no budgets', () => {
     expect(groupStatusByCategory([])).toEqual([]);
   });
+
+  it('sorts groups by category name regardless of input order', () => {
+    const groups = groupStatusByCategory([
+      entry({ id: 'budget-transport', category: 'Transport' }),
+      entry({ id: 'budget-food', category: 'Food' }),
+    ]);
+    expect(groups.map((g) => g.category)).toEqual(['Food', 'Transport']);
+  });
+
+  it('sorts a category\'s own line before its sub-categories\', regardless of input order', () => {
+    const [group] = groupStatusByCategory([
+      entry({ id: 'budget-restaurants', subCategory: 'Restaurants', limit: 100, spent: 50 }),
+      entry({ id: 'budget-food' }),
+    ]);
+    expect(group?.lines.map((l) => l.subCategory)).toEqual([undefined, 'Restaurants']);
+  });
+
+  it('sorts same-target lines by currency, regardless of input order', () => {
+    const [group] = groupStatusByCategory([
+      entry({ id: 'budget-usd', currency: CurrencyCode.enum.USD, limit: 100, spent: 30 }),
+      entry({ id: 'budget-brl', currency: CurrencyCode.enum.BRL, spent: 200 }),
+    ]);
+    expect(group?.lines.map((l) => l.currency)).toEqual([CurrencyCode.enum.BRL, CurrencyCode.enum.USD]);
+  });
 });
