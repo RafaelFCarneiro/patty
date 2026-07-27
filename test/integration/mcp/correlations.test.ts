@@ -61,7 +61,7 @@ const seedBaseline = async (
       category,
       currency,
       date,
-      idempotencyKey: `corr-baseline-${stamp}-${currency}-${i}`,
+      idempotencyKey: `corr-baseline-${stamp}-${category}-${currency}-${i}`,
     });
   }
 };
