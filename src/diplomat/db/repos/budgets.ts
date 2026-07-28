@@ -20,14 +20,11 @@ const BUDGET_VIEW_SELECT = sql`
   LEFT JOIN categories parent ON parent.id = node.parent_id
 `;
 
-/** A transaction counts toward a budget's target: a top-level target (`node.parent_id IS NULL`)
- *  matches on `t.category_id`, rolling up sub-category spend for free (a sub-category transaction's
- *  `category_id` is always its parent's); a sub-category target matches only `t.subcategory_id`,
- *  independently — so the same transaction counts toward both a sub-category's budget and its
- *  parent's, when both exist. Assumes the query aliases `budgets b` / `categories node` (the
- *  budgeted node) the same way every consumer does. Shared by `budgetsRepo.status` and
- *  `correlationsRepo.budgetFit` (Feature Design 016 phase D) so the two measurement queries can't
- *  drift apart — mirrors `transactionsRepo.correlatedToCard`, a predicate shared the same way. */
+/** A top-level target (`node.parent_id IS NULL`) matches on `t.category_id`, rolling up
+ *  sub-category spend for free; a sub-category target matches only `t.subcategory_id`. Assumes the
+ *  query aliases `budgets b`/`categories node` the same way every consumer does. Shared by
+ *  `budgetsRepo.status` and `correlationsRepo.budgetFit` so the two can't drift apart — mirrors
+ *  `transactionsRepo.correlatedToCard`. */
 export const budgetTargetMatch = sql`
   (node.parent_id IS NULL AND t.category_id = b.category_id)
   OR (node.parent_id IS NOT NULL AND t.subcategory_id = b.category_id)

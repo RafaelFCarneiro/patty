@@ -34,8 +34,7 @@ export const findCorrelations = async (
       const { from: baselineFrom } = baselineRange(input, input.baselineMonths);
       const budgetRows = await deps.correlations.budgetFit(baselineFrom, currentFrom, currentTo);
       const budgeted = shapeBudgetFitLines(budgetRows, input.baselineMonths, input.slackPct, input.overPct, locale);
-      // Unbudgeted candidates reuse Phase A's own query (the same per-category baseline the
-      // design calls for), excluding whatever `budgeted` already covers.
+      // Unbudgeted candidates reuse Phase A's own query, excluding whatever `budgeted` already covers.
       const shiftRows = await deps.correlations.spendingShifts(baselineFrom, currentFrom, currentTo);
       return {
         analysis: FindCorrelationsAnalysis.enum.budget_fit,

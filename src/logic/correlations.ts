@@ -63,11 +63,10 @@ const verdictFor = (baseline: number, limit: number, slackPct: number, overPct: 
   return BudgetFitVerdict.enum.realistic;
 };
 
-/** A budget's target is either the node itself (`nodeParentId` null — a top-level category) or a
- *  sub-category of it — mirrors `adapters/budgets.ts`'s `dbToView`/`dbToStatusEntry`. `parentName!`
- *  is safe: `isSubCategory` true means `nodeParentId` is set, and a category's `parent_id` is a
- *  self-referencing FK that can never point at a deleted row (`delete_category` blocks deleting a
- *  category any sub-category still references), so the `LEFT JOIN parent` always matches here. */
+/** A budget targets either the node itself or one of its sub-categories — mirrors
+ *  `adapters/budgets.ts`'s `dbToView`/`dbToStatusEntry`. `parentName!` is safe: a category's
+ *  `parent_id` is a self-referencing FK `delete_category` never lets dangle, so the `LEFT JOIN
+ *  parent` always matches when `nodeParentId` is set. */
 const resolveBudgetTargetNames = (row: BudgetFitInput, locale: Locale): { category: string; subCategory?: string } => {
   const isSubCategory = row.nodeParentId !== null;
   const nodeName = localizeCategoryName(row.nodeName, row.nodeNames, locale) ?? row.nodeName;
@@ -114,11 +113,9 @@ export const shapeBudgetFitLines = (
 
 const budgetedKey = (category: string, currency: CurrencyCode): string => `${category}::${currency}`;
 
-/** A category counts as "unbudgeted" when it has an established (nonzero) baseline spend pattern
- *  and no budget at all covers it — a one-off current-month blip with no track record isn't a
- *  suggestion-worthy pattern yet. `budgeted` is the same-request `shapeBudgetFitLines` result, so a
- *  sub-category budget's line (whose `category` is already resolved to its parent) still excludes
- *  the parent category from this list. */
+/** Unbudgeted requires `baseline > 0` — an established spend pattern, not just a one-off
+ *  current-month blip. `budgeted` lines already resolve a sub-category budget's `category` to its
+ *  parent, so this exclusion covers the parent too. */
 export const shapeUnbudgetedSpend = (
   shiftRows: readonly SpendingShiftInput[],
   budgeted: readonly BudgetFitLine[],

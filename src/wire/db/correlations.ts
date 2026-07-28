@@ -20,12 +20,10 @@ export const SpendingShiftDbRowSchema = z
 
 export type SpendingShiftDbRow = z.output<typeof SpendingShiftDbRowSchema>;
 
-/** One row per existing budget — `current`/`baseline_total` are the same conditional-SUM split as
- *  `SpendingShiftDbRowSchema`, but matched to the budget's own target (`budgetTargetMatch`,
- *  `diplomat/db/repos/budgets.ts`) rather than a plain category rollup. `nodeParentId` null means
- *  the budgeted node is itself a top-level category; set means it's a sub-category, and
- *  `parentName`/`parentNames` describe its parent. Mirrors `BudgetStatusRowSchema`
- *  (`wire/db/budgets.ts`) plus the current/baseline split. */
+/** Same current/baseline split as `SpendingShiftDbRowSchema`, but matched to the budget's own
+ *  target (`budgetTargetMatch`). `nodeParentId` null means a top-level target; set means a
+ *  sub-category, with `parentName`/`parentNames` describing its parent — mirrors
+ *  `BudgetStatusRowSchema` (`wire/db/budgets.ts`). */
 export const BudgetFitDbRowSchema = z
   .object({
     id: z.string().min(1),

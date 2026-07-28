@@ -15,9 +15,8 @@ export const DEFAULT_MIN_DELTA_PCT = 20;
 export const DEFAULT_SLACK_PCT = 20;
 export const DEFAULT_OVER_PCT = 20;
 
-/** Applied to a category's baseline to get a `suggestedLimit` (budget_fit) — a small cushion above
- *  the trailing average rather than the average itself, since a limit set exactly at the average
- *  would be exceeded by any normal month-to-month variance. */
+// A small cushion above the trailing average for `suggestedLimit` (budget_fit) — a limit set
+// exactly at the average would be exceeded by any normal month-to-month variance.
 export const SUGGESTED_LIMIT_MARGIN_PCT = 10;
 
 // Shared between minDeltaPct's own field description below and the tool's registered description
@@ -92,11 +91,9 @@ export const SpendingShiftSchema = z.object({
 });
 export type SpendingShift = z.infer<typeof SpendingShiftSchema>;
 
-/** What `logic/correlations.ts`'s `shapeSpendingShifts` needs per row — structurally matches (but
- *  is not the same declaration as) `SpendingShiftDbRow` (`wire/db/correlations.ts`); the repo's
- *  already-decoded rows satisfy this shape without any explicit conversion. Declared here, not in
- *  `logic/`, so the pure shaping functions depend on `models/` only, never `wire/db` (see #150 for
- *  the fuller adapter-layer follow-up this sidesteps for now). */
+/** What `logic/correlations.ts`'s `shapeSpendingShifts` needs per row — structurally matches
+ *  `SpendingShiftDbRow` (`wire/db/correlations.ts`), so the repo's already-decoded rows satisfy it
+ *  with no explicit conversion, while `logic/` itself depends on `models/` only, never `wire/db`. */
 export type SpendingShiftInput = {
   category: string;
   categoryNames: Record<string, string> | null;
