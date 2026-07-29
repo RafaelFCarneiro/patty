@@ -14,7 +14,9 @@ const uncategorizedLabels: Record<Locale, string> = {
 };
 
 const UNKNOWN_KEY = 'unknown';
-const unknownLabels: Record<Locale, string> = {
+
+// Exported: also the "no merchant_key" fallback for merchant_concentration (logic/correlations.ts).
+export const unknownLabels: Record<Locale, string> = {
   en: 'Unknown',
   pt: 'Desconhecido',
   es: 'Desconocido',

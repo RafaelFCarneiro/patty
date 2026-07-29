@@ -2,8 +2,10 @@ import { sql } from 'drizzle-orm';
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
 import {
   BudgetFitDbRowSchema,
+  MerchantSpendDbRowSchema,
   SpendingShiftDbRowSchema,
   type BudgetFitDbRow,
+  type MerchantSpendDbRow,
   type SpendingShiftDbRow,
 } from '../../../wire/db/correlations.js';
 import type { Db } from '../driver.js';
@@ -47,12 +49,28 @@ const BUDGET_FIT_SELECT = (baselineFrom: string, currentFrom: string, currentTo:
   GROUP BY b.id
 `;
 
+/** Per-merchant spend within `[from, to)`, optionally narrowed to one category — Feature Design
+ *  016 phase C. `categoryId` binds as a parameter when present; the fragment is empty (no
+ *  string-built clause) when absent, so caller text never reaches the query shape itself. */
+const MERCHANT_CONCENTRATION_SELECT = (from: string, to: string, categoryId: string | null) => sql`
+  SELECT c.name AS category, c.names AS category_names, t.currency, t.merchant_key, SUM(t.amount) AS spent
+  FROM transactions t
+  JOIN categories c ON c.id = t.category_id
+  WHERE t.date >= ${from} AND t.date < ${to}
+    AND t.status = ${TransactionStatus.enum.effective}
+    AND t.type = ${TransactionType.enum.expense}
+    ${categoryId ? sql`AND t.category_id = ${categoryId}` : sql``}
+  GROUP BY t.currency, c.id, t.merchant_key
+`;
+
 export type CorrelationsRepo = {
   /** `[baselineFrom, currentFrom)` is the trailing baseline window; `[currentFrom, currentTo)` is
    *  the reference month. */
   spendingShifts: (baselineFrom: string, currentFrom: string, currentTo: string) => Promise<SpendingShiftDbRow[]>;
   /** One row per existing budget, same window semantics as `spendingShifts`. */
   budgetFit: (baselineFrom: string, currentFrom: string, currentTo: string) => Promise<BudgetFitDbRow[]>;
+  /** One row per (category, currency, merchant) with spend in `[from, to)`. */
+  merchantConcentration: (from: string, to: string, categoryId: string | null) => Promise<MerchantSpendDbRow[]>;
 };
 
 export const correlationsRepo = (db: Db): CorrelationsRepo => ({
@@ -64,5 +82,10 @@ export const correlationsRepo = (db: Db): CorrelationsRepo => ({
   budgetFit: async (baselineFrom, currentFrom, currentTo) => {
     const rows = await db.all<Record<string, unknown>>(BUDGET_FIT_SELECT(baselineFrom, currentFrom, currentTo));
     return rows.map((r) => BudgetFitDbRowSchema.parse(r));
+  },
+
+  merchantConcentration: async (from, to, categoryId) => {
+    const rows = await db.all<Record<string, unknown>>(MERCHANT_CONCENTRATION_SELECT(from, to, categoryId));
+    return rows.map((r) => MerchantSpendDbRowSchema.parse(r));
   },
 });

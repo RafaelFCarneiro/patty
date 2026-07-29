@@ -62,6 +62,7 @@ import {
   DEFAULT_MIN_DELTA_PCT,
   DEFAULT_OVER_PCT,
   DEFAULT_SLACK_PCT,
+  DEFAULT_TOP_N,
   FindCorrelationsSchema,
   NEW_CATEGORY_ALWAYS_SURFACED_NOTE,
   type ResolvedFindCorrelations,
@@ -603,16 +604,22 @@ export const buildMcpServer = (
         'over limit — consistently over-budget, use `overPct`), or "generous" (baseline well under limit, ' +
         'use `slackPct`) — plus a `suggestedLimit` (baseline plus a small margin) you can pass straight to ' +
         'update_budget. `unbudgeted` lists categories with an established (nonzero baseline) spend pattern ' +
-        'but no budget at all, each with a `suggestedLimit` ready for create_budget.',
+        'but no budget at all, each with a `suggestedLimit` ready for create_budget. ' +
+        '`merchant_concentration`: within each category (or just one, via `category`), the top `topN` ' +
+        'merchants by effective expense, each `share` (spent / categoryTotal, a 0-1 fraction) and ' +
+        '`cumulativeShare` (running total in descending-spend order) — "where within Food is my money ' +
+        'actually going?" `othersSpent` is categoryTotal minus the returned merchants, the long tail beyond ' +
+        '`topN`. A transaction with no classified merchant groups under a localized "Unknown".',
       inputSchema: {
         ...FindCorrelationsSchema.shape,
         baselineMonths: FindCorrelationsSchema.shape.baselineMonths.default(DEFAULT_BASELINE_MONTHS),
         minDeltaPct: FindCorrelationsSchema.shape.minDeltaPct.default(DEFAULT_MIN_DELTA_PCT),
         slackPct: FindCorrelationsSchema.shape.slackPct.default(DEFAULT_SLACK_PCT),
         overPct: FindCorrelationsSchema.shape.overPct.default(DEFAULT_OVER_PCT),
+        topN: FindCorrelationsSchema.shape.topN.default(DEFAULT_TOP_N),
       },
     },
-    async (args) => json(await findCorrelations(deps, args as ResolvedFindCorrelations)),
+    async (args) => fromResult(await findCorrelations(deps, args as ResolvedFindCorrelations)),
   );
 
   server.registerTool(

@@ -1,4 +1,5 @@
 import * as R from 'remeda';
+import { unknownLabels } from './aggregate.js';
 import { localizeCategoryName } from './category.js';
 import { roundMoney } from './money.js';
 import {
@@ -7,6 +8,9 @@ import {
   SUGGESTED_LIMIT_MARGIN_PCT,
   type BudgetFitInput,
   type BudgetFitLine,
+  type CategoryConcentration,
+  type MerchantConcentrationInput,
+  type MerchantShare,
   type SpendingShift,
   type SpendingShiftInput,
   type UnbudgetedSpend,
@@ -142,3 +146,64 @@ export const shapeUnbudgetedSpend = (
     R.sortBy((entry) => entry.category),
   );
 };
+
+// Share/cumulativeShare are 0-1 fractions — 4 decimals gives ~0.01-percentage-point precision,
+// finer than roundMoney's 2 decimals (built for money amounts, not ratios).
+const roundShare = (value: number): number => Math.round(value * 10000) / 10000;
+
+const resolveMerchantLabel = (merchantKey: string | null, locale: Locale): string =>
+  merchantKey ?? unknownLabels[locale];
+
+const categoryCurrencyKey = (category: string, currency: CurrencyCode): string => `${category}::${currency}`;
+
+/** Accumulates `cumulativeShare` over the unrounded shares (rounding only the returned values),
+ *  so the running total stays accurate regardless of how many merchants are returned. Expects
+ *  `top` already sorted by spend descending. */
+const toMerchantShares = (
+  top: readonly MerchantConcentrationInput[],
+  categoryTotal: number,
+  locale: Locale,
+): MerchantShare[] => {
+  let cumulative = 0;
+  return top.map((row): MerchantShare => {
+    const share = categoryTotal === 0 ? 0 : row.spent / categoryTotal;
+    cumulative += share;
+    return {
+      merchant: resolveMerchantLabel(row.merchantKey, locale),
+      spent: roundMoney(row.spent),
+      share: roundShare(share),
+      cumulativeShare: roundShare(cumulative),
+    };
+  });
+};
+
+const toCategoryConcentration = (
+  rows: readonly MerchantConcentrationInput[],
+  topN: number,
+  locale: Locale,
+): CategoryConcentration => {
+  // Safe: a group from R.groupBy is never empty — every row shares the same category/currency.
+  const { category, categoryNames, currency } = rows[0]!;
+  const categoryTotal = R.sumBy(rows, (row) => row.spent);
+  const top = R.take(R.sortBy(rows, [(row) => row.spent, 'desc']), topN);
+  return {
+    category: localizeCategoryName(category, categoryNames, locale) ?? category,
+    currency,
+    categoryTotal: roundMoney(categoryTotal),
+    merchants: toMerchantShares(top, categoryTotal, locale),
+    othersSpent: roundMoney(categoryTotal - R.sumBy(top, (row) => row.spent)),
+  };
+};
+
+export const shapeMerchantConcentration = (
+  rows: readonly MerchantConcentrationInput[],
+  topN: number,
+  locale: Locale,
+): CategoryConcentration[] =>
+  R.pipe(
+    rows,
+    R.groupBy((row) => categoryCurrencyKey(row.category, row.currency)),
+    R.values(),
+    R.map((groupRows) => toCategoryConcentration(groupRows, topN, locale)),
+    R.sortBy((entry) => entry.category),
+  );

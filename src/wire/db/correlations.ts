@@ -51,3 +51,21 @@ export const BudgetFitDbRowSchema = z
   );
 
 export type BudgetFitDbRow = z.output<typeof BudgetFitDbRowSchema>;
+
+/** One (category, currency, merchant) row — `merchant_key` is nullable (no merchant classified);
+ *  `logic/correlations.ts`'s `shapeMerchantConcentration` resolves the display fallback. */
+export const MerchantSpendDbRowSchema = z
+  .object({
+    category: z.string().min(1),
+    category_names: z.string().nullable().default(null),
+    currency: CurrencyCode,
+    merchant_key: z.string().nullable(),
+    spent: z.number(),
+  })
+  .transform(({ category_names, merchant_key, ...rest }) => ({
+    ...rest,
+    categoryNames: parseCategoryNames(category_names),
+    merchantKey: merchant_key,
+  }));
+
+export type MerchantSpendDbRow = z.output<typeof MerchantSpendDbRowSchema>;
