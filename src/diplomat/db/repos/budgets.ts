@@ -20,17 +20,24 @@ const BUDGET_VIEW_SELECT = sql`
   LEFT JOIN categories parent ON parent.id = node.parent_id
 `;
 
+/** A top-level target (`node.parent_id IS NULL`) matches on `t.category_id`, rolling up
+ *  sub-category spend for free; a sub-category target matches only `t.subcategory_id`. Assumes the
+ *  query aliases `budgets b`/`categories node` the same way every consumer does. Shared by
+ *  `budgetsRepo.status` and `correlationsRepo.budgetFit` so the two can't drift apart — mirrors
+ *  `transactionsRepo.correlatedToCard`. */
+export const budgetTargetMatch = sql`
+  (node.parent_id IS NULL AND t.category_id = b.category_id)
+  OR (node.parent_id IS NOT NULL AND t.subcategory_id = b.category_id)
+`;
+
 /** Each budget's spend over `[from, to)`: `effective`, `expense`-typed, same-currency transactions
- *  matched to the target. `type = expense`, not just `!= transfer`: a `both`-kind category is a
- *  legitimate budget target (`isExpenseEligible`), and unlike `aggregate`/`summaryRows`
- *  (`diplomat/db/repos/transactions.ts`, which keep `type` as an output dimension their callers
- *  separate income from expense by), `spent` here is one collapsed scalar — an income transaction
- *  on a `both`-kind category has to be excluded at the filter itself, or it inflates the cap.
- *  `COALESCE(SUM(t.amount), 0)` yields `spent: 0` for a budget with no match, rather than a missing
- *  row. A top-level target (`node.parent_id IS NULL`) matches on `t.category_id`, rolling up
- *  sub-category spend for free (a sub-category transaction's `category_id` is always its parent's);
- *  a sub-category target matches only `t.subcategory_id`, independently — so the same transaction
- *  counts toward both a sub-category's budget and its parent's, when both exist. */
+ *  matched to the target (`budgetTargetMatch`). `type = expense`, not just `!= transfer`: a
+ *  `both`-kind category is a legitimate budget target (`isExpenseEligible`), and unlike
+ *  `aggregate`/`summaryRows` (`diplomat/db/repos/transactions.ts`, which keep `type` as an output
+ *  dimension their callers separate income from expense by), `spent` here is one collapsed scalar —
+ *  an income transaction on a `both`-kind category has to be excluded at the filter itself, or it
+ *  inflates the cap. `COALESCE(SUM(t.amount), 0)` yields `spent: 0` for a budget with no match,
+ *  rather than a missing row. */
 const BUDGET_STATUS_SELECT = (from: string, to: string) => sql`
   SELECT b.id, b.currency, b.limit_amount, b.period,
          node.name AS node_name, node.parent_id AS node_parent_id, parent.name AS parent_name,
@@ -43,10 +50,7 @@ const BUDGET_STATUS_SELECT = (from: string, to: string) => sql`
     AND t.status = ${TransactionStatus.enum.effective}
     AND t.type = ${TransactionType.enum.expense}
     AND t.date >= ${from} AND t.date < ${to}
-    AND (
-      (node.parent_id IS NULL AND t.category_id = b.category_id)
-      OR (node.parent_id IS NOT NULL AND t.subcategory_id = b.category_id)
-    )
+    AND (${budgetTargetMatch})
   GROUP BY b.id
   ORDER BY COALESCE(parent.name, node.name), node.name
 `;

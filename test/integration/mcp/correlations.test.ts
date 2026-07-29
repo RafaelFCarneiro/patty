@@ -11,7 +11,28 @@ type SpendingShift = {
   direction?: string;
 };
 
-type FindCorrelationsResult = { analysis?: string; month?: number; year?: number; shifts?: SpendingShift[] };
+type BudgetFitLine = {
+  id?: string;
+  category?: string;
+  subCategory?: string;
+  currency?: string;
+  limit?: number;
+  current?: number;
+  baseline?: number;
+  verdict?: string;
+  suggestedLimit?: number;
+};
+
+type UnbudgetedSpend = { category?: string; currency?: string; baseline?: number; suggestedLimit?: number };
+
+type FindCorrelationsResult = {
+  analysis?: string;
+  month?: number;
+  year?: number;
+  shifts?: SpendingShift[];
+  budgeted?: BudgetFitLine[];
+  unbudgeted?: UnbudgetedSpend[];
+};
 
 // A fixed reference period and its trailing 3-month baseline window, always in the past so this
 // never drifts or races the wall clock — mirrors budgets.test.ts's STATUS_DATE/STATUS_PERIOD.
@@ -21,10 +42,27 @@ const BASELINE_DATES = ['2025-03-15', '2025-04-15', '2025-05-15'];
 const EMPTY_PERIOD = { month: 1, year: 2011 };
 
 const createdTxIds: string[] = [];
+const createdBudgetIds: string[] = [];
 
 afterEach(async () => {
   await deleteTransactions([...createdTxIds]);
   createdTxIds.length = 0;
+
+  if (!createdBudgetIds.length) return;
+  const { client, transport } = makeClient();
+  try {
+    await client.connect(transport);
+    for (const id of [...createdBudgetIds]) {
+      try {
+        await callTool(client, { name: 'delete_budget', args: { id } });
+      } catch {
+        // best-effort
+      }
+    }
+  } finally {
+    await transport.close();
+    createdBudgetIds.length = 0;
+  }
 });
 
 const addExpense = async (client: Client, args: Record<string, unknown>): Promise<string> => {
@@ -66,8 +104,27 @@ const seedBaseline = async (
   }
 };
 
+const createBudget = async (client: Client, args: Record<string, unknown>): Promise<string> => {
+  const budget = (await callTool(client, { name: 'create_budget', args })) as { id?: string };
+  ensure(budget.id, 'create_budget: id missing');
+  createdBudgetIds.push(budget.id);
+  return budget.id;
+};
+
 const findShift = (result: FindCorrelationsResult, category: string, currency = 'BRL'): SpendingShift | undefined =>
   result.shifts?.find((s) => s.category === category && s.currency === currency);
+
+const findBudgetedLine = (
+  result: FindCorrelationsResult,
+  category: string,
+  currency = 'BRL',
+): BudgetFitLine | undefined => result.budgeted?.find((b) => b.category === category && b.currency === currency);
+
+const findUnbudgeted = (
+  result: FindCorrelationsResult,
+  category: string,
+  currency = 'BRL',
+): UnbudgetedSpend | undefined => result.unbudgeted?.find((u) => u.category === category && u.currency === currency);
 
 describe('MCP integration > find_correlations (spending_shifts)', () => {
   it('reports an up shift with the correct current/baseline/deltaPct beyond minDeltaPct', async () => {
@@ -367,6 +424,167 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         args: { analysis: 'spending_shifts', ...EMPTY_PERIOD },
       })) as FindCorrelationsResult;
       expect(result.shifts).toEqual([]);
+    } finally {
+      await transport.close();
+    }
+  });
+});
+
+describe('MCP integration > find_correlations (budget_fit)', () => {
+  it('reports unrealistic with a suggestedLimit above baseline for a materially over-budget category', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-BudgetOver-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await seedBaseline(client, categoryName, 100, 'BRL', stamp); // baseline 100/mo
+      await createBudget(client, { category: categoryName, currency: 'BRL', limit: 50 }); // ratio 2.0
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'budget_fit', ...REFERENCE },
+      })) as FindCorrelationsResult;
+
+      expect(result.analysis).toBe('budget_fit');
+      const line = findBudgetedLine(result, categoryName);
+      ensure(line, `no budgeted line for ${categoryName}`);
+      expect(line).toMatchObject({ limit: 50, baseline: 100, verdict: 'unrealistic', suggestedLimit: 110 });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('reports generous for a well-under-budget category', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-BudgetGenerous-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await seedBaseline(client, categoryName, 100, 'BRL', stamp); // baseline 100/mo
+      await createBudget(client, { category: categoryName, currency: 'BRL', limit: 1000 }); // ratio 0.1
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'budget_fit', ...REFERENCE },
+      })) as FindCorrelationsResult;
+
+      const line = findBudgetedLine(result, categoryName);
+      ensure(line, `no budgeted line for ${categoryName}`);
+      expect(line.verdict).toBe('generous');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('surfaces a category with an established baseline and no budget as unbudgeted', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-BudgetMissing-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await seedBaseline(client, categoryName, 100, 'BRL', stamp);
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'budget_fit', ...REFERENCE },
+      })) as FindCorrelationsResult;
+
+      expect(findBudgetedLine(result, categoryName)).toBeUndefined();
+      const unbudgeted = findUnbudgeted(result, categoryName);
+      ensure(unbudgeted, `no unbudgeted entry for ${categoryName}`);
+      expect(unbudgeted).toMatchObject({ baseline: 100, suggestedLimit: 110 });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('isolates a budget verdict per currency — a BRL budget ignores USD spend in the same category', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-BudgetCurrency-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await seedBaseline(client, categoryName, 100, 'BRL', stamp); // BRL baseline 100/mo
+      await seedBaseline(client, categoryName, 5000, 'USD', stamp); // unrelated, much larger USD baseline
+      await createBudget(client, { category: categoryName, currency: 'BRL', limit: 110 }); // ratio ~0.91, realistic
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'budget_fit', ...REFERENCE },
+      })) as FindCorrelationsResult;
+
+      const line = findBudgetedLine(result, categoryName, 'BRL');
+      ensure(line, `no BRL budgeted line for ${categoryName}`);
+      // If the USD spend leaked in, baseline would be ~1700 instead of 100 and the verdict would flip.
+      expect(line).toMatchObject({ currency: 'BRL', baseline: 100, verdict: 'realistic' });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('reports current: 0 for a budget whose category has no spend, without erroring', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-BudgetEmpty-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await createBudget(client, { category: categoryName, currency: 'BRL', limit: 300 });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'budget_fit', ...REFERENCE },
+      })) as FindCorrelationsResult;
+
+      const line = findBudgetedLine(result, categoryName);
+      ensure(line, `no budgeted line for ${categoryName}`);
+      expect(line).toMatchObject({ current: 0, baseline: 0, verdict: 'generous' });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('reports a sub-category budget under its parent category name', async () => {
+    const stamp = Date.now();
+    const parentName = `Corr-BudgetParent-${stamp}`;
+    const subCategoryName = `Corr-BudgetSub-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const parent = (await callTool(client, { name: 'create_category', args: { name: parentName } })) as {
+        id?: string;
+      };
+      ensure(parent.id, 'parent category id missing');
+      await callTool(client, { name: 'create_sub_category', args: { name: subCategoryName, parentId: parent.id } });
+      // seedBaseline targets `category`, which resolves the top-level node — a sub-category budget
+      // needs spend against `subCategory` specifically, so this seeds it directly instead.
+      for (const [i, date] of BASELINE_DATES.entries()) {
+        await addExpense(client, {
+          description: `baseline ${subCategoryName}`,
+          amount: 100,
+          subCategory: subCategoryName,
+          currency: 'BRL',
+          date,
+          idempotencyKey: `corr-budget-sub-baseline-${stamp}-${i}`,
+        });
+      }
+      await createBudget(client, { subCategory: subCategoryName, currency: 'BRL', limit: 50 });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'budget_fit', ...REFERENCE },
+      })) as FindCorrelationsResult;
+
+      const line = result.budgeted?.find((b) => b.subCategory === subCategoryName);
+      ensure(line, `no budgeted line for sub-category ${subCategoryName}`);
+      expect(line).toMatchObject({ category: parentName, baseline: 100, verdict: 'unrealistic' });
+      // The sub-category's spend rolls up to the parent too, but it's already covered by this
+      // budget, so the parent must not also show up as a separate "unbudgeted" suggestion.
+      expect(findUnbudgeted(result, parentName)).toBeUndefined();
     } finally {
       await transport.close();
     }

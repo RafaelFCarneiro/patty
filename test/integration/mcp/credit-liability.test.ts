@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { billPeriodFor } from '../../../src/logic/bill.js';
 import { toIsoDate } from '../../../src/logic/period.js';
 import { callTool, callToolError, makeClient } from './helpers.js';
 
@@ -188,9 +189,12 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
         },
       });
 
+      // The purchase's own bill cycle, not necessarily the calendar month/year — billPeriodFor
+      // rolls a transaction dated on/after closingDay into next month's bill (src/logic/bill.ts).
+      const guardBill = billPeriodFor(today, 28, 5);
       const payErr = (await callToolError(client, {
         name: 'pay_bill',
-        args: { card: guardCard, month, year, account: `Card: ${guardCard}` },
+        args: { card: guardCard, month: guardBill.month, year: guardBill.year, account: `Card: ${guardCard}` },
       })) as { error?: { code?: string } };
       expect(payErr.error?.code).toBe('validation');
 

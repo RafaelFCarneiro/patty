@@ -19,3 +19,35 @@ export const SpendingShiftDbRowSchema = z
   }));
 
 export type SpendingShiftDbRow = z.output<typeof SpendingShiftDbRowSchema>;
+
+/** Same current/baseline split as `SpendingShiftDbRowSchema`, but matched to the budget's own
+ *  target (`budgetTargetMatch`). `nodeParentId` null means a top-level target; set means a
+ *  sub-category, with `parentName`/`parentNames` describing its parent — mirrors
+ *  `BudgetStatusRowSchema` (`wire/db/budgets.ts`). */
+export const BudgetFitDbRowSchema = z
+  .object({
+    id: z.string().min(1),
+    currency: CurrencyCode,
+    limit_amount: z.number(),
+    node_name: z.string(),
+    node_names: z.string().nullable().default(null),
+    node_parent_id: z.string().nullable(),
+    parent_name: z.string().nullable(),
+    parent_names: z.string().nullable().default(null),
+    current: z.number(),
+    baseline_total: z.number(),
+  })
+  .transform(
+    ({ limit_amount, node_name, node_names, node_parent_id, parent_name, parent_names, baseline_total, ...rest }) => ({
+      ...rest,
+      limit: limit_amount,
+      nodeName: node_name,
+      nodeNames: parseCategoryNames(node_names),
+      nodeParentId: node_parent_id,
+      parentName: parent_name,
+      parentNames: parseCategoryNames(parent_names),
+      baselineTotal: baseline_total,
+    }),
+  );
+
+export type BudgetFitDbRow = z.output<typeof BudgetFitDbRowSchema>;

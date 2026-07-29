@@ -1,7 +1,13 @@
 import { sql } from 'drizzle-orm';
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
-import { SpendingShiftDbRowSchema, type SpendingShiftDbRow } from '../../../wire/db/correlations.js';
+import {
+  BudgetFitDbRowSchema,
+  SpendingShiftDbRowSchema,
+  type BudgetFitDbRow,
+  type SpendingShiftDbRow,
+} from '../../../wire/db/correlations.js';
 import type { Db } from '../driver.js';
+import { budgetTargetMatch } from './budgets.js';
 
 /** One conditional-SUM pass splits `[baselineFrom, currentTo)` into `current`/`baseline_total` —
  *  covers a category present in only one window (brand-new or dropped) without a `FULL OUTER JOIN`
@@ -20,15 +26,43 @@ const SPENDING_SHIFTS_SELECT = (baselineFrom: string, currentFrom: string, curre
   GROUP BY t.currency, c.id
 `;
 
+/** Same current/baseline conditional-SUM split as `SPENDING_SHIFTS_SELECT`, but matched to each
+ *  budget's own target via the shared `budgetTargetMatch` predicate (top-level rollup or
+ *  sub-category alone) instead of a plain category rollup — Feature Design 016 phase D. */
+const BUDGET_FIT_SELECT = (baselineFrom: string, currentFrom: string, currentTo: string) => sql`
+  SELECT b.id, b.currency, b.limit_amount,
+         node.name AS node_name, node.names AS node_names,
+         node.parent_id AS node_parent_id, parent.name AS parent_name, parent.names AS parent_names,
+         COALESCE(SUM(CASE WHEN t.date >= ${currentFrom} THEN t.amount ELSE 0 END), 0) AS current,
+         COALESCE(SUM(CASE WHEN t.date < ${currentFrom} THEN t.amount ELSE 0 END), 0) AS baseline_total
+  FROM budgets b
+  JOIN categories node ON node.id = b.category_id
+  LEFT JOIN categories parent ON parent.id = node.parent_id
+  LEFT JOIN transactions t
+    ON t.currency = b.currency
+    AND t.status = ${TransactionStatus.enum.effective}
+    AND t.type = ${TransactionType.enum.expense}
+    AND t.date >= ${baselineFrom} AND t.date < ${currentTo}
+    AND (${budgetTargetMatch})
+  GROUP BY b.id
+`;
+
 export type CorrelationsRepo = {
   /** `[baselineFrom, currentFrom)` is the trailing baseline window; `[currentFrom, currentTo)` is
    *  the reference month. */
   spendingShifts: (baselineFrom: string, currentFrom: string, currentTo: string) => Promise<SpendingShiftDbRow[]>;
+  /** One row per existing budget, same window semantics as `spendingShifts`. */
+  budgetFit: (baselineFrom: string, currentFrom: string, currentTo: string) => Promise<BudgetFitDbRow[]>;
 };
 
 export const correlationsRepo = (db: Db): CorrelationsRepo => ({
   spendingShifts: async (baselineFrom, currentFrom, currentTo) => {
     const rows = await db.all<Record<string, unknown>>(SPENDING_SHIFTS_SELECT(baselineFrom, currentFrom, currentTo));
     return rows.map((r) => SpendingShiftDbRowSchema.parse(r));
+  },
+
+  budgetFit: async (baselineFrom, currentFrom, currentTo) => {
+    const rows = await db.all<Record<string, unknown>>(BUDGET_FIT_SELECT(baselineFrom, currentFrom, currentTo));
+    return rows.map((r) => BudgetFitDbRowSchema.parse(r));
   },
 });
