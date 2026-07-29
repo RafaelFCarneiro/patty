@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PeriodSchema } from './date.js';
+import type { ValidationError } from './error.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
 
@@ -233,3 +234,12 @@ export const FindCorrelationsResultSchema = z.discriminatedUnion('analysis', [
   MerchantConcentrationResultSchema,
 ]);
 export type FindCorrelationsResult = z.infer<typeof FindCorrelationsResultSchema>;
+
+export type FindCorrelationsError = ValidationError;
+
+export const findCorrelationsErrors = {
+  unhandledAnalysis: (analysis: string): FindCorrelationsError => ({
+    code: 'validation',
+    issues: [`Unhandled analysis "${analysis}"`],
+  }),
+};

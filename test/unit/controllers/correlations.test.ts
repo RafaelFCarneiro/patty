@@ -110,11 +110,13 @@ describe('findCorrelations — spending_shifts', () => {
     });
   });
 
-  it('fails loudly instead of returning undefined for an analysis the switch does not handle', async () => {
-    // Can't happen through the MCP boundary (zod restricts `analysis`) — exercises assertNeverAnalysis directly.
+  it('reports a validation error instead of throwing for an analysis with no registered handler', async () => {
+    // Can't happen through the MCP boundary (zod restricts `analysis`) — exercises the ANALYSIS_HANDLERS fallback.
     const deps = makeDeps();
     const bogusInput = { ...input(), analysis: 'not_a_real_analysis' } as unknown as ResolvedFindCorrelations;
-    await expect(findCorrelations(deps, bogusInput)).rejects.toThrow(/unhandled analysis/);
+    const result = await findCorrelations(deps, bogusInput);
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
   });
 });
 
