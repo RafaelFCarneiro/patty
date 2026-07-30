@@ -8,6 +8,7 @@ import { CurrencyCode } from '../../../src/models/money.js';
 import type {
   BudgetFitDbRow,
   MerchantSpendDbRow,
+  RecurringCandidateDbRow,
   SpendingShiftDbRow,
 } from '../../../src/wire/db/correlations.js';
 
@@ -23,6 +24,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
     spendingShifts: async () => [],
     budgetFit: async () => [],
     merchantConcentration: async () => [],
+    recurringCandidates: async () => [],
   } as unknown as Deps['correlations'],
   creditCards: {} as Deps['creditCards'],
   dashboards: {} as Deps['dashboards'],
@@ -32,7 +34,10 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],
   transactions: {} as Deps['transactions'],
-  clock: () => new Date('2026-07-15'),
+  // Noon UTC, not midnight — a bare date-only string parses as UTC midnight, which `toIsoDate`'s
+  // local-time getters can roll back a day in a negative-offset timezone (mirrors dashboards.test.ts's
+  // FIXED_CLOCK).
+  clock: () => new Date('2026-07-15T12:00:00.000Z'),
   newId: () => 'id-1',
   locale: async () => Locale.enum.en,
   ...overrides,
@@ -47,6 +52,8 @@ const input = (overrides: Partial<ResolvedFindCorrelations> = {}): ResolvedFindC
   slackPct: 20,
   overPct: 20,
   topN: 5,
+  lookbackMonths: 6,
+  minOccurrences: 3,
   ...overrides,
 });
 
@@ -115,6 +122,13 @@ describe('findCorrelations — spending_shifts', () => {
     const deps = makeDeps();
     const bogusInput = { ...input(), analysis: 'not_a_real_analysis' } as unknown as ResolvedFindCorrelations;
     const result = await findCorrelations(deps, bogusInput);
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
+  });
+
+  it('reports missingPeriod when month/year are omitted', async () => {
+    const deps = makeDeps();
+    const result = await findCorrelations(deps, input({ month: undefined, year: undefined }));
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
   });
@@ -391,5 +405,110 @@ describe('findCorrelations — merchant_concentration', () => {
       year: 2026,
       categories: [],
     });
+  });
+});
+
+const recurringCandidatesInput = (overrides: Partial<ResolvedFindCorrelations> = {}): ResolvedFindCorrelations =>
+  input({ analysis: FindCorrelationsAnalysis.enum.recurring_candidates, ...overrides });
+
+const recurringRow = (overrides: Partial<RecurringCandidateDbRow> = {}): RecurringCandidateDbRow => ({
+  merchantKey: 'netflix',
+  currency: CurrencyCode.enum.BRL,
+  category: 'Subscriptions',
+  categoryNames: null,
+  date: '2026-01-05',
+  amount: 39.9,
+  ...overrides,
+});
+
+describe('findCorrelations — recurring_candidates', () => {
+  it('derives the lookback window from lookbackMonths ending today, ignoring month/year', async () => {
+    let calledWith: [string, string] | undefined;
+    const deps = makeDeps({
+      correlations: {
+        recurringCandidates: async (from: string, today: string) => {
+          calledWith = [from, today];
+          return [];
+        },
+      } as unknown as Deps['correlations'],
+    });
+
+    const result = await findCorrelations(deps, recurringCandidatesInput({ month: undefined, year: undefined }));
+
+    expect(calledWith).toEqual(['2026-01-01', '2026-07-15']);
+    expect(result._unsafeUnwrap()).toEqual({ analysis: 'recurring_candidates', candidates: [] });
+  });
+
+  it('does not require month/year at all, unlike the other three analyses', async () => {
+    const deps = makeDeps();
+    const result = await findCorrelations(deps, recurringCandidatesInput({ month: undefined, year: undefined }));
+    expect(result.isOk()).toBe(true);
+  });
+
+  it('shapes a qualifying merchant series into a ready-to-confirm candidate', async () => {
+    const deps = makeDeps({
+      correlations: {
+        recurringCandidates: async () => [
+          recurringRow({ date: '2026-01-05' }),
+          recurringRow({ date: '2026-02-04' }),
+          recurringRow({ date: '2026-03-06' }),
+        ],
+      } as unknown as Deps['correlations'],
+    });
+
+    const result = await findCorrelations(deps, recurringCandidatesInput());
+    expect(result._unsafeUnwrap()).toEqual({
+      analysis: 'recurring_candidates',
+      candidates: [
+        {
+          merchant: 'netflix',
+          currency: 'BRL',
+          category: 'Subscriptions',
+          typicalAmount: 39.9,
+          occurrences: 3,
+          lastDate: '2026-03-06',
+          suggestedNextDue: '2026-04-06',
+        },
+      ],
+    });
+  });
+
+  it('passes minOccurrences through to the shaping logic', async () => {
+    const deps = makeDeps({
+      correlations: {
+        recurringCandidates: async () => [
+          recurringRow({ merchantKey: 'gym', date: '2026-01-05', amount: 100 }),
+          recurringRow({ merchantKey: 'gym', date: '2026-02-04', amount: 100 }),
+        ],
+      } as unknown as Deps['correlations'],
+    });
+
+    const belowThreshold = await findCorrelations(deps, recurringCandidatesInput({ minOccurrences: 3 }));
+    expect(belowThreshold._unsafeUnwrap()).toMatchObject({ candidates: [] });
+
+    const atThreshold = await findCorrelations(deps, recurringCandidatesInput({ minOccurrences: 2 }));
+    expect(atThreshold._unsafeUnwrap()).toMatchObject({ candidates: [{ merchant: 'gym' }] });
+  });
+
+  it('resolves locale once and localizes category names through it', async () => {
+    const deps = makeDeps({
+      locale: async () => Locale.enum.pt,
+      correlations: {
+        recurringCandidates: async () => [
+          recurringRow({ category: 'Food', categoryNames: { pt: 'Alimentação' }, date: '2026-01-05' }),
+          recurringRow({ category: 'Food', categoryNames: { pt: 'Alimentação' }, date: '2026-02-04' }),
+          recurringRow({ category: 'Food', categoryNames: { pt: 'Alimentação' }, date: '2026-03-06' }),
+        ],
+      } as unknown as Deps['correlations'],
+    });
+
+    const result = await findCorrelations(deps, recurringCandidatesInput());
+    expect(result._unsafeUnwrap()).toMatchObject({ candidates: [{ category: 'Alimentação' }] });
+  });
+
+  it('returns an empty candidates array when nothing qualifies', async () => {
+    const deps = makeDeps();
+    const result = await findCorrelations(deps, recurringCandidatesInput());
+    expect(result._unsafeUnwrap()).toEqual({ analysis: 'recurring_candidates', candidates: [] });
   });
 });

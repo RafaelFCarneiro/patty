@@ -1,5 +1,6 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterEach, describe, expect, it } from 'vitest';
+import { toIsoDate } from '../../../src/logic/period.js';
 import { callTool, deleteTransactions, ensure, makeClient } from './helpers.js';
 
 type SpendingShift = {
@@ -35,6 +36,16 @@ type CategoryConcentration = {
   othersSpent?: number;
 };
 
+type RecurringCandidate = {
+  merchant?: string;
+  typicalAmount?: number;
+  currency?: string;
+  category?: string;
+  occurrences?: number;
+  lastDate?: string;
+  suggestedNextDue?: string;
+};
+
 type FindCorrelationsResult = {
   analysis?: string;
   month?: number;
@@ -43,6 +54,7 @@ type FindCorrelationsResult = {
   budgeted?: BudgetFitLine[];
   unbudgeted?: UnbudgetedSpend[];
   categories?: CategoryConcentration[];
+  candidates?: RecurringCandidate[];
 };
 
 // A fixed reference period and its trailing 3-month baseline window, always in the past so this
@@ -807,6 +819,154 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
         args: { analysis: 'merchant_concentration', ...EMPTY_PERIOD },
       })) as FindCorrelationsResult;
       expect(result.categories).toEqual([]);
+    } finally {
+      await transport.close();
+    }
+  });
+});
+
+describe('MCP integration > find_correlations (recurring_candidates)', () => {
+  // Unlike REFERENCE/CURRENT_DATE above — this mode has no reference period, only a live window.
+  const daysAgo = (n: number): string => {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return toIsoDate(d);
+  };
+
+  const findCandidate = (result: FindCorrelationsResult, merchant: string): RecurringCandidate | undefined =>
+    result.candidates?.find((c) => c.merchant === merchant);
+
+  it('flags a merchant with a consistent ~monthly cadence and stable amount, shaped for create_recurring', async () => {
+    const merchant = 'Corr Candidate Streaming';
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      for (const [i, offset] of [90, 60, 30, 0].entries()) {
+        await addExpense(client, {
+          description: merchant,
+          amount: 39.9,
+          category: 'Subscriptions',
+          currency: 'BRL',
+          date: daysAgo(offset),
+          idempotencyKey: `corr-candidate-streaming-${i}`,
+        });
+      }
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'recurring_candidates' },
+      })) as FindCorrelationsResult;
+
+      expect(result.analysis).toBe('recurring_candidates');
+      const candidate = findCandidate(result, 'corr candidate streaming');
+      ensure(candidate, 'expected corr candidate streaming to qualify');
+      expect(candidate).toMatchObject({
+        merchant: 'corr candidate streaming',
+        typicalAmount: 39.9,
+        currency: 'BRL',
+        category: 'Subscriptions',
+        occurrences: 4,
+        lastDate: daysAgo(0),
+      });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('excludes a merchant that already backs a recurring rule — exact merchant_key match (Design 017)', async () => {
+    const merchant = 'Corr Candidate Excluded';
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      for (const [i, offset] of [90, 60, 30, 0].entries()) {
+        await addExpense(client, {
+          description: merchant,
+          amount: 20,
+          category: 'Subscriptions',
+          currency: 'BRL',
+          date: daysAgo(offset),
+          idempotencyKey: `corr-candidate-excluded-${i}`,
+        });
+      }
+      await callTool(client, {
+        name: 'create_recurring',
+        args: {
+          description: 'Some rule',
+          amount: 20,
+          type: 'expense',
+          period: 'monthly',
+          startDate: daysAgo(0),
+          merchant,
+        },
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'recurring_candidates' },
+      })) as FindCorrelationsResult;
+
+      expect(findCandidate(result, 'corr candidate excluded')).toBeUndefined();
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('does not flag a merchant with too few occurrences for the given minOccurrences', async () => {
+    const merchant = 'Corr Candidate Sparse';
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await addExpense(client, {
+        description: merchant,
+        amount: 15,
+        category: 'Subscriptions',
+        currency: 'BRL',
+        date: daysAgo(30),
+        idempotencyKey: 'corr-candidate-sparse-0',
+      });
+      await addExpense(client, {
+        description: merchant,
+        amount: 15,
+        category: 'Subscriptions',
+        currency: 'BRL',
+        date: daysAgo(0),
+        idempotencyKey: 'corr-candidate-sparse-1',
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'recurring_candidates', minOccurrences: 3 },
+      })) as FindCorrelationsResult;
+
+      expect(findCandidate(result, 'corr candidate sparse')).toBeUndefined();
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('does not flag a merchant with an irregular gap', async () => {
+    const merchant = 'Corr Candidate Irregular';
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      for (const [i, offset] of [90, 75, 0].entries()) {
+        // 15-day then 75-day gap — neither a consistent ~monthly cadence.
+        await addExpense(client, {
+          description: merchant,
+          amount: 25,
+          category: 'Subscriptions',
+          currency: 'BRL',
+          date: daysAgo(offset),
+          idempotencyKey: `corr-candidate-irregular-${i}`,
+        });
+      }
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'recurring_candidates' },
+      })) as FindCorrelationsResult;
+
+      expect(findCandidate(result, 'corr candidate irregular')).toBeUndefined();
     } finally {
       await transport.close();
     }

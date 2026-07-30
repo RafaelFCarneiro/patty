@@ -2,8 +2,13 @@ import * as R from 'remeda';
 import { unknownLabels } from './aggregate.js';
 import { localizeCategoryName } from './category.js';
 import { roundMoney } from './money.js';
+import { daysBetween } from './period.js';
+import { nextDue } from './recurring.js';
 import {
   BudgetFitVerdict,
+  CADENCE_AMOUNT_TOLERANCE_PCT,
+  CADENCE_DAY_TOLERANCE_DAYS,
+  CADENCE_NOMINAL_GAP_DAYS,
   SpendingShiftDirection,
   SUGGESTED_LIMIT_MARGIN_PCT,
   type BudgetFitInput,
@@ -11,12 +16,15 @@ import {
   type CategoryConcentration,
   type MerchantConcentrationInput,
   type MerchantShare,
+  type RecurringCandidate,
+  type RecurringCandidateInput,
   type SpendingShift,
   type SpendingShiftInput,
   type UnbudgetedSpend,
 } from '../models/correlations.js';
 import type { Locale } from '../models/locale.js';
 import type { CurrencyCode } from '../models/money.js';
+import { RecurringPeriod } from '../models/recurring.js';
 
 /** A shift with no measurable baseline (brand-new spend) has no percentage to compare against
  *  `minDeltaPct`, but is always the most notable kind of shift — sorts as maximally significant. */
@@ -210,4 +218,78 @@ export const shapeMerchantConcentration = (
     R.values(),
     R.map((groupRows) => toCategoryConcentration(groupRows, topN, locale)),
     R.sortBy([(entry) => entry.category, 'asc'], [(entry) => entry.currency, 'asc']),
+  );
+
+/** Composite grouping key for a (merchant, currency) pair — same JSON-encoding rationale as
+ *  `categoryCurrencyKey`. */
+const merchantCurrencyKey = (merchantKey: string, currency: CurrencyCode): string =>
+  JSON.stringify([merchantKey, currency]);
+
+const withinTolerance = (value: number, target: number, tolerance: number): boolean =>
+  Math.abs(value - target) <= tolerance;
+
+type CadenceResult = {
+  typicalAmount: number;
+  occurrences: number;
+  lastDate: string;
+  suggestedNextDue: string;
+};
+
+export const detectRecurringCadence = (
+  series: readonly { date: string; amount: number }[],
+  minOccurrences: number,
+): CadenceResult | null => {
+  const sorted = R.sortBy(series, [(point) => point.date, 'asc']);
+  if (sorted.length < minOccurrences) return null;
+
+  const gaps = R.zipWith(sorted, sorted.slice(1), (a, b) => daysBetween(a.date, b.date));
+  const isConsistentCadence = gaps.every((gap) =>
+    withinTolerance(gap, CADENCE_NOMINAL_GAP_DAYS, CADENCE_DAY_TOLERANCE_DAYS),
+  );
+  if (!isConsistentCadence) return null;
+
+  const typicalAmount = R.meanBy(sorted, (point) => point.amount);
+  const amountTolerance = typicalAmount * (CADENCE_AMOUNT_TOLERANCE_PCT / 100);
+  const isStableAmount = sorted.every((point) => withinTolerance(point.amount, typicalAmount, amountTolerance));
+  if (!isStableAmount) return null;
+
+  const lastDate = sorted[sorted.length - 1]!.date;
+  return {
+    typicalAmount: roundMoney(typicalAmount),
+    occurrences: sorted.length,
+    lastDate,
+    suggestedNextDue: nextDue(lastDate, RecurringPeriod.enum.monthly),
+  };
+};
+
+const toRecurringCandidate = (
+  rows: readonly RecurringCandidateInput[],
+  minOccurrences: number,
+  locale: Locale,
+): RecurringCandidate | null => {
+  const cadence = detectRecurringCadence(rows, minOccurrences);
+  if (!cadence) return null;
+  const { merchantKey, currency } = rows[0]!;
+  // A merchant's category is stable in practice — no need for a full mode-count over the series.
+  const latest = R.firstBy(rows, [(row) => row.date, 'desc'])!;
+  return {
+    merchant: merchantKey,
+    currency,
+    category: localizeCategoryName(latest.category, latest.categoryNames, locale) ?? latest.category,
+    ...cadence,
+  };
+};
+
+export const shapeRecurringCandidates = (
+  rows: readonly RecurringCandidateInput[],
+  minOccurrences: number,
+  locale: Locale,
+): RecurringCandidate[] =>
+  R.pipe(
+    rows,
+    R.groupBy((row) => merchantCurrencyKey(row.merchantKey, row.currency)),
+    R.values(),
+    R.map((groupRows) => toRecurringCandidate(groupRows, minOccurrences, locale)),
+    R.filter(R.isNonNull),
+    R.sortBy([(candidate) => candidate.occurrences, 'desc'], [(candidate) => candidate.merchant, 'asc']),
   );

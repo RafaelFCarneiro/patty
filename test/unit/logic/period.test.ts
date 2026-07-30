@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   assertHasPeriodOrRange,
   baselineRange,
+  daysBetween,
   hasPeriod,
   hasDateRange,
+  lookbackFrom,
   periodRange,
   resolveDateRange,
 } from '../../../src/logic/period.js';
@@ -33,6 +35,42 @@ describe('baselineRange', () => {
 
   it('handles a one-month window', () => {
     expect(baselineRange({ month: 6, year: 2026 }, 1)).toEqual({ from: '2026-05-01', to: '2026-06-01' });
+  });
+});
+
+describe('daysBetween', () => {
+  it('counts whole days within the same month', () => {
+    expect(daysBetween('2026-06-01', '2026-06-15')).toBe(14);
+  });
+
+  it('crosses a month boundary', () => {
+    expect(daysBetween('2026-01-20', '2026-02-05')).toBe(16);
+  });
+
+  it('crosses a year boundary', () => {
+    expect(daysBetween('2025-12-20', '2026-01-05')).toBe(16);
+  });
+
+  it('is negative when b precedes a', () => {
+    expect(daysBetween('2026-06-15', '2026-06-01')).toBe(-14);
+  });
+
+  it('is zero for the same date', () => {
+    expect(daysBetween('2026-06-01', '2026-06-01')).toBe(0);
+  });
+});
+
+describe('lookbackFrom', () => {
+  it('rolls back N months from today\'s own month, day 01', () => {
+    expect(lookbackFrom('2026-07-15', 6)).toBe('2026-01-01');
+  });
+
+  it('rolls back across a year boundary', () => {
+    expect(lookbackFrom('2026-02-10', 3)).toBe('2025-11-01');
+  });
+
+  it('rolls back multiple years for a large window', () => {
+    expect(lookbackFrom('2026-01-10', 24)).toBe('2024-01-01');
   });
 });
 

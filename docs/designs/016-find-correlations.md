@@ -1,7 +1,7 @@
 # Feature Design 016: `find_correlations` — spending shifts, recurring candidates, merchant concentration
 
 **Type:** Feature design (a capability + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress (Phase A done — `spending_shifts`; Phase D done — `budget_fit`; Phase C done — `merchant_concentration`) · **Date:** 2026-07-25 · PLAN Phase 3 (insights) — the "differentiator"
+**Implementation status:** Done (Phase A — `spending_shifts`; Phase D — `budget_fit`; Phase C — `merchant_concentration`; Phase B — `recurring_candidates`) · **Date:** 2026-07-25 · PLAN Phase 3 (insights) — the "differentiator"
 analysis tool. **Read-only** (no entity, no write flow); a later phase with a caller-selected SQL shape (e.g. a
 groupBy-style dimension) would reuse the ADR-011 whitelist pattern — Phase A's query shape is fixed, so it needs
 no fragment map; respects the effective-only + per-currency invariants.
@@ -162,13 +162,33 @@ independent verification subagent per diff.
 The `find_correlations` tool skeleton + `analysis` enum + `spending_shifts` mode: the trailing-baseline query,
 result shape, tool registration, `docs/mcp-tools.md`, `docs/architecture.md`, PLAN progress.
 
-### Phase B — `feat/correlations-recurring-candidates`
+### Phase B — `feat/correlations-recurring-candidates` ✅ Done
 `recurring_candidates` mode: repo per-merchant series query + `logic/`'s pure `detectRecurringCadence`; the
 rule-exclusion; result shaped for `create_recurring`; docs. **Feature Design 017 (done)** gave `recurring_rules`
 its own `merchant_key`, so exclusion here is an exact `merchant_key` match against existing rules, not the
 loose category+amount approximation originally anticipated — a rule created before 017 (`merchant_key = null`)
 still won't match and so can slip back into the suggestions until re-saved, but every rule created after 017
 excludes exactly.
+
+**As built:** unlike the other three modes, this one has **no reference period at all** — `month`/`year` moved
+from required to optional on `FindCorrelationsSchema` (a rolling `lookbackMonths` window ending today instead),
+so `spending_shifts`/`budget_fit`/`merchant_concentration` now enforce their own period requirement via a
+`guard(hasPeriod(input), findCorrelationsErrors.missingPeriod(...))` in `controllers/correlations.ts`, mirroring
+`aggregate_spending`'s existing from/to-or-period flexibility rather than leaning on zod-required fields. Two new
+pure helpers in `logic/period.ts`: `daysBetween` (whole days between two `YYYY-MM-DD` dates) and `lookbackFrom`
+(month-index arithmetic anchored at "today", mirroring `baselineRange`'s anchored-at-a-period version).
+`correlationsRepo.recurringCandidates` (`diplomat/db/repos/correlations.ts`) fetches one row per qualifying
+transaction (not pre-aggregated — cadence detection needs individual dates/amounts), excluding merchants with no
+`merchant_key` and merchants already covered by a rule (the exact-match `NOT IN` subquery above) directly in SQL.
+`logic/correlations.ts`'s `detectRecurringCadence(series, minOccurrences)` is the pure cadence check: every
+consecutive gap within `CADENCE_DAY_TOLERANCE_DAYS` (5) of `CADENCE_NOMINAL_GAP_DAYS` (30) — covers every
+calendar month length (28-31 days) without also accepting a weekly/quarterly pattern — and every amount within
+`CADENCE_AMOUNT_TOLERANCE_PCT` (10%) of the series average; these three are fixed constants in
+`models/correlations.ts`, not caller params (only `lookbackMonths`/`minOccurrences` are). `suggestedNextDue`
+reuses `logic/recurring.ts`'s existing `nextDue` (month-length-aware date math) rather than reimplementing it.
+`shapeRecurringCandidates` groups by `(merchantKey, currency)`, runs the cadence check per group, and takes the
+category from the merchant's most recent occurrence (a merchant's category is stable in practice, so this is
+representative without a full mode-count over the series).
 
 ### Phase C — `feat/correlations-merchant-concentration` ✅ Done
 `merchant_concentration` mode: the per-category top-merchant + cumulative-share query; result shape; docs.

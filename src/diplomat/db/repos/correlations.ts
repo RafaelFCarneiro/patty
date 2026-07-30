@@ -3,9 +3,11 @@ import { TransactionStatus, TransactionType } from '../../../models/transaction.
 import {
   BudgetFitDbRowSchema,
   MerchantSpendDbRowSchema,
+  RecurringCandidateDbRowSchema,
   SpendingShiftDbRowSchema,
   type BudgetFitDbRow,
   type MerchantSpendDbRow,
+  type RecurringCandidateDbRow,
   type SpendingShiftDbRow,
 } from '../../../wire/db/correlations.js';
 import type { Db } from '../driver.js';
@@ -63,6 +65,21 @@ const MERCHANT_CONCENTRATION_SELECT = (from: string, to: string, categoryId: str
   GROUP BY t.currency, c.id, t.merchant_key
 `;
 
+/** Not pre-aggregated, unlike the queries above — cadence detection needs individual dates/amounts.
+ *  The exclusion subquery's `IS NOT NULL` matters: `NOT IN` against a subquery that can return NULL
+ *  would silently match nothing. */
+const RECURRING_CANDIDATES_SELECT = (from: string, today: string) => sql`
+  SELECT t.merchant_key, t.currency, c.name AS category, c.names AS category_names, t.date, t.amount
+  FROM transactions t
+  JOIN categories c ON c.id = t.category_id
+  WHERE t.date >= ${from} AND t.date <= ${today}
+    AND t.status = ${TransactionStatus.enum.effective}
+    AND t.type = ${TransactionType.enum.expense}
+    AND t.merchant_key IS NOT NULL
+    AND t.merchant_key NOT IN (SELECT merchant_key FROM recurring_rules WHERE merchant_key IS NOT NULL)
+  ORDER BY t.merchant_key, t.currency, t.date
+`;
+
 export type CorrelationsRepo = {
   /** `[baselineFrom, currentFrom)` is the trailing baseline window; `[currentFrom, currentTo)` is
    *  the reference month. */
@@ -71,6 +88,8 @@ export type CorrelationsRepo = {
   budgetFit: (baselineFrom: string, currentFrom: string, currentTo: string) => Promise<BudgetFitDbRow[]>;
   /** One row per (category, currency, merchant) with spend in `[from, to)`. */
   merchantConcentration: (from: string, to: string, categoryId: string | null) => Promise<MerchantSpendDbRow[]>;
+  /** One row per qualifying transaction in `[from, today]`, not already covered by a rule. */
+  recurringCandidates: (from: string, today: string) => Promise<RecurringCandidateDbRow[]>;
 };
 
 export const correlationsRepo = (db: Db): CorrelationsRepo => ({
@@ -87,5 +106,10 @@ export const correlationsRepo = (db: Db): CorrelationsRepo => ({
   merchantConcentration: async (from, to, categoryId) => {
     const rows = await db.all<Record<string, unknown>>(MERCHANT_CONCENTRATION_SELECT(from, to, categoryId));
     return rows.map((r) => MerchantSpendDbRowSchema.parse(r));
+  },
+
+  recurringCandidates: async (from, today) => {
+    const rows = await db.all<Record<string, unknown>>(RECURRING_CANDIDATES_SELECT(from, today));
+    return rows.map((r) => RecurringCandidateDbRowSchema.parse(r));
   },
 });

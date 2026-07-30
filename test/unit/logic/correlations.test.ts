@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  detectRecurringCadence,
   shapeBudgetFitLines,
   shapeMerchantConcentration,
+  shapeRecurringCandidates,
   shapeSpendingShifts,
   shapeUnbudgetedSpend,
 } from '../../../src/logic/correlations.js';
-import type { BudgetFitLine } from '../../../src/models/correlations.js';
+import type { BudgetFitLine, RecurringCandidateInput } from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import type {
@@ -381,5 +383,160 @@ describe('shapeMerchantConcentration', () => {
 
   it('returns an empty array for no rows (e.g. an empty period)', () => {
     expect(shapeMerchantConcentration([], 5, Locale.enum.en)).toEqual([]);
+  });
+});
+
+describe('detectRecurringCadence', () => {
+  const monthlySeries = [
+    { date: '2026-01-05', amount: 100 },
+    { date: '2026-02-04', amount: 100 },
+    { date: '2026-03-06', amount: 100 },
+  ];
+
+  it('flags a clean monthly series with the right typicalAmount/occurrences/lastDate/suggestedNextDue', () => {
+    const result = detectRecurringCadence(monthlySeries, 3);
+    expect(result).toEqual({
+      typicalAmount: 100,
+      occurrences: 3,
+      lastDate: '2026-03-06',
+      suggestedNextDue: '2026-04-06',
+    });
+  });
+
+  it('sorts an out-of-order series internally before measuring gaps', () => {
+    const shuffled = [monthlySeries[2]!, monthlySeries[0]!, monthlySeries[1]!];
+    expect(detectRecurringCadence(shuffled, 3)).toEqual(detectRecurringCadence(monthlySeries, 3));
+  });
+
+  it('rejects a series below minOccurrences, regardless of cadence', () => {
+    expect(detectRecurringCadence(monthlySeries.slice(0, 2), 3)).toBeNull();
+  });
+
+  it('rejects irregular gaps', () => {
+    const irregular = [
+      { date: '2026-01-01', amount: 100 },
+      { date: '2026-01-15', amount: 100 }, // 14-day gap — too short
+      { date: '2026-03-01', amount: 100 }, // 45-day gap — too long
+    ];
+    expect(detectRecurringCadence(irregular, 3)).toBeNull();
+  });
+
+  it('accepts a gap exactly at the tolerance boundary', () => {
+    const boundary = [
+      { date: '2026-01-01', amount: 100 },
+      { date: '2026-02-05', amount: 100 }, // exactly 35 days
+    ];
+    expect(detectRecurringCadence(boundary, 2)).not.toBeNull();
+  });
+
+  it('rejects amount drift beyond tolerance', () => {
+    const drifting = [
+      { date: '2026-01-05', amount: 100 },
+      { date: '2026-02-04', amount: 100 },
+      { date: '2026-03-06', amount: 200 }, // far beyond ±10% of the ~133 average
+    ];
+    expect(detectRecurringCadence(drifting, 3)).toBeNull();
+  });
+
+  it('accepts amount drift within tolerance', () => {
+    const withinDrift = [
+      { date: '2026-01-05', amount: 95 },
+      { date: '2026-02-04', amount: 100 },
+      { date: '2026-03-06', amount: 105 },
+    ];
+    expect(detectRecurringCadence(withinDrift, 3)).not.toBeNull();
+  });
+});
+
+describe('shapeRecurringCandidates', () => {
+  const recurringRow = (overrides: Partial<RecurringCandidateInput> = {}): RecurringCandidateInput => ({
+    merchantKey: 'netflix',
+    currency: CurrencyCode.enum.BRL,
+    category: 'Subscriptions',
+    categoryNames: null,
+    date: '2026-01-05',
+    amount: 39.9,
+    ...overrides,
+  });
+
+  it('flags a qualifying merchant as a candidate, ready for create_recurring', () => {
+    const rows = [
+      recurringRow({ date: '2026-01-05' }),
+      recurringRow({ date: '2026-02-04' }),
+      recurringRow({ date: '2026-03-06' }),
+    ];
+    const [candidate] = shapeRecurringCandidates(rows, 3, Locale.enum.en);
+    expect(candidate).toEqual({
+      merchant: 'netflix',
+      currency: 'BRL',
+      category: 'Subscriptions',
+      typicalAmount: 39.9,
+      occurrences: 3,
+      lastDate: '2026-03-06',
+      suggestedNextDue: '2026-04-06',
+    });
+  });
+
+  it('excludes a merchant whose series does not qualify', () => {
+    const rows = [
+      recurringRow({ date: '2026-01-01' }),
+      recurringRow({ date: '2026-01-15' }), // irregular gap
+      recurringRow({ date: '2026-03-01' }),
+    ];
+    expect(shapeRecurringCandidates(rows, 3, Locale.enum.en)).toEqual([]);
+  });
+
+  it('keeps merchants separate per currency', () => {
+    const rows = [
+      recurringRow({ currency: CurrencyCode.enum.BRL, date: '2026-01-05' }),
+      recurringRow({ currency: CurrencyCode.enum.BRL, date: '2026-02-04' }),
+      recurringRow({ currency: CurrencyCode.enum.USD, date: '2026-01-05' }),
+    ];
+    const candidates = shapeRecurringCandidates(rows, 2, Locale.enum.en);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ currency: 'BRL', occurrences: 2 });
+  });
+
+  it("uses the merchant's most recent occurrence to decide category", () => {
+    const rows = [
+      recurringRow({ date: '2026-01-05', category: 'Streaming' }),
+      recurringRow({ date: '2026-02-04', category: 'Streaming' }),
+      recurringRow({ date: '2026-03-06', category: 'Subscriptions' }),
+    ];
+    const [candidate] = shapeRecurringCandidates(rows, 3, Locale.enum.en);
+    expect(candidate?.category).toBe('Subscriptions');
+  });
+
+  it('localizes the category name via the names map for the given locale', () => {
+    const rows = [
+      recurringRow({ date: '2026-01-05', category: 'Food', categoryNames: { pt: 'Alimentação' } }),
+      recurringRow({ date: '2026-02-04', category: 'Food', categoryNames: { pt: 'Alimentação' } }),
+      recurringRow({ date: '2026-03-06', category: 'Food', categoryNames: { pt: 'Alimentação' } }),
+    ];
+    const [candidate] = shapeRecurringCandidates(rows, 3, Locale.enum.pt);
+    expect(candidate?.category).toBe('Alimentação');
+  });
+
+  it('sorts by occurrences descending, then merchant ascending', () => {
+    const rows = [
+      // 'b' qualifies with 4 monthly occurrences
+      recurringRow({ merchantKey: 'b', date: '2026-01-05' }),
+      recurringRow({ merchantKey: 'b', date: '2026-02-04' }),
+      recurringRow({ merchantKey: 'b', date: '2026-03-06' }),
+      recurringRow({ merchantKey: 'b', date: '2026-04-05' }),
+      // 'a' and 'c' both qualify with 3
+      recurringRow({ merchantKey: 'a', date: '2026-01-05' }),
+      recurringRow({ merchantKey: 'a', date: '2026-02-04' }),
+      recurringRow({ merchantKey: 'a', date: '2026-03-06' }),
+      recurringRow({ merchantKey: 'c', date: '2026-01-05' }),
+      recurringRow({ merchantKey: 'c', date: '2026-02-04' }),
+      recurringRow({ merchantKey: 'c', date: '2026-03-06' }),
+    ];
+    const candidates = shapeRecurringCandidates(rows, 3, Locale.enum.en);
+    expect(candidates.map((c) => c.merchant)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('returns an empty array for no rows', () => {
+    expect(shapeRecurringCandidates([], 3, Locale.enum.en)).toEqual([]);
   });
 });

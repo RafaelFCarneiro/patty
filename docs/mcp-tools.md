@@ -220,9 +220,8 @@ REST mirror: `GET /api/aggregate?groupBy=category&month=6&year=2026`.
 ## find_correlations
 
 Feature Design 016: one tool over spending-pattern analyses, discriminated by `analysis` (a whitelisted enum,
-mirroring `aggregate_spending`'s `groupBy`). Additive across phases — `spending_shifts`, `budget_fit`, and
-`merchant_concentration` exist so far (`recurring_candidates` lands in a later phase). Read-only: no entity, no
-write flow.
+mirroring `aggregate_spending`'s `groupBy`). All four phases are done — `spending_shifts`, `budget_fit`,
+`merchant_concentration`, and `recurring_candidates`. Read-only: no entity, no write flow.
 
 ### spending_shifts
 
@@ -259,6 +258,8 @@ Sorted by `|deltaPct|` descending; brand-new-spend categories (`deltaPct: null`)
 **Safety:** the query shape is fixed (no caller-selected dimension); all filter values (dates, thresholds) are
 parameter-bound, never concatenated into SQL — the same discipline as ADR-011 without needing a whitelist
 fragment map, since there is no structural choice to whitelist.
+
+**Errors:** `validation` (missing `month`/`year` — required for this mode, unlike `recurring_candidates`).
 
 ### budget_fit
 
@@ -301,6 +302,8 @@ track record is never suggested. Per-currency throughout — a BRL budget is mea
 
 No REST mirror yet (MCP-only, mirrors the budget tools).
 
+**Errors:** `validation` (missing `month`/`year`).
+
 ### merchant_concentration
 
 "Where within Food is my money actually going?" — spend concentration by merchant within a category, the
@@ -335,9 +338,42 @@ parent category, same as `spending_shifts`/`budget_fit`.
 ```
 Sorted by category name; within a category, `merchants` is sorted by spend descending.
 
-**Errors:** `unknown_category`, `ambiguous_category` (invalid `category` filter).
+**Errors:** `unknown_category`, `ambiguous_category` (invalid `category` filter), `validation` (missing
+`month`/`year`).
 
-No REST mirror yet (MCP-only, mirrors the budget tools).
+### recurring_candidates
+
+Merchants with a regular ~monthly cadence that are not yet set up as a recurring rule — each one a
+ready-to-confirm `create_recurring` shape (Feature Design 016 phase B). Unlike the three modes above, this one
+has **no reference period at all**: it scans a rolling window ending today, not a specific month.
+
+**Input:**
+- `analysis: "recurring_candidates"` (required)
+- `lookbackMonths` (default `6`): months of transaction history to scan, ending today
+- `minOccurrences` (default `3`): minimum qualifying transactions within the lookback to flag a candidate
+
+**Computation:** per `(merchant, currency)`, the effective, expense-only transaction series within the lookback
+window is checked for a consistent ~monthly cadence (every consecutive gap within 5 days of 30 — covers every
+calendar month length without also accepting a weekly or quarterly pattern) and a stable amount (every
+occurrence within 10% of the series average) — both fixed tolerances, not caller params. A merchant with fewer
+than `minOccurrences` qualifying transactions, an irregular gap, or amount drift beyond tolerance is not a
+candidate. **Excludes any merchant that already backs a recurring rule** — an exact `merchant_key` match against
+`recurring_rules.merchant_key` (Feature Design 017); a rule created before that migration (`merchant_key: null`)
+doesn't match and so can still surface here until it's re-saved. `category` is the merchant's most recent
+occurrence's category (a merchant's category is stable in practice).
+
+**Output:**
+```jsonc
+{ "analysis": "recurring_candidates",
+  "candidates": [
+    { "merchant": "netflix", "typicalAmount": 39.9, "currency": "BRL", "category": "Assinaturas",
+      "occurrences": 4, "lastDate": "2026-07-05", "suggestedNextDue": "2026-08-05" }
+  ] }
+```
+Sorted by `occurrences` descending, then merchant name. Pass `merchant`/`typicalAmount`/`currency`/`category`/
+`suggestedNextDue` straight through as `create_recurring`'s `merchant`/`amount`/`currency`/`category`/`startDate`.
+
+No REST mirror yet (MCP-only).
 
 ## get_spending_summary
 
