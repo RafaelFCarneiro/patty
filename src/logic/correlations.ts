@@ -237,10 +237,8 @@ type CadenceResult = {
 
 /**
  * Flags a `{date, amount}` series as a recurring candidate: `>= minOccurrences` points, every
- * consecutive gap within `CADENCE_DAY_TOLERANCE_DAYS` of `CADENCE_NOMINAL_GAP_DAYS` (covers every
- * calendar month length without also accepting a weekly/quarterly pattern), and every amount
- * within `CADENCE_AMOUNT_TOLERANCE_PCT` of the series average. Pure — the repo only fetches the
- * per-merchant series (Feature Design 016 phase B).
+ * consecutive gap within `CADENCE_DAY_TOLERANCE_DAYS` of `CADENCE_NOMINAL_GAP_DAYS`, and every
+ * amount within `CADENCE_AMOUNT_TOLERANCE_PCT` of the series average (Feature Design 016 phase B).
  */
 export const detectRecurringCadence = (
   series: readonly { date: string; amount: number }[],

@@ -43,10 +43,8 @@ export const NEW_CATEGORY_ALWAYS_SURFACED_NOTE =
 
 export const FindCorrelationsSchema = z.object({
   analysis: FindCorrelationsAnalysis.describe('Which correlation analysis to run'),
-  // Optional here: recurring_candidates has no reference period at all (a rolling lookback ending
-  // today) — required only for spending_shifts/budget_fit/merchant_concentration, enforced in
-  // controllers/correlations.ts via `hasPeriod` (mirrors aggregate_spending's own from/to-or-period
-  // flexibility).
+  // Requiredness is enforced per-mode in controllers/correlations.ts via `hasPeriod`, not here —
+  // mirrors aggregate_spending's own from/to-or-period flexibility.
   month: PeriodSchema.shape.month
     .optional()
     .describe(
