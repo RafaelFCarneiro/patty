@@ -150,7 +150,8 @@ transactions        (id PK, description, amount, type: expense|income|transfer,
                      INDEX: (status, date) — supports scheduling queries)
 transaction_tags    (transaction_id FK, tag_id FK — composite PK)
 recurring_rules     (id PK, description, amount, type, period, next_due, currency,
-                     account_id FK, category_id FK, version)
+                     account_id FK, category_id FK, merchant_key FK, version — Feature Design 017;
+                     null on rules created before the migration, no backfill)
 
 settings            (id PK DEFAULT 'singleton', locale: en|es|pt DEFAULT en,
                      locale_source: default|inferred|explicit DEFAULT default, version)
@@ -172,7 +173,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 3. **Currency**: transactions denormalize the account/card currency at write time; aggregations group per currency, never convert.
 4. **Balances are derived**, never stored: `initialBalance + income − expenses + transfers in − transfers out`. **Only `effective` transactions count** — pending transactions never affect the current balance. Projection (balance + pending-through-date) is opt-in via `projectedAsOf` on `get_account_balances`.
    - **Effective-only invariant (Feature Design 001)**: `get_account_balances` and `get_spending_summary` MUST filter `status = 'effective'`. Projection queries explicitly include `pending`. Classification ignores status. This is enforced in `diplomat/db/repos/` — violations are bugs.
-5. **Classification via merchant_category**: normalized description → `merchants.key` → strongest `merchant_category` edge; user corrections increment `weight` (`onConflictDoUpdate`).
+5. **Classification via merchant_category**: normalized description → `merchants.key` → strongest `merchant_category` edge; user corrections increment `weight` (`onConflictDoUpdate`). **Recurring rules carry a merchant too (Feature Design 017)**: `create_recurring` resolves `recurring_rules.merchant_key` from an explicit `merchant` or, failing that, the normalized `description`; every occurrence `apply_due_recurring` materializes inherits the rule's `merchant_key`, so recurring spend participates in merchant concentration and classification like any other transaction. Rules created before the migration have `merchant_key = null` (no backfill — `normalizeMerchant` can't be faithfully reproduced in SQL) until re-saved.
 6. **Category kind must match transaction type**: `expense` transactions may only use `expense` or `both` categories;
    `income` may only use `income` or `both`. Enforced in `controllers/transaction/core.ts`'s `resolveCategory`/
    `resolveSubCategory` (shared by every movement path) via `isCategoryKindAllowed` (predicate in `logic/transaction.ts`).

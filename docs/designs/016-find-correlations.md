@@ -164,7 +164,11 @@ result shape, tool registration, `docs/mcp-tools.md`, `docs/architecture.md`, PL
 
 ### Phase B — `feat/correlations-recurring-candidates`
 `recurring_candidates` mode: repo per-merchant series query + `logic/`'s pure `detectRecurringCadence`; the
-best-effort rule-exclusion; result shaped for `create_recurring`; docs.
+rule-exclusion; result shaped for `create_recurring`; docs. **Feature Design 017 (done)** gave `recurring_rules`
+its own `merchant_key`, so exclusion here is an exact `merchant_key` match against existing rules, not the
+loose category+amount approximation originally anticipated — a rule created before 017 (`merchant_key = null`)
+still won't match and so can slip back into the suggestions until re-saved, but every rule created after 017
+excludes exactly.
 
 ### Phase C — `feat/correlations-merchant-concentration` ✅ Done
 `merchant_concentration` mode: the per-category top-merchant + cumulative-share query; result shape; docs.

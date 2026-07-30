@@ -202,7 +202,8 @@ Merchant normalization logic; `merchant_category` weight learning from correctio
 ### Phase 3 — Insights + analysis (in progress)
 `aggregate_spending`, `find_correlations` (Feature Design 016 — one tool, `analysis`-discriminated, additive
 across phases; phase A `spending_shifts` ✅, phase D `budget_fit` ✅, phase C `merchant_concentration` ✅, phase B
-`recurring_candidates` pending — depends on Feature Design 017), budgets ✅ (Feature Design 015 —
+`recurring_candidates` pending — Feature Design 017 (recurring rules carry a merchant) ✅ unblocks it), budgets ✅
+(Feature Design 015 —
 `create_budget`/`update_budget`/`delete_budget`/`list_budgets`/`get_budget_status`), goals, saved views; MCP
 resources + prompts; monthly-review and import-statement skills. **Exit:** "how was my spending vs budget, and
 what's driving the change?" answered with composed queries; views persist.

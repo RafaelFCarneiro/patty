@@ -1,6 +1,7 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
+import { normalizeMerchant, withMerchant } from '../logic/merchant.js';
 import * as persistence from '../logic/persistence.js';
 import {
   MAX_RECURRING_OCCURRENCES_PER_RUN,
@@ -43,6 +44,10 @@ export const createRecurring = (
   safeTry(async function* () {
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
+    // Explicit `merchant` or the description, normalized the same way either way so a rule's key
+    // always matches how a transaction with the same merchant would classify (empty-string
+    // guarded — an empty key can't back a `merchants` FK row).
+    const merchantKey = normalizeMerchant(input.merchant ?? input.description) || undefined;
 
     const rule: RecurringRule = {
       id: deps.newId(),
@@ -54,9 +59,13 @@ export const createRecurring = (
       currency: resolveCurrency(account, input),
       accountId: account?.id,
       categoryId: category?.id,
+      merchantKey,
     };
 
-    const persist = [persistence.insert({ entity: RECURRING_ENTITY_TAG, model: rule })];
+    const persist = withMerchant(
+      [persistence.insert({ entity: RECURRING_ENTITY_TAG, model: rule })],
+      rule.merchantKey,
+    );
     const response: RecurringRuleView = {
       ...rule,
       accountName: account?.name,
@@ -75,6 +84,8 @@ type RulePlan = {
   advance: Persistable;
 };
 
+/** `rule.merchantKey`'s `merchants` row was already emitted when the rule was created (`withMerchant`
+ *  in `createRecurring`), so occurrences just reference it — no merchant `Persistable` needed here. */
 const buildOccurrenceEntity = (
   deps: Deps,
   rule: RecurringRuleEntity,
@@ -91,7 +102,7 @@ const buildOccurrenceEntity = (
   source: TransactionSource.enum.mcp,
   idempotencyKey: recurringIdempotencyKey(rule.id, due),
   classification: { method: ClassificationMethod.enum.user, confidence: 1 },
-  refs: { accountId: rule.accountId, categoryId: rule.categoryId },
+  refs: { accountId: rule.accountId, categoryId: rule.categoryId, merchantKey: rule.merchantKey },
 });
 
 /** `advance`'s model carries the rule's full desired end-state, not just `nextDue`, so the shell's

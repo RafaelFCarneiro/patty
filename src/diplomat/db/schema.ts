@@ -171,6 +171,7 @@ export const recurringRules = sqliteTable('recurring_rules', {
     .references(() => currencies.code),
   accountId: text('account_id').references(() => accounts.id),
   categoryId: text('category_id').references(() => categories.id),
+  merchantKey: text('merchant_key').references(() => merchants.key),
   version: integer('version').notNull().default(0),
 });
 

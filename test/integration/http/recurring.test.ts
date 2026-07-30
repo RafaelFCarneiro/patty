@@ -36,6 +36,43 @@ describe('GET /api/recurring', () => {
   });
 });
 
+describe('recurring merchant', () => {
+  it('derives merchantKey from description when merchant is omitted', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/recurring',
+      payload: {
+        description: 'Netflix',
+        amount: 39.9,
+        type: 'expense',
+        period: 'monthly',
+        startDate: '2026-07-01',
+        currency: 'USD',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().merchantKey).toBe('netflix');
+  });
+
+  it('uses the explicit merchant over the description when both are given', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/recurring',
+      payload: {
+        description: 'Monthly rent payment',
+        amount: 2000,
+        type: 'expense',
+        period: 'monthly',
+        startDate: '2026-07-01',
+        currency: 'USD',
+        merchant: 'Landlord LLC',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().merchantKey).toBe('landlord llc');
+  });
+});
+
 describe('POST /api/recurring', () => {
   it('creates a recurring rule (201)', async () => {
     const res = await inject({

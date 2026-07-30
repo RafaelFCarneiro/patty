@@ -26,6 +26,7 @@ export const dbToModel = (record: Record<string, unknown>): RecurringRuleView =>
     accountName: row.account_name ?? undefined,
     categoryId: row.category_id ?? undefined,
     categoryName: row.category_name ?? undefined,
+    merchantKey: row.merchant_key ?? undefined,
   });
 };
 
@@ -43,6 +44,7 @@ export const dbToEntity = (record: Record<string, unknown>): RecurringRuleEntity
     currency: row.currency,
     accountId: row.account_id ?? undefined,
     categoryId: row.category_id ?? undefined,
+    merchantKey: row.merchant_key ?? undefined,
     version: row.version,
   });
 };
@@ -59,6 +61,7 @@ export const modelToDb = (entity: RecurringRuleEntity): RecurringRuleRow => ({
   currency: entity.currency,
   accountId: entity.accountId ?? null,
   categoryId: entity.categoryId ?? null,
+  merchantKey: entity.merchantKey ?? null,
   version: entity.version,
 });
 
