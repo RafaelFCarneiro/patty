@@ -28,6 +28,7 @@ export const RecurringRuleSchema = z.object({
   currency: CurrencyCode.describe('Currency for materialized transactions'),
   accountId: Id.optional().describe('Target account for materialized transactions'),
   categoryId: Id.optional().describe('Category for materialized transactions'),
+  merchantKey: z.string().min(1).optional().describe('Normalized merchant key this rule pays, if known'),
 });
 export type RecurringRule = z.infer<typeof RecurringRuleSchema>;
 
@@ -56,5 +57,13 @@ export const CreateRecurringSchema = z.object({
   account: z.string().optional().describe('Account name (resolved by name match)'),
   category: z.string().optional().describe('Category name (resolved by name match)'),
   currency: CurrencyCode.optional().describe('Currency (resolved from account if omitted)'),
+  merchant: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Merchant this rule pays (e.g. "Netflix", the landlord) — normalized the same way as a ' +
+        'transaction description; omit to derive it from `description` instead',
+    ),
 });
 export type CreateRecurring = z.infer<typeof CreateRecurringSchema>;

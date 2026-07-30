@@ -14,6 +14,7 @@ const sqlRow = (overrides: Partial<Record<string, unknown>> = {}): Record<string
   account_name: 'Nubank',
   category_id: 'cat-1',
   category_name: 'Housing',
+  merchant_key: 'landlord',
   version: 2,
   ...overrides,
 });
@@ -33,15 +34,17 @@ describe('dbToModel', () => {
       accountName: 'Nubank',
       categoryId: 'cat-1',
       categoryName: 'Housing',
+      merchantKey: 'landlord',
     });
   });
 
   it('maps null relation columns to undefined optionals, not version', () => {
     const rule = recurringAdapters.dbToModel(
-      sqlRow({ account_id: null, account_name: null, category_id: null, category_name: null }),
+      sqlRow({ account_id: null, account_name: null, category_id: null, category_name: null, merchant_key: null }),
     );
     expect(rule.accountId).toBeUndefined();
     expect(rule.categoryId).toBeUndefined();
+    expect(rule.merchantKey).toBeUndefined();
     expect(rule).not.toHaveProperty('version');
   });
 
@@ -63,14 +66,18 @@ describe('dbToEntity', () => {
       currency: 'BRL',
       accountId: 'acc-1',
       categoryId: 'cat-1',
+      merchantKey: 'landlord',
       version: 2,
     });
   });
 
   it('maps null relation columns to undefined optionals', () => {
-    const rule = recurringAdapters.dbToEntity(sqlRow({ account_id: null, category_id: null }));
+    const rule = recurringAdapters.dbToEntity(
+      sqlRow({ account_id: null, category_id: null, merchant_key: null }),
+    );
     expect(rule.accountId).toBeUndefined();
     expect(rule.categoryId).toBeUndefined();
+    expect(rule.merchantKey).toBeUndefined();
   });
 });
 
@@ -102,11 +109,13 @@ describe('wireInToModel', () => {
       account: 'acc-nubank',
       category: 'cat-salario',
       currency: 'USD',
+      merchant: 'Employer Inc',
     });
     expect(recurringAdapters.wireInToModel(parsed)).toMatchObject({
       account: 'acc-nubank',
       category: 'cat-salario',
       currency: 'USD',
+      merchant: 'Employer Inc',
     });
   });
 });

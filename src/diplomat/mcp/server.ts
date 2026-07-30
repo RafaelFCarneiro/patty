@@ -391,7 +391,10 @@ export const buildMcpServer = (
     {
       title: 'Create recurring rule',
       description:
-        'Create a recurring transaction rule (salary, rent, subscription). Materialized by apply_due_recurring.',
+        'Create a recurring transaction rule (salary, rent, subscription). Materialized by apply_due_recurring, ' +
+        'each occurrence carrying the rule\'s merchant. `merchant` names it explicitly (e.g. "Netflix"); omit to ' +
+        'derive it from `description` — either way it\'s normalized the same way a transaction\'s merchant is, ' +
+        'so recurring spend shows up in merchant_concentration and reinforces classification like any other spend.',
       inputSchema: CreateRecurringSchema.shape,
     },
     async (args) => {

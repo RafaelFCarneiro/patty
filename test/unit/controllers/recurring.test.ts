@@ -7,6 +7,7 @@ import { CurrencyCode } from '../../../src/models/money.js';
 import { Locale } from '../../../src/models/locale.js';
 import type { FlowOutcome, PersistOutcome } from '../../../src/models/persistable.js';
 import { PersistOp } from '../../../src/models/persistable.js';
+import { MERCHANT_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { RECURRING_ENTITY_TAG, type RecurringRuleEntity } from '../../../src/models/recurring.js';
 import { TRANSACTION_ENTITY_TAG, type RawTransactionView } from '../../../src/models/transaction.js';
 
@@ -20,7 +21,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   creditCards: {} as Deps['creditCards'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
-  merchants: {} as Deps['merchants'],
+  merchants: { matchCandidates: async () => [] } as unknown as Deps['merchants'],
   recurring: { due: async () => [] } as unknown as Deps['recurring'],
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],
@@ -56,7 +57,7 @@ const resolveResponse = <T>(outcome: FlowOutcome<T>, outcomes: PersistOutcome[])
 };
 
 describe('createRecurring — functional core (ADR-021 phase 3b)', () => {
-  it('returns a single insert Persistable with resolved account/category ids — no version', async () => {
+  it('returns a merchant insert plus the rule insert, with resolved account/category ids — no version', async () => {
     const deps = makeDeps({
       accounts: { list: async () => [account()] } as unknown as Deps['accounts'],
       categories: { list: async () => [category()] } as unknown as Deps['categories'],
@@ -77,6 +78,11 @@ describe('createRecurring — functional core (ADR-021 phase 3b)', () => {
     expect(outcome.persist).toEqual([
       {
         op: PersistOp.enum.insert,
+        entity: MERCHANT_ENTITY_TAG,
+        model: { key: 'spotify' },
+      },
+      {
+        op: PersistOp.enum.insert,
         entity: RECURRING_ENTITY_TAG,
         model: {
           id: 'new-id',
@@ -88,10 +94,85 @@ describe('createRecurring — functional core (ADR-021 phase 3b)', () => {
           currency: CurrencyCode.enum.BRL,
           accountId: 'acc-1',
           categoryId: 'cat-1',
+          merchantKey: 'spotify',
         },
       },
     ]);
-    expect(outcome.persist[0]).not.toHaveProperty('model.version');
+    expect(outcome.persist[1]).not.toHaveProperty('model.version');
+  });
+
+  it('uses the explicit merchant, normalized, over the description, when both are given', async () => {
+    const deps = makeDeps();
+
+    const result = await createRecurring(deps, {
+      description: 'Monthly rent payment',
+      amount: 2000,
+      type: 'expense',
+      period: 'monthly',
+      startDate: '2026-07-01',
+      merchant: 'Landlord LLC',
+    });
+
+    const outcome = result._unsafeUnwrap();
+    const rule = outcome.persist.find((p) => p.entity === RECURRING_ENTITY_TAG);
+    expect(rule).toMatchObject({ model: { merchantKey: 'landlord llc' } });
+  });
+
+  it('reuses an already-learned merchant_category key over the full normalized description', async () => {
+    const deps = makeDeps({
+      merchants: {
+        matchCandidates: async () => [
+          { merchantKey: 'netflix', categoryId: 'cat-1', categoryName: 'Subscriptions', weight: 3, origin: 'rule' },
+        ],
+      } as unknown as Deps['merchants'],
+    });
+
+    const result = await createRecurring(deps, {
+      description: 'Netflix.com subscription',
+      amount: 39.9,
+      type: 'expense',
+      period: 'monthly',
+      startDate: '2026-07-01',
+    });
+
+    const rule = result._unsafeUnwrap().persist.find((p) => p.entity === RECURRING_ENTITY_TAG);
+    expect(rule).toMatchObject({ model: { merchantKey: 'netflix' } });
+  });
+
+  it('an explicit merchant is stored as-is, without consulting matchCandidates', async () => {
+    const matchCandidates = vi.fn(async () => [
+      { merchantKey: 'other-key', categoryId: 'cat-1', categoryName: 'Subscriptions', weight: 3, origin: 'rule' },
+    ]);
+    const deps = makeDeps({ merchants: { matchCandidates } as unknown as Deps['merchants'] });
+
+    const result = await createRecurring(deps, {
+      description: 'Netflix.com subscription',
+      amount: 39.9,
+      type: 'expense',
+      period: 'monthly',
+      startDate: '2026-07-01',
+      merchant: 'Netflix',
+    });
+
+    const rule = result._unsafeUnwrap().persist.find((p) => p.entity === RECURRING_ENTITY_TAG);
+    expect(rule).toMatchObject({ model: { merchantKey: 'netflix' } });
+    expect(matchCandidates).not.toHaveBeenCalled();
+  });
+
+  it('leaves merchantKey unset when the description normalizes to an empty string', async () => {
+    const deps = makeDeps();
+
+    const result = await createRecurring(deps, {
+      description: '123',
+      amount: 10,
+      type: 'expense',
+      period: 'monthly',
+      startDate: '2026-07-01',
+    });
+
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toHaveLength(1);
+    expect(outcome.persist[0]).toMatchObject({ entity: RECURRING_ENTITY_TAG, model: { merchantKey: undefined } });
   });
 
   it('the response carries the already-resolved account/category names — no read-back', async () => {
@@ -125,8 +206,8 @@ describe('createRecurring — functional core (ADR-021 phase 3b)', () => {
       startDate: '2026-07-01',
     });
 
-    const { model } = result._unsafeUnwrap().persist[0] as { model: { currency: string } };
-    expect(model.currency).toBe(CurrencyCode.enum.USD);
+    const rule = result._unsafeUnwrap().persist.find((p) => p.entity === RECURRING_ENTITY_TAG);
+    expect(rule).toMatchObject({ model: { currency: CurrencyCode.enum.USD } });
   });
 
   it('rejects an unknown account without building any Persistable', async () => {
@@ -156,6 +237,7 @@ const rule = (overrides: Partial<RecurringRuleEntity> = {}): RecurringRuleEntity
   currency: CurrencyCode.enum.BRL,
   accountId: 'acc-1',
   categoryId: 'cat-1',
+  merchantKey: 'landlord',
   version: 2,
   ...overrides,
 });
@@ -206,7 +288,7 @@ describe('applyDueRecurring — functional core (ADR-021 phase 3b)', () => {
         amount: 1000,
         date: '2026-05-01',
         idempotencyKey: 'rec-rec-1-2026-05-01',
-        refs: { accountId: 'acc-1', categoryId: 'cat-1' },
+        refs: { accountId: 'acc-1', categoryId: 'cat-1', merchantKey: 'landlord' },
       },
     });
     expect(advance).toEqual({

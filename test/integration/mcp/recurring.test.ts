@@ -182,6 +182,56 @@ describe('MCP integration > recurring', () => {
     }
   });
 
+  it('threads the merchant from create_recurring onto materialized occurrences', async () => {
+    const stamp = Date.now();
+    const accountName = `Merchant Recurring ${stamp}`;
+    const ruleDescription = `Streaming sub ${stamp}`;
+    const pastDate = new Date();
+    pastDate.setDate(pastDate.getDate() - 5);
+    const startDate = toIsoDate(pastDate);
+
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_account',
+        args: { name: accountName, type: 'checking', currency: 'BRL', initialBalance: 0 },
+      });
+
+      await callTool(client, {
+        name: 'create_recurring',
+        args: {
+          description: ruleDescription,
+          amount: 39.9,
+          type: 'expense',
+          period: 'monthly',
+          startDate,
+          account: accountName,
+          merchant: 'Streamflix',
+        },
+      });
+
+      const result = (await callTool(client, {
+        name: 'apply_due_recurring',
+        args: {},
+      })) as { applied?: Array<{ rule?: string; transaction?: { id?: string; merchant?: string } }> };
+
+      const ours = result.applied?.filter((a) => a.rule === ruleDescription) ?? [];
+      for (const a of ours) {
+        if (a.transaction?.id) createdTxIds.push(a.transaction.id);
+      }
+
+      expect(ours.length).toBeGreaterThan(0);
+      for (const a of ours) {
+        expect(a.transaction?.merchant).toBe('streamflix');
+      }
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('defaults currency to USD when no account is linked', async () => {
     const stamp = Date.now();
     const ruleDescription = `No-account rule ${stamp}`;

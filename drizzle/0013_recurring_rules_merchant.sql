@@ -1,0 +1,1 @@
+ALTER TABLE `recurring_rules` ADD `merchant_key` text REFERENCES merchants(key);

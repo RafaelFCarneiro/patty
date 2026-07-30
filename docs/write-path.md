@@ -223,11 +223,20 @@ effect runner, appliers, outcomes, and the per-flow notes.
   `TransactionEntity` field mapping confirm already inlined before this phase, extracted as a pure logic
   function — not a controller-local helper, since it's a plain data transform with no I/O — so the
   `amount`/`date`/`status` overrides on top of it read as the diff they are.
-- **Recurring.** `applyDueRecurring` reads every due rule, computes each rule's occurrences (bounded
-  `MAX_RECURRING_OCCURRENCES_PER_RUN = 36`) and `nextDue` in the domain, and emits **one atomic batch** — every
-  occurrence (`TRANSACTION_ENTITY_TAG` insert) plus each rule's version-guarded `advance` — retried whole on any
-  conflict, safe because `rec-<ruleId>-<date>` idempotency keys make re-materialization a no-op. A deliberate
-  atomicity granularity, in contrast to bulk import.
+- **Recurring** (Feature Design 017 adds the merchant). `createRecurring` resolves `merchantKey`: an explicit
+  `merchant` (normalized, stored as-is — no candidate lookup, since the user is naming it directly); otherwise it
+  mirrors `planAccountMovement`'s own precedence — `deps.merchants.matchCandidates(normalizedDescription)` +
+  `pickClassification` first, reusing an already-learned `merchant_category` key so the rule reinforces the same
+  merchant identity a matching transaction would, falling back to the normalized `description` (empty-string
+  guarded) only when nothing matches. Either way the key is emitted via `withMerchant` — a `MERCHANT_ENTITY_TAG`
+  insert *prepended* ahead of the rule insert (rule 5, composition), same pattern transactions use.
+  `applyDueRecurring` reads every due rule, computes each rule's occurrences
+  (bounded `MAX_RECURRING_OCCURRENCES_PER_RUN = 36`) and `nextDue` in the domain, and emits **one atomic batch** —
+  every occurrence (`TRANSACTION_ENTITY_TAG` insert, `refs.merchantKey` copied straight from the rule — the
+  `merchants` row already exists from rule creation, so materialization emits no merchant `Persistable` of its
+  own, preserving the positional-`R.zip` exception above) plus each rule's version-guarded `advance` — retried
+  whole on any conflict, safe because `rec-<ruleId>-<date>` idempotency keys make re-materialization a no-op. A
+  deliberate atomicity granularity, in contrast to bulk import.
 - **Bulk import** (ADR-022) — a **sequence of independent units** (partial success): one bad or conflicting line
   must not roll back the rest. `import_card_statement`/`import_account_statement` default each line via `bulk.ts`
   and return a `StatementImportPlan` (lines + a `flowFor` binding each line to the aggregate's own single-line

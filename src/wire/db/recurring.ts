@@ -16,6 +16,7 @@ export const RecurringRowSchema = z.object({
   account_name: z.string().nullable(),
   category_id: z.string().nullable(),
   category_name: z.string().nullable(),
+  merchant_key: z.string().nullable(),
   version: z.number().int(),
 });
 
