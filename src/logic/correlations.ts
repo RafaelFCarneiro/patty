@@ -112,10 +112,14 @@ export const shapeBudgetFitLines = (
   R.pipe(
     rows,
     R.map((row) => toBudgetFitLine(row, baselineMonths, slackPct, overPct, locale)),
-    R.sortBy((line) => line.category),
+    R.sortBy([(line) => line.category, 'asc'], [(line) => line.currency, 'asc'], [(line) => line.subCategory ?? '', 'asc']),
   );
 
-const budgetedKey = (category: string, currency: CurrencyCode): string => `${category}::${currency}`;
+/** Composite grouping key for a (category, currency) pair — JSON-encoded rather than
+ *  template-literal-concatenated, so a category name containing the delimiter can never collide
+ *  with a differently-split pair. Shared by `shapeUnbudgetedSpend`'s exclusion set and
+ *  `shapeMerchantConcentration`'s grouping. */
+const categoryCurrencyKey = (category: string, currency: CurrencyCode): string => JSON.stringify([category, currency]);
 
 /** Unbudgeted requires `baseline > 0` — an established spend pattern, not just a one-off
  *  current-month blip. `budgeted` lines already resolve a sub-category budget's `category` to its
@@ -126,7 +130,7 @@ export const shapeUnbudgetedSpend = (
   baselineMonths: number,
   locale: Locale,
 ): UnbudgetedSpend[] => {
-  const budgetedKeys = new Set(budgeted.map((line) => budgetedKey(line.category, line.currency)));
+  const budgetedKeys = new Set(budgeted.map((line) => categoryCurrencyKey(line.category, line.currency)));
   return R.pipe(
     shiftRows,
     R.map((row) => ({
@@ -134,7 +138,9 @@ export const shapeUnbudgetedSpend = (
       currency: row.currency,
       rawBaseline: row.baselineTotal / baselineMonths,
     })),
-    R.filter((shift) => shift.rawBaseline > 0 && !budgetedKeys.has(budgetedKey(shift.category, shift.currency))),
+    R.filter(
+      (shift) => shift.rawBaseline > 0 && !budgetedKeys.has(categoryCurrencyKey(shift.category, shift.currency)),
+    ),
     R.map(
       (shift): UnbudgetedSpend => ({
         category: shift.category,
@@ -143,7 +149,7 @@ export const shapeUnbudgetedSpend = (
         suggestedLimit: suggestedLimitFor(shift.rawBaseline),
       }),
     ),
-    R.sortBy((entry) => entry.category),
+    R.sortBy([(entry) => entry.category, 'asc'], [(entry) => entry.currency, 'asc']),
   );
 };
 
@@ -153,8 +159,6 @@ const roundShare = (value: number): number => Math.round(value * 10000) / 10000;
 
 const resolveMerchantLabel = (merchantKey: string | null, locale: Locale): string =>
   merchantKey ?? unknownLabels[locale];
-
-const categoryCurrencyKey = (category: string, currency: CurrencyCode): string => `${category}::${currency}`;
 
 /** Accumulates `cumulativeShare` over the unrounded shares (rounding only the returned values),
  *  so the running total stays accurate regardless of how many merchants are returned. Expects
@@ -205,5 +209,5 @@ export const shapeMerchantConcentration = (
     R.groupBy((row) => categoryCurrencyKey(row.category, row.currency)),
     R.values(),
     R.map((groupRows) => toCategoryConcentration(groupRows, topN, locale)),
-    R.sortBy((entry) => entry.category),
+    R.sortBy([(entry) => entry.category, 'asc'], [(entry) => entry.currency, 'asc']),
   );
