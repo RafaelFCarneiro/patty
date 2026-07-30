@@ -235,11 +235,6 @@ type CadenceResult = {
   suggestedNextDue: string;
 };
 
-/**
- * Flags a `{date, amount}` series as a recurring candidate: `>= minOccurrences` points, every
- * consecutive gap within `CADENCE_DAY_TOLERANCE_DAYS` of `CADENCE_NOMINAL_GAP_DAYS`, and every
- * amount within `CADENCE_AMOUNT_TOLERANCE_PCT` of the series average (Feature Design 016 phase B).
- */
 export const detectRecurringCadence = (
   series: readonly { date: string; amount: number }[],
   minOccurrences: number,
@@ -275,8 +270,7 @@ const toRecurringCandidate = (
   const cadence = detectRecurringCadence(rows, minOccurrences);
   if (!cadence) return null;
   const { merchantKey, currency } = rows[0]!;
-  // The merchant's most recent occurrence decides `category` — a merchant's category is stable in
-  // practice, so this is representative without needing a full mode-count over the series.
+  // A merchant's category is stable in practice — no need for a full mode-count over the series.
   const latest = R.firstBy(rows, [(row) => row.date, 'desc'])!;
   return {
     merchant: merchantKey,

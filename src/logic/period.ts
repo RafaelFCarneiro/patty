@@ -28,17 +28,14 @@ export const baselineRange = (period: Period, baselineMonths: number): DateRange
   return { from: `${year}-${pad(month)}-01`, to };
 };
 
-/** Whole days from `a` to `b` (both `YYYY-MM-DD`) — UTC-based like `logic/recurring.ts`'s `nextDue`,
- *  no timezone traps. */
+// UTC-based like `logic/recurring.ts`'s `nextDue` — no timezone traps.
 export const daysBetween = (a: string, b: string): number => {
   const [ay, am, ad] = a.split('-').map(Number) as [number, number, number];
   const [by, bm, bd] = b.split('-').map(Number) as [number, number, number];
   return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000);
 };
 
-/** The start date of a rolling `lookbackMonths`-month window ending at `today`'s own month —
- *  month-index arithmetic mirroring `baselineRange`, anchored at "now" instead of a reference
- *  period (Feature Design 016 phase B has no reference month at all). */
+// Month-index arithmetic mirroring `baselineRange`, anchored at "today" instead of a reference period.
 export const lookbackFrom = (today: string, lookbackMonths: number): string => {
   const [year, month] = today.split('-').map(Number) as [number, number];
   const monthIndex = year * 12 + (month - 1) - lookbackMonths;

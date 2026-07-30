@@ -28,10 +28,9 @@ export const DEFAULT_MIN_OCCURRENCES = 3;
 // exactly at the average would be exceeded by any normal month-to-month variance.
 export const SUGGESTED_LIMIT_MARGIN_PCT = 10;
 
-// Fixed tolerance constants for `detectRecurringCadence` (recurring_candidates) — not caller
-// params (the design calls them out as "tolerance constants", distinct from the two adjustable
-// params above). A real month is 28-31 days; ±5 around a 30-day nominal gap covers every calendar
-// month length without also accepting a weekly or quarterly pattern.
+// Fixed tolerance constants for `detectRecurringCadence` — not caller-adjustable like
+// `lookbackMonths`/`minOccurrences`. A real month is 28-31 days; ±5 around a 30-day nominal gap
+// covers every calendar month length without also accepting a weekly or quarterly pattern.
 export const CADENCE_NOMINAL_GAP_DAYS = 30;
 export const CADENCE_DAY_TOLERANCE_DAYS = 5;
 export const CADENCE_AMOUNT_TOLERANCE_PCT = 10;

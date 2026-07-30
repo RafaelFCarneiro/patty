@@ -826,7 +826,7 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
 });
 
 describe('MCP integration > find_correlations (recurring_candidates)', () => {
-  // Relative to "now" — this mode has no reference period, so its window is always today's.
+  // Unlike REFERENCE/CURRENT_DATE above — this mode has no reference period, only a live window.
   const daysAgo = (n: number): string => {
     const d = new Date();
     d.setDate(d.getDate() - n);

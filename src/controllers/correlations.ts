@@ -20,8 +20,7 @@ import type { Locale } from '../models/locale.js';
 import type { Deps } from './deps.js';
 import { resolveCategoryRef } from './resolve.js';
 
-// Safe only after `guard(hasPeriod(input), ...)` — spending_shifts/budget_fit/merchant_concentration
-// require month+year; recurring_candidates does not use this at all (see its own handler).
+// Safe only where the caller already ran `guard(hasPeriod(input), ...)`.
 const resolvePeriod = (input: ResolvedFindCorrelations): Period => ({ month: input.month!, year: input.year! });
 
 const resolveWindows = (
@@ -86,8 +85,6 @@ const merchantConcentration: AnalysisHandler = (deps, input, locale) =>
     });
   });
 
-/** No reference period at all — a rolling `lookbackMonths` window ending today (Feature Design 016
- *  phase B), unlike the three analyses above. */
 const recurringCandidates: AnalysisHandler = (deps, input, locale) =>
   safeTry(async function* () {
     const today = toIsoDate(deps.clock());

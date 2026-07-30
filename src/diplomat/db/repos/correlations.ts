@@ -65,11 +65,9 @@ const MERCHANT_CONCENTRATION_SELECT = (from: string, to: string, categoryId: str
   GROUP BY t.currency, c.id, t.merchant_key
 `;
 
-/** Per-(merchant, currency) qualifying transaction rows within `[from, today]`, one row per
- *  transaction (not pre-aggregated) — cadence detection needs the individual dates/amounts, not a
- *  sum. Excludes merchants with no `merchant_key` (nothing to build a rule against) and merchants
- *  that already have one, via an exact match on Feature Design 017's `recurring_rules.merchant_key`
- *  — Feature Design 016 phase B. */
+/** Not pre-aggregated, unlike the queries above — cadence detection needs individual dates/amounts.
+ *  The exclusion subquery's `IS NOT NULL` matters: `NOT IN` against a subquery that can return NULL
+ *  would silently match nothing. */
 const RECURRING_CANDIDATES_SELECT = (from: string, today: string) => sql`
   SELECT t.merchant_key, t.currency, c.name AS category, c.names AS category_names, t.date, t.amount
   FROM transactions t
