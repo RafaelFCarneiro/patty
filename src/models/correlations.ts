@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { PeriodSchema } from './date.js';
+import type { ValidationError } from './error.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
 
 /** Analysis modes for `find_correlations` (Feature Design 016) — one mode added per PR (A:
- *  `spending_shifts`, D: `budget_fit`). Whitelisted enum, mirroring `aggregate_spending`'s
- *  `groupBy` (ADR-011). */
-export const FindCorrelationsAnalysis = z.enum(['spending_shifts', 'budget_fit']);
+ *  `spending_shifts`, D: `budget_fit`, C: `merchant_concentration`). Whitelisted enum, mirroring
+ *  `aggregate_spending`'s `groupBy` (ADR-011). */
+export const FindCorrelationsAnalysis = z.enum(['spending_shifts', 'budget_fit', 'merchant_concentration']);
 export type FindCorrelationsAnalysis = z.infer<typeof FindCorrelationsAnalysis>;
 
 // QoL defaults applied at the MCP boundary, not baked into the schema — mirrors aggregate_spending.
@@ -14,6 +15,7 @@ export const DEFAULT_BASELINE_MONTHS = 3;
 export const DEFAULT_MIN_DELTA_PCT = 20;
 export const DEFAULT_SLACK_PCT = 20;
 export const DEFAULT_OVER_PCT = 20;
+export const DEFAULT_TOP_N = 5;
 
 // A small cushion above the trailing average for `suggestedLimit` (budget_fit) — a limit set
 // exactly at the average would be exceeded by any normal month-to-month variance.
@@ -61,6 +63,18 @@ export const FindCorrelationsSchema = z.object({
       `budget_fit: how far above the limit the baseline can sit before the budget is "unrealistic" — ` +
         `percentage (default ${DEFAULT_OVER_PCT})`,
     ),
+  category: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('merchant_concentration: restrict to a single category by name (default: every category)'),
+  topN: z
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .optional()
+    .describe(`merchant_concentration: top merchants to return per category (default ${DEFAULT_TOP_N})`),
 });
 export type FindCorrelations = z.infer<typeof FindCorrelationsSchema>;
 
@@ -70,6 +84,7 @@ export type ResolvedFindCorrelations = FindCorrelations & {
   minDeltaPct: number;
   slackPct: number;
   overPct: number;
+  topN: number;
 };
 
 export const SpendingShiftDirection = z.enum(['up', 'down']);
@@ -174,10 +189,57 @@ export const BudgetFitResultSchema = z.object({
 });
 export type BudgetFitResult = z.infer<typeof BudgetFitResultSchema>;
 
-/** Additive: future phases (B recurring_candidates, C merchant_concentration) each add their own
- *  result schema as a member of this union. */
+/** What `logic/correlations.ts`'s `shapeMerchantConcentration` needs per row — same rationale as
+ *  `SpendingShiftInput` above; structurally matches `MerchantSpendDbRow` (`wire/db/correlations.ts`). */
+export type MerchantConcentrationInput = {
+  category: string;
+  categoryNames: Record<string, string> | null;
+  currency: CurrencyCode;
+  merchantKey: string | null;
+  spent: number;
+};
+
+export const MerchantShareSchema = z.object({
+  merchant: z.string().min(1).describe('Merchant key, or a localized "Unknown" when the transaction has none'),
+  spent: z.number().describe('Effective expense total for this merchant within the category'),
+  share: z.number().describe('spent / categoryTotal, as a 0-1 fraction'),
+  cumulativeShare: z.number().describe('Running total of share, in descending-spend order, through this merchant'),
+});
+export type MerchantShare = z.infer<typeof MerchantShareSchema>;
+
+export const CategoryConcentrationSchema = z.object({
+  category: z.string().min(1).describe("Top-level category name — sub-category spend rolls up into its parent"),
+  currency: CurrencyCode,
+  categoryTotal: z.number().describe('Total effective expense in this category for the period'),
+  merchants: z.array(MerchantShareSchema).describe('Top `topN` merchants by spend, descending'),
+  othersSpent: z.number().describe('categoryTotal minus the sum of the returned merchants — the long tail'),
+});
+export type CategoryConcentration = z.infer<typeof CategoryConcentrationSchema>;
+
+export const MerchantConcentrationResultSchema = z.object({
+  analysis: z.literal(FindCorrelationsAnalysis.enum.merchant_concentration),
+  month: PeriodSchema.shape.month,
+  year: PeriodSchema.shape.year,
+  categories: z
+    .array(CategoryConcentrationSchema)
+    .describe('One entry per (category, currency) with spend in the period; sorted by category name'),
+});
+export type MerchantConcentrationResult = z.infer<typeof MerchantConcentrationResultSchema>;
+
+/** Additive: a future phase (B recurring_candidates) adds its own result schema as a member of
+ *  this union. */
 export const FindCorrelationsResultSchema = z.discriminatedUnion('analysis', [
   SpendingShiftsResultSchema,
   BudgetFitResultSchema,
+  MerchantConcentrationResultSchema,
 ]);
 export type FindCorrelationsResult = z.infer<typeof FindCorrelationsResultSchema>;
+
+export type FindCorrelationsError = ValidationError;
+
+export const findCorrelationsErrors = {
+  unhandledAnalysis: (analysis: string): FindCorrelationsError => ({
+    code: 'validation',
+    issues: [`Unhandled analysis "${analysis}"`],
+  }),
+};

@@ -25,6 +25,16 @@ type BudgetFitLine = {
 
 type UnbudgetedSpend = { category?: string; currency?: string; baseline?: number; suggestedLimit?: number };
 
+type MerchantShare = { merchant?: string; spent?: number; share?: number; cumulativeShare?: number };
+
+type CategoryConcentration = {
+  category?: string;
+  currency?: string;
+  categoryTotal?: number;
+  merchants?: MerchantShare[];
+  othersSpent?: number;
+};
+
 type FindCorrelationsResult = {
   analysis?: string;
   month?: number;
@@ -32,6 +42,7 @@ type FindCorrelationsResult = {
   shifts?: SpendingShift[];
   budgeted?: BudgetFitLine[];
   unbudgeted?: UnbudgetedSpend[];
+  categories?: CategoryConcentration[];
 };
 
 // A fixed reference period and its trailing 3-month baseline window, always in the past so this
@@ -585,6 +596,217 @@ describe('MCP integration > find_correlations (budget_fit)', () => {
       // The sub-category's spend rolls up to the parent too, but it's already covered by this
       // budget, so the parent must not also show up as a separate "unbudgeted" suggestion.
       expect(findUnbudgeted(result, parentName)).toBeUndefined();
+    } finally {
+      await transport.close();
+    }
+  });
+});
+
+describe('MCP integration > find_correlations (merchant_concentration)', () => {
+  const findConcentration = (result: FindCorrelationsResult, category: string, currency = 'BRL') =>
+    result.categories?.find((c) => c.category === category && c.currency === currency);
+
+  it('reports 100% share and zero othersSpent for a single-merchant category', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Concentration-Single-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await addExpense(client, {
+        description: 'Uber',
+        amount: 100,
+        category: categoryName,
+        currency: 'BRL',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-conc-single-${stamp}`,
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'merchant_concentration', ...REFERENCE },
+      })) as FindCorrelationsResult;
+
+      expect(result.analysis).toBe('merchant_concentration');
+      const group = findConcentration(result, categoryName);
+      ensure(group, `no concentration group for ${categoryName}`);
+      expect(group).toEqual({
+        category: categoryName,
+        currency: 'BRL',
+        categoryTotal: 100,
+        merchants: [{ merchant: 'uber', spent: 100, share: 1, cumulativeShare: 1 }],
+        othersSpent: 0,
+      });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('cuts off at topN and rolls the remainder into othersSpent, shares still summing to 1', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Concentration-TopN-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      const merchants: [string, number][] = [
+        ['Uber', 300],
+        ['Ifood', 200],
+        ['Amazon', 100],
+      ];
+      for (const [i, [description, amount]] of merchants.entries()) {
+        await addExpense(client, {
+          description,
+          amount,
+          category: categoryName,
+          currency: 'BRL',
+          date: CURRENT_DATE,
+          idempotencyKey: `corr-conc-topn-${stamp}-${i}`,
+        });
+      }
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'merchant_concentration', ...REFERENCE, topN: 2 },
+      })) as FindCorrelationsResult;
+
+      const group = findConcentration(result, categoryName);
+      ensure(group, `no concentration group for ${categoryName}`);
+      expect(group.categoryTotal).toBe(600);
+      expect(group.merchants?.map((m) => m.merchant)).toEqual(['uber', 'ifood']);
+      expect(group.othersSpent).toBe(100);
+
+      const shareSum = (group.merchants ?? []).reduce((sum, m) => sum + (m.share ?? 0), 0);
+      expect(shareSum + group.othersSpent! / group.categoryTotal!).toBeCloseTo(1, 4);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('isolates concentration per currency — a BRL expense never joins the USD group', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Concentration-Currency-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await addExpense(client, {
+        description: 'Uber',
+        amount: 100,
+        category: categoryName,
+        currency: 'BRL',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-conc-cur-brl-${stamp}`,
+      });
+      await addExpense(client, {
+        description: 'Uber',
+        amount: 40,
+        category: categoryName,
+        currency: 'USD',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-conc-cur-usd-${stamp}`,
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'merchant_concentration', ...REFERENCE },
+      })) as FindCorrelationsResult;
+
+      const brl = findConcentration(result, categoryName, 'BRL');
+      const usd = findConcentration(result, categoryName, 'USD');
+      ensure(brl, `no BRL group for ${categoryName}`);
+      ensure(usd, `no USD group for ${categoryName}`);
+      expect(brl.categoryTotal).toBe(100);
+      expect(usd.categoryTotal).toBe(40);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('excludes pending transactions — only effective spend counts', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Concentration-Pending-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await addExpense(client, {
+        description: 'Uber',
+        amount: 100,
+        category: categoryName,
+        currency: 'BRL',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-conc-pending-eff-${stamp}`,
+      });
+      await addExpense(client, {
+        description: 'Amazon',
+        amount: 500,
+        category: categoryName,
+        currency: 'BRL',
+        status: 'pending',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-conc-pending-pnd-${stamp}`,
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'merchant_concentration', ...REFERENCE },
+      })) as FindCorrelationsResult;
+
+      const group = findConcentration(result, categoryName);
+      ensure(group, `no concentration group for ${categoryName}`);
+      expect(group.categoryTotal).toBe(100);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('restricts to the requested category when the category filter is given', async () => {
+    const stamp = Date.now();
+    const wantedCategory = `Corr-Concentration-Wanted-${stamp}`;
+    const otherCategory = `Corr-Concentration-Other-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: wantedCategory } });
+      await callTool(client, { name: 'create_category', args: { name: otherCategory } });
+      await addExpense(client, {
+        description: 'Uber',
+        amount: 100,
+        category: wantedCategory,
+        currency: 'BRL',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-conc-filter-wanted-${stamp}`,
+      });
+      await addExpense(client, {
+        description: 'Amazon',
+        amount: 200,
+        category: otherCategory,
+        currency: 'BRL',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-conc-filter-other-${stamp}`,
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'merchant_concentration', ...REFERENCE, category: wantedCategory },
+      })) as FindCorrelationsResult;
+
+      expect(result.categories?.map((c) => c.category)).toEqual([wantedCategory]);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('returns an empty categories array for a period with no matching transactions', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'merchant_concentration', ...EMPTY_PERIOD },
+      })) as FindCorrelationsResult;
+      expect(result.categories).toEqual([]);
     } finally {
       await transport.close();
     }

@@ -1,7 +1,7 @@
 # Feature Design 016: `find_correlations` — spending shifts, recurring candidates, merchant concentration
 
 **Type:** Feature design (a capability + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress (Phase A done — `spending_shifts`; Phase D done — `budget_fit`) · **Date:** 2026-07-25 · PLAN Phase 3 (insights) — the "differentiator"
+**Implementation status:** In progress (Phase A done — `spending_shifts`; Phase D done — `budget_fit`; Phase C done — `merchant_concentration`) · **Date:** 2026-07-25 · PLAN Phase 3 (insights) — the "differentiator"
 analysis tool. **Read-only** (no entity, no write flow); a later phase with a caller-selected SQL shape (e.g. a
 groupBy-style dimension) would reuse the ADR-011 whitelist pattern — Phase A's query shape is fixed, so it needs
 no fragment map; respects the effective-only + per-currency invariants.
@@ -166,8 +166,20 @@ result shape, tool registration, `docs/mcp-tools.md`, `docs/architecture.md`, PL
 `recurring_candidates` mode: repo per-merchant series query + `logic/`'s pure `detectRecurringCadence`; the
 best-effort rule-exclusion; result shaped for `create_recurring`; docs.
 
-### Phase C — `feat/correlations-merchant-concentration`
+### Phase C — `feat/correlations-merchant-concentration` ✅ Done
 `merchant_concentration` mode: the per-category top-merchant + cumulative-share query; result shape; docs.
+
+**As built:** `correlationsRepo.merchantConcentration` (`diplomat/db/repos/correlations.ts`) fetches raw
+per-(category, currency, merchant) sums only — same minimal-SQL-plus-pure-`logic/`-math split as A/D;
+`logic/correlations.ts`'s `shapeMerchantConcentration` does the sort/topN-cutoff/share/cumulativeShare/
+othersSpent math on unrounded values, rounding only the returned fields. `share`/`cumulativeShare` are **0-1
+fractions** (design: "share = spent / categoryTotal", and the Testing bullet "sum to 1", not 100 — unlike
+`aggregate_spending`'s percentage `pct`). The optional `category` filter is the first `find_correlations` mode
+to ever resolve a name, so `findCorrelations` (`controllers/correlations.ts`) became a `safeTry` pipeline
+(`ResultAsync<FindCorrelationsResult, AppError>`) instead of a plain `async` function — `spending_shifts`/
+`budget_fit` just wrap their existing returns in `ok(...)`. A transaction with no classified merchant groups
+under a locale-resolved "Unknown" (`unknownLabels`, exported from `logic/aggregate.ts`'s own `groupBy: merchant`
+handling rather than duplicated).
 
 ### Phase D — `feat/correlations-budget-fit` ✅ Done
 `budget_fit` mode: reuse A's baseline, join budgets (`list`), per-currency verdicts + `suggestedLimit` for

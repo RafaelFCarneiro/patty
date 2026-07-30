@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { shapeBudgetFitLines, shapeSpendingShifts, shapeUnbudgetedSpend } from '../../../src/logic/correlations.js';
+import {
+  shapeBudgetFitLines,
+  shapeMerchantConcentration,
+  shapeSpendingShifts,
+  shapeUnbudgetedSpend,
+} from '../../../src/logic/correlations.js';
 import type { BudgetFitLine } from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import type { BudgetFitDbRow, SpendingShiftDbRow } from '../../../src/wire/db/correlations.js';
+import type {
+  BudgetFitDbRow,
+  MerchantSpendDbRow,
+  SpendingShiftDbRow,
+} from '../../../src/wire/db/correlations.js';
 
 const row = (overrides: Partial<SpendingShiftDbRow> = {}): SpendingShiftDbRow => ({
   category: 'Food',
@@ -25,6 +34,15 @@ const budgetRow = (overrides: Partial<BudgetFitDbRow> = {}): BudgetFitDbRow => (
   current: 0,
   limit: 300,
   baselineTotal: 900,
+  ...overrides,
+});
+
+const merchantRow = (overrides: Partial<MerchantSpendDbRow> = {}): MerchantSpendDbRow => ({
+  category: 'Food',
+  categoryNames: null,
+  currency: CurrencyCode.enum.BRL,
+  merchantKey: 'ifood',
+  spent: 100,
   ...overrides,
 });
 
@@ -168,6 +186,21 @@ describe('shapeBudgetFitLines', () => {
     );
     expect(line?.category).toBe('Alimentação');
   });
+
+  it('sorts deterministically by category, then currency, then sub-category', () => {
+    const lines = shapeBudgetFitLines(
+      [
+        budgetRow({ id: 'usd', nodeName: 'Food', currency: CurrencyCode.enum.USD }),
+        budgetRow({ id: 'brl-sub', nodeName: 'Restaurants', nodeParentId: 'cat-food', parentName: 'Food' }),
+        budgetRow({ id: 'brl', nodeName: 'Food' }),
+      ],
+      3,
+      20,
+      20,
+      Locale.enum.en,
+    );
+    expect(lines.map((l) => l.id)).toEqual(['brl', 'brl-sub', 'usd']);
+  });
 });
 
 describe('shapeUnbudgetedSpend', () => {
@@ -225,5 +258,128 @@ describe('shapeUnbudgetedSpend', () => {
 
   it('returns an empty array when there are no shift rows', () => {
     expect(shapeUnbudgetedSpend([], noBudgets, 3, Locale.enum.en)).toEqual([]);
+  });
+
+  it('breaks ties by currency for the same category name, deterministically', () => {
+    const rows = [
+      row({ category: 'Food', currency: CurrencyCode.enum.USD, baselineTotal: 900 }),
+      row({ category: 'Food', currency: CurrencyCode.enum.BRL, baselineTotal: 900 }),
+    ];
+    const entries = shapeUnbudgetedSpend(rows, noBudgets, 3, Locale.enum.en);
+    expect(entries.map((e) => e.currency)).toEqual(['BRL', 'USD']);
+  });
+});
+
+describe('shapeMerchantConcentration', () => {
+  it('reports 100% share and zero othersSpent for a single-merchant category', () => {
+    const [group] = shapeMerchantConcentration([merchantRow({ spent: 100 })], 5, Locale.enum.en);
+    expect(group).toEqual({
+      category: 'Food',
+      currency: 'BRL',
+      categoryTotal: 100,
+      merchants: [{ merchant: 'ifood', spent: 100, share: 1, cumulativeShare: 1 }],
+      othersSpent: 0,
+    });
+  });
+
+  it('cuts off at topN and rolls the remainder into othersSpent', () => {
+    const rows = [
+      merchantRow({ merchantKey: 'a', spent: 300 }),
+      merchantRow({ merchantKey: 'b', spent: 200 }),
+      merchantRow({ merchantKey: 'c', spent: 100 }),
+    ];
+    const [group] = shapeMerchantConcentration(rows, 2, Locale.enum.en);
+    expect(group?.categoryTotal).toBe(600);
+    expect(group?.merchants.map((m) => m.merchant)).toEqual(['a', 'b']);
+    expect(group?.othersSpent).toBe(100);
+  });
+
+  it('sorts merchants by spend descending regardless of input order', () => {
+    const rows = [
+      merchantRow({ merchantKey: 'small', spent: 10 }),
+      merchantRow({ merchantKey: 'big', spent: 90 }),
+    ];
+    const [group] = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    expect(group?.merchants.map((m) => m.merchant)).toEqual(['big', 'small']);
+  });
+
+  it('accumulates cumulativeShare in descending-spend order', () => {
+    const rows = [
+      merchantRow({ merchantKey: 'a', spent: 60 }),
+      merchantRow({ merchantKey: 'b', spent: 40 }),
+    ];
+    const [group] = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    expect(group?.merchants).toEqual([
+      { merchant: 'a', spent: 60, share: 0.6, cumulativeShare: 0.6 },
+      { merchant: 'b', spent: 40, share: 0.4, cumulativeShare: 1 },
+    ]);
+  });
+
+  it('shares (including othersSpent, as a share of categoryTotal) sum to 1 within a category', () => {
+    const rows = [
+      merchantRow({ merchantKey: 'a', spent: 50 }),
+      merchantRow({ merchantKey: 'b', spent: 30 }),
+      merchantRow({ merchantKey: 'c', spent: 15 }),
+      merchantRow({ merchantKey: 'd', spent: 5 }),
+    ];
+    const [group] = shapeMerchantConcentration(rows, 2, Locale.enum.en);
+    const merchantShareSum = group!.merchants.reduce((sum, m) => sum + m.share, 0);
+    const othersShare = group!.othersSpent / group!.categoryTotal;
+    expect(merchantShareSum + othersShare).toBeCloseTo(1, 4);
+  });
+
+  it('groups a null merchant_key under a localized "Unknown"', () => {
+    const [group] = shapeMerchantConcentration([merchantRow({ merchantKey: null, spent: 50 })], 5, Locale.enum.pt);
+    expect(group?.merchants[0]?.merchant).toBe('Desconhecido');
+  });
+
+  it('keeps categories separate per currency, even with the same name', () => {
+    const rows = [
+      merchantRow({ currency: CurrencyCode.enum.BRL, spent: 100 }),
+      merchantRow({ currency: CurrencyCode.enum.USD, spent: 50 }),
+    ];
+    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    expect(groups).toHaveLength(2);
+    expect(groups.find((g) => g.currency === 'BRL')?.categoryTotal).toBe(100);
+    expect(groups.find((g) => g.currency === 'USD')?.categoryTotal).toBe(50);
+  });
+
+  it('localizes the category name via the names map for the given locale', () => {
+    const [group] = shapeMerchantConcentration(
+      [merchantRow({ category: 'Food', categoryNames: { pt: 'Alimentação' } })],
+      5,
+      Locale.enum.pt,
+    );
+    expect(group?.category).toBe('Alimentação');
+  });
+
+  it('sorts the returned categories alphabetically', () => {
+    const rows = [merchantRow({ category: 'Transport' }), merchantRow({ category: 'Food' })];
+    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    expect(groups.map((g) => g.category)).toEqual(['Food', 'Transport']);
+  });
+
+  it('breaks ties by currency for the same category name, deterministically', () => {
+    const rows = [
+      merchantRow({ category: 'Food', currency: CurrencyCode.enum.USD }),
+      merchantRow({ category: 'Food', currency: CurrencyCode.enum.BRL }),
+    ];
+    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    expect(groups.map((g) => g.currency)).toEqual(['BRL', 'USD']);
+  });
+
+  it('does not merge a category whose name contains the internal key delimiter with an unrelated one', () => {
+    const rows = [
+      merchantRow({ category: 'Food::Drinks', spent: 100 }),
+      merchantRow({ category: 'Food', spent: 50 }),
+    ];
+    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    expect(groups).toHaveLength(2);
+    expect(groups.find((g) => g.category === 'Food::Drinks')?.categoryTotal).toBe(100);
+    expect(groups.find((g) => g.category === 'Food')?.categoryTotal).toBe(50);
+  });
+
+  it('returns an empty array for no rows (e.g. an empty period)', () => {
+    expect(shapeMerchantConcentration([], 5, Locale.enum.en)).toEqual([]);
   });
 });

@@ -220,8 +220,9 @@ REST mirror: `GET /api/aggregate?groupBy=category&month=6&year=2026`.
 ## find_correlations
 
 Feature Design 016: one tool over spending-pattern analyses, discriminated by `analysis` (a whitelisted enum,
-mirroring `aggregate_spending`'s `groupBy`). Additive across phases — `spending_shifts` and `budget_fit` exist so
-far (`recurring_candidates`, `merchant_concentration` land in later phases). Read-only: no entity, no write flow.
+mirroring `aggregate_spending`'s `groupBy`). Additive across phases — `spending_shifts`, `budget_fit`, and
+`merchant_concentration` exist so far (`recurring_candidates` lands in a later phase). Read-only: no entity, no
+write flow.
 
 ### spending_shifts
 
@@ -297,6 +298,44 @@ track record is never suggested. Per-currency throughout — a BRL budget is mea
     { "category": "Transporte", "currency": "BRL", "baseline": 340.0, "suggestedLimit": 374.0 }
   ] }
 ```
+
+No REST mirror yet (MCP-only, mirrors the budget tools).
+
+### merchant_concentration
+
+"Where within Food is my money actually going?" — spend concentration by merchant within a category, the
+concrete reading of "merchant clusters" (literal clustering/co-visitation was rejected as too fuzzy — see the
+design doc's Options/decisions).
+
+**Input:**
+- `analysis: "merchant_concentration"` (required)
+- `month`, `year` (required): the period
+- `category` (optional): restrict to a single category by name; omitted means every category
+- `topN` (default `5`): top merchants to return per category
+
+**Computation:** per `(category, currency)`, group effective, expense-only spend by merchant. `categoryTotal` is
+the full total (reconciles with `aggregate_spending`); `merchants` is the top `topN` by spend, each with `share`
+(`spent / categoryTotal`, a **0-1 fraction**, not a percentage) and `cumulativeShare` (running total in
+descending-spend order — the last returned merchant's `cumulativeShare` plus `othersSpent / categoryTotal` sums
+to 1). `othersSpent` is `categoryTotal` minus the returned merchants — the long tail beyond `topN`. A transaction
+with no classified merchant groups under a locale-resolved "Unknown". Sub-category spend rolls up into its
+parent category, same as `spending_shifts`/`budget_fit`.
+
+**Output:**
+```jsonc
+{ "analysis": "merchant_concentration", "month": 6, "year": 2026,
+  "categories": [
+    { "category": "Alimentação", "currency": "BRL", "categoryTotal": 1200.0,
+      "merchants": [
+        { "merchant": "ifood", "spent": 700.0, "share": 0.5833, "cumulativeShare": 0.5833 },
+        { "merchant": "uber eats", "spent": 300.0, "share": 0.25, "cumulativeShare": 0.8333 }
+      ],
+      "othersSpent": 200.0 }
+  ] }
+```
+Sorted by category name; within a category, `merchants` is sorted by spend descending.
+
+**Errors:** `unknown_category`, `ambiguous_category` (invalid `category` filter).
 
 No REST mirror yet (MCP-only, mirrors the budget tools).
 
