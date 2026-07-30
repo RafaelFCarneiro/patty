@@ -69,3 +69,22 @@ export const MerchantSpendDbRowSchema = z
   }));
 
 export type MerchantSpendDbRow = z.output<typeof MerchantSpendDbRowSchema>;
+
+/** One qualifying transaction row for recurring-candidate detection — `merchant_key` is always
+ *  non-null (the repo query filters it), unlike `MerchantSpendDbRowSchema`'s nullable one. */
+export const RecurringCandidateDbRowSchema = z
+  .object({
+    merchant_key: z.string().min(1),
+    currency: CurrencyCode,
+    category: z.string().min(1),
+    category_names: z.string().nullable().default(null),
+    date: z.string(),
+    amount: z.number(),
+  })
+  .transform(({ merchant_key, category_names, ...rest }) => ({
+    ...rest,
+    merchantKey: merchant_key,
+    categoryNames: parseCategoryNames(category_names),
+  }));
+
+export type RecurringCandidateDbRow = z.output<typeof RecurringCandidateDbRowSchema>;

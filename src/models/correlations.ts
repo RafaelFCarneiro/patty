@@ -1,13 +1,18 @@
 import { z } from 'zod';
-import { PeriodSchema } from './date.js';
+import { IsoDate, PeriodSchema } from './date.js';
 import type { ValidationError } from './error.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
 
 /** Analysis modes for `find_correlations` (Feature Design 016) — one mode added per PR (A:
- *  `spending_shifts`, D: `budget_fit`, C: `merchant_concentration`). Whitelisted enum, mirroring
- *  `aggregate_spending`'s `groupBy` (ADR-011). */
-export const FindCorrelationsAnalysis = z.enum(['spending_shifts', 'budget_fit', 'merchant_concentration']);
+ *  `spending_shifts`, D: `budget_fit`, C: `merchant_concentration`, B: `recurring_candidates`).
+ *  Whitelisted enum, mirroring `aggregate_spending`'s `groupBy` (ADR-011). */
+export const FindCorrelationsAnalysis = z.enum([
+  'spending_shifts',
+  'budget_fit',
+  'merchant_concentration',
+  'recurring_candidates',
+]);
 export type FindCorrelationsAnalysis = z.infer<typeof FindCorrelationsAnalysis>;
 
 // QoL defaults applied at the MCP boundary, not baked into the schema — mirrors aggregate_spending.
@@ -16,10 +21,20 @@ export const DEFAULT_MIN_DELTA_PCT = 20;
 export const DEFAULT_SLACK_PCT = 20;
 export const DEFAULT_OVER_PCT = 20;
 export const DEFAULT_TOP_N = 5;
+export const DEFAULT_LOOKBACK_MONTHS = 6;
+export const DEFAULT_MIN_OCCURRENCES = 3;
 
 // A small cushion above the trailing average for `suggestedLimit` (budget_fit) — a limit set
 // exactly at the average would be exceeded by any normal month-to-month variance.
 export const SUGGESTED_LIMIT_MARGIN_PCT = 10;
+
+// Fixed tolerance constants for `detectRecurringCadence` (recurring_candidates) — not caller
+// params (the design calls them out as "tolerance constants", distinct from the two adjustable
+// params above). A real month is 28-31 days; ±5 around a 30-day nominal gap covers every calendar
+// month length without also accepting a weekly or quarterly pattern.
+export const CADENCE_NOMINAL_GAP_DAYS = 30;
+export const CADENCE_DAY_TOLERANCE_DAYS = 5;
+export const CADENCE_AMOUNT_TOLERANCE_PCT = 10;
 
 // Shared between minDeltaPct's own field description below and the tool's registered description
 // (diplomat/mcp/server.ts), so the two can't drift apart.
@@ -28,10 +43,17 @@ export const NEW_CATEGORY_ALWAYS_SURFACED_NOTE =
 
 export const FindCorrelationsSchema = z.object({
   analysis: FindCorrelationsAnalysis.describe('Which correlation analysis to run'),
-  month: PeriodSchema.shape.month.describe(
-    'Reference month (1-12) — spending_shifts measures this month against its trailing baseline',
-  ),
-  year: PeriodSchema.shape.year.describe('Reference year'),
+  // Optional here: recurring_candidates has no reference period at all (a rolling lookback ending
+  // today) — required only for spending_shifts/budget_fit/merchant_concentration, enforced in
+  // controllers/correlations.ts via `hasPeriod` (mirrors aggregate_spending's own from/to-or-period
+  // flexibility).
+  month: PeriodSchema.shape.month
+    .optional()
+    .describe(
+      'Reference month (1-12) — spending_shifts/budget_fit/merchant_concentration measure this month against ' +
+        'its trailing baseline; not used by recurring_candidates',
+    ),
+  year: PeriodSchema.shape.year.optional().describe('Reference year — not used by recurring_candidates'),
   baselineMonths: z
     .number()
     .int()
@@ -75,6 +97,26 @@ export const FindCorrelationsSchema = z.object({
     .max(50)
     .optional()
     .describe(`merchant_concentration: top merchants to return per category (default ${DEFAULT_TOP_N})`),
+  lookbackMonths: z
+    .number()
+    .int()
+    .min(1)
+    .max(36)
+    .optional()
+    .describe(
+      `recurring_candidates: months of transaction history to scan for a recurring pattern, ending today ` +
+        `(default ${DEFAULT_LOOKBACK_MONTHS})`,
+    ),
+  minOccurrences: z
+    .number()
+    .int()
+    .min(2)
+    .max(24)
+    .optional()
+    .describe(
+      `recurring_candidates: minimum qualifying occurrences within the lookback window to flag a candidate ` +
+        `(default ${DEFAULT_MIN_OCCURRENCES})`,
+    ),
 });
 export type FindCorrelations = z.infer<typeof FindCorrelationsSchema>;
 
@@ -85,6 +127,8 @@ export type ResolvedFindCorrelations = FindCorrelations & {
   slackPct: number;
   overPct: number;
   topN: number;
+  lookbackMonths: number;
+  minOccurrences: number;
 };
 
 export const SpendingShiftDirection = z.enum(['up', 'down']);
@@ -226,12 +270,43 @@ export const MerchantConcentrationResultSchema = z.object({
 });
 export type MerchantConcentrationResult = z.infer<typeof MerchantConcentrationResultSchema>;
 
-/** Additive: a future phase (B recurring_candidates) adds its own result schema as a member of
- *  this union. */
+/** What `logic/correlations.ts`'s `shapeRecurringCandidates` needs per row — same rationale as
+ *  `SpendingShiftInput` above; structurally matches `RecurringCandidateDbRow` (`wire/db/correlations.ts`).
+ *  One row per qualifying transaction (not pre-grouped) — grouping by `(merchantKey, currency)` and
+ *  cadence detection both happen in `logic/`. */
+export type RecurringCandidateInput = {
+  merchantKey: string;
+  currency: CurrencyCode;
+  category: string;
+  categoryNames: Record<string, string> | null;
+  date: IsoDate;
+  amount: number;
+};
+
+export const RecurringCandidateSchema = z.object({
+  merchant: z.string().min(1).describe('Normalized merchant key — pass as `merchant` to create_recurring'),
+  typicalAmount: z.number().describe('Average amount across the qualifying occurrences'),
+  currency: CurrencyCode,
+  category: z.string().min(1).describe("Category of the merchant's most recent occurrence"),
+  occurrences: z.number().int().describe('Number of qualifying transactions within the lookback window'),
+  lastDate: IsoDate.describe('Date of the most recent occurrence'),
+  suggestedNextDue: IsoDate.describe("lastDate advanced one cadence — ready for create_recurring's startDate"),
+});
+export type RecurringCandidate = z.infer<typeof RecurringCandidateSchema>;
+
+export const RecurringCandidatesResultSchema = z.object({
+  analysis: z.literal(FindCorrelationsAnalysis.enum.recurring_candidates),
+  candidates: z
+    .array(RecurringCandidateSchema)
+    .describe('Sorted by occurrences descending, then merchant; excludes merchants already backing a rule'),
+});
+export type RecurringCandidatesResult = z.infer<typeof RecurringCandidatesResultSchema>;
+
 export const FindCorrelationsResultSchema = z.discriminatedUnion('analysis', [
   SpendingShiftsResultSchema,
   BudgetFitResultSchema,
   MerchantConcentrationResultSchema,
+  RecurringCandidatesResultSchema,
 ]);
 export type FindCorrelationsResult = z.infer<typeof FindCorrelationsResultSchema>;
 
@@ -241,5 +316,9 @@ export const findCorrelationsErrors = {
   unhandledAnalysis: (analysis: string): FindCorrelationsError => ({
     code: 'validation',
     issues: [`Unhandled analysis "${analysis}"`],
+  }),
+  missingPeriod: (analysis: string): FindCorrelationsError => ({
+    code: 'validation',
+    issues: [`analysis "${analysis}" requires month and year`],
   }),
 };
