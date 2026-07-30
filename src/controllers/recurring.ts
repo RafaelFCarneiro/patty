@@ -45,12 +45,9 @@ export const createRecurring = (
   safeTry(async function* () {
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
-    // Explicit `merchant` is the user's own naming, stored as-is (normalized). Without one, mirror
-    // the transaction write-path (`planAccountMovement`): reuse the best already-learned
-    // `merchant_category` key for the description rather than a fresh full-description normalize,
-    // so a rule reinforces the same merchant identity as a matching transaction would — falling
-    // back to the normalized description (empty-string guarded — an empty key can't back a
-    // `merchants` FK row) only when nothing matches.
+    // Explicit `merchant` is stored as-is (the user's own naming, no lookup). Otherwise mirror
+    // `planAccountMovement`'s precedence — an already-learned `merchant_category` key wins over a
+    // fresh normalize, so the rule matches the identity a transaction would.
     const normalizedDescription = normalizeMerchant(input.description);
     const merchantKey = input.merchant
       ? normalizeMerchant(input.merchant) || undefined

@@ -171,7 +171,6 @@ describe('createRecurring — functional core (ADR-021 phase 3b)', () => {
     });
 
     const outcome = result._unsafeUnwrap();
-    // No merchant key -> no merchant Persistable at all, just the rule insert.
     expect(outcome.persist).toHaveLength(1);
     expect(outcome.persist[0]).toMatchObject({ entity: RECURRING_ENTITY_TAG, model: { merchantKey: undefined } });
   });
