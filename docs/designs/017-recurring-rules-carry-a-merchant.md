@@ -28,12 +28,15 @@ Add `merchant_key` to `recurring_rules` and thread it onto materialized occurren
 
 1. **Schema (migration):** `recurring_rules.merchant_key TEXT` → FK `merchants.key`, **nullable** (existing rules
    have no known merchant; see backfill).
-2. **`create_recurring` sets the merchant** — optional explicit `merchant`, else **derived from `description`**
-   via the existing `normalizeMerchant` (`logic/merchant.ts`), empty-string guarded (an empty key can't back a
-   `merchants` FK — then leave `null`). This mirrors the transaction merchant-key fallback (the same
-   normalize-from-description path as issue #115). The flow emits the `MERCHANT_ENTITY_TAG` `Persistable`
-   alongside the rule (via `withMerchant`) so the `merchants` row exists before the FK is written — same batch
-   (rule 5).
+2. **`create_recurring` sets the merchant** — optional explicit `merchant` (stored as given, normalized), else
+   the merchant is resolved the same way a transaction's is: `deps.merchants.matchCandidates` + `pickClassification`
+   first, reusing an already-learned `merchant_category` key so the rule reinforces the same merchant identity a
+   matching transaction would, falling back to `normalizeMerchant(description)` (`logic/merchant.ts`,
+   empty-string guarded — an empty key can't back a `merchants` FK — then leave `null`) only when nothing
+   matches. (Caught in review: an earlier revision always used the full normalized description for the derived
+   case, which could fragment merchant identity — e.g. `"netflix com"` instead of a seeded/learned `"netflix"`.)
+   The flow emits the `MERCHANT_ENTITY_TAG` `Persistable` alongside the rule (via `withMerchant`) so the
+   `merchants` row exists before the FK is written — same batch (rule 5).
 3. **`apply_due_recurring` threads it** — each materialized occurrence carries the rule's `merchant_key`, so
    recurring transactions now appear in merchant concentration and are matchable. The merchant row already
    exists (created with the rule), so the occurrence just references it; no extra merchant emission needed at

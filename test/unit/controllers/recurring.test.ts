@@ -21,7 +21,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   creditCards: {} as Deps['creditCards'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
-  merchants: {} as Deps['merchants'],
+  merchants: { matchCandidates: async () => [] } as unknown as Deps['merchants'],
   recurring: { due: async () => [] } as unknown as Deps['recurring'],
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],
@@ -116,6 +116,47 @@ describe('createRecurring — functional core (ADR-021 phase 3b)', () => {
     const outcome = result._unsafeUnwrap();
     const rule = outcome.persist.find((p) => p.entity === RECURRING_ENTITY_TAG);
     expect(rule).toMatchObject({ model: { merchantKey: 'landlord llc' } });
+  });
+
+  it('reuses an already-learned merchant_category key over the full normalized description', async () => {
+    const deps = makeDeps({
+      merchants: {
+        matchCandidates: async () => [
+          { merchantKey: 'netflix', categoryId: 'cat-1', categoryName: 'Subscriptions', weight: 3, origin: 'rule' },
+        ],
+      } as unknown as Deps['merchants'],
+    });
+
+    const result = await createRecurring(deps, {
+      description: 'Netflix.com subscription',
+      amount: 39.9,
+      type: 'expense',
+      period: 'monthly',
+      startDate: '2026-07-01',
+    });
+
+    const rule = result._unsafeUnwrap().persist.find((p) => p.entity === RECURRING_ENTITY_TAG);
+    expect(rule).toMatchObject({ model: { merchantKey: 'netflix' } });
+  });
+
+  it('an explicit merchant is stored as-is, without consulting matchCandidates', async () => {
+    const matchCandidates = vi.fn(async () => [
+      { merchantKey: 'other-key', categoryId: 'cat-1', categoryName: 'Subscriptions', weight: 3, origin: 'rule' },
+    ]);
+    const deps = makeDeps({ merchants: { matchCandidates } as unknown as Deps['merchants'] });
+
+    const result = await createRecurring(deps, {
+      description: 'Netflix.com subscription',
+      amount: 39.9,
+      type: 'expense',
+      period: 'monthly',
+      startDate: '2026-07-01',
+      merchant: 'Netflix',
+    });
+
+    const rule = result._unsafeUnwrap().persist.find((p) => p.entity === RECURRING_ENTITY_TAG);
+    expect(rule).toMatchObject({ model: { merchantKey: 'netflix' } });
+    expect(matchCandidates).not.toHaveBeenCalled();
   });
 
   it('leaves merchantKey unset when the description normalizes to an empty string', async () => {

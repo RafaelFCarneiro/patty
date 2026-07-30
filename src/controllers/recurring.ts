@@ -1,6 +1,7 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
+import { pickClassification } from '../logic/classify.js';
 import { normalizeMerchant, withMerchant } from '../logic/merchant.js';
 import * as persistence from '../logic/persistence.js';
 import {
@@ -44,10 +45,17 @@ export const createRecurring = (
   safeTry(async function* () {
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
-    // Explicit `merchant` or the description, normalized the same way either way so a rule's key
-    // always matches how a transaction with the same merchant would classify (empty-string
-    // guarded — an empty key can't back a `merchants` FK row).
-    const merchantKey = normalizeMerchant(input.merchant ?? input.description) || undefined;
+    // Explicit `merchant` is the user's own naming, stored as-is (normalized). Without one, mirror
+    // the transaction write-path (`planAccountMovement`): reuse the best already-learned
+    // `merchant_category` key for the description rather than a fresh full-description normalize,
+    // so a rule reinforces the same merchant identity as a matching transaction would — falling
+    // back to the normalized description (empty-string guarded — an empty key can't back a
+    // `merchants` FK row) only when nothing matches.
+    const normalizedDescription = normalizeMerchant(input.description);
+    const merchantKey = input.merchant
+      ? normalizeMerchant(input.merchant) || undefined
+      : (pickClassification(await deps.merchants.matchCandidates(normalizedDescription)).merchantKey ??
+        (normalizedDescription || undefined));
 
     const rule: RecurringRule = {
       id: deps.newId(),

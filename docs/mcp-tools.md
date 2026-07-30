@@ -80,7 +80,7 @@ Input: `card` (name), `confirm` (default false). Hard delete: removes the card, 
 
 ## create_recurring / list_recurring / apply_due_recurring
 
-`create_recurring`: `description`, `amount`, `type`, `period` (`weekly|monthly|yearly`), `startDate` (first due), optional `account`, `category`, `currency`, `merchant` (Feature Design 017). Recurring transactions are classified as `user` with confidence 1. `merchant` names the merchant the rule pays (e.g. `"Netflix"`, a landlord); when omitted it's derived from `description` — either way, normalized the same way a transaction's merchant is. A rule created before this field existed has no merchant until re-saved (there is no `update_recurring` today).
+`create_recurring`: `description`, `amount`, `type`, `period` (`weekly|monthly|yearly`), `startDate` (first due), optional `account`, `category`, `currency`, `merchant` (Feature Design 017). Recurring transactions are classified as `user` with confidence 1. `merchant` names the merchant the rule pays (e.g. `"Netflix"`, a landlord) and is stored normalized, as given; when omitted, the merchant is resolved the same way a transaction's is — an already-learned `merchant_category` match takes priority (reusing that key rather than fragmenting it), falling back to the normalized `description` only when nothing matches. A rule created before this field existed has no merchant until re-saved (there is no `update_recurring` today).
 
 `list_recurring`: returns all recurring rules with `periodLabel` (localized period).
 
