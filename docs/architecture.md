@@ -330,6 +330,10 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 `diplomat/http/openapi.ts` holds only routing/doc-generation mechanics (`RouteDefinition`, `mountRoutes`, `buildOpenApiDocument`) — no wire schemas. Response shapes with no dedicated `wire/out` schema before this change (e.g. `BillView`, `ApplyDueResult`, the credit-card delete dry-run union, the shared `{ error }` envelopes for 404/409/422) got new small `wire/out` schemas (`wire/out/{bills,recurring,creditCards,common,errors}.ts`), same as any other response shape; request-side generic path-param/query shapes (`name`, `id`, `confirm`) got `wire/in/common.ts`. Unlike request schemas, these response schemas are not zod-validated at runtime (routes never parse their own outbound payloads), so they are best-effort documentation, not an enforced contract.
 
+## Reference resources (Feature Design 018)
+
+`fintrack://categories`/`accounts`/`tags`/`credit-cards` (`diplomat/mcp/server.ts`) are read-only, static-URI MCP resources that reuse the matching `list_*` read controller verbatim and serialize its result — the resource and its tool can never disagree, same principle as `fintrack://openapi` reusing `buildOpenApiDocument`. `fintrack://merchants/top` is the one addition with a new read path: `MerchantsRepo.top(limit)` (`diplomat/db/repos/merchants.ts`) groups effective, non-transfer transactions by `merchant_key`, resolves each merchant's dominant category (by transaction frequency, ties broken alphabetically), orders by count descending, and caps at `DEFAULT_TOP_MERCHANTS_LIMIT` (`models/merchant.ts`, 20) — a `controllers/merchants.ts#topMerchants` locale-resolves the category name before the resource serializes it. No `ResourceTemplate`/caller-supplied limit — it's a vocabulary list, not a tunable report.
+
 ## Dashboards / `/ui` surface (ADR-013 Phase A/B)
 
 The `dashboards` table (`id` PK, `name` UNIQUE, `html`, `updated_at`) stores agent-authored HTML shells, keyed by

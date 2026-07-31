@@ -21,6 +21,7 @@ import { createBudget, deleteBudget, getBudgetStatus, listBudgets, updateBudget 
 import { findCorrelations } from '../../controllers/correlations.js';
 import { getBill, payBill, revertBillPayment } from '../../controllers/creditCard/bill.js';
 import { deleteDashboard, listDashboards, renameDashboard, saveDashboard } from '../../controllers/dashboards.js';
+import { topMerchants } from '../../controllers/merchants.js';
 import {
   createCategory,
   createSubCategory,
@@ -84,6 +85,7 @@ import { PeriodSchema } from '../../models/date.js';
 import { AccountType } from '../../models/account.js';
 import { BillQuerySchema, PayBillSchema } from '../../models/bill.js';
 import { RenameDashboardSchema, SaveDashboardSchema } from '../../models/dashboard.js';
+import { DEFAULT_TOP_MERCHANTS_LIMIT } from '../../models/merchant.js';
 import { CreateRecurringSchema } from '../../wire/in/recurring.js';
 import {
   AddCardPurchaseSchema,
@@ -138,6 +140,12 @@ const jsonError = (e: AppError) => ({
 
 const fromResult = <T>(result: Result<T, AppError>) => result.match(json, jsonError);
 
+/** Shared by every static-URI JSON resource (`fintrack://openapi` and the Feature Design 018
+ *  reference resources) — one `contents` entry, `application/json`, pretty-printed. */
+const jsonResource = (uri: URL, value: unknown) => ({
+  contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(value, null, 2) }],
+});
+
 /** Shared by add_account_expense/add_account_income — identical aside from which movement kind
  *  is being recorded. */
 const addAccountMovementDescription = (movement: 'expense' | 'income'): string =>
@@ -178,9 +186,74 @@ export const buildMcpServer = (
         'Read this before generating fetch() calls against /api endpoints (ADR-013).',
       mimeType: 'application/json',
     },
-    async (uri) => ({
-      contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(openApiDocument, null, 2) }],
-    }),
+    async (uri) => jsonResource(uri, openApiDocument),
+  );
+
+  server.registerResource(
+    'categories',
+    'fintrack://categories',
+    {
+      title: 'Category taxonomy',
+      description:
+        'Top-level categories with locale-resolved display names and kind (expense/income/both) — the same ' +
+        'data list_categories returns. Read this to resolve a category name before classifying a transaction, ' +
+        'without a tool round-trip.',
+      mimeType: 'application/json',
+    },
+    async (uri) => jsonResource(uri, await listCategories(deps)),
+  );
+
+  server.registerResource(
+    'accounts',
+    'fintrack://accounts',
+    {
+      title: 'Accounts',
+      description:
+        'All accounts with name, type, and currency — the same data list_accounts returns. Read this to ' +
+        'resolve an account name without a tool round-trip.',
+      mimeType: 'application/json',
+    },
+    async (uri) => jsonResource(uri, await listAccounts(deps)),
+  );
+
+  server.registerResource(
+    'tags',
+    'fintrack://tags',
+    {
+      title: 'Tags',
+      description:
+        'All tags — the same data list_tags returns. Read this to resolve a tag name without a tool round-trip.',
+      mimeType: 'application/json',
+    },
+    async (uri) => jsonResource(uri, await listTags(deps)),
+  );
+
+  server.registerResource(
+    'credit-cards',
+    'fintrack://credit-cards',
+    {
+      title: 'Credit cards',
+      description:
+        'All credit cards — the same data list_credit_cards returns. Read this to resolve a card name without ' +
+        'a tool round-trip.',
+      mimeType: 'application/json',
+    },
+    async (uri) => jsonResource(uri, await listCreditCards(deps)),
+  );
+
+  server.registerResource(
+    'merchants-top',
+    'fintrack://merchants/top',
+    {
+      title: 'Top merchants',
+      description:
+        `The ${DEFAULT_TOP_MERCHANTS_LIMIT} merchants with the most effective, non-transfer transactions, each ` +
+        'with the category it is most often classified into — the vocabulary of merchants the user actually ' +
+        'deals with (e.g. "iFood → Alimentação"), by transaction frequency (not spend). Not a money report: no ' +
+        'per-currency amounts. categoryName is null for a merchant whose transactions are all uncategorized.',
+      mimeType: 'application/json',
+    },
+    async (uri) => jsonResource(uri, await topMerchants(deps)),
   );
 
   server.registerTool(
@@ -301,7 +374,7 @@ export const buildMcpServer = (
     {
       title: 'Update credit card',
       description:
-        'Update a credit card. name identifies the card; newName renames it — the card\'s internal account ' +
+        "Update a credit card. name identifies the card; newName renames it — the card's internal account " +
         '(named "Card: {name}", ADR-010) is renamed in the same atomic write. limit/closingDay/dueDay are plain ' +
         'field updates (a closingDay/dueDay change only applies to future bill cycles; existing bills keep their ' +
         'own computed dates). paymentAccount is resolved and validated exactly like create_credit_card/pay_bill: ' +
@@ -395,7 +468,7 @@ export const buildMcpServer = (
       description:
         'Create a recurring transaction rule (salary, rent, subscription). Materialized by apply_due_recurring, ' +
         'each occurrence carrying the rule\'s merchant. `merchant` names it explicitly (e.g. "Netflix"); omit to ' +
-        'derive it from `description` — either way it\'s normalized the same way a transaction\'s merchant is, ' +
+        "derive it from `description` — either way it's normalized the same way a transaction's merchant is, " +
         'so recurring spend shows up in merchant_concentration and reinforces classification like any other spend.',
       inputSchema: CreateRecurringSchema.shape,
     },
@@ -606,7 +679,7 @@ export const buildMcpServer = (
         'aggregate_spending/budgets. Per-currency — BRL and USD are never mixed. ' +
         '`budget_fit`: closes the loop between insights and budgets — read-only, apply a suggestion yourself ' +
         'via create_budget/update_budget. `budgeted` has one line per existing budget: `baseline` (same ' +
-        'trailing-average definition as spending_shifts) compared to the budget\'s own `limit` yields a ' +
+        "trailing-average definition as spending_shifts) compared to the budget's own `limit` yields a " +
         '`verdict` — "realistic" (baseline within tolerance of limit), "unrealistic" (baseline materially ' +
         'over limit — consistently over-budget, use `overPct`), or "generous" (baseline well under limit, ' +
         'use `slackPct`) — plus a `suggestedLimit` (baseline plus a small margin) you can pass straight to ' +
@@ -899,7 +972,7 @@ export const buildMcpServer = (
     'update_budget',
     {
       title: 'Update budget',
-      description: 'Update a budget\'s limit and/or period, identified by its id (from create_budget/list_budgets).',
+      description: "Update a budget's limit and/or period, identified by its id (from create_budget/list_budgets).",
       inputSchema: UpdateBudgetSchema.shape,
     },
     async (args) => {
@@ -937,12 +1010,12 @@ export const buildMcpServer = (
       title: 'Get budget status',
       description:
         'Spend-vs-limit for every budget in a month (Feature Design 015 phase 2) — grouped by top-level ' +
-        'category so a category\'s own budget and each of its sub-categories\' own budgets read as one ' +
+        "category so a category's own budget and each of its sub-categories' own budgets read as one " +
         'coherent unit; no cross-currency total (per-currency lines, BRL and USD never mixed). `spent` sums ' +
         'effective, expense-only, same-currency transactions in the month (income and transfers never count, ' +
         "even on a both-kind category); a category budget rolls up its sub-categories' spend, a sub-category " +
         'budget measures only its own (and also counts toward its ' +
-        'parent\'s, if the parent has a budget too). `remaining` (limit - spent) and `pct` (spent / limit) ' +
+        "parent's, if the parent has a budget too). `remaining` (limit - spent) and `pct` (spent / limit) " +
         'can go negative / exceed 1 when over budget — over-budget is reported, never an error.',
       inputSchema: PeriodSchema.shape,
     },

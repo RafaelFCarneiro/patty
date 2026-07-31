@@ -205,7 +205,8 @@ phases done: A `spending_shifts` ✅, D `budget_fit` ✅, C `merchant_concentrat
 — unblocked by Feature Design 017's recurring-rule merchant key), budgets ✅
 (Feature Design 015 —
 `create_budget`/`update_budget`/`delete_budget`/`list_budgets`/`get_budget_status`), goals, saved views; MCP
-resources + prompts; monthly-review and import-statement skills. **Exit:** "how was my spending vs budget, and
+resources ✅ (Feature Design 018 — `fintrack://categories`/`accounts`/`tags`/`credit-cards`/`merchants/top`) +
+prompts; monthly-review and import-statement skills. **Exit:** "how was my spending vs budget, and
 what's driving the change?" answered with composed queries; views persist.
 
 ### Phase 4 — Surfaces & hardening

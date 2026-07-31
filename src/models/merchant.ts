@@ -27,3 +27,16 @@ export type MerchantCategoryEdge = {
   weightDelta: number;
   origin: MerchantOrigin;
 };
+
+/** Default row cap for `fintrack://merchants/top` (Feature Design 018) — a reference/vocabulary
+ *  list, not a tunable report, so a static default rather than a caller-supplied parameter. */
+export const DEFAULT_TOP_MERCHANTS_LIMIT = 20;
+
+/** One row of `fintrack://merchants/top`: a merchant the user actually deals with, by transaction
+ *  frequency, plus the category it's most often classified into. `categoryName` is `null` when
+ *  every one of the merchant's transactions is uncategorized. */
+export type MerchantSummary = {
+  merchant: string;
+  transactionCount: number;
+  categoryName: string | null;
+};

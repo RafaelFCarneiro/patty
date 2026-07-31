@@ -530,3 +530,13 @@ Unlike tools (invoked with arguments), resources are read by URI — no input sc
 ### `fintrack://openapi`
 
 Returns the same OpenAPI 3.0 document served at `GET /api/openapi.json` (`application/json`, `text` content). Generated from the `wire/in`/`wire/out`/`models` zod schemas that back the REST routes (ADR-013 Phase A) — read this before generating `fetch()` calls against `/api` so the shapes can't be guessed wrong. This is the app's first MCP resource; read via `resources/read` with `uri: "fintrack://openapi"` (discoverable via `resources/list`).
+
+### Reference resources (Feature Design 018)
+
+Static-URI, read-only resources exposing the user's vocabulary — categories, accounts, tags, credit cards, and most-transacted merchants — so an agent resolving natural-language input ("R$32 uber ontem") can read them directly instead of round-tripping a `list_*` tool call every turn. Each mirrors its `list_*` tool exactly (same controller, same data — resource and tool can never disagree). `application/json`, one `contents` entry per resource.
+
+- **`fintrack://categories`** — same array as `list_categories`: top-level categories with locale-resolved display names, `kind` (expense/income/both), and `id`.
+- **`fintrack://accounts`** — same array as `list_accounts`: `name`, `type`, `currency`.
+- **`fintrack://tags`** — same array as `list_tags`.
+- **`fintrack://credit-cards`** — same array as `list_credit_cards`.
+- **`fintrack://merchants/top`** — the 20 (`DEFAULT_TOP_MERCHANTS_LIMIT`, `models/merchant.ts`) merchants with the most effective, non-transfer transactions, each `{ merchant, transactionCount, categoryName }` ordered by `transactionCount` descending. `categoryName` is the category the merchant is most often classified into (by transaction frequency, not spend), locale-resolved; `null` when every one of the merchant's transactions is uncategorized. A reference/vocabulary list, not a spend report — no per-currency amounts, no caller-supplied limit (static URI, no `ResourceTemplate` parameters).
