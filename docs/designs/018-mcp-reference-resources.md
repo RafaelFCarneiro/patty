@@ -20,12 +20,14 @@ PLAN scopes three: `fintrack://categories`, `fintrack://accounts`, `fintrack://m
 
 ## Decision
 
-Register three read-only resources, reusing existing read paths where they exist and adding one new query.
+Register five read-only resources — the three below required by PLAN, plus `fintrack://tags` and
+`fintrack://credit-cards` (§ "Also trivially available") — reusing existing read paths where they exist and
+adding one new query.
 
-1. **`fintrack://categories`** — the full category taxonomy: each category and sub-category with its display
-   name (locale-resolved, ADR-009), `kind` (expense/income/both), and parent linkage for sub-categories. Reuses
-   `listCategories` (`controllers/categories.ts`) — same data `list_categories` returns, so the resource and the
-   tool never disagree.
+1. **`fintrack://categories`** — top-level categories with their display name (locale-resolved, ADR-009) and
+   `kind` (expense/income/both). Reuses `listCategories` (`controllers/categories.ts`) — same data
+   `list_categories` returns (top-level only; sub-categories are their own tool/resource-shaped data, not
+   included here), so the resource and the tool never disagree.
 2. **`fintrack://accounts`** — accounts with `name`, `type`, `currency`. Reuses `listAccounts`.
 3. **`fintrack://merchants/top`** — the user's most-transacted merchants with their dominant category, so the
    agent recognises recurring vocabulary ("iFood → Alimentação"). **Needs one new read query**
@@ -39,9 +41,9 @@ Register three read-only resources, reusing existing read paths where they exist
 JSON }]` — the `fintrack://openapi` pattern. Handlers are thin: call the controller/query, serialize. Locale
 flows through `listCategories` already (localized display names).
 
-**Also trivially available (in-scope if wanted, else a one-line follow-up):** `fintrack://tags` and
-`fintrack://credit-cards` — both have `list` queries and are transaction vocabulary too. Recommend including
-them (near-zero cost, same pattern); the PLAN's three are the required core.
+**Also trivially available, and included:** `fintrack://tags` and `fintrack://credit-cards` — both have `list`
+queries and are transaction vocabulary too; near-zero cost, same pattern. The PLAN's three above are the
+required core; these two round it out to the five actually registered.
 
 ## Options / decisions
 
@@ -56,8 +58,8 @@ them (near-zero cost, same pattern); the PLAN's three are the required core.
 
 ## Docs to update
 
-- `docs/mcp-tools.md` (or `docs/mcp-clients.md`) — the three (or five) resources: URIs, shapes, when an agent
-  should read them.
+- `docs/mcp-tools.md` (or `docs/mcp-clients.md`) — the five resources: URIs, shapes, when an agent should read
+  them.
 - `docs/architecture.md` — a line noting the reference resources reuse the list read paths (read-only).
 - `docs/PLAN.md` — Phase 3 MCP-resources progress.
 

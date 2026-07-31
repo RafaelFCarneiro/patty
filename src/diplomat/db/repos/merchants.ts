@@ -17,13 +17,16 @@ const MatchRow = z.object({
 });
 
 /** The `limit` merchants with the most effective, non-transfer transactions, plus each one's
- *  dominant category (the category it's most often classified into, among those same
+ *  dominant *classified* category (the category it's most often classified into, among those same
  *  transactions) — Feature Design 018. `merchant_totals` picks the merchants first, so
- *  `category_counts` only ever aggregates over that already-limited set. The dominant-category
- *  join breaks ties deterministically via `MIN(c.name)`/`MIN(c.names)` (alphabetically first),
- *  rather than relying on SQLite's unspecified bare-column pick; a merchant with no category at
- *  all (`category_id IS NULL`) never matches `categories`, so both `MIN`s come back `NULL` —
- *  the "resolves gracefully" case. */
+ *  `category_counts` only ever aggregates over that already-limited set; it excludes
+ *  `category_id IS NULL` so an uncategorized transaction never outweighs a real category — a
+ *  merchant with 2 classified "Food" and 5 uncategorized transactions must still resolve to
+ *  "Food", not `null`. The dominant-category join breaks ties deterministically via
+ *  `MIN(c.name)`/`MIN(c.names)` (alphabetically first), rather than relying on SQLite's
+ *  unspecified bare-column pick; a merchant with *no classified* transactions at all has no rows
+ *  in `category_counts`, so the `LEFT JOIN` never matches and both `MIN`s come back `NULL` — the
+ *  "resolves gracefully" case. */
 const MERCHANTS_TOP_SELECT = (limit: number) => sql`
   WITH merchant_totals AS (
     SELECT t.merchant_key, COUNT(*) AS transaction_count
@@ -41,6 +44,7 @@ const MERCHANTS_TOP_SELECT = (limit: number) => sql`
     JOIN merchant_totals mt ON mt.merchant_key = t.merchant_key
     WHERE t.status = ${TransactionStatus.enum.effective}
       AND t.type != ${TransactionType.enum.transfer}
+      AND t.category_id IS NOT NULL
     GROUP BY t.merchant_key, t.category_id
   )
   SELECT mt.merchant_key AS merchant, mt.transaction_count AS transaction_count,

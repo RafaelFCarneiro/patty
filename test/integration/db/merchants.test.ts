@@ -116,6 +116,22 @@ describe('merchantsRepo.top', () => {
     ]);
   });
 
+  it('resolves the dominant category among classified transactions, not outweighed by uncategorized ones', async () => {
+    await insertMerchant('mostly-uncategorized-merchant');
+    const foodId = await insertCategory('Food');
+    await insertTx({ merchantKey: 'mostly-uncategorized-merchant', categoryId: foodId });
+    await insertTx({ merchantKey: 'mostly-uncategorized-merchant', categoryId: foodId });
+    for (let i = 0; i < 5; i += 1) {
+      await insertTx({ merchantKey: 'mostly-uncategorized-merchant', categoryId: null });
+    }
+
+    const rows = await repo.top(10);
+
+    expect(rows).toEqual([
+      { merchant: 'mostly-uncategorized-merchant', transactionCount: 7, categoryName: 'Food', categoryNames: null },
+    ]);
+  });
+
   it('resolves categoryName/categoryNames to null when the merchant has no classified category', async () => {
     await insertMerchant('uncategorized-merchant');
     await insertTx({ merchantKey: 'uncategorized-merchant', categoryId: null });
