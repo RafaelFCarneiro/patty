@@ -136,7 +136,8 @@ src/                             # backend lives at repo root
 docs/
   PLAN.md
   adr/                           # architecture decision records
-skills/                          # Claude skills: monthly-review, import-statement, ...
+skills/                          # Claude skills (e.g. dashboard-building) — monthly-review/import-statement
+                                  #   are MCP prompts instead (diplomat/mcp/prompts.ts), not skills here
 CLAUDE.md                        # dev guidance for AI agents (commands, layer rules)
 
 ../fintrack-legacy/              # archived v1 (NestJS/Mongo/React), reference only
@@ -206,8 +207,11 @@ phases done: A `spending_shifts` ✅, D `budget_fit` ✅, C `merchant_concentrat
 (Feature Design 015 —
 `create_budget`/`update_budget`/`delete_budget`/`list_budgets`/`get_budget_status`), goals, saved views; MCP
 resources ✅ (Feature Design 018 — `fintrack://categories`/`accounts`/`tags`/`credit-cards`/`merchants/top`) +
-prompts; monthly-review and import-statement skills. **Exit:** "how was my spending vs budget, and
-what's driving the change?" answered with composed queries; views persist.
+prompts ✅ (Feature Design 019 — `monthly_review`/`budget_checkup`/`import_statement`; this subsumes the
+monthly-review/import-statement skills line below — MCP prompts are portable/server-side where a Claude
+`SKILL.md` would just restate the same tool orchestration, so no skills are built), saved views. **Exit:**
+"how was my spending vs budget, and what's driving the change?" answered with composed queries; views
+persist.
 
 ### Phase 4 — Surfaces & hardening
 Minimal web frontend rendering saved views; activate owner columns for multi-user groundwork; OFX/CSV importers behind an interface (Open Finance Brasil / Pluggy later); e2e against MCP transport. Multi-user/hosted would also reopen the auth + safety-guard work intentionally deferred for the local-first first release.

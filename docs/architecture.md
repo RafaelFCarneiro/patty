@@ -334,6 +334,10 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 `fintrack://categories`/`accounts`/`tags`/`credit-cards` (`diplomat/mcp/server.ts`) are read-only, static-URI MCP resources that reuse the matching `list_*` read controller verbatim and serialize its result — the resource and its tool can never disagree, same principle as `fintrack://openapi` reusing `buildOpenApiDocument`. `fintrack://merchants/top` is the one addition with a new read path: `MerchantsRepo.top(limit)` (`diplomat/db/repos/merchants.ts`) groups effective, non-transfer transactions by `merchant_key`, resolves each merchant's dominant category (by transaction frequency, ties broken alphabetically), orders by count descending, and caps at `DEFAULT_TOP_MERCHANTS_LIMIT` (`models/merchant.ts`, 20) — a `controllers/merchants.ts#topMerchants` locale-resolves the category name before the resource serializes it. No `ResourceTemplate`/caller-supplied limit — it's a vocabulary list, not a tunable report.
 
+## Guided-workflow prompts (Feature Design 019)
+
+The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement` — text in `diplomat/mcp/prompts.ts`, registered in `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome; no DB access, no controller.
+
 ## Dashboards / `/ui` surface (ADR-013 Phase A/B)
 
 The `dashboards` table (`id` PK, `name` UNIQUE, `html`, `updated_at`) stores agent-authored HTML shells, keyed by
