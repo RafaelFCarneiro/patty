@@ -126,6 +126,14 @@ import * as settingsAdapters from '../../adapters/settings.js';
 import * as tagAdapters from '../../adapters/tags.js';
 import { buildOpenApiDocument } from '../http/openapi.js';
 import { buildRouteDefinitions } from '../http/routes.js';
+import {
+  budgetCheckupPromptText,
+  ImportStatementPromptArgsSchema,
+  importStatementPromptText,
+  monthlyReviewPromptText,
+  PeriodPromptArgsSchema,
+  resolvePromptPeriod,
+} from './prompts.js';
 
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. */
 
@@ -171,6 +179,58 @@ export const buildMcpServer = (
   resetLocale: () => void,
 ): McpServer => {
   const server = new McpServer({ name: 'fintrack', version });
+
+  server.registerPrompt(
+    'monthly_review',
+    {
+      title: 'Monthly financial review',
+      description:
+        'Synthesize a per-currency monthly review: spending summary, the biggest shifts vs baseline, ' +
+        'budget fit, and recurring-payment candidates worth automating.',
+      argsSchema: PeriodPromptArgsSchema,
+    },
+    async ({ month, year }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: { type: 'text', text: monthlyReviewPromptText(resolvePromptPeriod({ month, year }, deps.clock())) },
+        },
+      ],
+    }),
+  );
+
+  server.registerPrompt(
+    'budget_checkup',
+    {
+      title: 'Budget checkup',
+      description:
+        'Report which budgets are on track, over, or generous, surface suggested limits and unbudgeted ' +
+        'significant spend, and offer to apply the suggestions.',
+      argsSchema: PeriodPromptArgsSchema,
+    },
+    async ({ month, year }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: { type: 'text', text: budgetCheckupPromptText(resolvePromptPeriod({ month, year }, deps.clock())) },
+        },
+      ],
+    }),
+  );
+
+  server.registerPrompt(
+    'import_statement',
+    {
+      title: 'Import a statement',
+      description:
+        'Walk the user through pasting a card or account statement, importing it, and confirming any ' +
+        'needs_review items.',
+      argsSchema: ImportStatementPromptArgsSchema,
+    },
+    async ({ source }) => ({
+      messages: [{ role: 'user', content: { type: 'text', text: importStatementPromptText(source) } }],
+    }),
+  );
 
   const openApiDocument = buildOpenApiDocument(
     buildRouteDefinitions(deps, version, runEffects, runEffectsSequence),
