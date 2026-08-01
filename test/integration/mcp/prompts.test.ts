@@ -52,9 +52,9 @@ describe('MCP guided-workflow prompts (Feature Design 019)', () => {
     });
 
     it('defaults to the current period when args are omitted', async () => {
+      const now = new Date();
       const result = await client.getPrompt({ name: 'monthly_review', arguments: {} });
       const text = messageText(result);
-      const now = new Date();
       const expected = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
       expect(text).toContain(expected);
     });
@@ -70,9 +70,9 @@ describe('MCP guided-workflow prompts (Feature Design 019)', () => {
     });
 
     it('defaults to the current period when args are omitted', async () => {
+      const now = new Date();
       const result = await client.getPrompt({ name: 'budget_checkup', arguments: {} });
       const text = messageText(result);
-      const now = new Date();
       const expected = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
       expect(text).toContain(expected);
     });
