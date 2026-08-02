@@ -1,7 +1,9 @@
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { Period } from '../../models/date.js';
 import { PeriodSchema } from '../../models/date.js';
 import { ImportStatementSource } from '../../models/prompts.js';
+import type { McpContext } from './context.js';
 
 /** Guided-workflow MCP prompts (Feature Design 019) — orchestration text only, no DB access, no
  *  controller. The *model* executes the tools the text instructs it to call. `diplomat/*` may not
@@ -78,3 +80,60 @@ export const importStatementPromptText = (source: ImportStatementSource | undefi
   `${describeStatementSource(source)} After importing, report the created / duplicate / needs_review / ` +
   'error counts, then walk each needs_review item with the user one at a time so they can confirm or ' +
   'correct its category before moving on.';
+
+/** Guided-workflow prompts (Feature Design 019) — few and cross-domain, one module (ADR-025). */
+export const registerPrompts = (server: McpServer, ctx: McpContext): void => {
+  const { deps } = ctx;
+
+  server.registerPrompt(
+    'monthly_review',
+    {
+      title: 'Monthly financial review',
+      description:
+        'Synthesize a per-currency monthly review: spending summary, the biggest shifts vs baseline, ' +
+        'budget fit, and recurring-payment candidates worth automating.',
+      argsSchema: PeriodPromptArgsSchema,
+    },
+    async ({ month, year }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: { type: 'text', text: monthlyReviewPromptText(resolvePromptPeriod({ month, year }, deps.clock())) },
+        },
+      ],
+    }),
+  );
+
+  server.registerPrompt(
+    'budget_checkup',
+    {
+      title: 'Budget checkup',
+      description:
+        'Report which budgets are on track, over, or generous, surface suggested limits and unbudgeted ' +
+        'significant spend, and offer to apply the suggestions.',
+      argsSchema: PeriodPromptArgsSchema,
+    },
+    async ({ month, year }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: { type: 'text', text: budgetCheckupPromptText(resolvePromptPeriod({ month, year }, deps.clock())) },
+        },
+      ],
+    }),
+  );
+
+  server.registerPrompt(
+    'import_statement',
+    {
+      title: 'Import a statement',
+      description:
+        'Walk the user through pasting a card or account statement, importing it, and confirming any ' +
+        'needs_review items.',
+      argsSchema: ImportStatementPromptArgsSchema,
+    },
+    async ({ source }) => ({
+      messages: [{ role: 'user', content: { type: 'text', text: importStatementPromptText(source) } }],
+    }),
+  );
+};
