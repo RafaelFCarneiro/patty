@@ -102,11 +102,9 @@ still be one undifferentiated 800-line file.
 
 1. [x] Review/accept this ADR.
 2. [x] Phase 1 — MCP edge split (behavior-preserving; MCP integration tests unchanged).
-3. [ ] Phase 2 — HTTP routes split (behavior-preserving; HTTP integration tests unchanged).
-4. [ ] Record the diplomat-edge-organization convention in `docs/architecture.md`; one-line pointer in
-   `CLAUDE.md` mirrored to `.github/copilot-instructions.md`. (Partial: the MCP-side note is recorded in
-   `docs/architecture.md` § Diplomat edge organization; the `CLAUDE.md`/copilot one-liner lands with Phase 2,
-   per the migration plan.)
+3. [x] Phase 2 — HTTP routes split (behavior-preserving; HTTP integration tests unchanged).
+4. [x] Record the diplomat-edge-organization convention in `docs/architecture.md`; one-line pointer in
+   `CLAUDE.md` mirrored to `.github/copilot-instructions.md`.
 
 Each phase is feature-sized (spans many files) → independent verification subagent per diff, charged
 specifically to **diff the registered tool names and route paths before vs after** and confirm nothing was
