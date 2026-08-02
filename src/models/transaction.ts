@@ -347,8 +347,9 @@ export const DELETE_TRANSACTION_CONFIRM_HINT =
   'Destructive action: show the transaction to the user and call again with confirm: true.';
 
 /** MCP tool names for the aggregate-specific update/delete tools (ADR-017) — named once here and
- *  reused both at tool registration (diplomat/mcp/server.ts) and in the ownership-guard redirect
- *  hint (controllers/transaction/core.ts), rather than re-typed at each call site. */
+ *  reused both at tool registration (diplomat/mcp/tools/{account,creditCard}.ts) and in the
+ *  ownership-guard redirect hint (controllers/transaction/core.ts), rather than re-typed at each
+ *  call site. */
 export const TransactionTool = {
   updateCardTransaction: 'update_card_transaction',
   deleteCardTransaction: 'delete_card_transaction',

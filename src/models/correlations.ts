@@ -36,7 +36,7 @@ export const CADENCE_DAY_TOLERANCE_DAYS = 5;
 export const CADENCE_AMOUNT_TOLERANCE_PCT = 10;
 
 // Shared between minDeltaPct's own field description below and the tool's registered description
-// (diplomat/mcp/server.ts), so the two can't drift apart.
+// (diplomat/mcp/tools/correlations.ts), so the two can't drift apart.
 export const NEW_CATEGORY_ALWAYS_SURFACED_NOTE =
   'a brand-new category with no baseline spend at all is always surfaced regardless of this threshold';
 
