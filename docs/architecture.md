@@ -313,39 +313,35 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 ## Diplomat edge organization (ADR-025)
 
 Both diplomat edges are organized as per-domain registration/route modules mirroring `controllers/`, rather than
-one large file each. **The convention going forward, for both edges:** a new MCP tool/resource/prompt or HTTP
-route lives in the domain module matching its controller; the entrypoint (`server.ts`/`routes.ts`) never inlines
-a new registration.
+one large file each. **The convention:** a new MCP tool/resource/prompt or HTTP route lives in the domain module
+matching its controller; the entrypoint (`server.ts`/`routes.ts`) never inlines a new registration.
 
-**MCP (Phase 1) — `diplomat/mcp`.** `tools/<domain>.ts` (`account`, `creditCard`, `transaction`, `transfer`,
-`budget`, `recurring`, `category`, `tag`, `dashboard`, `correlations`, `aggregate`, `summary`, `system`) each
-export a `register<Domain>Tools(server, ctx)` that registers exactly the tools whose controller lives in that
-domain — `aggregate`/`summary` get their own thin module for the same reason `correlations` does: a single-tool
-domain is still a domain, mirroring its single-file controller (`controllers/aggregate.ts`/`summary.ts`).
-`resources.ts` (`registerResources`) and `prompts.ts` (`registerPrompts`) stay single cross-domain modules — few
-enough, and cross-cutting enough, not to warrant per-domain splitting. `respond.ts` holds the shared response
-helpers (`json`, `jsonError`, `fromResult`, `jsonResource`); `context.ts` defines `McpContext` (`{ deps, version,
+**MCP — `diplomat/mcp`.** `tools/<domain>.ts` (`account`, `creditCard`, `transaction`, `transfer`, `budget`,
+`recurring`, `category`, `tag`, `dashboard`, `correlations`, `aggregate`, `summary`, `system`) each export a
+`register<Domain>Tools(server, ctx)` that registers exactly the tools whose controller lives in that domain —
+`aggregate`/`summary` get their own thin module for the same reason `correlations` does: a single-tool domain is
+still a domain, mirroring its single-file controller (`controllers/aggregate.ts`/`summary.ts`). `resources.ts`
+(`registerResources`) and `prompts.ts` (`registerPrompts`) stay single cross-domain modules — few enough, and
+cross-cutting enough, not to warrant per-domain splitting. `respond.ts` holds the shared response helpers
+(`json`, `jsonError`, `fromResult`, `jsonResource`); `context.ts` defines `McpContext` (`{ deps, version,
 runEffects, runEffectsSequence, resetLocale }`), built once in `server.ts` and passed to every register call so
 no module carries the full parameter list. `server.ts` reduces to construction + aggregation: build the server,
 build `ctx`, call each `register…` once.
 
-**HTTP (Phase 2) — `diplomat/http`.** `routes/<domain>.ts` (`account`, `category`, `creditCard` — including
-`Bills` alongside credit cards, same as the MCP side — `transfer`, `recurring`, `transaction`, `tag`,
-`dashboard`, `aggregate`, `summary`, `system`) each export a `<domain>Routes(ctx): RouteDefinition[]` — exactly
-the routes whose controller lives in that domain. `respond.ts` holds the shared response helpers (`send`,
+**HTTP — `diplomat/http`.** `routes/<domain>.ts` (`account`, `category`, `creditCard` — including `Bills`
+alongside credit cards, same as the MCP side — `transfer`, `recurring`, `transaction`, `tag`, `dashboard`,
+`aggregate`, `summary`, `system`) each export a `<domain>Routes(ctx): RouteDefinition[]` — exactly the routes
+whose controller lives in that domain. Each module declares its own `<DOMAIN>_TAG` constant(s) for its OpenAPI
+tag(s) (`creditCard.ts` alone has two: `CreditCards` and `Bills`) rather than pulling from a shared enumeration,
+since no tag is used by more than one domain file. `respond.ts` holds the shared response helpers (`send`,
 `parse`) and OpenAPI response/param shorthands (`validation422`, `notFound404`, `conflict409`, `nameParam`,
-`idParam`, `confirmQuery`, `CACHE_CONTROL_NO_CACHE`) — `RouteTag` is deliberately **not** here: unlike those,
-each OpenAPI tag string is used by exactly one domain file (`creditCard.ts` alone uses two, `CreditCards` and
-`Bills`), so each `routes/<domain>.ts` module declares its own `<DOMAIN>_TAG` constant locally rather than
-having every domain reach into a shared enumeration every time one is added — the same reasoning that keeps
-new registrations out of the aggregator. `context.ts` defines `HttpContext` (`{ deps, version, runEffects,
-runEffectsSequence }`), built once in `routes.ts` and passed to every route builder.
-`GET /ui/:name` — a browser-facing HTML route, not a `RouteDefinition` (no OpenAPI entry) — is mounted by
-`routes/dashboard.ts`'s `registerDashboardHtmlRoute(app, ctx)`, called from `registerRoutes` alongside
-`mountRoutes`, since it shares the dashboard domain's `getDashboard` controller call. `routes.ts` reduces to
-construction + aggregation: `buildRouteDefinitions` concatenates every domain's array into the one list
-`mountRoutes`/`buildOpenApiDocument` consume (§ OpenAPI contract), and `registerRoutes` mounts it, the HTML
-route, and `/api/openapi.json`.
+`idParam`, `confirmQuery`, `CACHE_CONTROL_NO_CACHE`); `context.ts` defines `HttpContext` (`{ deps, version,
+runEffects, runEffectsSequence }`), built once in `routes.ts` and passed to every route builder. `GET /ui/:name`
+— a browser-facing HTML route, not a `RouteDefinition` (no OpenAPI entry) — is mounted by `routes/dashboard.ts`'s
+`registerDashboardHtmlRoute(app, ctx)`, called from `registerRoutes` alongside `mountRoutes`, since it shares
+the dashboard domain's `getDashboard` controller call. `routes.ts` reduces to construction + aggregation:
+`buildRouteDefinitions` concatenates every domain's array into the one list `mountRoutes`/`buildOpenApiDocument`
+consume (§ OpenAPI contract), and `registerRoutes` mounts it, the HTML route, and `/api/openapi.json`.
 
 ## HTTP sidecar (ADR-013 Decision 7)
 
