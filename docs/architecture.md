@@ -310,11 +310,14 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 
 **Transport:** controlled by `MCP_TRANSPORT` (zod enum, `config.ts`). Default is **`stdio`** — the client spawns the process; no port, no Fastify. Set `MCP_TRANSPORT=http` to start the Fastify server (REST + streamable HTTP MCP on `PORT`). Both transports connect the same `buildMcpServer(deps, version)` core; no domain code moves. (ADR-007)
 
-## Diplomat edge organization (ADR-025 — Phase 1: MCP)
+## Diplomat edge organization (ADR-025)
 
-`diplomat/mcp` is organized as per-domain registration modules mirroring `controllers/`, rather than one large
-`server.ts`. `tools/<domain>.ts` (`account`, `creditCard`, `transaction`, `transfer`, `budget`, `recurring`,
-`category`, `tag`, `dashboard`, `correlations`, `aggregate`, `summary`, `system`) each export a
+Both diplomat edges are organized as per-domain registration/route modules mirroring `controllers/`, rather than
+one large file each. **The convention:** a new MCP tool/resource/prompt or HTTP route lives in the domain module
+matching its controller; the entrypoint (`server.ts`/`routes.ts`) never inlines a new registration.
+
+**MCP — `diplomat/mcp`.** `tools/<domain>.ts` (`account`, `creditCard`, `transaction`, `transfer`, `budget`,
+`recurring`, `category`, `tag`, `dashboard`, `correlations`, `aggregate`, `summary`, `system`) each export a
 `register<Domain>Tools(server, ctx)` that registers exactly the tools whose controller lives in that domain —
 `aggregate`/`summary` get their own thin module for the same reason `correlations` does: a single-tool domain is
 still a domain, mirroring its single-file controller (`controllers/aggregate.ts`/`summary.ts`). `resources.ts`
@@ -323,9 +326,22 @@ cross-cutting enough, not to warrant per-domain splitting. `respond.ts` holds th
 (`json`, `jsonError`, `fromResult`, `jsonResource`); `context.ts` defines `McpContext` (`{ deps, version,
 runEffects, runEffectsSequence, resetLocale }`), built once in `server.ts` and passed to every register call so
 no module carries the full parameter list. `server.ts` reduces to construction + aggregation: build the server,
-build `ctx`, call each `register…` once. **The convention going forward:** a new MCP tool/resource/prompt lives
-in the domain module matching its controller; `server.ts` never inlines a new registration. HTTP routes
-(`diplomat/http/routes.ts`) are unchanged for now — Phase 2 applies the same split there.
+build `ctx`, call each `register…` once.
+
+**HTTP — `diplomat/http`.** `routes/<domain>.ts` (`account`, `category`, `creditCard` — including `Bills`
+alongside credit cards, same as the MCP side — `transfer`, `recurring`, `transaction`, `tag`, `dashboard`,
+`aggregate`, `summary`, `system`) each export a `<domain>Routes(ctx): RouteDefinition[]` — exactly the routes
+whose controller lives in that domain. Each module declares its own `<DOMAIN>_TAG` constant(s) for its OpenAPI
+tag(s) (`creditCard.ts` alone has two: `CreditCards` and `Bills`) rather than pulling from a shared enumeration,
+since no tag is used by more than one domain file. `respond.ts` holds the shared response helpers (`send`,
+`parse`) and OpenAPI response/param shorthands (`validation422`, `notFound404`, `conflict409`, `nameParam`,
+`idParam`, `confirmQuery`, `CACHE_CONTROL_NO_CACHE`); `context.ts` defines `HttpContext` (`{ deps, version,
+runEffects, runEffectsSequence }`), built once in `routes.ts` and passed to every route builder. `GET /ui/:name`
+— a browser-facing HTML route, not a `RouteDefinition` (no OpenAPI entry) — is mounted by `routes/dashboard.ts`'s
+`registerDashboardHtmlRoute(app, ctx)`, called from `registerRoutes` alongside `mountRoutes`, since it shares
+the dashboard domain's `getDashboard` controller call. `routes.ts` reduces to construction + aggregation:
+`buildRouteDefinitions` concatenates every domain's array into the one list `mountRoutes`/`buildOpenApiDocument`
+consume (§ OpenAPI contract), and `registerRoutes` mounts it, the HTML route, and `/api/openapi.json`.
 
 ## HTTP sidecar (ADR-013 Decision 7)
 
@@ -341,7 +357,7 @@ In the default **stdio** transport, the HTTP server (REST + streamable HTTP MCP,
 
 ## OpenAPI contract (ADR-013 Phase A)
 
-Every REST route is declared exactly once, in `diplomat/http/routes.ts`'s `buildRouteDefinitions(deps, version)` — a single array where each entry carries its method, path, `wire/in`/`wire/out`/`models`-derived request/response schemas, **and** its real handler together. There is no second, hand-maintained list to fall out of sync: `mountRoutes` (`diplomat/http/openapi.ts`) mounts the array on Fastify, and `buildOpenApiDocument` documents the same array via `@asteasolutions/zod-to-openapi`'s `OpenApiGeneratorV3` — neither function depends on the other, so a route that's mounted is, by construction, the same route that's documented. (An earlier version of this kept the route list and the OpenAPI registry as two separate, manually-synced files; that duplication was the actual defect, not something a parity test should merely detect after the fact — so the design was collapsed to one array instead. A unit test (`test/unit/diplomat/http/openapi.test.ts`) still checks the two consumers agree, mainly to guard against a future route being mounted by hand outside the array.)
+Every REST route is declared exactly once, in its domain module under `diplomat/http/routes/` (§ Diplomat edge organization), and concatenated by `diplomat/http/routes.ts`'s `buildRouteDefinitions(deps, version)` into a single array where each entry carries its method, path, `wire/in`/`wire/out`/`models`-derived request/response schemas, **and** its real handler together. There is no second, hand-maintained list to fall out of sync: `mountRoutes` (`diplomat/http/openapi.ts`) mounts the array on Fastify, and `buildOpenApiDocument` documents the same array via `@asteasolutions/zod-to-openapi`'s `OpenApiGeneratorV3` — neither function depends on the other, so a route that's mounted is, by construction, the same route that's documented. (An earlier version of this kept the route list and the OpenAPI registry as two separate, manually-synced files; that duplication was the actual defect, not something a parity test should merely detect after the fact — so the design was collapsed to one array instead. A unit test (`test/unit/diplomat/http/openapi.test.ts`) still checks the two consumers agree, mainly to guard against a future route being mounted by hand outside the array.)
 
 The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat/mcp/resources.ts`), so a tools/resource-only agent — including under the **stdio** transport, which never starts Fastify — can read the contract without an HTTP round-trip. This is the first MCP resource in the app (as opposed to tools). It calls `buildOpenApiDocument(buildRouteDefinitions(deps, version), version)` directly: building the array only constructs handler closures (never invokes them), so it needs no live Fastify instance. `diplomat/mcp` importing `buildRouteDefinitions`/`buildOpenApiDocument` from `diplomat/http` is a narrow, documented exception to the dependency table (§ Dependency direction) — both are deterministic, no-business-logic builders, the same category of shared artifact both diplomats already import (wire schemas, models).
 
@@ -419,4 +435,4 @@ available alongside the server.
 - ADR-022: the shell's executor is a generic effect runner (`runEffects`/`runEffectsSequence`) rather than a DB-specific unit of work — persistence is one effect kind, response always produced, message dispatch a named future kind; runs either a single atomic unit or a sequence of independent units (renames/extends ADR-021)
 - ADR-023: an applier decides nothing and performs no reads at all — merchant creation, tag resolution, and the learning weight/origin move into the core; idempotency treatment becomes the engine's, declared by registration config (extends ADR-021/ADR-022 — **accepted**; step 1 [merchant entity + weight delta] implemented, also landed outcome-addressing-by-entity-tag as a prerequisite refactor; step 2 [tag links resolved in the core] implemented; step 3 [generic idempotency + the `transactionApplier` collapse; tag set re-addressed by transactionId with keep-existing-on-duplicate; invariant sharpened to "no reads at all"] implemented)
 - ADR-024: local SQLite concurrency posture — WAL + `busy_timeout` on the connection, and `SQLITE_BUSY` made retryable in `runEffects`, so multiple concurrent writers (stdio spawned per client) wait/retry instead of hard-failing; the physical-contention axis left open after ADR-015→022 solved logical atomicity (multi-client use is steered to the HTTP transport — ADR-007 — **accepted, implemented**)
-- ADR-025: diplomat edge organization — MCP tools/resources/prompts and HTTP routes live in per-domain modules mirroring `controllers/`; the entrypoints (`buildMcpServer`/`buildRouteDefinitions`) only aggregate; behavior-preserving split of the two large edge files, with a convention governing new edge work (**accepted** — phase 1 [MCP edge split] implemented; phase 2 [HTTP routes split] pending)
+- ADR-025: diplomat edge organization — MCP tools/resources/prompts and HTTP routes live in per-domain modules mirroring `controllers/`; the entrypoints (`buildMcpServer`/`buildRouteDefinitions`) only aggregate; behavior-preserving split of the two large edge files, with a convention governing new edge work (**accepted** — phase 1 [MCP edge split] and phase 2 [HTTP routes split] both implemented)
