@@ -24,7 +24,17 @@ import { DeletedOut } from '../../../wire/out/common.js';
 import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../../../wire/out/transactions.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
-import { conflict409, confirmQuery, idParam, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
+import {
+  conflict409,
+  confirmQuery,
+  idParam,
+  invalidQueryResponse,
+  nameParam,
+  notFound404,
+  parse,
+  send,
+  validation422,
+} from '../respond.js';
 
 const ACCOUNTS_TAG = 'Accounts';
 
@@ -58,7 +68,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
       },
       handler: async (req, reply) => {
         const q = wireInAccounts.AccountBalancesQuerySchema.safeParse(req.query);
-        if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid query'] } });
+        if (!q.success) return invalidQueryResponse(reply);
         return send(reply, await getAccountBalances(deps, q.data));
       },
     },

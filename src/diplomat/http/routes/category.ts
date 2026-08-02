@@ -13,7 +13,7 @@ import * as wireInCategories from '../../../wire/in/categories.js';
 import { DeletedOut } from '../../../wire/out/common.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
-import { conflict409, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
+import { conflict409, invalidQueryResponse, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
 
 const CATEGORIES_TAG = 'Categories';
 
@@ -52,7 +52,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
       responses: { 200: okResponse('Sub-categories', z.array(SubCategorySchema)), 422: validation422 },
       handler: async (req, reply) => {
         const q = wireInCategories.SubCategoriesQuerySchema.safeParse(req.query);
-        if (!q.success) return reply.status(422).send({ error: { code: 'validation', issues: ['invalid query'] } });
+        if (!q.success) return invalidQueryResponse(reply);
         return reply.send(await listSubCategories(deps, q.data.parentId));
       },
     },

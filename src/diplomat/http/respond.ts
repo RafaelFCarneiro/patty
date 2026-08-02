@@ -23,6 +23,14 @@ export const parse = <S extends z.ZodTypeAny>(schema: S, body: unknown, reply: F
   return r.data as z.output<S>;
 };
 
+// Some query-param handlers (routes/account.ts, routes/category.ts) report a fixed generic
+// message on a failed safeParse rather than `parse`'s per-field zod issues, since a query string
+// is already loosely typed at that point. Shared here since the message is otherwise duplicated
+// verbatim across those route modules.
+const INVALID_QUERY_ISSUE = 'invalid query';
+export const invalidQueryResponse = (reply: FastifyReply) =>
+  reply.status(422).send({ error: { code: 'validation', issues: [INVALID_QUERY_ISSUE] } });
+
 // OpenAPI response-config shorthands, reused across route modules — composed here (not in
 // openapi.ts) because they're built from wire/out/errors.js schemas, and openapi.ts stays
 // domain/wire-agnostic (routing + doc-generation mechanics only).
