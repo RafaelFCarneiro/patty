@@ -33,7 +33,10 @@ import { DeleteCreditCardResultOut } from '../../../wire/out/creditCards.js';
 import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../../../wire/out/transactions.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
-import { conflict409, confirmQuery, idParam, nameParam, notFound404, parse, send, validation422, RouteTag } from '../respond.js';
+import { conflict409, confirmQuery, idParam, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
+
+const CREDIT_CARDS_TAG = 'CreditCards';
+const BILLS_TAG = 'Bills';
 
 export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
   const { deps, runEffects, runEffectsSequence } = ctx;
@@ -41,7 +44,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/credit-cards/purchases',
-      tags: [RouteTag.creditCards],
+      tags: [CREDIT_CARDS_TAG],
       summary: 'Add a credit-card purchase',
       request: { body: jsonBody(wireInCreditCards.AddCardPurchaseSchema) },
       responses: {
@@ -72,7 +75,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/credit-cards/statement',
-      tags: [RouteTag.creditCards],
+      tags: [CREDIT_CARDS_TAG],
       summary: 'Import a credit-card statement',
       request: { body: jsonBody(wireInCreditCards.ImportCardStatementSchema) },
       responses: { 201: okResponse('Import result', BulkResultOut), 422: validation422 },
@@ -92,7 +95,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'get',
       path: '/api/credit-cards',
-      tags: [RouteTag.creditCards],
+      tags: [CREDIT_CARDS_TAG],
       summary: 'List credit cards',
       responses: { 200: okResponse('Credit cards', z.array(CreditCardSchema)) },
       handler: async () => listCreditCards(deps),
@@ -100,7 +103,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/credit-cards',
-      tags: [RouteTag.creditCards],
+      tags: [CREDIT_CARDS_TAG],
       summary: 'Create credit card',
       request: { body: jsonBody(wireInCreditCards.CreateCreditCardSchema) },
       responses: {
@@ -122,7 +125,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'patch',
       path: '/api/credit-cards/:name',
-      tags: [RouteTag.creditCards],
+      tags: [CREDIT_CARDS_TAG],
       summary: 'Update credit card',
       request: { params: nameParam, body: jsonBody(wireInCreditCards.UpdateCreditCardSchema.omit({ name: true })) },
       responses: {
@@ -145,7 +148,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'delete',
       path: '/api/credit-cards/:name',
-      tags: [RouteTag.creditCards],
+      tags: [CREDIT_CARDS_TAG],
       summary: 'Delete credit card',
       request: { params: nameParam, query: confirmQuery },
       responses: {
@@ -168,7 +171,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'get',
       path: '/api/bills',
-      tags: [RouteTag.bills],
+      tags: [BILLS_TAG],
       summary: 'Get a credit card bill (fatura)',
       request: { query: BillQuery },
       responses: {
@@ -186,7 +189,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/bills/pay',
-      tags: [RouteTag.bills],
+      tags: [BILLS_TAG],
       summary: 'Pay a credit card bill',
       request: { body: jsonBody(PayBill) },
       responses: { 200: okResponse('Bill paid', BillSchema), 404: notFound404, 409: conflict409, 422: validation422 },
@@ -203,7 +206,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/bills/revert',
-      tags: [RouteTag.bills],
+      tags: [BILLS_TAG],
       summary: 'Revert a credit card bill payment',
       request: { body: jsonBody(BillQuery) },
       responses: {
@@ -223,7 +226,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'patch',
       path: '/api/credit-cards/transactions/:id',
-      tags: [RouteTag.creditCards],
+      tags: [CREDIT_CARDS_TAG],
       summary: 'Update a credit-card transaction',
       request: {
         params: idParam,
@@ -248,7 +251,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'delete',
       path: '/api/credit-cards/transactions/:id',
-      tags: [RouteTag.creditCards],
+      tags: [CREDIT_CARDS_TAG],
       summary: 'Delete a credit-card transaction',
       request: { params: idParam, query: confirmQuery },
       responses: {

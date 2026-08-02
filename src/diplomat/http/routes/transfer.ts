@@ -7,7 +7,9 @@ import * as wireInAccounts from '../../../wire/in/accounts.js';
 import { TransferResultOut } from '../../../wire/out/transactions.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
-import { conflict409, notFound404, parse, validation422, RouteTag } from '../respond.js';
+import { conflict409, notFound404, parse, validation422 } from '../respond.js';
+
+const TRANSFERS_TAG = 'Transfers';
 
 export const transferRoutes = (ctx: HttpContext): RouteDefinition[] => {
   const { deps, runEffects } = ctx;
@@ -15,7 +17,7 @@ export const transferRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/transfers',
-      tags: [RouteTag.transfers],
+      tags: [TRANSFERS_TAG],
       summary: 'Transfer between accounts',
       request: { body: jsonBody(wireInAccounts.CreateTransferSchema) },
       responses: {

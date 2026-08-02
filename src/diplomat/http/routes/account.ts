@@ -24,7 +24,9 @@ import { DeletedOut } from '../../../wire/out/common.js';
 import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../../../wire/out/transactions.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
-import { conflict409, confirmQuery, idParam, nameParam, notFound404, parse, send, validation422, RouteTag } from '../respond.js';
+import { conflict409, confirmQuery, idParam, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
+
+const ACCOUNTS_TAG = 'Accounts';
 
 export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
   const { deps, runEffects, runEffectsSequence } = ctx;
@@ -32,7 +34,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'get',
       path: '/api/accounts',
-      tags: [RouteTag.accounts],
+      tags: [ACCOUNTS_TAG],
       summary: 'List accounts',
       request: { query: wireInAccounts.AccountsQuerySchema },
       responses: { 200: okResponse('Accounts', z.array(AccountSchema)), 422: validation422 },
@@ -45,7 +47,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'get',
       path: '/api/accounts/balances',
-      tags: [RouteTag.accounts],
+      tags: [ACCOUNTS_TAG],
       summary: 'Get account balances',
       request: { query: wireInAccounts.AccountBalancesQuerySchema },
       responses: {
@@ -63,7 +65,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/accounts',
-      tags: [RouteTag.accounts],
+      tags: [ACCOUNTS_TAG],
       summary: 'Create account',
       request: { body: jsonBody(wireInAccounts.CreateAccountSchema) },
       responses: { 201: okResponse('Account created', AccountSchema), 409: conflict409, 422: validation422 },
@@ -78,7 +80,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'patch',
       path: '/api/accounts/:name',
-      tags: [RouteTag.accounts],
+      tags: [ACCOUNTS_TAG],
       summary: 'Update account',
       request: { params: nameParam, body: jsonBody(wireInAccounts.UpdateAccountSchema.omit({ name: true })) },
       responses: {
@@ -99,7 +101,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'delete',
       path: '/api/accounts/:name',
-      tags: [RouteTag.accounts],
+      tags: [ACCOUNTS_TAG],
       summary: 'Delete account',
       request: { params: nameParam },
       responses: {
@@ -117,7 +119,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/accounts/expenses',
-      tags: [RouteTag.accounts],
+      tags: [ACCOUNTS_TAG],
       summary: 'Add an account expense',
       request: { body: jsonBody(wireInAccounts.AddAccountMovementSchema) },
       responses: {
@@ -146,7 +148,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/accounts/income',
-      tags: [RouteTag.accounts],
+      tags: [ACCOUNTS_TAG],
       summary: 'Add account income',
       request: { body: jsonBody(wireInAccounts.AddAccountMovementSchema) },
       responses: {
@@ -175,7 +177,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/accounts/statement',
-      tags: [RouteTag.accounts],
+      tags: [ACCOUNTS_TAG],
       summary: 'Import an account statement',
       request: { body: jsonBody(wireInAccounts.ImportAccountStatementSchema) },
       responses: { 201: okResponse('Import result', BulkResultOut), 422: validation422 },
@@ -195,7 +197,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'patch',
       path: '/api/accounts/transactions/:id',
-      tags: [RouteTag.accounts],
+      tags: [ACCOUNTS_TAG],
       summary: 'Update an account transaction',
       request: {
         params: idParam,
@@ -221,7 +223,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'delete',
       path: '/api/accounts/transactions/:id',
-      tags: [RouteTag.accounts],
+      tags: [ACCOUNTS_TAG],
       summary: 'Delete an account transaction',
       request: { params: idParam, query: confirmQuery },
       responses: {

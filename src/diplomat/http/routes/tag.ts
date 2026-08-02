@@ -6,7 +6,9 @@ import { CreateTagSchema } from '../../../wire/in/tags.js';
 import { DeletedOut } from '../../../wire/out/common.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
-import { conflict409, idParam, parse, send, validation422, RouteTag } from '../respond.js';
+import { conflict409, idParam, parse, send, validation422 } from '../respond.js';
+
+const TAGS_TAG = 'Tags';
 
 export const tagRoutes = (ctx: HttpContext): RouteDefinition[] => {
   const { deps, runEffects } = ctx;
@@ -14,7 +16,7 @@ export const tagRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'get',
       path: '/api/tags',
-      tags: [RouteTag.tags],
+      tags: [TAGS_TAG],
       summary: 'List tags',
       responses: { 200: okResponse('Tags', z.array(TagSchema)) },
       handler: async () => listTags(deps),
@@ -22,7 +24,7 @@ export const tagRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/tags',
-      tags: [RouteTag.tags],
+      tags: [TAGS_TAG],
       summary: 'Create tag',
       request: { body: jsonBody(CreateTagSchema) },
       responses: { 201: okResponse('Tag created', TagSchema), 409: conflict409, 422: validation422 },
@@ -36,7 +38,7 @@ export const tagRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'delete',
       path: '/api/tags/:id',
-      tags: [RouteTag.tags],
+      tags: [TAGS_TAG],
       summary: 'Delete tag',
       request: { params: idParam },
       responses: { 200: okResponse('Tag deleted', DeletedOut) },

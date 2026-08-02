@@ -13,7 +13,9 @@ import * as wireInCategories from '../../../wire/in/categories.js';
 import { DeletedOut } from '../../../wire/out/common.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
-import { conflict409, nameParam, notFound404, parse, send, validation422, RouteTag } from '../respond.js';
+import { conflict409, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
+
+const CATEGORIES_TAG = 'Categories';
 
 export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
   const { deps, runEffects } = ctx;
@@ -21,7 +23,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'get',
       path: '/api/categories',
-      tags: [RouteTag.categories],
+      tags: [CATEGORIES_TAG],
       summary: 'List categories',
       responses: { 200: okResponse('Categories', z.array(CategorySchema)) },
       handler: async () => listCategories(deps),
@@ -29,7 +31,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/categories',
-      tags: [RouteTag.categories],
+      tags: [CATEGORIES_TAG],
       summary: 'Create category',
       request: { body: jsonBody(wireInCategories.CreateCategorySchema) },
       responses: { 201: okResponse('Category created', CategorySchema), 409: conflict409, 422: validation422 },
@@ -44,7 +46,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'get',
       path: '/api/sub-categories',
-      tags: [RouteTag.categories],
+      tags: [CATEGORIES_TAG],
       summary: 'List sub-categories',
       request: { query: wireInCategories.SubCategoriesQuerySchema },
       responses: { 200: okResponse('Sub-categories', z.array(SubCategorySchema)), 422: validation422 },
@@ -57,7 +59,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/sub-categories',
-      tags: [RouteTag.categories],
+      tags: [CATEGORIES_TAG],
       summary: 'Create sub-category',
       request: { body: jsonBody(wireInCategories.CreateSubCategorySchema) },
       responses: {
@@ -76,7 +78,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'delete',
       path: '/api/categories/:name',
-      tags: [RouteTag.categories],
+      tags: [CATEGORIES_TAG],
       summary: 'Delete category',
       request: { params: nameParam },
       responses: { 200: okResponse('Category deleted', DeletedOut), 404: notFound404, 409: conflict409 },
@@ -89,7 +91,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'delete',
       path: '/api/sub-categories/:name',
-      tags: [RouteTag.categories],
+      tags: [CATEGORIES_TAG],
       summary: 'Delete sub-category',
       request: { params: nameParam },
       responses: { 200: okResponse('Sub-category deleted', DeletedOut), 404: notFound404, 409: conflict409 },

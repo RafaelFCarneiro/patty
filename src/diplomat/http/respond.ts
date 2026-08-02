@@ -33,23 +33,6 @@ export const nameParam = NameParamSchema;
 export const idParam = IdParamSchema;
 export const confirmQuery = ConfirmQuerySchema;
 
-// OpenAPI grouping tags — each repeats across several routes, so named once here rather than
-// copy-pasted (code-quality.md "Constants over literals").
-export const RouteTag = {
-  system: 'System',
-  accounts: 'Accounts',
-  categories: 'Categories',
-  transactions: 'Transactions',
-  creditCards: 'CreditCards',
-  bills: 'Bills',
-  transfers: 'Transfers',
-  recurring: 'Recurring',
-  tags: 'Tags',
-  aggregate: 'Aggregate',
-  summary: 'Summary',
-  dashboards: 'Dashboards',
-} as const;
-
 // Shared by /ui/:name (routes/dashboard.ts) and /api/openapi.json (routes.ts) — both must never
 // be masked by a stale browser copy.
 export const CACHE_CONTROL_NO_CACHE = 'no-cache';

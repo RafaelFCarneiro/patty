@@ -334,8 +334,12 @@ build `ctx`, call each `register…` once.
 `dashboard`, `aggregate`, `summary`, `system`) each export a `<domain>Routes(ctx): RouteDefinition[]` — exactly
 the routes whose controller lives in that domain. `respond.ts` holds the shared response helpers (`send`,
 `parse`) and OpenAPI response/param shorthands (`validation422`, `notFound404`, `conflict409`, `nameParam`,
-`idParam`, `confirmQuery`, `RouteTag`, `CACHE_CONTROL_NO_CACHE`); `context.ts` defines `HttpContext` (`{ deps,
-version, runEffects, runEffectsSequence }`), built once in `routes.ts` and passed to every route builder.
+`idParam`, `confirmQuery`, `CACHE_CONTROL_NO_CACHE`) — `RouteTag` is deliberately **not** here: unlike those,
+each OpenAPI tag string is used by exactly one domain file (`creditCard.ts` alone uses two, `CreditCards` and
+`Bills`), so each `routes/<domain>.ts` module declares its own `<DOMAIN>_TAG` constant locally rather than
+having every domain reach into a shared enumeration every time one is added — the same reasoning that keeps
+new registrations out of the aggregator. `context.ts` defines `HttpContext` (`{ deps, version, runEffects,
+runEffectsSequence }`), built once in `routes.ts` and passed to every route builder.
 `GET /ui/:name` — a browser-facing HTML route, not a `RouteDefinition` (no OpenAPI entry) — is mounted by
 `routes/dashboard.ts`'s `registerDashboardHtmlRoute(app, ctx)`, called from `registerRoutes` alongside
 `mountRoutes`, since it shares the dashboard domain's `getDashboard` controller call. `routes.ts` reduces to

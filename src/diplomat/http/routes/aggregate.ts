@@ -3,7 +3,9 @@ import { AggregateResultSchema } from '../../../models/aggregate.js';
 import { AggregateSpendingInputSchema } from '../../../wire/in/aggregate.js';
 import type { HttpContext } from '../context.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
-import { conflict409, notFound404, parse, send, validation422, RouteTag } from '../respond.js';
+import { conflict409, notFound404, parse, send, validation422 } from '../respond.js';
+
+const AGGREGATE_TAG = 'Aggregate';
 
 export const aggregateRoutes = (ctx: HttpContext): RouteDefinition[] => {
   const { deps } = ctx;
@@ -11,7 +13,7 @@ export const aggregateRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'get',
       path: '/api/aggregate',
-      tags: [RouteTag.aggregate],
+      tags: [AGGREGATE_TAG],
       summary: 'Aggregate spending',
       request: { query: AggregateSpendingInputSchema },
       responses: {

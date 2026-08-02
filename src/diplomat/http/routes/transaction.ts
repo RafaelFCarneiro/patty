@@ -6,7 +6,9 @@ import { TransactionViewSchema } from '../../../models/transaction.js';
 import * as wireInTransactions from '../../../wire/in/transactions.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
-import { conflict409, idParam, notFound404, parse, send, validation422, RouteTag } from '../respond.js';
+import { conflict409, idParam, notFound404, parse, send, validation422 } from '../respond.js';
+
+const TRANSACTIONS_TAG = 'Transactions';
 
 export const transactionRoutes = (ctx: HttpContext): RouteDefinition[] => {
   const { deps, runEffects } = ctx;
@@ -14,7 +16,7 @@ export const transactionRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/transactions/:id/confirm',
-      tags: [RouteTag.transactions],
+      tags: [TRANSACTIONS_TAG],
       summary: 'Confirm (clear) a pending transaction',
       request: { params: idParam, body: jsonBody(wireInTransactions.ConfirmTransactionSchema.omit({ id: true })) },
       responses: {
@@ -37,7 +39,7 @@ export const transactionRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'get',
       path: '/api/transactions',
-      tags: [RouteTag.transactions],
+      tags: [TRANSACTIONS_TAG],
       summary: 'Search transactions',
       request: { query: wireInTransactions.SearchTransactionsQuerySchema },
       responses: {

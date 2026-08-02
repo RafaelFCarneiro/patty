@@ -7,7 +7,9 @@ import * as wireInRecurring from '../../../wire/in/recurring.js';
 import { ApplyDueResultOut } from '../../../wire/out/recurring.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
-import { conflict409, notFound404, parse, send, validation422, RouteTag } from '../respond.js';
+import { conflict409, notFound404, parse, send, validation422 } from '../respond.js';
+
+const RECURRING_TAG = 'Recurring';
 
 export const recurringRoutes = (ctx: HttpContext): RouteDefinition[] => {
   const { deps, runEffects } = ctx;
@@ -15,7 +17,7 @@ export const recurringRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'get',
       path: '/api/recurring',
-      tags: [RouteTag.recurring],
+      tags: [RECURRING_TAG],
       summary: 'List recurring rules',
       responses: { 200: okResponse('Recurring rules', z.array(RecurringRuleViewSchema)) },
       handler: async () => listRecurring(deps),
@@ -23,7 +25,7 @@ export const recurringRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/recurring',
-      tags: [RouteTag.recurring],
+      tags: [RECURRING_TAG],
       summary: 'Create recurring rule',
       request: { body: jsonBody(wireInRecurring.CreateRecurringSchema) },
       responses: {
@@ -43,7 +45,7 @@ export const recurringRoutes = (ctx: HttpContext): RouteDefinition[] => {
     {
       method: 'post',
       path: '/api/recurring/apply-due',
-      tags: [RouteTag.recurring],
+      tags: [RECURRING_TAG],
       summary: 'Materialize due recurring rules',
       request: { body: jsonBody(wireInRecurring.ApplyDueBodySchema) },
       responses: {
