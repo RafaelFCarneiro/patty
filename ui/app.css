@@ -258,6 +258,25 @@ nav#dashboard-menu a.active {
   background: var(--surface-alt);
 }
 
+/* Custom-dashboard submenu grouping (ADR-027 Phase 2) */
+
+.dashboard-menu-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding-left: 0.5rem;
+  margin-left: 0.25rem;
+  border-left: 1px solid var(--border);
+}
+
+.dashboard-menu-group-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .dashboard-toolbar {
   display: flex;
   flex-wrap: wrap;

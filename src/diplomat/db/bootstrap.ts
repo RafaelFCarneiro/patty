@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import * as R from 'remeda';
+import { DashboardSource } from '../../models/dashboard.js';
 import { ClassificationMethod } from '../../models/transaction.js';
 import { normalizeMerchant } from '../../logic/merchant.js';
 import type { Db } from './driver.js';
+import { HTML_FILE_EXTENSION, listDefaultDashboardFiles } from './repos/dashboards.js';
 import { categories, currencies, dashboards, merchantCategory, merchants } from './schema.js';
 import { CURRENCIES } from './seed/currencies.js';
 import { CATEGORIES } from './seed/categories.js';
-import { DEFAULT_DASHBOARD_HTML, DEFAULT_DASHBOARD_NAME } from './seed/dashboards.js';
 import { DEFAULT_MERCHANT_RULES } from './seed/merchantRules.js';
 
 // Resolve the migrations folder relative to this module (../../../drizzle), so it
@@ -44,18 +45,30 @@ const seedCategories = async (db: Db): Promise<void> => {
     .onConflictDoNothing();
 };
 
-// Seeded once (onConflictDoNothing on the `name` UNIQUE constraint); a later save_dashboard
-// upsert overrides it and survives future boots — bootstrap never re-seeds over a dashboard that
-// already exists. The minted id is discarded on that conflict path, same as any other insert.
+// Reconciles rows to the default dashboard files actually present under ui/dashboards/ (ADR-027
+// Phase 2) — every *.html file there becomes a source: 'file' row, named after its own filename,
+// on every boot; dropping a new default in that folder needs no code change here. Seeded once per
+// name (onConflictDoNothing on the `name` UNIQUE constraint): a later save_dashboard upsert
+// detaches that name into a custom, inline row and survives future boots — bootstrap never
+// re-seeds over a dashboard that already exists, file-backed or not. The minted id is discarded on
+// that conflict path, same as any other insert.
 const seedDashboards = async (db: Db): Promise<void> => {
+  const files = await listDefaultDashboardFiles();
+  if (files.length === 0) return;
+
+  const now = new Date().toISOString();
   await db
     .insert(dashboards)
-    .values({
-      id: randomUUID(),
-      name: DEFAULT_DASHBOARD_NAME,
-      html: DEFAULT_DASHBOARD_HTML,
-      updatedAt: new Date().toISOString(),
-    })
+    .values(
+      files.map((filename) => ({
+        id: randomUUID(),
+        name: filename.slice(0, -HTML_FILE_EXTENSION.length),
+        html: null,
+        source: DashboardSource.enum.file,
+        path: filename,
+        updatedAt: now,
+      })),
+    )
     .onConflictDoNothing();
 };
 

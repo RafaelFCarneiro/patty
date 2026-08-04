@@ -17,20 +17,17 @@ const MIGRATION_0011_TAG = '0011_dashboard_id_normalization';
 let tmpDir: string;
 let dbPath: string;
 let preMigrationFolder: string;
-let through0011Folder: string;
 
-/** Rewrites `folder`'s journal in place, keeping only entries up to (and, if `dropLast`, excluding)
- *  `MIGRATION_0011_TAG` — drizzle's migrator (`libsql/migrator.js`) applies a migration whenever its
- *  journal `when` timestamp is newer than the single latest-applied row it tracks, so it never
- *  backfills an older skipped entry once a *later*-dated one has already been recorded. Truncating
- *  both migrate() passes to "through 0011" keeps this test's skip-then-reapply trick correct
- *  regardless of how many migrations (like Feature Design 015's `budgets` table) land after 0011. */
-const truncateJournalThrough0011 = (folder: string, dropLast: boolean): void => {
+/** Rewrites `folder`'s journal in place, keeping only entries strictly before `MIGRATION_0011_TAG`
+ *  — drizzle's migrator (`libsql/migrator.js`) applies a migration whenever its journal `when`
+ *  timestamp is newer than the single latest-applied row it tracks, so it never backfills an older
+ *  skipped entry once a *later*-dated one has already been recorded. */
+const truncateJournalBefore0011 = (folder: string): void => {
   const journalPath = join(folder, 'meta', '_journal.json');
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: Array<{ tag: string }> };
   const cutoff = journal.entries.findIndex((entry) => entry.tag === MIGRATION_0011_TAG);
   if (cutoff === -1) throw new Error(`${MIGRATION_0011_TAG} not found in ${journalPath} — has it been renamed?`);
-  journal.entries = journal.entries.slice(0, dropLast ? cutoff : cutoff + 1);
+  journal.entries = journal.entries.slice(0, cutoff);
   writeFileSync(journalPath, JSON.stringify(journal, null, 2));
 };
 
@@ -38,17 +35,12 @@ beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-dashboard-migration-'));
   dbPath = join(tmpDir, 'migration.db');
 
-  // A copy of the real migrations folder with 0011's journal entry removed, so migrating against
-  // it stops one version short — simulating a DB that predates id-normalization.
+  // A copy of the real migrations folder with 0011's journal entry (and everything after) removed,
+  // so migrating against it stops one version short — simulating a DB that predates
+  // id-normalization.
   preMigrationFolder = join(tmpDir, 'pre-0011-migrations');
   cpSync(REAL_MIGRATIONS_FOLDER, preMigrationFolder, { recursive: true });
-  truncateJournalThrough0011(preMigrationFolder, true);
-
-  // A copy truncated to end at 0011 (inclusive) — any migration after 0011 (e.g. `budgets`) is
-  // irrelevant to this test and, per the note above, must not be present for the second migrate().
-  through0011Folder = join(tmpDir, 'through-0011-migrations');
-  cpSync(REAL_MIGRATIONS_FOLDER, through0011Folder, { recursive: true });
-  truncateJournalThrough0011(through0011Folder, false);
+  truncateJournalBefore0011(preMigrationFolder);
 });
 
 afterEach(() => {
@@ -64,7 +56,7 @@ const openOpts = () => ({
 });
 
 describe('migration 0011 — dashboards id normalization', () => {
-  it('backfills a stable UUID id for a pre-existing name-keyed row, preserving content and name UNIQUE', async () => {
+  it('backfills a stable id for a legacy row, staying readable through later migrations (source/path)', async () => {
     const db = await openDatabase(openOpts());
     await migrate(db, { migrationsFolder: preMigrationFolder });
 
@@ -72,7 +64,10 @@ describe('migration 0011 — dashboards id normalization', () => {
       sql`INSERT INTO dashboards (name, html, updated_at, version) VALUES ('legacy', '<html>old</html>', '2026-01-01', 0)`,
     );
 
-    await migrate(db, { migrationsFolder: through0011Folder });
+    // The rest of the head migrations, including 0011 itself and (later) the source/path columns —
+    // proving both that 0011 backfills the id correctly and that a pre-0011 row survives every
+    // migration since untouched.
+    await migrate(db, { migrationsFolder: REAL_MIGRATIONS_FOLDER });
 
     const rows = await db.all<{ id: string; name: string; html: string; updated_at: string; version: number }>(
       sql`SELECT id, name, html, updated_at, version FROM dashboards WHERE name = 'legacy'`,
@@ -90,7 +85,12 @@ describe('migration 0011 — dashboards id normalization', () => {
     ).rejects.toThrow();
 
     const repo = dashboardsRepo(db);
-    expect(await repo.get('legacy')).toEqual({ name: 'legacy', html: '<html>old</html>', updatedAt: '2026-01-01' });
-    expect(await repo.list()).toEqual([{ name: 'legacy', updatedAt: '2026-01-01' }]);
+    expect(await repo.get('legacy')).toEqual({
+      name: 'legacy',
+      html: '<html>old</html>',
+      updatedAt: '2026-01-01',
+      source: 'inline',
+    });
+    expect(await repo.list()).toEqual([{ name: 'legacy', updatedAt: '2026-01-01', source: 'inline' }]);
   });
 });

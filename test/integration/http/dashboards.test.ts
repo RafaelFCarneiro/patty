@@ -101,7 +101,33 @@ describe('GET /api/dashboards', () => {
     for (const item of list) {
       expect(item).not.toHaveProperty('html');
       expect(item).toHaveProperty('updatedAt');
+      expect(item).toHaveProperty('source');
     }
+  });
+
+  it('carries source: file for the seeded default, so the shell can group it apart from customs', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboards' });
+    const list = res.json() as Array<Record<string, unknown>>;
+    expect(list.find((d) => d.name === 'overview')).toMatchObject({ source: 'file' });
+  });
+});
+
+describe('save_dashboard detaches a file-backed default into a custom, inline row (ADR-027 Phase 2)', () => {
+  it('saving over "overview" flips source to inline and the new content is served', async () => {
+    const overriddenHtml = '<section>my custom overview</section>';
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'overview', html: overriddenHtml },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ name: 'overview', html: overriddenHtml, source: 'inline' });
+
+    const stored = await inject({ method: 'GET', url: '/api/dashboards/overview' });
+    expect(stored.json()).toMatchObject({ html: overriddenHtml, source: 'inline' });
+
+    const list = (await inject({ method: 'GET', url: '/api/dashboards' })).json() as Array<Record<string, unknown>>;
+    expect(list.find((d) => d.name === 'overview')).toMatchObject({ source: 'inline' });
   });
 });
 
