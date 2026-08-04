@@ -155,8 +155,10 @@ recurring_rules     (id PK, description, amount, type, period, next_due, currenc
 
 settings            (id PK DEFAULT 'singleton', locale: en|es|pt DEFAULT en,
                      locale_source: default|inferred|explicit DEFAULT default, version)
-dashboards          (id PK, name UNIQUE, html, updated_at, version — ADR-013 Phase A, id normalized in
-                     Feature Design 013 Phase 1; see § Dashboards / `/ui` surface)
+dashboards          (id PK, name UNIQUE, html (nullable), source: inline|file DEFAULT inline, path (nullable),
+                     updated_at, version — ADR-013 Phase A, id normalized in Feature Design 013 Phase 1,
+                     source/path added ADR-027 Phase 2; CHECK enforces exactly one of html/path per source;
+                     see § Dashboards / `/ui` surface)
 
 transactions_fts    VIRTUAL TABLE fts5(description, content='transactions')
                     — kept in sync via INSERT/UPDATE/DELETE triggers
@@ -372,18 +374,45 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement` — text and registration in `diplomat/mcp/prompts.ts`'s `registerPrompts`, called from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome; no DB access, no controller.
 
-## Dashboards / `/ui` surface (ADR-013 Phase A/B, app shell + fragments — ADR-027 Phase 1)
+## Dashboards / `/ui` surface (ADR-013 Phase A/B, app shell + fragments — ADR-027 Phase 1, file-backed defaults — ADR-027 Phase 2)
 
-The `dashboards` table (`id` PK, `name` UNIQUE, `html`, `updated_at`) stores agent-authored **content
-fragments**, keyed by name for every consumer-facing surface — `id` is a surrogate identity, internal only
-(Feature Design 013 Phase 1), never on the wire and never a tool argument. A fragment is a `<section>`-level
-markup + an inline `<script>` that runs its own init immediately once injected — **not** a full HTML page: no
-`<!doctype>`/`<html>`/`<head>`/`<style>` root. `save_dashboard` (MCP tool) / `POST /api/dashboards` (REST) is an
-**upsert**: saving to an existing name replaces its content immediately, no rebuild, restart, or migration.
-`GET /api/dashboards/:name` (REST) returns it as JSON (`{ name, html, updatedAt }`); absent name →
-`unknown_dashboard` (404). (`source`/`path` — a discriminator so *default* dashboards are file-backed instead
-of DB-stored — is ADR-027 **Phase 2**, not yet implemented; every dashboard, including the seeded `overview`,
-is DB-`inline` today.)
+The `dashboards` table (`id` PK, `name` UNIQUE, `html` nullable, `source: inline|file` DEFAULT `inline`, `path`
+nullable, `updated_at`) stores **content fragments**, keyed by name for every consumer-facing surface — `id` is
+a surrogate identity, internal only (Feature Design 013 Phase 1), never on the wire and never a tool argument.
+A fragment is a `<section>`-level markup + an inline `<script>` that runs its own init immediately once
+injected — **not** a full HTML page: no `<!doctype>`/`<html>`/`<head>`/`<style>` root. `save_dashboard` (MCP
+tool) / `POST /api/dashboards` (REST) is an **upsert**: saving to an existing name replaces its content
+immediately, no rebuild, restart, or migration. `GET /api/dashboards/:name` (REST) returns it as JSON
+(`{ name, html, updatedAt, source }`); absent name → `unknown_dashboard` (404).
+
+**`source` is the sole default/custom discriminator (ADR-027 Phase 2)** — no separate `kind` column:
+
+- **`file`** — content is resolved by reading a repo-relative `.html` file under `ui/dashboards/` at read time
+  (`dashboardsRepo`'s `get`/`findByName`, `diplomat/db/repos/dashboards.ts`); the row's own `html` column is
+  always `NULL`. Only bootstrap ever registers a `file`-backed row (see below) — never `save_dashboard`, which
+  closes the path-traversal surface entirely (a custom dashboard can never carry a caller-influenced `path`).
+  The file read is I/O, so it happens in the repo (never in `adapters/dashboards.ts`, which stays pure — the
+  repo passes the already-resolved content into `dashboardAdapters.dbToModel`/`dbToEntity` as a plain
+  argument); reads are cached in memory for the process lifetime, same pattern as
+  `diplomat/http/routes/ui.ts`'s shell/asset cache. `path` is confined to `ui/dashboards/` by a resolve-and-prefix-check
+  (`resolveDashboardFilePath`) — defense-in-depth, since `path` is only ever bootstrap-supplied, never
+  user input.
+- **`inline`** — content stored in the `html` column, as before Phase 2; `path` is always `NULL`.
+  `saveDashboard`/`renameDashboard` (`controllers/dashboards.ts`) and `adapters/dashboards.ts`'s `modelToDb`
+  enforce "exactly one of html/path per source" on the write side; a `CHECK` constraint
+  (`dashboard_source_content`, `diplomat/db/schema.ts`) enforces it at the schema level too.
+
+Bootstrap (`diplomat/db/bootstrap.ts`'s `seedDashboards`) **reconciles rows to the files actually present**
+under `ui/dashboards/` on every boot (`listDefaultDashboardFiles`, `diplomat/db/repos/dashboards.ts`): every
+`*.html` file there becomes a `source: 'file'` row named after its own filename (`overview.html` → `overview`),
+via `onConflictDoNothing` on the `name` UNIQUE constraint — dropping a new default file in that folder needs no
+code change. `save_dashboard`ing over an existing default's name **detaches** it: the row becomes `inline`
+with the caller's content and `path: NULL`, and no longer tracks the file (a later restart re-seeds the file's
+own name only if that name is free again — e.g. after `delete_dashboard`). `rename_dashboard` is a pure
+identity change and preserves `source`/`path` unchanged, so a renamed default stays file-backed under its new
+name. The menu (`ui/app.js`) groups `list_dashboards`' results straight off `source`: `file` rows render as
+flat top-level items, `inline` ones group under a labeled "Custom" submenu (`.dashboard-menu-group` in
+`ui/app.css`) — no separate grouping field to keep in sync.
 
 **The app shell** (ADR-027 Phase 1) is what actually renders a dashboard in a browser now — real,
 version-controlled files at the package root, sibling to `src/`/`drizzle/` (shipped via `package.json`'s
@@ -393,13 +422,18 @@ version-controlled files at the package root, sibling to `src/`/`drizzle/` (ship
   see § below), the menu bar (`#dashboard-menu`), and the `#content` container fragments render into.
 - **`ui/app.css`** — every style rule lifted verbatim from the pre-shell per-dashboard `<style>` blocks (the
   look is unchanged), plus the new menu-bar/toolbar chrome rules the shell itself needed.
-- **`ui/app.js`** — the shell client: renders the menu from `GET /api/dashboards`, resolves the active
-  dashboard name from `location.pathname` client-side, fetches its fragment (`GET /api/dashboards/:name`),
-  and injects it into `#content`. Handles both menu clicks (`history.pushState`, no reload) and direct/refresh
-  navigation to `/ui/:name`. A fragment's `<script>` is inert once inserted via `innerHTML` — `app.js` replaces
-  it with a freshly created `<script>` element (the standard SPA workaround) to actually execute it; the
-  fragment's own script runs its init **synchronously** at that point rather than waiting for
-  `DOMContentLoaded` (which only ever fires once, for the shell page itself, not per navigation).
+- **`ui/app.js`** — the shell client: renders the menu from `GET /api/dashboards` (grouped by `source` — see
+  above), resolves the active dashboard name from `location.pathname` client-side, fetches its fragment
+  (`GET /api/dashboards/:name`), and injects it into `#content`. Handles both menu clicks
+  (`history.pushState`, no reload) and direct/refresh navigation to `/ui/:name`. A fragment's `<script>` is
+  inert once inserted via `innerHTML` — `app.js` replaces it with a freshly created `<script>` element (the
+  standard SPA workaround) to actually execute it; the fragment's own script runs its init **synchronously**
+  at that point rather than waiting for `DOMContentLoaded` (which only ever fires once, for the shell page
+  itself, not per navigation).
+- **`ui/dashboards/*.html`** (ADR-027 Phase 2) — the default dashboard fragments themselves, one file per
+  default (currently just `overview.html`), git-versioned and read-only at the install location; bootstrap
+  reconciles them into `source: 'file'` rows (see above). Also shipped via `package.json`'s `files` array —
+  it lists the parent `ui` directory, which npm includes recursively, so no separate entry was needed.
 
 `GET /ui` and `GET /ui/:name` (`registerUiRoutes`, `diplomat/http/routes/ui.ts`, mounted by `registerRoutes`
 in `diplomat/http/routes.ts` — non-`RouteDefinition` browser routes, same reasoning as the OpenAPI-exclusion
@@ -425,8 +459,10 @@ unlocks (Feature Design 013 Phase 3): `renameDashboard` (`controllers/dashboards
 `findByName` (`unknown_dashboard` if absent), guards `newName` is free via `findRefByName`
 (`dashboardErrors.duplicateName` if taken — a clean expected failure rather than surfacing through the
 applier's own unique-conflict retry), then emits a version-guarded `update` carrying the same `id` and `html`,
-the new `name`, and a bumped `updatedAt`. `GET /api/dashboards/:newName` serves it immediately;
-`GET /api/dashboards/:name` (the old name) 404s — the handle moved, the identity didn't.
+the new `name`, a bumped `updatedAt`, and (ADR-027 Phase 2) the entity's own `source`/`path` unchanged — a
+rename never touches content or the default/custom discriminator, so a file-backed default stays file-backed
+under its new name. `GET /api/dashboards/:newName` serves it immediately; `GET /api/dashboards/:name` (the old
+name) 404s — the handle moved, the identity didn't.
 
 Before persisting, `saveDashboard` (`controllers/dashboards.ts`) runs `findHtmlValidationIssues`
 (`logic/dashboard.ts`, pure) and rejects with `validation` (422) if it fails: empty content, a full
@@ -440,16 +476,25 @@ existed), or an inline `<script>` that fails to *compile* (via Node's `vm.Script
 not sanitization: full HTML sanitization remains explicitly out of scope for this local single-user app
 (ADR-013 Phase A). A rejected save never reads `dashboards.findRefByName` or decides a `Persistable`, so the
 previously stored dashboard is untouched (`docs/write-path.md` — `saveDashboard` is FC/IS: it decides an
-insert/update as data, never writes directly).
+insert/update as data, never writes directly). **`saveDashboard` always builds `source: 'inline'`, `path:
+null`** (ADR-027 Phase 2 non-negotiable) regardless of what the target name previously was — saving over a
+file-backed default's name detaches it into a custom, inline row.
 
 `/ui*` is deliberately **not** part of the `/api` OpenAPI document: that document exists to give an agent
 correct `fetch()` shapes for the JSON data API (§ OpenAPI contract above), and `/ui` is a browser-facing
 HTML/asset surface, not a JSON contract. Management of dashboards (list/get/save) does have REST parity under
 `/api/dashboards*` and is documented in the OpenAPI spec like every other route.
 
-A baseline dashboard (name `overview`) is seeded via `src/diplomat/db/seed/dashboards.ts` at bootstrap (ADR-008 seed isolation — consumed only by `diplomat/db/bootstrap.ts`, never imported by the domain), so `GET /api/dashboards/overview` resolves — and `GET /ui`/`GET /ui/overview` render it — on a fresh install even before the agent has generated anything. Seeding uses `onConflictDoNothing` on the `name` UNIQUE constraint, so a `save_dashboard` override survives future restarts — bootstrap never re-seeds over a dashboard that already exists.
+A baseline dashboard (name `overview`) ships as `ui/dashboards/overview.html` (ADR-027 Phase 2 — previously a
+~500-line TS string literal in `src/diplomat/db/seed/dashboards.ts`, removed) and is registered as a
+`source: 'file'` row by bootstrap's directory scan (see above), so `GET /api/dashboards/overview` resolves —
+and `GET /ui`/`GET /ui/overview` render it — on a fresh install even before the agent has generated anything.
+Reconciliation uses `onConflictDoNothing` on the `name` UNIQUE constraint, so a `save_dashboard` override
+(which detaches it to `inline`) survives future restarts — bootstrap never re-seeds over a dashboard that
+already exists.
 
-**(Phase B, converted to a fragment by ADR-027 Phase 1)** The seed is a fragment — `<section>`s + one inline `<script>`, no page chrome (the shell now owns the document root, CSS, and the one Chart.js `<script>` tag). It renders income/expenses/balance, spending-by-category (chart + table), accounts & balances, recurring rules, and recent transactions, one block per currency, plus a clearly-labeled "coming soon" placeholder for installment projections (no endpoint exists yet — Phase C). Its script runs its init immediately (see the app-shell script re-exec note above) and issues same-origin `fetch('/api/...')` calls against the routes documented at `GET /api/openapi.json` (`/api/summary`, `/api/aggregate`, `/api/accounts/balances`, `/api/recurring`, `/api/transactions`), rendering whatever comes back with the localized labels the API already returns (`typeLabel`, `categoryName`, `periodLabel`, …) rather than hardcoding vocabulary. Every section has its own loading/empty/error state, so a slow or failing endpoint degrades one card instead of blanking the page. **The fragment embeds zero financial data or secrets** — this is the ADR-013 non-negotiable, and `test/integration/http/dashboardTemplate.test.ts` is a regression guard: it asserts the fragment (read via `GET /api/dashboards/overview`) contains the expected `fetch()` calls, contains no inline-data-blob patterns (e.g. `const spending = [...]`), carries no full document root, references no external host at all, and that every fetched path exists in the live OpenAPI document; a companion test asserts `GET /ui` references only the pinned Chart.js CDN host.
+**(Phase B, converted to a fragment by ADR-027 Phase 1; moved to `ui/dashboards/overview.html` and file-backed
+by ADR-027 Phase 2)** The default is a fragment — `<section>`s + one inline `<script>`, no page chrome (the shell now owns the document root, CSS, and the one Chart.js `<script>` tag). It renders income/expenses/balance, spending-by-category (chart + table), accounts & balances, recurring rules, and recent transactions, one block per currency, plus a clearly-labeled "coming soon" placeholder for installment projections (no endpoint exists yet — Phase C). Its script runs its init immediately (see the app-shell script re-exec note above) and issues same-origin `fetch('/api/...')` calls against the routes documented at `GET /api/openapi.json` (`/api/summary`, `/api/aggregate`, `/api/accounts/balances`, `/api/recurring`, `/api/transactions`), rendering whatever comes back with the localized labels the API already returns (`typeLabel`, `categoryName`, `periodLabel`, …) rather than hardcoding vocabulary. Every section has its own loading/empty/error state, so a slow or failing endpoint degrades one card instead of blanking the page. **The fragment embeds zero financial data or secrets** — this is the ADR-013 non-negotiable, and `test/integration/http/dashboardTemplate.test.ts` is a regression guard: it asserts the fragment (read via `GET /api/dashboards/overview`, resolved from the file at read time) contains the expected `fetch()` calls, contains no inline-data-blob patterns (e.g. `const spending = [...]`), carries no full document root, references no external host at all, and that every fetched path exists in the live OpenAPI document; a companion test asserts `GET /ui` references only the pinned Chart.js CDN host.
 
 **(Phase B, revised for the fragment model by ADR-027 Phase 1)** `skills/dashboard-building/SKILL.md` is the guardrail checklist an MCP client follows to build or
 adapt a dashboard for the user: read the contract (`fintrack://openapi`/`GET /api/openapi.json`) before
@@ -489,4 +534,4 @@ available alongside the server.
 - ADR-024: local SQLite concurrency posture — WAL + `busy_timeout` on the connection, and `SQLITE_BUSY` made retryable in `runEffects`, so multiple concurrent writers (stdio spawned per client) wait/retry instead of hard-failing; the physical-contention axis left open after ADR-015→022 solved logical atomicity (multi-client use is steered to the HTTP transport — ADR-007 — **accepted, implemented**)
 - ADR-025: diplomat edge organization — MCP tools/resources/prompts and HTTP routes live in per-domain modules mirroring `controllers/`; the entrypoints (`buildMcpServer`/`buildRouteDefinitions`) only aggregate; behavior-preserving split of the two large edge files, with a convention governing new edge work (**accepted** — phase 1 [MCP edge split] and phase 2 [HTTP routes split] both implemented)
 - ADR-026: multi-currency valuation — crypto currencies (USDC, BTC) as first-class, an agent-refreshed `currency_rates` table (the backend never fetches — local-first preserved), a `settings.base_currency`, and read-time conversion to the base currency on `get_account_balances`; relaxes no-implicit-conversion for **valuation** only (spend stays per-currency, conversions `as_of`-stamped) — resolves the cross-currency open question (**proposed**)
-- ADR-027: UI app shell — a shared shell (`ui/shell.html` + `app.css` + `app.js`) hosting dashboard **content fragments**; a `source: inline|file` discriminator so **default** dashboards are git-versioned `.html` files and **customs** stay DB-`inline` (`save_dashboard` always inline — path-traversal-safe); entity-tagged **SSE** live-update fed by the `runEffects` post-commit; overview is home; same Fastify, no build (extends/revises ADR-013 — **accepted**; phase 1 [app shell, shared `app.css`, fragment model, overview home, menu] implemented)
+- ADR-027: UI app shell — a shared shell (`ui/shell.html` + `app.css` + `app.js`) hosting dashboard **content fragments**; a `source: inline|file` discriminator so **default** dashboards are git-versioned `.html` files and **customs** stay DB-`inline` (`save_dashboard` always inline — path-traversal-safe); entity-tagged **SSE** live-update fed by the `runEffects` post-commit; overview is home; same Fastify, no build (extends/revises ADR-013 — **accepted**; phase 1 [app shell, shared `app.css`, fragment model, overview home, menu] and phase 2 [`source`/`path` discriminator, file-backed default dashboards under `ui/dashboards/*.html`, custom submenu grouping] implemented)

@@ -121,14 +121,39 @@
       });
   }
 
+  function menuLink(dashboard, activeName) {
+    var link = h('a', { href: UI_PATH_PREFIX + encodeURIComponent(dashboard.name), text: dashboard.name });
+    if (dashboard.name === activeName) link.classList.add('active');
+    return link;
+  }
+
+  // ADR-027 Phase 2: source is the sole default/custom discriminator — file-backed dashboards
+  // render as flat top-level items, inline (custom) ones group under a labeled "Custom" submenu,
+  // straight off list_dashboards (no separate grouping field to keep in sync).
   function renderMenu(dashboards, activeName) {
     var nav = document.getElementById('dashboard-menu');
     clearNode(nav);
-    dashboards.forEach(function (dashboard) {
-      var link = h('a', { href: UI_PATH_PREFIX + encodeURIComponent(dashboard.name), text: dashboard.name });
-      if (dashboard.name === activeName) link.classList.add('active');
-      nav.appendChild(link);
+
+    var defaults = dashboards.filter(function (dashboard) {
+      return dashboard.source === 'file';
     });
+    var customs = dashboards.filter(function (dashboard) {
+      return dashboard.source !== 'file';
+    });
+
+    defaults.forEach(function (dashboard) {
+      nav.appendChild(menuLink(dashboard, activeName));
+    });
+
+    if (customs.length > 0) {
+      var group = h('div', { class: 'dashboard-menu-group', id: 'dashboard-menu-custom' }, [
+        h('span', { class: 'dashboard-menu-group-label', text: 'Custom' }),
+      ]);
+      customs.forEach(function (dashboard) {
+        group.appendChild(menuLink(dashboard, activeName));
+      });
+      nav.appendChild(group);
+    }
   }
 
   function updateActiveMenuLink(activeName) {

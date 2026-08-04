@@ -1,15 +1,16 @@
-// Baseline data-less dashboard fragment (ADR-013 Phase B; converted to a fragment by ADR-027
-// Phase 1). The markup/JS below is the only content of the seed — it embeds NO financial data.
-// Every number rendered comes from a same-origin fetch('/api/...') issued by the browser after the
-// fragment loads, against the routes documented at GET /api/openapi.json
-// (src/diplomat/http/routes.ts). This is a *fragment* — sections + a <script> that runs its own
-// init immediately once injected — not a full HTML page: shared chrome (shell, menu, CSS,
-// Chart.js) now lives in ui/shell.html/ui/app.css/ui/app.js, served at GET /ui. Overriding this
-// default is a normal save_dashboard upsert (see diplomat/db/bootstrap.ts) — this seed only
-// guarantees GET /api/dashboards/overview resolves on a fresh install.
-export const DEFAULT_DASHBOARD_NAME = 'overview';
-
-export const DEFAULT_DASHBOARD_HTML = `<section class="dashboard-toolbar" aria-label="Period">
+<!--
+  Default "overview" dashboard (ADR-013 Phase A/B; converted to a fragment by ADR-027 Phase 1;
+  moved to this file and registered as a source: 'file' row by ADR-027 Phase 2). The markup/JS
+  below is the only content of this file — it embeds NO financial data. Every number rendered
+  comes from a same-origin fetch('/api/...') issued by the browser after the fragment loads,
+  against the routes documented at GET /api/openapi.json (src/diplomat/http/routes.ts). This is a
+  *fragment* — sections + a <script> that runs its own init immediately once injected — not a
+  full HTML page: shared chrome (shell, menu, CSS, Chart.js) lives in
+  ui/shell.html/ui/app.css/ui/app.js, served at GET /ui. This file is read-only at the install
+  location — fork/contribute to change it; save_dashboard always creates a separate, inline
+  custom dashboard instead (ADR-027 Phase 2).
+-->
+<section class="dashboard-toolbar" aria-label="Period">
   <p class="subtitle" id="last-updated">Not loaded yet</p>
   <form class="controls" id="period-form">
     <div class="field">
@@ -524,4 +525,3 @@ export const DEFAULT_DASHBOARD_HTML = `<section class="dashboard-toolbar" aria-l
     loadAll();
   })();
 </script>
-`;

@@ -12,6 +12,7 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { BudgetPeriod } from '../../models/budget.js';
+import { DashboardSource } from '../../models/dashboard.js';
 import { Locale, LocaleSource } from '../../models/locale.js';
 import { RecurringPeriod } from '../../models/recurring.js';
 import { ClassificationMethod, TransactionStatus } from '../../models/transaction.js';
@@ -175,13 +176,26 @@ export const recurringRules = sqliteTable('recurring_rules', {
   version: integer('version').notNull().default(0),
 });
 
-export const dashboards = sqliteTable('dashboards', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  html: text('html').notNull(),
-  updatedAt: text('updated_at').notNull(),
-  version: integer('version').notNull().default(0),
-});
+export const dashboards = sqliteTable(
+  'dashboards',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull().unique(),
+    // Nullable — a source: 'file' row resolves content from `path` at read time instead
+    // (ADR-027 Phase 2); exactly one of html/path is non-null per source, enforced below.
+    html: text('html'),
+    source: text('source', { enum: DashboardSource.options }).notNull().default(DashboardSource.enum.inline),
+    path: text('path'),
+    updatedAt: text('updated_at').notNull(),
+    version: integer('version').notNull().default(0),
+  },
+  (t) => [
+    check(
+      'dashboard_source_content',
+      sql`(${t.source} = 'inline' AND ${t.html} IS NOT NULL AND ${t.path} IS NULL) OR (${t.source} = 'file' AND ${t.html} IS NULL AND ${t.path} IS NOT NULL)`,
+    ),
+  ],
+);
 
 export const budgets = sqliteTable(
   'budgets',

@@ -7,7 +7,7 @@ import {
   saveDashboard,
 } from '../../../src/controllers/dashboards.js';
 import type { Deps } from '../../../src/controllers/deps.js';
-import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
+import { DASHBOARD_ENTITY_TAG, DashboardSource } from '../../../src/models/dashboard.js';
 import type { Dashboard, DashboardEntity, DashboardListItem } from '../../../src/models/dashboard.js';
 import { PersistOp } from '../../../src/models/persistable.js';
 
@@ -48,10 +48,11 @@ describe('saveDashboard', () => {
       name: 'overview',
       html: '<section></section>',
       updatedAt: FIXED_CLOCK.toISOString(),
+      source: DashboardSource.enum.inline,
     };
     expect(outcome.response).toEqual(dashboard);
     expect(outcome.persist).toEqual([
-      { op: PersistOp.enum.insert, entity: DASHBOARD_ENTITY_TAG, model: { ...dashboard, id: 'test-id' } },
+      { op: PersistOp.enum.insert, entity: DASHBOARD_ENTITY_TAG, model: { ...dashboard, id: 'test-id', path: null } },
     ]);
   });
 
@@ -63,13 +64,38 @@ describe('saveDashboard', () => {
       name: 'overview',
       html: '<section>new</section>',
       updatedAt: FIXED_CLOCK.toISOString(),
+      source: DashboardSource.enum.inline,
     };
     expect(outcome.response).toEqual(dashboard);
     expect(outcome.persist).toEqual([
       {
         op: PersistOp.enum.update,
         entity: DASHBOARD_ENTITY_TAG,
-        model: { ...dashboard, id: 'existing-id', version: 4 },
+        model: { ...dashboard, id: 'existing-id', version: 4, path: null },
+      },
+    ]);
+  });
+
+  it('always stores source: inline, path: null — even overwriting an existing file-backed default', async () => {
+    // saveDashboard never reads the existing row's source (only id/version via findRefByName), so
+    // this is really asserting it never even has a chance to preserve source: file — the
+    // ADR-027 Phase 2 non-negotiable that a custom dashboard can never be file-backed.
+    const deps = makeDeps({ findRefByName: vi.fn(async () => ({ id: 'overview-id', version: 0 })) });
+    const result = await saveDashboard(deps, 'overview', '<section>detached from the file now</section>');
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.persist).toEqual([
+      {
+        op: PersistOp.enum.update,
+        entity: DASHBOARD_ENTITY_TAG,
+        model: {
+          name: 'overview',
+          html: '<section>detached from the file now</section>',
+          updatedAt: FIXED_CLOCK.toISOString(),
+          source: DashboardSource.enum.inline,
+          id: 'overview-id',
+          version: 0,
+          path: null,
+        },
       },
     ]);
   });
@@ -132,6 +158,8 @@ describe('renameDashboard', () => {
     html: '<html>mine</html>',
     updatedAt: '2026-01-01T00:00:00.000Z',
     version: 3,
+    source: DashboardSource.enum.inline,
+    path: null,
     ...overrides,
   });
 
@@ -142,13 +170,49 @@ describe('renameDashboard', () => {
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
-    const dashboard: Dashboard = { name: 'renamed', html: '<html>mine</html>', updatedAt: FIXED_CLOCK.toISOString() };
+    const dashboard: Dashboard = {
+      name: 'renamed',
+      html: '<html>mine</html>',
+      updatedAt: FIXED_CLOCK.toISOString(),
+      source: DashboardSource.enum.inline,
+    };
     expect(outcome.response).toEqual(dashboard);
     expect(outcome.persist).toEqual([
       {
         op: PersistOp.enum.update,
         entity: DASHBOARD_ENTITY_TAG,
-        model: { ...dashboard, id: 'dash-existing', version: 3 },
+        model: { ...dashboard, id: 'dash-existing', version: 3, path: null },
+      },
+    ]);
+  });
+
+  it('preserves source: file and path across a rename — a default stays file-backed under its new name', async () => {
+    const fileEntity = existingEntity({ source: DashboardSource.enum.file, path: 'overview.html' });
+    const deps = makeDeps({ findByName: vi.fn(async () => fileEntity) });
+
+    const result = await renameDashboard(deps, 'overview', 'overview2');
+
+    expect(result.isOk()).toBe(true);
+    const outcome = result._unsafeUnwrap();
+    expect(outcome.response).toEqual({
+      name: 'overview2',
+      html: '<html>mine</html>',
+      updatedAt: FIXED_CLOCK.toISOString(),
+      source: DashboardSource.enum.file,
+    });
+    expect(outcome.persist).toEqual([
+      {
+        op: PersistOp.enum.update,
+        entity: DASHBOARD_ENTITY_TAG,
+        model: {
+          name: 'overview2',
+          html: '<html>mine</html>',
+          updatedAt: FIXED_CLOCK.toISOString(),
+          source: DashboardSource.enum.file,
+          id: 'dash-existing',
+          version: 3,
+          path: 'overview.html',
+        },
       },
     ]);
   });
@@ -187,6 +251,7 @@ describe('renameDashboard', () => {
       name: 'overview',
       html: '<html>mine</html>',
       updatedAt: '2026-01-01T00:00:00.000Z',
+      source: DashboardSource.enum.inline,
     });
     expect(deps.dashboards.findRefByName).not.toHaveBeenCalled();
   });
@@ -194,7 +259,9 @@ describe('renameDashboard', () => {
 
 describe('listDashboards', () => {
   it('delegates to the repo', async () => {
-    const items: DashboardListItem[] = [{ name: 'overview', updatedAt: FIXED_CLOCK.toISOString() }];
+    const items: DashboardListItem[] = [
+      { name: 'overview', updatedAt: FIXED_CLOCK.toISOString(), source: DashboardSource.enum.file },
+    ];
     const deps = makeDeps({ list: vi.fn(async () => items) });
     expect(await listDashboards(deps)).toEqual(items);
   });
@@ -202,7 +269,12 @@ describe('listDashboards', () => {
 
 describe('getDashboard', () => {
   it('returns the dashboard when found', async () => {
-    const dashboard: Dashboard = { name: 'overview', html: '<html></html>', updatedAt: FIXED_CLOCK.toISOString() };
+    const dashboard: Dashboard = {
+      name: 'overview',
+      html: '<html></html>',
+      updatedAt: FIXED_CLOCK.toISOString(),
+      source: DashboardSource.enum.inline,
+    };
     const deps = makeDeps({ get: vi.fn(async () => dashboard) });
     const result = await getDashboard(deps, 'overview');
     expect(result._unsafeUnwrap()).toEqual(dashboard);

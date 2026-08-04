@@ -1674,7 +1674,15 @@ describe('dashboardsRepo.findByName — full-row read for rename (Feature Design
 
     const entity = await dashboardsRepo(db).findByName(name);
 
-    expect(entity).toEqual({ id, name, html: '<html>full</html>', updatedAt: '2026-01-01', version: 2 });
+    expect(entity).toEqual({
+      id,
+      name,
+      html: '<html>full</html>',
+      updatedAt: '2026-01-01',
+      version: 2,
+      source: 'inline',
+      path: null,
+    });
   });
 
   it('returns null for an unknown name', async () => {
@@ -1779,6 +1787,7 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
       name,
       html: '<section>mine</section>',
       updatedAt: '2026-06-01T00:00:00.000Z',
+      source: 'inline',
     });
     const rows = await db.all<{ html: string; version: number }>(
       sql`SELECT html, version FROM dashboards WHERE name = ${name}`,

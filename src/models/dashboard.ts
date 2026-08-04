@@ -8,17 +8,28 @@ import { validation, type DuplicateName, type NotFound, type ValidationError } f
 // against an oversized save, without constraining realistic dashboard sizes.
 export const DASHBOARD_HTML_MAX_LENGTH = 500_000;
 
+// ADR-027 Phase 2: `source` is the sole default/custom discriminator (no separate `kind` column).
+// `file` — content resolved from a repo-relative .html file under ui/dashboards/ at read time;
+// only bootstrap ever registers one (never save_dashboard — see dashboardErrors/saveDashboard).
+// `inline` — content stored in the `dashboards.html` column, as before Phase 2.
+export const DashboardSource = z.enum(['inline', 'file']);
+export type DashboardSourceType = z.infer<typeof DashboardSource>;
+
 export const DashboardSchema = z.object({
   name: z.string().min(1).describe('Dashboard identifier, used as the /ui/:name path segment (e.g. "overview")'),
   html: z
     .string()
     .max(DASHBOARD_HTML_MAX_LENGTH)
     .describe(
-      'Content fragment (sections + script) rendered into the app shell\'s #content (GET /ui) — not a full ' +
+      "Content fragment (sections + script) rendered into the app shell's #content (GET /ui) — not a full " +
         'HTML page: no <!doctype>/<html>/<head>/<style> root, the shell already provides those. Must fetch ' +
         'data from /api on load — never embeds financial data',
     ),
   updatedAt: z.string().describe('ISO 8601 timestamp of the last save'),
+  source: DashboardSource.describe(
+    'inline: DB-stored, editable via save_dashboard. file: a bundled default read from ui/dashboards/, ' +
+      'read-only at the install location (ADR-027 Phase 2)',
+  ),
 });
 export type Dashboard = z.infer<typeof DashboardSchema>;
 
@@ -39,6 +50,13 @@ export const DASHBOARD_ENTITY_TAG = 'dashboard';
 export const DashboardEntitySchema = DashboardSchema.extend({
   id: Id.describe('internal; never on wire/out'),
   version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
+  path: z
+    .string()
+    .nullable()
+    .describe(
+      'internal; never on wire/out. Repo-relative filename under ui/dashboards/ for source: file rows, ' +
+        'always null for source: inline (ADR-027 Phase 2)',
+    ),
 });
 export type DashboardEntity = z.infer<typeof DashboardEntitySchema>;
 

@@ -4,6 +4,7 @@ import {
   dashboardErrors,
   DashboardListItemSchema,
   DashboardSchema,
+  DashboardSource,
   SaveDashboardSchema,
 } from '../../../src/models/dashboard.js';
 
@@ -13,13 +14,30 @@ describe('DashboardSchema', () => {
       name: 'overview',
       html: '<html></html>',
       updatedAt: '2026-01-01T00:00:00.000Z',
+      source: DashboardSource.enum.inline,
     });
     expect(result.success).toBe(true);
   });
 
   it('rejects empty name', () => {
     expect(
-      DashboardSchema.safeParse({ name: '', html: '<html></html>', updatedAt: '2026-01-01T00:00:00.000Z' }).success,
+      DashboardSchema.safeParse({
+        name: '',
+        html: '<html></html>',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        source: DashboardSource.enum.inline,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a source outside inline|file', () => {
+    expect(
+      DashboardSchema.safeParse({
+        name: 'overview',
+        html: '<html></html>',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        source: 'not-a-real-source',
+      }).success,
     ).toBe(false);
   });
 
@@ -28,6 +46,7 @@ describe('DashboardSchema', () => {
       name: 'overview',
       html: 'x'.repeat(DASHBOARD_HTML_MAX_LENGTH),
       updatedAt: '2026-01-01T00:00:00.000Z',
+      source: DashboardSource.enum.inline,
     });
     expect(result.success).toBe(true);
   });
@@ -37,15 +56,20 @@ describe('DashboardSchema', () => {
       name: 'overview',
       html: 'x'.repeat(DASHBOARD_HTML_MAX_LENGTH + 1),
       updatedAt: '2026-01-01T00:00:00.000Z',
+      source: DashboardSource.enum.inline,
     });
     expect(result.success).toBe(false);
   });
 });
 
 describe('DashboardListItemSchema', () => {
-  it('omits html', () => {
-    const parsed = DashboardListItemSchema.parse({ name: 'overview', updatedAt: '2026-01-01T00:00:00.000Z' });
-    expect(parsed).toEqual({ name: 'overview', updatedAt: '2026-01-01T00:00:00.000Z' });
+  it('omits html, keeping source', () => {
+    const parsed = DashboardListItemSchema.parse({
+      name: 'overview',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      source: DashboardSource.enum.file,
+    });
+    expect(parsed).toEqual({ name: 'overview', updatedAt: '2026-01-01T00:00:00.000Z', source: 'file' });
     expect('html' in parsed).toBe(false);
   });
 });

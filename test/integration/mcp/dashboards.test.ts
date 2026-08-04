@@ -26,15 +26,19 @@ describe('MCP integration > dashboards', () => {
       const saved = (await callTool(client, {
         name: 'save_dashboard',
         args: { name, html: '<section>v1</section>' },
-      })) as { name?: string; html?: string; updatedAt?: string };
+      })) as { name?: string; html?: string; updatedAt?: string; source?: string };
       expect(saved.name).toBe(name);
       expect(saved.html).toBe('<section>v1</section>');
       expect(saved.updatedAt).toBeTruthy();
+      expect(saved.source).toBe('inline');
 
       const list = (await callTool(client, { name: 'list_dashboards', args: {} })) as Array<Record<string, unknown>>;
       const entry = list.find((d) => d.name === name);
       expect(entry).toBeDefined();
       expect(entry).not.toHaveProperty('html');
+      // list_dashboards must carry source — the shell (ui/app.js) groups the menu into
+      // file-backed defaults vs custom (inline) dashboards straight off this field (ADR-027 Phase 2).
+      expect(entry).toMatchObject({ source: 'inline' });
 
       const resaved = (await callTool(client, {
         name: 'save_dashboard',

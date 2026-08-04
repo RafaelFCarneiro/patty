@@ -3,25 +3,40 @@ import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
 import { findHtmlValidationIssues } from '../logic/dashboard.js';
 import * as persistence from '../logic/persistence.js';
-import { DASHBOARD_ENTITY_TAG, dashboardErrors, type Dashboard, type DashboardListItem } from '../models/dashboard.js';
+import {
+  DASHBOARD_ENTITY_TAG,
+  DashboardSource,
+  dashboardErrors,
+  type Dashboard,
+  type DashboardListItem,
+} from '../models/dashboard.js';
 import type { FlowOutcome, Persistable } from '../models/persistable.js';
 import type { Deps } from './deps.js';
 
+/** ADR-027 Phase 2 non-negotiable: `save_dashboard` always stores `source: inline`, `path: null` —
+ *  a custom dashboard can never be file-backed, which closes the path-traversal surface entirely
+ *  (only bootstrap's own directory scan ever sets `path`, never a caller-supplied value). Saving to
+ *  an existing default's name detaches it from its file and converts it to a custom, inline row. */
 export const saveDashboard = (deps: Deps, name: string, html: string): ResultAsync<FlowOutcome<Dashboard>, AppError> =>
   safeTry(async function* () {
     const issues = findHtmlValidationIssues(html);
     yield* guard(issues.length === 0, dashboardErrors.invalidHtml(issues));
 
     const ref = await deps.dashboards.findRefByName(name);
-    const dashboard: Dashboard = { name, html, updatedAt: deps.clock().toISOString() };
+    const dashboard: Dashboard = {
+      name,
+      html,
+      updatedAt: deps.clock().toISOString(),
+      source: DashboardSource.enum.inline,
+    };
 
     const persist: Persistable[] =
       ref === null
-        ? [persistence.insert({ entity: DASHBOARD_ENTITY_TAG, model: { ...dashboard, id: deps.newId() } })]
+        ? [persistence.insert({ entity: DASHBOARD_ENTITY_TAG, model: { ...dashboard, id: deps.newId(), path: null } })]
         : [
             persistence.update({
               entity: DASHBOARD_ENTITY_TAG,
-              model: { ...dashboard, id: ref.id, version: ref.version },
+              model: { ...dashboard, id: ref.id, version: ref.version, path: null },
             }),
           ];
 
@@ -51,15 +66,25 @@ export const renameDashboard = (
 
     // Must precede the guard below — it would otherwise see this row's own name and reject it.
     if (newName === entity.name) {
-      return ok({ persist: [], response: { name: entity.name, html: entity.html, updatedAt: entity.updatedAt } });
+      return ok({
+        persist: [],
+        response: { name: entity.name, html: entity.html, updatedAt: entity.updatedAt, source: entity.source },
+      });
     }
     yield* guard(!(await deps.dashboards.findRefByName(newName)), dashboardErrors.duplicateName(newName));
 
-    const dashboard: Dashboard = { name: newName, html: entity.html, updatedAt: deps.clock().toISOString() };
+    // A rename is a pure identity change — it never touches content or the source/path
+    // discriminator, so a file-backed default stays file-backed under its new name.
+    const dashboard: Dashboard = {
+      name: newName,
+      html: entity.html,
+      updatedAt: deps.clock().toISOString(),
+      source: entity.source,
+    };
     const persist = [
       persistence.update({
         entity: DASHBOARD_ENTITY_TAG,
-        model: { ...dashboard, id: entity.id, version: entity.version },
+        model: { ...dashboard, id: entity.id, version: entity.version, path: entity.path },
       }),
     ];
     return ok({ persist, response: dashboard });

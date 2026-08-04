@@ -3,9 +3,9 @@ import { setupHttpTest } from './setup.js';
 
 const { inject } = setupHttpTest();
 
-// The endpoints the baseline template's fragment (src/diplomat/db/seed/dashboards.ts) fetches on
-// load. Kept in sync manually with that file's `Api` object — this test's job is to catch drift
-// against the *live* OpenAPI contract, not to duplicate the template's own source of truth.
+// The endpoints the baseline template's fragment (ui/dashboards/overview.html) fetches on load.
+// Kept in sync manually with that file's `Api` object — this test's job is to catch drift against
+// the *live* OpenAPI contract, not to duplicate the template's own source of truth.
 const FETCHED_API_PATHS = [
   '/api/summary',
   '/api/aggregate',
