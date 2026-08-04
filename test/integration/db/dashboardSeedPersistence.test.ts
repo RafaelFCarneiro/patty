@@ -39,7 +39,7 @@ describe('dashboard seed persistence across restart (ADR-008 onConflictDoNothing
     const firstDb = await openDatabase(openOpts());
     await bootstrap(firstDb);
 
-    const overriddenHtml = '<html><body>my custom dashboard</body></html>';
+    const overriddenHtml = '<section>my custom dashboard</section>';
     const deps = {
       dashboards: dashboardsRepo(firstDb),
       clock: () => new Date(),

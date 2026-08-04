@@ -1,18 +1,23 @@
 ---
 name: dashboard-building
-description: Use when the user asks to build, change, extend, or "show me" a dashboard/UI for their FinTrack finances. Guides generating a data-less HTML shell that fetches live data from the FinTrack API and saving it with save_dashboard.
+description: Use when the user asks to build, change, extend, or "show me" a dashboard/UI for their FinTrack finances. Guides generating a data-less HTML fragment that fetches live data from the FinTrack API and saving it with save_dashboard.
 ---
 
 # Building a FinTrack dashboard
 
-FinTrack dashboards are self-contained HTML pages stored server-side and served live at `GET /ui/:name`
-(ADR-013). The non-negotiable rule behind everything below: **a dashboard never contains data — it fetches
-it.** The page you write is layout, styling, and `fetch()` calls; every number, name, or row the user sees
-comes from a same-origin `/api` response read after the page loads, every time it loads.
+FinTrack dashboards are data-less content **fragments** stored server-side and rendered live inside a shared
+app shell at `GET /ui/:name` (ADR-013, fragment model ADR-027). A fragment is `<section>`s + one inline
+`<script>` — no `<!doctype>`, `<html>`, `<head>`, or `<style>` root: the shell (`ui/shell.html` +
+`ui/app.css` + `ui/app.js`, served by the same FinTrack HTTP server) already provides the document, shared
+styling, the menu, and Chart.js. The non-negotiable rule behind everything below: **a dashboard never
+contains data — it fetches it.** The fragment you write is layout, styling, and `fetch()` calls; every
+number, name, or row the user sees comes from a same-origin `/api` response read after the fragment loads,
+every time it loads.
 
-`save_dashboard` only rejects HTML that can't render at all (no `<html>` root, or a `<script>` syntax error)
-— it does **not** check for embedded data. Following this checklist is what keeps the dashboard data-less;
-the save endpoint won't catch a violation for you.
+`save_dashboard` only rejects content that can't render as a fragment at all (empty content, a full
+`<!doctype>`/`<html>` document root still present, an external `<script src>` reference, or a `<script>`
+syntax error) — it does **not** check for embedded data. Following this checklist is what keeps the
+dashboard data-less; the save endpoint won't catch a violation for you.
 
 ## Process
 
@@ -64,15 +69,18 @@ the save endpoint won't catch a violation for you.
    (see the baseline template's Installment projections section). Never invent an endpoint or fabricate a
    number to fill a gap.
 3. **Decide the save target.** `save_dashboard(name, html)` is an upsert — reusing an existing name replaces
-   it immediately, with no version history to recover the previous HTML. Ask before overwriting a dashboard
-   the user may still want, or default to a new name.
-4. **Start from the baseline template as the structural pattern**, not necessarily its content: the seeded
-   `overview` dashboard, viewable at `GET /ui/overview` when the HTTP sidecar is running, is a single
-   self-contained HTML file with inline `<style>` + inline `<script>`, one `Api` object mapping section →
-   endpoint, a per-section loading/empty/error state machine, and per-currency grouping. Reuse that shape;
-   change the sections/layout/endpoints to match what the user actually asked for. If you can't view it
+   it immediately, with no version history to recover the previous content. Ask before overwriting a
+   dashboard the user may still want, or default to a new name.
+4. **Start from the baseline fragment as the structural pattern**, not necessarily its content: the seeded
+   `overview` dashboard, viewable at `GET /ui/overview` when the HTTP sidecar is running, is `<section>`s +
+   one inline `<script>` (no page chrome of its own — the shell provides that), with one `Api` object mapping
+   section → endpoint, a per-section loading/empty/error state machine, and per-currency grouping. Reuse that
+   shape; change the sections/layout/endpoints to match what the user actually asked for. The fragment's
+   script runs its init immediately at the end of the file (it does **not** wait for `DOMContentLoaded` —
+   that only fires once for the shell page itself, never per dashboard navigation) since the shell only
+   re-executes it after the fragment's markup is already in the page. If you can't view the seeded fragment
    (sidecar not running, or you're running from the published package with no local source to read), that's
-   fine — the hard rules and self-check below fully specify a compliant shell without it.
+   fine — the hard rules and self-check below fully specify a compliant fragment without it.
 5. **Record the user's preferences in the dashboard itself** so the next change doesn't re-interrogate them:
    put a design-manifest comment at the top of the HTML. The manifest is **closed-shape only — no freeform
    text fields**, so it structurally cannot carry financial data:
@@ -91,8 +99,9 @@ the save endpoint won't catch a violation for you.
    (`get_preferences` returns only `{ locale, localeSource }` today, no dashboard-view state; the manifest
    is where per-dashboard view choices live.)
 6. **Save it**: call `save_dashboard(name, html)`. If it's rejected (`validation`, 422), the message names
-   the render-ability problem (missing `<html>` root, or a script syntax error) — fix it and resave; the
-   previously stored dashboard is untouched by a rejected save.
+   the render-ability problem (empty content, a full `<!doctype>`/`<html>` root still present, an external
+   `<script src>` reference, or a script syntax error) — fix it and resave; the previously stored dashboard
+   is untouched by a rejected save.
 7. **Hand back the URL**: `/ui/<name>` on whatever host/port the user's FinTrack HTTP sidecar is running on
    (see the "Manual config and HTTP mode" section of the project's `README.md` — shipped with this package
    — if unsure which). Tell them to open it in a browser.
@@ -106,11 +115,10 @@ the save endpoint won't catch a violation for you.
 2. **No secrets or tokens** of any kind in the file.
 3. **Same-origin `/api` only, for data.** Every data fetch path is relative (`/api/...`) — never an
    absolute host — because the dashboard is served from the same FinTrack HTTP server it reads from.
-4. **The only external reference allowed at all is a pinned chart library from a CDN**, matching the
-   baseline template's `<script src="https://cdn.jsdelivr.net/npm/chart.js@<version>/..." integrity="..."
-   crossorigin="anonymous">` — a pinned version with an SRI hash, loading code and nothing else. Do not add
-   any other external host (fonts, icons, analytics, other CDNs) and do not use an external reference for
-   data.
+4. **No external references of your own at all.** The shell already loads a pinned Chart.js from a CDN once
+   (`ui/shell.html`) — a fragment just uses the global `Chart` it provides; do not add your own
+   `<script src="...chart.js...">` or any other external host (fonts, icons, analytics, other CDNs). A
+   fragment's only "outside" references are same-origin `/api` data fetches.
 5. **Never mix currencies in one figure.** Group and render per currency exactly as the `/api`
    summary/aggregate responses already do (a `currencies` array); never sum or display BRL and USD
    together.
@@ -118,25 +126,28 @@ the save endpoint won't catch a violation for you.
    `accountName`, …) instead of hardcoding English vocabulary or deriving labels from raw enum values.
 7. **Every fetch-driven section has its own loading, empty, and error state.** A slow or failing endpoint
    degrades that one section — it never blanks or crashes the whole page. Use `aria-live` regions for
-   dynamic containers and `role="alert"` on error messages, as the baseline template does.
-8. **Real-time, not cached.** `GET /ui/:name` is already served with no-cache headers; freshness comes from
-   the page fetching on every load. Never inline a "data as of <time>" snapshot as if it were live — the
+   dynamic containers and `role="alert"` on error messages, as the baseline fragment does.
+8. **Real-time, not cached.** The fragment is re-fetched (no-cache) every time the shell loads it; freshness
+   comes from fetching on every load. Never inline a "data as of <time>" snapshot as if it were live — the
    only "as of" text allowed is a client-side "last updated" label set from `new Date()` at fetch time.
 9. **Accessible and responsive.** Label form controls, use semantic headings/landmarks, and keep the layout
-   usable on narrow viewports (see the baseline template's `@media` breakpoint).
-10. **Self-contained single file.** No separate `.js`/`.css` files — inline `<style>` and `<script>` in the
-    one HTML string, matching how `save_dashboard`/`GET /ui/:name` store and serve a single string.
+   usable on narrow viewports (see the baseline fragment's `.dashboard-toolbar`/`.cards-grid` classes and
+   `ui/app.css`'s `@media` breakpoint).
+10. **A fragment, not a full page.** No `<!doctype>`, `<html>`, `<head>`, `<body>`, or `<style>` — just the
+    `<section>`s and one inline `<script>`, the same shape `save_dashboard` stores and the shell injects into
+    `#content`. Shared styling lives in `ui/app.css`; reuse its existing classes (`card`, `cards-grid`,
+    `table-wrap`, `data-table`, `state`, `state-error`, `placeholder-card`, …) instead of inventing new ones.
 
 ## Overriding an existing dashboard
 
 `save_dashboard` is a name-keyed upsert with no rebuild step and no version history: regenerate the full
-HTML (steps 1–5) and call `save_dashboard` again with the same `name` to replace it. Once that save
-succeeds, the previous HTML is gone — if the user is changing a dashboard they might still want, offer to
+fragment (steps 1–5) and call `save_dashboard` again with the same `name` to replace it. Once that save
+succeeds, the previous content is gone — if the user is changing a dashboard they might still want, offer to
 save under a new name instead of overwriting.
 
 **Before regenerating, fetch the current dashboard (`GET /api/dashboards/:name`) and read its
 `fintrack:dashboard-manifest` comment**: preserve the recorded perspectives/range/currency choices unless
-the user is explicitly changing them, and carry the (updated) manifest into the new HTML. A request like
+the user is explicitly changing them, and carry the (updated) manifest into the new fragment. A request like
 "add a projections panel" changes one section — it should not silently lose the perspectives the user
 already chose.
 
@@ -152,11 +163,11 @@ so nothing gets silently dropped. This fallback works regardless of how FinTrack
 
 If you happen to be working from the FinTrack source repository itself (not the published package — you
 have a local `src/` to read) *and* the name is `overview` with no evidence it's been customized since the
-seed, you may additionally treat `src/diplomat/db/seed/dashboards.ts`'s `DEFAULT_DASHBOARD_HTML` as a
-verified stand-in for "the original" instead of asking: diff your new HTML against that source before
-saving, and confirm the diff is purely additive (existing sections untouched, only the requested change
-applied) — don't just assert it. Treat this as an optional shortcut available only in that specific
-environment, not the general-purpose fallback.
+seed, you may additionally treat `src/diplomat/db/seed/dashboards.ts`'s `DEFAULT_DASHBOARD_HTML` (the
+fragment content, despite the name) as a verified stand-in for "the original" instead of asking: diff your
+new fragment against that source before saving, and confirm the diff is purely additive (existing sections
+untouched, only the requested change applied) — don't just assert it. Treat this as an optional shortcut
+available only in that specific environment, not the general-purpose fallback.
 
 ## Self-check before calling save_dashboard
 
@@ -164,12 +175,12 @@ environment, not the general-purpose fallback.
       source.
 - [ ] No `const|let|var <name> = [...]`/`{...}` holding what looks like real spending, transaction,
       balance, or account data.
-- [ ] Every data fetch path starts with `/api/` (relative, same-origin); the only other external reference
-      is the one approved chart-library `<script src>`.
+- [ ] Every data fetch path starts with `/api/` (relative, same-origin); no other external reference at all
+      (no own chart-library `<script src>` — the shell already loads one).
 - [ ] Every currency-bearing section groups/loops by `currency` — nothing sums two currencies together.
 - [ ] Every section has a loading, empty, and error branch.
-- [ ] The file starts with `<!doctype html>` or has an `<html>` root, and every inline `<script>` is
-      syntactically valid.
+- [ ] The content is non-empty, does **NOT** start with `<!doctype html>` or have an `<html>` root (the shell
+      owns that), and every inline `<script>` is syntactically valid.
 - [ ] The `fintrack:dashboard-manifest` comment is present, reflects the user's chosen perspectives, and
       contains ONLY the closed-shape keys (`perspectives` tokens, `range` token or from/to dates,
       `currencies` ISO codes) — no freeform text, no extra keys.

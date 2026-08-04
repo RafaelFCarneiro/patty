@@ -11,6 +11,7 @@
   "files": [
     "dist",
     "drizzle",
+    "ui",
     "skills",
     "!skills/**/evals",
     "README.md",

@@ -13,8 +13,8 @@ const fetchStoredHtml = async (name: string): Promise<string> => {
   return body.html;
 };
 
-const fetchUiStatus = async (name: string): Promise<number> =>
-  (await fetch(new URL(`/ui/${name}`, new URL(mcpUrl).origin))).status;
+const fetchStoredDashboardStatus = async (name: string): Promise<number> =>
+  (await fetch(new URL(`/api/dashboards/${name}`, new URL(mcpUrl).origin))).status;
 
 describe('MCP integration > dashboards', () => {
   it('save_dashboard upserts and list_dashboards includes it without the html blob', async () => {
@@ -25,10 +25,10 @@ describe('MCP integration > dashboards', () => {
       await client.connect(transport);
       const saved = (await callTool(client, {
         name: 'save_dashboard',
-        args: { name, html: '<html><body>v1</body></html>' },
+        args: { name, html: '<section>v1</section>' },
       })) as { name?: string; html?: string; updatedAt?: string };
       expect(saved.name).toBe(name);
-      expect(saved.html).toBe('<html><body>v1</body></html>');
+      expect(saved.html).toBe('<section>v1</section>');
       expect(saved.updatedAt).toBeTruthy();
 
       const list = (await callTool(client, { name: 'list_dashboards', args: {} })) as Array<Record<string, unknown>>;
@@ -38,18 +38,18 @@ describe('MCP integration > dashboards', () => {
 
       const resaved = (await callTool(client, {
         name: 'save_dashboard',
-        args: { name, html: '<html><body>v2</body></html>' },
+        args: { name, html: '<section>v2</section>' },
       })) as { html?: string };
-      expect(resaved.html).toBe('<html><body>v2</body></html>');
+      expect(resaved.html).toBe('<section>v2</section>');
     } finally {
       await transport.close();
     }
   });
 
-  it('save_dashboard rejects html with no <html> root and leaves the prior save in place', async () => {
+  it('save_dashboard rejects html carrying a full document root and leaves the prior save in place', async () => {
     const stamp = Date.now();
     const name = `mcp-dash-invalid-${stamp}`;
-    const goodHtml = '<html><body>good</body></html>';
+    const goodHtml = '<section>good</section>';
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
@@ -57,7 +57,7 @@ describe('MCP integration > dashboards', () => {
 
       const { error } = (await callToolError(client, {
         name: 'save_dashboard',
-        args: { name, html: 'not html at all' },
+        args: { name, html: '<!doctype html><html><body>bad</body></html>' },
       })) as ValidationErrorPayload;
       expect(error.code).toBe('validation');
 
@@ -69,13 +69,31 @@ describe('MCP integration > dashboards', () => {
     }
   });
 
+  it('save_dashboard rejects an external <script src> reference', async () => {
+    const stamp = Date.now();
+    const name = `mcp-dash-external-script-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const html = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>';
+      const { error } = (await callToolError(client, {
+        name: 'save_dashboard',
+        args: { name, html },
+      })) as ValidationErrorPayload;
+      expect(error.code).toBe('validation');
+      expect(error.issues.some((issue) => issue.includes('no external <script src>'))).toBe(true);
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('save_dashboard rejects html with a broken inline <script>', async () => {
     const stamp = Date.now();
     const name = `mcp-dash-broken-script-${stamp}`;
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      const html = '<!doctype html><html><body><script>function( { broken</script></body></html>';
+      const html = '<section><script>function( { broken</script></section>';
       const { error } = (await callToolError(client, {
         name: 'save_dashboard',
         args: { name, html },
@@ -93,7 +111,7 @@ describe('MCP integration > dashboards', () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      await callTool(client, { name: 'save_dashboard', args: { name, html: '<html></html>' } });
+      await callTool(client, { name: 'save_dashboard', args: { name, html: '<section></section>' } });
 
       const result = (await callTool(client, { name: 'delete_dashboard', args: { name } })) as { deleted?: boolean };
       expect(result.deleted).toBe(true);
@@ -120,24 +138,24 @@ describe('MCP integration > dashboards', () => {
     }
   });
 
-  it('rename_dashboard preserves content, serves /ui/:newName, and 404s /ui/:name', async () => {
+  it('rename_dashboard preserves content: GET /api/dashboards/:newName serves it, :name 404s', async () => {
     const stamp = Date.now();
     const name = `mcp-dash-rename-${stamp}`;
     const newName = `mcp-dash-renamed-${stamp}`;
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      await callTool(client, { name: 'save_dashboard', args: { name, html: '<html><body>keep me</body></html>' } });
+      await callTool(client, { name: 'save_dashboard', args: { name, html: '<section>keep me</section>' } });
 
       const renamed = (await callTool(client, {
         name: 'rename_dashboard',
         args: { name, newName },
       })) as { name?: string; html?: string };
       expect(renamed.name).toBe(newName);
-      expect(renamed.html).toBe('<html><body>keep me</body></html>');
+      expect(renamed.html).toBe('<section>keep me</section>');
 
-      expect(await fetchUiStatus(newName)).toBe(200);
-      expect(await fetchUiStatus(name)).toBe(404);
+      expect(await fetchStoredHtml(newName)).toBe('<section>keep me</section>');
+      expect(await fetchStoredDashboardStatus(name)).toBe(404);
     } finally {
       await transport.close();
     }
@@ -164,8 +182,8 @@ describe('MCP integration > dashboards', () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      await callTool(client, { name: 'save_dashboard', args: { name: nameA, html: '<html></html>' } });
-      await callTool(client, { name: 'save_dashboard', args: { name: nameB, html: '<html></html>' } });
+      await callTool(client, { name: 'save_dashboard', args: { name: nameA, html: '<section></section>' } });
+      await callTool(client, { name: 'save_dashboard', args: { name: nameB, html: '<section></section>' } });
 
       const { error } = (await callToolError(client, {
         name: 'rename_dashboard',
@@ -183,7 +201,7 @@ describe('MCP integration > dashboards', () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      await callTool(client, { name: 'save_dashboard', args: { name, html: '<html></html>' } });
+      await callTool(client, { name: 'save_dashboard', args: { name, html: '<section></section>' } });
 
       const result = (await callTool(client, {
         name: 'rename_dashboard',

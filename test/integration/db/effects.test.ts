@@ -1770,19 +1770,21 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
     };
     const racingDeps: Deps = { ...deps, dashboards: racingDashboards };
 
-    const result = await runEffects(db, dashboardRegistry, () => saveDashboard(racingDeps, name, '<html>mine</html>'));
+    const result = await runEffects(db, dashboardRegistry, () =>
+      saveDashboard(racingDeps, name, '<section>mine</section>'),
+    );
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({
       name,
-      html: '<html>mine</html>',
+      html: '<section>mine</section>',
       updatedAt: '2026-06-01T00:00:00.000Z',
     });
     const rows = await db.all<{ html: string; version: number }>(
       sql`SELECT html, version FROM dashboards WHERE name = ${name}`,
     );
     expect(rows).toHaveLength(1); // exactly one row — the racer's insert, then this flow's update
-    expect(rows[0]?.html).toBe('<html>mine</html>');
+    expect(rows[0]?.html).toBe('<section>mine</section>');
     expect(rows[0]?.version).toBe(1); // version 0 (racer's insert) → 1 (this flow's update)
   });
 

@@ -42,9 +42,13 @@ const makeDeps = (overrides?: Partial<Deps['dashboards']>): Deps => ({
 describe('saveDashboard', () => {
   it('emits an insert minting an id and returns the saved dashboard when absent', async () => {
     const deps = makeDeps();
-    const result = await saveDashboard(deps, 'overview', '<html></html>');
+    const result = await saveDashboard(deps, 'overview', '<section></section>');
     const outcome = result._unsafeUnwrap();
-    const dashboard: Dashboard = { name: 'overview', html: '<html></html>', updatedAt: FIXED_CLOCK.toISOString() };
+    const dashboard: Dashboard = {
+      name: 'overview',
+      html: '<section></section>',
+      updatedAt: FIXED_CLOCK.toISOString(),
+    };
     expect(outcome.response).toEqual(dashboard);
     expect(outcome.persist).toEqual([
       { op: PersistOp.enum.insert, entity: DASHBOARD_ENTITY_TAG, model: { ...dashboard, id: 'test-id' } },
@@ -53,9 +57,13 @@ describe('saveDashboard', () => {
 
   it('emits a version-guarded update carrying the existing id and overwrites by name when present', async () => {
     const deps = makeDeps({ findRefByName: vi.fn(async () => ({ id: 'existing-id', version: 4 })) });
-    const result = await saveDashboard(deps, 'overview', '<html>new</html>');
+    const result = await saveDashboard(deps, 'overview', '<section>new</section>');
     const outcome = result._unsafeUnwrap();
-    const dashboard: Dashboard = { name: 'overview', html: '<html>new</html>', updatedAt: FIXED_CLOCK.toISOString() };
+    const dashboard: Dashboard = {
+      name: 'overview',
+      html: '<section>new</section>',
+      updatedAt: FIXED_CLOCK.toISOString(),
+    };
     expect(outcome.response).toEqual(dashboard);
     expect(outcome.persist).toEqual([
       {
@@ -66,22 +74,22 @@ describe('saveDashboard', () => {
     ]);
   });
 
-  it('rejects html with no <html> root without reading the repo for a decision', async () => {
+  it('rejects html carrying a full document root, without reading the repo for a decision', async () => {
     const deps = makeDeps();
-    const result = await saveDashboard(deps, 'overview', 'not html at all');
+    const result = await saveDashboard(deps, 'overview', '<!doctype html><html><body>full page</body></html>');
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
     // The exact wording is covered by findHtmlValidationIssues's own unit tests
     // (test/unit/logic/dashboard.test.ts) — asserting a substring here keeps this test focused on
     // saveDashboard's own behavior (reject + never touch the repo) without duplicating that string.
-    expect((error as { issues: string[] }).issues.some((issue) => issue.includes('root element'))).toBe(true);
+    expect((error as { issues: string[] }).issues.some((issue) => issue.includes('fragment'))).toBe(true);
     expect(deps.dashboards.findRefByName).not.toHaveBeenCalled();
   });
 
   it('rejects html with a broken inline <script> without reading the repo for a decision', async () => {
     const deps = makeDeps();
-    const html = '<!doctype html><html><body><script>function( { broken</script></body></html>';
+    const html = '<section><script>function( { broken</script></section>';
     const result = await saveDashboard(deps, 'overview', html);
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
