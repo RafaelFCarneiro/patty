@@ -123,7 +123,10 @@
 
   function menuLink(dashboard, activeName) {
     var link = h('a', { href: UI_PATH_PREFIX + encodeURIComponent(dashboard.name), text: dashboard.name });
-    if (dashboard.name === activeName) link.classList.add('active');
+    if (dashboard.name === activeName) {
+      link.classList.add('active');
+      link.setAttribute('aria-current', 'page');
+    }
     return link;
   }
 
@@ -146,9 +149,21 @@
     });
 
     if (customs.length > 0) {
-      var group = h('div', { class: 'dashboard-menu-group', id: 'dashboard-menu-custom' }, [
-        h('span', { class: 'dashboard-menu-group-label', text: 'Custom' }),
-      ]);
+      var groupLabel = h('span', {
+        class: 'dashboard-menu-group-label',
+        id: 'dashboard-menu-custom-label',
+        text: 'Custom',
+      });
+      var group = h(
+        'div',
+        {
+          class: 'dashboard-menu-group',
+          id: 'dashboard-menu-custom',
+          role: 'group',
+          'aria-labelledby': 'dashboard-menu-custom-label',
+        },
+        [groupLabel],
+      );
       customs.forEach(function (dashboard) {
         group.appendChild(menuLink(dashboard, activeName));
       });
@@ -158,7 +173,10 @@
 
   function updateActiveMenuLink(activeName) {
     document.querySelectorAll('#dashboard-menu a').forEach(function (link) {
-      link.classList.toggle('active', nameFromMenuHref(link.getAttribute('href')) === activeName);
+      var isActive = nameFromMenuHref(link.getAttribute('href')) === activeName;
+      link.classList.toggle('active', isActive);
+      if (isActive) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
     });
   }
 
