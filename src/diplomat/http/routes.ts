@@ -7,13 +7,14 @@ import { accountRoutes } from './routes/account.js';
 import { aggregateRoutes } from './routes/aggregate.js';
 import { categoryRoutes } from './routes/category.js';
 import { creditCardRoutes } from './routes/creditCard.js';
-import { dashboardRoutes, registerDashboardHtmlRoute } from './routes/dashboard.js';
+import { dashboardRoutes } from './routes/dashboard.js';
 import { recurringRoutes } from './routes/recurring.js';
 import { summaryRoutes } from './routes/summary.js';
 import { systemRoutes } from './routes/system.js';
 import { tagRoutes } from './routes/tag.js';
 import { transactionRoutes } from './routes/transaction.js';
 import { transferRoutes } from './routes/transfer.js';
+import { registerUiRoutes } from './routes/ui.js';
 
 /**
  * Thin diplomat: zod-parse (wire/in) → wireInToModel → controller → map Result to HTTP.
@@ -59,7 +60,7 @@ export const registerRoutes = (
   const definitions = buildRouteDefinitions(deps, version, runEffects, runEffectsSequence);
   mountRoutes(app, definitions);
 
-  registerDashboardHtmlRoute(app, { deps, version, runEffects, runEffectsSequence });
+  registerUiRoutes(app);
 
   // Built from the same list just mounted; excluded from its own document by design.
   const openApiDocument = buildOpenApiDocument(definitions, version);

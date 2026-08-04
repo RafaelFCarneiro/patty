@@ -1,6 +1,4 @@
-import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { httpStatus } from '../../../common/errors.js';
 import * as dashboardAdapters from '../../../adapters/dashboards.js';
 import {
   deleteDashboard,
@@ -18,7 +16,7 @@ import {
 import { DeletedOut } from '../../../wire/out/common.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
-import { CACHE_CONTROL_NO_CACHE, conflict409, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
+import { conflict409, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
 
 const DASHBOARDS_TAG = 'Dashboards';
 
@@ -95,22 +93,4 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
       },
     },
   ];
-};
-
-// Browser-facing HTML surface (ADR-013 Phase A item 2), not a JSON API contract — kept out of
-// the /api OpenAPI document (which documents fetch() shapes for agent-generated dashboards, see
-// docs/architecture.md § OpenAPI contract) rather than added as a text/html response there. Not a
-// RouteDefinition (no OpenAPI doc entry), so it's mounted directly rather than folded into
-// dashboardRoutes.
-export const registerDashboardHtmlRoute = (app: FastifyInstance, ctx: HttpContext): void => {
-  const { deps } = ctx;
-  app.get('/ui/:name', async (req, reply) => {
-    const { name } = req.params as { name: string };
-    const result = await getDashboard(deps, name);
-    return result.match(
-      (dashboard) =>
-        reply.header('cache-control', CACHE_CONTROL_NO_CACHE).type('text/html; charset=utf-8').send(dashboard.html),
-      (e) => reply.status(httpStatus(e)).send({ error: e }),
-    );
-  });
 };

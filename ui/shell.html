@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FinTrack</title>
+    <link rel="stylesheet" href="/ui/assets/app.css" />
+    <script
+      defer
+      referrerpolicy="no-referrer"
+      crossorigin="anonymous"
+      integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt"
+      src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+    ></script>
+  </head>
+  <body>
+    <header>
+      <h1>FinTrack</h1>
+      <nav id="dashboard-menu" aria-label="Dashboards">
+        <p class="state">Loading menu…</p>
+      </nav>
+    </header>
+    <main id="content" aria-live="polite">
+      <p class="state">Loading…</p>
+    </main>
+    <footer>Data is fetched live from this device's local FinTrack API on every load. Nothing on this page is stored.</footer>
+    <script defer src="/ui/assets/app.js"></script>
+  </body>
+</html>

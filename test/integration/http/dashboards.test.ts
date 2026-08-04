@@ -4,63 +4,32 @@ import { setupHttpTest } from './setup.js';
 
 const { inject } = setupHttpTest();
 
-describe('GET /ui/:name', () => {
-  it('serves the seeded baseline dashboard template on a fresh DB', async () => {
-    const res = await inject({ method: 'GET', url: '/ui/overview' });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['content-type']).toContain('text/html');
-    expect(res.headers['cache-control']).toContain('no-cache');
-    expect(res.body).toContain('FinTrack');
-  });
-
-  it('returns the exact stored HTML after save_dashboard, and reflects an override on next GET', async () => {
-    await inject({
-      method: 'POST',
-      url: '/api/dashboards',
-      payload: { name: 'ui-test', html: '<html><body>first</body></html>' },
-    });
-    const first = await inject({ method: 'GET', url: '/ui/ui-test' });
-    expect(first.statusCode).toBe(200);
-    expect(first.body).toBe('<html><body>first</body></html>');
-
-    await inject({
-      method: 'POST',
-      url: '/api/dashboards',
-      payload: { name: 'ui-test', html: '<html><body>second</body></html>' },
-    });
-    const second = await inject({ method: 'GET', url: '/ui/ui-test' });
-    expect(second.body).toBe('<html><body>second</body></html>');
-  });
-
-  it('404s for an unknown dashboard', async () => {
-    const res = await inject({ method: 'GET', url: '/ui/does-not-exist' });
-    expect(res.statusCode).toBe(404);
-    expect(res.json()).toHaveProperty('error.code', 'unknown_dashboard');
-  });
-});
-
 describe('POST /api/dashboards', () => {
   it('upserts and returns the dashboard', async () => {
     const res = await inject({
       method: 'POST',
       url: '/api/dashboards',
-      payload: { name: 'save-test', html: '<html></html>' },
+      payload: { name: 'save-test', html: '<section></section>' },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ name: 'save-test', html: '<html></html>' });
+    expect(res.json()).toMatchObject({ name: 'save-test', html: '<section></section>' });
     expect(res.json()).toHaveProperty('updatedAt');
   });
 
   it('rejects an empty name (422)', async () => {
-    const res = await inject({ method: 'POST', url: '/api/dashboards', payload: { name: '', html: '<html></html>' } });
-    expect(res.statusCode).toBe(422);
-  });
-
-  it('rejects html with no <html> root (422) and does not save it', async () => {
     const res = await inject({
       method: 'POST',
       url: '/api/dashboards',
-      payload: { name: 'unrenderable-root', html: 'not html at all' },
+      payload: { name: '', html: '<section></section>' },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it('rejects html carrying a full document root (422) and does not save it', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'unrenderable-root', html: '<!doctype html><html><body>full page</body></html>' },
     });
     expect(res.statusCode).toBe(422);
     expect(res.json()).toHaveProperty('error.code', 'validation');
@@ -69,8 +38,21 @@ describe('POST /api/dashboards', () => {
     expect(stored.statusCode).toBe(404);
   });
 
+  it('rejects empty content (422) and does not save it', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'unrenderable-empty', html: '   ' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toHaveProperty('error.code', 'validation');
+
+    const stored = await inject({ method: 'GET', url: '/api/dashboards/unrenderable-empty' });
+    expect(stored.statusCode).toBe(404);
+  });
+
   it('rejects html with a broken inline <script> (422) and does not save it', async () => {
-    const html = '<!doctype html><html><body><script>function( { broken</script></body></html>';
+    const html = '<section><script>function( { broken</script></section>';
     const res = await inject({
       method: 'POST',
       url: '/api/dashboards',
@@ -110,11 +92,15 @@ describe('GET /api/dashboards', () => {
 });
 
 describe('GET /api/dashboards/:name', () => {
-  it('returns the dashboard as JSON', async () => {
-    await inject({ method: 'POST', url: '/api/dashboards', payload: { name: 'json-test', html: '<html></html>' } });
+  it('returns the dashboard fragment as JSON', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'json-test', html: '<section></section>' },
+    });
     const res = await inject({ method: 'GET', url: '/api/dashboards/json-test' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ name: 'json-test', html: '<html></html>' });
+    expect(res.json()).toMatchObject({ name: 'json-test', html: '<section></section>' });
   });
 
   it('404s for an unknown dashboard', async () => {
@@ -125,14 +111,18 @@ describe('GET /api/dashboards/:name', () => {
 });
 
 describe('DELETE /api/dashboards/:name', () => {
-  it('deletes a dashboard, and /ui/:name 404s afterward', async () => {
-    await inject({ method: 'POST', url: '/api/dashboards', payload: { name: 'del-test', html: '<html></html>' } });
+  it('deletes a dashboard, and GET /api/dashboards/:name 404s afterward', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'del-test', html: '<section></section>' },
+    });
     const res = await inject({ method: 'DELETE', url: '/api/dashboards/del-test' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toHaveProperty('deleted', true);
 
-    const ui = await inject({ method: 'GET', url: '/ui/del-test' });
-    expect(ui.statusCode).toBe(404);
+    const stored = await inject({ method: 'GET', url: '/api/dashboards/del-test' });
+    expect(stored.statusCode).toBe(404);
   });
 
   it('returns deleted:false for an unknown name', async () => {
@@ -143,11 +133,11 @@ describe('DELETE /api/dashboards/:name', () => {
 });
 
 describe('POST /api/dashboards/:name/rename', () => {
-  it('renames a dashboard: /ui/:newName serves it, /ui/:name 404s', async () => {
+  it('renames a dashboard: GET /api/dashboards/:newName serves it, :name 404s', async () => {
     await inject({
       method: 'POST',
       url: '/api/dashboards',
-      payload: { name: 'rename-test', html: '<html><body>keep me</body></html>' },
+      payload: { name: 'rename-test', html: '<section>keep me</section>' },
     });
     const res = await inject({
       method: 'POST',
@@ -155,14 +145,14 @@ describe('POST /api/dashboards/:name/rename', () => {
       payload: { newName: 'renamed-test' },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ name: 'renamed-test', html: '<html><body>keep me</body></html>' });
+    expect(res.json()).toMatchObject({ name: 'renamed-test', html: '<section>keep me</section>' });
 
-    const newUi = await inject({ method: 'GET', url: '/ui/renamed-test' });
-    expect(newUi.statusCode).toBe(200);
-    expect(newUi.body).toBe('<html><body>keep me</body></html>');
+    const newStored = await inject({ method: 'GET', url: '/api/dashboards/renamed-test' });
+    expect(newStored.statusCode).toBe(200);
+    expect(newStored.json()).toHaveProperty('html', '<section>keep me</section>');
 
-    const oldUi = await inject({ method: 'GET', url: '/ui/rename-test' });
-    expect(oldUi.statusCode).toBe(404);
+    const oldStored = await inject({ method: 'GET', url: '/api/dashboards/rename-test' });
+    expect(oldStored.statusCode).toBe(404);
   });
 
   it('404s when the current name does not exist', async () => {
@@ -176,8 +166,16 @@ describe('POST /api/dashboards/:name/rename', () => {
   });
 
   it('rejects (409) a newName already in use', async () => {
-    await inject({ method: 'POST', url: '/api/dashboards', payload: { name: 'rename-a', html: '<html></html>' } });
-    await inject({ method: 'POST', url: '/api/dashboards', payload: { name: 'rename-b', html: '<html></html>' } });
+    await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'rename-a', html: '<section></section>' },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'rename-b', html: '<section></section>' },
+    });
 
     const res = await inject({
       method: 'POST',
@@ -189,7 +187,11 @@ describe('POST /api/dashboards/:name/rename', () => {
   });
 
   it('rejects an empty newName (422)', async () => {
-    await inject({ method: 'POST', url: '/api/dashboards', payload: { name: 'rename-empty', html: '<html></html>' } });
+    await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'rename-empty', html: '<section></section>' },
+    });
     const res = await inject({ method: 'POST', url: '/api/dashboards/rename-empty/rename', payload: { newName: '' } });
     expect(res.statusCode).toBe(422);
   });

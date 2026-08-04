@@ -2,9 +2,10 @@ import { z } from 'zod';
 import { Id } from './id.js';
 import { validation, type DuplicateName, type NotFound, type ValidationError } from './error.js';
 
-// A generous ceiling for a self-contained, data-less HTML shell (the baseline template is ~23KB)
-// — bounds worst-case DB growth and the cost of the render-ability check's vm.Script compile step
-// (logic/dashboard.ts) against an oversized save, without constraining realistic dashboard sizes.
+// A generous ceiling for a data-less dashboard fragment (the baseline template is ~20KB, down from
+// ~30KB pre-ADR-027 now that shared chrome/CSS/Chart.js moved to the shell) — bounds worst-case DB
+// growth and the cost of the render-ability check's vm.Script compile step (logic/dashboard.ts)
+// against an oversized save, without constraining realistic dashboard sizes.
 export const DASHBOARD_HTML_MAX_LENGTH = 500_000;
 
 export const DashboardSchema = z.object({
@@ -12,7 +13,11 @@ export const DashboardSchema = z.object({
   html: z
     .string()
     .max(DASHBOARD_HTML_MAX_LENGTH)
-    .describe('Self-contained HTML shell. Must fetch data from /api on load — never embeds financial data'),
+    .describe(
+      'Content fragment (sections + script) rendered into the app shell\'s #content (GET /ui) — not a full ' +
+        'HTML page: no <!doctype>/<html>/<head>/<style> root, the shell already provides those. Must fetch ' +
+        'data from /api on load — never embeds financial data',
+    ),
   updatedAt: z.string().describe('ISO 8601 timestamp of the last save'),
 });
 export type Dashboard = z.infer<typeof DashboardSchema>;

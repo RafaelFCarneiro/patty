@@ -2,22 +2,28 @@ import { Script as VmScript } from 'node:vm';
 import * as R from 'remeda';
 
 /**
- * Cheap, non-sanitizing render-ability checks (ADR-013): catches an empty/non-HTML save or a
- * `<script>` syntax error that would silently break every fetch on the page with no visible
+ * Cheap, non-sanitizing render-ability checks (ADR-013, revised by ADR-027 Phase 1 for the
+ * fragment content model): catches an empty save, a save that's still a full page instead of a
+ * fragment, or a `<script>` syntax error that would silently break every fetch with no visible
  * error — not a full HTML validator or sanitizer (deliberately out of scope for this local
  * single-user app, see ADR-013 Phase A).
  */
 export const findHtmlValidationIssues = (html: string): string[] => [
-  ...(hasHtmlDocumentShape(html) ? [] : ['html must contain a <!doctype html> or <html> root element']),
+  ...(isNonEmptyContent(html) ? [] : ['content must not be empty']),
+  ...(hasHtmlDocumentRoot(html)
+    ? ['content must be a fragment (sections + script) — remove the <!doctype>/<html> root; the shell (GET /ui) now provides it']
+    : []),
   ...findScriptSyntaxIssues(html),
 ];
+
+const isNonEmptyContent = (html: string): boolean => html.trim().length > 0;
 
 // The doctype only does anything if it's the very first thing in the document (leading whitespace
 // aside) — browsers ignore one that shows up after other content, so require it to start at
 // position 0 here too, rather than merely appearing anywhere in the string.
 const HTML_DOCUMENT_ROOT_PATTERN = /^\s*<!doctype html|<html[\s>]/i;
 
-const hasHtmlDocumentShape = (html: string): boolean => HTML_DOCUMENT_ROOT_PATTERN.test(html);
+const hasHtmlDocumentRoot = (html: string): boolean => HTML_DOCUMENT_ROOT_PATTERN.test(html);
 
 // Types this checker can't validate as classic-script syntax, for two different reasons:
 // `application/json`/`application/ld+json`/`importmap` are genuinely inert data, not code, so

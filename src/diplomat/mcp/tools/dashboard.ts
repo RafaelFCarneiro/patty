@@ -14,13 +14,16 @@ export const registerDashboardTools = (server: McpServer, ctx: McpContext): void
     {
       title: 'Save dashboard',
       description:
-        'Create or override a named dashboard: an HTML shell you author, stored and served live at ' +
-        'GET /ui/:name (ADR-013). Upsert semantics — saving to an existing name replaces it immediately, ' +
-        'no rebuild or restart needed. CRITICAL: the HTML must NEVER embed financial data, secrets, or ' +
-        'tokens inline — render layout/styling only and fetch data client-side from the documented /api ' +
-        'endpoints (read the fintrack://openapi resource for the contract) on page load, so the dashboard ' +
-        'is always live and safe to share. Rejected (validation error) if the HTML has no <html> root or ' +
-        'an inline <script> has a syntax error — fix the reported issue and save again.',
+        'Create or override a named dashboard: a content FRAGMENT you author (sections + an inline ' +
+        '<script>, no <!doctype>/<html>/<head>/<style> root — the app shell at GET /ui already provides ' +
+        'those and is what actually renders it, at GET /ui/:name) (ADR-013, fragment model ADR-027). ' +
+        'Upsert semantics — saving to an existing name replaces it immediately, no rebuild or restart ' +
+        'needed. CRITICAL: the fragment must NEVER embed financial data, secrets, or tokens inline — ' +
+        'render layout/styling only and fetch data client-side from the documented /api endpoints (read ' +
+        'the fintrack://openapi resource for the contract) on load, so the dashboard is always live and ' +
+        'safe to share. Rejected (validation error) if the content is empty, still carries a full ' +
+        '<!doctype>/<html> document root, or an inline <script> has a syntax error — fix the reported ' +
+        'issue and save again.',
       inputSchema: SaveDashboardSchema.shape,
     },
     async (args) => {
@@ -57,8 +60,10 @@ export const registerDashboardTools = (server: McpServer, ctx: McpContext): void
     {
       title: 'Rename dashboard',
       description:
-        'Rename a dashboard, preserving its content and identity. GET /ui/:newName serves it afterward; ' +
-        'GET /ui/:name (the old name) 404s.',
+        'Rename a dashboard, preserving its content and identity. GET /api/dashboards/:newName serves it ' +
+        "afterward; GET /api/dashboards/:name (the old name) 404s. GET /ui/:name always serves the app " +
+        'shell regardless of name, so it does not reflect this — the shell resolves the dashboard ' +
+        'client-side.',
       inputSchema: RenameDashboardSchema.shape,
     },
     async (args) => {
