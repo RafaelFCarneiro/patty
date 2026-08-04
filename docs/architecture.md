@@ -431,7 +431,11 @@ the new `name`, and a bumped `updatedAt`. `GET /api/dashboards/:newName` serves 
 Before persisting, `saveDashboard` (`controllers/dashboards.ts`) runs `findHtmlValidationIssues`
 (`logic/dashboard.ts`, pure) and rejects with `validation` (422) if it fails: empty content, a full
 `<!doctype>`/`<html>` document root still present (the shell owns that now — a save carrying one is rejected,
-inverted from the pre-ADR-027 check), or an inline `<script>` that fails to *compile* (via Node's `vm.Script`
+inverted from the pre-ADR-027 check), an external `<script src>` reference (fragments carry zero external
+references now — the shell's own `executeScripts` re-execution in `ui/app.js` would otherwise happily fetch
+and run one, so this is enforced server-side rather than left to the authoring skill's convention alone; the
+client additionally drops any `src`-bearing script as defense-in-depth for rows saved before this check
+existed), or an inline `<script>` that fails to *compile* (via Node's `vm.Script`
 — checked, never executed, so this can't itself run untrusted code). This is a narrow render-ability check,
 not sanitization: full HTML sanitization remains explicitly out of scope for this local single-user app
 (ADR-013 Phase A). A rejected save never reads `dashboards.findRefByName` or decides a `Persistable`, so the

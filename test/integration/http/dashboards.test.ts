@@ -51,6 +51,20 @@ describe('POST /api/dashboards', () => {
     expect(stored.statusCode).toBe(404);
   });
 
+  it('rejects an external <script src> reference (422) and does not save it', async () => {
+    const html = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>';
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'unrenderable-external-script', html },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.issues.some((issue: string) => issue.includes('no external <script src>'))).toBe(true);
+
+    const stored = await inject({ method: 'GET', url: '/api/dashboards/unrenderable-external-script' });
+    expect(stored.statusCode).toBe(404);
+  });
+
   it('rejects html with a broken inline <script> (422) and does not save it', async () => {
     const html = '<section><script>function( { broken</script></section>';
     const res = await inject({

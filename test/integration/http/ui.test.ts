@@ -45,3 +45,12 @@ describe('GET /ui/assets/app.js', () => {
     expect(res.body).toContain('/api/dashboards');
   });
 });
+
+describe('UI asset in-memory cache', () => {
+  it('serves identical content on a repeat request (the cached path)', async () => {
+    const first = await inject({ method: 'GET', url: '/ui/assets/app.css' });
+    const second = await inject({ method: 'GET', url: '/ui/assets/app.css' });
+    expect(second.statusCode).toBe(200);
+    expect(second.body).toBe(first.body);
+  });
+});

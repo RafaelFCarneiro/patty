@@ -17,8 +17,22 @@ const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
 const CSS_CONTENT_TYPE = 'text/css; charset=utf-8';
 const JS_CONTENT_TYPE = 'text/javascript; charset=utf-8';
 
-const serveUiFile = async (reply: FastifyReply, path: string, contentType: string): Promise<FastifyReply> => {
+// These three files are fixed package assets — never rewritten at runtime — so the first read of
+// each is cached in memory for the life of the process; only a *successful* read is cached (never
+// a rejected promise), so a transient read error doesn't wedge every later request into repeating
+// the same failure. `cache-control: no-cache` below governs the browser's cache, not this one.
+const fileContentCache = new Map<string, string>();
+
+const readCached = async (path: string): Promise<string> => {
+  const cached = fileContentCache.get(path);
+  if (cached !== undefined) return cached;
   const content = await readFile(path, 'utf-8');
+  fileContentCache.set(path, content);
+  return content;
+};
+
+const serveUiFile = async (reply: FastifyReply, path: string, contentType: string): Promise<FastifyReply> => {
+  const content = await readCached(path);
   return reply.header('cache-control', CACHE_CONTROL_NO_CACHE).type(contentType).send(content);
 };
 

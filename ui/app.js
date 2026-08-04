@@ -83,6 +83,13 @@
   // can't rely on DOMContentLoaded, which only ever fires once for the whole shell page).
   function executeScripts(container) {
     container.querySelectorAll('script').forEach(function (oldScript) {
+      // save_dashboard already rejects a src= script server-side (fragments carry zero external
+      // references — the shell owns Chart.js now), but a row saved before that check existed
+      // could still carry one; never execute it client-side either.
+      if (oldScript.hasAttribute('src')) {
+        oldScript.remove();
+        return;
+      }
       var newScript = document.createElement('script');
       for (var i = 0; i < oldScript.attributes.length; i++) {
         var attr = oldScript.attributes[i];

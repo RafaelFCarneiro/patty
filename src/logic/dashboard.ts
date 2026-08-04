@@ -4,7 +4,9 @@ import * as R from 'remeda';
 /**
  * Cheap, non-sanitizing render-ability checks (ADR-013, revised by ADR-027 Phase 1 for the
  * fragment content model): catches an empty save, a save that's still a full page instead of a
- * fragment, or a `<script>` syntax error that would silently break every fetch with no visible
+ * fragment, an external `<script src>` reference (fragments carry zero external references now —
+ * the shell already loads Chart.js once, see `skills/dashboard-building/SKILL.md` hard rule #4),
+ * or an inline `<script>` syntax error that would silently break every fetch with no visible
  * error — not a full HTML validator or sanitizer (deliberately out of scope for this local
  * single-user app, see ADR-013 Phase A).
  */
@@ -13,6 +15,7 @@ export const findHtmlValidationIssues = (html: string): string[] => [
   ...(hasHtmlDocumentRoot(html)
     ? ['content must be a fragment (sections + script) — remove the <!doctype>/<html> root; the shell (GET /ui) now provides it']
     : []),
+  ...findExternalScriptIssues(html),
   ...findScriptSyntaxIssues(html),
 ];
 
@@ -77,6 +80,23 @@ const isCheckableInlineScript = (script: ScriptTag): boolean => {
   const type = typeof rawType === 'string' ? normalizeScriptType(rawType) : undefined;
   return !type || !SKIPPED_SCRIPT_TYPES.includes(type);
 };
+
+const hasExternalSrc = (script: ScriptTag): boolean => parseAttributes(script.attributes).has('src');
+
+const EXTERNAL_SCRIPT_ISSUE =
+  'no external <script src> allowed in a fragment — the shell already loads Chart.js once; fetch data from /api instead';
+
+// The shell (ui/app.js) executes every <script> tag a saved fragment carries once it's injected
+// into the live page — rejecting an external src here, not just documenting it as a skill
+// guideline, closes that off server-side instead of trusting every future caller of save_dashboard
+// to follow the convention.
+const findExternalScriptIssues = (html: string): string[] =>
+  R.pipe(
+    [...html.matchAll(SCRIPT_TAG_PATTERN)],
+    R.map(parseScriptTag),
+    R.filter(hasExternalSrc),
+    R.map(R.constant(EXTERNAL_SCRIPT_ISSUE)),
+  );
 
 /** Compile-only (never executes the script) — just proves the browser could parse it. */
 const findScriptSyntaxError = (script: ScriptTag): string | null => {

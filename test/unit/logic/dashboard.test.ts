@@ -38,9 +38,15 @@ describe('findHtmlValidationIssues', () => {
     expect(issues).toHaveLength(2);
   });
 
-  it('ignores external <script src="..."> tags (no inline body to check)', () => {
+  it('rejects an external <script src="..."> tag — fragments carry zero external references now', () => {
     const html = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>';
-    expect(findHtmlValidationIssues(html)).toEqual([]);
+    const issues = findHtmlValidationIssues(html);
+    expect(issues.some((issue) => issue.includes('no external <script src>'))).toBe(true);
+  });
+
+  it('does not also run a syntax check on a rejected external script (no inline body to check)', () => {
+    const html = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>';
+    expect(findHtmlValidationIssues(html)).toHaveLength(1);
   });
 
   it('ignores script types that are not classic-script syntax (JSON-LD, import maps, modules)', () => {

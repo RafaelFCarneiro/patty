@@ -15,9 +15,9 @@ number, name, or row the user sees comes from a same-origin `/api` response read
 every time it loads.
 
 `save_dashboard` only rejects content that can't render as a fragment at all (empty content, a full
-`<!doctype>`/`<html>` document root still present, or a `<script>` syntax error) — it does **not** check for
-embedded data. Following this checklist is what keeps the dashboard data-less; the save endpoint won't catch
-a violation for you.
+`<!doctype>`/`<html>` document root still present, an external `<script src>` reference, or a `<script>`
+syntax error) — it does **not** check for embedded data. Following this checklist is what keeps the
+dashboard data-less; the save endpoint won't catch a violation for you.
 
 ## Process
 
@@ -99,8 +99,9 @@ a violation for you.
    (`get_preferences` returns only `{ locale, localeSource }` today, no dashboard-view state; the manifest
    is where per-dashboard view choices live.)
 6. **Save it**: call `save_dashboard(name, html)`. If it's rejected (`validation`, 422), the message names
-   the render-ability problem (empty content, a full `<!doctype>`/`<html>` root still present, or a script
-   syntax error) — fix it and resave; the previously stored dashboard is untouched by a rejected save.
+   the render-ability problem (empty content, a full `<!doctype>`/`<html>` root still present, an external
+   `<script src>` reference, or a script syntax error) — fix it and resave; the previously stored dashboard
+   is untouched by a rejected save.
 7. **Hand back the URL**: `/ui/<name>` on whatever host/port the user's FinTrack HTTP sidecar is running on
    (see the "Manual config and HTTP mode" section of the project's `README.md` — shipped with this package
    — if unsure which). Tell them to open it in a browser.

@@ -22,8 +22,9 @@ export const registerDashboardTools = (server: McpServer, ctx: McpContext): void
         'render layout/styling only and fetch data client-side from the documented /api endpoints (read ' +
         'the fintrack://openapi resource for the contract) on load, so the dashboard is always live and ' +
         'safe to share. Rejected (validation error) if the content is empty, still carries a full ' +
-        '<!doctype>/<html> document root, or an inline <script> has a syntax error — fix the reported ' +
-        'issue and save again.',
+        '<!doctype>/<html> document root, an external <script src> reference (the shell already loads ' +
+        'Chart.js once — a fragment carries zero external references of its own), or an inline <script> ' +
+        'has a syntax error — fix the reported issue and save again.',
       inputSchema: SaveDashboardSchema.shape,
     },
     async (args) => {

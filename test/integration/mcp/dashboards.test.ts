@@ -69,6 +69,24 @@ describe('MCP integration > dashboards', () => {
     }
   });
 
+  it('save_dashboard rejects an external <script src> reference', async () => {
+    const stamp = Date.now();
+    const name = `mcp-dash-external-script-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const html = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>';
+      const { error } = (await callToolError(client, {
+        name: 'save_dashboard',
+        args: { name, html },
+      })) as ValidationErrorPayload;
+      expect(error.code).toBe('validation');
+      expect(error.issues.some((issue) => issue.includes('no external <script src>'))).toBe(true);
+    } finally {
+      await transport.close();
+    }
+  });
+
   it('save_dashboard rejects html with a broken inline <script>', async () => {
     const stamp = Date.now();
     const name = `mcp-dash-broken-script-${stamp}`;
