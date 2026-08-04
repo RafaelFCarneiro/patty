@@ -200,51 +200,73 @@ Fastify + zod scaffold with diplomat layout; local libSQL + migrations + seed (c
 ### Phase 2 — Classification loop + bulk input ✅ (2026-06-11)
 Merchant normalization logic; `merchant_category` weight learning from corrections; `create_transactions_bulk`; credit cards with `bills` lifecycle (open → closed → paid) + recurring rules; transfers (ADR-002), sub-categories, tags, derived balances. **Exit:** paste a statement → classified transactions with confidence flags; corrections improve future classification.
 
-### Phase 3 — Insights + analysis (in progress)
-`aggregate_spending`, `find_correlations` (Feature Design 016 — one tool, `analysis`-discriminated, all four
-phases done: A `spending_shifts` ✅, D `budget_fit` ✅, C `merchant_concentration` ✅, B `recurring_candidates` ✅
-— unblocked by Feature Design 017's recurring-rule merchant key), budgets ✅
-(Feature Design 015 —
-`create_budget`/`update_budget`/`delete_budget`/`list_budgets`/`get_budget_status`), goals, saved views; MCP
-resources ✅ (Feature Design 018 — `fintrack://categories`/`accounts`/`tags`/`credit-cards`/`merchants/top`) +
-prompts ✅ (Feature Design 019 — `monthly_review`/`budget_checkup`/`import_statement`; this subsumes the
-monthly-review/import-statement skills line below — MCP prompts are portable/server-side where a Claude
-`SKILL.md` would just restate the same tool orchestration, so no skills are built), saved views. **Exit:**
-"how was my spending vs budget, and what's driving the change?" answered with composed queries; views
-persist.
+### Phase 3 — Insights + analysis ✅ (2026-07-26)
+`aggregate_spending` ✅; `find_correlations` ✅ (Feature Design 016 — one tool, `analysis`-discriminated:
+`spending_shifts`, `budget_fit`, `merchant_concentration`, `recurring_candidates`; the last unblocked by Feature
+Design 017's recurring-rule merchant key); budgets ✅ (Feature Design 015 — per-category / per-currency monthly
+limits: `create`/`update`/`delete`/`list_budgets` + `get_budget_status`); saved views ✅ (dashboards, Feature
+Design 013 — full lifecycle save/list/get/delete/rename over the `/ui` surface); MCP resources ✅ (Feature Design
+018 — `categories`/`accounts`/`tags`/`credit-cards`/`merchants-top`) and guided-workflow prompts ✅ (Feature
+Design 019 — `monthly_review`/`budget_checkup`/`import_statement`; subsumes the skills line — MCP prompts are
+portable/server-side where a Claude `SKILL.md` would restate the same orchestration, so no skills are built).
+**Goals deferred** (see below). **Exit met:** "how was my spending vs budget, and what's driving the change?"
+is answered by composed queries + the monthly-review prompt; dashboards persist.
 
-### Phase 4 — Surfaces & hardening
-Minimal web frontend rendering saved views; activate owner columns for multi-user groundwork; OFX/CSV importers behind an interface (Open Finance Brasil / Pluggy later); e2e against MCP transport. Multi-user/hosted would also reopen the auth + safety-guard work intentionally deferred for the local-first first release.
+**Landed alongside Phase 3 — architecture hardening (ADR-021 → ADR-025):** the functional-core / imperative-shell
+write path (the domain returns effects as data, a generic shell applies them; appliers decide and read nothing),
+the local-SQLite concurrency posture (WAL + `busy_timeout` + `SQLITE_BUSY` retry, ADR-024), and the diplomat-edge
+reorganization (per-domain modules mirroring `controllers/`, thin aggregators, ADR-025).
+
+### Deferred / parked (revisit when triggered)
+- **Goals** (`create_goal` / `get_goals_progress`) — consciously skipped in Phase 3; a near-clone of the budgets
+  entity (Feature Design 015), so a fast build when wanted.
+- **`update_recurring`** — recurring rules can't be edited today; notably an existing rule can't acquire a
+  `merchant_key` without delete + recreate (Feature Design 017).
+- **Future-dated confirm via create/import** — `confirm_transaction` / `pay_bill` enforce "an effective
+  transaction's date is never in the future"; a create/import tool that passes `status: effective` with a future
+  date is not yet guarded (architecture.md invariant note).
+
+### Phase 4 — Surfaces & hardening (next)
+Minimal web frontend rendering the saved dashboards (which already exist end-to-end, Feature Design 013 — Phase 4 is the richer client over them, beyond the seeded `/ui` template); activate owner columns for multi-user groundwork; OFX/CSV importers behind an interface (Open Finance Brasil / Pluggy later); e2e against MCP transport. Multi-user/hosted would also reopen the auth + safety-guard work intentionally deferred for the local-first first release.
 
 ## Testing
 
 - `logic/`: plain vitest unit tests — pure functions, no mocks needed. This is where FP pays off.
 - Diplomat/db: integration tests against an in-process libSQL DB (Testcontainers where a real engine is needed) — no Docker required for the common path.
 - MCP e2e: drive tools through the MCP SDK client — the contract that matters most.
-- **REST e2e (gap to close):** the HTTP routes (`src/diplomat/http/routes.ts`) currently have **no** integration
-  coverage — only MCP does. Add HTTP-level integration tests (Fastify `inject` against an in-process libSQL DB)
-  covering each `/api` route's status codes, validation, and payloads. This becomes load-bearing under **ADR-013**
-  (REST is the dashboards' data layer), so it gates that work. Tracked by
-  [#21](https://github.com/RafaelFCarneiro/fintrack/issues/21).
+- **REST e2e — largely closed ([#21]).** The HTTP routes now have integration coverage under
+  `test/integration/http/*` (Fastify `inject` against an in-process libSQL DB), added alongside the dashboards
+  work and the ADR-025 route split — status codes, validation, payloads, and OpenAPI parity per domain. Keep
+  extending it as new routes land (the ADR-025 convention keeps a route and its test in the same domain module).
 - Golden set: ~100 realistic BR transaction descriptions with expected categories; classification accuracy tracked as a regression test.
 
 ## Risks & mitigations
 
 - **No ORM-level relation magic**: hand-written joins — mitigated by zod decode-at-boundary (`wire/db`) and keeping all SQL parameterized in `diplomat/db/`.
-- **Correlation analysis is wordier in SQL** than the original graph vision — acceptable at single-user scale; recursive CTEs/window functions cover Phase 3.
+- **Correlation analysis is wordier in SQL** than the original graph vision — borne out and acceptable at
+  single-user scale; `find_correlations` (Feature Design 016) shipped on parameterized aggregates + window
+  functions with pure cadence detection in `logic/`, no graph engine needed.
 - **Diplomat discipline** is convention, not framework-enforced — add ESLint import-boundary rules (`logic/` may not import `diplomat/`).
-- **Multi-write concurrency (partial-write / TOCTOU):** controller flows that issue multiple sequential
-  repo writes are not atomic as a pair, and three concurrent write surfaces now exist (MCP, the default-on REST
-  sidecar, scheduled `apply_due_recurring`). The same bug shape recurred twice on PR #83 and was band-aided by a
-  one-off reorder. The unit-of-work fix (**ADR-015**) was **rejected before implementation**: a first-mover
-  attempt showed the non-atomicity is downstream of a structural problem — the transaction controller owns
-  credit-card/bill policy that should live in a credit-card aggregate. **ADR-016** reviews the domain/context
-  boundaries first (aggregate ownership over a shared transaction core); concurrency is re-examined afterward,
-  scoped to whatever within-aggregate atomicity remains, in a new ADR if still needed.
+- **Multi-write concurrency — RESOLVED (ADR-016 → ADR-021/022 for logical atomicity; ADR-024 for physical
+  contention).** The original per-flow non-atomicity (band-aided on PR #83) was downstream of a structural
+  problem, so the unit-of-work fix (**ADR-015**) was rejected in favor of first fixing domain/context boundaries
+  (**ADR-016**), then inverting to functional-core / imperative-shell (**ADR-021/022**): the domain returns a
+  flow's writes as one effect value and a generic shell applies them atomically with optimistic-version retry —
+  within-aggregate atomicity is now generic, not per-flow. Separately, **physical** lock contention (multiple
+  stdio servers on one SQLite file) is handled by **ADR-024** (WAL + `busy_timeout` + `SQLITE_BUSY` retry). Both
+  the logical and physical axes are closed.
 
 ## Open questions
 
 - ~~Credit card invoices~~ **Decided**: faturas are `bills` rows (`bills.credit_card_id`, `transactions.bill_id`). "Bill" over "Invoice" — invoice is B2B; "bill" matches everyday usage and Nubank's own API naming. Bills carry `close_date`/`due_date`/`status`; card transactions attach to the open bill at write time.
 - ~~`Result` library~~ **Decided** (ADR-001): neverthrow.
 - ~~Database~~ **Decided** (ADR-004/005/006): local-first encrypted libSQL + Drizzle, key in OS keychain.
-- Cross-currency conversion: which FX-rate source (BCB PTAX API is free and official for BRL/USD), and whether to store the rate on the transaction at write time or convert at read time. Until decided, all analytics are per-currency.
+- **Cross-currency conversion (undecided — the standing open question, not a parked feature):** the system
+  deliberately **never implicitly converts** — every total (summaries, budgets, `find_correlations`) is grouped
+  per currency, because without a rate source any cross-currency sum is arbitrary. Deciding this unlocks true
+  multi-currency totals: a consolidated net figure, and a grand-total on top of budgets' and analyses' per-currency
+  lines. Two decisions: (1) rate source — BCB PTAX is free and official for BRL/USD; (2) **convert at write time**
+  (store the rate on each transaction as of its date — faithful historical totals, more storage) **vs read time**
+  (convert on demand at a chosen as-of rate — simpler storage, totals move with the rate). Conversion would be an
+  explicit, opt-in layer (e.g. a `displayCurrency` parameter); per-currency stays the default and the source of
+  truth.
