@@ -49,7 +49,7 @@ const serveUiFile = async (reply: FastifyReply, path: string, contentType: strin
  * part of the `/api` JSON contract.
  */
 const registerUiEventsRoute = (app: FastifyInstance, subscribe: ChangeBus['subscribe']): void => {
-  app.get('/ui/events', (req, reply) => {
+  app.get('/ui/events', (_req, reply) => {
     reply.hijack();
     reply.raw.writeHead(200, {
       'content-type': SSE_CONTENT_TYPE,
@@ -62,9 +62,15 @@ const registerUiEventsRoute = (app: FastifyInstance, subscribe: ChangeBus['subsc
     reply.raw.flushHeaders();
 
     const unsubscribe = subscribe((entities) => {
+      // A publish can race a client disconnect that hasn't reached the 'close' handler below yet
+      // — skip the write rather than push data onto a response that's already torn down.
+      if (reply.raw.destroyed) return;
       reply.raw.write(`data: ${JSON.stringify({ entities })}\n\n`);
     });
-    req.raw.on('close', unsubscribe);
+    // reply.raw (not req.raw), matching the other hijacked route in this codebase
+    // (diplomat/mcp/route.ts) — this handler owns the response after hijack(), and it's the
+    // response's own lifecycle this cleanup is guarding.
+    reply.raw.on('close', unsubscribe);
   });
 };
 

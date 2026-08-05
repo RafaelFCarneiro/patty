@@ -96,6 +96,30 @@ describe('GET /ui/events (ADR-027 Phase 3 — SSE live update)', () => {
     staysController.abort();
   });
 
+  it('a publish racing a disconnect (before the close handler runs) never crashes the server', async () => {
+    const controller = new AbortController();
+    const res = await fetch(`${baseUrl}/ui/events`, { signal: controller.signal });
+    const reader = res.body!.getReader();
+
+    // No await between abort() and the write-triggering request — this is the exact race the
+    // reply.raw.destroyed guard (diplomat/http/routes/ui.ts) exists for: a publish landing in the
+    // gap before the 'close' handler has unsubscribed this connection.
+    controller.abort();
+    const created = await fetch(`${baseUrl}/api/tags`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: `SSE race tag ${Date.now()}` }),
+    });
+    expect(created.status).toBe(201);
+
+    // The server process (and this Fastify instance) is still alive and serving — an unguarded
+    // write-after-destroy that crashed the request handler or the process would fail this.
+    const health = await fetch(`${baseUrl}/api/health`);
+    expect(health.status).toBe(200);
+
+    await reader.cancel().catch(() => {});
+  });
+
   it('app.close() does not hang on an SSE connection the client never closed (forceCloseConnections)', async () => {
     const isolatedTmpDir = mkdtempSync(join(tmpdir(), 'fintrack-sse-shutdown-test-'));
     const ctx = await buildApp({ dbPath: join(isolatedTmpDir, 'test.db') });

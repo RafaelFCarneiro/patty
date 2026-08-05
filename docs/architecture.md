@@ -533,9 +533,13 @@ last parameter of `runEffects`/`runEffectsSequence`, defaulting to a no-op — e
 target — not a `RouteDefinition`, same reasoning as the rest of `/ui*`. The handler calls `reply.hijack()`
 (opts out of Fastify's own response lifecycle — an SSE stream deliberately never ends the way a normal
 response does) and writes `data: {"entities":[...]}\n\n` on every change-bus publish for as long as the
-client stays connected; `req.raw.on('close', unsubscribe)` cleans up per-connection on disconnect.
-`reply.raw.writeHead()` alone only sets internal state — Node doesn't put headers on the wire until the first
-`write()`/`end()` — so the handler calls `reply.raw.flushHeaders()` immediately after, or a client with
+client stays connected; `reply.raw.on('close', unsubscribe)` cleans up per-connection on disconnect —
+`reply.raw`, not `req.raw`, matching `diplomat/mcp/route.ts`'s own hijacked route (the only other one in
+this codebase), since this handler owns the response's lifecycle after `hijack()`. The publish callback
+itself checks `reply.raw.destroyed` before writing — a publish can race a disconnect that hasn't reached the
+`close` handler yet, and skipping the write is simpler than reasoning about whether a stale write would be
+safe. `reply.raw.writeHead()` alone only sets internal state — Node doesn't put headers on the wire until the
+first `write()`/`end()` — so the handler calls `reply.raw.flushHeaders()` immediately after, or a client with
 nothing yet to publish would hang waiting for a response that was never actually sent. `buildHttpApp`'s
 Fastify instance sets `forceCloseConnections: true` for the same reason `/ui/events` exists at all: without
 it, `app.close()` waits for every open connection to end on its own, which a long-lived SSE stream never does
