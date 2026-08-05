@@ -42,7 +42,9 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
       responses: { 200: okResponse('Dashboard', DashboardSchema), 404: notFound404 },
       handler: async (req, reply) => {
         const { name } = req.params as { name: string };
-        return send(reply, await getDashboard(deps, name));
+        const result = await getDashboard(deps, name);
+        reply.header('cache-control', 'no-cache');
+        return send(reply, result);
       },
     },
     {

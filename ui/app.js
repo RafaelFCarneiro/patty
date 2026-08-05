@@ -209,7 +209,7 @@
   function loadDashboard(name) {
     var container = document.getElementById('content');
     setLoading(container, 'Loading dashboard…');
-    return fetchJson(Api.dashboard(name))
+    return fetchJson(Api.dashboard(name) + '?t=' + Date.now())
       .then(function (dashboard) {
         document.title = 'FinTrack — ' + dashboard.name;
         renderFragment(container, dashboard.html);

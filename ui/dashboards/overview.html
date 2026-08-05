@@ -203,7 +203,7 @@
         }
 
         .panel-header {
-            padding: 1.25rem 1.5rem;
+            padding: 0.9rem 1.5rem;
             border-bottom: 1px solid var(--panel-border);
             display: flex;
             justify-content: space-between;
@@ -225,7 +225,7 @@
         /* Calendar & Details Split Row */
         .calendar-split-row {
             display: grid;
-            grid-template-columns: 1.6fr 1fr;
+            grid-template-columns: 1.15fr 1fr;
             gap: 1.5rem;
         }
 
@@ -254,7 +254,7 @@
         .dot-trans { background-color: var(--text-muted); }
 
         .calendar-panel-body {
-            padding: 1.25rem 1.5rem;
+            padding: 0.75rem 1.5rem 0.85rem 1.5rem;
         }
 
         .calendar-grid-header {
@@ -278,11 +278,12 @@
         }
 
         .calendar-day {
+            box-sizing: border-box;
             background: rgba(255, 255, 255, 0.015);
             border: 1px solid var(--panel-border);
             border-radius: 12px;
             height: 72px;
-            padding: 0.35rem 0.25rem 0.25rem 0.25rem;
+            padding: 0.25rem 0.2rem 0.15rem 0.2rem;
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
@@ -340,7 +341,7 @@
             display: flex;
             flex-direction: column;
             gap: 2px;
-            margin-top: 0.25rem;
+            margin-top: 2px;
         }
 
         .day-flow {
@@ -644,18 +645,15 @@
             height: auto;
         }
         .calendar-details-body {
-            max-height: 480px;
+            flex: 1;
             overflow-y: auto;
+            min-height: 0;
         }
 
         /* Desktop lock heights (prevents layout jumping) */
         @media (min-width: 1025px) {
             .calendar-split-row .panel {
-                height: 620px;
-            }
-            .calendar-details-body {
-                height: calc(620px - 56px - 40px) !important;
-                max-height: none !important;
+                height: 610px;
             }
         }
 

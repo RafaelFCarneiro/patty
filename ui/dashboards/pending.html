@@ -306,12 +306,13 @@
             gap: 0.75rem;
             flex-wrap: wrap;
             width: 100%;
+            align-items: center;
         }
 
         .search-wrapper {
             position: relative;
-            flex: 1.5;
-            min-width: 200px;
+            flex: 1;
+            min-width: 180px;
         }
 
         .search-wrapper i {
@@ -326,6 +327,7 @@
 
         .search-input {
             width: 100%;
+            box-sizing: border-box;
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid var(--panel-border);
             color: var(--text-main);
@@ -347,8 +349,8 @@
         }
 
         .filter-wrapper {
-            flex: 1;
-            min-width: 150px;
+            flex: 0 0 115px;
+            min-width: 115px;
         }
 
         .filter-wrapper select {
@@ -357,11 +359,22 @@
             border-radius: 10px;
         }
 
+        .filter-wrapper .select-container-custom {
+            width: 100%;
+        }
+
         /* Custom Multiselect Dropdowns styling */
         .multiselect-container {
             position: relative;
-            flex: 1.2;
-            min-width: 180px;
+            flex: 0 0 130px;
+            min-width: 130px;
+        }
+
+        @media (max-width: 580px) {
+            .search-wrapper, .filter-wrapper, .multiselect-container {
+                flex: 1 1 100%;
+                min-width: 100%;
+            }
         }
 
         .multiselect-btn {
@@ -1339,9 +1352,9 @@
                     </div>
                     <div class="filter-wrapper">
                         <select id="filter-type" class="select-custom" style="width: 100%;">
-                            <option value="">Todos os Tipos</option>
-                            <option value="expense">Apenas Despesas</option>
-                            <option value="income">Apenas Receitas</option>
+                            <option value="">Ambos</option>
+                            <option value="expense">Despesas</option>
+                            <option value="income">Receitas</option>
                         </select>
                     </div>
                     
@@ -3122,7 +3135,7 @@ function initCustomSelects() {
         } else if (select.id === 'year-select') {
             container.style.minWidth = '90px';
         } else if (select.id === 'filter-type') {
-            container.style.minWidth = '130px';
+            container.style.minWidth = '115px';
         }
         
         const trigger = document.createElement('div');
@@ -4861,7 +4874,7 @@ function initCustomSelects() {
         } else if (select.id === 'year-select') {
             container.style.minWidth = '90px';
         } else if (select.id === 'filter-type') {
-            container.style.minWidth = '130px';
+            container.style.minWidth = '115px';
         }
         
         const trigger = document.createElement('div');
