@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import Fastify, { type FastifyInstance } from 'fastify';
-import type { ChangeBus } from './changeBus.js';
+import type { ChangeBus } from './diplomat/changeBus.js';
 import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
 import { registerRoutes } from './diplomat/http/routes.js';

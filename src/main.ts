@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
-import { createChangeBus, type ChangeBus } from './changeBus.js';
+import { createChangeBus, type ChangeBus } from './diplomat/changeBus.js';
 import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';

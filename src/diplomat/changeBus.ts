@@ -5,12 +5,15 @@ import { EventEmitter } from 'node:events';
  * external broker — the MCP server, HTTP sidecar, and scheduler share one process (ADR-024
  * context), so this is the whole mechanism. `diplomat/db/effects.ts` publishes the entity tags of
  * every batch that actually committed writes; `GET /ui/events` (`diplomat/http/routes/ui.ts`)
- * subscribes and forwards them to connected browsers over SSE. Composition-root tier (like
- * `config.ts`) — constructed once in `main.ts`/`test/integration/app-builder.ts`; `diplomat/db` and
- * `diplomat/http` only ever receive the bound `publish`/`subscribe` function, never this module.
- * Known limit: only reaches subscribers on this process — a write from a different stdio server
- * won't push here (mitigated by ADR-024 steering multi-client use to the single HTTP-transport
- * server; a periodic poll can backstop if cross-process live-update ever matters).
+ * subscribes and forwards them to connected browsers over SSE. Lives at the `diplomat/` root — not
+ * owned by any one surface, just the shared plumbing between the two — mirroring how `RunEffects`
+ * crosses the same boundary. `createChangeBus()` itself is composition-root-only, called once in
+ * `main.ts`/`test/integration/app-builder.ts`; `diplomat/db` and `diplomat/http` only ever import
+ * the `PublishChange`/`ChangeBus` *types* from here and receive the bound `publish`/`subscribe`
+ * function as a parameter, never construct one themselves. Known limit: only reaches subscribers
+ * on this process — a write from a different stdio server won't push here (mitigated by ADR-024
+ * steering multi-client use to the single HTTP-transport server; a periodic poll can backstop if
+ * cross-process live-update ever matters).
  */
 export type PublishChange = (entities: readonly string[]) => void;
 

@@ -35,7 +35,7 @@ import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../src/models/transactionTag.js';
 import { buildHttpApp } from '../../src/server.js';
 import { runEffects, runEffectsSequence, type ApplierRegistry } from '../../src/diplomat/db/effects.js';
-import { createChangeBus, type ChangeBus } from '../../src/changeBus.js';
+import { createChangeBus, type ChangeBus } from '../../src/diplomat/changeBus.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
 
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64);

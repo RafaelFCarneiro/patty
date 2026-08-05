@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createChangeBus } from '../../src/changeBus.js';
+import { createChangeBus } from '../../../src/diplomat/changeBus.js';
 
 describe('createChangeBus (ADR-027 Phase 3)', () => {
   it('delivers a publish to every subscriber', () => {
