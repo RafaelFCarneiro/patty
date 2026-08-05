@@ -1,5 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import Fastify, { type FastifyInstance } from 'fastify';
+import type { ChangeBus } from './changeBus.js';
 import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
 import { registerRoutes } from './diplomat/http/routes.js';
@@ -17,10 +18,14 @@ export const buildHttpApp = (
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
   resetLocale: () => void,
+  subscribeToChanges: ChangeBus['subscribe'],
   opts?: { logger?: boolean },
 ): FastifyInstance => {
-  const app = Fastify({ logger: opts?.logger ?? true });
-  registerRoutes(app, deps, version, runEffects, runEffectsSequence);
+  // ADR-027 Phase 3: GET /ui/events is a genuinely long-lived connection (SSE) — without this,
+  // fastify.close() waits for it to end on its own, which it never does, hanging shutdown for as
+  // long as any browser tab has a dashboard open.
+  const app = Fastify({ logger: opts?.logger ?? true, forceCloseConnections: true });
+  registerRoutes(app, deps, version, runEffects, runEffectsSequence, subscribeToChanges);
   registerMcpRoute(app, deps, version, runEffects, runEffectsSequence, resetLocale);
   return app;
 };
@@ -40,9 +45,12 @@ export const startHttpSidecar = async (
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
   resetLocale: () => void,
+  subscribeToChanges: ChangeBus['subscribe'],
   port: number,
 ): Promise<HttpSidecar> => {
-  const app = buildHttpApp(deps, version, runEffects, runEffectsSequence, resetLocale, { logger: false });
+  const app = buildHttpApp(deps, version, runEffects, runEffectsSequence, resetLocale, subscribeToChanges, {
+    logger: false,
+  });
   try {
     await app.listen({ port, host: LOOPBACK_HOST });
     // `port` may be 0 (OS-assigned); read back the address actually bound for the banner.

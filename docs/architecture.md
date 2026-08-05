@@ -374,7 +374,7 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement` — text and registration in `diplomat/mcp/prompts.ts`'s `registerPrompts`, called from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome; no DB access, no controller.
 
-## Dashboards / `/ui` surface (ADR-013 Phase A/B, app shell + fragments — ADR-027 Phase 1, file-backed defaults — ADR-027 Phase 2)
+## Dashboards / `/ui` surface (ADR-013 Phase A/B, app shell + fragments — ADR-027 Phase 1, file-backed defaults — ADR-027 Phase 2, live update — ADR-027 Phase 3)
 
 The `dashboards` table (`id` PK, `name` UNIQUE, `html` nullable, `source: inline|file` DEFAULT `inline`, `path`
 nullable, `updated_at`) stores **content fragments**, keyed by name for every consumer-facing surface — `id` is
@@ -505,6 +505,56 @@ Chart.js once; per-currency grouping; localized labels; loading/empty/error stat
 `save_dashboard`. It is a docs-only artifact — no runtime
 behavior depends on it — shipped in the published npm package via `package.json`'s `files` array so it's
 available alongside the server.
+
+### Live update — SSE, entity-tagged (ADR-027 Phase 3)
+
+**The change bus** (`src/changeBus.ts`) is a plain `EventEmitter` wrapper — `createChangeBus()` returns
+`{ publish, subscribe }` — constructed once at the composition root (`main.ts`,
+`test/integration/app-builder.ts`), same tier as `config.ts`. No external broker: the MCP server, HTTP
+sidecar, and scheduler share one process (ADR-024 context), so an in-process emitter is the whole mechanism.
+`diplomat/db`/`diplomat/http` never import this module directly — each only ever receives the bound
+`publish`/`subscribe` function, the same pattern `RunEffects`/`resetLocale` already use to cross from the
+composition root into a diplomat edge.
+
+**The post-commit publish hook** lives in `diplomat/db/effects.ts`'s `attempt` (the one place a batch actually
+commits, shared by both `runEffects` and `runEffectsSequence`): once `applyBatch` reports `applied: true`, the
+deduped entity tags of every outcome that itself `applied: true` are published — an idempotent-duplicate
+insert's `applied: false` outcome changed nothing, so its entity is never published, and a version-conflict
+retry's failed attempts publish nothing either (only the eventual successful commit does). `publish` is the
+last parameter of `runEffects`/`runEffectsSequence`, defaulting to a no-op — every existing direct caller
+(chiefly tests) is unaffected; only the composition root binds the real change bus.
+
+**`GET /ui/events`** (`registerUiEventsRoute`, `diplomat/http/routes/ui.ts`) is the shell's `EventSource`
+target — not a `RouteDefinition`, same reasoning as the rest of `/ui*`. The handler calls `reply.hijack()`
+(opts out of Fastify's own response lifecycle — an SSE stream deliberately never ends the way a normal
+response does) and writes `data: {"entities":[...]}\n\n` on every change-bus publish for as long as the
+client stays connected; `req.raw.on('close', unsubscribe)` cleans up per-connection on disconnect.
+`reply.raw.writeHead()` alone only sets internal state — Node doesn't put headers on the wire until the first
+`write()`/`end()` — so the handler calls `reply.raw.flushHeaders()` immediately after, or a client with
+nothing yet to publish would hang waiting for a response that was never actually sent. `buildHttpApp`'s
+Fastify instance sets `forceCloseConnections: true` for the same reason `/ui/events` exists at all: without
+it, `app.close()` waits for every open connection to end on its own, which a long-lived SSE stream never does
+— shutdown would hang for as long as any browser tab has a dashboard open.
+
+**The shell forwards, the fragment decides.** `ui/app.js` opens exactly one `EventSource('/ui/events')` for
+the page's whole lifetime (fragment swaps never reopen it) and, on every message, calls
+`window.fintrackOnDataChanged(entities)` if the currently-loaded fragment defined it — the shell has no
+knowledge of a fragment's internal sections, only this one well-known global slot. `renderFragment` resets
+the slot to `null` before tearing down the outgoing fragment's DOM (never after injecting the new one), so a
+stale closure referencing already-removed elements can't fire and a fragment whose script errors before
+reaching its own registration simply gets no live update rather than the previous fragment's. The baseline
+`ui/dashboards/overview.html` fragment implements the contract: a `SECTION_ENTITY_DEPENDENCIES` map declares
+which entity tags feed each of its section loaders (`summary`/`categorySpending`/`accounts`/`recurring`/
+`recentTransactions`), and `onDataChanged` refetches only the sections whose declared dependencies intersect
+the published entities, assigning itself to `window.fintrackOnDataChanged` as the last line of the script
+(after the initial load). `skills/dashboard-building/SKILL.md` documents the same hook as optional guidance
+for hand-authored/custom dashboards — a fragment that never sets it simply has no live update, same as before
+this phase.
+
+**Known limit (by design, ADR-027):** the change bus only reaches subscribers on this process — a write from
+a *different* stdio server won't push here. Mitigated because ADR-024 steers multi-client use to the single
+HTTP-transport server; a periodic client-side poll can backstop if cross-process live-update ever matters.
+Shipped SSE-in-process first.
 
 ## ADR index
 

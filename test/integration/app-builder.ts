@@ -35,6 +35,7 @@ import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../src/models/transactionTag.js';
 import { buildHttpApp } from '../../src/server.js';
 import { runEffects, runEffectsSequence, type ApplierRegistry } from '../../src/diplomat/db/effects.js';
+import { createChangeBus, type ChangeBus } from '../../src/changeBus.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
 
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64);
@@ -45,6 +46,7 @@ export type AppContext = {
   version: string;
   runEffects: RunEffects;
   runEffectsSequence: RunEffectsSequence;
+  changeBus: ChangeBus;
 };
 
 export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promise<AppContext> => {
@@ -99,12 +101,26 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     [DASHBOARD_ENTITY_TAG]: dashboardApplier,
     [SETTINGS_ENTITY_TAG]: settingsApplier,
   };
-  const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow);
+  const changeBus = createChangeBus();
+  const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
-    runEffectsSequence(db, applierRegistry, items, flowFor);
-  const app = buildHttpApp(deps, version, boundRunEffects, boundRunEffectsSequence, localeResolver.resetLocale, {
-    logger: false,
-  });
+    runEffectsSequence(db, applierRegistry, items, flowFor, changeBus.publish);
+  const app = buildHttpApp(
+    deps,
+    version,
+    boundRunEffects,
+    boundRunEffectsSequence,
+    localeResolver.resetLocale,
+    changeBus.subscribe,
+    { logger: false },
+  );
 
-  return { app, deps, version, runEffects: boundRunEffects, runEffectsSequence: boundRunEffectsSequence };
+  return {
+    app,
+    deps,
+    version,
+    runEffects: boundRunEffects,
+    runEffectsSequence: boundRunEffectsSequence,
+    changeBus,
+  };
 };

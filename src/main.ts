@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
+import { createChangeBus, type ChangeBus } from './changeBus.js';
 import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
@@ -56,11 +57,12 @@ const maybeStartSidecar = async (
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
   resetLocale: () => void,
+  subscribeToChanges: ChangeBus['subscribe'],
   config: Config,
 ): Promise<HttpSidecar | null> => {
   if (!config.FINTRACK_HTTP) return null;
   const { startHttpSidecar } = await loadServerModule();
-  return startHttpSidecar(deps, version, runEffects, runEffectsSequence, resetLocale, config.PORT);
+  return startHttpSidecar(deps, version, runEffects, runEffectsSequence, resetLocale, subscribeToChanges, config.PORT);
 };
 
 const main = async (): Promise<void> => {
@@ -115,9 +117,12 @@ const main = async (): Promise<void> => {
     [DASHBOARD_ENTITY_TAG]: dashboardApplier,
     [SETTINGS_ENTITY_TAG]: settingsApplier,
   };
-  const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow);
+  // ADR-027 Phase 3: constructed once here, the composition root — diplomat/db only ever receives
+  // the bound `publish` (below), diplomat/http only ever receives the bound `subscribe`.
+  const changeBus = createChangeBus();
+  const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
-    runEffectsSequence(db, applierRegistry, items, flowFor);
+    runEffectsSequence(db, applierRegistry, items, flowFor, changeBus.publish);
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
     const server = await connectStdio(
@@ -136,6 +141,7 @@ const main = async (): Promise<void> => {
       boundRunEffects,
       boundRunEffectsSequence,
       localeResolver.resetLocale,
+      changeBus.subscribe,
       config,
     );
 
@@ -162,7 +168,14 @@ const main = async (): Promise<void> => {
   // sidecar, this is the only surface running — a bind failure here is fatal by design
   // (there is no stdio fallback to keep the process alive), handled below in main().catch.
   const { buildHttpApp } = await loadServerModule();
-  const app = buildHttpApp(deps, version, boundRunEffects, boundRunEffectsSequence, localeResolver.resetLocale);
+  const app = buildHttpApp(
+    deps,
+    version,
+    boundRunEffects,
+    boundRunEffectsSequence,
+    localeResolver.resetLocale,
+    changeBus.subscribe,
+  );
 
   // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.
   let shuttingDown = false;

@@ -2307,3 +2307,93 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
     expect(await db.all(sql`SELECT id FROM accounts WHERE id = ${payerId}`)).toHaveLength(1);
   });
 });
+
+describe('runEffects / runEffectsSequence — change bus publish hook (ADR-027 Phase 3)', () => {
+  it('publishes the deduped entity tags of a batch that actually committed', async () => {
+    const publish = vi.fn();
+    const first = newAccount();
+    const second = newAccount();
+
+    const result = await runEffects(
+      db,
+      registry,
+      () =>
+        okAsync({
+          persist: [
+            persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: first }),
+            persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: second }),
+          ],
+          response: null,
+        }),
+      publish,
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(publish).toHaveBeenCalledOnce();
+    expect(publish).toHaveBeenCalledWith([ACCOUNT_ENTITY_TAG]);
+  });
+
+  it('never publishes for an empty persist batch (a dry-run preview flow)', async () => {
+    const publish = vi.fn();
+
+    await runEffects(db, registry, () => okAsync({ persist: [], response: 'preview' }), publish);
+
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('does not publish the entity of an idempotent-duplicate insert — nothing actually changed', async () => {
+    const seed = newAccount();
+    await runEffects(db, registry, insertOne(seed));
+
+    const publish = vi.fn();
+    await runEffects(db, registry, insertOne(seed), publish); // same id — no-ops
+
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('publishes exactly once, on the successful attempt, after a version-conflict retry', async () => {
+    const seed = newAccount();
+    await runEffects(db, registry, insertOne(seed));
+
+    const publish = vi.fn();
+    let calls = 0;
+    const flow = () => {
+      calls += 1;
+      const version = calls === 1 ? seed.version + 1 : seed.version; // stale on first attempt
+      return okAsync({
+        persist: [persistence.update({ entity: ACCOUNT_ENTITY_TAG, model: { ...seed, name: 'Renamed', version } })],
+        response: null,
+      });
+    };
+
+    const result = await runEffects(db, registry, flow, publish);
+
+    expect(result.isOk()).toBe(true);
+    expect(publish).toHaveBeenCalledOnce();
+    expect(publish).toHaveBeenCalledWith([ACCOUNT_ENTITY_TAG]);
+  });
+
+  it('runEffectsSequence publishes per unit that actually commits, skipping a failed unit', async () => {
+    const publish = vi.fn();
+    const a1 = newAccount();
+    const a3 = newAccount();
+    type Unit = 'one' | 'two' | 'three';
+    const flowFor = (unit: Unit) => {
+      if (unit === 'two') return () => errAsync(validation(['bad line']));
+      return insertOne(unit === 'one' ? a1 : a3);
+    };
+
+    const outcomes = await runEffectsSequence(db, registry, ['one', 'two', 'three'] as const, flowFor, publish);
+
+    expect(outcomes[0]?.isOk()).toBe(true);
+    expect(outcomes[1]?.isErr()).toBe(true);
+    expect(outcomes[2]?.isOk()).toBe(true);
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish).toHaveBeenCalledWith([ACCOUNT_ENTITY_TAG]);
+  });
+
+  it('defaults to a no-op when publish is omitted — every existing direct caller is unaffected', async () => {
+    const result = await runEffects(db, registry, insertOne(newAccount()));
+    expect(result.isOk()).toBe(true);
+  });
+});

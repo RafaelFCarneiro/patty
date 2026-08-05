@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { ChangeBus } from '../../changeBus.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
 import type { HttpContext } from './context.js';
 import { buildOpenApiDocument, mountRoutes, type RouteDefinition } from './openapi.js';
@@ -56,11 +57,12 @@ export const registerRoutes = (
   version: string,
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
+  subscribeToChanges: ChangeBus['subscribe'],
 ): void => {
   const definitions = buildRouteDefinitions(deps, version, runEffects, runEffectsSequence);
   mountRoutes(app, definitions);
 
-  registerUiRoutes(app);
+  registerUiRoutes(app, subscribeToChanges);
 
   // Built from the same list just mounted; excluded from its own document by design.
   const openApiDocument = buildOpenApiDocument(definitions, version);

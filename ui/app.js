@@ -1,12 +1,17 @@
 // FinTrack app shell client (ADR-027 Phase 1) — vanilla JS, no build step. Renders the dashboard
 // menu from GET /api/dashboards, loads the selected dashboard's fragment from
 // GET /api/dashboards/:name, and injects it into #content. Client-side navigation between
-// dashboards never reloads the page.
+// dashboards never reloads the page. ADR-027 Phase 3 adds live update: one EventSource for the
+// life of the page (fragment swaps never reopen it), forwarding each message to whichever
+// fragment is currently loaded via the window.fintrackOnDataChanged contract (see connectEvents
+// below) — the shell knows nothing about a fragment's own sections, only that one may want to
+// know when data changed.
 (function () {
   'use strict';
 
   var DEFAULT_DASHBOARD_NAME = 'overview';
   var UI_PATH_PREFIX = '/ui/';
+  var EVENTS_PATH = '/ui/events';
 
   var Api = {
     dashboards: '/api/dashboards',
@@ -101,6 +106,11 @@
   }
 
   function renderFragment(container, html) {
+    // Reset before tearing down the outgoing fragment's DOM, not after injecting the new one — a
+    // stale closure referencing already-removed elements must never fire again, and a fragment
+    // whose own script errors before reaching its own registration simply gets no live update
+    // rather than the previous fragment's.
+    window.fintrackOnDataChanged = null;
     clearNode(container);
     var temp = document.createElement('div');
     temp.innerHTML = html;
@@ -190,6 +200,29 @@
     navigate(currentDashboardName(), false);
   });
 
+  // ADR-027 Phase 3 — live update. Opened once, for the page's whole lifetime; fragment swaps
+  // (navigate/renderFragment above) never touch this connection, only the
+  // window.fintrackOnDataChanged slot it delivers into. EventSource reconnects on its own after a
+  // drop (the browser's built-in retry), so no reconnect logic is needed here; a message that
+  // arrives with no fragment currently registered (or between "torn down" and "registered again")
+  // is simply dropped — the next live-relevant fetch a user triggers (period change, manual
+  // refresh) always reflects current data regardless.
+  function connectEvents() {
+    if (typeof EventSource === 'undefined') return;
+    var source = new EventSource(EVENTS_PATH);
+    source.onmessage = function (event) {
+      var payload;
+      try {
+        payload = JSON.parse(event.data);
+      } catch (err) {
+        return;
+      }
+      if (typeof window.fintrackOnDataChanged === 'function' && Array.isArray(payload.entities)) {
+        window.fintrackOnDataChanged(payload.entities);
+      }
+    };
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     var menu = document.getElementById('dashboard-menu');
     menu.addEventListener('click', function (event) {
@@ -208,5 +241,6 @@
         setError(menu, err.message);
       });
     loadDashboard(initialName);
+    connectEvents();
   });
 })();
