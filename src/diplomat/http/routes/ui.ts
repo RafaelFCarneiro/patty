@@ -17,7 +17,7 @@ const APP_JS_PATH = `${UI_ROOT}/app.js`;
 const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
 const CSS_CONTENT_TYPE = 'text/css; charset=utf-8';
 const JS_CONTENT_TYPE = 'text/javascript; charset=utf-8';
-const SSE_CONTENT_TYPE = 'text/event-stream';
+const SSE_CONTENT_TYPE = 'text/event-stream; charset=utf-8';
 
 // These three files are fixed package assets — never rewritten at runtime — so the first read of
 // each is cached in memory for the life of the process; only a *successful* read is cached (never

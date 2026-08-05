@@ -13,6 +13,12 @@
   var UI_PATH_PREFIX = '/ui/';
   var EVENTS_PATH = '/ui/events';
 
+  // Module-scope, not local to connectEvents() — an EventSource with no surviving reference to the
+  // object itself risks being garbage-collected in some implementations even with a handler
+  // attached, which would silently stop live update. Also guards connectEvents() itself against
+  // ever opening a second connection.
+  var eventSource = null;
+
   var Api = {
     dashboards: '/api/dashboards',
     dashboard: function (name) {
@@ -208,9 +214,9 @@
   // is simply dropped — the next live-relevant fetch a user triggers (period change, manual
   // refresh) always reflects current data regardless.
   function connectEvents() {
-    if (typeof EventSource === 'undefined') return;
-    var source = new EventSource(EVENTS_PATH);
-    source.onmessage = function (event) {
+    if (typeof EventSource === 'undefined' || eventSource) return;
+    eventSource = new EventSource(EVENTS_PATH);
+    eventSource.onmessage = function (event) {
       var payload;
       try {
         payload = JSON.parse(event.data);
