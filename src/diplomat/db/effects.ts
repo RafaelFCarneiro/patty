@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { errAsync, okAsync, type Result, ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
+import type { PublishChange } from '../changeBus.js';
 import type { AppError } from '../../common/errors.js';
 import { conflict } from '../../models/error.js';
 import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
@@ -12,6 +13,12 @@ import { isForeignKeyConstraintViolation, isSqliteBusy } from './sqliteErrors.js
 // (docs/functional-core-imperative-shell.md rule 4), up to this many attempts total. Exported so
 // tests assert the real policy instead of duplicating the literal.
 export const MAX_RUN_EFFECTS_ATTEMPTS = 3;
+
+// The vast majority of call sites (every direct `runEffects`/`runEffectsSequence` test call, plus
+// any composition root that hasn't wired a change bus) don't care about live-update — `publish`
+// defaults to this no-op rather than being required, so this file's only two exported entry points
+// stay backward-compatible.
+const noopPublish: PublishChange = () => {};
 
 /** The transaction handle `db.transaction` hands its callback — inferred from `Db` itself rather
  *  than naming a drizzle-internal type directly. Exported so each `EntityApplier` (which runs
@@ -213,12 +220,36 @@ type Flow<T> = () => ResultAsync<FlowOutcome<T>, AppError>;
 const resolveResponse = <T>(response: T | ((outcomes: PersistOutcome[]) => T), outcomes: PersistOutcome[]): T =>
   typeof response === 'function' ? (response as (o: PersistOutcome[]) => T)(outcomes) : response;
 
-const attempt = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>, attemptsLeft: number): ResultAsync<T, AppError> =>
+/** Only outcomes that actually wrote something feed the change bus — an idempotent-duplicate
+ *  insert's `applied: false` outcome changed nothing, so its entity is never published (ADR-027
+ *  Phase 3). Deduped, since one batch commonly touches the same entity via more than one
+ *  `Persistable` (e.g. a transaction insert alongside its tag-set insert touches `transaction`
+ *  once but could repeat across other flows). A no-op batch (nothing applied) publishes nothing. */
+const publishChangedEntities = (outcomes: PersistOutcome[], publish: PublishChange): void => {
+  const entities = R.pipe(
+    outcomes,
+    R.filter((o) => o.applied),
+    R.map((o) => o.entity),
+    R.unique(),
+  );
+  if (entities.length > 0) publish(entities);
+};
+
+const attempt = <T>(
+  db: Db,
+  registry: ApplierRegistry,
+  flow: Flow<T>,
+  attemptsLeft: number,
+  publish: PublishChange,
+): ResultAsync<T, AppError> =>
   flow().andThen(({ persist, response }) =>
     ResultAsync.fromSafePromise(applyBatch(db, registry, persist)).andThen(({ applied, outcomes }) => {
-      if (applied) return okAsync(resolveResponse(response, outcomes));
+      if (applied) {
+        publishChangedEntities(outcomes, publish);
+        return okAsync(resolveResponse(response, outcomes));
+      }
       if (attemptsLeft <= 1) return errAsync<T, AppError>(conflict);
-      return attempt(db, registry, flow, attemptsLeft - 1);
+      return attempt(db, registry, flow, attemptsLeft - 1, publish);
     }),
   );
 
@@ -229,10 +260,17 @@ const attempt = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>, attemptsLe
  * `registry` (built once at the composition root) knows which entity is which. A version conflict
  * or a busy physical lock (`SQLITE_BUSY`, ADR-024) rolls back the whole batch and re-invokes
  * `flow`, up to `MAX_RUN_EFFECTS_ATTEMPTS` times, before surfacing the generic `conflict` error.
- * This is the single-atomic-unit mode — the "unit of work" mode.
+ * This is the single-atomic-unit mode — the "unit of work" mode. `publish` (ADR-027 Phase 3) is
+ * the change bus's post-commit hook, called once per successful commit with the batch's changed
+ * entity tags — optional so every existing direct caller (chiefly tests) is unaffected; the
+ * composition root binds the real change bus.
  */
-export const runEffects = <T>(db: Db, registry: ApplierRegistry, flow: Flow<T>): ResultAsync<T, AppError> =>
-  attempt(db, registry, flow, MAX_RUN_EFFECTS_ATTEMPTS);
+export const runEffects = <T>(
+  db: Db,
+  registry: ApplierRegistry,
+  flow: Flow<T>,
+  publish: PublishChange = noopPublish,
+): ResultAsync<T, AppError> => attempt(db, registry, flow, MAX_RUN_EFFECTS_ATTEMPTS, publish);
 
 /** One unit's outcome from `runEffectsSequence`: its response, or the `AppError` it failed with
  *  (a domain error from its own flow, or a bounded-retry-exhausted `conflict`). A plain neverthrow
@@ -249,17 +287,19 @@ export type SequenceOutcome<T> = Result<T, AppError>;
  * this relies on for retry is the same mechanism that makes unit *i+1* see unit *i*'s committed
  * writes (option B). A unit's domain error, or its own retry exhaustion, is recorded as `Err` and
  * the loop continues to the next item — partial success, never a short-circuit; only a genuine
- * unexpected failure (not a version conflict) still throws, same as `runEffects`.
+ * unexpected failure (not a version conflict) still throws, same as `runEffects`. `publish`
+ * (ADR-027 Phase 3), same default as `runEffects`, fires per unit that actually commits.
  */
 export const runEffectsSequence = async <I, T>(
   db: Db,
   registry: ApplierRegistry,
   items: readonly I[],
   flowFor: (item: I) => Flow<T>,
+  publish: PublishChange = noopPublish,
 ): Promise<SequenceOutcome<T>[]> => {
   const outcomes: SequenceOutcome<T>[] = [];
   for (const item of items) {
-    outcomes.push(await attempt(db, registry, flowFor(item), MAX_RUN_EFFECTS_ATTEMPTS));
+    outcomes.push(await attempt(db, registry, flowFor(item), MAX_RUN_EFFECTS_ATTEMPTS, publish));
   }
   return outcomes;
 };

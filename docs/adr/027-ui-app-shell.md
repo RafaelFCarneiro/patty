@@ -131,7 +131,7 @@ separate host: the zero-build, local-first posture (ADR-004/007/013) is unchange
 2. [x] Phase 1 — app shell, shared `app.css`, fragment model, overview home, menu.
 3. [x] Phase 2 — `source`/`path` discriminator, file-backed default dashboards, package the `ui/` files, custom
    submenu grouping.
-4. [ ] Phase 3 — SSE `/ui/events` + effect-runner change-event bus (entity-tagged) + shell dependency-refetch.
+4. [x] Phase 3 — SSE `/ui/events` + effect-runner change-event bus (entity-tagged) + shell dependency-refetch.
 5. [ ] Revise ADR-013's dashboard-model wording; record the UI architecture (shell/fragments/source/SSE) and the
    `save_dashboard`-is-always-inline security invariant in `docs/architecture.md`; PLAN Phase 4 web-frontend note.
 

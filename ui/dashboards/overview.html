@@ -518,10 +518,46 @@
       markUpdated();
     }
 
+    // ADR-027 Phase 3 — live update: each section declares which entity tags feed it, so an
+    // MCP/HTTP write only refetches the sections it could actually have changed, not the whole
+    // dashboard. Recurring rules are keyed off the "recurring" tag alone — materializing a due
+    // occurrence writes a transaction, not the rule row this section lists.
+    var SECTION_ENTITY_DEPENDENCIES = {
+      summary: ['transaction'],
+      categorySpending: ['transaction', 'category'],
+      accounts: ['account', 'transaction'],
+      recurring: ['recurring'],
+      recentTransactions: ['transaction'],
+    };
+    var SECTION_LOADERS = {
+      summary: loadSummary,
+      categorySpending: loadCategorySpending,
+      accounts: loadAccounts,
+      recurring: loadRecurring,
+      recentTransactions: loadRecentTransactions,
+    };
+
+    // The shell's live-update contract (ui/app.js): called with the changed entity tags of every
+    // batch that just committed, for as long as this fragment stays loaded.
+    function onDataChanged(entities) {
+      var refetchedAny = false;
+      Object.keys(SECTION_ENTITY_DEPENDENCIES).forEach(function (section) {
+        var dependsOn = SECTION_ENTITY_DEPENDENCIES[section];
+        var affected = dependsOn.some(function (tag) {
+          return entities.indexOf(tag) !== -1;
+        });
+        if (!affected) return;
+        refetchedAny = true;
+        SECTION_LOADERS[section]();
+      });
+      if (refetchedAny) markUpdated();
+    }
+
     // No DOMContentLoaded wait: the shell (ui/app.js) only re-executes this script after this
     // fragment's own markup is already attached to the live document, so the elements above are
     // guaranteed to exist by the time this line runs.
     initControls();
     loadAll();
+    window.fintrackOnDataChanged = onDataChanged;
   })();
 </script>

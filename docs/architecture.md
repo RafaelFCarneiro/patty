@@ -51,6 +51,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | `diplomat/*` | `controllers/`, `adapters/`, `models/`, wire schemas, runtime clients |
 | `diplomat/db/seed/` | `models/` (types and runtime enums) — nothing outside `diplomat/db` imports `seed/` |
 | `diplomat/mcp` → `diplomat/http/{routes,openapi}.ts` | **Documented exception**: `buildRouteDefinitions`/`buildOpenApiDocument` are deterministic, no-business-logic wire-schema-driven builders (their only module-scope effect is a one-time, idempotent `extendZodWithOpenApi(z)` zod-prototype patch) reused verbatim by both the REST route and the `fintrack://openapi` MCP resource — including under stdio transport, which never touches Fastify — so the two surfaces can't drift (ADR-013 Phase A). |
+| `diplomat/db`, `diplomat/http` → `diplomat/changeBus.ts` | **Documented exception (ADR-027 Phase 3)**: `changeBus.ts` sits at the `diplomat/` root, owned by neither submodule — shared plumbing between the effect runner's post-commit publish (`diplomat/db/effects.ts`) and the SSE subscriber (`diplomat/http/routes/ui.ts`). Both imports are **type-only** (`PublishChange`/`ChangeBus`); the concrete `createChangeBus()` constructor is called exactly once, at the composition root (`main.ts`), which is the only caller that ever wires the two submodules together — this row documents a shared-type import, not composition-root wiring leaking into `diplomat/*`. |
 | `controllers/transaction/{core,read,bulk}.ts` | **Narrower than `controllers/` above (ADR-016)**: same base rule, but additionally must NOT import `logic/bill.js`, `deps.bills`, or anything from `controllers/creditCard/*`/`controllers/account/*`/`models/creditCard.ts`/`models/account.ts` — not even a type-only import (enforced: `rg "logic/bill\|deps\.bills" src/controllers/transaction/` and `rg "creditCard|controllers/account" src/controllers/transaction/ src/models/transaction.ts` each match only the header comments that document this rule — no actual import or usage) — this is the shared transaction core (row integrity, category resolution, generic patch/delete primitives, cross-cutting reads) that aggregates depend on, never the reverse. `bulk.ts` (ADR-017 step 2, ADR-022 step 3) makes **no** ownership decision at all — unlike its predecessor `createTransactionsBulk` (which delegated the account-vs-card dispatch to a composition-root router), single-source statement imports fix ownership by construction: whichever aggregate importer (`importCardStatement`/`importAccountStatement`) built the plan already knows which one card/account every line belongs to. `bulk.ts` is pure: `defaultStatementLines` defaults per-line fields (date, idempotencyKey) shared by every import and stamps on the whole import's `rawInput`; `buildBulkResult` shapes the shell's per-line `SequenceOutcome`s back into the `BulkResult` contract. Both are typed purely against the core's own generic `StatementLine`/`ClassifiedUpsertResult`, with no card- or account-shaped field baked into either signature. `bulk.ts` never runs anything itself — each aggregate importer hands the shell a `StatementImportPlan` (defaulted lines + a `flowFor` closure factory), and the MCP/REST handler runs it through `runEffectsSequence` (see `docs/write-path.md`). |
 | `controllers/creditCard/*` | Same base `controllers/` rule, **plus** it may depend on `controllers/transaction/{core,read,bulk}.ts` — the credit-card aggregate owns card CRUD (`creditCard.ts`), the bill lifecycle (`bill.ts`), and card-transaction policy (`transaction.ts`: `addCardPurchase`/`updateCardTransaction`/`deleteCardTransaction`/`importCardStatement`), validating (account-type ownership via its own `assertCreditAccountLeg`, built on `controllers/resolve.ts`'s neutral `resolveLegAccounts` — ADR-020; paid-bill immutability; cycle resolution) before delegating row persistence to the core. Never calls `guardTransferMutability` — the one transfer it ever sees (the bill-payment transfer) is blocked outright by its own bill-process guard, not transfer-immutability policy (ADR-020 §3). `importCardStatement` (ADR-017 step 2, ADR-022 step 3) defaults each line via `bulk.ts`, then binds every line to `addCardPurchase` — the same single-line flow `add_card_purchase` calls, unchanged — bound to the ONE card named in the request, and returns the `StatementImportPlan` for the shell to run. |
 | `controllers/account/*` | Same base `controllers/` rule, **plus** it may depend on `controllers/transaction/{core,read,bulk}.ts` — the account aggregate owns account CRUD + balances (`account.ts`), account-movement policy (`transaction.ts`: `addAccountExpense`/`addAccountIncome`/`updateAccountTransaction`/`deleteAccountTransaction`/`importAccountStatement` — namespaced as `controllers/account/*` already, so the file doesn't repeat "account" in its own name), and transfers (`transfer.ts`: `createTransfer`, folded in from the former top-level `controllers/transfers.ts` at ADR-016 step 4 — a transfer request is account-context vocabulary even though it persists via the shared core primitive), validating (non-credit account, category/sub-category exclusivity, currency match, distinct legs) before delegating row persistence to the core. `updateAccountTransaction`/`deleteAccountTransaction` assert account-type ownership via their own `assertAccountOwnedLegs` (built on `resolveLegAccounts`, testing membership in `logic/account.ts`'s `isAccountOwnedType` — its own positive scope, not a negation of the credit-card aggregate's test, ADR-020) before delegating to the core's generic patch/delete; `updateAccountTransaction` additionally runs `guardTransferMutability` (`logic/account.ts`, ADR-020 §4) — the only place a regular, mutable transfer is ever reached. `importAccountStatement` (ADR-017 step 2, ADR-022 step 3) defaults each line via `bulk.ts`, then binds every line to `addAccountExpense`/`addAccountIncome` (picked per item by the item's own `type`) — the same single-line flows the individual tools call, unchanged — bound to the ONE account named in the request, and returns the `StatementImportPlan` for the shell to run. |
@@ -374,7 +375,7 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement` — text and registration in `diplomat/mcp/prompts.ts`'s `registerPrompts`, called from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome; no DB access, no controller.
 
-## Dashboards / `/ui` surface (ADR-013 Phase A/B, app shell + fragments — ADR-027 Phase 1, file-backed defaults — ADR-027 Phase 2)
+## Dashboards / `/ui` surface (ADR-013 Phase A/B, app shell + fragments — ADR-027 Phase 1, file-backed defaults — ADR-027 Phase 2, live update — ADR-027 Phase 3)
 
 The `dashboards` table (`id` PK, `name` UNIQUE, `html` nullable, `source: inline|file` DEFAULT `inline`, `path`
 nullable, `updated_at`) stores **content fragments**, keyed by name for every consumer-facing surface — `id` is
@@ -505,6 +506,64 @@ Chart.js once; per-currency grouping; localized labels; loading/empty/error stat
 `save_dashboard`. It is a docs-only artifact — no runtime
 behavior depends on it — shipped in the published npm package via `package.json`'s `files` array so it's
 available alongside the server.
+
+### Live update — SSE, entity-tagged (ADR-027 Phase 3)
+
+**The change bus** (`src/diplomat/changeBus.ts`) is a plain `EventEmitter` wrapper — `createChangeBus()`
+returns `{ publish, subscribe }`. It lives at the `diplomat/` root rather than under `db/`, `http/`, or `mcp/`
+— shared plumbing owned by neither surface, only consumed by them. `createChangeBus()` itself is
+composition-root-only, called once in `main.ts`/`test/integration/app-builder.ts`; `diplomat/db`/
+`diplomat/http` only ever import the `PublishChange`/`ChangeBus` **types** from here and receive the bound
+`publish`/`subscribe` **function** as a parameter — the same pattern `RunEffects`/`resetLocale` already use
+to cross from the composition root into a diplomat edge, just with the type declared next to the concrete
+implementation instead of in `controllers/deps.ts` (there is no controller-facing capability here to route
+through that file — SSE is HTTP-only, never reachable from a controller). No external broker: the MCP
+server, HTTP sidecar, and scheduler share one process (ADR-024 context), so an in-process emitter is the
+whole mechanism.
+
+**The post-commit publish hook** lives in `diplomat/db/effects.ts`'s `attempt` (the one place a batch actually
+commits, shared by both `runEffects` and `runEffectsSequence`): once `applyBatch` reports `applied: true`, the
+deduped entity tags of every outcome that itself `applied: true` are published — an idempotent-duplicate
+insert's `applied: false` outcome changed nothing, so its entity is never published, and a version-conflict
+retry's failed attempts publish nothing either (only the eventual successful commit does). `publish` is the
+last parameter of `runEffects`/`runEffectsSequence`, defaulting to a no-op — every existing direct caller
+(chiefly tests) is unaffected; only the composition root binds the real change bus.
+
+**`GET /ui/events`** (`registerUiEventsRoute`, `diplomat/http/routes/ui.ts`) is the shell's `EventSource`
+target — not a `RouteDefinition`, same reasoning as the rest of `/ui*`. The handler calls `reply.hijack()`
+(opts out of Fastify's own response lifecycle — an SSE stream deliberately never ends the way a normal
+response does) and writes `data: {"entities":[...]}\n\n` on every change-bus publish for as long as the
+client stays connected; `reply.raw.on('close', unsubscribe)` cleans up per-connection on disconnect —
+`reply.raw`, not `req.raw`, matching `diplomat/mcp/route.ts`'s own hijacked route (the only other one in
+this codebase), since this handler owns the response's lifecycle after `hijack()`. The publish callback
+itself checks `reply.raw.destroyed` before writing — a publish can race a disconnect that hasn't reached the
+`close` handler yet, and skipping the write is simpler than reasoning about whether a stale write would be
+safe. `reply.raw.writeHead()` alone only sets internal state — Node doesn't put headers on the wire until the
+first `write()`/`end()` — so the handler calls `reply.raw.flushHeaders()` immediately after, or a client with
+nothing yet to publish would hang waiting for a response that was never actually sent. `buildHttpApp`'s
+Fastify instance sets `forceCloseConnections: true` for the same reason `/ui/events` exists at all: without
+it, `app.close()` waits for every open connection to end on its own, which a long-lived SSE stream never does
+— shutdown would hang for as long as any browser tab has a dashboard open.
+
+**The shell forwards, the fragment decides.** `ui/app.js` opens exactly one `EventSource('/ui/events')` for
+the page's whole lifetime (fragment swaps never reopen it) and, on every message, calls
+`window.fintrackOnDataChanged(entities)` if the currently-loaded fragment defined it — the shell has no
+knowledge of a fragment's internal sections, only this one well-known global slot. `renderFragment` resets
+the slot to `null` before tearing down the outgoing fragment's DOM (never after injecting the new one), so a
+stale closure referencing already-removed elements can't fire and a fragment whose script errors before
+reaching its own registration simply gets no live update rather than the previous fragment's. The baseline
+`ui/dashboards/overview.html` fragment implements the contract: a `SECTION_ENTITY_DEPENDENCIES` map declares
+which entity tags feed each of its section loaders (`summary`/`categorySpending`/`accounts`/`recurring`/
+`recentTransactions`), and `onDataChanged` refetches only the sections whose declared dependencies intersect
+the published entities, assigning itself to `window.fintrackOnDataChanged` as the last line of the script
+(after the initial load). `skills/dashboard-building/SKILL.md` documents the same hook as optional guidance
+for hand-authored/custom dashboards — a fragment that never sets it simply has no live update, same as before
+this phase.
+
+**Known limit (by design, ADR-027):** the change bus only reaches subscribers on this process — a write from
+a *different* stdio server won't push here. Mitigated because ADR-024 steers multi-client use to the single
+HTTP-transport server; a periodic client-side poll can backstop if cross-process live-update ever matters.
+Shipped SSE-in-process first.
 
 ## ADR index
 

@@ -51,6 +51,16 @@ describe('baseline dashboard fragment is data-less (ADR-013 Phase B, converted t
     expect(html).not.toMatch(/<!doctype html|<html[\s>]/i);
   });
 
+  it('registers the live-update hook (ADR-027 Phase 3) as the last thing its script does', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboards/overview' });
+    const { html } = res.json() as { html: string };
+
+    expect(html).toContain('window.fintrackOnDataChanged');
+    // Registered after the initial load call, not before — a stray SSE message arriving mid-init
+    // must never call a handler whose sections haven't rendered yet.
+    expect(html.indexOf('loadAll();')).toBeLessThan(html.indexOf('window.fintrackOnDataChanged ='));
+  });
+
   it('only fetches endpoints that exist as GET operations in the live OpenAPI contract', async () => {
     const res = await inject({ method: 'GET', url: '/api/openapi.json' });
     expect(res.statusCode).toBe(200);

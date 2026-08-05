@@ -81,6 +81,16 @@ dashboard data-less; the save endpoint won't catch a violation for you.
    re-executes it after the fragment's markup is already in the page. If you can't view the seeded fragment
    (sidecar not running, or you're running from the published package with no local source to read), that's
    fine — the hard rules and self-check below fully specify a compliant fragment without it.
+
+   **Optional: live update (ADR-027 Phase 3).** The shell opens one `EventSource` to `/ui/events` for the
+   page's whole lifetime and, on every message, calls `window.fintrackOnDataChanged(entities)` if the
+   currently-loaded fragment has defined it — `entities` is an array of changed entity tags (e.g.
+   `"transaction"`, `"account"`, `"category"`, `"recurring"`, `"tag"`, `"budget"`). Mirror the baseline
+   fragment's pattern: map each section to the loader it already has and the entity tags that feed it, refetch
+   only the affected ones, and assign the function to `window.fintrackOnDataChanged` as the very last line of
+   the script (after the initial `loadAll()`/equivalent). This is optional — a fragment that never sets it
+   simply has no live update, same as before this phase — but skipping it means the user has to manually
+   reload to see a write reflected.
 5. **Record the user's preferences in the dashboard itself** so the next change doesn't re-interrogate them:
    put a design-manifest comment at the top of the HTML. The manifest is **closed-shape only — no freeform
    text fields**, so it structurally cannot carry financial data:
@@ -162,12 +172,12 @@ current contents back, name the reason (sidecar disabled or not running), and ei
 so nothing gets silently dropped. This fallback works regardless of how FinTrack was installed.
 
 If you happen to be working from the FinTrack source repository itself (not the published package — you
-have a local `src/` to read) *and* the name is `overview` with no evidence it's been customized since the
-seed, you may additionally treat `src/diplomat/db/seed/dashboards.ts`'s `DEFAULT_DASHBOARD_HTML` (the
-fragment content, despite the name) as a verified stand-in for "the original" instead of asking: diff your
-new fragment against that source before saving, and confirm the diff is purely additive (existing sections
-untouched, only the requested change applied) — don't just assert it. Treat this as an optional shortcut
-available only in that specific environment, not the general-purpose fallback.
+have a local `src/`/`ui/` to read) *and* the name is `overview` with no evidence it's been customized since
+the seed, you may additionally treat `ui/dashboards/overview.html` (the file-backed default itself, ADR-027
+Phase 2) as a verified stand-in for "the original" instead of asking: diff your new fragment against that
+source before saving, and confirm the diff is purely additive (existing sections untouched, only the
+requested change applied) — don't just assert it. Treat this as an optional shortcut available only in that
+specific environment, not the general-purpose fallback.
 
 ## Self-check before calling save_dashboard
 
