@@ -1,563 +1,2535 @@
-<!--
-  Default "overview" dashboard (ADR-013 Phase A/B; converted to a fragment by ADR-027 Phase 1;
-  moved to this file and registered as a source: 'file' row by ADR-027 Phase 2). The markup/JS
-  below is the only content of this file — it embeds NO financial data. Every number rendered
-  comes from a same-origin fetch('/api/...') issued by the browser after the fragment loads,
-  against the routes documented at GET /api/openapi.json (src/diplomat/http/routes.ts). This is a
-  *fragment* — sections + a <script> that runs its own init immediately once injected — not a
-  full HTML page: shared chrome (shell, menu, CSS, Chart.js) lives in
-  ui/shell.html/ui/app.css/ui/app.js, served at GET /ui. This file is read-only at the install
-  location — fork/contribute to change it; save_dashboard always creates a separate, inline
-  custom dashboard instead (ADR-027 Phase 2).
--->
-<section class="dashboard-toolbar" aria-label="Period">
-  <p class="subtitle" id="last-updated">Not loaded yet</p>
-  <form class="controls" id="period-form">
-    <div class="field">
-      <label for="period-month">Month</label>
-      <select id="period-month" name="month"></select>
-    </div>
-    <div class="field">
-      <label for="period-year">Year</label>
-      <input id="period-year" name="year" type="number" min="2000" max="2100" />
-    </div>
-    <button type="submit" id="apply-period">Apply</button>
-    <button type="button" class="secondary" id="refresh-all">Refresh all</button>
-  </form>
-</section>
+<style>
+/* Sidebar styling */
+        
 
-<section aria-labelledby="summary-heading">
-  <h2 id="summary-heading">Income / Expenses / Balance</h2>
-  <div class="cards-grid" id="summary-cards" aria-live="polite"></div>
-</section>
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #fff;
+        }
 
-<section aria-labelledby="category-heading">
-  <h2 id="category-heading">Spending by category</h2>
-  <div class="cards-grid" id="category-spending-blocks" aria-live="polite"></div>
-</section>
+        .sidebar-brand span {
+            display: none;
+        }
 
-<section aria-labelledby="accounts-heading">
-  <h2 id="accounts-heading">Accounts &amp; balances</h2>
-  <div class="table-wrap" id="accounts-table-wrap" aria-live="polite"></div>
-</section>
+        .sidebar-brand i {
+            color: var(--accent-primary);
+        }
 
-<section aria-labelledby="recurring-heading">
-  <h2 id="recurring-heading">Recurring</h2>
-  <div class="table-wrap" id="recurring-table-wrap" aria-live="polite"></div>
-</section>
+        
 
-<section aria-labelledby="recent-heading">
-  <h2 id="recent-heading">Recent transactions</h2>
-  <div class="table-wrap" id="recent-transactions-table-wrap" aria-live="polite"></div>
-</section>
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 0;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 1.1rem;
+            border-radius: 12px;
+            transition: var(--transition-smooth);
+            position: relative;
+            width: 100%;
+        }
 
-<section aria-labelledby="installments-heading">
-  <h2 id="installments-heading">Installment projections</h2>
-  <div class="placeholder-card">Coming soon — no API endpoint publishes installment projections yet.</div>
-</section>
+        .sidebar-menu a span {
+            display: none;
+        }
+
+        .sidebar-menu a:hover {
+            background: rgba(255, 255, 255, 0.03);
+            color: #fff;
+        }
+
+        .sidebar-menu a.active {
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.1);
+        }
+
+        /* Tooltip styling */
+        .sidebar-menu a::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 65px;
+            top: 50%;
+            transform: translateY(-50%) translateX(10px);
+            background: #111322;
+            border: 1px solid var(--panel-border);
+            color: #fff;
+            padding: 0.4rem 0.8rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: var(--transition-smooth);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+
+        .sidebar-menu a:hover::after {
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }
+
+        /* Main Content container */
+        
+
+        /* Header styling */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .header-title-area h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-title-area p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+
+        .controls-area {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            padding: 0.5rem 1rem;
+            border-radius: 14px;
+            backdrop-filter: blur(12px);
+        }
+
+        .controls-area label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .select-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.4rem 1rem;
+            border-radius: 10px;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-custom:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        /* KPI cards grid */
+        .kpis-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.25rem;
+        }
+
+        .kpi-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 20px;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            backdrop-filter: blur(12px);
+            box-shadow: var(--card-shadow);
+        }
+
+        .kpi-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .kpi-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .kpi-details {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            padding-top: 0.5rem;
+            margin-top: 0.25rem;
+        }
+
+        /* Panels styling */
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            backdrop-filter: blur(12px);
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .panel-header h2 i {
+            color: var(--accent-primary);
+        }
+
+        /* Calendar & Details Split Row */
+        .calendar-split-row {
+            display: grid;
+            grid-template-columns: 1.6fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .calendar-legend {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .dot-inc { background-color: var(--income-color); }
+        .dot-exp { background-color: var(--expense-color); }
+        .dot-trans { background-color: var(--text-muted); }
+
+        .calendar-panel-body {
+            padding: 1.25rem 1.5rem;
+        }
+
+        .calendar-grid-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            text-align: center;
+            font-weight: 700;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .calendar-grid-body {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .calendar-day {
+            background: rgba(255, 255, 255, 0.015);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            height: 72px;
+            padding: 0.35rem 0.25rem 0.25rem 0.25rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .calendar-day:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .calendar-day.empty {
+            background: transparent;
+            border: none;
+            cursor: default;
+            pointer-events: none;
+        }
+
+        .calendar-day.today {
+            border-color: #d97706;
+            background: rgba(217, 119, 6, 0.08);
+        }
+
+        .calendar-day.selected-day {
+            border-color: var(--accent-primary);
+            background: rgba(139, 92, 246, 0.12);
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+        }
+
+        .calendar-day.selected-day .day-num {
+            color: #c084fc;
+        }
+
+        .day-num {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+
+        .day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            height: 14px;
+        }
+
+        .calendar-day.today .day-num {
+            color: #fbbf24;
+        }
+
+        .day-flows {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-top: 0.25rem;
+        }
+
+        .day-flow {
+            font-size: 0.62rem;
+            font-weight: 700;
+            border-radius: 4px;
+            padding: 1px 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+        }
+
+        .day-flow.inflow {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--income-color);
+        }
+
+        .day-flow.outflow {
+            background: rgba(244, 63, 94, 0.1);
+            color: var(--expense-color);
+        }
+
+        .day-flow.transflow {
+            background: rgba(156, 163, 175, 0.12);
+            color: var(--text-muted);
+        }
+
+        /* Custom Scrollbar for calendar details panel */
+        #calendar-details-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        #calendar-details-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #calendar-details-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+        }
+        #calendar-details-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(139, 92, 246, 0.35);
+        }
+
+        /* Widgets grid styling */
+        .widgets-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+
+        .widget-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            backdrop-filter: blur(12px);
+            box-shadow: var(--card-shadow);
+        }
+
+        .widget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 0.75rem;
+        }
+
+        .widget-header h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .widget-header h3 i {
+            color: var(--accent-primary);
+        }
+
+        .widget-link {
+            font-size: 0.8rem;
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 600;
+            transition: var(--transition-smooth);
+        }
+
+        .widget-link:hover {
+            color: #a78bfa;
+        }
+
+        .widget-body {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            min-height: 180px;
+        }
+
+        .widget-body.chart-body {
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* List items inside widgets */
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0.5rem;
+            border-radius: 8px;
+            transition: var(--transition-smooth);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .list-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .list-item-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .list-item-title {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .list-item-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .list-item-value {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        /* Pending item styles */
+        .pending-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.65rem 0.5rem;
+            border-radius: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            transition: var(--transition-smooth);
+        }
+
+        .pending-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .pending-item:last-child {
+            border-bottom: none;
+        }
+
+        .pending-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .pending-desc {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .pending-date-cat {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        .pending-action-area {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .pending-value {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--expense-color);
+        }
+
+        .pending-value.income {
+            color: var(--income-color);
+        }
+
+        .btn-action-confirm {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            color: var(--income-color);
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .btn-action-confirm:hover {
+            background: var(--income-color);
+            color: #0c0e17;
+            border-color: var(--income-color);
+        }
+
+        /* Loading overlays */
+        .loading-wrapper {
+            position: relative;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(12, 14, 23, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 10;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border-radius: 20px;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--accent-primary);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .badge-status {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+        }
+
+        .status-eff {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--income-color);
+        }
+
+        .status-pend {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning-color);
+        }
+
+        /* Toast notification styling */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            background: #111322;
+            border: 1px solid var(--panel-border);
+            color: #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            z-index: 1100;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast-success i { color: var(--income-color); }
+        .toast-error i { color: var(--expense-color); }
+
+        /* Default mobile/tablet fluid styles for calendar row */
+        .calendar-split-row .panel {
+            height: auto;
+        }
+        .calendar-details-body {
+            max-height: 480px;
+            overflow-y: auto;
+        }
+
+        /* Desktop lock heights (prevents layout jumping) */
+        @media (min-width: 1025px) {
+            .calendar-split-row .panel {
+                height: 620px;
+            }
+            .calendar-details-body {
+                height: calc(620px - 56px - 40px) !important;
+                max-height: none !important;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .kpis-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .calendar-split-row {
+                grid-template-columns: 1fr;
+            }
+            .widgets-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            
+            
+            
+            .sidebar-menu a {
+                padding: 0.5rem;
+            }
+            .sidebar-menu a::after {
+                display: none;
+            }
+            
+            .kpis-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* More menu at bottom of sidebar */
+        .sidebar-more-container {
+            margin-top: auto;
+            width: 100%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+        }
+        .sidebar-more-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            padding: 0.75rem 0;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 12px;
+            transition: var(--transition-smooth);
+        }
+        .sidebar-more-btn:hover {
+            background: rgba(255, 255, 255, 0.03);
+            color: #fff;
+        }
+        .sidebar-more-dropdown {
+            position: absolute;
+            bottom: 0;
+            left: 60px;
+            background: #0d0f1a;
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            width: 170px;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+            transition: all 0.2s ease;
+            z-index: 1000;
+        }
+        .sidebar-more-dropdown::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -20px;
+            width: 20px;
+            height: 100%;
+            background: transparent;
+        }
+        .sidebar-more-container:hover .sidebar-more-dropdown {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateY(0);
+        }
+        .sidebar-more-dropdown a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.6rem 0.75rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border-radius: 8px;
+            transition: var(--transition-smooth);
+        }
+        .sidebar-more-dropdown a:hover {
+            background: rgba(139, 92, 246, 0.1);
+            color: #a78bfa;
+        }
+        .sidebar-more-dropdown a.active {
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.1);
+        }
+        .sidebar-more-dropdown a i {
+            font-size: 0.95rem;
+            width: 16px;
+            text-align: center;
+        }
+
+        /* Elevate header stacking context globally for custom select dropdowns */
+        header, .dashboard-header {
+            position: relative !important;
+            z-index: 110 !important;
+        }
+        
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+        
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+        
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+        
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+        
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+        
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+        
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+        
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+        
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+</style>
+
+<!-- Header -->
+        <header>
+            <div class="header-title-area">
+                <h1><i class="fa-solid fa-house"></i> <span data-i18n="overview_title">Overview</span></h1>
+                <p data-i18n="overview_subtitle">Monthly financial summary, calendar, and quick shortcuts</p>
+            </div>
+            <div class="controls-area">
+                <label for="month-select" data-i18n="reference_label">Reference:</label>
+                <select id="month-select" class="select-custom">
+                    <option value="1">Janeiro</option>
+                    <option value="2">Fevereiro</option>
+                    <option value="3">Março</option>
+                    <option value="4">Abril</option>
+                    <option value="5">Maio</option>
+                    <option value="6">Junho</option>
+                    <option value="7" selected>Julho</option>
+                    <option value="8">Agosto</option>
+                    <option value="9">Setembro</option>
+                    <option value="10">Outubro</option>
+                    <option value="11">Novembro</option>
+                    <option value="12">Dezembro</option>
+                </select>
+                <select id="year-select" class="select-custom">
+                    <option value="2025">2025</option>
+                    <option value="2026" selected>2026</option>
+                    <option value="2027">2027</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- Loading Overlay for the whole dashboard -->
+        <div class="loading-wrapper">
+            <div id="dashboard-loading" class="loading-overlay active">
+                <div class="spinner"></div>
+            </div>
+
+            <!-- KPI Cards Row -->
+            <div class="kpis-row">
+                <!-- Incomes card -->
+                <div class="kpi-card">
+                    <div class="kpi-title">
+                        <i class="fa-solid fa-circle-arrow-up" style="color: var(--income-color);"></i>
+                        Receitas Totais
+                    </div>
+                    <div class="kpi-value" id="kpi-income-val">R$ 0,00</div>
+                    <div class="kpi-details">
+                        <span>Efetivado: <strong id="kpi-income-eff" style="color: var(--income-color)">R$ 0,00</strong></span>
+                        <span>Pendente: <strong id="kpi-income-pend">R$ 0,00</strong></span>
+                    </div>
+                </div>
+                <!-- Expenses card -->
+                <div class="kpi-card">
+                    <div class="kpi-title">
+                        <i class="fa-solid fa-circle-arrow-down" style="color: var(--expense-color);"></i>
+                        Despesas Totais
+                    </div>
+                    <div class="kpi-value" id="kpi-expense-val">R$ 0,00</div>
+                    <div class="kpi-details">
+                        <span>Efetivado: <strong id="kpi-expense-eff" style="color: var(--expense-color)">R$ 0,00</strong></span>
+                        <span>Pendente: <strong id="kpi-expense-pend">R$ 0,00</strong></span>
+                    </div>
+                </div>
+                <!-- Balance card -->
+                <div class="kpi-card">
+                    <div class="kpi-title">
+                        <i class="fa-solid fa-scale-balanced" style="color: var(--accent-primary);"></i>
+                        Saldo Resultante
+                    </div>
+                    <div class="kpi-value" id="kpi-balance-val">R$ 0,00</div>
+                    <div class="kpi-details">
+                        <span>Líquido mensal (Receitas x Despesas)</span>
+                    </div>
+                </div>
+                <!-- Card Bill card -->
+                <div class="kpi-card">
+                    <div class="kpi-title">
+                        <i class="fa-solid fa-credit-card" style="color: var(--warning-color);"></i>
+                        Faturas do Mês
+                    </div>
+                    <div class="kpi-value" id="kpi-cards-val">R$ 0,00</div>
+                    <div class="kpi-details">
+                        <span>Total de faturas em aberto no período</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calendar & Details Panel (Split Layout) -->
+            <div class="calendar-split-row" style="margin-top: 1.5rem;">
+                <!-- Calendar (Left Column) -->
+                <div class="panel" style="margin-top: 0;">
+                    <div class="panel-header">
+                        <h2><i class="fa-solid fa-calendar-days"></i> <span data-i18n="due_calendar">Daily Flow & Dues</span></h2>
+                        <div class="calendar-legend">
+                            <span class="legend-item"><span class="dot dot-inc"></span> Receitas</span>
+                            <span class="legend-item"><span class="dot dot-exp"></span> Despesas</span>
+                            <span class="legend-item"><span class="dot dot-trans"></span> Transferências</span>
+                        </div>
+                    </div>
+                    <div class="calendar-panel-body">
+                        <div class="calendar-grid-header">
+                            <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+                        </div>
+                        <div class="calendar-grid-body" id="calendar-days">
+                            <!-- Populated dynamically via JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calendar Daily Details Panel (Right Column) -->
+                <div class="panel" id="calendar-details-panel">
+                    <div class="panel-header">
+                        <h2 id="calendar-details-title"><i class="fa-solid fa-calendar-day"></i> Lançamentos</h2>
+                    </div>
+                    <div class="calendar-details-body" id="calendar-details-content" style="padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                        <!-- Dynamically populated or placeholder -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Widgets Grid -->
+            <div class="widgets-grid" style="margin-top: 1.5rem;">
+                <!-- Widget 1: Contas Bancárias -->
+                <div class="widget-card">
+                    <div class="widget-header">
+                        <h3><i class="fa-solid fa-building-columns"></i> Contas Bancárias</h3>
+                        <a href="/ui/accounts" class="widget-link">Ver todas <i class="fa-solid fa-arrow-right"></i></a>
+                    </div>
+                    <div class="widget-body" id="widget-accounts-body">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Widget 2: Faturas de Cartão -->
+                <div class="widget-card">
+                    <div class="widget-header">
+                        <h3><i class="fa-solid fa-credit-card"></i> Faturas de Cartão</h3>
+                        <a href="/ui/cards" class="widget-link">Ver detalhes <i class="fa-solid fa-arrow-right"></i></a>
+                    </div>
+                    <div class="widget-body" id="widget-cards-body">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Widget 3: Transações Pendentes -->
+                <div class="widget-card">
+                    <div class="widget-header">
+                        <h3><i class="fa-solid fa-clock"></i> Próximos Pendentes</h3>
+                        <a href="/ui/pending" class="widget-link">Ver todos <i class="fa-solid fa-arrow-right"></i></a>
+                    </div>
+                    <div class="widget-body" id="widget-pending-body" style="position:relative;">
+                        <!-- Loading spinner for widget confirm action -->
+                        <div id="pending-widget-loading" class="loading-overlay">
+                            <div class="spinner"></div>
+                        </div>
+                        <div id="pending-items-container" style="width:100%; display:flex; flex-direction:column; gap:0.25rem;">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Widget 4: Distribuição de Despesas -->
+                <div class="widget-card">
+                    <div class="widget-header">
+                        <h3><i class="fa-solid fa-chart-pie"></i> Distribuição de Despesas</h3>
+                        <a href="/ui/comparative" class="widget-link">Ver categorias <i class="fa-solid fa-arrow-right"></i></a>
+                    </div>
+                    <div class="widget-body chart-body">
+                        <div class="chart-container-inner" style="height: 180px; width: 100%; position: relative; display: flex; align-items: center; justify-content: center;">
+                            <canvas id="expensePieChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
 <script>
-  (function () {
-    'use strict';
+// Global variables for dashboard state
+        var selectedMonth = 7;
+        var selectedYear = 2026;
+        var allTransactions = [];
+        var accounts = [];
+        var creditCards = [];
+        var categories = [];
+        var expensePieChartInstance = null;
 
-    var RECENT_TRANSACTIONS_LIMIT = 10;
-    var CHART_COLORS = ['#4f8cff', '#3fb950', '#f2cc60', '#f85149', '#a371f7', '#39c5cf', '#ff9d5c', '#ff6bcb'];
+        // Number utilities
+        function formatBRL(value) {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+        }
 
-    var Api = {
-      summary: function (month, year) {
-        return '/api/summary?month=' + month + '&year=' + year;
-      },
-      categorySpending: function (month, year) {
-        return '/api/aggregate?groupBy=category&type=expense&month=' + month + '&year=' + year;
-      },
-      accountBalances: '/api/accounts/balances',
-      recurring: '/api/recurring',
-      // search_transactions/GET /api/transactions returns a page { items, nextCursor?, total? }
-      // (ADR-014), not a bare array — pass the previous page's nextCursor back as cursor to
-      // keep walking.
-      recentTransactions: function (limit, cursor) {
-        var url = '/api/transactions?limit=' + limit;
-        if (cursor) url += '&cursor=' + encodeURIComponent(cursor);
-        return url;
-      },
-    };
+        function formatBRLNoSymbol(value) {
+            return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+        }
 
-    var charts = {};
-    var period = currentPeriod();
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+        }
 
-    // "Latest request wins" guard: rapid period changes / refresh clicks can resolve out of
-    // order, so a stale response must never overwrite a newer one already on screen.
-    var requestSequence = { summary: 0, categorySpending: 0, accounts: 0, recurring: 0, recentTransactions: 0 };
+        // Date helper
+        function getLastDay(year, month) {
+            return new Date(year, month, 0).getDate();
+        }
 
-    function beginRequest(section) {
-      return ++requestSequence[section];
-    }
-
-    function isCurrentRequest(section, requestId) {
-      return requestSequence[section] === requestId;
-    }
-
-    function currentPeriod() {
-      var now = new Date();
-      return { month: now.getMonth() + 1, year: now.getFullYear() };
-    }
-
-    function monthName(monthNumber) {
-      return new Date(2000, monthNumber - 1, 1).toLocaleString(undefined, { month: 'long' });
-    }
-
-    function h(tag, props, children) {
-      var el = document.createElement(tag);
-      if (props) {
-        Object.keys(props).forEach(function (key) {
-          if (key === 'class') el.className = props[key];
-          else if (key === 'text') el.textContent = props[key];
-          else el.setAttribute(key, props[key]);
-        });
-      }
-      (children || []).forEach(function (child) {
-        if (child) el.appendChild(child);
-      });
-      return el;
-    }
-
-    function clearNode(el) {
-      while (el.firstChild) el.removeChild(el.firstChild);
-    }
-
-    function setLoading(el, message) {
-      clearNode(el);
-      el.appendChild(h('p', { class: 'state', text: message }));
-    }
-
-    function setEmpty(el, message) {
-      clearNode(el);
-      el.appendChild(h('p', { class: 'state', text: message }));
-    }
-
-    function setError(el, message) {
-      clearNode(el);
-      el.appendChild(h('p', { class: 'state state-error', role: 'alert', text: 'Could not load this section: ' + message }));
-    }
-
-    function fetchJson(path) {
-      return fetch(path, { headers: { accept: 'application/json' } }).then(function (res) {
-        if (res.ok) return res.json();
-        return res
-          .json()
-          .catch(function () {
-            return null;
-          })
-          .then(function (body) {
-            var detail = res.statusText;
-            if (body && body.error && Array.isArray(body.error.issues) && body.error.issues.length) {
-              detail = body.error.issues.join(', ');
-            } else if (body && body.error && body.error.code) {
-              detail = body.error.code;
+        // Adaptive segment fetch to safely handle months with > 50 transactions without truncation
+        async function fetchMonthSegment(year, month, startDay, endDay) {
+            const mStr = String(month).padStart(2, '0');
+            const sStr = String(startDay).padStart(2, '0');
+            const eStr = String(endDay).padStart(2, '0');
+            
+            const url = `/api/transactions?from=${year}-${mStr}-${sStr}&to=${year}-${mStr}-${eStr}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Erro ao buscar transações de ${mStr}/${year} entre dias ${sStr} e ${eStr}`);
+            const list = await res.json();
+            
+            if (!Array.isArray(list) || list.length < 50) {
+                return list || [];
             }
-            throw new Error('Request failed (' + res.status + '): ' + detail);
-          });
-      });
+            
+            if (startDay === endDay) {
+                return list;
+            }
+            
+            const mid = Math.floor((startDay + endDay) / 2);
+            const [part1, part2] = await Promise.all([
+                fetchMonthSegment(year, month, startDay, mid),
+                fetchMonthSegment(year, month, mid + 1, endDay)
+            ]);
+            
+            return part1.concat(part2);
+        }
+
+        // Fetch transactions for selected month using safe pagination
+        async function fetchMonthTransactions(year, month) {
+            const lastDay = getLastDay(year, month);
+            const mStr = String(month).padStart(2, '0');
+            const fromStr = `${year}-${mStr}-01`;
+            const toStr = `${year}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+            
+            // Add 1 day to prevent timezone cutoff
+            const endDateObj = new Date(year, month - 1, lastDay + 1);
+            const toYear = endDateObj.getFullYear();
+            const toMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
+            const toDay = String(endDateObj.getDate()).padStart(2, '0');
+            const adjustedTo = `${toYear}-${toMonth}-${toDay}`;
+
+            let allItems = [];
+            let cursor = null;
+            
+            while (true) {
+                const queryParams = new URLSearchParams({
+                    from: fromStr,
+                    to: adjustedTo,
+                    sort: 'date',
+                    dir: 'desc'
+                });
+                if (cursor) {
+                    queryParams.set('cursor', cursor);
+                }
+                
+                const url = `/api/transactions?${queryParams.toString()}`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+                
+                const data = await res.json();
+                
+                let items = [];
+                let nextCursor = null;
+                if (data && typeof data === 'object') {
+                    if (Array.isArray(data.items)) {
+                        items = data.items;
+                        nextCursor = data.nextCursor;
+                    } else if (Array.isArray(data)) {
+                        items = data;
+                    }
+                }
+                
+                allItems.push(...items);
+                
+                if (!nextCursor) {
+                    break;
+                }
+                cursor = nextCursor;
+            }
+            
+            return allItems.filter(t => t.date && t.date <= toStr);
+        }
+
+        // Toast controller
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `
+                <i class="${type === 'success' ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'}"></i>
+                <span>${message}</span>
+            `;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3500);
+        }
+
+        // Initialize controllers
+        
+// Translation engine and dictionaries
+var TRANSLATIONS = {
+    en: {
+        // Sidebar Menu
+        tooltip_overview: "Overview",
+        tooltip_pending: "Pending",
+        tooltip_comparative: "Comparative",
+        tooltip_projections: "Projections",
+        tooltip_accounts: "Bank Accounts",
+        tooltip_cards: "Credit Cards",
+        menu_categories: "Categories",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "January", february: "February", march: "March", april: "April", may: "May", june: "June",
+        july: "July", august: "August", september: "September", october: "October", november: "November", december: "December",
+        
+        // General UI terms
+        reference_label: "Reference:",
+        day_sun: "Sun", day_mon: "Mon", day_tue: "Tue", day_wed: "Wed", day_thu: "Thu", day_fri: "Fri", day_sat: "Sat",
+        paid: "Paid", unpaid: "Unpaid", active: "Active", inactive: "Inactive",
+        
+        // Overview Dashboard
+        overview_title: "Overview",
+        overview_subtitle: "Monthly financial summary, calendar, and quick shortcuts",
+        accounts_balance: "Accounts Balance",
+        expenses_month: "Expenses this Month",
+        card_bills: "Credit Card Bills",
+        incomes_month: "Incomes this Month",
+        final_projection: "Final Projection:",
+        recent_transactions: "Recent Transactions",
+        due_calendar: "Daily Flow & Dues",
+        expenses_distribution: "Expenses Distribution",
+        quick_shortcuts: "Quick Shortcuts",
+        new_transaction: "New Transaction",
+        new_transfer: "New Transfer",
+        new_category: "New Category",
+        new_card: "New Card",
+        new_account: "New Account",
+        no_expenses_month: "No expenses recorded this month.",
+        no_recent_transactions: "No recent transactions found.",
+        no_dues_period: "No transactions due in this period.",
+        income: "Income",
+        expense: "Expense",
+        paid_reconciled: "Paid / Reconciled",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Recurring & Installment Projections",
+        projections_subtitle: "Advanced visual mapping and projection of active recurrences and installments for the next months",
+        projection_label: "Projection:",
+        months_3: "3 Months",
+        months_6: "6 Months",
+        months_9: "9 Months",
+        months_12: "12 Months",
+        heatmap_income_title: "Recurrent / Installment Incomes",
+        heatmap_expense_title: "Recurrent / Installment Expenses",
+        total: "Total",
+        no_recurrent_incomes: "No active recurrent or installment incomes in the selected semester.",
+        no_recurrent_expenses: "No active recurrent or installment expenses in the selected semester.",
+        modal_details_title: "Projection Breakdown",
+        modal_details_subtitle: "Details of projected transactions for the category and month",
+        col_date: "Date",
+        col_desc: "Description",
+        col_value: "Value",
+        col_status: "Status",
+        btn_close: "Close",
+        
+        // Comparative Dashboard
+        comparative_title: "Comparative Dashboard",
+        comparative_subtitle: "Analysis and comparison of monthly incomes vs expenses, and category limits",
+        month_summary_title: "Month Summary",
+        cat_spending_title: "Spending by Category",
+        card_limits_title: "Category Budgets & Limits",
+        col_category: "Category",
+        col_limit: "Budget Limit",
+        col_spent: "Spent",
+        col_status_limit: "Status",
+        col_percentage: "Percentage",
+        within_limit: "Within Limit",
+        exceeded: "Exceeded",
+        reception: "Incomes",
+        deduction: "Expenses",
+        net_balance: "Net Balance",
+        performance: "Financial Health",
+        no_spending_month: "No category spend recorded this month.",
+        
+        // Accounts Dashboard
+        accounts_title: "Bank Accounts",
+        accounts_subtitle: "Manage accounts, checking balances, and reviewing statements",
+        active_account_statement: "Account Statement",
+        btn_new_transaction: "New Transaction",
+        btn_new_transfer: "New Transfer",
+        search_description_placeholder: "Type to search...",
+        filter_type_label: "Type",
+        filter_type_all: "All",
+        filter_type_income: "Incomes",
+        filter_type_expense: "Expenses",
+        col_actions: "Actions",
+        action_confirm: "Confirm",
+        action_edit: "Edit",
+        action_delete: "Delete",
+        no_transactions_account: "No transactions recorded for this account in the selected month.",
+        confirm_delete_title: "Are you sure you want to permanently delete this transaction?",
+        modal_new_tx_title: "New Transaction",
+        modal_new_transfer_title: "New Transfer",
+        label_account: "Account",
+        label_description: "Description",
+        label_value: "Value",
+        label_date: "Date",
+        label_category: "Category / Subcategory",
+        label_type: "Type",
+        label_status: "Status",
+        status_pending: "Pending",
+        status_confirmed: "Paid / Confirmed",
+        btn_cancel: "Cancel",
+        btn_save: "Save",
+        label_origin: "Origin Account",
+        label_destination: "Destination Account",
+        
+        // Pending Dashboard
+        pending_title: "Pending Transactions",
+        pending_subtitle: "Monitoring and quick confirmation of pending or future transactions",
+        pending_kpi_total: "Total Pending",
+        pending_kpi_incomes: "Pending Incomes",
+        pending_kpi_expenses: "Pending Expenses",
+        pending_chart_incomes: "Pending Incomes Trend",
+        pending_chart_expenses: "Pending Expenses Trend",
+        btn_confirm: "Confirm",
+        btn_edit: "Edit",
+        btn_delete: "Delete",
+        no_pending_transactions: "No pending transactions found for this period.",
+        toast_success_confirm: "Transaction confirmed successfully!",
+        
+        // Categories Dashboard
+        categories_title: "Category Management",
+        categories_subtitle: "Visualize, search, and manage categories and subcategories in a clean tree list",
+        btn_new_category: "New Category",
+        search_category_placeholder: "Search categories...",
+        col_type: "Type",
+        col_actions_cat: "Actions",
+        subcategories_label: "Subcategories",
+        no_subcategories: "No subcategories registered.",
+        modal_new_cat_title: "New Category",
+        modal_new_subcat_title: "New Subcategory",
+        label_name: "Name",
+        label_color: "Color",
+        label_parent_category: "Parent Category (Read-Only)",
+        toast_success_cat: "Category created successfully!",
+        toast_success_subcat: "Subcategory created successfully!",
+        
+        // Cards Dashboard
+        cards_title: "Credit Cards",
+        cards_subtitle: "Manage credit cards, credit limits, and statement history",
+        card_bill_details: "Card Bill Details",
+        btn_pay_bill: "Pay Bill",
+        btn_revert_payment: "Revert Payment",
+        bill_status: "Bill Status:",
+        status_open: "Open",
+        status_closed: "Closed",
+        status_paid: "Paid",
+        no_card_transactions: "No transactions recorded for this card bill in the selected cycle.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Dashboards Monitor",
+        dashboards_subtitle: "List, view source, and upload fintrack dashboards",
+        col_dashboard: "Dashboard",
+        col_last_update: "Last Updated",
+        btn_view_source: "View Source",
+        btn_download: "Download",
+        upload_new_dashboard: "Upload New Dashboard",
+        placeholder_dashboard_name: "Dashboard Name (e.g. pending)",
+        upload_instructions: "Select or drop HTML file here to upload",
+        btn_upload: "Upload",
+        modal_source_title: "HTML Source Code",
+        
+        // Tags Management
+        menu_tags: "Tags",
+        tags_title: "Tag Management",
+        tags_subtitle: "Manage tags to label and organize your transactions",
+        panel_title_tags: "Active Tags",
+        btn_new_tag: "New Tag",
+        label_tag_name: "Tag Name",
+        placeholder_tag_name: "E.g. work, travel, refund",
+        empty_tags_message: "No tags registered.",
+        btn_save: "Save",
+        btn_cancel: "Cancel",
+        toast_success_tag_created: 'Tag "{name}" created successfully!',
+        toast_success_tag_deleted: 'Tag "{name}" deleted successfully!',
+        confirm_delete_tag: 'Are you sure you want to delete tag "{name}"?\n(This action will remove the tag from all linked transactions)'
+    },
+    pt: {
+        // Sidebar Menu
+        tooltip_overview: "Visão Geral",
+        tooltip_pending: "Pendentes",
+        tooltip_comparative: "Comparativo",
+        tooltip_projections: "Projeções",
+        tooltip_accounts: "Contas Bancárias",
+        tooltip_cards: "Cartões de Crédito",
+        menu_categories: "Categorias",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "Janeiro", february: "Fevereiro", march: "Março", april: "Abril", may: "Maio", june: "Junho",
+        july: "Julho", august: "Agosto", september: "Setembro", october: "Outubro", november: "Novembro", december: "Dezembro",
+        
+        // General UI terms
+        reference_label: "Referência:",
+        day_sun: "Dom", day_mon: "Seg", day_tue: "Ter", day_wed: "Qua", day_thu: "Qui", day_fri: "Sex", day_sat: "Sáb",
+        paid: "Pago", unpaid: "Não Pago", active: "Ativo", inactive: "Inativo",
+        
+        // Overview Dashboard
+        overview_title: "Visão Geral",
+        overview_subtitle: "Consolidado financeiro mensal, calendário e atalhos rápidos",
+        accounts_balance: "Saldo em Contas",
+        expenses_month: "Despesas do Mês",
+        card_bills: "Faturas de Cartão",
+        incomes_month: "Receitas do Mês",
+        final_projection: "Projeção Final:",
+        recent_transactions: "Lançamentos Recentes",
+        due_calendar: "Fluxo Diário",
+        expenses_distribution: "Distribuição de Despesas",
+        quick_shortcuts: "Atalhos Rápidos",
+        new_transaction: "Novo Lançamento",
+        new_transfer: "Nova Transferência",
+        new_category: "Nova Categoria",
+        new_card: "Novo Cartão",
+        new_account: "Nova Conta",
+        no_expenses_month: "Sem despesas registradas neste mês.",
+        no_recent_transactions: "Nenhuma transação recente encontrada.",
+        no_dues_period: "Sem vencimentos neste período.",
+        income: "Receita",
+        expense: "Despesa",
+        paid_reconciled: "Pago / Conciliado",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Projeção de Recorrências e Parcelas",
+        projections_subtitle: "Mapeamento visual avançado e projeção de recorrências e parcelas ativas para os próximos meses",
+        projection_label: "Projeção:",
+        months_3: "3 Meses",
+        months_6: "6 Meses",
+        months_9: "9 Meses",
+        months_12: "12 Meses",
+        heatmap_income_title: "Receitas Recorrentes / Parceladas",
+        heatmap_expense_title: "Despesas Recorrentes / Parceladas",
+        total: "Total",
+        no_recurrent_incomes: "Nenhuma receita recorrente/parcelada ativa no semestre.",
+        no_recurrent_expenses: "Nenhuma despesa recorrente/parcelada ativa no semestre.",
+        modal_details_title: "Detalhamento de Projeções",
+        modal_details_subtitle: "Detalhes das transações projetadas para a categoria e mês",
+        col_date: "Data",
+        col_desc: "Descrição",
+        col_value: "Valor",
+        col_status: "Status",
+        btn_close: "Fechar",
+        
+        // Comparative Dashboard
+        comparative_title: "Dashboard Comparativo",
+        comparative_subtitle: "Análise e comparação mensal de receitas vs despesas e limites por categoria",
+        month_summary_title: "Resumo do Mês",
+        cat_spending_title: "Gastos por Categoria",
+        card_limits_title: "Orçamentos e Limites de Categorias",
+        col_category: "Categoria",
+        col_limit: "Limite de Orçamento",
+        col_spent: "Gasto",
+        col_status_limit: "Status",
+        col_percentage: "Porcentagem",
+        within_limit: "Dentro do Limite",
+        exceeded: "Excedido",
+        reception: "Receitas",
+        deduction: "Despesas",
+        net_balance: "Saldo Líquido",
+        performance: "Saúde Financeira",
+        no_spending_month: "Sem despesas registradas por categoria neste mês.",
+        
+        // Accounts Dashboard
+        accounts_title: "Minhas Contas",
+        accounts_subtitle: "Gerencie contas, consulte saldos e revise extratos",
+        active_account_statement: "Extrato de Conta",
+        btn_new_transaction: "Novo Lançamento",
+        btn_new_transfer: "Nova Transferência",
+        search_description_placeholder: "Digite para filtrar...",
+        filter_type_label: "Tipo",
+        filter_type_all: "Todos",
+        filter_type_income: "Receitas",
+        filter_type_expense: "Despesas",
+        col_actions: "Ações",
+        action_confirm: "Confirmar",
+        action_edit: "Editar",
+        action_delete: "Excluir",
+        no_transactions_account: "Nenhum lançamento nesta conta para o mês selecionado.",
+        confirm_delete_title: "Deseja excluir definitivamente a transação?",
+        modal_new_tx_title: "Novo Lançamento",
+        modal_new_transfer_title: "Nova Transferência",
+        label_account: "Conta",
+        label_description: "Descrição",
+        label_value: "Valor",
+        label_date: "Data",
+        label_category: "Categoria / Subcategoria",
+        label_type: "Tipo",
+        label_status: "Status",
+        status_pending: "Pendente",
+        status_confirmed: "Pago / Confirmado",
+        btn_cancel: "Cancelar",
+        btn_save: "Salvar",
+        label_origin: "Conta Origem",
+        label_destination: "Conta Destino",
+        
+        // Pending Dashboard
+        pending_title: "Transações Pendentes",
+        pending_subtitle: "Monitoramento e confirmação rápida de lançamentos pendentes ou futuros",
+        pending_kpi_total: "Total Pendente",
+        pending_kpi_incomes: "Receitas Pendentes",
+        pending_kpi_expenses: "Despesas Pendentes",
+        pending_chart_incomes: "Tendência de Receitas Pendentes",
+        pending_chart_expenses: "Tendência de Despesas Pendentes",
+        btn_confirm: "Confirmar",
+        btn_edit: "Editar",
+        btn_delete: "Excluir",
+        no_pending_transactions: "Nenhuma transação pendente encontrada para este período.",
+        toast_success_confirm: "Transação confirmada com sucesso!",
+        
+        // Categories Dashboard
+        categories_title: "Gerenciamento de Categorias",
+        categories_subtitle: "Visualize, pesquise e gerencie categorias e subcategorias em árvore",
+        btn_new_category: "Nova Categoria",
+        search_category_placeholder: "Pesquisar categorias...",
+        col_type: "Tipo",
+        col_actions_cat: "Ações",
+        subcategories_label: "Subcategorias",
+        no_subcategories: "Nenhuma subcategoria cadastrada.",
+        modal_new_cat_title: "Nova Categoria",
+        modal_new_subcat_title: "Nova Subcategoria",
+        label_name: "Nome",
+        label_color: "Cor",
+        label_parent_category: "Categoria Pai (Somente Leitura)",
+        toast_success_cat: "Categoria criada com sucesso!",
+        toast_success_subcat: "Subcategoria criada com sucesso!",
+        
+        // Cards Dashboard
+        cards_title: "Cartões de Crédito",
+        cards_subtitle: "Gerencie cartões de crédito, limites e histórico de faturas",
+        card_bill_details: "Detalhamento de Fatura",
+        btn_pay_bill: "Pagar Fatura",
+        btn_revert_payment: "Estornar Pagamento",
+        bill_status: "Status da Fatura:",
+        status_open: "Aberta",
+        status_closed: "Fechada",
+        status_paid: "Paga",
+        no_card_transactions: "Nenhuma transação registrada nesta fatura para o ciclo selecionado.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Monitor de Dashboards",
+        dashboards_subtitle: "Liste, visualize o código fonte e envie dashboards para o servidor do fintrack",
+        col_dashboard: "Dashboard",
+        col_last_update: "Última Atualização",
+        btn_view_source: "Ver Código",
+        btn_download: "Baixar HTML",
+        upload_new_dashboard: "Enviar Novo Dashboard",
+        placeholder_dashboard_name: "Nome do Dashboard (ex: pending)",
+        upload_instructions: "Selecione ou solte o arquivo HTML aqui para upload",
+        btn_upload: "Fazer Upload",
+        modal_source_title: "Código Fonte HTML",
+        
+        // Tags Management
+        menu_tags: "Tags",
+        tags_title: "Gerenciar Tags",
+        tags_subtitle: "Gerencie as tags utilizadas para rotular e categorizar suas transações",
+        panel_title_tags: "Tags Ativas",
+        btn_new_tag: "Nova Tag",
+        label_tag_name: "Nome da Tag",
+        placeholder_tag_name: "Ex: trabalho, viagem, reembolso",
+        empty_tags_message: "Nenhuma tag cadastrada.",
+        btn_save: "Salvar",
+        btn_cancel: "Cancelar",
+        toast_success_tag_created: 'Tag "{name}" criada com sucesso!',
+        toast_success_tag_deleted: 'Tag "{name}" excluída com sucesso!',
+        confirm_delete_tag: 'Deseja realmente excluir a tag "{name}"?\n(Esta ação removerá a tag de todas as transações vinculadas)'
+    },
+    es: {
+        // Sidebar Menu
+        tooltip_overview: "Vista General",
+        tooltip_pending: "Pendientes",
+        tooltip_comparative: "Comparativo",
+        tooltip_projections: "Proyecciones",
+        tooltip_accounts: "Cuentas Bancárias",
+        tooltip_cards: "Tarjetas de Crédito",
+        menu_categories: "Categorías",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "Enero", february: "Febrero", march: "Marzo", april: "Abril", may: "Mayo", june: "Junio",
+        july: "Julio", august: "Agosto", september: "Septiembre", october: "Octubre", november: "Noviembre", december: "Diciembre",
+        
+        // General UI terms
+        reference_label: "Referencia:",
+        day_sun: "Dom", day_mon: "Lun", day_tue: "Mar", day_wed: "Mié", day_thu: "Jue", day_fri: "Vie", day_sat: "Sáb",
+        paid: "Pagado", unpaid: "No Pagado", active: "Activo", inactive: "Inactivo",
+        
+        // Overview Dashboard
+        overview_title: "Vista General",
+        overview_subtitle: "Resumen financiero mensual, calendario y accesos rápidos",
+        accounts_balance: "Saldo en Cuentas",
+        expenses_month: "Gastos del Mes",
+        card_bills: "Facturas de Tarjeta",
+        incomes_month: "Ingresos del Mes",
+        final_projection: "Proyección Final:",
+        recent_transactions: "Transacciones Recientes",
+        due_calendar: "Calendario de Pagos",
+        expenses_distribution: "Distribución de Gastos",
+        quick_shortcuts: "Accesos Rápidos",
+        new_transaction: "Nueva Transacción",
+        new_transfer: "Nueva Transferencia",
+        new_category: "Nueva Categoría",
+        new_card: "Nueva Tarjeta",
+        new_account: "Nueva Cuenta",
+        no_expenses_month: "No hay gastos registrados este mes.",
+        no_recent_transactions: "No se encontraron transacciones recientes.",
+        no_dues_period: "Sin vencimientos en este período.",
+        income: "Ingreso",
+        expense: "Gasto",
+        paid_reconciled: "Pagado / Conciliado",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Proyección de Recurrencias y Cuotas",
+        projections_subtitle: "Mapeo visual avanzado y proyección de recurrencias y cuotas activas para los próximos meses",
+        projection_label: "Proyección:",
+        months_3: "3 Meses",
+        months_6: "6 Meses",
+        months_9: "9 Meses",
+        months_12: "12 Meses",
+        heatmap_income_title: "Ingresos Recurrentes / Cuotas",
+        heatmap_expense_title: "Gastos Recurrentes / Cuotas",
+        total: "Total",
+        no_recurrent_incomes: "Ningún ingreso recurrente o en cuotas activo en el semestre seleccionado.",
+        no_recurrent_expenses: "Ningún gasto recurrente o en cuotas activo en el semestre seleccionado.",
+        modal_details_title: "Detalle de Proyecciones",
+        modal_details_subtitle: "Detalles de transacciones proyectadas para la categoría y mes",
+        col_date: "Fecha",
+        col_desc: "Descripción",
+        col_value: "Valor",
+        col_status: "Estado",
+        btn_close: "Cerrar",
+        
+        // Comparative Dashboard
+        comparative_title: "Dashboard Comparativo",
+        comparative_subtitle: "Análisis y comparación mensual de ingresos vs gastos y límites por categoría",
+        month_summary_title: "Resumen del Mes",
+        cat_spending_title: "Gastos por Categoría",
+        card_limits_title: "Presupuestos y Límites de Categorías",
+        col_category: "Categoría",
+        col_limit: "Límite de Presupuesto",
+        col_spent: "Gastado",
+        col_status_limit: "Estado",
+        col_percentage: "Porcentaje",
+        within_limit: "Dentro del Límite",
+        exceeded: "Excedido",
+        reception: "Ingresos",
+        deduction: "Gastos",
+        net_balance: "Saldo Neto",
+        performance: "Salud Financiera",
+        no_spending_month: "No hay gastos registrados por categoría este mes.",
+        
+        // Accounts Dashboard
+        accounts_title: "Cuentas Bancarias",
+        accounts_subtitle: "Administre cuentas, consulte saldos y revise extractos",
+        active_account_statement: "Extracto de Cuenta",
+        btn_new_transaction: "Nueva Transacción",
+        btn_new_transfer: "Nueva Transferencia",
+        search_description_placeholder: "Escriba para filtrar...",
+        filter_type_label: "Tipo",
+        filter_type_all: "Todos",
+        filter_type_income: "Ingresos",
+        filter_type_expense: "Gastos",
+        col_actions: "Acciones",
+        action_confirm: "Confirmar",
+        action_edit: "Editar",
+        action_delete: "Eliminar",
+        no_transactions_account: "No hay transacciones registradas en esta cuenta en el mes seleccionado.",
+        confirm_delete_title: "¿Está seguro de eliminar definitivamente esta transacción?",
+        modal_new_tx_title: "Nueva Transacción",
+        modal_new_transfer_title: "Nueva Transferencia",
+        label_account: "Cuenta",
+        label_description: "Descripción",
+        label_value: "Valor",
+        label_date: "Fecha",
+        label_category: "Categoría / Subcategoría",
+        label_type: "Tipo",
+        label_status: "Estado",
+        status_pending: "Pendiente",
+        status_confirmed: "Pagado / Confirmado",
+        btn_cancel: "Cancelar",
+        btn_save: "Guardar",
+        label_origin: "Cuenta Origen",
+        label_destination: "Cuenta Destino",
+        
+        // Pending Dashboard
+        pending_title: "Transacciones Pendientes",
+        pending_subtitle: "Monitoreo y confirmación rápida de transacciones pendientes o futuras",
+        pending_kpi_total: "Total Pendiente",
+        pending_kpi_incomes: "Ingresos Pendientes",
+        pending_kpi_expenses: "Gastos Pendientes",
+        pending_chart_incomes: "Tendencia de Ingresos Pendientes",
+        pending_chart_expenses: "Tendencia de Gastos Pendientes",
+        btn_confirm: "Confirmar",
+        btn_edit: "Editar",
+        btn_delete: "Eliminar",
+        no_pending_transactions: "No se encontraron transacciones pendientes en este período.",
+        toast_success_confirm: "¡Transacción confirmada con éxito!",
+        
+        // Categories Dashboard
+        categories_title: "Gestión de Categorías",
+        categories_subtitle: "Visualice, busque y gestione categorías y subcategorías en árbol",
+        btn_new_category: "Nueva Categoría",
+        search_category_placeholder: "Buscar categorías...",
+        col_type: "Tipo",
+        col_actions_cat: "Acciones",
+        subcategories_label: "Subcategorías",
+        no_subcategories: "Ninguna subcategoría registrada.",
+        modal_new_cat_title: "Nueva Categoría",
+        modal_new_subcat_title: "Nueva Subcategoría",
+        label_name: "Nombre",
+        label_color: "Color",
+        label_parent_category: "Categoría Padre (Solo Lectura)",
+        toast_success_cat: "¡Categoría creada con éxito!",
+        toast_success_subcat: "¡Subcategoría creada con éxito!",
+        
+        // Cards Dashboard
+        cards_title: "Tarjetas de Crédito",
+        cards_subtitle: "Gestione tarjetas de crédito, límites y facturas",
+        card_bill_details: "Detalle de Factura",
+        btn_pay_bill: "Pagar Factura",
+        btn_revert_payment: "Revertir Pago",
+        bill_status: "Estado de la Factura:",
+        status_open: "Abierta",
+        status_closed: "Cerrada",
+        status_paid: "Pagada",
+        no_card_transactions: "Ninguna transacción registrada en esta factura para el ciclo seleccionado.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Gestor de Dashboards",
+        dashboards_subtitle: "Liste, vea el código fuente y suba dashboards al servidor de fintrack",
+        col_dashboard: "Dashboard",
+        col_last_update: "Última Actualización",
+        btn_view_source: "Ver Código",
+        btn_download: "Descargar HTML",
+        upload_new_dashboard: "Subir Nuevo Dashboard",
+        placeholder_dashboard_name: "Nombre del Dashboard (ej: pending)",
+        upload_instructions: "Seleccione o arrastre el archivo HTML aquí para subir",
+        btn_upload: "Subir Dashboard",
+        modal_source_title: "Código Fuente HTML",
+        
+        // Tags Management
+        menu_tags: "Etiquetas",
+        tags_title: "Administrar Etiquetas",
+        tags_subtitle: "Administre las etiquetas utilizadas para etiquetar y organizar sus transacciones",
+        panel_title_tags: "Etiquetas Activas",
+        btn_new_tag: "Nueva Etiqueta",
+        label_tag_name: "Nombre de la Etiqueta",
+        placeholder_tag_name: "Ej: trabajo, viaje, reembolso",
+        empty_tags_message: "No hay etiquetas registradas.",
+        btn_save: "Guardar",
+        btn_cancel: "Cancelar",
+        toast_success_tag_created: '¡Etiqueta "{name}" creada con éxito!',
+        toast_success_tag_deleted: '¡Etiqueta "{name}" eliminada con éxito!',
+        confirm_delete_tag: '¿Realmente deseja eliminar la etiqueta "{name}"?\n(Esta acción eliminará la etiqueta de todas las transacciones vinculadas)'
+    }
+};
+
+var currentLocale = 'en'; // English as default
+
+// Helper to translate in JS
+function t(key) {
+    const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
+    return tDict[key] || key;
+}
+
+async function checkLocale() {
+    try {
+        const res = await fetch('/api/status');
+        if (res.ok) {
+            const data = await res.json();
+            if (data.locale && TRANSLATIONS[data.locale]) {
+                currentLocale = data.locale;
+            }
+        }
+    } catch (err) {
+        console.error("Failed to read locale preferences:", err);
+    }
+    translatePage();
+}
+
+function translatePage() {
+    const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
+    
+    // 1. Static texts
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (tDict[key]) {
+            const icon = el.querySelector('i');
+            if (icon) {
+                const iconOuter = icon.outerHTML;
+                el.innerHTML = iconOuter + ' ' + tDict[key];
+            } else {
+                el.textContent = tDict[key];
+            }
+        }
+    });
+
+    // 2. Placeholders
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (tDict[key]) {
+            el.placeholder = tDict[key];
+        }
+    });
+
+    // 3. Tooltips
+    document.querySelectorAll('[data-i18n-tooltip]').forEach(el => {
+        const key = el.getAttribute('data-i18n-tooltip');
+        if (tDict[key]) {
+            el.setAttribute('data-tooltip', tDict[key]);
+        }
+    });
+    
+    // 4. Document title translation
+    if (tDict['overview_title'] && document.title.includes("Overview") || document.title.includes("Visão")) {
+        // dynamic title update fallback if needed
     }
 
-    function formatMoney(amount, currency) {
-      try {
-        return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency }).format(amount);
-      } catch (err) {
-        return currency + ' ' + Number(amount).toFixed(2);
-      }
-    }
+    // 5. Translate select months
+    const monthSelects = [
+        document.getElementById('month-select'),
+        document.getElementById('start-month-select')
+    ];
+    monthSelects.forEach(monthSelect => {
+        if (monthSelect) {
+            const monthKeys = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+            Array.from(monthSelect.options).forEach((opt, idx) => {
+                const key = monthKeys[idx];
+                if (tDict[key]) {
+                    opt.textContent = tDict[key];
+                }
+            });
+        }
+    });
 
-    function formatDate(isoDate) {
-      var parsed = new Date(isoDate + 'T00:00:00');
-      return isNaN(parsed.getTime()) ? isoDate : parsed.toLocaleDateString();
-    }
-
-    function amountClass(type) {
-      if (type === 'income') return 'positive';
-      if (type === 'expense') return 'negative';
-      return '';
-    }
-
-    function markUpdated() {
-      document.getElementById('last-updated').textContent = 'Last updated ' + new Date().toLocaleTimeString();
-    }
-
-    function initControls() {
-      var monthSelect = document.getElementById('period-month');
-      var yearInput = document.getElementById('period-year');
-      for (var m = 1; m <= 12; m++) {
-        var option = h('option', { value: String(m), text: monthName(m) });
-        if (m === period.month) option.setAttribute('selected', 'selected');
-        monthSelect.appendChild(option);
-      }
-      yearInput.value = String(period.year);
-
-      document.getElementById('period-form').addEventListener('submit', function (event) {
-        event.preventDefault();
-        var month = parseInt(monthSelect.value, 10);
-        var year = parseInt(yearInput.value, 10);
-        if (!month || !year) return;
-        period = { month: month, year: year };
-        loadSummary();
-        loadCategorySpending();
-        markUpdated();
-      });
-
-      document.getElementById('refresh-all').addEventListener('click', loadAll);
-    }
-
-    function loadSummary() {
-      var container = document.getElementById('summary-cards');
-      var requestId = beginRequest('summary');
-      setLoading(container, 'Loading summary…');
-      fetchJson(Api.summary(period.month, period.year))
-        .then(function (data) {
-          if (!isCurrentRequest('summary', requestId)) return;
-          if (!data.currencies || data.currencies.length === 0) {
-            setEmpty(container, 'No transactions for this period yet.');
-            return;
-          }
-          clearNode(container);
-          data.currencies.forEach(function (block) {
-            container.appendChild(renderSummaryCard(block));
-          });
-        })
-        .catch(function (err) {
-          if (!isCurrentRequest('summary', requestId)) return;
-          setError(container, err.message);
+    // 6. Translate projection months select options (3, 6, 9, 12 months)
+    const hmSelect = document.getElementById('heatmap-months-select');
+    if (hmSelect) {
+        Array.from(hmSelect.options).forEach(opt => {
+            const val = opt.value;
+            const key = `months_${val}`;
+            if (tDict[key]) {
+                opt.textContent = tDict[key];
+            }
         });
     }
 
-    function renderSummaryCard(block) {
-      return h('article', { class: 'card summary-card' }, [
-        h('h3', { text: block.currency }),
-        h('dl', { class: 'summary-metrics' }, [
-          h('div', { class: 'metric' }, [h('dt', { text: 'Income' }), h('dd', { class: 'positive', text: formatMoney(block.income, block.currency) })]),
-          h('div', { class: 'metric' }, [h('dt', { text: 'Expenses' }), h('dd', { class: 'negative', text: formatMoney(block.expenses, block.currency) })]),
-          h('div', { class: 'metric' }, [
-            h('dt', { text: 'Balance' }),
-            h('dd', { class: block.balance >= 0 ? 'positive' : 'negative', text: formatMoney(block.balance, block.currency) }),
-          ]),
-        ]),
-      ]);
+    // Automatically initialize/refresh custom selects on all pages
+    if (typeof initCustomSelects === 'function') {
+        initCustomSelects();
     }
+}
 
-    function loadCategorySpending() {
-      var container = document.getElementById('category-spending-blocks');
-      var requestId = beginRequest('categorySpending');
-      setLoading(container, 'Loading spending by category…');
-      fetchJson(Api.categorySpending(period.month, period.year))
-        .then(function (data) {
-          if (!isCurrentRequest('categorySpending', requestId)) return;
-          Object.keys(charts).forEach(function (key) {
-            charts[key].destroy();
-            delete charts[key];
-          });
-          var blocksWithRows = (data.currencies || []).filter(function (block) {
-            return block.rows.length > 0;
-          });
-          if (blocksWithRows.length === 0) {
-            setEmpty(container, 'No categorized spending for this period yet.');
+// Custom Select Component implementation
+function initCustomSelects() {
+    document.querySelectorAll('select.select-custom').forEach(select => {
+        if (select.nextElementSibling && select.nextElementSibling.classList.contains('select-container-custom')) {
+            // Already initialized, just sync selected value
+            const container = select.nextElementSibling;
+            const triggerSpan = container.querySelector('.select-trigger-custom span');
+            const selectedOpt = select.options[select.selectedIndex];
+            if (selectedOpt && triggerSpan) {
+                triggerSpan.textContent = selectedOpt.textContent;
+            }
             return;
-          }
-          clearNode(container);
-          blocksWithRows.forEach(function (block) {
-            var built = renderCategoryBlock(block);
-            container.appendChild(built.wrap);
-            if (typeof Chart !== 'undefined') {
-              charts[block.currency] = new Chart(built.canvas, {
+        }
+        select.style.display = 'none';
+        const container = document.createElement('div');
+        container.className = 'select-container-custom';
+        
+        // Match specific element custom min-widths
+        if (select.id === 'heatmap-months-select') {
+            container.style.minWidth = '110px';
+        } else if (select.id === 'year-select') {
+            container.style.minWidth = '90px';
+        } else if (select.id === 'filter-type') {
+            container.style.minWidth = '130px';
+        }
+        
+        const trigger = document.createElement('div');
+        trigger.className = 'select-trigger-custom';
+        const triggerSpan = document.createElement('span');
+        trigger.appendChild(triggerSpan);
+        container.appendChild(trigger);
+        const optionsContainer = document.createElement('div');
+        optionsContainer.className = 'select-options-custom';
+        container.appendChild(optionsContainer);
+        
+        function syncSelected() {
+            const selectedOpt = select.options[select.selectedIndex] || select.options[0];
+            if (selectedOpt) {
+                triggerSpan.textContent = selectedOpt.textContent;
+                Array.from(optionsContainer.children).forEach(child => {
+                    if (child.getAttribute('data-value') === select.value) {
+                        child.classList.add('selected');
+                    } else {
+                        child.classList.remove('selected');
+                    }
+                });
+            }
+        }
+        
+        function populateOptions() {
+            optionsContainer.innerHTML = '';
+            Array.from(select.options).forEach(opt => {
+                const optDiv = document.createElement('div');
+                optDiv.className = 'select-option-custom';
+                optDiv.textContent = opt.textContent;
+                optDiv.setAttribute('data-value', opt.value);
+                optDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    select.value = opt.value;
+                    select.dispatchEvent(new Event('change'));
+                    syncSelected();
+                    container.classList.remove('open');
+                });
+                optionsContainer.appendChild(optDiv);
+            });
+        }
+        
+        populateOptions();
+        syncSelected();
+        
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = container.classList.contains('open');
+            document.querySelectorAll('.select-container-custom').forEach(el => {
+                el.classList.remove('open');
+            });
+            if (!isOpen) {
+                populateOptions();
+                syncSelected();
+                container.classList.add('open');
+                setTimeout(() => {
+                    const selectedEl = optionsContainer.querySelector('.select-option-custom.selected');
+                    if (selectedEl) {
+                        const itemHeight = selectedEl.offsetHeight || 36;
+                        optionsContainer.scrollTop = Math.max(0, selectedEl.offsetTop - itemHeight);
+                    }
+                }, 10);
+            }
+        });
+        
+        select.parentNode.insertBefore(container, select.nextSibling);
+        select.addEventListener('change', syncSelected);
+        
+        // Watch for dynamic options updates
+        const observer = new MutationObserver(() => {
+            syncSelected();
+        });
+        observer.observe(select, { childList: true, subtree: true });
+        
+        setTimeout(syncSelected, 200);
+        setTimeout(syncSelected, 1000);
+    });
+    
+    // Global click listener to close options dropdowns when clicking outside
+    if (!window.customSelectGlobalBound) {
+        window.customSelectGlobalBound = true;
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.select-container-custom').forEach(el => {
+                el.classList.remove('open');
+            });
+        });
+    }
+}
+
+        
+            checkLocale();
+            var monthSelect = document.getElementById('month-select');
+            var yearSelect = document.getElementById('year-select');
+
+            // Sync with query params or local date
+            var params = new URLSearchParams(window.location.search);
+            var queryMonth = parseInt(params.get('month'));
+            var queryYear = parseInt(params.get('year'));
+
+            var now = new Date();
+            selectedMonth = !isNaN(queryMonth) ? queryMonth : (now.getMonth() + 1);
+            selectedYear = !isNaN(queryYear) ? queryYear : now.getFullYear();
+
+            if (monthSelect) monthSelect.value = selectedMonth;
+            if (yearSelect) yearSelect.value = selectedYear;
+
+            // Handle date filter change
+            var handleFilterChange = () => {
+                selectedMonth = parseInt(monthSelect.value);
+                selectedYear = parseInt(yearSelect.value);
+                
+                // Update URL params quietly (without page reload)
+                const newUrl = `${window.location.pathname}?month=${selectedMonth}&year=${selectedYear}`;
+                window.history.pushState({ path: newUrl }, '', newUrl);
+                
+                loadDashboardData();
+            };
+
+            if (monthSelect) monthSelect.addEventListener('change', handleFilterChange);
+            if (yearSelect) yearSelect.addEventListener('change', handleFilterChange);
+
+            loadDashboardData();
+
+        // Main data loading orchestrator
+        async function loadDashboardData() {
+            const loadingOverlay = document.getElementById('dashboard-loading');
+            if (loadingOverlay) loadingOverlay.classList.add('active');
+
+            try {
+                const projectedAsOfStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${getLastDay(selectedYear, selectedMonth)}`;
+
+                // 1. Fetch metadata (accounts, balances, cards, categories) in parallel
+                const [accountsData, balancesData, cardsData, categoriesData] = await Promise.all([
+                    fetch('/api/accounts').then(r => r.json()),
+                    fetch(`/api/accounts/balances?projectedAsOf=${projectedAsOfStr}`).then(r => r.json()).catch(err => {
+                        console.error("Failed to load balances", err);
+                        return [];
+                    }),
+                    fetch('/api/credit-cards').then(r => r.json()),
+                    fetch('/api/categories').then(r => r.json())
+                ]);
+
+                // Map balances to accounts
+                accounts = accountsData.map(acc => {
+                    const balInfo = balancesData.find(b => b.name === acc.name) || { balance: acc.initialBalance || 0 };
+                    return {
+                        ...acc,
+                        balance: typeof balInfo.balance !== 'undefined' ? balInfo.balance : acc.initialBalance
+                    };
+                });
+
+                creditCards = cardsData;
+                categories = categoriesData;
+
+                // 2. Fetch monthly transactions adaptively (preventing 50-limit truncation)
+                const lastDay = getLastDay(selectedYear, selectedMonth);
+                allTransactions = await fetchMonthTransactions(selectedYear, selectedMonth);
+
+                // 3. Fetch credit card bills of the next cycle (the one currently open/accumulating during selectedMonth)
+                let nextMonth = selectedMonth + 1;
+                let nextYear = selectedYear;
+                if (nextMonth === 13) {
+                    nextMonth = 1;
+                    nextYear += 1;
+                }
+
+                const billPromises = creditCards.map(async card => {
+                    try {
+                        const res = await fetch(`/api/bills?card=${encodeURIComponent(card.name)}&month=${nextMonth}&year=${nextYear}`);
+                        if (res.ok) {
+                            return { cardName: card.name, data: await res.json() };
+                        }
+                    } catch (e) {
+                        console.error(e);
+                    }
+                    // Fallback for not created/404 bills
+                    return {
+                        cardName: card.name,
+                        data: {
+                            bill: { month: nextMonth, year: nextYear, status: 'open' },
+                            transactions: [],
+                            total: 0
+                        }
+                    };
+                });
+                const cardBills = await Promise.all(billPromises);
+
+                // 4. Render everything
+                renderKPIs(cardBills);
+                renderCalendar();
+                renderAccountsWidget();
+                renderCardsWidget(cardBills);
+                renderPendingWidget();
+                renderCategoryChart();
+
+            } catch (err) {
+                console.error("Error loading dashboard data:", err);
+                showToast("Erro ao carregar os dados financeiros.", "error");
+            } finally {
+                if (loadingOverlay) loadingOverlay.classList.remove('active');
+            }
+        }
+
+        // Render KPI summary cards
+        function renderKPIs(cardBills) {
+            let totalIncome = 0;
+            let effIncome = 0;
+            let pendIncome = 0;
+
+            let totalExpense = 0;
+            let effExpense = 0;
+            let pendExpense = 0;
+
+            allTransactions.forEach(t => {
+                // Ignore all transfers (including bill payments)
+                if (t.type === 'transfer') return;
+
+                const amount = parseFloat(t.amount) || 0;
+                const isEffective = t.status === 'effective';
+
+                if (t.type === 'income') {
+                    totalIncome += amount;
+                    if (isEffective) effIncome += amount;
+                    else pendIncome += amount;
+                } else if (t.type === 'expense') {
+                    totalExpense += amount;
+                    if (isEffective) effExpense += amount;
+                    else pendExpense += amount;
+                }
+            });
+
+            // Sum credit card bills in open/pending status for this month
+            let totalBills = 0;
+            cardBills.forEach(cb => {
+                if (cb.data && typeof cb.data.total !== 'undefined') {
+                    totalBills += parseFloat(cb.data.total) || 0;
+                }
+            });
+
+            // Update KPI elements
+            document.getElementById('kpi-income-val').textContent = formatBRL(totalIncome);
+            document.getElementById('kpi-income-eff').textContent = formatBRL(effIncome);
+            document.getElementById('kpi-income-pend').textContent = formatBRL(pendIncome);
+
+            document.getElementById('kpi-expense-val').textContent = formatBRL(totalExpense);
+            document.getElementById('kpi-expense-eff').textContent = formatBRL(effExpense);
+            document.getElementById('kpi-expense-pend').textContent = formatBRL(pendExpense);
+
+            const netBalance = totalIncome - totalExpense;
+            const balElement = document.getElementById('kpi-balance-val');
+            balElement.textContent = formatBRL(netBalance);
+            if (netBalance >= 0) {
+                balElement.style.color = 'var(--income-color)';
+            } else {
+                balElement.style.color = 'var(--expense-color)';
+            }
+
+            document.getElementById('kpi-cards-val').textContent = formatBRL(totalBills);
+        }
+
+        // Render Monthly Calendar
+        function renderCalendar() {
+            const container = document.getElementById('calendar-days');
+            container.innerHTML = '';
+
+            const firstDayDate = new Date(selectedYear, selectedMonth - 1, 1);
+            const firstDayIndex = firstDayDate.getDay(); // 0 = Sun, 1 = Mon ...
+            const numDays = getLastDay(selectedYear, selectedMonth);
+
+            const now = new Date();
+            const isCurrentMonth = now.getFullYear() === selectedYear && (now.getMonth() + 1) === selectedMonth;
+            const todayDay = now.getDate();
+
+            // Populate empty cells before day 1
+            for (let i = 0; i < firstDayIndex; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'calendar-day empty';
+                container.appendChild(emptyCell);
+            }
+
+            // Populate days 1 to numDays
+            for (let d = 1; d <= numDays; d++) {
+                const dayStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                
+                // Calculate inflows, outflows and transfers for this day
+                let dayIncome = 0;
+                let dayExpense = 0;
+                let dayTransfer = 0;
+
+                allTransactions.forEach(t => {
+                    if (t.date === dayStr) {
+                        const amount = parseFloat(t.amount) || 0;
+                        if (t.type === 'income') dayIncome += amount;
+                        else if (t.type === 'expense') dayExpense += amount;
+                        else if (t.type === 'transfer') dayTransfer += amount;
+                    }
+                });
+
+                const dayCell = document.createElement('div');
+                dayCell.className = 'calendar-day';
+                if (isCurrentMonth && d === todayDay) {
+                    dayCell.classList.add('today');
+                }
+
+                // Header number - Transfer (transflow) is inline in the header
+                let transflowHtml = '';
+                if (dayTransfer > 0) {
+                    transflowHtml = `<div class="day-flow transflow" style="padding: 0px 3px; flex-grow: 1; margin-left: 6px;">⇄ ${formatBRLNoSymbol(dayTransfer)}</div>`;
+                }
+
+                let flowsHtml = '';
+                const hasAnyFlow = dayIncome > 0 || dayExpense > 0 || dayTransfer > 0;
+                if (hasAnyFlow) {
+                    if (dayIncome > 0) {
+                        flowsHtml += `<div class="day-flow inflow">+${formatBRLNoSymbol(dayIncome)}</div>`;
+                    } else {
+                        flowsHtml += `<div class="day-flow" style="visibility: hidden;">&nbsp;</div>`;
+                    }
+                    if (dayExpense > 0) {
+                        flowsHtml += `<div class="day-flow outflow">-${formatBRLNoSymbol(dayExpense)}</div>`;
+                    } else {
+                        flowsHtml += `<div class="day-flow" style="visibility: hidden;">&nbsp;</div>`;
+                    }
+                }
+
+                dayCell.innerHTML = `
+                    <div class="day-header">
+                        <span class="day-num">${d}</span>
+                        ${transflowHtml}
+                    </div>
+                    <div class="day-flows">
+                        ${flowsHtml}
+                    </div>
+                `;
+
+                // Add click event to drilldown transactions of this day
+                dayCell.addEventListener('click', () => updateDayDetails(d, dayStr));
+                container.appendChild(dayCell);
+            }
+
+            // Select default day details to display
+            const defaultDay = isCurrentMonth ? todayDay : 1;
+            const defaultDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(defaultDay).padStart(2, '0')}`;
+            updateDayDetails(defaultDay, defaultDateStr);
+        }
+
+        // Update Daily Details Sidebar panel
+        function updateDayDetails(dayNum, dateStr) {
+            const titleEl = document.getElementById('calendar-details-title');
+            const contentEl = document.getElementById('calendar-details-content');
+            
+            titleEl.innerHTML = `<i class="fa-solid fa-calendar-day"></i> Lançamentos (${dayNum}/${String(selectedMonth).padStart(2, '0')})`;
+            contentEl.innerHTML = '';
+            
+            // Highlight the selected cell in the calendar
+            const allDays = document.querySelectorAll('.calendar-day');
+            allDays.forEach(cell => {
+                cell.classList.remove('selected-day');
+                const numSpan = cell.querySelector('.day-num');
+                if (numSpan && parseInt(numSpan.textContent) === dayNum && !cell.classList.contains('empty')) {
+                    cell.classList.add('selected-day');
+                }
+            });
+
+            const matches = allTransactions.filter(t => t.date === dateStr);
+
+            if (matches.length === 0) {
+                contentEl.innerHTML = `
+                    <div style="margin: auto; text-align: center; color: var(--text-muted); padding: 3rem 0;">
+                        <i class="fa-regular fa-calendar-minus" style="font-size: 2.2rem; margin-bottom: 0.75rem; color: var(--text-dark);"></i>
+                        <div style="font-size: 0.82rem; font-style: italic;">Nenhum lançamento registrado neste dia.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            matches.forEach(t => {
+                const isIncome = t.type === 'income';
+                const isTransfer = t.type === 'transfer';
+                
+                const item = document.createElement('div');
+                item.style.cssText = `
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    background: rgba(255, 255, 255, 0.02);
+                    border: 1px solid var(--panel-border);
+                    border-radius: 14px;
+                    padding: 0.75rem 1rem;
+                    transition: var(--transition-smooth);
+                `;
+                
+                let amountColor = 'var(--text-main)';
+                let prefix = '';
+                if (isIncome) {
+                    amountColor = 'var(--income-color)';
+                    prefix = '+';
+                } else if (t.type === 'expense') {
+                    amountColor = 'var(--expense-color)';
+                    prefix = '-';
+                }
+
+                item.innerHTML = `
+                    <div style="display: flex; flex-direction: column; gap: 2px; max-width: 60%; text-align: left;">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(t.description)}">${escapeHtml(t.description)}</span>
+                        <span style="font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            <i class="fa-solid fa-building-columns" style="font-size: 0.65rem;"></i> ${escapeHtml(t.accountName)} | 
+                            <i class="fa-solid fa-tag" style="font-size: 0.65rem;"></i> ${escapeHtml(t.categoryName || (isTransfer ? 'Transferência' : 'Geral'))}
+                        </span>
+                    </div>
+                    <div style="text-align: right; display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+                        <span style="font-size: 0.88rem; font-weight: 700; color: ${amountColor}">${prefix} ${formatBRL(t.amount)}</span>
+                        <span class="badge-status ${t.status === 'effective' ? 'status-eff' : 'status-pend'}" style="font-size: 0.6rem; padding: 1px 4px;">
+                            ${t.status === 'effective' ? 'Efetivado' : 'Pendente'}
+                        </span>
+                    </div>
+                `;
+                contentEl.appendChild(item);
+            });
+        }
+
+        // Widget 1: Render accounts balance
+        function renderAccountsWidget() {
+            const body = document.getElementById('widget-accounts-body');
+            body.innerHTML = '';
+
+            // Filter out credit card accounts and sort: checking first, then by balance desc
+            const sortedAccounts = [...accounts]
+                .filter(acc => acc.type !== 'credit')
+                .sort((a,b) => {
+                    if (a.type === 'checking' && b.type !== 'checking') return -1;
+                    if (a.type !== 'checking' && b.type === 'checking') return 1;
+                    return (b.balance || 0) - (a.balance || 0);
+                });
+                
+            const displayList = sortedAccounts.slice(0, 4);
+
+            if (displayList.length === 0) {
+                body.innerHTML = `<div style="margin:auto; font-size:0.85rem; color:var(--text-muted); font-style:italic;">Nenhuma conta bancária.</div>`;
+                return;
+            }
+
+            displayList.forEach(acc => {
+                const typeLabels = {
+                    checking: 'Corrente',
+                    savings: 'Poupança',
+                    wallet: 'Dinheiro',
+                    investment: 'Investimento'
+                };
+                
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.innerHTML = `
+                    <div class="list-item-meta">
+                        <span class="list-item-title">${escapeHtml(acc.name)}</span>
+                        <span class="list-item-subtitle">${typeLabels[acc.type] || acc.type}</span>
+                    </div>
+                    <span class="list-item-value" style="color: ${(acc.balance || 0) >= 0 ? 'var(--income-color)' : 'var(--expense-color)'}">
+                        ${formatBRL(acc.balance || 0)}
+                    </span>
+                `;
+                body.appendChild(item);
+            });
+        }
+
+        // Widget 2: Render Credit Card bills
+        function renderCardsWidget(cardBills) {
+            const body = document.getElementById('widget-cards-body');
+            body.innerHTML = '';
+
+            if (cardBills.length === 0) {
+                body.innerHTML = `<div style="margin:auto; font-size:0.85rem; color:var(--text-muted); font-style:italic;">Nenhum cartão cadastrado.</div>`;
+                return;
+            }
+
+            cardBills.slice(0, 4).forEach(cb => {
+                const cardInfo = creditCards.find(c => c.name === cb.cardName) || { dueDay: 8 };
+                const bill = cb.data ? cb.data.bill : { status: 'open' };
+                const dueDay = cardInfo.dueDay || 8;
+                const amount = cb.data ? (parseFloat(cb.data.total) || 0) : 0;
+                
+                // Get cycle month of the fetched bill
+                const billMonth = bill.month || (selectedMonth + 1 === 13 ? 1 : selectedMonth + 1);
+                
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.innerHTML = `
+                    <div class="list-item-meta">
+                        <span class="list-item-title">${escapeHtml(cb.cardName)}</span>
+                        <span class="list-item-subtitle">Vencimento: Dia ${dueDay}/${String(billMonth).padStart(2, '0')}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="list-item-value">${formatBRL(amount)}</div>
+                        <span class="badge-status ${bill.status === 'paid' ? 'status-eff' : 'status-pend'}" style="font-size:0.6rem; padding:1px 4px;">
+                            ${bill.status === 'paid' ? 'Paga' : 'Em Aberto'}
+                        </span>
+                    </div>
+                `;
+                body.appendChild(item);
+            });
+        }
+
+        // Widget 3: Render pending transactions of the month
+        function renderPendingWidget() {
+            const container = document.getElementById('pending-items-container');
+            container.innerHTML = '';
+
+            // Filter all pending transactions in selectedMonth, sort by date ascending
+            const pendings = allTransactions.filter(t => t.status === 'pending')
+                                            .sort((a,b) => a.date.localeCompare(b.date));
+
+            const displayList = pendings.slice(0, 4);
+
+            if (displayList.length === 0) {
+                container.innerHTML = `<div style="margin:auto; text-align:center; font-size:0.85rem; color:var(--text-muted); font-style:italic; padding-top:4rem;">Nenhum lançamento pendente.</div>`;
+                return;
+            }
+
+            displayList.forEach(t => {
+                const isIncome = t.type === 'income';
+                const isTransfer = t.type === 'transfer';
+                
+                const item = document.createElement('div');
+                item.className = 'pending-item';
+                
+                const dtObj = new Date(t.date + 'T12:00:00');
+                const dtFmt = dtObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+                item.innerHTML = `
+                    <div class="pending-meta">
+                        <span class="pending-desc">${escapeHtml(t.description)}</span>
+                        <span class="pending-date-cat">
+                            <i class="fa-solid fa-calendar" style="font-size:0.65rem;"></i> ${dtFmt} | 
+                            <i class="fa-solid fa-tag" style="font-size:0.65rem;"></i> ${escapeHtml(t.categoryName || (isTransfer ? 'Transferência' : 'Geral'))}
+                        </span>
+                    </div>
+                    <div class="pending-action-area">
+                        <span class="pending-value ${isIncome ? 'income' : ''}">
+                            ${isIncome ? '+' : isTransfer ? '' : '-'} ${formatBRL(t.amount)}
+                        </span>
+                        <button class="btn-action-confirm" onclick="confirmPendingTransaction('${t.id}', '${escapeHtml(t.description)}')">
+                            Efetivar
+                        </button>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // Action: Confirm pending transaction directly from widget
+        async function confirmPendingTransaction(id, description) {
+            const widgetLoading = document.getElementById('pending-widget-loading');
+            if (widgetLoading) widgetLoading.classList.add('active');
+
+            try {
+                const res = await fetch(`/api/transactions/${id}/confirm`, {
+                    method: 'POST'
+                });
+
+                if (!res.ok) throw new Error("Falha ao confirmar transação no servidor.");
+
+                showToast(`Lançamento "${description}" efetivado com sucesso!`, 'success');
+                // Reload dashboard data
+                await loadDashboardData();
+            } catch (err) {
+                console.error("Error confirming transaction:", err);
+                showToast(`Erro: ${err.message}`, 'error');
+            } finally {
+                if (widgetLoading) widgetLoading.classList.remove('active');
+            }
+        }
+
+        // Widget 4: Render Expense Categories Chart via Chart.js
+        function renderCategoryChart() {
+            // Group expenses of selectedMonth by category name (excluding transfers)
+            const expenseSums = {};
+            let totalExpenses = 0;
+
+            allTransactions.forEach(t => {
+                if (t.type === 'expense') {
+                    const amount = parseFloat(t.amount) || 0;
+                    const catName = t.categoryName || 'Sem Categoria';
+                    expenseSums[catName] = (expenseSums[catName] || 0) + amount;
+                    totalExpenses += amount;
+                }
+            });
+
+            // Convert to array and sort descending
+            const dataList = Object.entries(expenseSums)
+                                    .map(([name, val]) => ({ name, val }))
+                                    .sort((a,b) => b.val - a.val);
+
+            // Destroy previous chart instance
+            if (expensePieChartInstance) {
+                expensePieChartInstance.destroy();
+            }
+
+            const canvas = document.getElementById('expensePieChart');
+            const ctx = canvas.getContext('2d');
+
+            if (dataList.length === 0) {
+                // Render placeholder text
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.font = "12px sans-serif";
+                ctx.fillStyle = "#9ca3af";
+                ctx.textAlign = "center";
+                ctx.fillText(t("no_expenses_month"), canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            const labels = dataList.map(item => item.name);
+            const values = dataList.map(item => item.val);
+            const palette = ['#8b5cf6', '#ec4899', '#3b82f6', '#f97316', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7', '#f43f5e'];
+
+            expensePieChartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                  labels: block.rows.map(function (row) {
-                    return row.label;
-                  }),
-                  datasets: [
-                    {
-                      data: block.rows.map(function (row) {
-                        return row.value;
-                      }),
-                      backgroundColor: block.rows.map(function (_row, index) {
-                        return CHART_COLORS[index % CHART_COLORS.length];
-                      }),
-                    },
-                  ],
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: palette.slice(0, Math.max(values.length, palette.length)),
+                        borderWidth: 1,
+                        borderColor: '#111322'
+                    }]
                 },
                 options: {
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: { legend: { position: 'bottom', labels: { color: '#e6edf3' } } },
-                },
-              });
-            } else {
-              built.chartNote.textContent = 'Chart library unavailable — showing table only.';
-            }
-          });
-        })
-        .catch(function (err) {
-          if (!isCurrentRequest('categorySpending', requestId)) return;
-          setError(container, err.message);
-        });
-    }
-
-    function renderCategoryBlock(block) {
-      var canvas = document.createElement('canvas');
-      canvas.setAttribute('aria-label', 'Spending by category chart (' + block.currency + ')');
-      canvas.setAttribute('role', 'img');
-      var chartNote = h('p', { class: 'state', text: '' });
-      var table = h('table', { class: 'data-table' }, [
-        h('thead', null, [h('tr', null, ['Category', 'Amount', 'Share'].map(function (title) {
-          return h('th', { text: title });
-        }))]),
-        h(
-          'tbody',
-          null,
-          block.rows.map(function (row) {
-            return h('tr', null, [h('td', { text: row.label }), h('td', { text: formatMoney(row.value, block.currency) }), h('td', { text: row.pct.toFixed(1) + '%' })]);
-          }),
-        ),
-      ]);
-      var wrap = h('article', { class: 'card category-card' }, [h('h3', { text: block.currency }), h('div', { class: 'chart-wrap' }, [canvas]), chartNote, table]);
-      return { wrap: wrap, canvas: canvas, chartNote: chartNote };
-    }
-
-    function loadAccounts() {
-      var container = document.getElementById('accounts-table-wrap');
-      var requestId = beginRequest('accounts');
-      setLoading(container, 'Loading accounts…');
-      fetchJson(Api.accountBalances)
-        .then(function (accounts) {
-          if (!isCurrentRequest('accounts', requestId)) return;
-          if (!accounts.length) {
-            setEmpty(container, 'No accounts yet.');
-            return;
-          }
-          clearNode(container);
-          container.appendChild(renderAccountsTable(accounts));
-        })
-        .catch(function (err) {
-          if (!isCurrentRequest('accounts', requestId)) return;
-          setError(container, err.message);
-        });
-    }
-
-    function renderAccountsTable(accounts) {
-      return h('table', { class: 'data-table' }, [
-        h('thead', null, [h('tr', null, ['Account', 'Type', 'Currency', 'Balance'].map(function (title) {
-          return h('th', { text: title });
-        }))]),
-        h(
-          'tbody',
-          null,
-          accounts.map(function (account) {
-            return h('tr', null, [
-              h('td', { text: account.name }),
-              h('td', { text: account.typeLabel || account.type }),
-              h('td', { text: account.currency }),
-              h('td', { class: account.balance >= 0 ? 'positive' : 'negative', text: formatMoney(account.balance, account.currency) }),
-            ]);
-          }),
-        ),
-      ]);
-    }
-
-    function loadRecurring() {
-      var container = document.getElementById('recurring-table-wrap');
-      var requestId = beginRequest('recurring');
-      setLoading(container, 'Loading recurring rules…');
-      fetchJson(Api.recurring)
-        .then(function (rules) {
-          if (!isCurrentRequest('recurring', requestId)) return;
-          if (!rules.length) {
-            setEmpty(container, 'No recurring rules set up yet.');
-            return;
-          }
-          clearNode(container);
-          container.appendChild(renderRecurringTable(rules));
-        })
-        .catch(function (err) {
-          if (!isCurrentRequest('recurring', requestId)) return;
-          setError(container, err.message);
-        });
-    }
-
-    function renderRecurringTable(rules) {
-      return h('table', { class: 'data-table' }, [
-        h('thead', null, [h('tr', null, ['Description', 'Amount', 'Period', 'Next due', 'Account'].map(function (title) {
-          return h('th', { text: title });
-        }))]),
-        h(
-          'tbody',
-          null,
-          rules.map(function (rule) {
-            return h('tr', null, [
-              h('td', { text: rule.description }),
-              h('td', { class: amountClass(rule.type), text: formatMoney(rule.amount, rule.currency) }),
-              h('td', { text: rule.periodLabel || rule.period }),
-              h('td', { text: formatDate(rule.nextDue) }),
-              h('td', { text: rule.accountName || '—' }),
-            ]);
-          }),
-        ),
-      ]);
-    }
-
-    function loadRecentTransactions() {
-      var container = document.getElementById('recent-transactions-table-wrap');
-      var requestId = beginRequest('recentTransactions');
-      setLoading(container, 'Loading recent transactions…');
-      fetchJson(Api.recentTransactions(RECENT_TRANSACTIONS_LIMIT))
-        .then(function (page) {
-          if (!isCurrentRequest('recentTransactions', requestId)) return;
-          if (!page.items.length) {
-            setEmpty(container, 'No transactions recorded yet.');
-            return;
-          }
-          clearNode(container);
-          container.appendChild(renderTransactionsTable(page.items));
-          renderLoadMoreButton(container, page.nextCursor);
-        })
-        .catch(function (err) {
-          if (!isCurrentRequest('recentTransactions', requestId)) return;
-          setError(container, err.message);
-        });
-    }
-
-    // Removes any previous load-more button or inline retry error, without touching the
-    // already-rendered table — a failed "load more" must never wipe rows that loaded fine.
-    function clearLoadMoreControls(container) {
-      var existingButton = document.getElementById('recent-transactions-load-more');
-      if (existingButton) existingButton.remove();
-      var existingError = document.getElementById('recent-transactions-load-more-error');
-      if (existingError) existingError.remove();
-    }
-
-    // "Load more" walks the envelope's nextCursor (ADR-014) — appends rows to the existing
-    // table instead of re-fetching from the start, the same pattern any fetch-all agent loop uses.
-    function renderLoadMoreButton(container, cursor) {
-      clearLoadMoreControls(container);
-      if (!cursor) return;
-      var button = h('button', {
-        type: 'button',
-        class: 'secondary',
-        id: 'recent-transactions-load-more',
-        text: 'Load more',
-      });
-      button.addEventListener('click', function () {
-        loadMoreRecentTransactions(container, cursor);
-      });
-      container.appendChild(button);
-    }
-
-    // A failed "load more" keeps the rows already on screen — it only replaces the button
-    // with an inline error + retry (same cursor, so retrying doesn't skip or repeat a page).
-    function renderLoadMoreError(container, message, cursor) {
-      clearLoadMoreControls(container);
-      var retry = h('button', { type: 'button', class: 'secondary', text: 'Retry' });
-      retry.addEventListener('click', function () {
-        loadMoreRecentTransactions(container, cursor);
-      });
-      container.appendChild(
-        h(
-          'p',
-          {
-            class: 'state state-error',
-            role: 'alert',
-            id: 'recent-transactions-load-more-error',
-            text: 'Could not load more: ' + message + ' ',
-          },
-          [retry],
-        ),
-      );
-    }
-
-    function loadMoreRecentTransactions(container, cursor) {
-      var requestId = beginRequest('recentTransactions');
-      fetchJson(Api.recentTransactions(RECENT_TRANSACTIONS_LIMIT, cursor))
-        .then(function (page) {
-          if (!isCurrentRequest('recentTransactions', requestId)) return;
-          var tbody = container.querySelector('table.data-table tbody');
-          if (tbody) {
-            page.items.forEach(function (tx) {
-              tbody.appendChild(renderTransactionRow(tx));
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false } // Hide legend for premium look
+                    },
+                    cutout: '70%'
+                }
             });
-          }
-          renderLoadMoreButton(container, page.nextCursor);
-        })
-        .catch(function (err) {
-          if (!isCurrentRequest('recentTransactions', requestId)) return;
-          renderLoadMoreError(container, err.message, cursor);
-        });
+        }
+
+// ADR-027 Live-update listener
+window.fintrackOnDataChanged = function(entities) {
+    var affected = entities.some(function(tag) {
+        return ['transaction', 'account', 'category', 'recurring'].indexOf(tag) !== -1;
+    });
+    if (affected) {
+        console.log("overview refetching due to entity change:", entities);
+        loadDashboardData();
     }
+};
 
-    function renderTransactionRow(tx) {
-      return h('tr', null, [
-        h('td', { text: formatDate(tx.date) }),
-        h('td', { text: tx.description }),
-        h('td', { text: tx.categoryName || '—' }),
-        h('td', { text: tx.accountName || tx.cardName || '—' }),
-        h('td', { class: amountClass(tx.type), text: formatMoney(tx.amount, tx.currency) }),
-      ]);
-    }
-
-    function renderTransactionsTable(transactions) {
-      return h('table', { class: 'data-table' }, [
-        h('thead', null, [h('tr', null, ['Date', 'Description', 'Category', 'Account', 'Amount'].map(function (title) {
-          return h('th', { text: title });
-        }))]),
-        h('tbody', null, transactions.map(renderTransactionRow)),
-      ]);
-    }
-
-    function loadAll() {
-      loadSummary();
-      loadCategorySpending();
-      loadAccounts();
-      loadRecurring();
-      loadRecentTransactions();
-      markUpdated();
-    }
-
-    // ADR-027 Phase 3 — live update: each section declares which entity tags feed it, so an
-    // MCP/HTTP write only refetches the sections it could actually have changed, not the whole
-    // dashboard. Recurring rules are keyed off the "recurring" tag alone — materializing a due
-    // occurrence writes a transaction, not the rule row this section lists.
-    var SECTION_ENTITY_DEPENDENCIES = {
-      summary: ['transaction'],
-      categorySpending: ['transaction', 'category'],
-      accounts: ['account', 'transaction'],
-      recurring: ['recurring'],
-      recentTransactions: ['transaction'],
-    };
-    var SECTION_LOADERS = {
-      summary: loadSummary,
-      categorySpending: loadCategorySpending,
-      accounts: loadAccounts,
-      recurring: loadRecurring,
-      recentTransactions: loadRecentTransactions,
-    };
-
-    // The shell's live-update contract (ui/app.js): called with the changed entity tags of every
-    // batch that just committed, for as long as this fragment stays loaded.
-    function onDataChanged(entities) {
-      var refetchedAny = false;
-      Object.keys(SECTION_ENTITY_DEPENDENCIES).forEach(function (section) {
-        var dependsOn = SECTION_ENTITY_DEPENDENCIES[section];
-        var affected = dependsOn.some(function (tag) {
-          return entities.indexOf(tag) !== -1;
-        });
-        if (!affected) return;
-        refetchedAny = true;
-        SECTION_LOADERS[section]();
-      });
-      if (refetchedAny) markUpdated();
-    }
-
-    // No DOMContentLoaded wait: the shell (ui/app.js) only re-executes this script after this
-    // fragment's own markup is already attached to the live document, so the elements above are
-    // guaranteed to exist by the time this line runs.
-    initControls();
-    loadAll();
-    window.fintrackOnDataChanged = onDataChanged;
-  })();
 </script>

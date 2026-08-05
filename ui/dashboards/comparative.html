@@ -1,0 +1,4244 @@
+<style>
+/* Sidebar styling */
+        
+
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .sidebar-brand span {
+            display: none;
+        }
+
+        .sidebar-brand i {
+            color: var(--accent-primary);
+        }
+
+        
+
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 0;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 1.1rem;
+            border-radius: 12px;
+            transition: var(--transition-smooth);
+            position: relative;
+            width: 100%;
+        }
+
+        .sidebar-menu a span {
+            display: none;
+        }
+
+        .sidebar-menu a:hover {
+            background: rgba(255, 255, 255, 0.03);
+            color: #fff;
+        }
+
+        .sidebar-menu a.active {
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.1);
+        }
+
+        /* Tooltip styling */
+        .sidebar-menu a::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 65px;
+            top: 50%;
+            transform: translateY(-50%) translateX(10px);
+            background: #111322;
+            border: 1px solid var(--panel-border);
+            color: #fff;
+            padding: 0.4rem 0.8rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: var(--transition-smooth);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+
+        .sidebar-menu a:hover::after {
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }
+
+        
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        /* Header styling */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .header-title-area h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-title-area p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+
+        .controls-area {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            padding: 0.5rem 1rem;
+            border-radius: 14px;
+            backdrop-filter: blur(12px);
+        }
+
+        .controls-area label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .select-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 1.5rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            font-family: var(--font-family);
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            transition: var(--transition-smooth);
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 16px;
+        }
+
+        .select-custom:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        /* KPI summary cards */
+        .kpis-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .kpis-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .kpi-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 20px;
+            padding: 1.5rem;
+            backdrop-filter: blur(16px);
+            box-shadow: var(--card-shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 4px; height: 100%;
+        }
+
+        .kpi-income::before { background: var(--income-color); }
+        .kpi-expense::before { background: var(--expense-color); }
+        .kpi-balance::before { background: var(--accent-primary); }
+
+        .kpi-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .kpi-value {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .kpi-income .kpi-value {
+            color: var(--income-color) !important;
+        }
+
+        .kpi-expense .kpi-value {
+            color: var(--expense-color) !important;
+        }
+
+        .kpi-income .kpi-details span strong {
+            color: var(--income-color);
+        }
+
+        .kpi-expense .kpi-details span strong {
+            color: var(--expense-color);
+        }
+
+        .kpi-details {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: 1rem;
+        }
+
+        .kpi-details span strong {
+            color: #fff;
+        }
+
+        /* Chart grids */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chart-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            min-height: 320px;
+        }
+
+        .chart-card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .chart-container-inner {
+            position: relative;
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            min-height: 240px;
+        }
+
+        /* Category panels */
+        .categories-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 900px) {
+            .categories-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .category-panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 1.5rem;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .category-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 0.75rem;
+        }
+
+        .category-panel-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .category-panel-title.income { color: var(--income-color); }
+        .category-panel-title.expense { color: var(--expense-color); }
+
+        .category-total-badge {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .categories-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        /* Category Row Accordion */
+        .category-row-container {
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            overflow: hidden;
+            background: rgba(0,0,0,0.1);
+            transition: var(--transition-smooth);
+        }
+
+        .category-row-container:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .category-row-header {
+            padding: 1rem;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            user-select: none;
+        }
+
+        .cat-meta-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cat-name-label {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .cat-name-label i {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            transition: transform 0.3s ease;
+        }
+
+        .category-row-container.open .cat-name-label i {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .cat-val-label {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .cat-pct-label {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-left: 0.5rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.02em;
+        }
+
+        /* Progress Bar Proportions styling */
+        .proportion-bar-container {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .bar-segment {
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+
+        .bar-segment.effective-inc { background: var(--income-color); }
+        .bar-segment.pending-inc {
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(16, 185, 129, 0.25) 0px,
+                rgba(16, 185, 129, 0.25) 8px,
+                rgba(16, 185, 129, 0.45) 8px,
+                rgba(16, 185, 129, 0.45) 16px
+            );
+        }
+
+        .bar-segment.effective-exp { background: var(--expense-color); }
+        .bar-segment.pending-exp {
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(244, 63, 94, 0.25) 0px,
+                rgba(244, 63, 94, 0.25) 8px,
+                rgba(244, 63, 94, 0.45) 8px,
+                rgba(244, 63, 94, 0.45) 16px
+            );
+        }
+
+        .cat-breakdown-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            padding: 0 0.1rem;
+        }
+        .cat-breakdown-text span strong {
+            color: var(--text-main);
+        }
+
+        /* Expanded transaction list inside categories */
+        .category-tx-details {
+            display: none;
+            border-top: 1px solid var(--panel-border);
+            background: rgba(0, 0, 0, 0.25);
+            padding: 0.75rem 1rem;
+            overflow-x: auto;
+        }
+
+        .category-tx-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            text-align: left;
+        }
+
+        .category-tx-table th {
+            padding: 0.4rem 0.6rem;
+            color: var(--text-dark);
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .category-tx-table td {
+            padding: 0.5rem 0.6rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            color: var(--text-main);
+        }
+
+        .category-tx-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .badge-status {
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .status-eff {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--income-color);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        .status-pend {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        /* Projections Heat Map Grid styling */
+        .heatmap-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 1.75rem;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .heatmap-title-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 0.75rem;
+        }
+
+        .heatmap-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .heatmap-title i {
+            color: var(--accent-primary);
+        }
+
+        .heatmap-table-container {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid var(--panel-border);
+            background: rgba(0,0,0,0.1);
+        }
+
+        .heatmap-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: center;
+            font-size: 0.85rem;
+        }
+
+        .heatmap-table th {
+            padding: 0.75rem 1rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--panel-border);
+            background: rgba(255,255,255,0.01);
+        }
+
+        .heatmap-table th:first-child, 
+        .heatmap-table td:first-child {
+            text-align: left;
+            font-weight: 600;
+            width: 250px;
+        }
+
+        .heatmap-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            border-right: 1px solid rgba(255, 255, 255, 0.02);
+            color: var(--text-main);
+            transition: var(--transition-smooth);
+        }
+
+        .heatmap-table td:last-child {
+            border-right: none;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .heatmap-cell-value {
+            cursor: pointer;
+            border-radius: 6px;
+            padding: 0.35rem 0.5rem;
+            display: block;
+            font-weight: 500;
+            transition: var(--transition-smooth);
+        }
+
+        .heatmap-cell-value:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+
+        .heatmap-table tfoot {
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.03);
+            border-top: 2px solid var(--panel-border);
+        }
+
+        .heatmap-table tfoot td {
+            padding: 0.75rem 1rem;
+            color: #fff;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .heatmap-empty {
+            color: var(--text-dark);
+            font-size: 0.8rem;
+            font-style: italic;
+        }
+
+        /* Overlay loader */
+        .loading-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(12, 14, 23, 0.8);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 100; backdrop-filter: blur(4px);
+            border-radius: 24px;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--accent-primary);
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Modal heat map cell details */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .modal-overlay.open {
+            display: flex;
+            opacity: 1;
+        }
+
+        .modal-box {
+            background: #111322;
+            border: 1px solid var(--panel-border);
+            border-radius: 20px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            position: relative;
+            transform: translateY(-30px);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .modal-overlay.open .modal-box {
+            transform: translateY(0);
+        }
+
+        .modal-close-btn {
+            position: absolute;
+            top: 1.25rem;
+            right: 1.25rem;
+            background: none;
+            border: none;
+            color: var(--text-dark);
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: var(--transition-smooth);
+        }
+        .modal-close-btn:hover {
+            color: var(--text-main);
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #fff;
+        }
+        .modal-title i {
+            color: var(--accent-primary);
+        }
+
+        .modal-desc-text {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+        }
+
+        /* More menu at bottom of sidebar */
+        .sidebar-more-container {
+            margin-top: auto;
+            width: 100%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+        }
+        .sidebar-more-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            padding: 0.75rem 0;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 12px;
+            transition: var(--transition-smooth);
+        }
+        .sidebar-more-btn:hover {
+            background: rgba(255, 255, 255, 0.03);
+            color: #fff;
+        }
+        .sidebar-more-dropdown {
+            position: absolute;
+            bottom: 0;
+            left: 60px;
+            background: #0d0f1a;
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            width: 170px;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+            transition: all 0.2s ease;
+            z-index: 1000;
+        }
+        .sidebar-more-dropdown::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -20px;
+            width: 20px;
+            height: 100%;
+            background: transparent;
+        }
+        .sidebar-more-container:hover .sidebar-more-dropdown {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateY(0);
+        }
+        .sidebar-more-dropdown a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.6rem 0.75rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border-radius: 8px;
+            transition: var(--transition-smooth);
+        }
+        .sidebar-more-dropdown a:hover {
+            background: rgba(139, 92, 246, 0.1);
+            color: #a78bfa;
+        }
+        .sidebar-more-dropdown a.active {
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.1);
+        }
+        .sidebar-more-dropdown a i {
+            font-size: 0.95rem;
+            width: 16px;
+            text-align: center;
+        }
+
+        /* Elevate header stacking context globally for custom select dropdowns */
+        header, .dashboard-header {
+            position: relative !important;
+            z-index: 110 !important;
+        }
+        
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+        
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+        
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+        
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+        
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+        
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+        
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+        
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+        
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+</style>
+
+<div class="dashboard-container">
+        <!-- Header -->
+        <header>
+            <div class="header-title-area">
+                <h1><i class="fa-solid fa-chart-line"></i> Comparativo de Resultados</h1>
+                <p>Análise de receitas vs despesas por categorias e projeção de lançamentos futuros</p>
+            </div>
+            <div class="controls-area">
+                <label for="month-select">Mês de Referência:</label>
+                <select id="month-select" class="select-custom">
+                    <option value="1">Janeiro</option>
+                    <option value="2">Fevereiro</option>
+                    <option value="3">Março</option>
+                    <option value="4">Abril</option>
+                    <option value="5">Maio</option>
+                    <option value="6">Junho</option>
+                    <option value="7" selected>Julho</option>
+                    <option value="8">Agosto</option>
+                    <option value="9">Setembro</option>
+                    <option value="10">Outubro</option>
+                    <option value="11">Novembro</option>
+                    <option value="12">Dezembro</option>
+                </select>
+                <select id="year-select" class="select-custom">
+                    <option value="2025">2025</option>
+                    <option value="2026" selected>2026</option>
+                    <option value="2027">2027</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- KPI summary cards -->
+        <div class="kpis-row">
+            <!-- Incomes card -->
+            <div class="kpi-card kpi-income">
+                <div class="kpi-title">
+                    <i class="fa-solid fa-circle-arrow-up" style="color: var(--income-color);"></i>
+                    Receitas Totais
+                </div>
+                <div class="kpi-value" id="kpi-income-val">R$ 0,00</div>
+                <div class="kpi-details">
+                    <span>Efetivado: <strong id="kpi-income-eff">R$ 0,00</strong></span>
+                    <span>Pendente: <strong id="kpi-income-pend">R$ 0,00</strong></span>
+                </div>
+            </div>
+            <!-- Expenses card -->
+            <div class="kpi-card kpi-expense">
+                <div class="kpi-title">
+                    <i class="fa-solid fa-circle-arrow-down" style="color: var(--expense-color);"></i>
+                    Despesas Totais
+                </div>
+                <div class="kpi-value" id="kpi-expense-val">R$ 0,00</div>
+                <div class="kpi-details">
+                    <span>Efetivado: <strong id="kpi-expense-eff">R$ 0,00</strong></span>
+                    <span>Pendente: <strong id="kpi-expense-pend">R$ 0,00</strong></span>
+                </div>
+            </div>
+            <!-- Balance card -->
+            <div class="kpi-card kpi-balance">
+                <div class="kpi-title">
+                    <i class="fa-solid fa-scale-balanced" style="color: var(--accent-primary);"></i>
+                    Saldo Resultante
+                </div>
+                <div class="kpi-value" id="kpi-balance-val">R$ 0,00</div>
+                <div class="kpi-details">
+                    <span id="kpi-balance-pct">Resultado mensal líquido</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts row -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <div class="chart-card-title">
+                    <i class="fa-solid fa-chart-bar" style="color: var(--accent-primary);"></i>
+                    Comparativo Mensal (Receitas x Despesas)
+                </div>
+                <div class="chart-container-inner">
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-card-title">
+                    <i class="fa-solid fa-chart-pie" style="color: var(--income-color);"></i>
+                    Receitas por Categoria
+                </div>
+                <div class="chart-container-inner">
+                    <canvas id="incomePieChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-card-title">
+                    <i class="fa-solid fa-chart-pie" style="color: var(--expense-color);"></i>
+                    Despesas por Categoria
+                </div>
+                <div class="chart-container-inner">
+                    <canvas id="expensePieChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category split breakdown -->
+        <div class="categories-grid" style="position: relative;">
+            <div class="loading-overlay" id="panels-loading">
+                <div class="spinner"></div>
+            </div>
+
+            <!-- Incomes breakdown -->
+            <div class="category-panel">
+                <div class="category-panel-header">
+                    <div class="category-panel-title income">
+                        <i class="fa-solid fa-circle-arrow-up"></i> Receitas por Categoria
+                    </div>
+                    <div class="category-total-badge" id="income-categories-total">R$ 0,00</div>
+                </div>
+                <div class="categories-list" id="income-categories-list">
+                    <!-- Dynamic categories -->
+                </div>
+            </div>
+
+            <!-- Expenses breakdown -->
+            <div class="category-panel">
+                <div class="category-panel-header">
+                    <div class="category-panel-title expense">
+                        <i class="fa-solid fa-circle-arrow-down"></i> Despesas por Categoria
+                    </div>
+                    <div class="category-total-badge" id="expense-categories-total">R$ 0,00</div>
+                </div>
+                <div class="categories-list" id="expense-categories-list">
+                    <!-- Dynamic categories -->
+                </div>
+            </div>
+        </div>
+
+        </div>
+        </div>
+    </div>
+
+    
+    </div>
+
+    <script>
+        // State
+        var categories = [];
+        var allTransactions = []; // Holds all transactions fetched for the selected year
+        var now = new Date();
+        var params = new URLSearchParams(window.location.search);
+        var queryMonth = parseInt(params.get('month'));
+        var queryYear = parseInt(params.get('year'));
+        var selectedMonth = !isNaN(queryMonth) ? queryMonth : (now.getMonth() + 1);
+        var selectedYear = !isNaN(queryYear) ? queryYear : now.getFullYear();
+         // Holds list of calculated projection months dynamically
+
+        // Charts references
+        var barChartInstance = null;
+        var incomePieChartInstance = null;
+        var expensePieChartInstance = null;
+
+        // Elements
+        var monthSelect = document.getElementById('month-select');
+        var yearSelect = document.getElementById('year-select');
+        if (monthSelect) monthSelect.value = String(selectedMonth);
+        if (yearSelect) yearSelect.value = String(selectedYear);
+        var panelsLoading = document.getElementById('panels-loading');
+        var heatmapLoading = document.getElementById('heatmap-loading');
+
+        // Helpers
+        function formatBRL(val) {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.add('open');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('open');
+        }
+
+        // Close modal on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const activeModal = document.querySelector('.modal-overlay.open');
+                if (activeModal) {
+                    closeModal(activeModal.id);
+                }
+            }
+        });
+
+        // Toggle accordion drawer for category transactions
+        function toggleCategoryAccordion(elementId) {
+            const container = document.getElementById(elementId);
+            if (!container) return;
+            
+            const isOpen = container.classList.contains('open');
+            
+            // Close all others inside the SAME list only
+            const parentList = container.closest('.categories-list');
+            if (parentList) {
+                parentList.querySelectorAll('.category-row-container').forEach(el => {
+                    el.classList.remove('open');
+                    el.querySelector('.category-tx-details').style.display = 'none';
+                });
+            }
+
+            if (!isOpen) {
+                container.classList.add('open');
+                container.querySelector('.category-tx-details').style.display = 'block';
+            }
+        }
+
+        function getLastDay(year, month) {
+            return new Date(year, month, 0).getDate();
+        }
+
+        // Bootstrap data fetch
+        async function initDashboard() {
+            if (panelsLoading) panelsLoading.classList.add('active');
+            if (heatmapLoading) heatmapLoading.classList.add('active');
+            try {
+                // Fetch categories
+                const catsRes = await fetch('/api/categories');
+                if (catsRes.ok) {
+                    categories = await catsRes.json();
+                }
+                categories = Array.isArray(categories) ? categories : [];
+
+                await loadTransactionsData();
+            } catch (err) {
+                console.error("Error initializing comparative dashboard:", err);
+            } finally {
+                if (panelsLoading) panelsLoading.classList.remove('active');
+                if (heatmapLoading) heatmapLoading.classList.remove('active');
+            }
+        }
+
+
+
+        // Fetch transactions for selected month using safe pagination
+        async function loadTransactionsData() {
+            if (panelsLoading) panelsLoading.classList.add('active');
+            
+            const mSel = document.getElementById('month-select');
+            const ySel = document.getElementById('year-select');
+            
+            selectedMonth = mSel ? parseInt(mSel.value) : 7;
+            selectedYear = ySel ? parseInt(ySel.value) : 2026;
+
+            try {
+                async function fetchMonthTransactions(year, month) {
+                    const lastDay = getLastDay(year, month);
+                    const mStr = String(month).padStart(2, '0');
+                    
+                    const fromStr = `${year}-${mStr}-01`;
+                    const toStr = `${year}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+                    
+                    // Add 1 day to prevent timezone cutoff
+                    const endDateObj = new Date(year, month - 1, lastDay + 1);
+                    const toYear = endDateObj.getFullYear();
+                    const toMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
+                    const toDay = String(endDateObj.getDate()).padStart(2, '0');
+                    const adjustedTo = `${toYear}-${toMonth}-${toDay}`;
+
+                    let allItems = [];
+                    let cursor = null;
+                    
+                    while (true) {
+                        const queryParams = new URLSearchParams({
+                            from: fromStr,
+                            to: adjustedTo,
+                            sort: 'date',
+                            dir: 'desc'
+                        });
+                        if (cursor) {
+                            queryParams.set('cursor', cursor);
+                        }
+                        
+                        const url = `/api/transactions?${queryParams.toString()}`;
+                        const res = await fetch(url);
+                        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+                        
+                        const data = await res.json();
+                        
+                        let items = [];
+                        let nextCursor = null;
+                        if (data && typeof data === 'object') {
+                            if (Array.isArray(data.items)) {
+                                items = data.items;
+                                nextCursor = data.nextCursor;
+                            } else if (Array.isArray(data)) {
+                                items = data;
+                            }
+                        }
+                        
+                        allItems.push(...items);
+                        
+                        if (!nextCursor) {
+                            break;
+                        }
+                        cursor = nextCursor;
+                    }
+                    
+                    return allItems.filter(t => t.date && t.date <= toStr);
+                }
+
+                allTransactions = await fetchMonthTransactions(selectedYear, selectedMonth);
+                calculateAndRenderAll();
+            } catch (err) {
+                console.error("Error loading transactions:", err);
+            } finally {
+                if (panelsLoading) panelsLoading.classList.remove('active');
+            }
+        }
+
+        // Core processing function
+        function calculateAndRenderAll() {
+            // 1. FILTER FOR CURRENT MONTH
+            const currentMonthStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+            const monthTxs = allTransactions.filter(t => t.date && typeof t.date === 'string' && t.date.startsWith(currentMonthStr));
+
+            // Calculate KPIs
+            let totalIncome = 0;
+            let effIncome = 0;
+            let pendIncome = 0;
+
+            let totalExpense = 0;
+            let effExpense = 0;
+            let pendExpense = 0;
+
+            // Group transactions by category for current month
+            const categorySums = {}; // categoryId -> { effective: 0, pending: 0, txs: [] }
+
+            monthTxs.forEach(t => {
+                // Ignore all transfers (including bill payments)
+                if (t.type === 'transfer') return;
+
+                const amount = parseFloat(t.amount) || 0;
+                const isEffective = t.status === 'effective';
+
+                if (t.type === 'income') {
+                    totalIncome += amount;
+                    if (isEffective) effIncome += amount;
+                    else pendIncome += amount;
+                } else if (t.type === 'expense') {
+                    totalExpense += amount;
+                    if (isEffective) effExpense += amount;
+                    else pendExpense += amount;
+                }
+
+                // Group by category name or fallback
+                const catName = t.categoryName || 'Sem Categoria';
+                const catId = t.categoryId || 'cat-none';
+
+                if (!categorySums[catId]) {
+                    categorySums[catId] = { id: catId, name: catName, kind: t.type === 'income' ? 'income' : 'expense', effective: 0, pending: 0, txs: [] };
+                }
+                
+                if (isEffective) {
+                    categorySums[catId].effective += amount;
+                } else {
+                    categorySums[catId].pending += amount;
+                }
+                categorySums[catId].txs.push(t);
+            });
+
+            // Update KPI elements
+            document.getElementById('kpi-income-val').textContent = formatBRL(totalIncome);
+            document.getElementById('kpi-income-eff').textContent = formatBRL(effIncome);
+            document.getElementById('kpi-income-pend').textContent = formatBRL(pendIncome);
+
+            document.getElementById('kpi-expense-val').textContent = formatBRL(totalExpense);
+            document.getElementById('kpi-expense-eff').textContent = formatBRL(effExpense);
+            document.getElementById('kpi-expense-pend').textContent = formatBRL(pendExpense);
+
+            const netBalance = totalIncome - totalExpense;
+            const balElement = document.getElementById('kpi-balance-val');
+            balElement.textContent = formatBRL(netBalance);
+            if (netBalance >= 0) {
+                balElement.style.color = 'var(--income-color)';
+            } else {
+                balElement.style.color = 'var(--expense-color)';
+            }
+
+            // 2. RENDER CHARTS
+            try {
+                if (typeof Chart !== 'undefined') {
+                    renderComparativeCharts(effIncome, pendIncome, effExpense, pendExpense, categorySums);
+                } else {
+                    console.warn("Chart.js was not loaded.");
+                }
+            } catch (chartErr) {
+                console.error("Error rendering charts:", chartErr);
+            }
+
+            // 3. RENDER CATEGORIES COLUMNS
+            renderCategoryColumns(categorySums, totalIncome, totalExpense);
+
+
+        }
+
+        // Render charts via Chart.js
+        function renderComparativeCharts(effInc, pendInc, effExp, pendExp, categorySums) {
+            // Destroy existing charts to prevent hover glitching
+            if (barChartInstance) barChartInstance.destroy();
+            if (incomePieChartInstance) incomePieChartInstance.destroy();
+            if (expensePieChartInstance) expensePieChartInstance.destroy();
+
+            // Bar Chart: Comparative Incomes vs Expenses
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            barChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: ['Receitas', 'Despesas'],
+                    datasets: [
+                        {
+                            label: 'Efetivado',
+                            data: [effInc, effExp],
+                            backgroundColor: ['#10b981', '#f43f5e'],
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Pendente',
+                            data: [pendInc, pendExp],
+                            backgroundColor: ['rgba(16, 185, 129, 0.45)', 'rgba(244, 63, 94, 0.45)'],
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#9ca3af', font: { family: 'Plus Jakarta Sans' } } }
+                    },
+                    scales: {
+                        x: { stacked: true, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#9ca3af' } },
+                        y: { stacked: true, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#9ca3af' } }
+                    }
+                }
+            });
+
+            // Parse categories for pies
+            const incomeCategories = [];
+            const expenseCategories = [];
+
+            Object.values(categorySums).forEach(cat => {
+                const total = cat.effective + cat.pending;
+                if (total <= 0) return;
+                
+                if (cat.kind === 'income') {
+                    incomeCategories.push(cat);
+                } else {
+                    expenseCategories.push(cat);
+                }
+            });
+
+            // Donut 1: Incomes by Category
+            const ctxIncPie = document.getElementById('incomePieChart').getContext('2d');
+            incomePieChartInstance = new Chart(ctxIncPie, {
+                type: 'doughnut',
+                data: {
+                    labels: incomeCategories.map(c => c.name),
+                    datasets: [{
+                        data: incomeCategories.map(c => c.effective + c.pending),
+                        backgroundColor: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#047857', '#065f46'],
+                        borderWidth: 1,
+                        borderColor: '#111322'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false } // Hide legend to look premium
+                    },
+                    cutout: '65%'
+                }
+            });
+
+            // Donut 2: Expenses by Category
+            const ctxExpPie = document.getElementById('expensePieChart').getContext('2d');
+            expensePieChartInstance = new Chart(ctxExpPie, {
+                type: 'doughnut',
+                data: {
+                    labels: expenseCategories.map(c => c.name),
+                    datasets: [{
+                        data: expenseCategories.map(c => c.effective + c.pending),
+                        backgroundColor: ['#f43f5e', '#fb7185', '#fca5a5', '#ffe4e6', '#be123c', '#9f1239'],
+                        borderWidth: 1,
+                        borderColor: '#111322'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        // Render side-by-side categories layout
+        function renderCategoryColumns(categorySums, totalIncome, totalExpense) {
+            const incListEl = document.getElementById('income-categories-list');
+            const expListEl = document.getElementById('expense-categories-list');
+
+            incListEl.innerHTML = '';
+            expListEl.innerHTML = '';
+
+            // Group by category type
+            const listCats = Object.values(categorySums);
+            
+            // Add any other categories that exist in DB but have no transactions in current month
+            categories.forEach(c => {
+                const found = listCats.some(lc => lc.id === c.id);
+                if (!found) {
+                    listCats.push({
+                        id: c.id,
+                        name: c.name,
+                        kind: c.kind,
+                        effective: 0,
+                        pending: 0,
+                        txs: []
+                    });
+                }
+            });
+
+            // Sort lists by total value descending
+            listCats.sort((a,b) => (b.effective + b.pending) - (a.effective + a.pending));
+
+            let incTotalSum = 0;
+            let expTotalSum = 0;
+
+            listCats.forEach(cat => {
+                const total = cat.effective + cat.pending;
+                if (cat.kind === 'income') {
+                    incTotalSum += total;
+                } else {
+                    expTotalSum += total;
+                }
+
+                if (total === 0) {
+                    return;
+                }
+
+                // Render progress bar widths relative to total income/expense of the month
+                let pctEff = 0;
+                let pctPend = 0;
+                if (cat.kind === 'income') {
+                    if (totalIncome > 0) {
+                        pctEff = (cat.effective / totalIncome) * 100;
+                        pctPend = (cat.pending / totalIncome) * 100;
+                    }
+                } else {
+                    if (totalExpense > 0) {
+                        pctEff = (cat.effective / totalExpense) * 100;
+                        pctPend = (cat.pending / totalExpense) * 100;
+                    }
+                }
+
+                // Create container element
+                const rowId = `cat-row-${cat.id}`;
+                const div = document.createElement('div');
+                div.className = 'category-row-container';
+                div.id = rowId;
+
+                // Sort transactions inside drawer
+                cat.txs.sort((a,b) => b.date.localeCompare(a.date));
+
+                div.innerHTML = `
+                    <div class="category-row-header" onclick="toggleCategoryAccordion('${rowId}')">
+                        <div class="cat-meta-info">
+                            <div class="cat-name-label">
+                                <i class="fa-solid fa-chevron-down"></i>
+                                ${escapeHtml(cat.name)}
+                            </div>
+                            <div class="cat-val-label">
+                                ${formatBRL(total)}
+                                <span class="cat-pct-label">${(pctEff + pctPend).toFixed(1)}%</span>
+                            </div>
+                        </div>
+                        
+                        <div class="proportion-bar-container">
+                            <div class="bar-segment ${cat.kind === 'income' ? 'effective-inc' : 'effective-exp'}" style="width: ${pctEff}%;"></div>
+                            <div class="bar-segment ${cat.kind === 'income' ? 'pending-inc' : 'pending-exp'}" style="width: ${pctPend}%;"></div>
+                        </div>
+
+                        <div class="cat-breakdown-text">
+                            <span>Efetivado: <strong>${formatBRL(cat.effective)}</strong></span>
+                            <span>Pendente: <strong>${formatBRL(cat.pending)}</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="category-tx-details">
+                        ${cat.txs.length === 0 ? '<div style="font-size:0.75rem; color:var(--text-dark); font-style:italic; padding:0.25rem;">Nenhum lançamento no mês.</div>' : `
+                            <table class="category-tx-table">
+                                <colgroup>
+                                    <col style="width: 14%;">
+                                    <col style="width: 44%;">
+                                    <col style="width: 22%;">
+                                    <col style="width: 8%;">
+                                    <col style="width: 12%;">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Descrição</th>
+                                        <th>Conta</th>
+                                        <th>St.</th>
+                                        <th style="text-align:right;">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${cat.txs.map(t => {
+                                        const dtObj = new Date(t.date + 'T12:00:00');
+                                        const dtFmt = dtObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                                        return `
+                                            <tr>
+                                                <td>${dtFmt}</td>
+                                                <td>${escapeHtml(t.description)}</td>
+                                                <td>${escapeHtml(t.accountName)}</td>
+                                                <td style="text-align: center;">
+                                                    ${t.status === 'effective'
+                                                        ? `<span title="Efetivado"><i class="fa-solid fa-circle-check" style="color: var(--income-color); font-size: 0.95rem;"></i></span>`
+                                                        : `<span title="Pendente"><i class="fa-solid fa-clock" style="color: var(--accent-primary); font-size: 0.95rem;"></i></span>`
+                                                    }
+                                                </td>
+                                                <td style="text-align:right; font-weight:700; color:${t.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'}; white-space: nowrap;">
+                                                    ${t.type === 'income' ? '+' : '-'} ${formatBRL(t.amount)}
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        `}
+                    </div>
+                `;
+
+                if (cat.kind === 'income') {
+                    incListEl.appendChild(div);
+                } else {
+                    expListEl.appendChild(div);
+                }
+            });
+
+            document.getElementById('income-categories-total').textContent = formatBRL(incTotalSum);
+            document.getElementById('expense-categories-total').textContent = formatBRL(expTotalSum);
+        }
+
+        // Render Recurring & Installment Heat Map
+        function renderHeatMap() {
+            // We use global projectionMonths array
+            const monthsNamesShort = {
+                1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
+                7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'
+            };
+
+            const incBody = document.getElementById('heatmap-income-body');
+            const expBody = document.getElementById('heatmap-expense-body');
+
+            incBody.innerHTML = '';
+            expBody.innerHTML = '';
+
+            // Render table headers dynamically
+            const incHeadRow = document.getElementById('heatmap-income-header-row');
+            const expHeadRow = document.getElementById('heatmap-expense-header-row');
+            
+            const headerHtml = `
+                <th>Categoria</th>
+                ${projectionMonths.map(p => `<th>${monthsNamesShort[p.month]} ${String(p.year).substring(2)}</th>`).join('')}
+                <th>Total Projetado</th>
+            `;
+            if (incHeadRow) incHeadRow.innerHTML = headerHtml;
+            if (expHeadRow) expHeadRow.innerHTML = headerHtml;
+
+            // Group all transactions in the projectionMonths
+            // Row key: categoryId -> { categoryName, kind, monthValues: { "YYYY-MM": [] } }
+            const heatMatrix = {};
+
+            // Initialize all categories in the matrix
+            categories.forEach(c => {
+                heatMatrix[c.id] = {
+                    categoryId: c.id,
+                    categoryName: c.name,
+                    kind: c.kind,
+                    months: {}
+                };
+                projectionMonths.forEach(p => {
+                    const key = `${p.year}-${p.month}`;
+                    heatMatrix[c.id].months[key] = [];
+                });
+            });
+
+            // Filter year transactions that fall in the projection range
+            allTransactions.forEach(t => {
+                // Ignore all transfers (including bill payments)
+                if (t.type === 'transfer') return;
+
+                if (!t.date || typeof t.date !== 'string') return;
+
+                const tDateObj = new Date(t.date + 'T12:00:00');
+                const tYear = tDateObj.getFullYear();
+                const tMonth = tDateObj.getMonth() + 1; // 1-indexed
+
+                // Check if this month/year matches any of the projection months
+                const isInProjection = projectionMonths.some(p => p.month === tMonth && p.year === tYear);
+                if (!isInProjection) return;
+
+                const catId = t.categoryId || 'cat-none';
+                if (!heatMatrix[catId]) {
+                    // Fallback create category
+                    heatMatrix[catId] = {
+                        categoryId: catId,
+                        categoryName: t.categoryName || 'Sem Categoria',
+                        kind: t.type === 'income' ? 'income' : 'expense',
+                        months: {}
+                    };
+                    projectionMonths.forEach(p => {
+                        const key = `${p.year}-${p.month}`;
+                        heatMatrix[catId].months[key] = [];
+                    });
+                }
+
+                const key = `${tYear}-${tMonth}`;
+                heatMatrix[catId].months[key].push(t);
+            });
+
+            // Determine max cell value to calculate color opacity relative range (heat map effect)
+            let maxCellValue = 100; // default min divisor
+            Object.values(heatMatrix).forEach(row => {
+                projectionMonths.forEach(p => {
+                    const key = `${p.year}-${p.month}`;
+                    const sum = row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                    if (sum > maxCellValue) {
+                        maxCellValue = sum;
+                    }
+                });
+            });
+
+            // Accumulators for column totals
+            const colSums = {};
+            projectionMonths.forEach(p => {
+                const key = `${p.year}-${p.month}`;
+                colSums[key] = { income: 0, expense: 0 };
+            });
+            let totalIncomeSum = 0;
+            let totalExpenseSum = 0;
+            let hasIncomeData = false;
+            let hasExpenseData = false;
+
+            // Render Rows
+            Object.values(heatMatrix).forEach(row => {
+                // Calculate row total sum
+                let rowTotal = 0;
+                projectionMonths.forEach(p => {
+                    const key = `${p.year}-${p.month}`;
+                    rowTotal += row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                });
+
+                // Skip category row if it has no recurrings/installments in these months
+                if (rowTotal === 0) return;
+
+                // Update column sums
+                if (row.kind === 'income') {
+                    hasIncomeData = true;
+                    totalIncomeSum += rowTotal;
+                    projectionMonths.forEach(p => {
+                        const key = `${p.year}-${p.month}`;
+                        colSums[key].income += row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                    });
+                } else {
+                    hasExpenseData = true;
+                    totalExpenseSum += rowTotal;
+                    projectionMonths.forEach(p => {
+                        const key = `${p.year}-${p.month}`;
+                        colSums[key].expense += row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                    });
+                }
+
+                const tr = document.createElement('tr');
+                
+                // Column 1: Category Name
+                let cellsHtml = `<td>${escapeHtml(row.categoryName)}</td>`;
+
+                // Columns: Months
+                projectionMonths.forEach(p => {
+                    const key = `${p.year}-${p.month}`;
+                    const monthTxs = row.months[key];
+                    const sum = monthTxs.reduce((acc, t) => acc + t.amount, 0);
+
+                    if (sum === 0) {
+                        cellsHtml += `<td class="heatmap-empty">-</td>`;
+                    } else {
+                        // Calculate opacity relative to max value in grid
+                        const opacity = Math.min(1, Math.max(0.1, sum / maxCellValue));
+                        const bgColor = row.kind === 'income' 
+                            ? `rgba(16, 185, 129, ${opacity})` 
+                            : `rgba(244, 63, 94, ${opacity})`;
+                        
+                        const textColor = opacity > 0.65 ? '#fff' : 'var(--text-main)';
+                        
+                        const cellId = `hc-${row.categoryId}-${key}`;
+                        
+                        cellsHtml += `
+                            <td style="padding:0.4rem;">
+                                <span class="heatmap-cell-value" id="${cellId}" 
+                                      style="background:${bgColor}; color:${textColor};" 
+                                      onclick="showHeatmapCellDetails('${row.categoryId}', ${p.month}, ${p.year}, '${escapeJs(row.categoryName)}')">
+                                    ${formatBRL(sum)}
+                                </span>
+                            </td>
+                        `;
+                    }
+                });
+
+                // Row Total
+                cellsHtml += `<td>${formatBRL(rowTotal)}</td>`;
+                tr.innerHTML = cellsHtml;
+
+                if (row.kind === 'income') {
+                    incBody.appendChild(tr);
+                } else {
+                    expBody.appendChild(tr);
+                }
+            });
+
+            // Fallback for empty tables
+            const colspan = projectionMonths.length + 2;
+            if (incBody.innerHTML === '') {
+                incBody.innerHTML = `<tr><td colspan="${colspan}" class="heatmap-empty" style="text-align:center;">Nenhuma receita recorrente/parcelada ativa no semestre.</td></tr>`;
+            }
+            if (expBody.innerHTML === '') {
+                expBody.innerHTML = `<tr><td colspan="${colspan}" class="heatmap-empty" style="text-align:center;">Nenhuma despesa recorrente/parcelada ativa no semestre.</td></tr>`;
+            }
+
+            // Render Footers with Column Totals
+            const incFoot = document.getElementById('heatmap-income-foot');
+            if (incFoot) {
+                if (!hasIncomeData) {
+                    incFoot.innerHTML = '';
+                } else {
+                    let cellsHtml = `<td style="text-align:left; font-weight:700;">TOTAL</td>`;
+                    projectionMonths.forEach(p => {
+                        const key = `${p.year}-${p.month}`;
+                        cellsHtml += `<td style="font-weight:700; color:var(--income-color);">${formatBRL(colSums[key].income)}</td>`;
+                    });
+                    cellsHtml += `<td style="font-weight:700; color:var(--income-color);">${formatBRL(totalIncomeSum)}</td>`;
+                    incFoot.innerHTML = `<tr>${cellsHtml}</tr>`;
+                }
+            }
+
+            const expFoot = document.getElementById('heatmap-expense-foot');
+            if (expFoot) {
+                if (!hasExpenseData) {
+                    expFoot.innerHTML = '';
+                } else {
+                    let cellsHtml = `<td style="text-align:left; font-weight:700;">TOTAL</td>`;
+                    projectionMonths.forEach(p => {
+                        const key = `${p.year}-${p.month}`;
+                        cellsHtml += `<td style="font-weight:700; color:var(--expense-color);">${formatBRL(colSums[key].expense)}</td>`;
+                    });
+                    cellsHtml += `<td style="font-weight:700; color:var(--expense-color);">${formatBRL(totalExpenseSum)}</td>`;
+                    expFoot.innerHTML = `<tr>${cellsHtml}</tr>`;
+                }
+            }
+        }
+
+        // Show projected details inside modal on cell click
+        function showHeatmapCellDetails(categoryId, month, year, categoryName) {
+            const monthsNames = {
+                1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho',
+                7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'
+            };
+
+            const title = document.getElementById('modal-details-title');
+            const subtitle = document.getElementById('modal-details-subtitle');
+            const body = document.getElementById('modal-details-table-body');
+
+            title.textContent = "Detalhamento de Projeções";
+            subtitle.textContent = `Categoria: ${categoryName} | Mês: ${monthsNames[month]} de ${year}`;
+            body.innerHTML = '';
+
+            // Filter year transactions in state
+            const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`;
+            const matches = allTransactions.filter(t => {
+                // Ignore all transfers (including bill payments)
+                if (t.type === 'transfer') return false;
+                
+                const catMatch = t.categoryId === categoryId || (!t.categoryId && categoryId === 'cat-none');
+                return catMatch && t.date && t.date.startsWith(currentMonthStr);
+            });
+
+            matches.sort((a,b) => a.date.localeCompare(b.date));
+
+            matches.forEach(t => {
+                const tr = document.createElement('tr');
+                const dtObj = new Date(t.date + 'T12:00:00');
+                const dtFmt = dtObj.toLocaleDateString('pt-BR');
+
+                tr.innerHTML = `
+                    <td style="padding:0.5rem 0.75rem;">${dtFmt}</td>
+                    <td style="padding:0.5rem 0.75rem; font-weight:500;">${escapeHtml(t.description)}</td>
+                    <td style="padding:0.5rem 0.75rem;">${escapeHtml(t.accountName)}</td>
+                    <td style="padding:0.5rem 0.75rem; text-align:right; font-weight:700; color:${t.type === 'income' ? 'var(--income-color)' : 'var(--text-main)'}">
+                        ${t.type === 'income' ? '+' : '-'} ${formatBRL(t.amount)}
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+
+            openModal('modal-cell-details');
+        }
+
+        // JS escaping helper
+        function escapeJs(str) {
+            if (!str) return '';
+            return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        // Event listeners
+        var mSel = document.getElementById('month-select');
+        var ySel = document.getElementById('year-select');
+        var hmSel = document.getElementById('heatmap-months-select');
+        if (mSel) mSel.addEventListener('change', loadTransactionsData);
+        if (ySel) ySel.addEventListener('change', loadTransactionsData);
+        if (hmSel) hmSel.addEventListener('change', loadTransactionsData);
+
+        // Load bootstrap - try direct execution first, and bind to onload as fallback
+        var hasInitialized = false;
+        async function runInit() {
+            if (hasInitialized) return;
+            hasInitialized = true;
+            await initDashboard();
+        }
+
+        // Run immediately since DOM is already parsed (script is at bottom of body)
+        runInit();
+
+        // Fallback for full page loads or wrapper injections
+        window.onload = runInit;
+        
+// Translation engine and dictionaries
+var TRANSLATIONS = {
+    en: {
+        // Sidebar Menu
+        tooltip_overview: "Overview",
+        tooltip_pending: "Pending",
+        tooltip_comparative: "Comparative",
+        tooltip_projections: "Projections",
+        tooltip_accounts: "Bank Accounts",
+        tooltip_cards: "Credit Cards",
+        menu_categories: "Categories",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "January", february: "February", march: "March", april: "April", may: "May", june: "June",
+        july: "July", august: "August", september: "September", october: "October", november: "November", december: "December",
+        
+        // General UI terms
+        reference_label: "Reference:",
+        day_sun: "Sun", day_mon: "Mon", day_tue: "Tue", day_wed: "Wed", day_thu: "Thu", day_fri: "Fri", day_sat: "Sat",
+        paid: "Paid", unpaid: "Unpaid", active: "Active", inactive: "Inactive",
+        
+        // Overview Dashboard
+        overview_title: "Overview",
+        overview_subtitle: "Monthly financial summary, calendar, and quick shortcuts",
+        accounts_balance: "Accounts Balance",
+        expenses_month: "Expenses this Month",
+        card_bills: "Credit Card Bills",
+        incomes_month: "Incomes this Month",
+        final_projection: "Final Projection:",
+        recent_transactions: "Recent Transactions",
+        due_calendar: "Daily Flow & Dues",
+        expenses_distribution: "Expenses Distribution",
+        quick_shortcuts: "Quick Shortcuts",
+        new_transaction: "New Transaction",
+        new_transfer: "New Transfer",
+        new_category: "New Category",
+        new_card: "New Card",
+        new_account: "New Account",
+        no_expenses_month: "No expenses recorded this month.",
+        no_recent_transactions: "No recent transactions found.",
+        no_dues_period: "No transactions due in this period.",
+        income: "Income",
+        expense: "Expense",
+        paid_reconciled: "Paid / Reconciled",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Recurring & Installment Projections",
+        projections_subtitle: "Advanced visual mapping and projection of active recurrences and installments for the next months",
+        projection_label: "Projection:",
+        months_3: "3 Months",
+        months_6: "6 Months",
+        months_9: "9 Months",
+        months_12: "12 Months",
+        heatmap_income_title: "Recurrent / Installment Incomes",
+        heatmap_expense_title: "Recurrent / Installment Expenses",
+        total: "Total",
+        no_recurrent_incomes: "No active recurrent or installment incomes in the selected semester.",
+        no_recurrent_expenses: "No active recurrent or installment expenses in the selected semester.",
+        modal_details_title: "Projection Breakdown",
+        modal_details_subtitle: "Details of projected transactions for the category and month",
+        col_date: "Date",
+        col_desc: "Description",
+        col_value: "Value",
+        col_status: "Status",
+        btn_close: "Close",
+        
+        // Comparative Dashboard
+        comparative_title: "Comparative Dashboard",
+        comparative_subtitle: "Analysis and comparison of monthly incomes vs expenses, and category limits",
+        month_summary_title: "Month Summary",
+        cat_spending_title: "Spending by Category",
+        card_limits_title: "Category Budgets & Limits",
+        col_category: "Category",
+        col_limit: "Budget Limit",
+        col_spent: "Spent",
+        col_status_limit: "Status",
+        col_percentage: "Percentage",
+        within_limit: "Within Limit",
+        exceeded: "Exceeded",
+        reception: "Incomes",
+        deduction: "Expenses",
+        net_balance: "Net Balance",
+        performance: "Financial Health",
+        no_spending_month: "No category spend recorded this month.",
+        
+        // Accounts Dashboard
+        accounts_title: "Bank Accounts",
+        accounts_subtitle: "Manage accounts, checking balances, and reviewing statements",
+        active_account_statement: "Account Statement",
+        btn_new_transaction: "New Transaction",
+        btn_new_transfer: "New Transfer",
+        search_description_placeholder: "Type to search...",
+        filter_type_label: "Type",
+        filter_type_all: "All",
+        filter_type_income: "Incomes",
+        filter_type_expense: "Expenses",
+        col_actions: "Actions",
+        action_confirm: "Confirm",
+        action_edit: "Edit",
+        action_delete: "Delete",
+        no_transactions_account: "No transactions recorded for this account in the selected month.",
+        confirm_delete_title: "Are you sure you want to permanently delete this transaction?",
+        modal_new_tx_title: "New Transaction",
+        modal_new_transfer_title: "New Transfer",
+        label_account: "Account",
+        label_description: "Description",
+        label_value: "Value",
+        label_date: "Date",
+        label_category: "Category / Subcategory",
+        label_type: "Type",
+        label_status: "Status",
+        status_pending: "Pending",
+        status_confirmed: "Paid / Confirmed",
+        btn_cancel: "Cancel",
+        btn_save: "Save",
+        label_origin: "Origin Account",
+        label_destination: "Destination Account",
+        
+        // Pending Dashboard
+        pending_title: "Pending Transactions",
+        pending_subtitle: "Monitoring and quick confirmation of pending or future transactions",
+        pending_kpi_total: "Total Pending",
+        pending_kpi_incomes: "Pending Incomes",
+        pending_kpi_expenses: "Pending Expenses",
+        pending_chart_incomes: "Pending Incomes Trend",
+        pending_chart_expenses: "Pending Expenses Trend",
+        btn_confirm: "Confirm",
+        btn_edit: "Edit",
+        btn_delete: "Delete",
+        no_pending_transactions: "No pending transactions found for this period.",
+        toast_success_confirm: "Transaction confirmed successfully!",
+        
+        // Categories Dashboard
+        categories_title: "Category Management",
+        categories_subtitle: "Visualize, search, and manage categories and subcategories in a clean tree list",
+        btn_new_category: "New Category",
+        search_category_placeholder: "Search categories...",
+        col_type: "Type",
+        col_actions_cat: "Actions",
+        subcategories_label: "Subcategories",
+        no_subcategories: "No subcategories registered.",
+        modal_new_cat_title: "New Category",
+        modal_new_subcat_title: "New Subcategory",
+        label_name: "Name",
+        label_color: "Color",
+        label_parent_category: "Parent Category (Read-Only)",
+        toast_success_cat: "Category created successfully!",
+        toast_success_subcat: "Subcategory created successfully!",
+        
+        // Cards Dashboard
+        cards_title: "Credit Cards",
+        cards_subtitle: "Manage credit cards, credit limits, and statement history",
+        card_bill_details: "Card Bill Details",
+        btn_pay_bill: "Pay Bill",
+        btn_revert_payment: "Revert Payment",
+        bill_status: "Bill Status:",
+        status_open: "Open",
+        status_closed: "Closed",
+        status_paid: "Paid",
+        no_card_transactions: "No transactions recorded for this card bill in the selected cycle.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Dashboards Monitor",
+        dashboards_subtitle: "List, view source, and upload fintrack dashboards",
+        col_dashboard: "Dashboard",
+        col_last_update: "Last Updated",
+        btn_view_source: "View Source",
+        btn_download: "Download",
+        upload_new_dashboard: "Upload New Dashboard",
+        placeholder_dashboard_name: "Dashboard Name (e.g. pending)",
+        upload_instructions: "Select or drop HTML file here to upload",
+        btn_upload: "Upload",
+        modal_source_title: "HTML Source Code",
+        
+        // Tags Management
+        menu_tags: "Tags",
+        tags_title: "Tag Management",
+        tags_subtitle: "Manage tags to label and organize your transactions",
+        panel_title_tags: "Active Tags",
+        btn_new_tag: "New Tag",
+        label_tag_name: "Tag Name",
+        placeholder_tag_name: "E.g. work, travel, refund",
+        empty_tags_message: "No tags registered.",
+        btn_save: "Save",
+        btn_cancel: "Cancel",
+        toast_success_tag_created: 'Tag "{name}" created successfully!',
+        toast_success_tag_deleted: 'Tag "{name}" deleted successfully!',
+        confirm_delete_tag: 'Are you sure you want to delete tag "{name}"?\n(This action will remove the tag from all linked transactions)'
+    },
+    pt: {
+        // Sidebar Menu
+        tooltip_overview: "Visão Geral",
+        tooltip_pending: "Pendentes",
+        tooltip_comparative: "Comparativo",
+        tooltip_projections: "Projeções",
+        tooltip_accounts: "Contas Bancárias",
+        tooltip_cards: "Cartões de Crédito",
+        menu_categories: "Categorias",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "Janeiro", february: "Fevereiro", march: "Março", april: "Abril", may: "Maio", june: "Junho",
+        july: "Julho", august: "Agosto", september: "Setembro", october: "Outubro", november: "Novembro", december: "Dezembro",
+        
+        // General UI terms
+        reference_label: "Referência:",
+        day_sun: "Dom", day_mon: "Seg", day_tue: "Ter", day_wed: "Qua", day_thu: "Qui", day_fri: "Sex", day_sat: "Sáb",
+        paid: "Pago", unpaid: "Não Pago", active: "Ativo", inactive: "Inativo",
+        
+        // Overview Dashboard
+        overview_title: "Visão Geral",
+        overview_subtitle: "Consolidado financeiro mensal, calendário e atalhos rápidos",
+        accounts_balance: "Saldo em Contas",
+        expenses_month: "Despesas do Mês",
+        card_bills: "Faturas de Cartão",
+        incomes_month: "Receitas do Mês",
+        final_projection: "Projeção Final:",
+        recent_transactions: "Lançamentos Recentes",
+        due_calendar: "Fluxo Diário",
+        expenses_distribution: "Distribuição de Despesas",
+        quick_shortcuts: "Atalhos Rápidos",
+        new_transaction: "Novo Lançamento",
+        new_transfer: "Nova Transferência",
+        new_category: "Nova Categoria",
+        new_card: "Novo Cartão",
+        new_account: "Nova Conta",
+        no_expenses_month: "Sem despesas registradas neste mês.",
+        no_recent_transactions: "Nenhuma transação recente encontrada.",
+        no_dues_period: "Sem vencimentos neste período.",
+        income: "Receita",
+        expense: "Despesa",
+        paid_reconciled: "Pago / Conciliado",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Projeção de Recorrências e Parcelas",
+        projections_subtitle: "Mapeamento visual avançado e projeção de recorrências e parcelas ativas para os próximos meses",
+        projection_label: "Projeção:",
+        months_3: "3 Meses",
+        months_6: "6 Meses",
+        months_9: "9 Meses",
+        months_12: "12 Meses",
+        heatmap_income_title: "Receitas Recorrentes / Parceladas",
+        heatmap_expense_title: "Despesas Recorrentes / Parceladas",
+        total: "Total",
+        no_recurrent_incomes: "Nenhuma receita recorrente/parcelada ativa no semestre.",
+        no_recurrent_expenses: "Nenhuma despesa recorrente/parcelada ativa no semestre.",
+        modal_details_title: "Detalhamento de Projeções",
+        modal_details_subtitle: "Detalhes das transações projetadas para a categoria e mês",
+        col_date: "Data",
+        col_desc: "Descrição",
+        col_value: "Valor",
+        col_status: "Status",
+        btn_close: "Fechar",
+        
+        // Comparative Dashboard
+        comparative_title: "Dashboard Comparativo",
+        comparative_subtitle: "Análise e comparação mensal de receitas vs despesas e limites por categoria",
+        month_summary_title: "Resumo do Mês",
+        cat_spending_title: "Gastos por Categoria",
+        card_limits_title: "Orçamentos e Limites de Categorias",
+        col_category: "Categoria",
+        col_limit: "Limite de Orçamento",
+        col_spent: "Gasto",
+        col_status_limit: "Status",
+        col_percentage: "Porcentagem",
+        within_limit: "Dentro do Limite",
+        exceeded: "Excedido",
+        reception: "Receitas",
+        deduction: "Despesas",
+        net_balance: "Saldo Líquido",
+        performance: "Saúde Financeira",
+        no_spending_month: "Sem despesas registradas por categoria neste mês.",
+        
+        // Accounts Dashboard
+        accounts_title: "Minhas Contas",
+        accounts_subtitle: "Gerencie contas, consulte saldos e revise extratos",
+        active_account_statement: "Extrato de Conta",
+        btn_new_transaction: "Novo Lançamento",
+        btn_new_transfer: "Nova Transferência",
+        search_description_placeholder: "Digite para filtrar...",
+        filter_type_label: "Tipo",
+        filter_type_all: "Todos",
+        filter_type_income: "Receitas",
+        filter_type_expense: "Despesas",
+        col_actions: "Ações",
+        action_confirm: "Confirmar",
+        action_edit: "Editar",
+        action_delete: "Excluir",
+        no_transactions_account: "Nenhum lançamento nesta conta para o mês selecionado.",
+        confirm_delete_title: "Deseja excluir definitivamente a transação?",
+        modal_new_tx_title: "Novo Lançamento",
+        modal_new_transfer_title: "Nova Transferência",
+        label_account: "Conta",
+        label_description: "Descrição",
+        label_value: "Valor",
+        label_date: "Data",
+        label_category: "Categoria / Subcategoria",
+        label_type: "Tipo",
+        label_status: "Status",
+        status_pending: "Pendente",
+        status_confirmed: "Pago / Confirmado",
+        btn_cancel: "Cancelar",
+        btn_save: "Salvar",
+        label_origin: "Conta Origem",
+        label_destination: "Conta Destino",
+        
+        // Pending Dashboard
+        pending_title: "Transações Pendentes",
+        pending_subtitle: "Monitoramento e confirmação rápida de lançamentos pendentes ou futuros",
+        pending_kpi_total: "Total Pendente",
+        pending_kpi_incomes: "Receitas Pendentes",
+        pending_kpi_expenses: "Despesas Pendentes",
+        pending_chart_incomes: "Tendência de Receitas Pendentes",
+        pending_chart_expenses: "Tendência de Despesas Pendentes",
+        btn_confirm: "Confirmar",
+        btn_edit: "Editar",
+        btn_delete: "Excluir",
+        no_pending_transactions: "Nenhuma transação pendente encontrada para este período.",
+        toast_success_confirm: "Transação confirmada com sucesso!",
+        
+        // Categories Dashboard
+        categories_title: "Gerenciamento de Categorias",
+        categories_subtitle: "Visualize, pesquise e gerencie categorias e subcategorias em árvore",
+        btn_new_category: "Nova Categoria",
+        search_category_placeholder: "Pesquisar categorias...",
+        col_type: "Tipo",
+        col_actions_cat: "Ações",
+        subcategories_label: "Subcategorias",
+        no_subcategories: "Nenhuma subcategoria cadastrada.",
+        modal_new_cat_title: "Nova Categoria",
+        modal_new_subcat_title: "Nova Subcategoria",
+        label_name: "Nome",
+        label_color: "Cor",
+        label_parent_category: "Categoria Pai (Somente Leitura)",
+        toast_success_cat: "Categoria criada com sucesso!",
+        toast_success_subcat: "Subcategoria criada com sucesso!",
+        
+        // Cards Dashboard
+        cards_title: "Cartões de Crédito",
+        cards_subtitle: "Gerencie cartões de crédito, limites e histórico de faturas",
+        card_bill_details: "Detalhamento de Fatura",
+        btn_pay_bill: "Pagar Fatura",
+        btn_revert_payment: "Estornar Pagamento",
+        bill_status: "Status da Fatura:",
+        status_open: "Aberta",
+        status_closed: "Fechada",
+        status_paid: "Paga",
+        no_card_transactions: "Nenhuma transação registrada nesta fatura para o ciclo selecionado.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Monitor de Dashboards",
+        dashboards_subtitle: "Liste, visualize o código fonte e envie dashboards para o servidor do fintrack",
+        col_dashboard: "Dashboard",
+        col_last_update: "Última Atualização",
+        btn_view_source: "Ver Código",
+        btn_download: "Baixar HTML",
+        upload_new_dashboard: "Enviar Novo Dashboard",
+        placeholder_dashboard_name: "Nome do Dashboard (ex: pending)",
+        upload_instructions: "Selecione ou solte o arquivo HTML aqui para upload",
+        btn_upload: "Fazer Upload",
+        modal_source_title: "Código Fonte HTML",
+        
+        // Tags Management
+        menu_tags: "Tags",
+        tags_title: "Gerenciar Tags",
+        tags_subtitle: "Gerencie as tags utilizadas para rotular e categorizar suas transações",
+        panel_title_tags: "Tags Ativas",
+        btn_new_tag: "Nova Tag",
+        label_tag_name: "Nome da Tag",
+        placeholder_tag_name: "Ex: trabalho, viagem, reembolso",
+        empty_tags_message: "Nenhuma tag cadastrada.",
+        btn_save: "Salvar",
+        btn_cancel: "Cancelar",
+        toast_success_tag_created: 'Tag "{name}" criada com sucesso!',
+        toast_success_tag_deleted: 'Tag "{name}" excluída com sucesso!',
+        confirm_delete_tag: 'Deseja realmente excluir a tag "{name}"?\n(Esta ação removerá a tag de todas as transações vinculadas)'
+    },
+    es: {
+        // Sidebar Menu
+        tooltip_overview: "Vista General",
+        tooltip_pending: "Pendientes",
+        tooltip_comparative: "Comparativo",
+        tooltip_projections: "Proyecciones",
+        tooltip_accounts: "Cuentas Bancárias",
+        tooltip_cards: "Tarjetas de Crédito",
+        menu_categories: "Categorías",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "Enero", february: "Febrero", march: "Marzo", april: "Abril", may: "Mayo", june: "Junio",
+        july: "Julio", august: "Agosto", september: "Septiembre", october: "Octubre", november: "Noviembre", december: "Diciembre",
+        
+        // General UI terms
+        reference_label: "Referencia:",
+        day_sun: "Dom", day_mon: "Lun", day_tue: "Mar", day_wed: "Mié", day_thu: "Jue", day_fri: "Vie", day_sat: "Sáb",
+        paid: "Pagado", unpaid: "No Pagado", active: "Activo", inactive: "Inactivo",
+        
+        // Overview Dashboard
+        overview_title: "Vista General",
+        overview_subtitle: "Resumen financiero mensual, calendario y accesos rápidos",
+        accounts_balance: "Saldo en Cuentas",
+        expenses_month: "Gastos del Mes",
+        card_bills: "Facturas de Tarjeta",
+        incomes_month: "Ingresos del Mes",
+        final_projection: "Proyección Final:",
+        recent_transactions: "Transacciones Recientes",
+        due_calendar: "Calendario de Pagos",
+        expenses_distribution: "Distribución de Gastos",
+        quick_shortcuts: "Accesos Rápidos",
+        new_transaction: "Nueva Transacción",
+        new_transfer: "Nueva Transferencia",
+        new_category: "Nueva Categoría",
+        new_card: "Nueva Tarjeta",
+        new_account: "Nueva Cuenta",
+        no_expenses_month: "No hay gastos registrados este mes.",
+        no_recent_transactions: "No se encontraron transacciones recientes.",
+        no_dues_period: "Sin vencimientos en este período.",
+        income: "Ingreso",
+        expense: "Gasto",
+        paid_reconciled: "Pagado / Conciliado",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Proyección de Recurrencias y Cuotas",
+        projections_subtitle: "Mapeo visual avanzado y proyección de recurrencias y cuotas activas para los próximos meses",
+        projection_label: "Proyección:",
+        months_3: "3 Meses",
+        months_6: "6 Meses",
+        months_9: "9 Meses",
+        months_12: "12 Meses",
+        heatmap_income_title: "Ingresos Recurrentes / Cuotas",
+        heatmap_expense_title: "Gastos Recurrentes / Cuotas",
+        total: "Total",
+        no_recurrent_incomes: "Ningún ingreso recurrente o en cuotas activo en el semestre seleccionado.",
+        no_recurrent_expenses: "Ningún gasto recurrente o en cuotas activo en el semestre seleccionado.",
+        modal_details_title: "Detalle de Proyecciones",
+        modal_details_subtitle: "Detalles de transacciones proyectadas para la categoría y mes",
+        col_date: "Fecha",
+        col_desc: "Descripción",
+        col_value: "Valor",
+        col_status: "Estado",
+        btn_close: "Cerrar",
+        
+        // Comparative Dashboard
+        comparative_title: "Dashboard Comparativo",
+        comparative_subtitle: "Análisis y comparación mensual de ingresos vs gastos y límites por categoría",
+        month_summary_title: "Resumen del Mes",
+        cat_spending_title: "Gastos por Categoría",
+        card_limits_title: "Presupuestos y Límites de Categorías",
+        col_category: "Categoría",
+        col_limit: "Límite de Presupuesto",
+        col_spent: "Gastado",
+        col_status_limit: "Estado",
+        col_percentage: "Porcentaje",
+        within_limit: "Dentro del Límite",
+        exceeded: "Excedido",
+        reception: "Ingresos",
+        deduction: "Gastos",
+        net_balance: "Saldo Neto",
+        performance: "Salud Financiera",
+        no_spending_month: "No hay gastos registrados por categoría este mes.",
+        
+        // Accounts Dashboard
+        accounts_title: "Cuentas Bancarias",
+        accounts_subtitle: "Administre cuentas, consulte saldos y revise extractos",
+        active_account_statement: "Extracto de Cuenta",
+        btn_new_transaction: "Nueva Transacción",
+        btn_new_transfer: "Nueva Transferencia",
+        search_description_placeholder: "Escriba para filtrar...",
+        filter_type_label: "Tipo",
+        filter_type_all: "Todos",
+        filter_type_income: "Ingresos",
+        filter_type_expense: "Gastos",
+        col_actions: "Acciones",
+        action_confirm: "Confirmar",
+        action_edit: "Editar",
+        action_delete: "Eliminar",
+        no_transactions_account: "No hay transacciones registradas en esta cuenta en el mes seleccionado.",
+        confirm_delete_title: "¿Está seguro de eliminar definitivamente esta transacción?",
+        modal_new_tx_title: "Nueva Transacción",
+        modal_new_transfer_title: "Nueva Transferencia",
+        label_account: "Cuenta",
+        label_description: "Descripción",
+        label_value: "Valor",
+        label_date: "Fecha",
+        label_category: "Categoría / Subcategoría",
+        label_type: "Tipo",
+        label_status: "Estado",
+        status_pending: "Pendiente",
+        status_confirmed: "Pagado / Confirmado",
+        btn_cancel: "Cancelar",
+        btn_save: "Guardar",
+        label_origin: "Cuenta Origen",
+        label_destination: "Cuenta Destino",
+        
+        // Pending Dashboard
+        pending_title: "Transacciones Pendientes",
+        pending_subtitle: "Monitoreo y confirmación rápida de transacciones pendientes o futuras",
+        pending_kpi_total: "Total Pendiente",
+        pending_kpi_incomes: "Ingresos Pendientes",
+        pending_kpi_expenses: "Gastos Pendientes",
+        pending_chart_incomes: "Tendencia de Ingresos Pendientes",
+        pending_chart_expenses: "Tendencia de Gastos Pendientes",
+        btn_confirm: "Confirmar",
+        btn_edit: "Editar",
+        btn_delete: "Eliminar",
+        no_pending_transactions: "No se encontraron transacciones pendientes en este período.",
+        toast_success_confirm: "¡Transacción confirmada con éxito!",
+        
+        // Categories Dashboard
+        categories_title: "Gestión de Categorías",
+        categories_subtitle: "Visualice, busque y gestione categorías y subcategorías en árbol",
+        btn_new_category: "Nueva Categoría",
+        search_category_placeholder: "Buscar categorías...",
+        col_type: "Tipo",
+        col_actions_cat: "Acciones",
+        subcategories_label: "Subcategorías",
+        no_subcategories: "Ninguna subcategoría registrada.",
+        modal_new_cat_title: "Nueva Categoría",
+        modal_new_subcat_title: "Nueva Subcategoría",
+        label_name: "Nombre",
+        label_color: "Color",
+        label_parent_category: "Categoría Padre (Solo Lectura)",
+        toast_success_cat: "¡Categoría creada con éxito!",
+        toast_success_subcat: "¡Subcategoría creada con éxito!",
+        
+        // Cards Dashboard
+        cards_title: "Tarjetas de Crédito",
+        cards_subtitle: "Gestione tarjetas de crédito, límites y facturas",
+        card_bill_details: "Detalle de Factura",
+        btn_pay_bill: "Pagar Factura",
+        btn_revert_payment: "Revertir Pago",
+        bill_status: "Estado de la Factura:",
+        status_open: "Abierta",
+        status_closed: "Cerrada",
+        status_paid: "Pagada",
+        no_card_transactions: "Ninguna transacción registrada en esta factura para el ciclo seleccionado.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Gestor de Dashboards",
+        dashboards_subtitle: "Liste, vea el código fuente y suba dashboards al servidor de fintrack",
+        col_dashboard: "Dashboard",
+        col_last_update: "Última Actualización",
+        btn_view_source: "Ver Código",
+        btn_download: "Descargar HTML",
+        upload_new_dashboard: "Subir Nuevo Dashboard",
+        placeholder_dashboard_name: "Nombre del Dashboard (ej: pending)",
+        upload_instructions: "Seleccione o arrastre el archivo HTML aquí para subir",
+        btn_upload: "Subir Dashboard",
+        modal_source_title: "Código Fuente HTML",
+        
+        // Tags Management
+        menu_tags: "Etiquetas",
+        tags_title: "Administrar Etiquetas",
+        tags_subtitle: "Administre las etiquetas utilizadas para etiquetar y organizar sus transacciones",
+        panel_title_tags: "Etiquetas Activas",
+        btn_new_tag: "Nueva Etiqueta",
+        label_tag_name: "Nombre de la Etiqueta",
+        placeholder_tag_name: "Ej: trabajo, viaje, reembolso",
+        empty_tags_message: "No hay etiquetas registradas.",
+        btn_save: "Guardar",
+        btn_cancel: "Cancelar",
+        toast_success_tag_created: '¡Etiqueta "{name}" creada con éxito!',
+        toast_success_tag_deleted: '¡Etiqueta "{name}" eliminada con éxito!',
+        confirm_delete_tag: '¿Realmente deseja eliminar la etiqueta "{name}"?\n(Esta acción eliminará la etiqueta de todas las transacciones vinculadas)'
+    }
+};
+
+var currentLocale = 'en'; // English as default
+
+// Helper to translate in JS
+function t(key) {
+    const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
+    return tDict[key] || key;
+}
+
+async function checkLocale() {
+    try {
+        const res = await fetch('/api/status');
+        if (res.ok) {
+            const data = await res.json();
+            if (data.locale && TRANSLATIONS[data.locale]) {
+                currentLocale = data.locale;
+            }
+        }
+    } catch (err) {
+        console.error("Failed to read locale preferences:", err);
+    }
+    translatePage();
+}
+
+function translatePage() {
+    const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
+    
+    // 1. Static texts
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (tDict[key]) {
+            const icon = el.querySelector('i');
+            if (icon) {
+                const iconOuter = icon.outerHTML;
+                el.innerHTML = iconOuter + ' ' + tDict[key];
+            } else {
+                el.textContent = tDict[key];
+            }
+        }
+    });
+
+    // 2. Placeholders
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (tDict[key]) {
+            el.placeholder = tDict[key];
+        }
+    });
+
+    // 3. Tooltips
+    document.querySelectorAll('[data-i18n-tooltip]').forEach(el => {
+        const key = el.getAttribute('data-i18n-tooltip');
+        if (tDict[key]) {
+            el.setAttribute('data-tooltip', tDict[key]);
+        }
+    });
+    
+    // 4. Document title translation
+    if (tDict['overview_title'] && document.title.includes("Overview") || document.title.includes("Visão")) {
+        // dynamic title update fallback if needed
+    }
+
+    // 5. Translate select months
+    const monthSelects = [
+        document.getElementById('month-select'),
+        document.getElementById('start-month-select')
+    ];
+    monthSelects.forEach(monthSelect => {
+        if (monthSelect) {
+            const monthKeys = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+            Array.from(monthSelect.options).forEach((opt, idx) => {
+                const key = monthKeys[idx];
+                if (tDict[key]) {
+                    opt.textContent = tDict[key];
+                }
+            });
+        }
+    });
+
+    // 6. Translate projection months select options (3, 6, 9, 12 months)
+    const hmSelect = document.getElementById('heatmap-months-select');
+    if (hmSelect) {
+        Array.from(hmSelect.options).forEach(opt => {
+            const val = opt.value;
+            const key = `months_${val}`;
+            if (tDict[key]) {
+                opt.textContent = tDict[key];
+            }
+        });
+    }
+
+    // Automatically initialize/refresh custom selects on all pages
+    if (typeof initCustomSelects === 'function') {
+        initCustomSelects();
+    }
+}
+
+// Custom Select Component implementation
+function initCustomSelects() {
+    document.querySelectorAll('select.select-custom').forEach(select => {
+        if (select.nextElementSibling && select.nextElementSibling.classList.contains('select-container-custom')) {
+            // Already initialized, just sync selected value
+            const container = select.nextElementSibling;
+            const triggerSpan = container.querySelector('.select-trigger-custom span');
+            const selectedOpt = select.options[select.selectedIndex];
+            if (selectedOpt && triggerSpan) {
+                triggerSpan.textContent = selectedOpt.textContent;
+            }
+            return;
+        }
+        select.style.display = 'none';
+        const container = document.createElement('div');
+        container.className = 'select-container-custom';
+        
+        // Match specific element custom min-widths
+        if (select.id === 'heatmap-months-select') {
+            container.style.minWidth = '110px';
+        } else if (select.id === 'year-select') {
+            container.style.minWidth = '90px';
+        } else if (select.id === 'filter-type') {
+            container.style.minWidth = '130px';
+        }
+        
+        const trigger = document.createElement('div');
+        trigger.className = 'select-trigger-custom';
+        const triggerSpan = document.createElement('span');
+        trigger.appendChild(triggerSpan);
+        container.appendChild(trigger);
+        const optionsContainer = document.createElement('div');
+        optionsContainer.className = 'select-options-custom';
+        container.appendChild(optionsContainer);
+        
+        function syncSelected() {
+            const selectedOpt = select.options[select.selectedIndex] || select.options[0];
+            if (selectedOpt) {
+                triggerSpan.textContent = selectedOpt.textContent;
+                Array.from(optionsContainer.children).forEach(child => {
+                    if (child.getAttribute('data-value') === select.value) {
+                        child.classList.add('selected');
+                    } else {
+                        child.classList.remove('selected');
+                    }
+                });
+            }
+        }
+        
+        function populateOptions() {
+            optionsContainer.innerHTML = '';
+            Array.from(select.options).forEach(opt => {
+                const optDiv = document.createElement('div');
+                optDiv.className = 'select-option-custom';
+                optDiv.textContent = opt.textContent;
+                optDiv.setAttribute('data-value', opt.value);
+                optDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    select.value = opt.value;
+                    select.dispatchEvent(new Event('change'));
+                    syncSelected();
+                    container.classList.remove('open');
+                });
+                optionsContainer.appendChild(optDiv);
+            });
+        }
+        
+        populateOptions();
+        syncSelected();
+        
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = container.classList.contains('open');
+            document.querySelectorAll('.select-container-custom').forEach(el => {
+                el.classList.remove('open');
+            });
+            if (!isOpen) {
+                populateOptions();
+                syncSelected();
+                container.classList.add('open');
+                setTimeout(() => {
+                    const selectedEl = optionsContainer.querySelector('.select-option-custom.selected');
+                    if (selectedEl) {
+                        const itemHeight = selectedEl.offsetHeight || 36;
+                        optionsContainer.scrollTop = Math.max(0, selectedEl.offsetTop - itemHeight);
+                    }
+                }, 10);
+            }
+        });
+        
+        select.parentNode.insertBefore(container, select.nextSibling);
+        select.addEventListener('change', syncSelected);
+        
+        // Watch for dynamic options updates
+        const observer = new MutationObserver(() => {
+            syncSelected();
+        });
+        observer.observe(select, { childList: true, subtree: true });
+        
+        setTimeout(syncSelected, 200);
+        setTimeout(syncSelected, 1000);
+    });
+    
+    // Global click listener to close options dropdowns when clicking outside
+    if (!window.customSelectGlobalBound) {
+        window.customSelectGlobalBound = true;
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.select-container-custom').forEach(el => {
+                el.classList.remove('open');
+            });
+        });
+    }
+}
+
+        document.addEventListener('DOMContentLoaded', runInit);
+            checkLocale();
+    </script>
+
+<script>
+// State
+        var categories = [];
+        var allTransactions = []; // Holds all transactions fetched for the selected year
+        var now = new Date();
+        var params = new URLSearchParams(window.location.search);
+        var queryMonth = parseInt(params.get('month'));
+        var queryYear = parseInt(params.get('year'));
+        var selectedMonth = !isNaN(queryMonth) ? queryMonth : (now.getMonth() + 1);
+        var selectedYear = !isNaN(queryYear) ? queryYear : now.getFullYear();
+         // Holds list of calculated projection months dynamically
+
+        // Charts references
+        var barChartInstance = null;
+        var incomePieChartInstance = null;
+        var expensePieChartInstance = null;
+
+        // Elements
+        var monthSelect = document.getElementById('month-select');
+        var yearSelect = document.getElementById('year-select');
+        if (monthSelect) monthSelect.value = String(selectedMonth);
+        if (yearSelect) yearSelect.value = String(selectedYear);
+        var panelsLoading = document.getElementById('panels-loading');
+        var heatmapLoading = document.getElementById('heatmap-loading');
+
+        // Helpers
+        function formatBRL(val) {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.add('open');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('open');
+        }
+
+        // Close modal on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const activeModal = document.querySelector('.modal-overlay.open');
+                if (activeModal) {
+                    closeModal(activeModal.id);
+                }
+            }
+        });
+
+        // Toggle accordion drawer for category transactions
+        function toggleCategoryAccordion(elementId) {
+            const container = document.getElementById(elementId);
+            if (!container) return;
+            
+            const isOpen = container.classList.contains('open');
+            
+            // Close all others inside the SAME list only
+            const parentList = container.closest('.categories-list');
+            if (parentList) {
+                parentList.querySelectorAll('.category-row-container').forEach(el => {
+                    el.classList.remove('open');
+                    el.querySelector('.category-tx-details').style.display = 'none';
+                });
+            }
+
+            if (!isOpen) {
+                container.classList.add('open');
+                container.querySelector('.category-tx-details').style.display = 'block';
+            }
+        }
+
+        function getLastDay(year, month) {
+            return new Date(year, month, 0).getDate();
+        }
+
+        // Bootstrap data fetch
+        async function initDashboard() {
+            if (panelsLoading) panelsLoading.classList.add('active');
+            if (heatmapLoading) heatmapLoading.classList.add('active');
+            try {
+                // Fetch categories
+                const catsRes = await fetch('/api/categories');
+                if (catsRes.ok) {
+                    categories = await catsRes.json();
+                }
+                categories = Array.isArray(categories) ? categories : [];
+
+                await loadTransactionsData();
+            } catch (err) {
+                console.error("Error initializing comparative dashboard:", err);
+            } finally {
+                if (panelsLoading) panelsLoading.classList.remove('active');
+                if (heatmapLoading) heatmapLoading.classList.remove('active');
+            }
+        }
+
+
+
+        // Fetch transactions for selected month using safe pagination
+        async function loadTransactionsData() {
+            if (panelsLoading) panelsLoading.classList.add('active');
+            
+            const mSel = document.getElementById('month-select');
+            const ySel = document.getElementById('year-select');
+            
+            selectedMonth = mSel ? parseInt(mSel.value) : 7;
+            selectedYear = ySel ? parseInt(ySel.value) : 2026;
+
+            try {
+                async function fetchMonthTransactions(year, month) {
+                    const lastDay = getLastDay(year, month);
+                    const mStr = String(month).padStart(2, '0');
+                    
+                    const fromStr = `${year}-${mStr}-01`;
+                    const toStr = `${year}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+                    
+                    // Add 1 day to prevent timezone cutoff
+                    const endDateObj = new Date(year, month - 1, lastDay + 1);
+                    const toYear = endDateObj.getFullYear();
+                    const toMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
+                    const toDay = String(endDateObj.getDate()).padStart(2, '0');
+                    const adjustedTo = `${toYear}-${toMonth}-${toDay}`;
+
+                    let allItems = [];
+                    let cursor = null;
+                    
+                    while (true) {
+                        const queryParams = new URLSearchParams({
+                            from: fromStr,
+                            to: adjustedTo,
+                            sort: 'date',
+                            dir: 'desc'
+                        });
+                        if (cursor) {
+                            queryParams.set('cursor', cursor);
+                        }
+                        
+                        const url = `/api/transactions?${queryParams.toString()}`;
+                        const res = await fetch(url);
+                        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+                        
+                        const data = await res.json();
+                        
+                        let items = [];
+                        let nextCursor = null;
+                        if (data && typeof data === 'object') {
+                            if (Array.isArray(data.items)) {
+                                items = data.items;
+                                nextCursor = data.nextCursor;
+                            } else if (Array.isArray(data)) {
+                                items = data;
+                            }
+                        }
+                        
+                        allItems.push(...items);
+                        
+                        if (!nextCursor) {
+                            break;
+                        }
+                        cursor = nextCursor;
+                    }
+                    
+                    return allItems.filter(t => t.date && t.date <= toStr);
+                }
+
+                allTransactions = await fetchMonthTransactions(selectedYear, selectedMonth);
+                calculateAndRenderAll();
+            } catch (err) {
+                console.error("Error loading transactions:", err);
+            } finally {
+                if (panelsLoading) panelsLoading.classList.remove('active');
+            }
+        }
+
+        // Core processing function
+        function calculateAndRenderAll() {
+            // 1. FILTER FOR CURRENT MONTH
+            const currentMonthStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+            const monthTxs = allTransactions.filter(t => t.date && typeof t.date === 'string' && t.date.startsWith(currentMonthStr));
+
+            // Calculate KPIs
+            let totalIncome = 0;
+            let effIncome = 0;
+            let pendIncome = 0;
+
+            let totalExpense = 0;
+            let effExpense = 0;
+            let pendExpense = 0;
+
+            // Group transactions by category for current month
+            const categorySums = {}; // categoryId -> { effective: 0, pending: 0, txs: [] }
+
+            monthTxs.forEach(t => {
+                // Ignore all transfers (including bill payments)
+                if (t.type === 'transfer') return;
+
+                const amount = parseFloat(t.amount) || 0;
+                const isEffective = t.status === 'effective';
+
+                if (t.type === 'income') {
+                    totalIncome += amount;
+                    if (isEffective) effIncome += amount;
+                    else pendIncome += amount;
+                } else if (t.type === 'expense') {
+                    totalExpense += amount;
+                    if (isEffective) effExpense += amount;
+                    else pendExpense += amount;
+                }
+
+                // Group by category name or fallback
+                const catName = t.categoryName || 'Sem Categoria';
+                const catId = t.categoryId || 'cat-none';
+
+                if (!categorySums[catId]) {
+                    categorySums[catId] = { id: catId, name: catName, kind: t.type === 'income' ? 'income' : 'expense', effective: 0, pending: 0, txs: [] };
+                }
+                
+                if (isEffective) {
+                    categorySums[catId].effective += amount;
+                } else {
+                    categorySums[catId].pending += amount;
+                }
+                categorySums[catId].txs.push(t);
+            });
+
+            // Update KPI elements
+            document.getElementById('kpi-income-val').textContent = formatBRL(totalIncome);
+            document.getElementById('kpi-income-eff').textContent = formatBRL(effIncome);
+            document.getElementById('kpi-income-pend').textContent = formatBRL(pendIncome);
+
+            document.getElementById('kpi-expense-val').textContent = formatBRL(totalExpense);
+            document.getElementById('kpi-expense-eff').textContent = formatBRL(effExpense);
+            document.getElementById('kpi-expense-pend').textContent = formatBRL(pendExpense);
+
+            const netBalance = totalIncome - totalExpense;
+            const balElement = document.getElementById('kpi-balance-val');
+            balElement.textContent = formatBRL(netBalance);
+            if (netBalance >= 0) {
+                balElement.style.color = 'var(--income-color)';
+            } else {
+                balElement.style.color = 'var(--expense-color)';
+            }
+
+            // 2. RENDER CHARTS
+            try {
+                if (typeof Chart !== 'undefined') {
+                    renderComparativeCharts(effIncome, pendIncome, effExpense, pendExpense, categorySums);
+                } else {
+                    console.warn("Chart.js was not loaded.");
+                }
+            } catch (chartErr) {
+                console.error("Error rendering charts:", chartErr);
+            }
+
+            // 3. RENDER CATEGORIES COLUMNS
+            renderCategoryColumns(categorySums, totalIncome, totalExpense);
+
+
+        }
+
+        // Render charts via Chart.js
+        function renderComparativeCharts(effInc, pendInc, effExp, pendExp, categorySums) {
+            // Destroy existing charts to prevent hover glitching
+            if (barChartInstance) barChartInstance.destroy();
+            if (incomePieChartInstance) incomePieChartInstance.destroy();
+            if (expensePieChartInstance) expensePieChartInstance.destroy();
+
+            // Bar Chart: Comparative Incomes vs Expenses
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            barChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: ['Receitas', 'Despesas'],
+                    datasets: [
+                        {
+                            label: 'Efetivado',
+                            data: [effInc, effExp],
+                            backgroundColor: ['#10b981', '#f43f5e'],
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Pendente',
+                            data: [pendInc, pendExp],
+                            backgroundColor: ['rgba(16, 185, 129, 0.45)', 'rgba(244, 63, 94, 0.45)'],
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#9ca3af', font: { family: 'Plus Jakarta Sans' } } }
+                    },
+                    scales: {
+                        x: { stacked: true, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#9ca3af' } },
+                        y: { stacked: true, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#9ca3af' } }
+                    }
+                }
+            });
+
+            // Parse categories for pies
+            const incomeCategories = [];
+            const expenseCategories = [];
+
+            Object.values(categorySums).forEach(cat => {
+                const total = cat.effective + cat.pending;
+                if (total <= 0) return;
+                
+                if (cat.kind === 'income') {
+                    incomeCategories.push(cat);
+                } else {
+                    expenseCategories.push(cat);
+                }
+            });
+
+            // Donut 1: Incomes by Category
+            const ctxIncPie = document.getElementById('incomePieChart').getContext('2d');
+            incomePieChartInstance = new Chart(ctxIncPie, {
+                type: 'doughnut',
+                data: {
+                    labels: incomeCategories.map(c => c.name),
+                    datasets: [{
+                        data: incomeCategories.map(c => c.effective + c.pending),
+                        backgroundColor: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#047857', '#065f46'],
+                        borderWidth: 1,
+                        borderColor: '#111322'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false } // Hide legend to look premium
+                    },
+                    cutout: '65%'
+                }
+            });
+
+            // Donut 2: Expenses by Category
+            const ctxExpPie = document.getElementById('expensePieChart').getContext('2d');
+            expensePieChartInstance = new Chart(ctxExpPie, {
+                type: 'doughnut',
+                data: {
+                    labels: expenseCategories.map(c => c.name),
+                    datasets: [{
+                        data: expenseCategories.map(c => c.effective + c.pending),
+                        backgroundColor: ['#f43f5e', '#fb7185', '#fca5a5', '#ffe4e6', '#be123c', '#9f1239'],
+                        borderWidth: 1,
+                        borderColor: '#111322'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        // Render side-by-side categories layout
+        function renderCategoryColumns(categorySums, totalIncome, totalExpense) {
+            const incListEl = document.getElementById('income-categories-list');
+            const expListEl = document.getElementById('expense-categories-list');
+
+            incListEl.innerHTML = '';
+            expListEl.innerHTML = '';
+
+            // Group by category type
+            const listCats = Object.values(categorySums);
+            
+            // Add any other categories that exist in DB but have no transactions in current month
+            categories.forEach(c => {
+                const found = listCats.some(lc => lc.id === c.id);
+                if (!found) {
+                    listCats.push({
+                        id: c.id,
+                        name: c.name,
+                        kind: c.kind,
+                        effective: 0,
+                        pending: 0,
+                        txs: []
+                    });
+                }
+            });
+
+            // Sort lists by total value descending
+            listCats.sort((a,b) => (b.effective + b.pending) - (a.effective + a.pending));
+
+            let incTotalSum = 0;
+            let expTotalSum = 0;
+
+            listCats.forEach(cat => {
+                const total = cat.effective + cat.pending;
+                if (cat.kind === 'income') {
+                    incTotalSum += total;
+                } else {
+                    expTotalSum += total;
+                }
+
+                if (total === 0) {
+                    return;
+                }
+
+                // Render progress bar widths relative to total income/expense of the month
+                let pctEff = 0;
+                let pctPend = 0;
+                if (cat.kind === 'income') {
+                    if (totalIncome > 0) {
+                        pctEff = (cat.effective / totalIncome) * 100;
+                        pctPend = (cat.pending / totalIncome) * 100;
+                    }
+                } else {
+                    if (totalExpense > 0) {
+                        pctEff = (cat.effective / totalExpense) * 100;
+                        pctPend = (cat.pending / totalExpense) * 100;
+                    }
+                }
+
+                // Create container element
+                const rowId = `cat-row-${cat.id}`;
+                const div = document.createElement('div');
+                div.className = 'category-row-container';
+                div.id = rowId;
+
+                // Sort transactions inside drawer
+                cat.txs.sort((a,b) => b.date.localeCompare(a.date));
+
+                div.innerHTML = `
+                    <div class="category-row-header" onclick="toggleCategoryAccordion('${rowId}')">
+                        <div class="cat-meta-info">
+                            <div class="cat-name-label">
+                                <i class="fa-solid fa-chevron-down"></i>
+                                ${escapeHtml(cat.name)}
+                            </div>
+                            <div class="cat-val-label">
+                                ${formatBRL(total)}
+                                <span class="cat-pct-label">${(pctEff + pctPend).toFixed(1)}%</span>
+                            </div>
+                        </div>
+                        
+                        <div class="proportion-bar-container">
+                            <div class="bar-segment ${cat.kind === 'income' ? 'effective-inc' : 'effective-exp'}" style="width: ${pctEff}%;"></div>
+                            <div class="bar-segment ${cat.kind === 'income' ? 'pending-inc' : 'pending-exp'}" style="width: ${pctPend}%;"></div>
+                        </div>
+
+                        <div class="cat-breakdown-text">
+                            <span>Efetivado: <strong>${formatBRL(cat.effective)}</strong></span>
+                            <span>Pendente: <strong>${formatBRL(cat.pending)}</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="category-tx-details">
+                        ${cat.txs.length === 0 ? '<div style="font-size:0.75rem; color:var(--text-dark); font-style:italic; padding:0.25rem;">Nenhum lançamento no mês.</div>' : `
+                            <table class="category-tx-table">
+                                <colgroup>
+                                    <col style="width: 14%;">
+                                    <col style="width: 44%;">
+                                    <col style="width: 22%;">
+                                    <col style="width: 8%;">
+                                    <col style="width: 12%;">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Descrição</th>
+                                        <th>Conta</th>
+                                        <th>St.</th>
+                                        <th style="text-align:right;">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${cat.txs.map(t => {
+                                        const dtObj = new Date(t.date + 'T12:00:00');
+                                        const dtFmt = dtObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                                        return `
+                                            <tr>
+                                                <td>${dtFmt}</td>
+                                                <td>${escapeHtml(t.description)}</td>
+                                                <td>${escapeHtml(t.accountName)}</td>
+                                                <td style="text-align: center;">
+                                                    ${t.status === 'effective'
+                                                        ? `<span title="Efetivado"><i class="fa-solid fa-circle-check" style="color: var(--income-color); font-size: 0.95rem;"></i></span>`
+                                                        : `<span title="Pendente"><i class="fa-solid fa-clock" style="color: var(--accent-primary); font-size: 0.95rem;"></i></span>`
+                                                    }
+                                                </td>
+                                                <td style="text-align:right; font-weight:700; color:${t.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'}; white-space: nowrap;">
+                                                    ${t.type === 'income' ? '+' : '-'} ${formatBRL(t.amount)}
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        `}
+                    </div>
+                `;
+
+                if (cat.kind === 'income') {
+                    incListEl.appendChild(div);
+                } else {
+                    expListEl.appendChild(div);
+                }
+            });
+
+            document.getElementById('income-categories-total').textContent = formatBRL(incTotalSum);
+            document.getElementById('expense-categories-total').textContent = formatBRL(expTotalSum);
+        }
+
+        // Render Recurring & Installment Heat Map
+        function renderHeatMap() {
+            // We use global projectionMonths array
+            const monthsNamesShort = {
+                1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
+                7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'
+            };
+
+            const incBody = document.getElementById('heatmap-income-body');
+            const expBody = document.getElementById('heatmap-expense-body');
+
+            incBody.innerHTML = '';
+            expBody.innerHTML = '';
+
+            // Render table headers dynamically
+            const incHeadRow = document.getElementById('heatmap-income-header-row');
+            const expHeadRow = document.getElementById('heatmap-expense-header-row');
+            
+            const headerHtml = `
+                <th>Categoria</th>
+                ${projectionMonths.map(p => `<th>${monthsNamesShort[p.month]} ${String(p.year).substring(2)}</th>`).join('')}
+                <th>Total Projetado</th>
+            `;
+            if (incHeadRow) incHeadRow.innerHTML = headerHtml;
+            if (expHeadRow) expHeadRow.innerHTML = headerHtml;
+
+            // Group all transactions in the projectionMonths
+            // Row key: categoryId -> { categoryName, kind, monthValues: { "YYYY-MM": [] } }
+            const heatMatrix = {};
+
+            // Initialize all categories in the matrix
+            categories.forEach(c => {
+                heatMatrix[c.id] = {
+                    categoryId: c.id,
+                    categoryName: c.name,
+                    kind: c.kind,
+                    months: {}
+                };
+                projectionMonths.forEach(p => {
+                    const key = `${p.year}-${p.month}`;
+                    heatMatrix[c.id].months[key] = [];
+                });
+            });
+
+            // Filter year transactions that fall in the projection range
+            allTransactions.forEach(t => {
+                // Ignore all transfers (including bill payments)
+                if (t.type === 'transfer') return;
+
+                if (!t.date || typeof t.date !== 'string') return;
+
+                const tDateObj = new Date(t.date + 'T12:00:00');
+                const tYear = tDateObj.getFullYear();
+                const tMonth = tDateObj.getMonth() + 1; // 1-indexed
+
+                // Check if this month/year matches any of the projection months
+                const isInProjection = projectionMonths.some(p => p.month === tMonth && p.year === tYear);
+                if (!isInProjection) return;
+
+                const catId = t.categoryId || 'cat-none';
+                if (!heatMatrix[catId]) {
+                    // Fallback create category
+                    heatMatrix[catId] = {
+                        categoryId: catId,
+                        categoryName: t.categoryName || 'Sem Categoria',
+                        kind: t.type === 'income' ? 'income' : 'expense',
+                        months: {}
+                    };
+                    projectionMonths.forEach(p => {
+                        const key = `${p.year}-${p.month}`;
+                        heatMatrix[catId].months[key] = [];
+                    });
+                }
+
+                const key = `${tYear}-${tMonth}`;
+                heatMatrix[catId].months[key].push(t);
+            });
+
+            // Determine max cell value to calculate color opacity relative range (heat map effect)
+            let maxCellValue = 100; // default min divisor
+            Object.values(heatMatrix).forEach(row => {
+                projectionMonths.forEach(p => {
+                    const key = `${p.year}-${p.month}`;
+                    const sum = row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                    if (sum > maxCellValue) {
+                        maxCellValue = sum;
+                    }
+                });
+            });
+
+            // Accumulators for column totals
+            const colSums = {};
+            projectionMonths.forEach(p => {
+                const key = `${p.year}-${p.month}`;
+                colSums[key] = { income: 0, expense: 0 };
+            });
+            let totalIncomeSum = 0;
+            let totalExpenseSum = 0;
+            let hasIncomeData = false;
+            let hasExpenseData = false;
+
+            // Render Rows
+            Object.values(heatMatrix).forEach(row => {
+                // Calculate row total sum
+                let rowTotal = 0;
+                projectionMonths.forEach(p => {
+                    const key = `${p.year}-${p.month}`;
+                    rowTotal += row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                });
+
+                // Skip category row if it has no recurrings/installments in these months
+                if (rowTotal === 0) return;
+
+                // Update column sums
+                if (row.kind === 'income') {
+                    hasIncomeData = true;
+                    totalIncomeSum += rowTotal;
+                    projectionMonths.forEach(p => {
+                        const key = `${p.year}-${p.month}`;
+                        colSums[key].income += row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                    });
+                } else {
+                    hasExpenseData = true;
+                    totalExpenseSum += rowTotal;
+                    projectionMonths.forEach(p => {
+                        const key = `${p.year}-${p.month}`;
+                        colSums[key].expense += row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                    });
+                }
+
+                const tr = document.createElement('tr');
+                
+                // Column 1: Category Name
+                let cellsHtml = `<td>${escapeHtml(row.categoryName)}</td>`;
+
+                // Columns: Months
+                projectionMonths.forEach(p => {
+                    const key = `${p.year}-${p.month}`;
+                    const monthTxs = row.months[key];
+                    const sum = monthTxs.reduce((acc, t) => acc + t.amount, 0);
+
+                    if (sum === 0) {
+                        cellsHtml += `<td class="heatmap-empty">-</td>`;
+                    } else {
+                        // Calculate opacity relative to max value in grid
+                        const opacity = Math.min(1, Math.max(0.1, sum / maxCellValue));
+                        const bgColor = row.kind === 'income' 
+                            ? `rgba(16, 185, 129, ${opacity})` 
+                            : `rgba(244, 63, 94, ${opacity})`;
+                        
+                        const textColor = opacity > 0.65 ? '#fff' : 'var(--text-main)';
+                        
+                        const cellId = `hc-${row.categoryId}-${key}`;
+                        
+                        cellsHtml += `
+                            <td style="padding:0.4rem;">
+                                <span class="heatmap-cell-value" id="${cellId}" 
+                                      style="background:${bgColor}; color:${textColor};" 
+                                      onclick="showHeatmapCellDetails('${row.categoryId}', ${p.month}, ${p.year}, '${escapeJs(row.categoryName)}')">
+                                    ${formatBRL(sum)}
+                                </span>
+                            </td>
+                        `;
+                    }
+                });
+
+                // Row Total
+                cellsHtml += `<td>${formatBRL(rowTotal)}</td>`;
+                tr.innerHTML = cellsHtml;
+
+                if (row.kind === 'income') {
+                    incBody.appendChild(tr);
+                } else {
+                    expBody.appendChild(tr);
+                }
+            });
+
+            // Fallback for empty tables
+            const colspan = projectionMonths.length + 2;
+            if (incBody.innerHTML === '') {
+                incBody.innerHTML = `<tr><td colspan="${colspan}" class="heatmap-empty" style="text-align:center;">Nenhuma receita recorrente/parcelada ativa no semestre.</td></tr>`;
+            }
+            if (expBody.innerHTML === '') {
+                expBody.innerHTML = `<tr><td colspan="${colspan}" class="heatmap-empty" style="text-align:center;">Nenhuma despesa recorrente/parcelada ativa no semestre.</td></tr>`;
+            }
+
+            // Render Footers with Column Totals
+            const incFoot = document.getElementById('heatmap-income-foot');
+            if (incFoot) {
+                if (!hasIncomeData) {
+                    incFoot.innerHTML = '';
+                } else {
+                    let cellsHtml = `<td style="text-align:left; font-weight:700;">TOTAL</td>`;
+                    projectionMonths.forEach(p => {
+                        const key = `${p.year}-${p.month}`;
+                        cellsHtml += `<td style="font-weight:700; color:var(--income-color);">${formatBRL(colSums[key].income)}</td>`;
+                    });
+                    cellsHtml += `<td style="font-weight:700; color:var(--income-color);">${formatBRL(totalIncomeSum)}</td>`;
+                    incFoot.innerHTML = `<tr>${cellsHtml}</tr>`;
+                }
+            }
+
+            const expFoot = document.getElementById('heatmap-expense-foot');
+            if (expFoot) {
+                if (!hasExpenseData) {
+                    expFoot.innerHTML = '';
+                } else {
+                    let cellsHtml = `<td style="text-align:left; font-weight:700;">TOTAL</td>`;
+                    projectionMonths.forEach(p => {
+                        const key = `${p.year}-${p.month}`;
+                        cellsHtml += `<td style="font-weight:700; color:var(--expense-color);">${formatBRL(colSums[key].expense)}</td>`;
+                    });
+                    cellsHtml += `<td style="font-weight:700; color:var(--expense-color);">${formatBRL(totalExpenseSum)}</td>`;
+                    expFoot.innerHTML = `<tr>${cellsHtml}</tr>`;
+                }
+            }
+        }
+
+        // Show projected details inside modal on cell click
+        function showHeatmapCellDetails(categoryId, month, year, categoryName) {
+            const monthsNames = {
+                1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho',
+                7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'
+            };
+
+            const title = document.getElementById('modal-details-title');
+            const subtitle = document.getElementById('modal-details-subtitle');
+            const body = document.getElementById('modal-details-table-body');
+
+            title.textContent = "Detalhamento de Projeções";
+            subtitle.textContent = `Categoria: ${categoryName} | Mês: ${monthsNames[month]} de ${year}`;
+            body.innerHTML = '';
+
+            // Filter year transactions in state
+            const currentMonthStr = `${year}-${String(month).padStart(2, '0')}`;
+            const matches = allTransactions.filter(t => {
+                // Ignore all transfers (including bill payments)
+                if (t.type === 'transfer') return false;
+                
+                const catMatch = t.categoryId === categoryId || (!t.categoryId && categoryId === 'cat-none');
+                return catMatch && t.date && t.date.startsWith(currentMonthStr);
+            });
+
+            matches.sort((a,b) => a.date.localeCompare(b.date));
+
+            matches.forEach(t => {
+                const tr = document.createElement('tr');
+                const dtObj = new Date(t.date + 'T12:00:00');
+                const dtFmt = dtObj.toLocaleDateString('pt-BR');
+
+                tr.innerHTML = `
+                    <td style="padding:0.5rem 0.75rem;">${dtFmt}</td>
+                    <td style="padding:0.5rem 0.75rem; font-weight:500;">${escapeHtml(t.description)}</td>
+                    <td style="padding:0.5rem 0.75rem;">${escapeHtml(t.accountName)}</td>
+                    <td style="padding:0.5rem 0.75rem; text-align:right; font-weight:700; color:${t.type === 'income' ? 'var(--income-color)' : 'var(--text-main)'}">
+                        ${t.type === 'income' ? '+' : '-'} ${formatBRL(t.amount)}
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+
+            openModal('modal-cell-details');
+        }
+
+        // JS escaping helper
+        function escapeJs(str) {
+            if (!str) return '';
+            return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        // Event listeners
+        var mSel = document.getElementById('month-select');
+        var ySel = document.getElementById('year-select');
+        var hmSel = document.getElementById('heatmap-months-select');
+        if (mSel) mSel.addEventListener('change', loadTransactionsData);
+        if (ySel) ySel.addEventListener('change', loadTransactionsData);
+        if (hmSel) hmSel.addEventListener('change', loadTransactionsData);
+
+        // Load bootstrap - try direct execution first, and bind to onload as fallback
+        var hasInitialized = false;
+        async function runInit() {
+            if (hasInitialized) return;
+            hasInitialized = true;
+            await initDashboard();
+        }
+
+        // Run immediately since DOM is already parsed (script is at bottom of body)
+        runInit();
+
+        // Fallback for full page loads or wrapper injections
+        runInit();
+        
+// Translation engine and dictionaries
+var TRANSLATIONS = {
+    en: {
+        // Sidebar Menu
+        tooltip_overview: "Overview",
+        tooltip_pending: "Pending",
+        tooltip_comparative: "Comparative",
+        tooltip_projections: "Projections",
+        tooltip_accounts: "Bank Accounts",
+        tooltip_cards: "Credit Cards",
+        menu_categories: "Categories",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "January", february: "February", march: "March", april: "April", may: "May", june: "June",
+        july: "July", august: "August", september: "September", october: "October", november: "November", december: "December",
+        
+        // General UI terms
+        reference_label: "Reference:",
+        day_sun: "Sun", day_mon: "Mon", day_tue: "Tue", day_wed: "Wed", day_thu: "Thu", day_fri: "Fri", day_sat: "Sat",
+        paid: "Paid", unpaid: "Unpaid", active: "Active", inactive: "Inactive",
+        
+        // Overview Dashboard
+        overview_title: "Overview",
+        overview_subtitle: "Monthly financial summary, calendar, and quick shortcuts",
+        accounts_balance: "Accounts Balance",
+        expenses_month: "Expenses this Month",
+        card_bills: "Credit Card Bills",
+        incomes_month: "Incomes this Month",
+        final_projection: "Final Projection:",
+        recent_transactions: "Recent Transactions",
+        due_calendar: "Daily Flow & Dues",
+        expenses_distribution: "Expenses Distribution",
+        quick_shortcuts: "Quick Shortcuts",
+        new_transaction: "New Transaction",
+        new_transfer: "New Transfer",
+        new_category: "New Category",
+        new_card: "New Card",
+        new_account: "New Account",
+        no_expenses_month: "No expenses recorded this month.",
+        no_recent_transactions: "No recent transactions found.",
+        no_dues_period: "No transactions due in this period.",
+        income: "Income",
+        expense: "Expense",
+        paid_reconciled: "Paid / Reconciled",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Recurring & Installment Projections",
+        projections_subtitle: "Advanced visual mapping and projection of active recurrences and installments for the next months",
+        projection_label: "Projection:",
+        months_3: "3 Months",
+        months_6: "6 Months",
+        months_9: "9 Months",
+        months_12: "12 Months",
+        heatmap_income_title: "Recurrent / Installment Incomes",
+        heatmap_expense_title: "Recurrent / Installment Expenses",
+        total: "Total",
+        no_recurrent_incomes: "No active recurrent or installment incomes in the selected semester.",
+        no_recurrent_expenses: "No active recurrent or installment expenses in the selected semester.",
+        modal_details_title: "Projection Breakdown",
+        modal_details_subtitle: "Details of projected transactions for the category and month",
+        col_date: "Date",
+        col_desc: "Description",
+        col_value: "Value",
+        col_status: "Status",
+        btn_close: "Close",
+        
+        // Comparative Dashboard
+        comparative_title: "Comparative Dashboard",
+        comparative_subtitle: "Analysis and comparison of monthly incomes vs expenses, and category limits",
+        month_summary_title: "Month Summary",
+        cat_spending_title: "Spending by Category",
+        card_limits_title: "Category Budgets & Limits",
+        col_category: "Category",
+        col_limit: "Budget Limit",
+        col_spent: "Spent",
+        col_status_limit: "Status",
+        col_percentage: "Percentage",
+        within_limit: "Within Limit",
+        exceeded: "Exceeded",
+        reception: "Incomes",
+        deduction: "Expenses",
+        net_balance: "Net Balance",
+        performance: "Financial Health",
+        no_spending_month: "No category spend recorded this month.",
+        
+        // Accounts Dashboard
+        accounts_title: "Bank Accounts",
+        accounts_subtitle: "Manage accounts, checking balances, and reviewing statements",
+        active_account_statement: "Account Statement",
+        btn_new_transaction: "New Transaction",
+        btn_new_transfer: "New Transfer",
+        search_description_placeholder: "Type to search...",
+        filter_type_label: "Type",
+        filter_type_all: "All",
+        filter_type_income: "Incomes",
+        filter_type_expense: "Expenses",
+        col_actions: "Actions",
+        action_confirm: "Confirm",
+        action_edit: "Edit",
+        action_delete: "Delete",
+        no_transactions_account: "No transactions recorded for this account in the selected month.",
+        confirm_delete_title: "Are you sure you want to permanently delete this transaction?",
+        modal_new_tx_title: "New Transaction",
+        modal_new_transfer_title: "New Transfer",
+        label_account: "Account",
+        label_description: "Description",
+        label_value: "Value",
+        label_date: "Date",
+        label_category: "Category / Subcategory",
+        label_type: "Type",
+        label_status: "Status",
+        status_pending: "Pending",
+        status_confirmed: "Paid / Confirmed",
+        btn_cancel: "Cancel",
+        btn_save: "Save",
+        label_origin: "Origin Account",
+        label_destination: "Destination Account",
+        
+        // Pending Dashboard
+        pending_title: "Pending Transactions",
+        pending_subtitle: "Monitoring and quick confirmation of pending or future transactions",
+        pending_kpi_total: "Total Pending",
+        pending_kpi_incomes: "Pending Incomes",
+        pending_kpi_expenses: "Pending Expenses",
+        pending_chart_incomes: "Pending Incomes Trend",
+        pending_chart_expenses: "Pending Expenses Trend",
+        btn_confirm: "Confirm",
+        btn_edit: "Edit",
+        btn_delete: "Delete",
+        no_pending_transactions: "No pending transactions found for this period.",
+        toast_success_confirm: "Transaction confirmed successfully!",
+        
+        // Categories Dashboard
+        categories_title: "Category Management",
+        categories_subtitle: "Visualize, search, and manage categories and subcategories in a clean tree list",
+        btn_new_category: "New Category",
+        search_category_placeholder: "Search categories...",
+        col_type: "Type",
+        col_actions_cat: "Actions",
+        subcategories_label: "Subcategories",
+        no_subcategories: "No subcategories registered.",
+        modal_new_cat_title: "New Category",
+        modal_new_subcat_title: "New Subcategory",
+        label_name: "Name",
+        label_color: "Color",
+        label_parent_category: "Parent Category (Read-Only)",
+        toast_success_cat: "Category created successfully!",
+        toast_success_subcat: "Subcategory created successfully!",
+        
+        // Cards Dashboard
+        cards_title: "Credit Cards",
+        cards_subtitle: "Manage credit cards, credit limits, and statement history",
+        card_bill_details: "Card Bill Details",
+        btn_pay_bill: "Pay Bill",
+        btn_revert_payment: "Revert Payment",
+        bill_status: "Bill Status:",
+        status_open: "Open",
+        status_closed: "Closed",
+        status_paid: "Paid",
+        no_card_transactions: "No transactions recorded for this card bill in the selected cycle.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Dashboards Monitor",
+        dashboards_subtitle: "List, view source, and upload fintrack dashboards",
+        col_dashboard: "Dashboard",
+        col_last_update: "Last Updated",
+        btn_view_source: "View Source",
+        btn_download: "Download",
+        upload_new_dashboard: "Upload New Dashboard",
+        placeholder_dashboard_name: "Dashboard Name (e.g. pending)",
+        upload_instructions: "Select or drop HTML file here to upload",
+        btn_upload: "Upload",
+        modal_source_title: "HTML Source Code",
+        
+        // Tags Management
+        menu_tags: "Tags",
+        tags_title: "Tag Management",
+        tags_subtitle: "Manage tags to label and organize your transactions",
+        panel_title_tags: "Active Tags",
+        btn_new_tag: "New Tag",
+        label_tag_name: "Tag Name",
+        placeholder_tag_name: "E.g. work, travel, refund",
+        empty_tags_message: "No tags registered.",
+        btn_save: "Save",
+        btn_cancel: "Cancel",
+        toast_success_tag_created: 'Tag "{name}" created successfully!',
+        toast_success_tag_deleted: 'Tag "{name}" deleted successfully!',
+        confirm_delete_tag: 'Are you sure you want to delete tag "{name}"?\n(This action will remove the tag from all linked transactions)'
+    },
+    pt: {
+        // Sidebar Menu
+        tooltip_overview: "Visão Geral",
+        tooltip_pending: "Pendentes",
+        tooltip_comparative: "Comparativo",
+        tooltip_projections: "Projeções",
+        tooltip_accounts: "Contas Bancárias",
+        tooltip_cards: "Cartões de Crédito",
+        menu_categories: "Categorias",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "Janeiro", february: "Fevereiro", march: "Março", april: "Abril", may: "Maio", june: "Junho",
+        july: "Julho", august: "Agosto", september: "Setembro", october: "Outubro", november: "Novembro", december: "Dezembro",
+        
+        // General UI terms
+        reference_label: "Referência:",
+        day_sun: "Dom", day_mon: "Seg", day_tue: "Ter", day_wed: "Qua", day_thu: "Qui", day_fri: "Sex", day_sat: "Sáb",
+        paid: "Pago", unpaid: "Não Pago", active: "Ativo", inactive: "Inativo",
+        
+        // Overview Dashboard
+        overview_title: "Visão Geral",
+        overview_subtitle: "Consolidado financeiro mensal, calendário e atalhos rápidos",
+        accounts_balance: "Saldo em Contas",
+        expenses_month: "Despesas do Mês",
+        card_bills: "Faturas de Cartão",
+        incomes_month: "Receitas do Mês",
+        final_projection: "Projeção Final:",
+        recent_transactions: "Lançamentos Recentes",
+        due_calendar: "Fluxo Diário",
+        expenses_distribution: "Distribuição de Despesas",
+        quick_shortcuts: "Atalhos Rápidos",
+        new_transaction: "Novo Lançamento",
+        new_transfer: "Nova Transferência",
+        new_category: "Nova Categoria",
+        new_card: "Novo Cartão",
+        new_account: "Nova Conta",
+        no_expenses_month: "Sem despesas registradas neste mês.",
+        no_recent_transactions: "Nenhuma transação recente encontrada.",
+        no_dues_period: "Sem vencimentos neste período.",
+        income: "Receita",
+        expense: "Despesa",
+        paid_reconciled: "Pago / Conciliado",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Projeção de Recorrências e Parcelas",
+        projections_subtitle: "Mapeamento visual avançado e projeção de recorrências e parcelas ativas para os próximos meses",
+        projection_label: "Projeção:",
+        months_3: "3 Meses",
+        months_6: "6 Meses",
+        months_9: "9 Meses",
+        months_12: "12 Meses",
+        heatmap_income_title: "Receitas Recorrentes / Parceladas",
+        heatmap_expense_title: "Despesas Recorrentes / Parceladas",
+        total: "Total",
+        no_recurrent_incomes: "Nenhuma receita recorrente/parcelada ativa no semestre.",
+        no_recurrent_expenses: "Nenhuma despesa recorrente/parcelada ativa no semestre.",
+        modal_details_title: "Detalhamento de Projeções",
+        modal_details_subtitle: "Detalhes das transações projetadas para a categoria e mês",
+        col_date: "Data",
+        col_desc: "Descrição",
+        col_value: "Valor",
+        col_status: "Status",
+        btn_close: "Fechar",
+        
+        // Comparative Dashboard
+        comparative_title: "Dashboard Comparativo",
+        comparative_subtitle: "Análise e comparação mensal de receitas vs despesas e limites por categoria",
+        month_summary_title: "Resumo do Mês",
+        cat_spending_title: "Gastos por Categoria",
+        card_limits_title: "Orçamentos e Limites de Categorias",
+        col_category: "Categoria",
+        col_limit: "Limite de Orçamento",
+        col_spent: "Gasto",
+        col_status_limit: "Status",
+        col_percentage: "Porcentagem",
+        within_limit: "Dentro do Limite",
+        exceeded: "Excedido",
+        reception: "Receitas",
+        deduction: "Despesas",
+        net_balance: "Saldo Líquido",
+        performance: "Saúde Financeira",
+        no_spending_month: "Sem despesas registradas por categoria neste mês.",
+        
+        // Accounts Dashboard
+        accounts_title: "Minhas Contas",
+        accounts_subtitle: "Gerencie contas, consulte saldos e revise extratos",
+        active_account_statement: "Extrato de Conta",
+        btn_new_transaction: "Novo Lançamento",
+        btn_new_transfer: "Nova Transferência",
+        search_description_placeholder: "Digite para filtrar...",
+        filter_type_label: "Tipo",
+        filter_type_all: "Todos",
+        filter_type_income: "Receitas",
+        filter_type_expense: "Despesas",
+        col_actions: "Ações",
+        action_confirm: "Confirmar",
+        action_edit: "Editar",
+        action_delete: "Excluir",
+        no_transactions_account: "Nenhum lançamento nesta conta para o mês selecionado.",
+        confirm_delete_title: "Deseja excluir definitivamente a transação?",
+        modal_new_tx_title: "Novo Lançamento",
+        modal_new_transfer_title: "Nova Transferência",
+        label_account: "Conta",
+        label_description: "Descrição",
+        label_value: "Valor",
+        label_date: "Data",
+        label_category: "Categoria / Subcategoria",
+        label_type: "Tipo",
+        label_status: "Status",
+        status_pending: "Pendente",
+        status_confirmed: "Pago / Confirmado",
+        btn_cancel: "Cancelar",
+        btn_save: "Salvar",
+        label_origin: "Conta Origem",
+        label_destination: "Conta Destino",
+        
+        // Pending Dashboard
+        pending_title: "Transações Pendentes",
+        pending_subtitle: "Monitoramento e confirmação rápida de lançamentos pendentes ou futuros",
+        pending_kpi_total: "Total Pendente",
+        pending_kpi_incomes: "Receitas Pendentes",
+        pending_kpi_expenses: "Despesas Pendentes",
+        pending_chart_incomes: "Tendência de Receitas Pendentes",
+        pending_chart_expenses: "Tendência de Despesas Pendentes",
+        btn_confirm: "Confirmar",
+        btn_edit: "Editar",
+        btn_delete: "Excluir",
+        no_pending_transactions: "Nenhuma transação pendente encontrada para este período.",
+        toast_success_confirm: "Transação confirmada com sucesso!",
+        
+        // Categories Dashboard
+        categories_title: "Gerenciamento de Categorias",
+        categories_subtitle: "Visualize, pesquise e gerencie categorias e subcategorias em árvore",
+        btn_new_category: "Nova Categoria",
+        search_category_placeholder: "Pesquisar categorias...",
+        col_type: "Tipo",
+        col_actions_cat: "Ações",
+        subcategories_label: "Subcategorias",
+        no_subcategories: "Nenhuma subcategoria cadastrada.",
+        modal_new_cat_title: "Nova Categoria",
+        modal_new_subcat_title: "Nova Subcategoria",
+        label_name: "Nome",
+        label_color: "Cor",
+        label_parent_category: "Categoria Pai (Somente Leitura)",
+        toast_success_cat: "Categoria criada com sucesso!",
+        toast_success_subcat: "Subcategoria criada com sucesso!",
+        
+        // Cards Dashboard
+        cards_title: "Cartões de Crédito",
+        cards_subtitle: "Gerencie cartões de crédito, limites e histórico de faturas",
+        card_bill_details: "Detalhamento de Fatura",
+        btn_pay_bill: "Pagar Fatura",
+        btn_revert_payment: "Estornar Pagamento",
+        bill_status: "Status da Fatura:",
+        status_open: "Aberta",
+        status_closed: "Fechada",
+        status_paid: "Paga",
+        no_card_transactions: "Nenhuma transação registrada nesta fatura para o ciclo selecionado.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Monitor de Dashboards",
+        dashboards_subtitle: "Liste, visualize o código fonte e envie dashboards para o servidor do fintrack",
+        col_dashboard: "Dashboard",
+        col_last_update: "Última Atualização",
+        btn_view_source: "Ver Código",
+        btn_download: "Baixar HTML",
+        upload_new_dashboard: "Enviar Novo Dashboard",
+        placeholder_dashboard_name: "Nome do Dashboard (ex: pending)",
+        upload_instructions: "Selecione ou solte o arquivo HTML aqui para upload",
+        btn_upload: "Fazer Upload",
+        modal_source_title: "Código Fonte HTML",
+        
+        // Tags Management
+        menu_tags: "Tags",
+        tags_title: "Gerenciar Tags",
+        tags_subtitle: "Gerencie as tags utilizadas para rotular e categorizar suas transações",
+        panel_title_tags: "Tags Ativas",
+        btn_new_tag: "Nova Tag",
+        label_tag_name: "Nome da Tag",
+        placeholder_tag_name: "Ex: trabalho, viagem, reembolso",
+        empty_tags_message: "Nenhuma tag cadastrada.",
+        btn_save: "Salvar",
+        btn_cancel: "Cancelar",
+        toast_success_tag_created: 'Tag "{name}" criada com sucesso!',
+        toast_success_tag_deleted: 'Tag "{name}" excluída com sucesso!',
+        confirm_delete_tag: 'Deseja realmente excluir a tag "{name}"?\n(Esta ação removerá a tag de todas as transações vinculadas)'
+    },
+    es: {
+        // Sidebar Menu
+        tooltip_overview: "Vista General",
+        tooltip_pending: "Pendientes",
+        tooltip_comparative: "Comparativo",
+        tooltip_projections: "Proyecciones",
+        tooltip_accounts: "Cuentas Bancárias",
+        tooltip_cards: "Tarjetas de Crédito",
+        menu_categories: "Categorías",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "Enero", february: "Febrero", march: "Marzo", april: "Abril", may: "Mayo", june: "Junio",
+        july: "Julio", august: "Agosto", september: "Septiembre", october: "Octubre", november: "Noviembre", december: "Diciembre",
+        
+        // General UI terms
+        reference_label: "Referencia:",
+        day_sun: "Dom", day_mon: "Lun", day_tue: "Mar", day_wed: "Mié", day_thu: "Jue", day_fri: "Vie", day_sat: "Sáb",
+        paid: "Pagado", unpaid: "No Pagado", active: "Activo", inactive: "Inactivo",
+        
+        // Overview Dashboard
+        overview_title: "Vista General",
+        overview_subtitle: "Resumen financiero mensual, calendario y accesos rápidos",
+        accounts_balance: "Saldo en Cuentas",
+        expenses_month: "Gastos del Mes",
+        card_bills: "Facturas de Tarjeta",
+        incomes_month: "Ingresos del Mes",
+        final_projection: "Proyección Final:",
+        recent_transactions: "Transacciones Recientes",
+        due_calendar: "Calendario de Pagos",
+        expenses_distribution: "Distribución de Gastos",
+        quick_shortcuts: "Accesos Rápidos",
+        new_transaction: "Nueva Transacción",
+        new_transfer: "Nueva Transferencia",
+        new_category: "Nueva Categoría",
+        new_card: "Nueva Tarjeta",
+        new_account: "Nueva Cuenta",
+        no_expenses_month: "No hay gastos registrados este mes.",
+        no_recent_transactions: "No se encontraron transacciones recientes.",
+        no_dues_period: "Sin vencimientos en este período.",
+        income: "Ingreso",
+        expense: "Gasto",
+        paid_reconciled: "Pagado / Conciliado",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Proyección de Recurrencias y Cuotas",
+        projections_subtitle: "Mapeo visual avanzado y proyección de recurrencias y cuotas activas para los próximos meses",
+        projection_label: "Proyección:",
+        months_3: "3 Meses",
+        months_6: "6 Meses",
+        months_9: "9 Meses",
+        months_12: "12 Meses",
+        heatmap_income_title: "Ingresos Recurrentes / Cuotas",
+        heatmap_expense_title: "Gastos Recurrentes / Cuotas",
+        total: "Total",
+        no_recurrent_incomes: "Ningún ingreso recurrente o en cuotas activo en el semestre seleccionado.",
+        no_recurrent_expenses: "Ningún gasto recurrente o en cuotas activo en el semestre seleccionado.",
+        modal_details_title: "Detalle de Proyecciones",
+        modal_details_subtitle: "Detalles de transacciones proyectadas para la categoría y mes",
+        col_date: "Fecha",
+        col_desc: "Descripción",
+        col_value: "Valor",
+        col_status: "Estado",
+        btn_close: "Cerrar",
+        
+        // Comparative Dashboard
+        comparative_title: "Dashboard Comparativo",
+        comparative_subtitle: "Análisis y comparación mensual de ingresos vs gastos y límites por categoría",
+        month_summary_title: "Resumen del Mes",
+        cat_spending_title: "Gastos por Categoría",
+        card_limits_title: "Presupuestos y Límites de Categorías",
+        col_category: "Categoría",
+        col_limit: "Límite de Presupuesto",
+        col_spent: "Gastado",
+        col_status_limit: "Estado",
+        col_percentage: "Porcentaje",
+        within_limit: "Dentro del Límite",
+        exceeded: "Excedido",
+        reception: "Ingresos",
+        deduction: "Gastos",
+        net_balance: "Saldo Neto",
+        performance: "Salud Financiera",
+        no_spending_month: "No hay gastos registrados por categoría este mes.",
+        
+        // Accounts Dashboard
+        accounts_title: "Cuentas Bancarias",
+        accounts_subtitle: "Administre cuentas, consulte saldos y revise extractos",
+        active_account_statement: "Extracto de Cuenta",
+        btn_new_transaction: "Nueva Transacción",
+        btn_new_transfer: "Nueva Transferencia",
+        search_description_placeholder: "Escriba para filtrar...",
+        filter_type_label: "Tipo",
+        filter_type_all: "Todos",
+        filter_type_income: "Ingresos",
+        filter_type_expense: "Gastos",
+        col_actions: "Acciones",
+        action_confirm: "Confirmar",
+        action_edit: "Editar",
+        action_delete: "Eliminar",
+        no_transactions_account: "No hay transacciones registradas en esta cuenta en el mes seleccionado.",
+        confirm_delete_title: "¿Está seguro de eliminar definitivamente esta transacción?",
+        modal_new_tx_title: "Nueva Transacción",
+        modal_new_transfer_title: "Nueva Transferencia",
+        label_account: "Cuenta",
+        label_description: "Descripción",
+        label_value: "Valor",
+        label_date: "Fecha",
+        label_category: "Categoría / Subcategoría",
+        label_type: "Tipo",
+        label_status: "Estado",
+        status_pending: "Pendiente",
+        status_confirmed: "Pagado / Confirmado",
+        btn_cancel: "Cancelar",
+        btn_save: "Guardar",
+        label_origin: "Cuenta Origen",
+        label_destination: "Cuenta Destino",
+        
+        // Pending Dashboard
+        pending_title: "Transacciones Pendientes",
+        pending_subtitle: "Monitoreo y confirmación rápida de transacciones pendientes o futuras",
+        pending_kpi_total: "Total Pendiente",
+        pending_kpi_incomes: "Ingresos Pendientes",
+        pending_kpi_expenses: "Gastos Pendientes",
+        pending_chart_incomes: "Tendencia de Ingresos Pendientes",
+        pending_chart_expenses: "Tendencia de Gastos Pendientes",
+        btn_confirm: "Confirmar",
+        btn_edit: "Editar",
+        btn_delete: "Eliminar",
+        no_pending_transactions: "No se encontraron transacciones pendientes en este período.",
+        toast_success_confirm: "¡Transacción confirmada con éxito!",
+        
+        // Categories Dashboard
+        categories_title: "Gestión de Categorías",
+        categories_subtitle: "Visualice, busque y gestione categorías y subcategorías en árbol",
+        btn_new_category: "Nueva Categoría",
+        search_category_placeholder: "Buscar categorías...",
+        col_type: "Tipo",
+        col_actions_cat: "Acciones",
+        subcategories_label: "Subcategorías",
+        no_subcategories: "Ninguna subcategoría registrada.",
+        modal_new_cat_title: "Nueva Categoría",
+        modal_new_subcat_title: "Nueva Subcategoría",
+        label_name: "Nombre",
+        label_color: "Color",
+        label_parent_category: "Categoría Padre (Solo Lectura)",
+        toast_success_cat: "¡Categoría creada con éxito!",
+        toast_success_subcat: "¡Subcategoría creada con éxito!",
+        
+        // Cards Dashboard
+        cards_title: "Tarjetas de Crédito",
+        cards_subtitle: "Gestione tarjetas de crédito, límites y facturas",
+        card_bill_details: "Detalle de Factura",
+        btn_pay_bill: "Pagar Factura",
+        btn_revert_payment: "Revertir Pago",
+        bill_status: "Estado de la Factura:",
+        status_open: "Abierta",
+        status_closed: "Cerrada",
+        status_paid: "Pagada",
+        no_card_transactions: "Ninguna transacción registrada en esta factura para el ciclo seleccionado.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Gestor de Dashboards",
+        dashboards_subtitle: "Liste, vea el código fuente y suba dashboards al servidor de fintrack",
+        col_dashboard: "Dashboard",
+        col_last_update: "Última Actualización",
+        btn_view_source: "Ver Código",
+        btn_download: "Descargar HTML",
+        upload_new_dashboard: "Subir Nuevo Dashboard",
+        placeholder_dashboard_name: "Nombre del Dashboard (ej: pending)",
+        upload_instructions: "Seleccione o arrastre el archivo HTML aquí para subir",
+        btn_upload: "Subir Dashboard",
+        modal_source_title: "Código Fuente HTML",
+        
+        // Tags Management
+        menu_tags: "Etiquetas",
+        tags_title: "Administrar Etiquetas",
+        tags_subtitle: "Administre las etiquetas utilizadas para etiquetar y organizar sus transacciones",
+        panel_title_tags: "Etiquetas Activas",
+        btn_new_tag: "Nueva Etiqueta",
+        label_tag_name: "Nombre de la Etiqueta",
+        placeholder_tag_name: "Ej: trabajo, viaje, reembolso",
+        empty_tags_message: "No hay etiquetas registradas.",
+        btn_save: "Guardar",
+        btn_cancel: "Cancelar",
+        toast_success_tag_created: '¡Etiqueta "{name}" creada con éxito!',
+        toast_success_tag_deleted: '¡Etiqueta "{name}" eliminada con éxito!',
+        confirm_delete_tag: '¿Realmente deseja eliminar la etiqueta "{name}"?\n(Esta acción eliminará la etiqueta de todas las transacciones vinculadas)'
+    }
+};
+
+var currentLocale = 'en'; // English as default
+
+// Helper to translate in JS
+function t(key) {
+    const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
+    return tDict[key] || key;
+}
+
+async function checkLocale() {
+    try {
+        const res = await fetch('/api/status');
+        if (res.ok) {
+            const data = await res.json();
+            if (data.locale && TRANSLATIONS[data.locale]) {
+                currentLocale = data.locale;
+            }
+        }
+    } catch (err) {
+        console.error("Failed to read locale preferences:", err);
+    }
+    translatePage();
+}
+
+function translatePage() {
+    const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
+    
+    // 1. Static texts
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (tDict[key]) {
+            const icon = el.querySelector('i');
+            if (icon) {
+                const iconOuter = icon.outerHTML;
+                el.innerHTML = iconOuter + ' ' + tDict[key];
+            } else {
+                el.textContent = tDict[key];
+            }
+        }
+    });
+
+    // 2. Placeholders
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (tDict[key]) {
+            el.placeholder = tDict[key];
+        }
+    });
+
+    // 3. Tooltips
+    document.querySelectorAll('[data-i18n-tooltip]').forEach(el => {
+        const key = el.getAttribute('data-i18n-tooltip');
+        if (tDict[key]) {
+            el.setAttribute('data-tooltip', tDict[key]);
+        }
+    });
+    
+    // 4. Document title translation
+    if (tDict['overview_title'] && document.title.includes("Overview") || document.title.includes("Visão")) {
+        // dynamic title update fallback if needed
+    }
+
+    // 5. Translate select months
+    const monthSelects = [
+        document.getElementById('month-select'),
+        document.getElementById('start-month-select')
+    ];
+    monthSelects.forEach(monthSelect => {
+        if (monthSelect) {
+            const monthKeys = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+            Array.from(monthSelect.options).forEach((opt, idx) => {
+                const key = monthKeys[idx];
+                if (tDict[key]) {
+                    opt.textContent = tDict[key];
+                }
+            });
+        }
+    });
+
+    // 6. Translate projection months select options (3, 6, 9, 12 months)
+    const hmSelect = document.getElementById('heatmap-months-select');
+    if (hmSelect) {
+        Array.from(hmSelect.options).forEach(opt => {
+            const val = opt.value;
+            const key = `months_${val}`;
+            if (tDict[key]) {
+                opt.textContent = tDict[key];
+            }
+        });
+    }
+
+    // Automatically initialize/refresh custom selects on all pages
+    if (typeof initCustomSelects === 'function') {
+        initCustomSelects();
+    }
+}
+
+// Custom Select Component implementation
+function initCustomSelects() {
+    document.querySelectorAll('select.select-custom').forEach(select => {
+        if (select.nextElementSibling && select.nextElementSibling.classList.contains('select-container-custom')) {
+            // Already initialized, just sync selected value
+            const container = select.nextElementSibling;
+            const triggerSpan = container.querySelector('.select-trigger-custom span');
+            const selectedOpt = select.options[select.selectedIndex];
+            if (selectedOpt && triggerSpan) {
+                triggerSpan.textContent = selectedOpt.textContent;
+            }
+            return;
+        }
+        select.style.display = 'none';
+        const container = document.createElement('div');
+        container.className = 'select-container-custom';
+        
+        // Match specific element custom min-widths
+        if (select.id === 'heatmap-months-select') {
+            container.style.minWidth = '110px';
+        } else if (select.id === 'year-select') {
+            container.style.minWidth = '90px';
+        } else if (select.id === 'filter-type') {
+            container.style.minWidth = '130px';
+        }
+        
+        const trigger = document.createElement('div');
+        trigger.className = 'select-trigger-custom';
+        const triggerSpan = document.createElement('span');
+        trigger.appendChild(triggerSpan);
+        container.appendChild(trigger);
+        const optionsContainer = document.createElement('div');
+        optionsContainer.className = 'select-options-custom';
+        container.appendChild(optionsContainer);
+        
+        function syncSelected() {
+            const selectedOpt = select.options[select.selectedIndex] || select.options[0];
+            if (selectedOpt) {
+                triggerSpan.textContent = selectedOpt.textContent;
+                Array.from(optionsContainer.children).forEach(child => {
+                    if (child.getAttribute('data-value') === select.value) {
+                        child.classList.add('selected');
+                    } else {
+                        child.classList.remove('selected');
+                    }
+                });
+            }
+        }
+        
+        function populateOptions() {
+            optionsContainer.innerHTML = '';
+            Array.from(select.options).forEach(opt => {
+                const optDiv = document.createElement('div');
+                optDiv.className = 'select-option-custom';
+                optDiv.textContent = opt.textContent;
+                optDiv.setAttribute('data-value', opt.value);
+                optDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    select.value = opt.value;
+                    select.dispatchEvent(new Event('change'));
+                    syncSelected();
+                    container.classList.remove('open');
+                });
+                optionsContainer.appendChild(optDiv);
+            });
+        }
+        
+        populateOptions();
+        syncSelected();
+        
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = container.classList.contains('open');
+            document.querySelectorAll('.select-container-custom').forEach(el => {
+                el.classList.remove('open');
+            });
+            if (!isOpen) {
+                populateOptions();
+                syncSelected();
+                container.classList.add('open');
+                setTimeout(() => {
+                    const selectedEl = optionsContainer.querySelector('.select-option-custom.selected');
+                    if (selectedEl) {
+                        const itemHeight = selectedEl.offsetHeight || 36;
+                        optionsContainer.scrollTop = Math.max(0, selectedEl.offsetTop - itemHeight);
+                    }
+                }, 10);
+            }
+        });
+        
+        select.parentNode.insertBefore(container, select.nextSibling);
+        select.addEventListener('change', syncSelected);
+        
+        // Watch for dynamic options updates
+        const observer = new MutationObserver(() => {
+            syncSelected();
+        });
+        observer.observe(select, { childList: true, subtree: true });
+        
+        setTimeout(syncSelected, 200);
+        setTimeout(syncSelected, 1000);
+    });
+    
+    // Global click listener to close options dropdowns when clicking outside
+    if (!window.customSelectGlobalBound) {
+        window.customSelectGlobalBound = true;
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.select-container-custom').forEach(el => {
+                el.classList.remove('open');
+            });
+        });
+    }
+}
+
+        runInit();
+            checkLocale();
+
+// ADR-027 Live-update listener
+window.fintrackOnDataChanged = function(entities) {
+    var affected = entities.some(function(tag) {
+        return ['transaction', 'category'].indexOf(tag) !== -1;
+    });
+    if (affected) {
+        console.log("comparative refetching due to entity change:", entities);
+        runInit();
+    }
+};
+
+</script>

@@ -1,0 +1,1090 @@
+<style>
+/* Sidebar Styling */
+        
+
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .sidebar-brand i {
+            color: var(--accent-primary);
+        }
+
+        
+
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 0;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 1.1rem;
+            border-radius: 12px;
+            transition: var(--transition-smooth);
+            position: relative;
+            width: 100%;
+        }
+
+        .sidebar-menu a:hover {
+            background: rgba(255, 255, 255, 0.03);
+            color: #fff;
+        }
+
+        .sidebar-menu a.active {
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.1);
+        }
+
+        /* Tooltip styling */
+        .sidebar-menu a[data-tooltip]::after,
+        .sidebar-more-container[data-tooltip]::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 80px;
+            top: 50%;
+            transform: translateY(-50%) translateX(-10px);
+            background: #11131e;
+            color: #fff;
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            border: 1px solid var(--panel-border);
+        }
+
+        .sidebar-menu a[data-tooltip]:hover::after,
+        .sidebar-more-container:hover::after {
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }
+
+        
+        /* More menu at bottom of sidebar */
+        .sidebar-more-container {
+            margin-top: auto;
+            width: 100%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+        }
+        .sidebar-more-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            padding: 0.75rem 0;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 12px;
+            transition: var(--transition-smooth);
+        }
+        .sidebar-more-btn:hover {
+            background: rgba(255, 255, 255, 0.03);
+            color: #fff;
+        }
+        .sidebar-more-dropdown {
+            position: absolute;
+            bottom: 0;
+            left: 60px;
+            background: #0d0f1a;
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            width: 170px;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+            transition: all 0.2s ease;
+            z-index: 1000;
+        }
+        .sidebar-more-dropdown::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -20px;
+            width: 20px;
+            height: 100%;
+            background: transparent;
+        }
+        .sidebar-more-container:hover .sidebar-more-dropdown {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateY(0);
+        }
+        .sidebar-more-dropdown a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.6rem 0.75rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border-radius: 8px;
+            transition: var(--transition-smooth);
+        }
+        .sidebar-more-dropdown a:hover {
+            background: rgba(139, 92, 246, 0.1);
+            color: #a78bfa;
+        }
+        .sidebar-more-dropdown a.active {
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.1);
+        }
+        .sidebar-more-dropdown a i {
+            font-size: 0.95rem;
+            width: 16px;
+            text-align: center;
+        }
+
+
+        /* Main Content Layout */
+        
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 1.5rem;
+        }
+
+        header h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        header h1 i {
+            color: var(--accent-primary);
+        }
+
+        header p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        /* Page Grid Layout */
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1.3fr 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Panel Styling */
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 1.5rem;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(16px);
+            position: relative;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 0.75rem;
+        }
+
+        .panel-title i {
+            color: var(--accent-primary);
+        }
+
+        /* Forms Styling */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-control {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: var(--transition-smooth);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            background: rgba(255, 255, 255, 0.06);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+        }
+
+        .btn-submit {
+            width: 100%;
+            background: var(--accent-primary);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            padding: 0.75rem;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-submit:hover {
+            background: var(--accent-secondary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        /* List Styling */
+        .dashboard-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-height: 70vh;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        .dashboard-item-card {
+            background: rgba(255, 255, 255, 0.015);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: var(--transition-smooth);
+        }
+
+        .dashboard-item-card:hover {
+            border-color: rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .dashboard-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .dashboard-name {
+            font-weight: 600;
+            font-size: 1rem;
+            text-transform: capitalize;
+        }
+
+        .dashboard-meta {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dashboard-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-action {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .btn-action:hover {
+            background: rgba(139, 92, 246, 0.12);
+            color: var(--accent-secondary);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-action.danger:hover {
+            background: rgba(244, 63, 94, 0.12);
+            color: var(--expense-color);
+            border-color: rgba(244, 63, 94, 0.3);
+        }
+
+        /* File Upload Area */
+        .upload-area {
+            border: 2px dashed var(--panel-border);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            margin-bottom: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent-primary);
+            background: rgba(139, 92, 246, 0.02);
+        }
+
+        .upload-area i {
+            font-size: 2rem;
+            color: var(--text-dark);
+            transition: var(--transition-smooth);
+        }
+
+        .upload-area:hover i {
+            color: var(--accent-secondary);
+        }
+
+        .upload-filename {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--accent-secondary);
+            margin-top: 0.25rem;
+            display: none;
+        }
+
+        /* Modals */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(5, 5, 8, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: var(--transition-smooth);
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-card {
+            background: #0f111e;
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 1.75rem;
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            transform: scale(0.95);
+            transition: var(--transition-smooth);
+        }
+
+        .modal-overlay.open .modal-card {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .modal-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .modal-title i {
+            color: var(--accent-primary);
+        }
+
+        .btn-close-modal {
+            background: none;
+            border: none;
+            color: var(--text-dark);
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .btn-close-modal:hover {
+            color: #fff;
+        }
+
+        .code-area {
+            background: #06070a;
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 1rem;
+            color: #10b981;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            overflow: auto;
+            flex: 1;
+            min-height: 350px;
+            white-space: pre-wrap;
+            user-select: text;
+        }
+
+        /* Loading Spinner Overlay */
+        .loading-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(12, 14, 23, 0.85);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 100; backdrop-filter: blur(4px);
+            border-radius: 24px;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        .loading-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--accent-primary);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            z-index: 9999;
+        }
+
+        .toast {
+            background: #111322;
+            border: 1px solid var(--panel-border);
+            padding: 1rem 1.25rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #fff;
+            transform: translateY(20px);
+            opacity: 0;
+            animation: toastIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+            min-width: 280px;
+        }
+
+        .toast.success { border-left: 4px solid var(--income-color); }
+        .toast.error { border-left: 4px solid var(--expense-color); }
+
+        .toast i { font-size: 1.1rem; }
+        .toast.success i { color: var(--income-color); }
+        .toast.error i { color: var(--expense-color); }
+
+        @keyframes toastIn {
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateY(20px); }
+        }
+
+        /* More menu at bottom of sidebar */
+        .sidebar-more-container {
+            margin-top: auto;
+            width: 100%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+        }
+        .sidebar-more-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            padding: 0.75rem 0;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 12px;
+            transition: var(--transition-smooth);
+        }
+        .sidebar-more-btn:hover {
+            background: rgba(255, 255, 255, 0.03);
+            color: #fff;
+        }
+        .sidebar-more-dropdown {
+            position: absolute;
+            bottom: 0;
+            left: 60px;
+            background: #0d0f1a;
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            width: 170px;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+            transition: all 0.2s ease;
+            z-index: 1000;
+        }
+        .sidebar-more-dropdown::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -20px;
+            width: 20px;
+            height: 100%;
+            background: transparent;
+        }
+        .sidebar-more-container:hover .sidebar-more-dropdown {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateY(0);
+        }
+        .sidebar-more-dropdown a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.6rem 0.75rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border-radius: 8px;
+            transition: var(--transition-smooth);
+        }
+        .sidebar-more-dropdown a:hover {
+            background: rgba(139, 92, 246, 0.1);
+            color: #a78bfa;
+        }
+        .sidebar-more-dropdown a.active {
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.1);
+        }
+        .sidebar-more-dropdown a i {
+            font-size: 0.95rem;
+            width: 16px;
+            text-align: center;
+        }
+
+        /* Elevate header stacking context globally for custom select dropdowns */
+        header, .dashboard-header {
+            position: relative !important;
+            z-index: 110 !important;
+        }
+        
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+        
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+        
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+        
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+        
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+        
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+        
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+        
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+        
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+</style>
+
+<header>
+            <div class="header-title-area">
+                <h1><i class="fa-solid fa-folder-open"></i> Gerenciamento de Dashboards</h1>
+                <p>Monitore, visualize ou envie novos layouts de dashboards para a plataforma FinTrack</p>
+            </div>
+        </header>
+
+        <div class="grid-container">
+            <!-- Left Panel: Active Dashboards -->
+            <section class="panel">
+                <div class="loading-overlay" id="list-loading">
+                    <div class="spinner"></div>
+                </div>
+                <div class="panel-title">
+                    <i class="fa-solid fa-rectangle-list"></i> Dashboards Ativos
+                </div>
+                <div class="dashboard-list" id="dashboard-list">
+                    <!-- Dynamic list cards -->
+                </div>
+            </section>
+
+            <!-- Right Panel: Upload / Save Dashboard -->
+            <section class="panel">
+                <div class="loading-overlay" id="form-loading">
+                    <div class="spinner"></div>
+                </div>
+                <div class="panel-title">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Registrar/Atualizar Dashboard
+                </div>
+                <form id="upload-form" onsubmit="handleUploadDashboard(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="dash-name">Nome do Dashboard</label>
+                        <input type="text" id="dash-name" class="form-control" placeholder="Ex: overview, projecoes, comparativo" required>
+                        <span style="font-size:0.75rem; color:var(--text-dark); margin-top:0.25rem; display:block;">Use letras minúsculas sem espaços ou acentos.</span>
+                    </div>
+
+                    <!-- Upload Area -->
+                    <div class="form-group">
+                        <label class="form-label">Arquivo do Layout (.html)</label>
+                        <div class="upload-area" onclick="document.getElementById('dash-file').click()">
+                            <i class="fa-solid fa-file-code"></i>
+                            <span style="font-size:0.85rem; font-weight:600;">Clique para escolher o arquivo HTML</span>
+                            <span style="font-size:0.75rem; color:var(--text-dark);">Tamanho máximo recomendado: 500KB</span>
+                            <div class="upload-filename" id="upload-filename">Nenhum arquivo selecionado</div>
+                        </div>
+                        <input type="file" id="dash-file" style="display:none;" accept=".html" onchange="handleFileChange(event)">
+                    </div>
+
+                    <button type="submit" class="btn-submit">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Enviar Dashboard
+                    </button>
+                </form>
+            </section>
+        </div>
+
+<script>
+// State
+        var dashboards = [];
+        var uploadedHtmlContent = "";
+
+        // Elements
+        var listLoading = document.getElementById('list-loading');
+        var formLoading = document.getElementById('form-loading');
+        var dashboardList = document.getElementById('dashboard-list');
+        var uploadFilename = document.getElementById('upload-filename');
+
+        // Toast Helper
+        function showToast(message, type = "success") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i>
+                <span>${message}</span>
+            `;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = "fadeOut 0.4s ease forwards";
+                setTimeout(() => toast.remove(), 400);
+            }, 3500);
+        }
+
+        // Open/Close Modal Helper
+        function openModal(id) {
+            document.getElementById(id).classList.add('open');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('open');
+        }
+
+        // Close modal on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const activeModal = document.querySelector('.modal-overlay.open');
+                if (activeModal) {
+                    closeModal(activeModal.id);
+                }
+            }
+        });
+
+        // Load dashboards from API
+        async function loadDashboards() {
+            listLoading.classList.add('active');
+            try {
+                const res = await fetch('/api/dashboards');
+                if (res.ok) {
+                    dashboards = await res.json();
+                    // Sort by name
+                    dashboards.sort((a, b) => a.name.localeCompare(b.name));
+                    renderDashboardList();
+                } else {
+                    showToast("Erro ao buscar a lista de dashboards.", "error");
+                }
+            } catch (err) {
+                console.error("Error fetching dashboards:", err);
+                showToast("Erro de conexão ao buscar dashboards.", "error");
+            } finally {
+                listLoading.classList.remove('active');
+            }
+        }
+
+        // Render Dashboard item cards
+        function renderDashboardList() {
+            dashboardList.innerHTML = '';
+
+            if (dashboards.length === 0) {
+                dashboardList.innerHTML = '<div style="text-align:center; padding:3rem 0; color:var(--text-dark); font-style:italic;">Nenhum dashboard ativo.</div>';
+                return;
+            }
+
+            dashboards.forEach(d => {
+                const card = document.createElement('div');
+                card.className = 'dashboard-item-card';
+
+                const updateDate = d.updatedAt ? new Date(d.updatedAt).toLocaleString('pt-BR') : 'Desconhecida';
+
+                card.innerHTML = `
+                    <div class="dashboard-info">
+                        <span class="dashboard-name">${escapeHtml(d.name)}</span>
+                        <div class="dashboard-meta">
+                            <i class="fa-regular fa-clock"></i>
+                            <span>Atualizado em: ${updateDate}</span>
+                        </div>
+                    </div>
+                    <div class="dashboard-actions">
+                        <button type="button" class="btn-action" onclick="viewDashboardHtml('${escapeHtml(d.name)}')">
+                            <i class="fa-solid fa-code"></i> Ver Código
+                        </button>
+                        <button type="button" class="btn-action" onclick="downloadDashboard('${escapeHtml(d.name)}')">
+                            <i class="fa-solid fa-circle-down"></i> Baixar
+                        </button>
+                        <button type="button" class="btn-action danger" onclick="deleteDashboard('${escapeHtml(d.name)}')">
+                            <i class="fa-solid fa-trash-can"></i> Excluir
+                        </button>
+                    </div>
+                `;
+
+                dashboardList.appendChild(card);
+            });
+        }
+
+        // Handle File Select
+        function handleFileChange(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Automatically pre-fill name from filename (without extension)
+            const nameField = document.getElementById('dash-name');
+            const nameWithoutExt = file.name.replace(/\.html$/i, '').toLowerCase();
+            nameField.value = nameWithoutExt;
+
+            uploadFilename.textContent = file.name;
+            uploadFilename.style.display = 'block';
+
+            // Read HTML content
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                uploadedHtmlContent = evt.target.result;
+            };
+            reader.readAsText(file);
+        }
+
+        // Handle Dashboard Upload
+        async function handleUploadDashboard(e) {
+            e.preventDefault();
+            const nameField = document.getElementById('dash-name');
+            const name = nameField.value.trim().toLowerCase();
+
+            if (!name) return;
+            if (!uploadedHtmlContent) {
+                showToast("Por favor, selecione um arquivo HTML válido.", "error");
+                return;
+            }
+
+            formLoading.classList.add('active');
+            try {
+                const res = await fetch('/api/dashboards', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, html: uploadedHtmlContent })
+                });
+
+                if (res.ok) {
+                    showToast(`Dashboard "${name}" atualizado com sucesso!`);
+                    // Reset fields
+                    nameField.value = '';
+                    uploadFilename.textContent = 'Nenhum arquivo selecionado';
+                    uploadFilename.style.display = 'none';
+                    document.getElementById('dash-file').value = '';
+                    uploadedHtmlContent = '';
+                    await loadDashboards();
+                } else {
+                    showToast("Erro ao registrar o dashboard no servidor.", "error");
+                }
+            } catch (err) {
+                console.error("Error uploading dashboard:", err);
+                showToast("Erro de conexão ao enviar o dashboard.", "error");
+            } finally {
+                formLoading.classList.remove('active');
+            }
+        }
+
+        // View Dashboard HTML source code inside modal
+        async function viewDashboardHtml(name) {
+            // Note: Since GET /api/dashboards only returns metadata, we can fetch the active page HTML from '/ui/' + name
+            listLoading.classList.add('active');
+            try {
+                const res = await fetch(`/ui/${name}`);
+                if (res.ok) {
+                    const html = await res.text();
+                    document.getElementById('modal-code-title').innerHTML = `<i class="fa-solid fa-code"></i> Código Fonte: ${name}.html`;
+                    document.getElementById('modal-code-viewer').textContent = html;
+                    openModal('modal-view-code');
+                } else {
+                    showToast("Não foi possível carregar o código fonte do dashboard.", "error");
+                }
+            } catch (err) {
+                console.error("Error reading dashboard code:", err);
+                showToast("Erro de conexão ao ler código.", "error");
+            } finally {
+                listLoading.classList.remove('active');
+            }
+        }
+
+        // Send request to delete dashboard
+        async function deleteDashboard(name) {
+            if (!confirm(`Deseja realmente excluir o dashboard "${name}"?`)) {
+                return;
+            }
+            listLoading.classList.add('active');
+            try {
+                const res = await fetch(`/api/dashboards/${name}`, {
+                    method: 'DELETE'
+                });
+                if (res.ok) {
+                    showToast(`Dashboard "${name}" excluído com sucesso!`);
+                    await loadDashboards();
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    const errMsg = data.error || "Erro ao excluir o dashboard.";
+                    showToast(errMsg, "error");
+                }
+            } catch (err) {
+                console.error("Error deleting dashboard:", err);
+                showToast("Erro de rede ao excluir o dashboard.", "error");
+            } finally {
+                listLoading.classList.remove('active');
+            }
+        }
+
+        // Trigger dynamic file download in browser
+        async function downloadDashboard(name) {
+            listLoading.classList.add('active');
+            try {
+                const res = await fetch(`/ui/${name}`);
+                if (res.ok) {
+                    const html = await res.text();
+                    const blob = new Blob([html], { type: 'text/html' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `${name}.html`;
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                    showToast(`Download de "${name}.html" iniciado!`);
+                } else {
+                    showToast("Erro ao baixar o layout do dashboard.", "error");
+                }
+            } catch (err) {
+                console.error("Error downloading file:", err);
+                showToast("Erro de rede ao baixar.", "error");
+            } finally {
+                listLoading.classList.remove('active');
+            }
+        }
+
+        // HTML escaping
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;")
+                      .replace(/'/g, "&#039;");
+        }
+
+        // Bootstrap load
+        loadDashboards();
+
+// ADR-027 Live-update listener
+window.fintrackOnDataChanged = function(entities) {
+    var affected = entities.some(function(tag) {
+        return ['dashboard'].indexOf(tag) !== -1;
+    });
+    if (affected) {
+        console.log("dashboards refetching due to entity change:", entities);
+        loadDashboards();
+    }
+};
+
+</script>
