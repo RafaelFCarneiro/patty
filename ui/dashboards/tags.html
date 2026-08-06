@@ -1,175 +1,5 @@
 <style>
-/* Sidebar Styling (Position Fixed) */
-        
-
-        .sidebar-brand {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.4rem;
-            font-weight: 800;
-            color: #fff;
-        }
-
-        .sidebar-brand i {
-            color: var(--accent-primary);
-        }
-
-        
-
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0.75rem 0;
-            color: var(--text-muted);
-            text-decoration: none;
-            font-size: 1.1rem;
-            border-radius: 12px;
-            transition: var(--transition-smooth);
-            position: relative;
-            width: 100%;
-        }
-
-        .sidebar-menu a:hover {
-            background: rgba(255, 255, 255, 0.03);
-            color: #fff;
-        }
-
-        .sidebar-menu a.active {
-            background: rgba(139, 92, 246, 0.15);
-            color: var(--accent-secondary);
-        }
-
-        /* Tooltip style */
-        .sidebar-menu a::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            left: 80px;
-            background: #08090f;
-            border: 1px solid var(--panel-border);
-            color: #fff;
-            padding: 0.35rem 0.6rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            border-radius: 6px;
-            white-space: nowrap;
-            opacity: 0;
-            pointer-events: none;
-            transform: translateX(-5px);
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        }
-
-        .sidebar-menu a:hover::after {
-            opacity: 1;
-            transform: translateX(0);
-        }
-
-        /* Bottom More options menu */
-        .sidebar-more-container {
-            margin-top: auto;
-            width: 100%;
-            position: relative;
-            display: flex;
-            justify-content: center;
-        }
-        .sidebar-more-btn {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-size: 1.2rem;
-            padding: 0.75rem 0;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            border-radius: 12px;
-            transition: var(--transition-smooth);
-        }
-        .sidebar-more-btn:hover {
-            background: rgba(255, 255, 255, 0.03);
-            color: #fff;
-        }
-        .sidebar-more-dropdown {
-            position: absolute;
-            bottom: 0;
-            left: 60px;
-            background: #0d0f1a;
-            border: 1px solid var(--panel-border);
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            padding: 0.5rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-            width: 170px;
-            opacity: 0;
-            pointer-events: none;
-            transform: translateY(10px);
-            transition: all 0.2s ease;
-            z-index: 1000;
-        }
-        .sidebar-more-container:hover .sidebar-more-dropdown {
-            opacity: 1;
-            pointer-events: auto;
-            transform: translateY(0);
-        }
-        .sidebar-more-dropdown a {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 0.75rem;
-            color: var(--text-muted);
-            text-decoration: none;
-            font-size: 0.82rem;
-            font-weight: 500;
-            border-radius: 8px;
-            transition: var(--transition-smooth);
-        }
-        .sidebar-more-dropdown a:hover {
-            background: rgba(255, 255, 255, 0.03);
-            color: #fff;
-        }
-        .sidebar-more-dropdown a.active {
-            background: rgba(139, 92, 246, 0.1);
-            color: var(--accent-secondary);
-            font-weight: 600;
-        }
-
-        /* Main Content Layout */
-        
-
-        header {
-            margin-bottom: 2.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 1.5rem;
-        }
-
-        .header-title-area h1 {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 0.35rem;
-        }
-
-        .header-title-area h1 i {
-            color: var(--accent-primary);
-        }
-
-        .header-title-area p {
-            color: var(--text-muted);
-            font-size: 0.9rem;
-        }
-
-        /* Dashboard Panel Containers */
+/* Dashboard Panel Containers */
         .panel {
             background: var(--panel-bg);
             backdrop-filter: blur(20px);
@@ -449,98 +279,6 @@
             grid-column: 1 / -1;
         }
 
-        /* More menu at bottom of sidebar */
-        .sidebar-more-container {
-            margin-top: auto;
-            width: 100%;
-            position: relative;
-            display: flex;
-            justify-content: center;
-        }
-        .sidebar-more-btn {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-size: 1.2rem;
-            padding: 0.75rem 0;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            border-radius: 12px;
-            transition: var(--transition-smooth);
-        }
-        .sidebar-more-btn:hover {
-            background: rgba(255, 255, 255, 0.03);
-            color: #fff;
-        }
-        .sidebar-more-dropdown {
-            position: absolute;
-            bottom: 0;
-            left: 60px;
-            background: #0d0f1a;
-            border: 1px solid var(--panel-border);
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            padding: 0.5rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-            width: 170px;
-            opacity: 0;
-            pointer-events: none;
-            transform: translateY(10px);
-            transition: all 0.2s ease;
-            z-index: 1000;
-        }
-        .sidebar-more-dropdown::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -20px;
-            width: 20px;
-            height: 100%;
-            background: transparent;
-        }
-        .sidebar-more-container:hover .sidebar-more-dropdown {
-            opacity: 1;
-            pointer-events: all;
-            transform: translateY(0);
-        }
-        .sidebar-more-dropdown a {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.6rem 0.75rem;
-            color: var(--text-muted);
-            text-decoration: none;
-            font-size: 0.85rem;
-            font-weight: 500;
-            border-radius: 8px;
-            transition: var(--transition-smooth);
-        }
-        .sidebar-more-dropdown a:hover {
-            background: rgba(139, 92, 246, 0.1);
-            color: #a78bfa;
-        }
-        .sidebar-more-dropdown a.active {
-            background: rgba(139, 92, 246, 0.15);
-            color: #a78bfa;
-            border: 1px solid rgba(139, 92, 246, 0.1);
-        }
-        .sidebar-more-dropdown a i {
-            font-size: 0.95rem;
-            width: 16px;
-            text-align: center;
-        }
-
-        /* Elevate header stacking context globally for custom select dropdowns */
-        header, .dashboard-header {
-            position: relative !important;
-            z-index: 110 !important;
-        }
-        
         /* Custom Select component styling */
         .select-container-custom {
             position: relative;
@@ -548,7 +286,7 @@
             min-width: 120px;
             user-select: none;
         }
-        
+
         .select-trigger-custom {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--panel-border);
@@ -565,17 +303,17 @@
             min-height: 36px;
             box-sizing: border-box;
         }
-        
+
         .select-trigger-custom:hover {
             border-color: rgba(255, 255, 255, 0.15);
             background: rgba(255, 255, 255, 0.08);
         }
-        
+
         .select-container-custom.open .select-trigger-custom {
             border-color: var(--accent-primary);
             box-shadow: 0 0 0 2px var(--accent-primary-glow);
         }
-        
+
         .select-trigger-custom::after {
             content: '\f078';
             font-family: 'Font Awesome 6 Free';
@@ -586,12 +324,12 @@
             right: 12px;
             transition: transform 0.3s ease;
         }
-        
+
         .select-container-custom.open .select-trigger-custom::after {
             transform: rotate(180deg);
             color: var(--accent-primary);
         }
-        
+
         .select-options-custom {
             display: none;
             position: absolute;
@@ -610,16 +348,16 @@
             box-sizing: border-box;
             animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        
+
         @keyframes selectFadeIn {
             from { opacity: 0; transform: translateY(-8px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
+
         .select-container-custom.open .select-options-custom {
             display: block;
         }
-        
+
         .select-option-custom {
             padding: 0.5rem 0.75rem;
             color: var(--text-muted); /* Highly readable text color on dark backgrounds */
@@ -629,18 +367,18 @@
             cursor: pointer;
             transition: var(--transition-smooth);
         }
-        
+
         .select-option-custom:hover {
             background: rgba(255, 255, 255, 0.08);
             color: #fff;
         }
-        
+
         .select-option-custom.selected {
             background: var(--accent-primary-glow);
             color: var(--accent-primary);
             font-weight: 700;
         }
-        
+
         .select-options-custom::-webkit-scrollbar {
             width: 6px;
         }
