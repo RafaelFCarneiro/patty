@@ -132,8 +132,18 @@ separate host: the zero-build, local-first posture (ADR-004/007/013) is unchange
 3. [x] Phase 2 — `source`/`path` discriminator, file-backed default dashboards, package the `ui/` files, custom
    submenu grouping.
 4. [x] Phase 3 — SSE `/ui/events` + effect-runner change-event bus (entity-tagged) + shell dependency-refetch.
-5. [ ] Revise ADR-013's dashboard-model wording; record the UI architecture (shell/fragments/source/SSE) and the
-   `save_dashboard`-is-always-inline security invariant in `docs/architecture.md`; PLAN Phase 4 web-frontend note.
+5. [x] Revise ADR-013's dashboard-model wording (revision note added, pointing here + to `docs/ui.md`); record
+   the UI architecture (shell/fragments/source/SSE) and the `save_dashboard`-is-always-inline security invariant
+   in its own `docs/ui.md` (extracted from `docs/architecture.md`, which now points to it); PLAN Phase 4
+   web-frontend note.
+6. [x] Convert the remaining default dashboards to file-backed fragments (`feat/new-default-templates`): all
+   nine defaults — `overview`, `accounts`, `cards`, `categories`, `comparative`, `dashboards`, `pending`,
+   `projections`, `tags` — now ship as `ui/dashboards/*.html`, auto-registered as `source: 'file'` rows by
+   bootstrap's directory scan. Follow-ups tracked separately: lift the CSS components duplicated across
+   fragments (toast, modal, panel, form, kpi, spinner, loading-overlay) into `ui/app.css`
+   ([#164](https://github.com/RafaelFCarneiro/fintrack/issues/164)); pin version + SRI for the Flatpickr CDN
+   includes the same PR added to `ui/shell.html`, matching Chart.js's existing pattern
+   ([#165](https://github.com/RafaelFCarneiro/fintrack/issues/165)).
 
 Each phase is feature-sized (schema and/or a new server capability, many files) → independent verification
 subagent per diff.
