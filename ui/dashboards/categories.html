@@ -3533,6 +3533,8 @@
             </div>
         </section>
 
+        <div class="toast-container" id="toast-container"></div>
+
 <script>
 // State
         var categories = [];
@@ -3551,7 +3553,7 @@
             toast.className = `toast ${type}`;
             toast.innerHTML = `
                 <i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i>
-                <span>${message}</span>
+                <span>${escapeHtml(message)}</span>
             `;
             container.appendChild(toast);
 
@@ -3721,7 +3723,7 @@
                 subsHtml += `
                     <div class="tree-node-child">
                         <span>${escapeHtml(sub.name)}</span>
-                        <button type="button" class="btn-node-action delete-node" title="Excluir subcategoria" onclick="handleDeleteSubcategory('${escapeHtml(sub.name)}')">
+                        <button type="button" class="btn-node-action delete-node" title="Excluir subcategoria" onclick="handleDeleteSubcategory('${escapeJsAttr(sub.name)}')">
                             <i class="fa-regular fa-trash-can"></i>
                         </button>
                     </div>
@@ -3745,7 +3747,7 @@
                         <button type="button" class="btn-node-action add-sub" title="Adicionar subcategoria" onclick="toggleAddSubcatForm('${c.id}', true)">
                             <i class="fa-solid fa-plus"></i>
                         </button>
-                        <button type="button" class="btn-node-action delete-node" title="Excluir categoria" onclick="handleDeleteCategory('${escapeHtml(c.name)}')">
+                        <button type="button" class="btn-node-action delete-node" title="Excluir categoria" onclick="handleDeleteCategory('${escapeJsAttr(c.name)}')">
                             <i class="fa-regular fa-trash-can"></i>
                         </button>
                     </div>
@@ -3924,6 +3926,17 @@
                       .replace(/>/g, "&gt;")
                       .replace(/"/g, "&quot;")
                       .replace(/'/g, "&#039;");
+        }
+
+        // Escapes a value for safe embedding as a single-quoted JS string literal *inside* an
+        // HTML attribute (e.g. onclick="fn('${escapeJsAttr(value)}')"). escapeHtml() alone is not
+        // enough here: the browser HTML-decodes the attribute before the JS parser reads it, so an
+        // HTML-escaped quote round-trips back into a real quote and still breaks out of the string.
+        // Escaping backslash+quote for the JS layer first, then HTML-escaping the result for the
+        // attribute layer, survives that decode step correctly for both layers.
+        function escapeJsAttr(str) {
+            if (!str) return '';
+            return escapeHtml(String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
         }
 
         // Bootstrap load

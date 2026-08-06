@@ -1443,7 +1443,7 @@
 
             toast.innerHTML = `
                 <i class="fa-solid ${iconClass}"></i>
-                <span>${message}</span>
+                <span>${escapeHtml(message)}</span>
                 <i class="fa-solid fa-xmark toast-close"></i>
             `;
             
@@ -2079,7 +2079,7 @@
                             <button class="action-btn btn-edit-icon" title="${isBillPayment ? 'Pagamento de fatura não editável' : 'Editar'}" onclick="${editCall}" ${isBillPayment ? 'disabled' : ''}>
                                 <i class="fa-solid fa-pen-to-square"></i>
                             </button>
-                            <button class="action-btn btn-delete-icon" title="${isBillPayment ? 'Pagamento de fatura não excluível por aqui' : 'Excluir'}" onclick="deleteTx('${t.id}', '${escapeJs(t.description)}')" ${isBillPayment ? 'disabled' : ''}>
+                            <button class="action-btn btn-delete-icon" title="${isBillPayment ? 'Pagamento de fatura não excluível por aqui' : 'Excluir'}" onclick="deleteTx('${t.id}', '${escapeJsAttr(t.description)}')" ${isBillPayment ? 'disabled' : ''}>
                                 <i class="fa-solid fa-trash-can"></i>
                             </button>
                         </div>
@@ -2433,11 +2433,15 @@
                       .replace(/'/g, "&#039;");
         }
 
-        // JS escaping
-        function escapeJs(str) {
+        // Escapes a value for safe embedding as a single-quoted JS string literal *inside* an
+        // HTML attribute (e.g. onclick="fn('${escapeJsAttr(value)}')"). JS-escaping backslash+quote
+        // alone is not enough: the outer onclick="..." attribute is double-quoted, and the HTML
+        // parser (which finds the attribute's closing quote before any JS is parsed) doesn't
+        // understand a JS \" escape — a raw '"' still ends the attribute early. HTML-escaping the
+        // JS-escaped result closes that gap too.
+        function escapeJsAttr(str) {
             if (!str) return '';
-            return str.replace(/'/g, "\\'")
-                      .replace(/"/g, '\\"');
+            return escapeHtml(String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
         }
 
         // Event listeners

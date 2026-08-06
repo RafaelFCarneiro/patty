@@ -50,23 +50,26 @@ Real, version-controlled files at the package root, sibling to `src/`/`drizzle/`
 import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works under `tsx src/...` (dev) and
 `node dist/...` (published) regardless of `cwd`.
 
-- **`ui/shell.html`** — shared `<head>` (links `ui/app.css`; loads Chart.js and Flatpickr once, each from a
-  pinned CDN, plus Google Fonts and Font Awesome for shell chrome), the left nav menu (`#dashboard-menu`), and
+- **`ui/shell.html`** — shared `<head>` (links `ui/app.css`; loads Chart.js, Flatpickr, Font Awesome, and
+  Google Fonts, each from a CDN — only Chart.js and Font Awesome are version-pinned today, Flatpickr is not
+  yet, tracked as a gap in
+  [#165](https://github.com/RafaelFCarneiro/fintrack/issues/165)), the left nav menu (`#dashboard-menu`), and
   the `#content` container fragments render into. Fragments load none of these themselves — Chart.js and
   Flatpickr are called as shell-provided globals (`ui/dashboards/*.html`'s date inputs call `flatpickr(...)`
   directly) — so the shell's `<head>` is the *only* place external hosts are referenced; a fragment carrying
   its own `<script src>`/`<link>` is rejected by `save_dashboard` (see Management flows below).
   `test/integration/http/dashboardTemplate.test.ts` pins the allowed host list for both the shell and every
   fragment.
-- **`ui/app.css`** — every style rule lifted verbatim from the pre-shell per-dashboard `<style>` blocks (the
-  look is unchanged), plus the menu-bar/toolbar chrome the shell adds.
-- **`ui/app.js`** — the shell client: renders the menu from `GET /api/dashboards` (grouped by `source`),
-  resolves the active dashboard name from `location.pathname`, fetches its fragment
-  (`GET /api/dashboards/:name`), and injects it into `#content`. Handles menu clicks (`history.pushState`, no
-  reload) and direct/refresh navigation to `/ui/:name`. A fragment's `<script>` is inert once inserted via
-  `innerHTML`, so `app.js` replaces it with a freshly created `<script>` element (standard SPA workaround) to
-  execute it; the fragment's script runs its init **synchronously** at that point rather than waiting for
-  `DOMContentLoaded` (which fires once, for the shell page, not per navigation).
+- **`ui/app.css`** — shell/layout styling for the sidebar-nav shell (menu, toolbar chrome, Flatpickr theme
+  overrides), reworked from the original per-dashboard `<style>` blocks rather than a verbatim lift of them.
+- **`ui/app.js`** — the shell client: renders the menu from `GET /api/dashboards` (see the `source`
+  discriminator section above for how defaults vs. customs are placed), resolves the active dashboard name
+  from `location.pathname`, fetches its fragment (`GET /api/dashboards/:name`), and injects it into
+  `#content`. Handles menu clicks (`history.pushState`, no reload) and direct/refresh navigation to
+  `/ui/:name`. A fragment's `<script>` is inert once inserted via `innerHTML`, so `app.js` replaces it with a
+  freshly created `<script>` element (standard SPA workaround) to execute it; the fragment's script runs its
+  init **synchronously** at that point rather than waiting for `DOMContentLoaded` (which fires once, for the
+  shell page, not per navigation).
 - **`ui/dashboards/*.html`** (ADR-027 Phase 2) — the default dashboard fragments, one file per default,
   git-versioned and read-only at the install location; bootstrap reconciles them into `source: 'file'` rows.
 

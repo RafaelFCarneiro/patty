@@ -587,6 +587,21 @@
             </section>
         </div>
 
+        <div class="toast-container" id="toast-container"></div>
+
+        <!-- View Dashboard HTML source code modal -->
+        <div class="modal-overlay" id="modal-view-code">
+            <div class="modal-card" style="max-width: 900px;">
+                <div class="modal-header">
+                    <span class="modal-title" id="modal-code-title"></span>
+                    <button type="button" class="btn-close-modal" onclick="closeModal('modal-view-code')">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <pre id="modal-code-viewer" style="margin: 0; overflow: auto; max-height: 60vh; padding: 1rem; background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: 12px; color: var(--text-dark); font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; word-break: break-all;"></pre>
+            </div>
+        </div>
+
 <script>
 // State
         var dashboards = [];
@@ -605,7 +620,7 @@
             toast.className = `toast ${type}`;
             toast.innerHTML = `
                 <i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i>
-                <span>${message}</span>
+                <span>${escapeHtml(message)}</span>
             `;
             container.appendChild(toast);
 
@@ -679,13 +694,13 @@
                         </div>
                     </div>
                     <div class="dashboard-actions">
-                        <button type="button" class="btn-action" onclick="viewDashboardHtml('${escapeHtml(d.name)}')">
+                        <button type="button" class="btn-action" onclick="viewDashboardHtml('${escapeJsAttr(d.name)}')">
                             <i class="fa-solid fa-code"></i> Ver Código
                         </button>
-                        <button type="button" class="btn-action" onclick="downloadDashboard('${escapeHtml(d.name)}')">
+                        <button type="button" class="btn-action" onclick="downloadDashboard('${escapeJsAttr(d.name)}')">
                             <i class="fa-solid fa-circle-down"></i> Baixar
                         </button>
-                        <button type="button" class="btn-action danger" onclick="deleteDashboard('${escapeHtml(d.name)}')">
+                        <button type="button" class="btn-action danger" onclick="deleteDashboard('${escapeJsAttr(d.name)}')">
                             <i class="fa-solid fa-trash-can"></i> Excluir
                         </button>
                     </div>
@@ -764,7 +779,7 @@
                 const res = await fetch(`/ui/${name}`);
                 if (res.ok) {
                     const html = await res.text();
-                    document.getElementById('modal-code-title').innerHTML = `<i class="fa-solid fa-code"></i> Código Fonte: ${name}.html`;
+                    document.getElementById('modal-code-title').innerHTML = `<i class="fa-solid fa-code"></i> Código Fonte: ${escapeHtml(name)}.html`;
                     document.getElementById('modal-code-viewer').textContent = html;
                     openModal('modal-view-code');
                 } else {
@@ -837,6 +852,17 @@
                       .replace(/>/g, "&gt;")
                       .replace(/"/g, "&quot;")
                       .replace(/'/g, "&#039;");
+        }
+
+        // Escapes a value for safe embedding as a single-quoted JS string literal *inside* an
+        // HTML attribute (e.g. onclick="fn('${escapeJsAttr(value)}')"). escapeHtml() alone is not
+        // enough here: the browser HTML-decodes the attribute before the JS parser reads it, so an
+        // HTML-escaped quote round-trips back into a real quote and still breaks out of the string.
+        // Escaping backslash+quote for the JS layer first, then HTML-escaping the result for the
+        // attribute layer, survives that decode step correctly for both layers.
+        function escapeJsAttr(str) {
+            if (!str) return '';
+            return escapeHtml(String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
         }
 
         // Bootstrap load

@@ -1521,7 +1521,7 @@
                             <td style="padding:0.4rem;">
                                 <span class="heatmap-cell-value" id="${cellId}" 
                                       style="background:${bgColor}; color:${textColor};" 
-                                      onclick="showHeatmapCellDetails('${row.categoryId}', ${p.month}, ${p.year}, '${escapeJs(row.categoryName)}')">
+                                      onclick="showHeatmapCellDetails('${row.categoryId}', ${p.month}, ${p.year}, '${escapeJsAttr(row.categoryName)}')">
                                     ${formatBRL(sum)}
                                 </span>
                             </td>
@@ -1628,9 +1628,15 @@
         }
 
         // JS escaping helper
-        function escapeJs(str) {
+        // Escapes a value for safe embedding as a single-quoted JS string literal *inside* an
+        // HTML attribute (e.g. onclick="fn('${escapeJsAttr(value)}')"). JS-escaping backslash+quote
+        // alone is not enough: the outer onclick="..." attribute is double-quoted, and the HTML
+        // parser (which finds the attribute's closing quote before any JS is parsed) doesn't
+        // understand a JS \" escape — a raw '"' still ends the attribute early. HTML-escaping the
+        // JS-escaped result closes that gap too.
+        function escapeJsAttr(str) {
             if (!str) return '';
-            return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+            return escapeHtml(String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
         }
 
         // Event listeners
