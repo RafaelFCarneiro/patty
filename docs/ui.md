@@ -36,9 +36,12 @@ always stores `source: 'inline'`, `path: null`** — regardless of what the targ
 over a file-backed default's name *detaches* it into a custom inline row. A custom dashboard can therefore
 never carry a caller-influenced `path`, which closes the path-traversal surface entirely.
 
-The menu (`ui/app.js`) groups `list_dashboards` results straight off `source`: `file` rows render as flat
-top-level items, `inline` rows group under a labeled "Custom" submenu (`.dashboard-menu-group` in `ui/app.css`)
-— no separate grouping field to keep in sync.
+The menu (`ui/app.js`'s `renderMenu`) places the eight most-used defaults directly in the sidebar and the rest
+in a `#more-dropdown` overflow menu, split by two hardcoded name-order lists (`mainSequence`/`dropdownSequence`)
+rather than by `source` — every file-backed default has a fixed slot either way. `inline` (custom) dashboards
+are never in either list, so they always fall through to the dropdown, appended after a plain `<hr
+class="sidebar-divider">` separator (`ui/app.css`) once at least one exists — there's no labeled "Custom"
+group, just a divider ahead of whatever customs `list_dashboards` returns.
 
 ## The app shell (ADR-027 Phase 1)
 

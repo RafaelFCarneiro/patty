@@ -261,9 +261,9 @@
     return link;
   }
 
-  // ADR-027 Phase 2: source is the sole default/custom discriminator — file-backed dashboards
-  // render as flat top-level items, inline (custom) ones group under a divider,
-  // straight off list_dashboards (no separate grouping field to keep in sync).
+  // ADR-027 Phase 2: file-backed defaults get a fixed slot in mainSequence/dropdownSequence below;
+  // inline (custom) dashboards are never in either list, so they always fall through to the
+  // dropdown, after a divider once at least one exists.
   function renderMenu(dashboards, activeName) {
     var nav = document.getElementById('dashboard-menu');
     clearNode(nav);

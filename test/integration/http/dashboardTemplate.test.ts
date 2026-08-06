@@ -88,6 +88,11 @@ describe('default dashboard fragments are data-less (ADR-013 Phase B, converted 
       expect(html).toContain('window.fintrackOnDataChanged');
     });
 
+    // Method-agnostic by design: apiPathsFetchedIn has no way to correlate a matched path string
+    // with the HTTP method its own fetch() call used (GET load vs. POST/DELETE user actions mixed
+    // into the same fragment), so this only catches a path that doesn't exist under ANY method —
+    // not a real path called with the wrong one. Narrower than the single-dashboard version this
+    // replaced, which checked GET specifically; traded off for coverage across all nine fragments.
     it('only fetches /api paths that exist in the live OpenAPI contract', async () => {
       const [dashboardRes, openApiRes] = await Promise.all([
         inject({ method: 'GET', url: `/api/dashboards/${name}` }),
