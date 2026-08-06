@@ -83,10 +83,11 @@ fragments (`.spinner`, `.loading-overlay`, `.toast-container`/`.toast`, `.modal-
 and why, follows one rule:
 
 **A property is only moved into the shared base if every fragment that uses the class declares that
-property at all** — either with the identical value everywhere (safe outright), or with a majority value
-that becomes the base default while the minority keeps a small local override for just that one property (in
-the fragment's own `<style>` block, injected into `#content` after `app.css` in DOM order, so it wins the
-cascade for anything it declares). A property a fragment never declared for that class is **never** centralized,
+property at all** — either with the identical value everywhere (safe outright), or with the most common
+value becoming the base default while every fragment whose value differs (whether that's a true majority or
+just a plurality) keeps a small local override for just that one property (in the fragment's own `<style>`
+block, injected into `#content` after `app.css` in DOM order, so it wins the cascade for anything it
+declares). A property a fragment never declared for that class is **never** centralized,
 even when most fragments agree on it — centralizing it would make that fragment silently inherit a property it
 never asked for. This is why, for example, `.modal-overlay`'s `background`/`z-index` are shared with per-file
 overrides (every user sets both, just to different values) while its `width`/`height` stay fully local
