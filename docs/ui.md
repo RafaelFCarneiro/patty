@@ -52,8 +52,8 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
 
 - **`ui/shell.html`** — shared `<head>` (links `ui/app.css`; loads Chart.js, Flatpickr, and Font Awesome from
   a CDN, each version-pinned with an SRI `integrity` hash (#165); Google Fonts' CSS2 API is the one
-  intentional exception — its response varies by requesting User-Agent, so there's no single fixed body an
-  SRI hash could pin, documented inline at that `<link>`), the left nav menu (`#dashboard-menu`), and the
+  intentional exception — its response varies by requesting User-Agent, so there's no single fixed body that
+  an SRI hash could pin, documented inline at that `<link>`), the left nav menu (`#dashboard-menu`), and the
   `#content` container fragments render into. Fragments load none of these themselves — Chart.js and
   Flatpickr are called as shell-provided globals (`ui/dashboards/*.html`'s date inputs call `flatpickr(...)`
   directly) — so the shell's `<head>` is the *only* place external hosts are referenced; a fragment carrying

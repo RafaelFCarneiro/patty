@@ -26,7 +26,7 @@ const DEFAULT_DASHBOARD_NAMES = [
 const INLINE_DATA_BLOB_PATTERN =
   /(?:const|let|var)\s+\w*(spending|transactions|balances|accounts|recurring)\w*\s*=\s*(?:\[(?!\s*\]|\s*\.\.\.)|\{(?!\s*\}))/i;
 
-// Pinned CDN prefixes the app shell (ui/shell.html) and every fragment are allowed to reference
+// Pinned CDN prefixes that the app shell (ui/shell.html) and every fragment are allowed to reference
 // externally — anything else means a new, unreviewed third-party host slipped in. Chart.js,
 // Flatpickr, and Font Awesome each pin an exact version (#165) — the prefix here includes the
 // version, so bumping or unpinning one without updating this list fails the test. Google Fonts'
