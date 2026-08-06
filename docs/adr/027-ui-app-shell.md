@@ -146,6 +146,15 @@ separate host: the zero-build, local-first posture (ADR-004/007/013) is unchange
    (`fix/pin-shell-cdn-assets`), matching Chart.js's existing pattern; Google Fonts documented as the one
    intentional exception (its CSS2 API response varies by requesting User-Agent, so there's no single fixed
    body to hash). Closes [#165](https://github.com/RafaelFCarneiro/fintrack/issues/165).
+8. [x] Lift the CSS components duplicated across the nine fragments (`.spinner`, `.loading-overlay`,
+   `.toast-container`/`.toast`, `.modal-overlay`/`.modal-box`/`.modal-title`, `.panel`,
+   `.form-group label`/`.form-control`/`.form-control:focus`, `.kpi-card`, `.btn-action-primary`) into
+   `ui/app.css`
+   (`refactor/lift-common-dashboard-css`) — see `docs/ui.md`'s "Shared component classes" section for the
+   safety rule that governed what could move (only properties every consuming fragment declares) and which
+   components turned out too divergent to lift at all. Verified zero visual regression via a
+   `getComputedStyle` hash comparison across all nine fragments, before and after. Closes
+   [#164](https://github.com/RafaelFCarneiro/fintrack/issues/164).
 
 Each phase is feature-sized (schema and/or a new server capability, many files) → independent verification
 subagent per diff.

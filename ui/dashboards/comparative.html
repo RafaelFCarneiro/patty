@@ -56,24 +56,12 @@
             gap: 1.5rem;
         }
 
+        /* base: ui/app.css (#164) */
         .kpi-card {
-            background: var(--panel-bg);
-            border: 1px solid var(--panel-border);
-            border-radius: 20px;
-            padding: 1.5rem;
-            backdrop-filter: blur(16px);
-            box-shadow: var(--card-shadow);
-            display: flex;
             flex-direction: column;
             gap: 0.75rem;
             position: relative;
             overflow: hidden;
-        }
-
-        .kpi-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; width: 4px; height: 100%;
         }
 
         .kpi-income::before { background: var(--income-color); }
@@ -503,59 +491,26 @@
             font-style: italic;
         }
 
-        /* Overlay loader */
+        /* Overlay loader (.loading-overlay/.spinner base: ui/app.css, #164) */
         .loading-overlay {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(12, 14, 23, 0.8);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 100; backdrop-filter: blur(4px);
+            width: 100%; height: 100%;
+            z-index: 100;
             border-radius: 24px;
             opacity: 0; pointer-events: none;
             transition: opacity 0.25s ease;
         }
         .loading-overlay.active { opacity: 1; pointer-events: all; }
-        .spinner {
-            width: 40px; height: 40px;
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            border-top-color: var(--accent-primary);
-            animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Modal heat map cell details */
+        /* Modal heat map cell details (.modal-overlay/.modal-box/.modal-title base: ui/app.css, #164) */
         .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(8px);
-            z-index: 1000;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.3s ease;
+            width: 100%; height: 100%;
         }
         .modal-overlay.open {
             display: flex;
-            opacity: 1;
         }
 
         .modal-box {
-            background: #111322;
-            border: 1px solid var(--panel-border);
-            border-radius: 20px;
-            padding: 2rem;
-            width: 100%;
             max-width: 600px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
-            position: relative;
-            transform: translateY(-30px);
-            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        .modal-overlay.open .modal-box {
-            transform: translateY(0);
         }
 
         .modal-close-btn {
@@ -575,15 +530,8 @@
 
         .modal-title {
             font-size: 1.2rem;
-            font-weight: 700;
             margin-bottom: 1.25rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
             color: #fff;
-        }
-        .modal-title i {
-            color: var(--accent-primary);
         }
 
         .modal-desc-text {

@@ -42,16 +42,17 @@
             gap: 1.25rem;
         }
 
+        /* base: ui/app.css (#164) */
         .kpi-card {
-            background: var(--panel-bg);
-            border: 1px solid var(--panel-border);
-            border-radius: 20px;
             padding: 1.25rem 1.5rem;
-            display: flex;
             flex-direction: column;
             gap: 0.5rem;
             backdrop-filter: blur(12px);
-            box-shadow: var(--card-shadow);
+            /* Pre-existing gap, not introduced by the #164 refactor (confirmed against origin/main):
+               .kpi-card::before (ui/app.css) is position:absolute and needs a positioned ancestor.
+               This file never set one, so the (invisible here — no .income/.expense/.net modifier
+               ever applies a background to it) accent bar was positioning against the viewport. */
+            position: relative;
         }
 
         .kpi-title {
@@ -81,13 +82,9 @@
             margin-top: 0.25rem;
         }
 
-        /* Panels styling */
+        /* Panels styling (base: ui/app.css, #164) */
         .panel {
-            background: var(--panel-bg);
-            border: 1px solid var(--panel-border);
-            border-radius: 24px;
             backdrop-filter: blur(12px);
-            box-shadow: var(--card-shadow);
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -459,15 +456,11 @@
             position: relative;
         }
 
+        /* .loading-overlay/.spinner base: ui/app.css (#164) */
         .loading-overlay {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            width: 100%; height: 100%;
             background: rgba(12, 14, 23, 0.7);
-            backdrop-filter: blur(4px);
-            z-index: 10;
             display: none;
-            align-items: center;
-            justify-content: center;
             border-radius: 20px;
         }
 
@@ -478,13 +471,7 @@
         .spinner {
             width: 32px;
             height: 32px;
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            border-top-color: var(--accent-primary);
-            animation: spin 1s ease-in-out infinite;
         }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
 
         .badge-status {
             font-size: 0.7rem;
@@ -503,20 +490,13 @@
             color: var(--warning-color);
         }
 
-        /* Toast notification styling */
+        /* Toast notification styling (.toast base: ui/app.css, #164 — overview has no
+           .toast-container; this is the single persistent toast element itself) */
         .toast {
             position: fixed;
             bottom: 2rem;
             right: 2rem;
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
             background: #111322;
-            border: 1px solid var(--panel-border);
-            color: #fff;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
             z-index: 1100;
             transform: translateY(100px);
             opacity: 0;
