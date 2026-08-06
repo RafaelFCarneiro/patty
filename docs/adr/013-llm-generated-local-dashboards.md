@@ -1,7 +1,10 @@
 # ADR-013: LLM-generated, data-less local dashboards over the HTTP API
 
 **Status:** Accepted · **Date:** 2026-06-27 · **Deciders:** Rafael · Opens the **presentation layer** for
-Phase 3/4. Strategic direction (multi-phase); each phase ships its own design + PR.
+Phase 3/4. Strategic direction (multi-phase); each phase ships its own design + PR. · **Revised by ADR-027**:
+the dashboard content model changed from a *self-contained HTML page* to a **content fragment** rendered inside
+a shared app shell, and default dashboards moved from a seeded HTML string to git-versioned `source: 'file'`
+rows under `ui/dashboards/`. See `docs/ui.md` for the as-built surface.
 
 ## Context
 
@@ -30,7 +33,8 @@ The goal: **the agent authors the presentation (the shell); the data stays live 
    `/ui` surface. Same origin ⇒ dashboards `fetch()` live data with no CORS friction, and the server is the
    natural home to store/list dashboards.
    - **Dashboards are stored *content*, not a bundled asset — so they're replaceable at runtime.** A dashboard is
-     a self-contained HTML string persisted by name (a `dashboards` entity: `name`, `html`, `updated_at`). The
+     a self-contained HTML string persisted by name (a `dashboards` entity: `name`, `html`, `updated_at`).
+     *(Revised by ADR-027: content is now a fragment, not a full page; defaults are file-backed. See `docs/ui.md`.)* The
      agent writes/overrides it through a normal MCP write (`save_dashboard(name, html)` — an upsert), and
      `GET /ui/:name` returns whatever is *currently* stored. Overriding the UI is therefore just re-upserting
      under the same name: no rebuild, restart, or redeploy — the new shell shows on the next reload. **The shipped

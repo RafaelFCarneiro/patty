@@ -9,9 +9,89 @@
 (function () {
   'use strict';
 
+  window.addEventListener('error', function (e) {
+    showDiagnosticError(e.error ? e.error.message + '\n' + e.error.stack : e.message);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    showDiagnosticError('Unhandled Promise Rejection: ' + (e.reason ? (e.reason.stack || e.reason.message || e.reason) : e));
+  });
+
+  function showDiagnosticError(message) {
+    console.error("DIAGNOSTIC ERROR CAUGHT:", message);
+    var errDiv = document.getElementById('shell-diagnostic-error');
+    if (!errDiv) {
+      errDiv = document.createElement('div');
+      errDiv.id = 'shell-diagnostic-error';
+      errDiv.style.cssText = 'position: fixed; top: 10px; right: 10px; left: 10px; background: rgba(220, 38, 38, 0.95); color: #fff; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 12px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.5); white-space: pre-wrap; overflow-y: auto; max-height: 200px; border: 1px solid #ef4444;';
+      var closeBtn = document.createElement('button');
+      closeBtn.textContent = '✕';
+      closeBtn.style.cssText = 'float: right; background: none; border: none; color: #fff; font-size: 16px; cursor: pointer; margin-left: 10px;';
+      closeBtn.onclick = function() { errDiv.remove(); };
+      errDiv.appendChild(closeBtn);
+      var pre = document.createElement('pre');
+      pre.style.margin = '0';
+      pre.style.whiteSpace = 'pre-wrap';
+      pre.textContent = message;
+      errDiv.appendChild(pre);
+      document.body.appendChild(errDiv);
+    } else {
+      var pre = errDiv.querySelector('pre');
+      if (pre) pre.textContent += '\n\n' + message;
+    }
+  }
+
   var DEFAULT_DASHBOARD_NAME = 'overview';
   var UI_PATH_PREFIX = '/ui/';
   var EVENTS_PATH = '/ui/events';
+  var currentLocale = 'en';
+
+  var DASHBOARD_ICONS = {
+    overview: 'fa-chart-pie',
+    accounts: 'fa-building-columns',
+    cards: 'fa-credit-card',
+    categories: 'fa-sitemap',
+    tags: 'fa-tags',
+    pending: 'fa-clock',
+    projections: 'fa-chart-line',
+    comparative: 'fa-scale-balanced',
+    dashboards: 'fa-sliders'
+  };
+
+  var LOCALIZED_TOOLTIPS = {
+    en: {
+      overview: 'Overview',
+      accounts: 'Bank Accounts',
+      cards: 'Credit Cards',
+      categories: 'Categories',
+      tags: 'Tags',
+      pending: 'Pending',
+      projections: 'Projections',
+      comparative: 'Comparative',
+      dashboards: 'Dashboards Manager'
+    },
+    pt: {
+      overview: 'Visão Geral',
+      accounts: 'Contas Bancárias',
+      cards: 'Cartões de Crédito',
+      categories: 'Categorias',
+      tags: 'Tags',
+      pending: 'Pendentes',
+      projections: 'Projeções',
+      comparative: 'Comparativo',
+      dashboards: 'Gerenciador de Dashboards'
+    },
+    es: {
+      overview: 'Visión General',
+      accounts: 'Cuentas Bancarias',
+      cards: 'Tarjetas de Crédito',
+      categories: 'Categorías',
+      tags: 'Tags',
+      pending: 'Pendientes',
+      projections: 'Proyecciones',
+      comparative: 'Comparativo',
+      dashboards: 'Gestor de Dashboards'
+    }
+  };
 
   // Module-scope, not local to connectEvents() — an EventSource with no surviving reference to the
   // object itself risks being garbage-collected in some implementations even with a handler
@@ -20,6 +100,7 @@
   var eventSource = null;
 
   var Api = {
+    status: '/api/status',
     dashboards: '/api/dashboards',
     dashboard: function (name) {
       return '/api/dashboards/' + encodeURIComponent(name);
@@ -36,7 +117,8 @@
       });
     }
     (children || []).forEach(function (child) {
-      if (child) el.appendChild(child);
+      if (typeof child === 'string') el.appendChild(document.createTextNode(child));
+      else if (child) el.appendChild(child);
     });
     return el;
   }
@@ -127,7 +209,7 @@
   function loadDashboard(name) {
     var container = document.getElementById('content');
     setLoading(container, 'Loading dashboard…');
-    return fetchJson(Api.dashboard(name))
+    return fetchJson(Api.dashboard(name) + '?t=' + Date.now())
       .then(function (dashboard) {
         document.title = 'FinTrack — ' + dashboard.name;
         renderFragment(container, dashboard.html);
@@ -138,7 +220,22 @@
   }
 
   function menuLink(dashboard, activeName) {
-    var link = h('a', { href: UI_PATH_PREFIX + encodeURIComponent(dashboard.name), text: dashboard.name });
+    var key = dashboard.name.toLowerCase();
+    var tooltipText = dashboard.name;
+    var iconClass = DASHBOARD_ICONS[key] || 'fa-chart-simple';
+    
+    var dict = LOCALIZED_TOOLTIPS[currentLocale] || LOCALIZED_TOOLTIPS['en'];
+    if (dict && dict[key]) {
+      tooltipText = dict[key];
+    }
+
+    var iconEl = h('i', { class: 'fa-solid ' + iconClass });
+    var link = h('a', {
+      href: UI_PATH_PREFIX + encodeURIComponent(dashboard.name),
+      title: tooltipText,
+      'aria-label': tooltipText
+    }, [iconEl]);
+
     if (dashboard.name === activeName) {
       link.classList.add('active');
       link.setAttribute('aria-current', 'page');
@@ -146,49 +243,78 @@
     return link;
   }
 
-  // ADR-027 Phase 2: source is the sole default/custom discriminator — file-backed dashboards
-  // render as flat top-level items, inline (custom) ones group under a labeled "Custom" submenu,
-  // straight off list_dashboards (no separate grouping field to keep in sync).
+  function dropdownLink(dashboard, activeName) {
+    var key = dashboard.name.toLowerCase();
+    var displayText = dashboard.name;
+    var iconClass = DASHBOARD_ICONS[key] || 'fa-chart-simple';
+    
+    var dict = LOCALIZED_TOOLTIPS[currentLocale] || LOCALIZED_TOOLTIPS['en'];
+    if (dict && dict[key]) {
+      displayText = dict[key];
+    }
+
+    var iconEl = h('i', { class: 'fa-solid ' + iconClass });
+    var link = h('a', { href: UI_PATH_PREFIX + encodeURIComponent(dashboard.name) }, [iconEl, ' ' + displayText]);
+
+    if (dashboard.name === activeName) {
+      link.classList.add('active');
+    }
+    return link;
+  }
+
+  // ADR-027 Phase 2: file-backed defaults get a fixed slot in mainSequence/dropdownSequence below;
+  // inline (custom) dashboards are never in either list, so they always fall through to the
+  // dropdown, after a divider once at least one exists.
   function renderMenu(dashboards, activeName) {
     var nav = document.getElementById('dashboard-menu');
     clearNode(nav);
+    var dropdown = document.getElementById('more-dropdown');
+    clearNode(dropdown);
 
-    var defaults = dashboards.filter(function (dashboard) {
-      return dashboard.source === 'file';
-    });
-    var customs = dashboards.filter(function (dashboard) {
-      return dashboard.source !== 'file';
+    // Order of items in the main sidebar list:
+    var mainSequence = ['overview', 'pending', 'comparative', 'projections', 'accounts', 'cards'];
+    // Order of items in the dropdown list:
+    var dropdownSequence = ['categories', 'tags', 'dashboards'];
+
+    // Map by name lowercase for fast lookup
+    var dbMap = {};
+    dashboards.forEach(function(d) {
+      dbMap[d.name.toLowerCase()] = d;
     });
 
-    defaults.forEach(function (dashboard) {
-      nav.appendChild(menuLink(dashboard, activeName));
+    // 1. Render main sequence icons
+    mainSequence.forEach(function(nameKey) {
+      var d = dbMap[nameKey];
+      if (d) {
+        nav.appendChild(menuLink(d, activeName));
+      }
+    });
+
+    // 2. Render dropdown sequence text items
+    dropdownSequence.forEach(function(nameKey) {
+      var d = dbMap[nameKey];
+      if (d) {
+        dropdown.appendChild(dropdownLink(d, activeName));
+      }
+    });
+
+    // 3. Render any custom (user-uploaded) dashboards inside the dropdown as well
+    var customs = dashboards.filter(function(d) {
+      var key = d.name.toLowerCase();
+      return d.source !== 'file' && mainSequence.indexOf(key) === -1 && dropdownSequence.indexOf(key) === -1;
     });
 
     if (customs.length > 0) {
-      var groupLabel = h('span', {
-        class: 'dashboard-menu-group-label',
-        id: 'dashboard-menu-custom-label',
-        text: 'Custom',
+      var divider = h('hr', { class: 'sidebar-divider', style: 'width: 90%; margin: 0.25rem auto;' });
+      dropdown.appendChild(divider);
+      customs.forEach(function(d) {
+        dropdown.appendChild(dropdownLink(d, activeName));
       });
-      var group = h(
-        'div',
-        {
-          class: 'dashboard-menu-group',
-          id: 'dashboard-menu-custom',
-          role: 'group',
-          'aria-labelledby': 'dashboard-menu-custom-label',
-        },
-        [groupLabel],
-      );
-      customs.forEach(function (dashboard) {
-        group.appendChild(menuLink(dashboard, activeName));
-      });
-      nav.appendChild(group);
     }
   }
 
   function updateActiveMenuLink(activeName) {
-    document.querySelectorAll('#dashboard-menu a').forEach(function (link) {
+    document.querySelectorAll('#dashboard-menu a, #more-dropdown a').forEach(function (link) {
       var isActive = nameFromMenuHref(link.getAttribute('href')) === activeName;
       link.classList.toggle('active', isActive);
       if (isActive) link.setAttribute('aria-current', 'page');
@@ -238,14 +364,56 @@
       navigate(nameFromMenuHref(link.getAttribute('href')), true);
     });
 
+    var dropdown = document.getElementById('more-dropdown');
+    var moreContainer = document.getElementById('more-container');
+    var moreBtn = document.getElementById('more-btn');
+    
+    if (dropdown && moreContainer && moreBtn) {
+      var setMoreOpen = function (open) {
+        moreContainer.classList.toggle('open', open);
+        moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      };
+
+      dropdown.addEventListener('click', function (event) {
+        var link = event.target.closest('a');
+        if (!link) return;
+        event.preventDefault();
+        setMoreOpen(false);
+        navigate(nameFromMenuHref(link.getAttribute('href')), true);
+      });
+
+      moreBtn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        setMoreOpen(!moreContainer.classList.contains('open'));
+      });
+
+      document.addEventListener('click', function () {
+        setMoreOpen(false);
+      });
+    }
+
     var initialName = currentDashboardName();
-    fetchJson(Api.dashboards)
+    
+    // First read system status for locale, then fetch and render dashboards
+    fetchJson(Api.status)
+      .then(function (status) {
+        if (status && status.locale) {
+          currentLocale = status.locale;
+        }
+      })
+      .catch(function () {
+        // Fallback to English silently
+      })
+      .then(function () {
+        return fetchJson(Api.dashboards);
+      })
       .then(function (dashboards) {
         renderMenu(dashboards, initialName);
       })
       .catch(function (err) {
         setError(menu, err.message);
       });
+      
     loadDashboard(initialName);
     connectEvents();
   });

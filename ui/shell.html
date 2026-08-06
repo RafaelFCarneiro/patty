@@ -4,7 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FinTrack</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" />
+    <!-- Custom layout CSS -->
     <link rel="stylesheet" href="/ui/assets/app.css" />
+    
+    <!-- Chart.js CDN -->
     <script
       defer
       referrerpolicy="no-referrer"
@@ -12,18 +22,37 @@
       integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt"
       src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
     ></script>
+    <!-- Flatpickr JS -->
+    <script defer src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
   </head>
   <body>
-    <header>
-      <h1>FinTrack</h1>
-      <nav id="dashboard-menu" aria-label="Dashboards">
+    <!-- Left Navigation Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <i class="fa-solid fa-wallet" style="color: var(--accent-primary);"></i>
+      </div>
+      <nav class="sidebar-menu" id="dashboard-menu" aria-label="Dashboards">
         <p class="state">Loading menu…</p>
       </nav>
-    </header>
+      
+      <!-- Bottom options menu -->
+      <div class="sidebar-more-container" id="more-container">
+        <button class="sidebar-more-btn" id="more-btn" aria-label="More options" aria-haspopup="true" aria-controls="more-dropdown" aria-expanded="false">
+          <i class="fa-solid fa-ellipsis"></i>
+        </button>
+        <div class="sidebar-more-dropdown" id="more-dropdown">
+          <!-- Dynamically populated or static dropdown links -->
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Shell -->
     <main id="content" aria-live="polite">
       <p class="state">Loading…</p>
     </main>
-    <footer>Data is fetched live from this device's local FinTrack API on every load. Nothing on this page is stored.</footer>
+
     <script defer src="/ui/assets/app.js"></script>
   </body>
 </html>
+

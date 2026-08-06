@@ -16,7 +16,7 @@ import {
 import { DeletedOut } from '../../../wire/out/common.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
-import { conflict409, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
+import { CACHE_CONTROL_NO_CACHE, conflict409, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
 
 const DASHBOARDS_TAG = 'Dashboards';
 
@@ -42,7 +42,9 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
       responses: { 200: okResponse('Dashboard', DashboardSchema), 404: notFound404 },
       handler: async (req, reply) => {
         const { name } = req.params as { name: string };
-        return send(reply, await getDashboard(deps, name));
+        const result = await getDashboard(deps, name);
+        reply.header('cache-control', CACHE_CONTROL_NO_CACHE);
+        return send(reply, result);
       },
     },
     {

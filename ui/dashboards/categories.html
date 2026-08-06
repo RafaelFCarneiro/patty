@@ -1,0 +1,4736 @@
+<style>
+/* Tooltip styling */
+        .sidebar-menu a[data-tooltip]::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 80px;
+            top: 50%;
+            transform: translateY(-50%) translateX(-10px);
+            background: #11131e;
+            color: #fff;
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            border: 1px solid var(--panel-border);
+            z-index: 1000;
+        }
+
+        .sidebar-menu a[data-tooltip]:hover::after {
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }
+
+        header h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        header h1 i {
+            color: var(--accent-primary);
+        }
+
+        header p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        /* Main Tree Panel */
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 1.75rem;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(16px);
+            position: relative;
+        }
+
+        .panel-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 1rem;
+        }
+
+        .panel-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .panel-title i {
+            color: var(--accent-primary);
+        }
+
+        /* Buttons */
+        .btn-action-primary {
+            background: var(--accent-primary);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .btn-action-primary:hover {
+            background: var(--accent-secondary);
+            transform: translateY(-1px);
+        }
+
+        /* Inline Forms */
+        .panel-form-inline {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px dashed rgba(139, 92, 246, 0.25);
+            border-radius: 16px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            animation: slideDown 0.3s ease;
+        }
+
+        .panel-form-inline.hidden {
+            display: none !important;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-row {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 0.4rem;
+            text-transform: uppercase;
+        }
+
+        .form-control {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 0.55rem 0.75rem;
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: var(--transition-smooth);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
+        }
+
+        /* Grouped Columns Grid (Receitas x Despesas) */
+        .tree-columns-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2.5rem;
+        }
+
+        @media (max-width: 900px) {
+            .tree-columns-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+        }
+
+        .tree-column-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .column-header {
+            font-size: 1rem;
+            font-weight: 700;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--panel-border);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .column-header.income {
+            color: var(--income-color);
+            border-bottom-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .column-header.expense {
+            color: var(--expense-color);
+            border-bottom-color: rgba(244, 63, 94, 0.3);
+        }
+
+        /* Tree Structure List */
+        .tree-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .tree-node-parent {
+            position: relative;
+            padding-bottom: 0.25rem;
+        }
+
+        /* Left vertical branch connector line */
+        .tree-node-parent::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 28px;
+            bottom: 6px;
+            width: 1px;
+            border-left: 1px dashed rgba(255, 255, 255, 0.12);
+        }
+
+        /* Hide branch line if collapsed */
+        .tree-node-parent.collapsed::before {
+            display: none;
+        }
+
+        .category-row-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.45rem 0.5rem;
+            border-radius: 8px;
+            transition: var(--transition-smooth);
+        }
+
+        .category-row-item:hover {
+            background: rgba(255, 255, 255, 0.025);
+        }
+
+        .category-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            user-select: none;
+        }
+
+        .btn-collapse {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.75rem;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition-smooth);
+        }
+
+        .btn-collapse.collapsed i {
+            transform: rotate(-90deg);
+        }
+
+        .category-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .category-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            opacity: 0.3;
+            transition: var(--transition-smooth);
+        }
+
+        .category-row-item:hover .category-actions {
+            opacity: 1;
+        }
+
+        .btn-node-action {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.85rem;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-node-action.add-sub:hover {
+            color: var(--accent-secondary);
+            background: rgba(139, 92, 246, 0.15);
+        }
+
+        .btn-node-action.delete-node:hover {
+            color: var(--expense-color);
+            background: rgba(244, 63, 94, 0.12);
+        }
+
+        /* Subcategories Nest */
+        .subcategories-nest {
+            padding-left: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            margin-top: 0.25rem;
+        }
+
+        .subcategories-nest.hidden {
+            display: none !important;
+        }
+
+        .tree-node-child {
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.35rem 0.5rem;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            border-radius: 6px;
+            transition: var(--transition-smooth);
+        }
+
+        /* Horizontal branch connector line (L-shaped) */
+        .tree-node-child::before {
+            content: '';
+            position: absolute;
+            left: -14px;
+            top: 14px;
+            width: 10px;
+            height: 1px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.12);
+        }
+
+        .tree-node-child:hover {
+            background: rgba(255, 255, 255, 0.02);
+            color: #fff;
+        }
+
+        .tree-node-child .btn-node-action {
+            opacity: 0;
+        }
+
+        .tree-node-child:hover .btn-node-action {
+            opacity: 1;
+        }
+
+        .empty-nest {
+            font-size: 0.78rem;
+            color: var(--text-dark);
+            font-style: italic;
+            padding: 0.25rem 0.5rem;
+            position: relative;
+        }
+
+        .empty-nest::before {
+            content: '';
+            position: absolute;
+            left: -14px;
+            top: 12px;
+            width: 10px;
+            height: 1px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.12);
+        }
+
+        /* Inline Subcategory Form */
+        .inline-subcat-form {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(139, 92, 246, 0.03);
+            border: 1px dashed rgba(139, 92, 246, 0.15);
+            padding: 0.3rem 0.5rem;
+            border-radius: 6px;
+            margin-bottom: 0.2rem;
+            animation: slideDown 0.2s ease;
+            position: relative;
+        }
+
+        .inline-subcat-form::before {
+            content: '';
+            position: absolute;
+            left: -14px;
+            top: 17px;
+            width: 10px;
+            height: 1px;
+            border-top: 1px dashed rgba(139, 92, 246, 0.25);
+        }
+
+        .inline-subcat-form.hidden {
+            display: none !important;
+        }
+
+        .inline-subcat-form input {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--panel-border);
+            border-radius: 5px;
+            padding: 0.25rem 0.45rem;
+            color: #fff;
+            font-size: 0.78rem;
+            font-family: inherit;
+        }
+
+        .inline-subcat-form input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+
+        .btn-inline-action {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.45rem;
+            border-radius: 4px;
+            font-weight: 700;
+            transition: var(--transition-smooth);
+        }
+
+        .btn-inline-action.save {
+            background: var(--accent-primary);
+            color: #fff;
+        }
+
+        .btn-inline-action.save:hover {
+            background: var(--accent-secondary);
+        }
+
+        .btn-inline-action.cancel {
+            color: var(--text-muted);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .btn-inline-action.cancel:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(12, 14, 23, 0.85);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 100; backdrop-filter: blur(4px);
+            border-radius: 24px;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        .loading-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--accent-primary);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            z-index: 9999;
+        }
+
+        .toast {
+            background: #111322;
+            border: 1px solid var(--panel-border);
+            padding: 1rem 1.25rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #fff;
+            transform: translateY(20px);
+            opacity: 0;
+            animation: toastIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+            min-width: 280px;
+        }
+
+        .toast.success { border-left: 4px solid var(--income-color); }
+        .toast.error { border-left: 4px solid var(--expense-color); }
+
+        .toast i { font-size: 1.1rem; }
+        .toast.success i { color: var(--income-color); }
+        .toast.error i { color: var(--expense-color); }
+
+        @keyframes toastIn {
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateY(20px); }
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-dark);
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        /* Segmented control for type selections (Receita/Despesa/Ambos) */
+        .segmented-control {
+            display: flex;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 2px;
+            width: 100%;
+        }
+
+        .segmented-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 0.6rem;
+            border-radius: 6px;
+            font-family: var(--font-family);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .segmented-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .segmented-btn.active.expense {
+            background: var(--expense-color);
+            color: #fff;
+            box-shadow: 0 2px 8px var(--expense-glow);
+        }
+
+        .segmented-btn.active.income {
+            background: var(--income-color);
+            color: #fff;
+            box-shadow: 0 2px 8px var(--income-glow);
+        }
+
+        .segmented-btn.active.both {
+            background: var(--accent-primary);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+</style>
+
+<header>
+            <div class="header-title-area">
+                <h1><i class="fa-solid fa-tags"></i> Árvore de Categorias</h1>
+                <p>Gerencie as categorias e subcategorias utilizadas nos seus lançamentos</p>
+            </div>
+        </header>
+
+        <!-- Main centered tree panel -->
+        <section class="panel">
+            <div class="loading-overlay" id="list-loading">
+                <div class="spinner"></div>
+            </div>
+
+            <div class="panel-header-row">
+                <div class="panel-title">
+                    <i class="fa-solid fa-folder-tree"></i> Estrutura de Diretório
+                </div>
+                <button type="button" class="btn-action-primary" onclick="toggleAddCategoryForm()">
+                    <i class="fa-solid fa-plus"></i> Nova Categoria
+                </button>
+            </div>
+
+            <!-- Form: Create New Category (Hidden/Inline) -->
+            <!-- Form: Create New Category (Hidden/Inline) -->
+            <div id="add-category-form-container" class="panel-form-inline hidden">
+                <form id="category-form" onsubmit="handleCreateCategory(event)">
+                    <div class="form-row" style="display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap;">
+                        <div class="form-group" style="flex: 2; min-width: 200px; display: flex; flex-direction: column; gap: 6px;">
+                            <label class="form-label" for="cat-name">Nome da Categoria</label>
+                            <input type="text" id="cat-name" class="form-control" placeholder="Ex: Alimentação, Lazer" style="height: 38px; box-sizing: border-box;" required>
+                        </div>
+                        <div class="form-group" style="flex: 2; min-width: 280px; display: flex; flex-direction: column; gap: 6px;">
+                            <label class="form-label">Tipo de Lançamento</label>
+                            <div class="segmented-control" id="cat-kind-control" style="height: 38px; align-items: center; box-sizing: border-box;">
+                                <button type="button" class="segmented-btn expense active" id="btn-kind-expense" onclick="setCategoryKind('expense')" style="height: 32px;">
+                                    <i class="fa-solid fa-arrow-trend-down"></i> Despesa
+                                </button>
+                                <button type="button" class="segmented-btn income" id="btn-kind-income" onclick="setCategoryKind('income')" style="height: 32px;">
+                                    <i class="fa-solid fa-arrow-trend-up"></i> Receita
+                                </button>
+                                <button type="button" class="segmented-btn both" id="btn-kind-both" onclick="setCategoryKind('both')" style="height: 32px;">
+                                    <i class="fa-solid fa-shuffle"></i> Ambos
+                                </button>
+                            </div>
+                            <input type="hidden" id="cat-kind" value="expense">
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; height: 38px; align-items: center;">
+                            <button type="submit" class="btn-action-primary" style="height: 38px; padding: 0 1.25rem;">Salvar</button>
+                            <button type="button" class="btn-action-primary" style="height: 38px; padding: 0 1.25rem; background: rgba(255, 255, 255, 0.05); color: var(--text-muted);" onclick="toggleAddCategoryForm()">Cancelar</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Grouped Columns (Receitas x Despesas) -->
+            <div class="tree-columns-grid">
+                <!-- Incomes Column -->
+                <div class="tree-column-panel">
+                    <div class="column-header income">
+                        <i class="fa-solid fa-circle-arrow-up"></i>
+                        <span>Receitas</span>
+                    </div>
+                    <div class="tree-list" id="income-tree-list">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- Expenses Column -->
+                <div class="tree-column-panel">
+                    <div class="column-header expense">
+                        <i class="fa-solid fa-circle-arrow-down"></i>
+                        <span>Despesas</span>
+                    </div>
+                    <div class="tree-list" id="expense-tree-list">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="toast-container" id="toast-container"></div>
+
+<script>
+// State
+        var categories = [];
+        var subcategories = [];
+        var collapsedCategories = {}; // categoryId -> boolean
+
+        // Elements
+        var listLoading = document.getElementById('list-loading');
+        var incomeTreeList = document.getElementById('income-tree-list');
+        var expenseTreeList = document.getElementById('expense-tree-list');
+
+        // Toast Helper
+        function showToast(message, type = "success") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i>
+                <span>${escapeHtml(message)}</span>
+            `;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = "fadeOut 0.4s ease forwards";
+                setTimeout(() => toast.remove(), 400);
+            }, 3500);
+        }
+
+        // Fetch data from local API
+        async function loadData() {
+            listLoading.classList.add('active');
+            try {
+                const [catsRes, subcatsRes] = await Promise.all([
+                    fetch('/api/categories'),
+                    fetch('/api/sub-categories')
+                ]);
+
+                if (catsRes.ok) {
+                    categories = await catsRes.json();
+                    categories.sort((a, b) => a.name.localeCompare(b.name));
+                }
+                if (subcatsRes.ok) {
+                    subcategories = await subcatsRes.json();
+                    subcategories.sort((a, b) => a.name.localeCompare(b.name));
+                }
+
+                renderTreeView();
+            } catch (err) {
+                console.error("Error loading categories:", err);
+                showToast("Erro ao buscar dados do servidor.", "error");
+            } finally {
+                listLoading.classList.remove('active');
+            }
+        }
+
+        // Set category kind from segmented control
+        function setCategoryKind(kind) {
+            document.getElementById('cat-kind').value = kind;
+            
+            // Toggle active classes on segmented buttons
+            const kinds = ['expense', 'income', 'both'];
+            kinds.forEach(k => {
+                const btn = document.getElementById(`btn-kind-${k}`);
+                if (btn) {
+                    if (k === kind) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                }
+            });
+        }
+
+        // Toggle New Category Form
+        function toggleAddCategoryForm() {
+            const container = document.getElementById('add-category-form-container');
+            container.classList.toggle('hidden');
+            if (!container.classList.contains('hidden')) {
+                document.getElementById('category-form').reset();
+                setCategoryKind('expense'); // Reset kind segment
+                document.getElementById('cat-name').focus();
+            }
+        }
+
+        // Toggle Category Collapse/Expand
+        function toggleCategoryNode(categoryId) {
+            // Get current active state or default state
+            const childSubs = subcategories.filter(s => s.parentId === categoryId);
+            let isCollapsed = collapsedCategories[categoryId];
+            if (isCollapsed === undefined) {
+                isCollapsed = childSubs.length === 0;
+            }
+            
+            // Flip the state
+            collapsedCategories[categoryId] = !isCollapsed;
+            
+            const nest = document.getElementById(`nest-${categoryId}`);
+            const btn = document.getElementById(`collapse-btn-${categoryId}`);
+            const node = document.getElementById(`node-${categoryId}`);
+            
+            if (collapsedCategories[categoryId]) {
+                nest.classList.add('hidden');
+                btn.classList.add('collapsed');
+                node.classList.add('collapsed');
+            } else {
+                nest.classList.remove('hidden');
+                btn.classList.remove('collapsed');
+                node.classList.remove('collapsed');
+            }
+        }
+
+        // Toggle Inline Subcategory Form
+        function toggleAddSubcatForm(categoryId, forceShow = false) {
+            // Expand parent category if collapsed
+            if (collapsedCategories[categoryId]) {
+                toggleCategoryNode(categoryId);
+            }
+
+            const form = document.getElementById(`subcat-form-${categoryId}`);
+            const input = document.getElementById(`subcat-input-${categoryId}`);
+            
+            if (forceShow) {
+                form.classList.remove('hidden');
+                input.focus();
+            } else {
+                form.classList.toggle('hidden');
+                if (!form.classList.contains('hidden')) {
+                    input.focus();
+                } else {
+                    input.value = '';
+                }
+            }
+        }
+
+        // Render Tree List View
+        function renderTreeView() {
+            incomeTreeList.innerHTML = '';
+            expenseTreeList.innerHTML = '';
+
+            const incomes = categories.filter(c => c.kind === 'income' || c.kind === 'both');
+            const expenses = categories.filter(c => c.kind === 'expense' || c.kind === 'both');
+
+            if (incomes.length === 0) {
+                incomeTreeList.innerHTML = '<div style="text-align:center; padding:1.5rem 0; color:var(--text-dark); font-style:italic; font-size:0.82rem;">Nenhuma categoria de receita.</div>';
+            } else {
+                incomes.forEach(c => renderCategoryNode(c, incomeTreeList));
+            }
+
+            if (expenses.length === 0) {
+                expenseTreeList.innerHTML = '<div style="text-align:center; padding:1.5rem 0; color:var(--text-dark); font-style:italic; font-size:0.82rem;">Nenhuma categoria de despesa.</div>';
+            } else {
+                expenses.forEach(c => renderCategoryNode(c, expenseTreeList));
+            }
+        }
+
+        // Helper to render node in specific container
+        function renderCategoryNode(c, container) {
+            const node = document.createElement('div');
+            
+            // Subcategories under this parent
+            const childSubs = subcategories.filter(s => s.parentId === c.id);
+
+            // Default collapsed state: collapsed if no subcategories, expanded if has subcategories
+            let isCollapsed = collapsedCategories[c.id];
+            if (isCollapsed === undefined) {
+                isCollapsed = childSubs.length === 0;
+            }
+            
+            node.className = `tree-node-parent ${isCollapsed ? 'collapsed' : ''}`;
+            node.id = `node-${c.id}`;
+
+            // Badge mapping
+            let badgeClass = 'badge-both';
+            let kindText = 'Ambos';
+            if (c.kind === 'income') {
+                badgeClass = 'badge-income';
+                kindText = 'Receita';
+            } else if (c.kind === 'expense') {
+                badgeClass = 'badge-expense';
+                kindText = 'Despesa';
+            }
+
+            // Subcategory Rows HTML
+            let subsHtml = '';
+            childSubs.forEach(sub => {
+                subsHtml += `
+                    <div class="tree-node-child">
+                        <span>${escapeHtml(sub.name)}</span>
+                        <button type="button" class="btn-node-action delete-node" title="Excluir subcategoria" onclick="handleDeleteSubcategory('${escapeJsAttr(sub.name)}')">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                    </div>
+                `;
+            });
+
+            if (childSubs.length === 0) {
+                subsHtml += `<div class="empty-nest" id="empty-${c.id}">Sem subcategorias</div>`;
+            }
+
+            node.innerHTML = `
+                <div class="category-row-item">
+                    <div class="category-info">
+                        <button type="button" class="btn-collapse ${isCollapsed ? 'collapsed' : ''}" id="collapse-btn-${c.id}" onclick="toggleCategoryNode('${c.id}')" title="Recolher/Expandir">
+                            <i class="fa-solid fa-chevron-down"></i>
+                        </button>
+                        <span class="category-name">${escapeHtml(c.name)}</span>
+                        ${c.kind === 'both' ? `<span class="category-badge ${badgeClass}">${kindText}</span>` : ''}
+                    </div>
+                    <div class="category-actions">
+                        <button type="button" class="btn-node-action add-sub" title="Adicionar subcategoria" onclick="toggleAddSubcatForm('${c.id}', true)">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                        <button type="button" class="btn-node-action delete-node" title="Excluir categoria" onclick="handleDeleteCategory('${escapeJsAttr(c.name)}')">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="subcategories-nest ${isCollapsed ? 'hidden' : ''}" id="nest-${c.id}">
+                    <!-- Inline Subcategory Form (Pai Fixo/Read-Only) -->
+                    <div class="inline-subcat-form hidden" id="subcat-form-${c.id}">
+                        <input type="text" id="subcat-input-${c.id}" placeholder="Nova subcategoria..." onkeydown="handleSubcatKeyDown(event, '${c.id}')">
+                        <button type="button" class="btn-inline-action save" onclick="saveSubcategory('${c.id}')">Salvar</button>
+                        <button type="button" class="btn-inline-action cancel" onclick="toggleAddSubcatForm('${c.id}')">Cancelar</button>
+                    </div>
+                    
+                    ${subsHtml}
+                </div>
+            `;
+
+            container.appendChild(node);
+        }
+
+        // Subcategory form KeyDown listener (Enter/Escape shortcut)
+        function handleSubcatKeyDown(e, categoryId) {
+            if (e.key === 'Enter') {
+                saveSubcategory(categoryId);
+            } else if (e.key === 'Escape') {
+                toggleAddSubcatForm(categoryId);
+            }
+        }
+
+        // Create Category handler (Inline Form)
+        async function handleCreateCategory(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('cat-name');
+            const kindSelect = document.getElementById('cat-kind');
+            
+            const name = nameInput.value.trim();
+            const kind = kindSelect.value;
+
+            if (!name) return;
+
+            listLoading.classList.add('active');
+            try {
+                const res = await fetch('/api/categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, kind })
+                });
+
+                if (res.status === 201 || res.status === 200) {
+                    showToast(`Categoria "${name}" criada com sucesso!`);
+                    nameInput.value = '';
+                    toggleAddCategoryForm();
+                    await loadData();
+                } else {
+                    const errData = await res.json();
+                    const errMsg = errData.error?.code === 'duplicate_name' 
+                        ? 'Uma categoria com este nome já existe.' 
+                        : 'Erro ao criar categoria.';
+                    showToast(errMsg, 'error');
+                }
+            } catch (err) {
+                console.error("Error creating category:", err);
+                showToast("Erro de rede ao criar categoria.", "error");
+            } finally {
+                listLoading.classList.remove('active');
+            }
+        }
+
+        // Create Subcategory handler (Inline Input)
+        async function saveSubcategory(categoryId) {
+            const input = document.getElementById(`subcat-input-${categoryId}`);
+            const name = input.value.trim();
+
+            if (!name) {
+                showToast("Digite o nome da subcategoria.", "error");
+                return;
+            }
+
+            listLoading.classList.add('active');
+            try {
+                const res = await fetch('/api/sub-categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ categoryId, name })
+                });
+
+                if (res.status === 201 || res.status === 200) {
+                    showToast(`Subcategoria "${name}" adicionada!`);
+                    input.value = '';
+                    toggleAddSubcatForm(categoryId);
+                    await loadData();
+                } else {
+                    const errData = await res.json();
+                    const errMsg = errData.error?.code === 'duplicate_name' 
+                        ? 'Esta subcategoria já existe nesta categoria.' 
+                        : 'Erro ao criar subcategoria.';
+                    showToast(errMsg, 'error');
+                }
+            } catch (err) {
+                console.error("Error creating subcategory:", err);
+                showToast("Erro de rede ao criar subcategoria.", "error");
+            } finally {
+                listLoading.classList.remove('active');
+            }
+        }
+
+        // Delete Category handler
+        async function handleDeleteCategory(name) {
+            if (!confirm(`Deseja realmente excluir a categoria "${name}"?\
+(Esta operação é irreversível e requer que nenhuma transação ou subcategoria esteja vinculada a ela).`)) {
+                return;
+            }
+
+            listLoading.classList.add('active');
+            try {
+                const res = await fetch(`/api/categories/${encodeURIComponent(name)}`, {
+                    method: 'DELETE'
+                });
+
+                if (res.ok) {
+                    showToast(`Categoria "${name}" excluída!`);
+                    await loadData();
+                } else {
+                    const errData = await res.json();
+                    let errMsg = "Não foi possível excluir a categoria.";
+                    if (errData.error?.code === 'in_use') {
+                        errMsg = `A categoria está em uso por transações ou subcategorias.`;
+                    }
+                    showToast(errMsg, 'error');
+                }
+            } catch (err) {
+                console.error("Error deleting category:", err);
+                showToast("Erro de rede ao excluir categoria.", "error");
+            } finally {
+                listLoading.classList.remove('active');
+            }
+        }
+
+        // Delete Subcategory handler
+        async function handleDeleteSubcategory(name) {
+            if (!confirm(`Deseja realmente excluir a subcategoria "${name}"?\
+(Esta operação é irreversível e requer que nenhuma transação esteja vinculada a ela).`)) {
+                return;
+            }
+
+            listLoading.classList.add('active');
+            try {
+                const res = await fetch(`/api/sub-categories/${encodeURIComponent(name)}`, {
+                    method: 'DELETE'
+                });
+
+                if (res.ok) {
+                    showToast(`Subcategoria "${name}" excluída!`);
+                    await loadData();
+                } else {
+                    const errData = await res.json();
+                    let errMsg = "Não foi possível excluir a subcategoria.";
+                    if (errData.error?.code === 'in_use') {
+                        errMsg = `A subcategoria está em uso por transações.`;
+                    }
+                    showToast(errMsg, 'error');
+                }
+            } catch (err) {
+                console.error("Error deleting subcategory:", err);
+                showToast("Erro de rede ao excluir subcategoria.", "error");
+            } finally {
+                listLoading.classList.remove('active');
+            }
+        }
+
+        // HTML escaping
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;")
+                      .replace(/'/g, "&#039;");
+        }
+
+        // Escapes a value for safe embedding as a single-quoted JS string literal *inside* an
+        // HTML attribute (e.g. onclick="fn('${escapeJsAttr(value)}')"). escapeHtml() alone is not
+        // enough here: the browser HTML-decodes the attribute before the JS parser reads it, so an
+        // HTML-escaped quote round-trips back into a real quote and still breaks out of the string.
+        // Escaping backslash+quote for the JS layer first, then HTML-escaping the result for the
+        // attribute layer, survives that decode step correctly for both layers.
+        function escapeJsAttr(str) {
+            if (!str) return '';
+            return escapeHtml(String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        }
+
+        // Bootstrap load
+        
+// Translation engine and dictionaries
+var TRANSLATIONS = {
+    en: {
+        // Sidebar Menu
+        tooltip_overview: "Overview",
+        tooltip_pending: "Pending",
+        tooltip_comparative: "Comparative",
+        tooltip_projections: "Projections",
+        tooltip_accounts: "Bank Accounts",
+        tooltip_cards: "Credit Cards",
+        menu_categories: "Categories",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "January", february: "February", march: "March", april: "April", may: "May", june: "June",
+        july: "July", august: "August", september: "September", october: "October", november: "November", december: "December",
+        
+        // General UI terms
+        reference_label: "Reference:",
+        day_sun: "Sun", day_mon: "Mon", day_tue: "Tue", day_wed: "Wed", day_thu: "Thu", day_fri: "Fri", day_sat: "Sat",
+        paid: "Paid", unpaid: "Unpaid", active: "Active", inactive: "Inactive",
+        
+        // Overview Dashboard
+        overview_title: "Overview",
+        overview_subtitle: "Monthly financial summary, calendar, and quick shortcuts",
+        accounts_balance: "Accounts Balance",
+        expenses_month: "Expenses this Month",
+        card_bills: "Credit Card Bills",
+        incomes_month: "Incomes this Month",
+        final_projection: "Final Projection:",
+        recent_transactions: "Recent Transactions",
+        due_calendar: "Daily Flow & Dues",
+        expenses_distribution: "Expenses Distribution",
+        quick_shortcuts: "Quick Shortcuts",
+        new_transaction: "New Transaction",
+        new_transfer: "New Transfer",
+        new_category: "New Category",
+        new_card: "New Card",
+        new_account: "New Account",
+        no_expenses_month: "No expenses recorded this month.",
+        no_recent_transactions: "No recent transactions found.",
+        no_dues_period: "No transactions due in this period.",
+        income: "Income",
+        expense: "Expense",
+        paid_reconciled: "Paid / Reconciled",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Recurring & Installment Projections",
+        projections_subtitle: "Advanced visual mapping and projection of active recurrences and installments for the next months",
+        projection_label: "Projection:",
+        months_3: "3 Months",
+        months_6: "6 Months",
+        months_9: "9 Months",
+        months_12: "12 Months",
+        heatmap_income_title: "Recurrent / Installment Incomes",
+        heatmap_expense_title: "Recurrent / Installment Expenses",
+        total: "Total",
+        no_recurrent_incomes: "No active recurrent or installment incomes in the selected semester.",
+        no_recurrent_expenses: "No active recurrent or installment expenses in the selected semester.",
+        modal_details_title: "Projection Breakdown",
+        modal_details_subtitle: "Details of projected transactions for the category and month",
+        col_date: "Date",
+        col_desc: "Description",
+        col_value: "Value",
+        col_status: "Status",
+        btn_close: "Close",
+        
+        // Comparative Dashboard
+        comparative_title: "Comparative Dashboard",
+        comparative_subtitle: "Analysis and comparison of monthly incomes vs expenses, and category limits",
+        month_summary_title: "Month Summary",
+        cat_spending_title: "Spending by Category",
+        card_limits_title: "Category Budgets & Limits",
+        col_category: "Category",
+        col_limit: "Budget Limit",
+        col_spent: "Spent",
+        col_status_limit: "Status",
+        col_percentage: "Percentage",
+        within_limit: "Within Limit",
+        exceeded: "Exceeded",
+        reception: "Incomes",
+        deduction: "Expenses",
+        net_balance: "Net Balance",
+        performance: "Financial Health",
+        no_spending_month: "No category spend recorded this month.",
+        
+        // Accounts Dashboard
+        accounts_title: "Bank Accounts",
+        accounts_subtitle: "Manage accounts, checking balances, and reviewing statements",
+        active_account_statement: "Account Statement",
+        btn_new_transaction: "New Transaction",
+        btn_new_transfer: "New Transfer",
+        search_description_placeholder: "Type to search...",
+        filter_type_label: "Type",
+        filter_type_all: "All",
+        filter_type_income: "Incomes",
+        filter_type_expense: "Expenses",
+        col_actions: "Actions",
+        action_confirm: "Confirm",
+        action_edit: "Edit",
+        action_delete: "Delete",
+        no_transactions_account: "No transactions recorded for this account in the selected month.",
+        confirm_delete_title: "Are you sure you want to permanently delete this transaction?",
+        modal_new_tx_title: "New Transaction",
+        modal_new_transfer_title: "New Transfer",
+        label_account: "Account",
+        label_description: "Description",
+        label_value: "Value",
+        label_date: "Date",
+        label_category: "Category / Subcategory",
+        label_type: "Type",
+        label_status: "Status",
+        status_pending: "Pending",
+        status_confirmed: "Paid / Confirmed",
+        btn_cancel: "Cancel",
+        btn_save: "Save",
+        label_origin: "Origin Account",
+        label_destination: "Destination Account",
+        
+        // Pending Dashboard
+        pending_title: "Pending Transactions",
+        pending_subtitle: "Monitoring and quick confirmation of pending or future transactions",
+        pending_kpi_total: "Total Pending",
+        pending_kpi_incomes: "Pending Incomes",
+        pending_kpi_expenses: "Pending Expenses",
+        pending_chart_incomes: "Pending Incomes Trend",
+        pending_chart_expenses: "Pending Expenses Trend",
+        btn_confirm: "Confirm",
+        btn_edit: "Edit",
+        btn_delete: "Delete",
+        no_pending_transactions: "No pending transactions found for this period.",
+        toast_success_confirm: "Transaction confirmed successfully!",
+        
+        // Categories Dashboard
+        categories_title: "Category Management",
+        categories_subtitle: "Visualize, search, and manage categories and subcategories in a clean tree list",
+        btn_new_category: "New Category",
+        search_category_placeholder: "Search categories...",
+        col_type: "Type",
+        col_actions_cat: "Actions",
+        subcategories_label: "Subcategories",
+        no_subcategories: "No subcategories registered.",
+        modal_new_cat_title: "New Category",
+        modal_new_subcat_title: "New Subcategory",
+        label_name: "Name",
+        label_color: "Color",
+        label_parent_category: "Parent Category (Read-Only)",
+        toast_success_cat: "Category created successfully!",
+        toast_success_subcat: "Subcategory created successfully!",
+        
+        // Cards Dashboard
+        cards_title: "Credit Cards",
+        cards_subtitle: "Manage credit cards, credit limits, and statement history",
+        card_bill_details: "Card Bill Details",
+        btn_pay_bill: "Pay Bill",
+        btn_revert_payment: "Revert Payment",
+        bill_status: "Bill Status:",
+        status_open: "Open",
+        status_closed: "Closed",
+        status_paid: "Paid",
+        no_card_transactions: "No transactions recorded for this card bill in the selected cycle.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Dashboards Monitor",
+        dashboards_subtitle: "List, view source, and upload fintrack dashboards",
+        col_dashboard: "Dashboard",
+        col_last_update: "Last Updated",
+        btn_view_source: "View Source",
+        btn_download: "Download",
+        upload_new_dashboard: "Upload New Dashboard",
+        placeholder_dashboard_name: "Dashboard Name (e.g. pending)",
+        upload_instructions: "Select or drop HTML file here to upload",
+        btn_upload: "Upload",
+        modal_source_title: "HTML Source Code",
+        
+        // Tags Management
+        menu_tags: "Tags",
+        tags_title: "Tag Management",
+        tags_subtitle: "Manage tags to label and organize your transactions",
+        panel_title_tags: "Active Tags",
+        btn_new_tag: "New Tag",
+        label_tag_name: "Tag Name",
+        placeholder_tag_name: "E.g. work, travel, refund",
+        empty_tags_message: "No tags registered.",
+        btn_save: "Save",
+        btn_cancel: "Cancel",
+        toast_success_tag_created: 'Tag "{name}" created successfully!',
+        toast_success_tag_deleted: 'Tag "{name}" deleted successfully!',
+        confirm_delete_tag: 'Are you sure you want to delete tag "{name}"?\n(This action will remove the tag from all linked transactions)'
+    },
+    pt: {
+        // Sidebar Menu
+        tooltip_overview: "Visão Geral",
+        tooltip_pending: "Pendentes",
+        tooltip_comparative: "Comparativo",
+        tooltip_projections: "Projeções",
+        tooltip_accounts: "Contas Bancárias",
+        tooltip_cards: "Cartões de Crédito",
+        menu_categories: "Categorias",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "Janeiro", february: "Fevereiro", march: "Março", april: "Abril", may: "Maio", june: "Junho",
+        july: "Julho", august: "Agosto", september: "Setembro", october: "Outubro", november: "Novembro", december: "Dezembro",
+        
+        // General UI terms
+        reference_label: "Referência:",
+        day_sun: "Dom", day_mon: "Seg", day_tue: "Ter", day_wed: "Qua", day_thu: "Qui", day_fri: "Sex", day_sat: "Sáb",
+        paid: "Pago", unpaid: "Não Pago", active: "Ativo", inactive: "Inativo",
+        
+        // Overview Dashboard
+        overview_title: "Visão Geral",
+        overview_subtitle: "Consolidado financeiro mensal, calendário e atalhos rápidos",
+        accounts_balance: "Saldo em Contas",
+        expenses_month: "Despesas do Mês",
+        card_bills: "Faturas de Cartão",
+        incomes_month: "Receitas do Mês",
+        final_projection: "Projeção Final:",
+        recent_transactions: "Lançamentos Recentes",
+        due_calendar: "Fluxo Diário",
+        expenses_distribution: "Distribuição de Despesas",
+        quick_shortcuts: "Atalhos Rápidos",
+        new_transaction: "Novo Lançamento",
+        new_transfer: "Nova Transferência",
+        new_category: "Nova Categoria",
+        new_card: "Novo Cartão",
+        new_account: "Nova Conta",
+        no_expenses_month: "Sem despesas registradas neste mês.",
+        no_recent_transactions: "Nenhuma transação recente encontrada.",
+        no_dues_period: "Sem vencimentos neste período.",
+        income: "Receita",
+        expense: "Despesa",
+        paid_reconciled: "Pago / Conciliado",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Projeção de Recorrências e Parcelas",
+        projections_subtitle: "Mapeamento visual avançado e projeção de recorrências e parcelas ativas para os próximos meses",
+        projection_label: "Projeção:",
+        months_3: "3 Meses",
+        months_6: "6 Meses",
+        months_9: "9 Meses",
+        months_12: "12 Meses",
+        heatmap_income_title: "Receitas Recorrentes / Parceladas",
+        heatmap_expense_title: "Despesas Recorrentes / Parceladas",
+        total: "Total",
+        no_recurrent_incomes: "Nenhuma receita recorrente/parcelada ativa no semestre.",
+        no_recurrent_expenses: "Nenhuma despesa recorrente/parcelada ativa no semestre.",
+        modal_details_title: "Detalhamento de Projeções",
+        modal_details_subtitle: "Detalhes das transações projetadas para a categoria e mês",
+        col_date: "Data",
+        col_desc: "Descrição",
+        col_value: "Valor",
+        col_status: "Status",
+        btn_close: "Fechar",
+        
+        // Comparative Dashboard
+        comparative_title: "Dashboard Comparativo",
+        comparative_subtitle: "Análise e comparação mensal de receitas vs despesas e limites por categoria",
+        month_summary_title: "Resumo do Mês",
+        cat_spending_title: "Gastos por Categoria",
+        card_limits_title: "Orçamentos e Limites de Categorias",
+        col_category: "Categoria",
+        col_limit: "Limite de Orçamento",
+        col_spent: "Gasto",
+        col_status_limit: "Status",
+        col_percentage: "Porcentagem",
+        within_limit: "Dentro do Limite",
+        exceeded: "Excedido",
+        reception: "Receitas",
+        deduction: "Despesas",
+        net_balance: "Saldo Líquido",
+        performance: "Saúde Financeira",
+        no_spending_month: "Sem despesas registradas por categoria neste mês.",
+        
+        // Accounts Dashboard
+        accounts_title: "Minhas Contas",
+        accounts_subtitle: "Gerencie contas, consulte saldos e revise extratos",
+        active_account_statement: "Extrato de Conta",
+        btn_new_transaction: "Novo Lançamento",
+        btn_new_transfer: "Nova Transferência",
+        search_description_placeholder: "Digite para filtrar...",
+        filter_type_label: "Tipo",
+        filter_type_all: "Todos",
+        filter_type_income: "Receitas",
+        filter_type_expense: "Despesas",
+        col_actions: "Ações",
+        action_confirm: "Confirmar",
+        action_edit: "Editar",
+        action_delete: "Excluir",
+        no_transactions_account: "Nenhum lançamento nesta conta para o mês selecionado.",
+        confirm_delete_title: "Deseja excluir definitivamente a transação?",
+        modal_new_tx_title: "Novo Lançamento",
+        modal_new_transfer_title: "Nova Transferência",
+        label_account: "Conta",
+        label_description: "Descrição",
+        label_value: "Valor",
+        label_date: "Data",
+        label_category: "Categoria / Subcategoria",
+        label_type: "Tipo",
+        label_status: "Status",
+        status_pending: "Pendente",
+        status_confirmed: "Pago / Confirmado",
+        btn_cancel: "Cancelar",
+        btn_save: "Salvar",
+        label_origin: "Conta Origem",
+        label_destination: "Conta Destino",
+        
+        // Pending Dashboard
+        pending_title: "Transações Pendentes",
+        pending_subtitle: "Monitoramento e confirmação rápida de lançamentos pendentes ou futuros",
+        pending_kpi_total: "Total Pendente",
+        pending_kpi_incomes: "Receitas Pendentes",
+        pending_kpi_expenses: "Despesas Pendentes",
+        pending_chart_incomes: "Tendência de Receitas Pendentes",
+        pending_chart_expenses: "Tendência de Despesas Pendentes",
+        btn_confirm: "Confirmar",
+        btn_edit: "Editar",
+        btn_delete: "Excluir",
+        no_pending_transactions: "Nenhuma transação pendente encontrada para este período.",
+        toast_success_confirm: "Transação confirmada com sucesso!",
+        
+        // Categories Dashboard
+        categories_title: "Gerenciamento de Categorias",
+        categories_subtitle: "Visualize, pesquise e gerencie categorias e subcategorias em árvore",
+        btn_new_category: "Nova Categoria",
+        search_category_placeholder: "Pesquisar categorias...",
+        col_type: "Tipo",
+        col_actions_cat: "Ações",
+        subcategories_label: "Subcategorias",
+        no_subcategories: "Nenhuma subcategoria cadastrada.",
+        modal_new_cat_title: "Nova Categoria",
+        modal_new_subcat_title: "Nova Subcategoria",
+        label_name: "Nome",
+        label_color: "Cor",
+        label_parent_category: "Categoria Pai (Somente Leitura)",
+        toast_success_cat: "Categoria criada com sucesso!",
+        toast_success_subcat: "Subcategoria criada com sucesso!",
+        
+        // Cards Dashboard
+        cards_title: "Cartões de Crédito",
+        cards_subtitle: "Gerencie cartões de crédito, limites e histórico de faturas",
+        card_bill_details: "Detalhamento de Fatura",
+        btn_pay_bill: "Pagar Fatura",
+        btn_revert_payment: "Estornar Pagamento",
+        bill_status: "Status da Fatura:",
+        status_open: "Aberta",
+        status_closed: "Fechada",
+        status_paid: "Paga",
+        no_card_transactions: "Nenhuma transação registrada nesta fatura para o ciclo selecionado.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Monitor de Dashboards",
+        dashboards_subtitle: "Liste, visualize o código fonte e envie dashboards para o servidor do fintrack",
+        col_dashboard: "Dashboard",
+        col_last_update: "Última Atualização",
+        btn_view_source: "Ver Código",
+        btn_download: "Baixar HTML",
+        upload_new_dashboard: "Enviar Novo Dashboard",
+        placeholder_dashboard_name: "Nome do Dashboard (ex: pending)",
+        upload_instructions: "Selecione ou solte o arquivo HTML aqui para upload",
+        btn_upload: "Fazer Upload",
+        modal_source_title: "Código Fonte HTML",
+        
+        // Tags Management
+        menu_tags: "Tags",
+        tags_title: "Gerenciar Tags",
+        tags_subtitle: "Gerencie as tags utilizadas para rotular e categorizar suas transações",
+        panel_title_tags: "Tags Ativas",
+        btn_new_tag: "Nova Tag",
+        label_tag_name: "Nome da Tag",
+        placeholder_tag_name: "Ex: trabalho, viagem, reembolso",
+        empty_tags_message: "Nenhuma tag cadastrada.",
+        btn_save: "Salvar",
+        btn_cancel: "Cancelar",
+        toast_success_tag_created: 'Tag "{name}" criada com sucesso!',
+        toast_success_tag_deleted: 'Tag "{name}" excluída com sucesso!',
+        confirm_delete_tag: 'Deseja realmente excluir a tag "{name}"?\n(Esta ação removerá a tag de todas as transações vinculadas)'
+    },
+    es: {
+        // Sidebar Menu
+        tooltip_overview: "Vista General",
+        tooltip_pending: "Pendientes",
+        tooltip_comparative: "Comparativo",
+        tooltip_projections: "Proyecciones",
+        tooltip_accounts: "Cuentas Bancárias",
+        tooltip_cards: "Tarjetas de Crédito",
+        menu_categories: "Categorías",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "Enero", february: "Febrero", march: "Marzo", april: "Abril", may: "Mayo", june: "Junio",
+        july: "Julio", august: "Agosto", september: "Septiembre", october: "Octubre", november: "Noviembre", december: "Diciembre",
+        
+        // General UI terms
+        reference_label: "Referencia:",
+        day_sun: "Dom", day_mon: "Lun", day_tue: "Mar", day_wed: "Mié", day_thu: "Jue", day_fri: "Vie", day_sat: "Sáb",
+        paid: "Pagado", unpaid: "No Pagado", active: "Activo", inactive: "Inactivo",
+        
+        // Overview Dashboard
+        overview_title: "Vista General",
+        overview_subtitle: "Resumen financiero mensual, calendario y accesos rápidos",
+        accounts_balance: "Saldo en Cuentas",
+        expenses_month: "Gastos del Mes",
+        card_bills: "Facturas de Tarjeta",
+        incomes_month: "Ingresos del Mes",
+        final_projection: "Proyección Final:",
+        recent_transactions: "Transacciones Recientes",
+        due_calendar: "Calendario de Pagos",
+        expenses_distribution: "Distribución de Gastos",
+        quick_shortcuts: "Accesos Rápidos",
+        new_transaction: "Nueva Transacción",
+        new_transfer: "Nueva Transferencia",
+        new_category: "Nueva Categoría",
+        new_card: "Nueva Tarjeta",
+        new_account: "Nueva Cuenta",
+        no_expenses_month: "No hay gastos registrados este mes.",
+        no_recent_transactions: "No se encontraron transacciones recientes.",
+        no_dues_period: "Sin vencimientos en este período.",
+        income: "Ingreso",
+        expense: "Gasto",
+        paid_reconciled: "Pagado / Conciliado",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Proyección de Recurrencias y Cuotas",
+        projections_subtitle: "Mapeo visual avanzado y proyección de recurrencias y cuotas activas para los próximos meses",
+        projection_label: "Proyección:",
+        months_3: "3 Meses",
+        months_6: "6 Meses",
+        months_9: "9 Meses",
+        months_12: "12 Meses",
+        heatmap_income_title: "Ingresos Recurrentes / Cuotas",
+        heatmap_expense_title: "Gastos Recurrentes / Cuotas",
+        total: "Total",
+        no_recurrent_incomes: "Ningún ingreso recurrente o en cuotas activo en el semestre seleccionado.",
+        no_recurrent_expenses: "Ningún gasto recurrente o en cuotas activo en el semestre seleccionado.",
+        modal_details_title: "Detalle de Proyecciones",
+        modal_details_subtitle: "Detalles de transacciones proyectadas para la categoría y mes",
+        col_date: "Fecha",
+        col_desc: "Descripción",
+        col_value: "Valor",
+        col_status: "Estado",
+        btn_close: "Cerrar",
+        
+        // Comparative Dashboard
+        comparative_title: "Dashboard Comparativo",
+        comparative_subtitle: "Análisis y comparación mensual de ingresos vs gastos y límites por categoría",
+        month_summary_title: "Resumen del Mes",
+        cat_spending_title: "Gastos por Categoría",
+        card_limits_title: "Presupuestos y Límites de Categorías",
+        col_category: "Categoría",
+        col_limit: "Límite de Presupuesto",
+        col_spent: "Gastado",
+        col_status_limit: "Estado",
+        col_percentage: "Porcentaje",
+        within_limit: "Dentro del Límite",
+        exceeded: "Excedido",
+        reception: "Ingresos",
+        deduction: "Gastos",
+        net_balance: "Saldo Neto",
+        performance: "Salud Financiera",
+        no_spending_month: "No hay gastos registrados por categoría este mes.",
+        
+        // Accounts Dashboard
+        accounts_title: "Cuentas Bancarias",
+        accounts_subtitle: "Administre cuentas, consulte saldos y revise extractos",
+        active_account_statement: "Extracto de Cuenta",
+        btn_new_transaction: "Nueva Transacción",
+        btn_new_transfer: "Nueva Transferencia",
+        search_description_placeholder: "Escriba para filtrar...",
+        filter_type_label: "Tipo",
+        filter_type_all: "Todos",
+        filter_type_income: "Ingresos",
+        filter_type_expense: "Gastos",
+        col_actions: "Acciones",
+        action_confirm: "Confirmar",
+        action_edit: "Editar",
+        action_delete: "Eliminar",
+        no_transactions_account: "No hay transacciones registradas en esta cuenta en el mes seleccionado.",
+        confirm_delete_title: "¿Está seguro de eliminar definitivamente esta transacción?",
+        modal_new_tx_title: "Nueva Transacción",
+        modal_new_transfer_title: "Nueva Transferencia",
+        label_account: "Cuenta",
+        label_description: "Descripción",
+        label_value: "Valor",
+        label_date: "Fecha",
+        label_category: "Categoría / Subcategoría",
+        label_type: "Tipo",
+        label_status: "Estado",
+        status_pending: "Pendiente",
+        status_confirmed: "Pagado / Confirmado",
+        btn_cancel: "Cancelar",
+        btn_save: "Guardar",
+        label_origin: "Cuenta Origen",
+        label_destination: "Cuenta Destino",
+        
+        // Pending Dashboard
+        pending_title: "Transacciones Pendientes",
+        pending_subtitle: "Monitoreo y confirmación rápida de transacciones pendientes o futuras",
+        pending_kpi_total: "Total Pendiente",
+        pending_kpi_incomes: "Ingresos Pendientes",
+        pending_kpi_expenses: "Gastos Pendientes",
+        pending_chart_incomes: "Tendencia de Ingresos Pendientes",
+        pending_chart_expenses: "Tendencia de Gastos Pendientes",
+        btn_confirm: "Confirmar",
+        btn_edit: "Editar",
+        btn_delete: "Eliminar",
+        no_pending_transactions: "No se encontraron transacciones pendientes en este período.",
+        toast_success_confirm: "¡Transacción confirmada con éxito!",
+        
+        // Categories Dashboard
+        categories_title: "Gestión de Categorías",
+        categories_subtitle: "Visualice, busque y gestione categorías y subcategorías en árbol",
+        btn_new_category: "Nueva Categoría",
+        search_category_placeholder: "Buscar categorías...",
+        col_type: "Tipo",
+        col_actions_cat: "Acciones",
+        subcategories_label: "Subcategorías",
+        no_subcategories: "Ninguna subcategoría registrada.",
+        modal_new_cat_title: "Nueva Categoría",
+        modal_new_subcat_title: "Nueva Subcategoría",
+        label_name: "Nombre",
+        label_color: "Color",
+        label_parent_category: "Categoría Padre (Solo Lectura)",
+        toast_success_cat: "¡Categoría creada con éxito!",
+        toast_success_subcat: "¡Subcategoría creada con éxito!",
+        
+        // Cards Dashboard
+        cards_title: "Tarjetas de Crédito",
+        cards_subtitle: "Gestione tarjetas de crédito, límites y facturas",
+        card_bill_details: "Detalle de Factura",
+        btn_pay_bill: "Pagar Factura",
+        btn_revert_payment: "Revertir Pago",
+        bill_status: "Estado de la Factura:",
+        status_open: "Abierta",
+        status_closed: "Cerrada",
+        status_paid: "Pagada",
+        no_card_transactions: "Ninguna transacción registrada en esta factura para el ciclo seleccionado.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Gestor de Dashboards",
+        dashboards_subtitle: "Liste, vea el código fuente y suba dashboards al servidor de fintrack",
+        col_dashboard: "Dashboard",
+        col_last_update: "Última Actualización",
+        btn_view_source: "Ver Código",
+        btn_download: "Descargar HTML",
+        upload_new_dashboard: "Subir Nuevo Dashboard",
+        placeholder_dashboard_name: "Nombre del Dashboard (ej: pending)",
+        upload_instructions: "Seleccione o arrastre el archivo HTML aquí para subir",
+        btn_upload: "Subir Dashboard",
+        modal_source_title: "Código Fuente HTML",
+        
+        // Tags Management
+        menu_tags: "Etiquetas",
+        tags_title: "Administrar Etiquetas",
+        tags_subtitle: "Administre las etiquetas utilizadas para etiquetar y organizar sus transacciones",
+        panel_title_tags: "Etiquetas Activas",
+        btn_new_tag: "Nueva Etiqueta",
+        label_tag_name: "Nombre de la Etiqueta",
+        placeholder_tag_name: "Ej: trabajo, viaje, reembolso",
+        empty_tags_message: "No hay etiquetas registradas.",
+        btn_save: "Guardar",
+        btn_cancel: "Cancelar",
+        toast_success_tag_created: '¡Etiqueta "{name}" creada con éxito!',
+        toast_success_tag_deleted: '¡Etiqueta "{name}" eliminada con éxito!',
+        confirm_delete_tag: '¿Realmente deseja eliminar la etiqueta "{name}"?\n(Esta acción eliminará la etiqueta de todas las transacciones vinculadas)'
+    }
+};
+
+var currentLocale = 'en'; // English as default
+
+// Helper to translate in JS
+function t(key) {
+    const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
+    return tDict[key] || key;
+}
+
+async function checkLocale() {
+    try {
+        const res = await fetch('/api/status');
+        if (res.ok) {
+            const data = await res.json();
+            if (data.locale && TRANSLATIONS[data.locale]) {
+                currentLocale = data.locale;
+            }
+        }
+    } catch (err) {
+        console.error("Failed to read locale preferences:", err);
+    }
+    translatePage();
+}
+
+function translatePage() {
+    const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
+    
+    // 1. Static texts
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (tDict[key]) {
+            const icon = el.querySelector('i');
+            if (icon) {
+                const iconOuter = icon.outerHTML;
+                el.innerHTML = iconOuter + ' ' + tDict[key];
+            } else {
+                el.textContent = tDict[key];
+            }
+        }
+    });
+
+    // 2. Placeholders
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (tDict[key]) {
+            el.placeholder = tDict[key];
+        }
+    });
+
+    // 3. Tooltips
+    document.querySelectorAll('[data-i18n-tooltip]').forEach(el => {
+        const key = el.getAttribute('data-i18n-tooltip');
+        if (tDict[key]) {
+            el.setAttribute('data-tooltip', tDict[key]);
+        }
+    });
+    
+    // 4. Document title translation
+    if (tDict['overview_title'] && document.title.includes("Overview") || document.title.includes("Visão")) {
+        // dynamic title update fallback if needed
+    }
+
+    // 5. Translate select months
+    const monthSelects = [
+        document.getElementById('month-select'),
+        document.getElementById('start-month-select')
+    ];
+    monthSelects.forEach(monthSelect => {
+        if (monthSelect) {
+            const monthKeys = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+            Array.from(monthSelect.options).forEach((opt, idx) => {
+                const key = monthKeys[idx];
+                if (tDict[key]) {
+                    opt.textContent = tDict[key];
+                }
+            });
+        }
+    });
+
+    // 6. Translate projection months select options (3, 6, 9, 12 months)
+    const hmSelect = document.getElementById('heatmap-months-select');
+    if (hmSelect) {
+        Array.from(hmSelect.options).forEach(opt => {
+            const val = opt.value;
+            const key = `months_${val}`;
+            if (tDict[key]) {
+                opt.textContent = tDict[key];
+            }
+        });
+    }
+
+    // Automatically initialize/refresh custom selects on all pages
+    if (typeof initCustomSelects === 'function') {
+        initCustomSelects();
+    }
+}
+
+// Custom Select Component implementation
+function initCustomSelects() {
+    document.querySelectorAll('select.select-custom').forEach(select => {
+        if (select.nextElementSibling && select.nextElementSibling.classList.contains('select-container-custom')) {
+            // Already initialized, just sync selected value
+            const container = select.nextElementSibling;
+            const triggerSpan = container.querySelector('.select-trigger-custom span');
+            const selectedOpt = select.options[select.selectedIndex];
+            if (selectedOpt && triggerSpan) {
+                triggerSpan.textContent = selectedOpt.textContent;
+            }
+            return;
+        }
+        select.style.display = 'none';
+        const container = document.createElement('div');
+        container.className = 'select-container-custom';
+        
+        // Match specific element custom min-widths
+        if (select.id === 'heatmap-months-select') {
+            container.style.minWidth = '110px';
+        } else if (select.id === 'year-select') {
+            container.style.minWidth = '90px';
+        } else if (select.id === 'filter-type') {
+            container.style.minWidth = '130px';
+        }
+        
+        const trigger = document.createElement('div');
+        trigger.className = 'select-trigger-custom';
+        const triggerSpan = document.createElement('span');
+        trigger.appendChild(triggerSpan);
+        container.appendChild(trigger);
+        const optionsContainer = document.createElement('div');
+        optionsContainer.className = 'select-options-custom';
+        container.appendChild(optionsContainer);
+        
+        function syncSelected() {
+            const selectedOpt = select.options[select.selectedIndex] || select.options[0];
+            if (selectedOpt) {
+                triggerSpan.textContent = selectedOpt.textContent;
+                Array.from(optionsContainer.children).forEach(child => {
+                    if (child.getAttribute('data-value') === select.value) {
+                        child.classList.add('selected');
+                    } else {
+                        child.classList.remove('selected');
+                    }
+                });
+            }
+        }
+        
+        function populateOptions() {
+            optionsContainer.innerHTML = '';
+            Array.from(select.options).forEach(opt => {
+                const optDiv = document.createElement('div');
+                optDiv.className = 'select-option-custom';
+                optDiv.textContent = opt.textContent;
+                optDiv.setAttribute('data-value', opt.value);
+                optDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    select.value = opt.value;
+                    select.dispatchEvent(new Event('change'));
+                    syncSelected();
+                    container.classList.remove('open');
+                });
+                optionsContainer.appendChild(optDiv);
+            });
+        }
+        
+        populateOptions();
+        syncSelected();
+        
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = container.classList.contains('open');
+            document.querySelectorAll('.select-container-custom').forEach(el => {
+                el.classList.remove('open');
+            });
+            if (!isOpen) {
+                populateOptions();
+                syncSelected();
+                container.classList.add('open');
+                setTimeout(() => {
+                    const selectedEl = optionsContainer.querySelector('.select-option-custom.selected');
+                    if (selectedEl) {
+                        const itemHeight = selectedEl.offsetHeight || 36;
+                        optionsContainer.scrollTop = Math.max(0, selectedEl.offsetTop - itemHeight);
+                    }
+                }, 10);
+            }
+        });
+        
+        select.parentNode.insertBefore(container, select.nextSibling);
+        select.addEventListener('change', syncSelected);
+        
+        // Watch for dynamic options updates
+        const observer = new MutationObserver(() => {
+            syncSelected();
+        });
+        observer.observe(select, { childList: true, subtree: true });
+        
+        setTimeout(syncSelected, 200);
+        setTimeout(syncSelected, 1000);
+    });
+    
+    // Global click listener to close options dropdowns when clicking outside
+    if (!window.customSelectGlobalBound) {
+        window.customSelectGlobalBound = true;
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.select-container-custom').forEach(el => {
+                el.classList.remove('open');
+            });
+        });
+    }
+}
+
+        loadData();
+            checkLocale();
+
+// ADR-027 Live-update listener
+window.fintrackOnDataChanged = function(entities) {
+    var affected = entities.some(function(tag) {
+        return ['category'].indexOf(tag) !== -1;
+    });
+    if (affected) {
+        console.log("categories refetching due to entity change:", entities);
+        loadData();
+    }
+};
+
+</script>

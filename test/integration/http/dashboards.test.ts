@@ -148,6 +148,16 @@ describe('GET /api/dashboards/:name', () => {
     expect(res.statusCode).toBe(404);
     expect(res.json()).toHaveProperty('error.code', 'unknown_dashboard');
   });
+
+  it('sets cache-control: no-cache — file-backed content can change on disk between requests', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/dashboards',
+      payload: { name: 'cache-control-test', html: '<section></section>' },
+    });
+    const res = await inject({ method: 'GET', url: '/api/dashboards/cache-control-test' });
+    expect(res.headers['cache-control']).toContain('no-cache');
+  });
 });
 
 describe('DELETE /api/dashboards/:name', () => {

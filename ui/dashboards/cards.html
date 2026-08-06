@@ -1,0 +1,4108 @@
+<style>
+.dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .controls-area {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            padding: 0.5rem 1rem;
+            border-radius: 14px;
+            backdrop-filter: blur(12px);
+        }
+
+        .controls-area label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .select-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 1.5rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            font-family: var(--font-family);
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            transition: var(--transition-smooth);
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 16px;
+        }
+
+        .select-custom:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        /* Premium Credit Cards Section */
+        .cards-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-title i {
+            color: var(--accent-primary);
+        }
+
+        .cards-carousel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .credit-card-mockup {
+            height: 200px;
+            border-radius: 18px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            box-shadow: var(--card-shadow);
+            transition: var(--transition-smooth);
+            border: 2px solid transparent;
+            user-select: none;
+        }
+
+        .credit-card-mockup::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                45deg,
+                transparent 45%,
+                rgba(255, 255, 255, 0.05) 50%,
+                transparent 55%
+            );
+            transform: rotate(30deg);
+            transition: transform 0.8s ease-in-out;
+        }
+
+        .credit-card-mockup:hover {
+            transform: translateY(-8px) scale(1.02);
+        }
+
+        .credit-card-mockup:hover::after {
+            transform: rotate(30deg) translate(15%, 15%);
+        }
+
+        .credit-card-mockup.active {
+            border-color: rgba(255, 255, 255, 0.5);
+            box-shadow: 0 0 25px rgba(139, 92, 246, 0.4);
+        }
+
+        /* Specific card styles */
+        .personnalite-black {
+            background: linear-gradient(135deg, #12131a 0%, #1e1f29 60%, #2a2c3a 100%);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+        }
+        .personnalite-black.active {
+            border-color: #d4af37;
+            box-shadow: 0 0 25px rgba(212, 175, 55, 0.35);
+        }
+
+        .personnalite-infinite {
+            background: linear-gradient(135deg, #0b1120 0%, #111b36 60%, #1a2a54 100%);
+            border: 1px solid rgba(0, 200, 255, 0.15);
+        }
+        .personnalite-infinite.active {
+            border-color: #00c8ff;
+            box-shadow: 0 0 25px rgba(0, 200, 255, 0.35);
+        }
+
+        .ultravioleta-black {
+            background: linear-gradient(135deg, #1b0a2a 0%, #2e104e 60%, #4a154b 100%);
+            border: 1px solid rgba(168, 85, 247, 0.2);
+        }
+        .ultravioleta-black.active {
+            border-color: #a855f7;
+            box-shadow: 0 0 25px rgba(168, 85, 247, 0.35);
+        }
+
+        /* Card internals */
+        .card-header-mock {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .card-name-mock {
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .personnalite-black .card-name-mock { color: #e5c158; }
+        .personnalite-infinite .card-name-mock { color: #60d6ff; }
+        .ultravioleta-black .card-name-mock { color: #d8b4fe; }
+
+        .card-chip {
+            width: 38px;
+            height: 28px;
+            background: linear-gradient(135deg, #e5c158 0%, #b8860b 100%);
+            border-radius: 6px;
+            position: relative;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .personnalite-infinite .card-chip {
+            background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
+        }
+
+        .card-chip::before {
+            content: '';
+            position: absolute;
+            top: 4px; left: 6px; right: 6px; bottom: 4px;
+            border: 1px solid rgba(0,0,0,0.15);
+            border-radius: 4px;
+        }
+
+        .card-number-mock {
+            font-size: 1.1rem;
+            letter-spacing: 0.15em;
+            color: rgba(255, 255, 255, 0.9);
+            font-family: monospace;
+            text-shadow: 0 2px 3px rgba(0,0,0,0.8);
+            margin: 0.75rem 0;
+        }
+
+        .card-footer-mock {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .card-holder-mock {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .card-holder-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #fff;
+            margin-top: 2px;
+            letter-spacing: 0.05em;
+        }
+
+        .card-limit-mock {
+            text-align: right;
+        }
+
+        .card-limit-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .card-limit-value {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .card-indicator-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1.5rem;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .card-indicator-badge.open { color: var(--warning-color); border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.1); }
+        .card-indicator-badge.closed { color: var(--expense-color); border-color: rgba(244, 63, 94, 0.3); background: rgba(244, 63, 94, 0.1); }
+        .card-indicator-badge.paid { color: var(--income-color); border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.1); }
+
+        /* Main Workspace split: Bill info & Transactions list */
+        .workspace-grid {
+            display: grid;
+            grid-template-columns: 1.1fr 2fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .workspace-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 1.75rem;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            position: relative;
+        }
+
+        /* Bill Cycle Navigation Tabs */
+        .bill-cycle-tabs {
+            display: flex;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 0.25rem;
+            gap: 0.25rem;
+        }
+
+        .bill-tab {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 0.5rem;
+            border-radius: 8px;
+            font-family: var(--font-family);
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            text-align: center;
+        }
+
+        .bill-tab.active {
+            background: var(--accent-primary);
+            color: #fff;
+            box-shadow: 0 4px 12px var(--accent-primary-glow);
+        }
+
+        /* Bill info panels */
+        .bill-info-box {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background: rgba(0, 0, 0, 0.15);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 1.25rem;
+        }
+
+        .bill-info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .bill-info-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .bill-info-value {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .bill-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.3rem 0.65rem;
+            border-radius: 6px;
+        }
+        .bill-status-badge.open { color: var(--warning-color); background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); }
+        .bill-status-badge.closed { color: var(--expense-color); background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.2); }
+        .bill-status-badge.paid { color: var(--income-color); background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); }
+
+        .bill-total-area {
+            text-align: center;
+            padding: 1rem 0;
+            border-top: 1px solid rgba(255,255,255,0.04);
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .bill-total-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.25rem;
+        }
+
+        .bill-total-amount {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .bill-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .btn-action-primary {
+            width: 100%;
+            background: var(--accent-primary);
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 12px;
+            font-family: var(--font-family);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 15px var(--accent-primary-glow);
+        }
+
+        .btn-action-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            background: #9d76fd;
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.55);
+        }
+
+        .btn-action-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .btn-action-secondary {
+            width: 100%;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.75rem;
+            border-radius: 12px;
+            font-family: var(--font-family);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-action-secondary:hover:not(:disabled) {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.15);
+        }
+
+        .btn-action-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Panel Header styling */
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .panel-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        /* Split modal container rules */
+        .modal-box.split-modal {
+            max-width: 780px;
+        }
+
+        .modal-split-body {
+            display: grid;
+            grid-template-columns: 1.1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .modal-column-left {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-column-right {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .textarea-large {
+            width: 100%;
+            flex: 1;
+            min-height: 180px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-family: var(--font-family);
+            outline: none;
+            transition: var(--transition-smooth);
+            resize: none;
+            font-size: 0.9rem;
+        }
+        .textarea-large:focus {
+            border-color: var(--accent-primary);
+            background: rgba(255, 255, 255, 0.06);
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.25);
+        }
+
+        /* Table & Transactions Panel styling */
+        .panel-header-buttons {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .btn-mini-add {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: var(--income-color);
+            padding: 0.4rem 0.8rem;
+            border-radius: 8px;
+            font-family: var(--font-family);
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .btn-mini-add:hover {
+            background: rgba(16, 185, 129, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 14px;
+            border: 1px solid var(--panel-border);
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--text-muted);
+            font-weight: 600;
+            padding: 1rem;
+            border-bottom: 1px solid var(--panel-border);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: var(--transition-smooth);
+        }
+
+        th.sortable:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        th i {
+            margin-left: 0.35rem;
+            font-size: 0.8rem;
+            transition: var(--transition-smooth);
+        }
+
+        td {
+            padding: 0.9rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            vertical-align: middle;
+            color: var(--text-main);
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .col-date { color: var(--text-muted); white-space: nowrap; }
+        .col-desc { font-weight: 500; }
+        .amount-cell { font-weight: 700; text-align: right; white-space: nowrap; color: var(--expense-color); }
+        .badge-cat {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--panel-border);
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .actions-cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .action-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            transition: var(--transition-smooth);
+        }
+
+        .btn-change-icon { color: var(--accent-primary); opacity: 0.65; }
+        .btn-change-icon:hover { opacity: 1; transform: scale(1.25); }
+
+        .btn-confirm-icon { color: var(--income-color); opacity: 0.65; }
+        .btn-confirm-icon:hover { opacity: 1; transform: scale(1.25); }
+
+        .btn-delete-icon { color: var(--expense-color); opacity: 0.65; }
+        .btn-delete-icon:hover { opacity: 1; transform: scale(1.25); }
+
+        /* Loader */
+        .loading-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(12, 14, 23, 0.8);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10; backdrop-filter: blur(4px);
+            border-radius: 24px;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        .loading-overlay.active { opacity: 1; pointer-events: all; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--accent-primary);
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .no-data-msg {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-dark);
+            font-weight: 500;
+        }
+        .no-data-msg i {
+            font-size: 2.5rem;
+            margin-bottom: 0.75rem;
+            display: block;
+            opacity: 0.5;
+        }
+
+        /* Modal Dialog systems */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .modal-overlay.open {
+            display: flex;
+            opacity: 1;
+        }
+
+        .modal-box {
+            background: #111322;
+            border: 1px solid var(--panel-border);
+            border-radius: 20px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            position: relative;
+            transform: translateY(-30px);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .modal-overlay.open .modal-box {
+            transform: translateY(0);
+        }
+
+        .modal-close-btn {
+            position: absolute;
+            top: 1.25rem;
+            right: 1.25rem;
+            background: none;
+            border: none;
+            color: var(--text-dark);
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: var(--transition-smooth);
+        }
+        .modal-close-btn:hover {
+            color: var(--text-main);
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #fff;
+        }
+        .modal-title i {
+            color: var(--accent-primary);
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .form-control {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-family: var(--font-family);
+            outline: none;
+            transition: var(--transition-smooth);
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .form-control:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        /* Dark datepicker input custom style overrides */
+        input[type="date"] {
+            color-scheme: dark;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(0.9) sepia(1) saturate(5) hue-rotate(240deg);
+            cursor: pointer;
+        }
+
+        /* Custom Flatpickr styling overrides to match theme */
+        .flatpickr-calendar {
+            background: #111322 !important;
+            border: 1px solid var(--panel-border) !important;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6) !important;
+            font-family: var(--font-family) !important;
+            border-radius: 12px !important;
+        }
+        .flatpickr-day.selected, 
+        .flatpickr-day.startRange, 
+        .flatpickr-day.endRange, 
+        .flatpickr-day.selected.inRange, 
+        .flatpickr-day.startRange.inRange, 
+        .flatpickr-day.endRange.inRange, 
+        .flatpickr-day.selected:focus, 
+        .flatpickr-day.startRange:focus, 
+        .flatpickr-day.endRange:focus, 
+        .flatpickr-day.selected:hover, 
+        .flatpickr-day.startRange:hover, 
+        .flatpickr-day.endRange:hover, 
+        .flatpickr-day.prevMonthDay.selected, 
+        .flatpickr-day.nextMonthDay.selected {
+            background: var(--accent-primary) !important;
+            border-color: var(--accent-primary) !important;
+        }
+        .flatpickr-months .flatpickr-month {
+            color: #fff !important;
+        }
+        .flatpickr-current-month .flatpickr-monthDropdown-months {
+            background: #111322 !important;
+            color: #fff !important;
+        }
+        .flatpickr-day {
+            color: var(--text-main) !important;
+        }
+        .flatpickr-day:hover {
+            background: rgba(255, 255, 255, 0.08) !important;
+        }
+        .flatpickr-day.flatpickr-disabled, 
+        .flatpickr-day.flatpickr-disabled:hover {
+            color: var(--text-dark) !important;
+            background: transparent !important;
+        }
+        .flatpickr-weekday {
+            color: var(--text-muted) !important;
+        }
+        .flatpickr-months .flatpickr-prev-month, .flatpickr-months .flatpickr-next-month {
+            color: var(--text-muted) !important;
+            fill: var(--text-muted) !important;
+        }
+        .flatpickr-calendar.arrowTop:before, .flatpickr-calendar.arrowTop:after {
+            border-bottom-color: #111322 !important;
+        }
+        .flatpickr-calendar.arrowBottom:before, .flatpickr-calendar.arrowBottom:after {
+            border-top-color: #111322 !important;
+        }
+
+        /* Hide HTML5 Up/Down Spin-Buttons */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        /* Toast system */
+        .toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            z-index: 2000;
+        }
+
+        .toast {
+            background: rgba(20, 24, 43, 0.95);
+            border: 1px solid var(--panel-border);
+            border-left: 4px solid var(--accent-primary);
+            color: var(--text-main);
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 300px;
+            animation: slideIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            position: relative;
+        }
+        .toast.success { border-left-color: var(--income-color); }
+        .toast.error { border-left-color: var(--expense-color); }
+
+        .toast-close {
+            position: absolute; right: 10px; top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-dark); cursor: pointer; font-size: 0.8rem;
+        }
+        .toast-close:hover { color: var(--text-main); }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateY(20px); }
+        }
+
+        /* Top workspace layout grid */
+        .top-workspace-grid {
+            display: grid;
+            grid-template-columns: 1.8fr 1.2fr;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+            align-items: stretch;
+        }
+        @media (max-width: 1024px) {
+            .top-workspace-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Compact Bill Panel inside top workspace grid */
+        .compact-bill-panel {
+            padding: 1.25rem 1.5rem !important;
+            border-radius: 20px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 0.75rem !important;
+            background: var(--panel-bg) !important;
+            border: 1px solid var(--panel-border) !important;
+            box-sizing: border-box !important;
+            height: 100% !important;
+            justify-content: space-between !important;
+        }
+
+        .compact-bill-header {
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            flex-wrap: wrap !important;
+            gap: 0.5rem !important;
+            border-bottom: none !important;
+            padding-bottom: 0 !important;
+        }
+
+        .compact-bill-title {
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.5rem !important;
+            font-size: 1rem !important;
+            font-weight: 600 !important;
+            color: var(--text-main) !important;
+            margin-bottom: 0 !important;
+        }
+
+        .compact-bill-info-box {
+            display: flex !important;
+            flex-direction: row !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            gap: 1.25rem !important;
+            background: rgba(0, 0, 0, 0.15) !important;
+            border: 1px solid var(--panel-border) !important;
+            border-radius: 16px !important;
+            padding: 1.25rem !important;
+            flex-wrap: wrap !important;
+            flex: 1 !important;
+            margin-bottom: 0.5rem !important;
+        }
+
+        .compact-bill-row {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            justify-content: center !important;
+            gap: 4px !important;
+            flex: 1 !important;
+            min-width: 75px !important;
+        }
+
+        .compact-bill-row.total-area {
+            flex: 1 1 100% !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-left: none !important;
+            border-top: 1px dashed var(--panel-border) !important;
+            padding-top: 1rem !important;
+            padding-left: 0 !important;
+            margin-top: 0.75rem !important;
+            width: 100% !important;
+        }
+
+        .compact-bill-label {
+            font-size: 0.7rem !important;
+            color: var(--text-muted) !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            margin-bottom: 0 !important;
+        }
+
+        .compact-bill-value {
+            font-weight: 600 !important;
+            font-size: 0.85rem !important;
+            color: var(--text-main) !important;
+        }
+
+        .compact-bill-total-amount {
+            font-size: 1.25rem !important;
+            font-weight: 700 !important;
+            color: var(--text-main) !important;
+            margin-top: 0 !important;
+        }
+
+        .compact-bill-actions {
+            display: flex !important;
+            gap: 0.75rem !important;
+            width: 100% !important;
+            margin-top: 0 !important;
+        }
+
+        /* Premium Transaction List styles */
+        .tx-list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            width: 100%;
+        }
+
+        .day-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            width: 100%;
+        }
+
+        .day-group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .day-group-date {
+            color: var(--accent-primary);
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .day-group-summary {
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .day-group-sum-val {
+            color: var(--text-main);
+            font-weight: 700;
+        }
+
+        .day-group-items {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .tx-list-item {
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.015);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            transition: var(--transition-smooth);
+            overflow: hidden;
+        }
+
+        .tx-list-item.has-note {
+            cursor: pointer;
+        }
+
+        .tx-list-item:hover {
+            background: rgba(255, 255, 255, 0.035);
+            border-color: rgba(255, 255, 255, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .tx-item-row-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .tx-item-left {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            width: 50%;
+            flex-shrink: 0;
+            min-width: 0;
+        }
+
+        .tx-item-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .tx-item-details {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .tx-item-desc {
+            font-weight: 500;
+            color: var(--text-main);
+            font-size: 0.95rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tx-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .tx-item-note {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .tx-item-right {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 1.25rem;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .tx-item-drawer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.25s ease-out;
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        .tx-list-item.expanded .tx-item-drawer {
+            max-height: 100px;
+        }
+
+        .tx-item-drawer-inner {
+            padding: 0.75rem 1rem 0.75rem 3.8rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .tx-item-amount {
+            font-weight: 700;
+            font-size: 1.05rem;
+            white-space: nowrap;
+        }
+        .tx-item-amount.expense {
+            color: var(--expense-color);
+        }
+        .tx-item-amount.income {
+            color: var(--income-color);
+        }
+
+        .sort-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .sort-link {
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .sort-link:hover {
+            color: var(--accent-primary);
+        }
+
+        .sort-link.active {
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        /* Custom Select component styling */
+        .select-container-custom {
+            position: relative;
+            display: inline-block;
+            min-width: 120px;
+            user-select: none;
+        }
+
+        .select-trigger-custom {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition-smooth);
+            min-height: 36px;
+            box-sizing: border-box;
+        }
+
+        .select-trigger-custom:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .select-container-custom.open .select-trigger-custom {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        .select-trigger-custom::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: absolute;
+            right: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .select-container-custom.open .select-trigger-custom::after {
+            transform: rotate(180deg);
+            color: var(--accent-primary);
+        }
+
+        .select-options-custom {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            background: rgba(22, 22, 34, 0.98); /* Opaque dark background to prevent bleed-through */
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 4px;
+            backdrop-filter: blur(20px);
+            box-sizing: border-box;
+            animation: selectFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes selectFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .select-container-custom.open .select-options-custom {
+            display: block;
+        }
+
+        .select-option-custom {
+            padding: 0.5rem 0.75rem;
+            color: var(--text-muted); /* Highly readable text color on dark backgrounds */
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .select-option-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .select-option-custom.selected {
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .select-options-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        .select-options-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .select-options-custom::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+</style>
+
+<div class="dashboard-container">
+        <!-- Header -->
+        <header>
+            <div class="header-title-area">
+                <h1><i class="fa-solid fa-credit-card"></i> Cartões & Faturas</h1>
+                <p>Monitore limites, analise extratos e realize pagamentos de faturas</p>
+            </div>
+            <div class="controls-area">
+                <label for="month-select" data-i18n="reference_label">Reference:</label>
+                <select id="month-select" class="select-custom">
+                    <option value="1">Janeiro</option>
+                    <option value="2">Fevereiro</option>
+                    <option value="3">Março</option>
+                    <option value="4">Abril</option>
+                    <option value="5">Maio</option>
+                    <option value="6">Junho</option>
+                    <option value="7" selected>Julho</option>
+                    <option value="8">Agosto</option>
+                    <option value="9">Setembro</option>
+                    <option value="10">Outubro</option>
+                    <option value="11">Novembro</option>
+                    <option value="12">Dezembro</option>
+                </select>
+                <select id="year-select" class="select-custom">
+                    <option value="2025">2025</option>
+                    <option value="2026" selected>2026</option>
+                    <option value="2027">2027</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- Wrapper to keep title and workspace grid close together -->
+        <div style="display: flex; flex-direction: column;">
+        <!-- Section Header above top-workspace-grid -->
+        <div class="section-title" style="display:flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 0.5rem;">
+            <div style="display:flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-wallet"></i>
+                <span>Selecione um Cartão de Crédito</span>
+            </div>
+            <div style="display:flex; gap: 0.5rem;">
+                <button class="btn-mini-add" id="btn-edit-card" onclick="openEditCardModal()" style="background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border); color: #fff; display: none;">
+                    <i class="fa-solid fa-pen-to-square"></i> <span data-i18n="btn_edit_card">Editar Cartão</span>
+                </button>
+                <button class="btn-mini-add" onclick="openAddCardModal()">
+                    <i class="fa-solid fa-plus"></i> <span data-i18n="new_card">Novo Cartão</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Top Workspace: Cards Selector & Bill Cycle Info -->
+        <div class="top-workspace-grid" style="margin-bottom: 0.75rem;">
+            <!-- Left Column: Cards carousel -->
+            <div class="cards-carousel" id="cards-container" style="margin-top: 0;">
+                <!-- Loaded dynamically -->
+            </div>
+
+            <!-- Right Column: Bill summary and details (Ciclo & Fatura) -->
+            <section class="compact-bill-panel" style="position: relative;">
+                <div class="loading-overlay" id="bill-loading">
+                    <div class="spinner"></div>
+                </div>
+
+                <div class="compact-bill-header" style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem; width: 100%;">
+                    <div class="compact-bill-title" style="justify-content: center; font-size: 1.1rem; margin-bottom: 0.25rem;">
+                        <i class="fa-solid fa-receipt"></i>
+                        <span>Ciclo & Fatura</span>
+                    </div>
+                    <!-- Past / Current / Future Tabs (Centered below title) -->
+                    <div class="bill-cycle-tabs" id="bill-tabs" style="margin: 0 auto; width: 100%; max-width: 320px; padding: 2px; gap: 2px; display: flex; justify-content: center;">
+                        <button class="bill-tab" id="tab-past" onclick="selectBillType('past')" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; flex: 1;">Passada</button>
+                        <button class="bill-tab active" id="tab-current" onclick="selectBillType('current')" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; flex: 1;">Atual</button>
+                        <button class="bill-tab" id="tab-future" onclick="selectBillType('future')" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; flex: 1;">Futura</button>
+                    </div>
+                </div>
+
+                <!-- Bill Details row (Flexed horizontally!) -->
+                <div class="compact-bill-info-box">
+                    <div class="compact-bill-row">
+                        <span class="compact-bill-label">Status</span>
+                        <span class="bill-status-badge open" id="bill-status-badge" style="align-self: flex-start; font-size: 0.7rem; padding: 2px 6px;">Aberta</span>
+                    </div>
+                    <div class="compact-bill-row">
+                        <span class="compact-bill-label">Fechamento</span>
+                        <span class="compact-bill-value" id="bill-close-date">-</span>
+                    </div>
+                    <div class="compact-bill-row">
+                        <span class="compact-bill-label">Vencimento</span>
+                        <span class="compact-bill-value" id="bill-due-date">-</span>
+                    </div>
+                    <div class="compact-bill-row total-area">
+                        <span class="compact-bill-label" id="bill-total-label">Total da Fatura</span>
+                        <span class="compact-bill-total-amount" id="bill-total-val">R$ 0,00</span>
+                    </div>
+                </div>
+
+                <!-- Bill Actions -->
+                <div class="compact-bill-actions">
+                    <button class="btn-action-primary" id="btn-pay-bill" onclick="openPayModal()" style="padding: 0.45rem 1rem; font-size: 0.8rem; flex: 1;">
+                        <i class="fa-solid fa-money-bill-transfer"></i> Pagar Fatura
+                    </button>
+                    <button class="btn-action-secondary" id="btn-revert-pay" onclick="revertBillPayment()" style="display: none; padding: 0.45rem 1rem; font-size: 0.8rem; flex: 1;">
+                        <i class="fa-solid fa-undo"></i> Reverter
+                    </button>
+                </div>
+            </section>
+        </div>
+        </div>
+
+        <!-- Bottom Panel: Transaction list for the bill (Full Width) -->
+        <section class="panel" style="position: relative; width: 100%; box-sizing: border-box; padding: 1.5rem;">
+            <div class="loading-overlay" id="tx-loading">
+                <div class="spinner"></div>
+            </div>
+
+            <div class="panel-header" style="justify-content: space-between; display: flex; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; border-bottom: none; padding-bottom: 0;">
+                <div class="panel-title" style="margin-bottom: 0;">
+                    <i class="fa-solid fa-list-ul"></i>
+                    <span>Lançamentos Vinculados</span>
+                </div>
+                <div class="panel-header-buttons" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <!-- Sort controls inside header -->
+                    <div class="sort-controls">
+                        <span>Ordenar:</span>
+                        <span class="sort-link active" onclick="toggleSort('date')" id="sort-link-date">Data</span>
+                        <span>•</span>
+                        <span class="sort-link" onclick="toggleSort('description')" id="sort-link-description">Descrição</span>
+                        <span>•</span>
+                        <span class="sort-link" onclick="toggleSort('category')" id="sort-link-category">Categoria</span>
+                        <span>•</span>
+                        <span class="sort-link" onclick="toggleSort('amount')" id="sort-link-amount">Valor</span>
+                    </div>
+                    <button class="btn-mini-add" onclick="openAddTxModal()">
+                        <i class="fa-solid fa-plus"></i> Novo Lançamento
+                    </button>
+                </div>
+            </div>
+
+            <!-- Wide Search Box Row -->
+            <div class="tx-filter-row" style="margin-bottom: 1.25rem; width: 100%;">
+                <div class="search-box-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
+                    <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; color: var(--text-muted); font-size: 0.9rem; pointer-events: none;"></i>
+                    <input type="text" id="tx-search-input" placeholder="Buscar por descrição, categoria, tags ou observações..." oninput="handleTxSearch(this.value)" style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 0.5rem 1rem 0.5rem 2.5rem; color: var(--text-main); font-size: 0.85rem; width: 100%; box-sizing: border-box; transition: all 0.25s ease; outline: none;" onfocus="this.style.borderColor='var(--accent-primary)'; this.style.background='rgba(255, 255, 255, 0.07)'; this.style.boxShadow='0 0 0 3px rgba(139, 92, 246, 0.15)';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.08)'; this.style.background='rgba(255, 255, 255, 0.04)'; this.style.boxShadow='none';">
+                </div>
+            </div>
+
+            <!-- List-based Statement instead of table -->
+            <div class="tx-list-container" id="bill-txs-list">
+                <!-- Populated dynamically -->
+            </div>
+            <div id="no-tx-msg" class="no-data-msg" style="display: none;">
+                <i class="fa-regular fa-folder-open"></i>
+                Nenhum lançamento encontrado para esta fatura.
+            </div>
+        </section>
+    </div>
+
+    <!-- MODAL: ADD TRANSACTION -->
+    <div class="modal-overlay" id="modal-add-tx">
+        <div class="modal-box split-modal">
+            <button class="modal-close-btn" onclick="closeModal('modal-add-tx')"><i class="fa-solid fa-xmark"></i></button>
+            <div class="modal-title">
+                <i class="fa-solid fa-circle-plus"></i>
+                <span>Novo Lançamento</span>
+            </div>
+            <form id="form-add-tx" onsubmit="handleAddTxSubmit(event)">
+                <div class="modal-split-body">
+                    <!-- Left Column: Fields -->
+                    <div class="modal-column-left">
+                        <div class="form-group">
+                            <label for="add-desc">Descrição</label>
+                            <input type="text" id="add-desc" class="form-control" placeholder="Ex: Supermercado" required>
+                        </div>
+                        <div class="form-group" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+                            <div>
+                                <label for="add-amount">Valor (R$)</label>
+                                <input type="number" step="0.01" min="0.01" id="add-amount" class="form-control" placeholder="0,00" required>
+                            </div>
+                            <div>
+                                <label for="add-date">Data</label>
+                                <input type="date" id="add-date" class="form-control" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="add-category">Categoria</label>
+                            <select id="add-category" class="form-control select-custom" style="background-image:none; padding-right:0.75rem;" required>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="add-bill-cycle">Fatura de Destino</label>
+                            <select id="add-bill-cycle" class="form-control select-custom" style="background-image:none; padding-right:0.75rem;">
+                                <option value="auto">Automática (Baseada na data)</option>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Observações & Tags -->
+                    <div class="modal-column-right">
+                        <div class="form-group" style="display:flex; flex-direction:column; margin-bottom: 0.75rem;">
+                            <label for="add-note">Observação / Notas da Transação</label>
+                            <textarea id="add-note" class="textarea-large" placeholder="Escreva observações sobre este lançamento..." style="min-height: 120px; flex: 1;"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="add-tags">Tags (separadas por vírgula)</label>
+                            <input type="text" id="add-tags" class="form-control" placeholder="ex: viagem, mercado, lazer">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-add-tx')" style="width:auto;">Cancelar</button>
+                    <button type="submit" class="btn-action-primary" style="width:auto;">Adicionar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- MODAL: ADD CREDIT CARD -->
+    <div class="modal-overlay" id="modal-add-card">
+        <div class="modal-box split-modal">
+            <button class="modal-close-btn" onclick="closeModal('modal-add-card')"><i class="fa-solid fa-xmark"></i></button>
+            <div class="modal-title">
+                <i class="fa-solid fa-credit-card"></i>
+                <span data-i18n="modal_add_card_title">Novo Cartão de Crédito</span>
+            </div>
+            <form id="form-add-card" onsubmit="handleAddCardSubmit(event)">
+                <div class="modal-split-body">
+                    <!-- Left Column: Fields -->
+                    <div class="modal-column-left">
+                        <div class="form-group">
+                            <label for="card-add-name" data-i18n="label_card_name">Nome do Cartão</label>
+                            <input type="text" id="card-add-name" class="form-control" placeholder="Ex: Nu Ultravioleta" oninput="updateCardPreview()" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="card-add-limit" data-i18n="label_limit">Limite (R$)</label>
+                            <input type="number" step="0.01" min="1" id="card-add-limit" class="form-control" placeholder="0,00" oninput="updateCardPreview()" required>
+                        </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1.8fr; gap:0.75rem; margin-bottom: 1.25rem;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="card-add-closing-day" data-i18n="label_closing_day">Fechamento</label>
+                                <input type="number" min="1" max="28" id="card-add-closing-day" class="form-control" placeholder="ex: 5" style="max-width: 90px;" required>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="card-add-due-day" data-i18n="label_due_day">Vencimento</label>
+                                <input type="number" min="1" max="28" id="card-add-due-day" class="form-control" placeholder="ex: 15" style="max-width: 90px;" required>
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1.8fr; gap:0.75rem; margin-bottom: 1.25rem;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="card-add-currency" data-i18n="label_currency">Moeda</label>
+                                <select id="card-add-currency" class="form-control select-custom" onchange="updateCardPreview()">
+                                    <option value="BRL">BRL (R$)</option>
+                                    <option value="USD">USD ($)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="card-add-payment-account" data-i18n="label_payment_account">Conta Padrão</label>
+                                <select id="card-add-payment-account" class="form-control select-custom" style="color: var(--text-muted);">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Live Mockup Preview -->
+                    <div class="modal-column-right" style="justify-content: center; align-items: center; gap: 0.75rem;">
+                        <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; text-align: center;" data-i18n="design_preview">Pré-visualização do Design</div>
+                        <div id="card-preview-element" class="credit-card-mockup personnalite-black active" style="pointer-events: none; width: 320px; height: 190px; margin: 0; box-shadow: 0 0 25px rgba(212, 175, 55, 0.35); border-color: #d4af37;">
+                            <!-- Filled dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-add-card')" style="width:auto;" data-i18n="btn_cancel">Cancelar</button>
+                    <button type="submit" class="btn-action-primary" style="width:auto;" data-i18n="btn_create_card">Criar Cartão</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: EDIT CREDIT CARD -->
+    <div class="modal-overlay" id="modal-edit-card">
+        <div class="modal-box split-modal">
+            <button class="modal-close-btn" onclick="closeModal('modal-edit-card')"><i class="fa-solid fa-xmark"></i></button>
+            <div class="modal-title">
+                <i class="fa-solid fa-credit-card"></i>
+                <span data-i18n="modal_edit_card_title">Editar Cartão de Crédito</span>
+            </div>
+            <form id="form-edit-card" onsubmit="handleEditCardSubmit(event)">
+                <div class="modal-split-body">
+                    <!-- Left Column: Fields -->
+                    <div class="modal-column-left">
+                        <div class="form-group">
+                            <label for="card-edit-name" data-i18n="label_card_name">Nome do Cartão</label>
+                            <input type="text" id="card-edit-name" class="form-control" placeholder="Ex: Nu Ultravioleta" oninput="updateCardEditPreview()" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="card-edit-limit" data-i18n="label_limit">Limite</label>
+                            <input type="number" step="0.01" min="1" id="card-edit-limit" class="form-control" placeholder="0,00" oninput="updateCardEditPreview()" required>
+                        </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1.8fr; gap:0.75rem; margin-bottom: 1.25rem;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="card-edit-closing-day" data-i18n="label_closing_day">Fechamento</label>
+                                <input type="number" min="1" max="28" id="card-edit-closing-day" class="form-control" placeholder="ex: 5" style="max-width: 90px;" required>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="card-edit-due-day" data-i18n="label_due_day">Vencimento</label>
+                                <input type="number" min="1" max="28" id="card-edit-due-day" class="form-control" placeholder="ex: 15" style="max-width: 90px;" required>
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1.8fr; gap:0.75rem; margin-bottom: 1.25rem;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="card-edit-currency" data-i18n="label_currency">Moeda</label>
+                                <input type="text" id="card-edit-currency" class="form-control" disabled style="background: rgba(255,255,255,0.02); color: var(--text-dark);">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="card-edit-payment-account" data-i18n="label_payment_account">Conta Padrão</label>
+                                <select id="card-edit-payment-account" class="form-control select-custom" style="color: var(--text-muted);">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Live Mockup Preview -->
+                    <div class="modal-column-right" style="justify-content: center; align-items: center; gap: 0.75rem;">
+                        <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; text-align: center;" data-i18n="design_preview">Pré-visualização do Design</div>
+                        <div id="card-edit-preview-element" class="credit-card-mockup personnalite-black active" style="pointer-events: none; width: 320px; height: 190px; margin: 0; box-shadow: 0 0 25px rgba(212, 175, 55, 0.35); border-color: #d4af37;">
+                            <!-- Filled dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-edit-card')" style="width:auto;" data-i18n="btn_cancel">Cancelar</button>
+                    <button type="submit" class="btn-action-primary" style="width:auto;" data-i18n="btn_save">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: REASSIGN BILL -->
+    <div class="modal-overlay" id="modal-reassign">
+        <div class="modal-box">
+            <button class="modal-close-btn" onclick="closeModal('modal-reassign')"><i class="fa-solid fa-xmark"></i></button>
+            <div class="modal-title">
+                <i class="fa-solid fa-calendar-days"></i>
+                <span>Mudar Fatura do Lançamento</span>
+            </div>
+            <form id="form-reassign" onsubmit="handleReassignSubmit(event)">
+                <input type="hidden" id="reassign-tx-id">
+                <div class="form-group">
+                    <label>Lançamento</label>
+                    <div id="reassign-tx-desc" style="font-weight:600; font-size:1rem; margin-bottom:0.5rem;">-</div>
+                    <div id="reassign-tx-details" style="font-size:0.85rem; color:var(--text-muted);">-</div>
+                </div>
+                <div class="form-group">
+                    <label for="reassign-cycle">Vincular a Fatura de</label>
+                    <select id="reassign-cycle" class="form-control select-custom" style="background-image:none; padding-right:0.75rem;" required>
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-reassign')" style="width:auto;">Cancelar</button>
+                    <button type="submit" class="btn-action-primary" style="width:auto;">Salvar Alteração</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: PAY BILL -->
+    <div class="modal-overlay" id="modal-pay-bill">
+        <div class="modal-box">
+            <button class="modal-close-btn" onclick="closeModal('modal-pay-bill')"><i class="fa-solid fa-xmark"></i></button>
+            <div class="modal-title">
+                <i class="fa-solid fa-money-bill-transfer"></i>
+                <span>Pagar Fatura</span>
+            </div>
+            <form id="form-pay-bill" onsubmit="handlePaySubmit(event)">
+                <div class="form-group">
+                    <label>Cartão / Fatura</label>
+                    <div id="pay-card-name" style="font-weight:600; font-size:1.1rem; color:#fff;">-</div>
+                    <div id="pay-bill-cycle" style="font-size:0.85rem; color:var(--text-muted);">-</div>
+                </div>
+                <div class="form-group" style="text-align:center; padding: 1rem 0; background:rgba(0,0,0,0.2); border-radius:10px; border:1px dashed var(--panel-border);">
+                    <label style="margin-bottom:0;">Valor Total a Pagar</label>
+                    <div id="pay-bill-total" style="font-size:1.8rem; font-weight:800; color:var(--income-color);">R$ 0,00</div>
+                </div>
+                <div class="form-group">
+                    <label for="pay-account">Débito na Conta Corrente</label>
+                    <select id="pay-account" class="form-control select-custom" style="background-image:none; padding-right:0.75rem;" required>
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="pay-date">Data do Pagamento</label>
+                    <input type="date" id="pay-date" class="form-control" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-pay-bill')" style="width:auto;">Cancelar</button>
+                    <button type="submit" class="btn-action-primary" style="width:auto;">Confirmar Pagamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: CONFIRM TRANSACTION -->
+    <div class="modal-overlay" id="modal-confirm-tx">
+        <div class="modal-box">
+            <button class="modal-close-btn" onclick="closeModal('modal-confirm-tx')"><i class="fa-solid fa-xmark"></i></button>
+            <div class="modal-title">
+                <i class="fa-solid fa-circle-check" style="color: var(--income-color);"></i>
+                <span data-i18n="modal_confirm_tx_title">Confirmar Lançamento</span>
+            </div>
+            <form id="form-confirm-tx" onsubmit="handleConfirmSubmit(event)">
+                <input type="hidden" id="confirm-tx-id">
+                <div class="form-group">
+                    <label data-i18n="label_description">Lançamento</label>
+                    <div id="confirm-tx-desc" style="font-weight:600; font-size:1.1rem; color:#fff;">-</div>
+                </div>
+                <div class="form-group">
+                    <label for="confirm-tx-date" data-i18n="label_confirm_date">Data da Confirmação</label>
+                    <input type="date" id="confirm-tx-date" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="confirm-tx-amount" data-i18n="label_value">Valor</label>
+                    <input type="number" id="confirm-tx-amount" step="0.01" min="0.01" class="form-control" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-action-secondary" onclick="closeModal('modal-confirm-tx')" style="width:auto;" data-i18n="btn_cancel">Cancelar</button>
+                    <button type="submit" class="btn-action-primary" style="width:auto;" data-i18n="btn_confirm">Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-box"></div>
+
+    
+
+<script>
+// State
+        var creditCards = [];
+        var activeCard = null; // Card Object
+        var selectedBillType = 'current'; // 'past' | 'current' | 'future'
+        var currentBill = null; // Bill response object
+        var accounts = [];
+        var categories = [];
+
+        // Sorting state
+        var sortColumn = 'date';
+        var sortDirection = 'desc';
+        var searchTerm = '';
+
+        // Elements
+        var monthSelect = document.getElementById('month-select');
+        var yearSelect = document.getElementById('year-select');
+        var cardsContainer = document.getElementById('cards-container');
+        var txListContainer = document.getElementById('bill-txs-list');
+        var noTxMsg = document.getElementById('no-tx-msg');
+        var billStatusBadge = document.getElementById('bill-status-badge');
+        var billCloseDate = document.getElementById('bill-close-date');
+        var billDueDate = document.getElementById('bill-due-date');
+        var billTotalVal = document.getElementById('bill-total-val');
+        var btnPayBill = document.getElementById('btn-pay-bill');
+        var btnRevertPay = document.getElementById('btn-revert-pay');
+        var billLoading = document.getElementById('bill-loading');
+        var txLoading = document.getElementById('tx-loading');
+
+        // Initial setup
+        var today = new Date();
+        var now = new Date();
+        var params = new URLSearchParams(window.location.search);
+        var defaultMonth = parseInt(params.get('month')) || (now.getMonth() + 1);
+        var defaultYear = parseInt(params.get('year')) || now.getFullYear();
+        monthSelect.value = String(defaultMonth);
+        yearSelect.value = String(defaultYear);
+
+        // Toast system helper
+        function showToast(message, type = 'info') {
+            const toastBox = document.getElementById('toast-box');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            let iconClass = 'fa-circle-info';
+            if (type === 'success') iconClass = 'fa-circle-check';
+            if (type === 'error') iconClass = 'fa-circle-exclamation';
+
+            toast.innerHTML = `
+                <i class="fa-solid ${iconClass}"></i>
+                <span>${escapeHtml(message)}</span>
+                <i class="fa-solid fa-xmark toast-close"></i>
+            `;
+            
+            toast.querySelector('.toast-close').addEventListener('click', () => {
+                toast.style.animation = 'fadeOut 0.3s forwards';
+                setTimeout(() => toast.remove(), 300);
+            });
+
+            toastBox.appendChild(toast);
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.style.animation = 'fadeOut 0.3s forwards';
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 4000);
+        }
+
+        // Modals management
+        function openModal(id) {
+            document.getElementById(id).classList.add('open');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('open');
+        }
+
+        // Close modal on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const activeModal = document.querySelector('.modal-overlay.open');
+                if (activeModal) {
+                    closeModal(activeModal.id);
+                }
+            }
+        });
+
+        // Setup Month/Year tabs dates
+        function getBillCycleInfo(billType, refMonth, refYear) {
+            let m = parseInt(refMonth);
+            let y = parseInt(refYear);
+
+            if (billType === 'past') {
+                m = m - 1;
+                if (m === 0) { m = 12; y = y - 1; }
+            } else if (billType === 'future') {
+                m = m + 1;
+                if (m === 13) { m = 1; y = y + 1; }
+            }
+
+            return { month: m, year: y };
+        }
+
+        function updateTabLabels() {
+            const m = parseInt(monthSelect.value);
+            const y = parseInt(yearSelect.value);
+
+            const pastCycle = getBillCycleInfo('past', m, y);
+            const futureCycle = getBillCycleInfo('future', m, y);
+
+            const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+            
+            document.getElementById('tab-past').textContent = `Passada (${monthNames[pastCycle.month - 1]})`;
+            document.getElementById('tab-current').textContent = `Atual (${monthNames[m - 1]})`;
+            document.getElementById('tab-future').textContent = `Futura (${monthNames[futureCycle.month - 1]})`;
+        }
+
+        function selectBillType(type) {
+            document.querySelectorAll('.bill-tab').forEach(tab => tab.classList.remove('active'));
+            if (type === 'past') document.getElementById('tab-past').classList.add('active');
+            if (type === 'current') document.getElementById('tab-current').classList.add('active');
+            if (type === 'future') document.getElementById('tab-future').classList.add('active');
+            
+            selectedBillType = type;
+            loadBillDetails();
+        }
+
+        // Card selection
+        async function selectCard(cardId) {
+            const cardObj = creditCards.find(c => c.id === cardId);
+            if (!cardObj) return;
+            
+            activeCard = cardObj;
+            
+            // Update edit button visibility
+            const editBtn = document.getElementById('btn-edit-card');
+            if (editBtn) {
+                editBtn.style.display = 'inline-flex';
+            }
+            
+            // UI select mockup class update
+            document.querySelectorAll('.credit-card-mockup').forEach(cardEl => {
+                cardEl.classList.remove('active');
+                const isCustom = cardEl.classList.contains('custom-card-style');
+                if (isCustom) {
+                    cardEl.style.boxShadow = '';
+                    cardEl.style.borderColor = '';
+                }
+                if (cardEl.dataset.id === cardId) {
+                    cardEl.classList.add('active');
+                    if (isCustom) {
+                        const styleInfo = getCardStyle(cardObj.name);
+                        cardEl.style.boxShadow = `0 0 25px ${styleInfo.glowColor}`;
+                        cardEl.style.borderColor = `hsla(${styleInfo.hue}, 80%, 65%, 0.7)`;
+                    }
+                }
+            });
+
+            await determineDefaultBillType();
+        }
+
+        async function determineDefaultBillType() {
+            if (!activeCard) return;
+
+            let defaultBillType = 'current';
+            
+            billLoading.classList.add('active');
+            txLoading.classList.add('active');
+
+            const refMonth = parseInt(monthSelect.value);
+            const refYear = parseInt(yearSelect.value);
+            const targetCycle = getBillCycleInfo('current', refMonth, refYear);
+
+            const params = new URLSearchParams({
+                card: activeCard.name,
+                month: targetCycle.month,
+                year: targetCycle.year
+            });
+
+            try {
+                const res = await fetch(`/api/bills?${params.toString()}`);
+                if (res.ok) {
+                    const billObj = await res.json();
+                    if (billObj && billObj.bill && (billObj.bill.status === 'closed' || billObj.bill.status === 'paid')) {
+                        defaultBillType = 'future';
+                    }
+                }
+            } catch (err) {
+                console.error("Error checking default bill status", err);
+            }
+
+            document.querySelectorAll('.bill-tab').forEach(tab => tab.classList.remove('active'));
+            if (defaultBillType === 'past') document.getElementById('tab-past').classList.add('active');
+            if (defaultBillType === 'current') document.getElementById('tab-current').classList.add('active');
+            if (defaultBillType === 'future') document.getElementById('tab-future').classList.add('active');
+            
+            selectedBillType = defaultBillType;
+            await loadBillDetails();
+        }
+
+        // Fetch cards, accounts and categories
+        async function fetchInitialData() {
+            try {
+                const [cardsRes, accsRes, catsRes] = await Promise.all([
+                    fetch('/api/credit-cards'),
+                    fetch('/api/accounts'),
+                    fetch('/api/categories')
+                ]);
+
+                if (cardsRes.ok) creditCards = await cardsRes.json();
+                if (accsRes.ok) accounts = await accsRes.json();
+                if (catsRes.ok) categories = await catsRes.json();
+
+                // Sort categories
+                categories.sort((a,b) => a.name.localeCompare(b.name));
+                
+                // Populate Add Transaction category dropdown
+                const catSelect = document.getElementById('add-category');
+                catSelect.innerHTML = '';
+                categories.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.name;
+                    opt.textContent = c.name;
+                    catSelect.appendChild(opt);
+                });
+
+                renderCardsCarousel();
+                updateTabLabels();
+
+                // Select first card by default
+                if (creditCards.length > 0) {
+                    selectCard(creditCards[0].id);
+                }
+            } catch (err) {
+                console.error("Error loading initial data", err);
+                showToast("Erro ao carregar dados dos cartões e contas.", "error");
+            }
+        }
+
+        // Hash function for stable card characteristics
+        function getCardHash(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return Math.abs(hash);
+        }
+
+        // Get card styling (preset class or dynamic HSL gradient)
+        function getCardStyle(name) {
+            const lower = name.toLowerCase();
+            
+            // Preset keyword check
+            if (lower.includes('infinite')) {
+                return { isPreset: true, className: 'personnalite-infinite', style: '', textClass: '' };
+            }
+            if (lower.includes('ultravioleta') || lower.includes('nubank')) {
+                return { isPreset: true, className: 'ultravioleta-black', style: '', textClass: '' };
+            }
+            if (lower.includes('black') && (lower.includes('itau') || lower.includes('personnalite'))) {
+                return { isPreset: true, className: 'personnalite-black', style: '', textClass: '' };
+            }
+            
+            // Dynamic generated gradient for other cards!
+            const hash = getCardHash(name);
+            const hue1 = hash % 360;
+            const hue2 = (hue1 + 35) % 360; // 35 degrees difference for analog harmony
+            const saturation = 45 + (hash % 15); // 45-60%
+            const lightness1 = 12 + (hash % 6);  // 12-18%
+            const lightness2 = 25 + (hash % 10); // 25-35%
+            
+            const gradient = `linear-gradient(135deg, hsl(${hue1}, ${saturation}%, ${lightness1}%) 0%, hsl(${hue1}, ${saturation}%, ${lightness2}%) 60%, hsl(${hue2}, ${saturation + 10}%, ${lightness2 + 10}%) 100%)`;
+            const border = `1px solid hsla(${hue1}, ${saturation}%, 50%, 0.25)`;
+            const glowColor = `hsla(${hue1}, ${saturation}%, 50%, 0.35)`;
+            
+            return {
+                isPreset: false,
+                className: 'custom-card-style',
+                style: `background: ${gradient}; border: ${border};`,
+                glowColor: glowColor,
+                hue: hue1
+            };
+        }
+
+        // Render Card Carousel with Premium mockups
+        function renderCardsCarousel() {
+            cardsContainer.innerHTML = '';
+            
+            creditCards.forEach(c => {
+                const styleInfo = getCardStyle(c.name);
+                let mockupType = 'VISA';
+                if (c.name.toLowerCase().includes('mastercard') || c.name.toLowerCase().includes('black') || c.name.toLowerCase().includes('ultravioleta')) {
+                    mockupType = 'Mastercard';
+                } else if (c.name.toLowerCase().includes('elo')) {
+                    mockupType = 'Elo';
+                } else if (c.name.toLowerCase().includes('amex') || c.name.toLowerCase().includes('express')) {
+                    mockupType = 'American Express';
+                }
+
+                // Stable mock digits based on ID/Name
+                const hashVal = getCardHash(c.id || c.name);
+                const lastDigitsVal = String(hashVal % 10000).padStart(4, '0');
+                const lastDigits = `•••• ${lastDigitsVal}`;
+
+                const div = document.createElement('div');
+                div.className = `credit-card-mockup ${styleInfo.className} ${activeCard && activeCard.id === c.id ? 'active' : ''}`;
+                div.dataset.id = c.id;
+                div.onclick = () => selectCard(c.id);
+
+                if (!styleInfo.isPreset) {
+                    div.setAttribute('style', styleInfo.style);
+                    if (activeCard && activeCard.id === c.id) {
+                        div.style.boxShadow = `0 0 25px ${styleInfo.glowColor}`;
+                        div.style.borderColor = `hsla(${styleInfo.hue}, 80%, 65%, 0.7)`;
+                    }
+                }
+
+                const fmtLimit = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: c.currency }).format(c.limit);
+
+                div.innerHTML = `
+                    <div class="card-header-mock">
+                        <div class="card-name-mock">${escapeHtml(c.name)}</div>
+                        <div style="font-size:0.75rem; font-weight:700; opacity:0.8; letter-spacing:0.05em;">${mockupType}</div>
+                    </div>
+                    <div class="card-number-mock">${lastDigits}</div>
+                    <div class="card-chip"></div>
+                    <div class="card-footer-mock">
+                        <div>
+                            <div class="card-holder-mock">Titular</div>
+                            <div class="card-holder-name">RAFAEL F CARNEIRO</div>
+                        </div>
+                        <div class="card-limit-mock">
+                            <div class="card-limit-label">Limite</div>
+                            <div class="card-limit-value">${fmtLimit}</div>
+                        </div>
+                    </div>
+                `;
+                cardsContainer.appendChild(div);
+            });
+        }
+
+        // Load specific bill details
+        async function loadBillDetails() {
+            if (!activeCard) return;
+
+            billLoading.classList.add('active');
+            txLoading.classList.add('active');
+
+            const refMonth = parseInt(monthSelect.value);
+            const refYear = parseInt(yearSelect.value);
+            
+            const targetCycle = getBillCycleInfo(selectedBillType, refMonth, refYear);
+
+            const params = new URLSearchParams({
+                card: activeCard.name,
+                month: targetCycle.month,
+                year: targetCycle.year
+            });
+
+            try {
+                const res = await fetch(`/api/bills?${params.toString()}`);
+                
+                if (res.ok) {
+                    currentBill = await res.json();
+                } else if (res.status === 404) {
+                    // Fallback for not yet created/empty bill
+                    const closeDay = activeCard.closingDay || 1;
+                    const dueDay = activeCard.dueDay || 8;
+                    const padMonth = String(targetCycle.month).padStart(2, '0');
+                    
+                    currentBill = {
+                        bill: {
+                            id: null,
+                            month: targetCycle.month,
+                            year: targetCycle.year,
+                            closeDate: `${targetCycle.year}-${padMonth}-${String(closeDay).padStart(2, '0')}`,
+                            dueDate: `${targetCycle.year}-${padMonth}-${String(dueDay).padStart(2, '0')}`,
+                            status: 'open',
+                            statusLabel: 'Aberta'
+                        },
+                        cardName: activeCard.name,
+                        transactions: [],
+                        total: 0
+                    };
+                } else {
+                    throw new Error("Erro de conexão com o servidor");
+                }
+
+                renderBillSummary();
+                renderTransactionsTable();
+            } catch (err) {
+                console.error("Error loading bill details", err);
+                showToast("Erro ao carregar os detalhes da fatura.", "error");
+            } finally {
+                billLoading.classList.remove('active');
+                txLoading.classList.remove('active');
+            }
+        }
+
+        // Render left summary panel
+        function renderBillSummary() {
+            if (!currentBill) return;
+
+            const b = currentBill.bill || {};
+            const status = b.status || 'open';
+            const statusLabel = b.statusLabel || 'Aberta';
+
+            // Set badge status text & class
+            billStatusBadge.className = `bill-status-badge ${status}`;
+            billStatusBadge.innerHTML = `
+                <i class="fa-solid ${status === 'paid' ? 'fa-circle-check' : (status === 'closed' ? 'fa-lock' : 'fa-lock-open')}"></i>
+                <span>${statusLabel}</span>
+            `;
+
+            // Dates
+            const fmtDate = (dStr) => {
+                if (!dStr) return '-';
+                const parts = dStr.split('-');
+                return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            };
+            billCloseDate.textContent = fmtDate(b.closeDate);
+            billDueDate.textContent = fmtDate(b.dueDate);
+
+            // Total Amount
+            const isBrl = activeCard.currency === 'BRL';
+            document.getElementById('bill-total-label').textContent = `Total da Fatura (${activeCard.currency})`;
+            
+            const fmtAmount = new Intl.NumberFormat(isBrl ? 'pt-BR' : 'en-US', {
+                style: 'currency',
+                currency: activeCard.currency
+            }).format(currentBill.total || 0);
+            
+            billTotalVal.textContent = fmtAmount;
+
+            // Handle actions visibility
+            if (status === 'paid') {
+                btnPayBill.style.display = 'none';
+                btnRevertPay.style.display = 'flex';
+            } else {
+                btnPayBill.style.display = 'flex';
+                btnRevertPay.style.display = 'none';
+                btnPayBill.disabled = (currentBill.total === 0);
+            }
+        }
+
+        // Toggle Table sorting
+        function toggleSort(column) {
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+            updateSortHeaders();
+            renderTransactionsTable();
+        }
+        function handleTxSearch(value) {
+            searchTerm = value.trim().toLowerCase();
+            renderTransactionsTable();
+        }
+        function updateSortHeaders() {
+            const columns = ['date', 'description', 'category', 'amount'];
+            columns.forEach(col => {
+                const link = document.getElementById(`sort-link-${col}`);
+                if (!link) return;
+                
+                if (sortColumn === col) {
+                    link.className = 'sort-link active';
+                    const label = col === 'date' ? 'Data' : col === 'description' ? 'Descrição' : col === 'category' ? 'Categoria' : 'Valor';
+                    link.innerHTML = `${label} ${sortDirection === 'asc' ? '▲' : '▼'}`;
+                } else {
+                    link.className = 'sort-link';
+                    const label = col === 'date' ? 'Data' : col === 'description' ? 'Descrição' : col === 'category' ? 'Categoria' : 'Valor';
+                    link.innerHTML = label;
+                }
+            });
+        }
+
+        // Render transactions list
+        // Render a single transaction item in the list
+        // Toggle expand/collapse drawer for transaction notes
+        function toggleTxExpand(event, el) {
+            if (event.target.closest('button') || event.target.closest('.action-btn') || event.target.closest('a')) {
+                return;
+            }
+            el.classList.toggle('expanded');
+        }
+
+        // Render a single transaction item in the list
+        function renderTxItem(t, container, showDateInline) {
+            const isBrl = t.currency === 'BRL';
+            const amtFormatted = new Intl.NumberFormat(isBrl ? 'pt-BR' : 'en-US', {
+                style: 'currency',
+                currency: t.currency
+            }).format(t.amount);
+
+            const isIncome = t.type === 'transfer' || t.type === 'income';
+            const amountClass = isIncome ? 'income' : 'expense';
+            const amountPrefix = isIncome ? '+' : '-';
+
+            // Get Category Colors & Icons
+            const categoryMap = {
+                'Bares e Restaurantes': { icon: 'fa-utensils', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)', text: '#c084fc' },
+                'Transporte': { icon: 'fa-car', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', text: '#93c5fd' },
+                'Compras': { icon: 'fa-bag-shopping', color: '#ec4899', bg: 'rgba(236, 72, 153, 0.1)', text: '#f9a8d4' },
+                'Supermercado': { icon: 'fa-cart-shopping', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', text: '#fcd34d' },
+                'Educação': { icon: 'fa-graduation-cap', color: '#f97316', bg: 'rgba(249, 115, 22, 0.1)', text: '#fdba74' },
+                'Moradia': { icon: 'fa-house', color: '#f43f5e', bg: 'rgba(244, 63, 94, 0.1)', text: '#fda4af' },
+                'Lazer': { icon: 'fa-gamepad', color: '#84cc16', bg: 'rgba(132, 204, 22, 0.1)', text: '#bef264' },
+                'Assinaturas': { icon: 'fa-rotate', color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.1)', text: '#67e8f9' },
+                'TV / Internet / Telefone': { icon: 'fa-wifi', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', text: '#6ee7b7' },
+                'Cuidados Pessoais': { icon: 'fa-heart', color: '#ec4899', bg: 'rgba(236, 72, 153, 0.1)', text: '#f9a8d4' },
+                'Saúde': { icon: 'fa-stethoscope', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', text: '#fca5a5' },
+                'Empréstimos p/ Terc': { icon: 'fa-hand-holding-dollar', color: '#64748b', bg: 'rgba(100, 116, 139, 0.1)', text: '#cbd5e1' }
+            };
+
+            let catName = t.categoryName || 'Sem Categoria';
+            let colColors = categoryMap[catName] || { icon: 'fa-receipt', color: '#a855f7', bg: 'rgba(168, 85, 247, 0.1)', text: '#d8b4fe' };
+
+            // Special overrides for payments
+            if (isIncome) {
+                catName = 'Pagamento';
+                colColors = { icon: 'fa-credit-card', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', text: '#6ee7b7' };
+            }
+
+            const isPaid = currentBill.bill && currentBill.bill.status === 'paid';
+            const actionButtons = isPaid 
+                ? `<span style="font-size:0.75rem; color:var(--text-dark); font-style:italic; min-width: 80px; text-align: center;">Fatura Paga</span>`
+                : `
+                    <div class="tx-item-actions">
+                        ${t.status === 'pending' ? `
+                        <button class="action-btn btn-confirm-icon" title="Confirmar" onclick="confirmTx('${t.id}', '${escapeJsAttr(t.description)}', '${t.date}', ${t.amount})">
+                            <i class="fa-solid fa-check"></i>
+                        </button>
+                        ` : ''}
+                        <button class="action-btn btn-change-icon" title="Mover Fatura" onclick="openReassignModal('${t.id}', '${escapeJsAttr(t.description)}', '${t.date}', ${t.amount})">
+                            <i class="fa-solid fa-calendar-days"></i>
+                        </button>
+                        <button class="action-btn btn-delete-icon" title="Excluir" onclick="deleteTx('${t.id}', '${escapeJsAttr(t.description)}')">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                `;
+
+            const txItem = document.createElement('div');
+            if (t.note) {
+                txItem.className = 'tx-list-item has-note';
+                txItem.setAttribute('onclick', 'toggleTxExpand(event, this)');
+            } else {
+                txItem.className = 'tx-list-item';
+            }
+
+            // Compile tags HTML
+            const tagsHtml = t.tags && t.tags.length > 0 
+                ? `<div style="display:flex; gap: 4px; flex-wrap:wrap; margin-top: 2px;">
+                    ${t.tags.map(tag => `<span class="badge-cat" style="font-size:0.65rem; padding:0.5px 3px; border-radius:3px; color:#c084fc; border-color:rgba(192, 132, 252, 0.2); background:rgba(192, 132, 252, 0.05);"><i class="fa-solid fa-tag" style="font-size:0.55rem;"></i> ${escapeHtml(tag)}</span>`).join('')}
+                   </div>` 
+                : '';
+
+            // Formatting inline date if shown flat
+            let inlineDateHtml = '';
+            if (showDateInline) {
+                const dateObj = new Date(t.date + 'T12:00:00');
+                const day = String(dateObj.getDate()).padStart(2, '0');
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                inlineDateHtml = `<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">• ${day}/${month}</span>`;
+            }
+
+            txItem.innerHTML = `
+                <div class="tx-item-row-content">
+                    <div class="tx-item-left">
+                        <div class="tx-item-icon" style="background: ${colColors.bg}; border-color: rgba(255, 255, 255, 0.05); color: ${colColors.color};">
+                            <i class="fa-solid ${colColors.icon}"></i>
+                        </div>
+                        <div class="tx-item-details">
+                            <span class="tx-item-desc">${escapeHtml(t.description)}</span>
+                            <div class="tx-item-meta">
+                                ${tagsHtml}
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Category badge in the middle to prevent tag/category confusion -->
+                    <div class="tx-item-category-middle" style="width: 155px; flex-shrink: 0; text-align: left; display: flex; align-items: center; gap: 6px;">
+                        <span class="badge-cat" style="background: ${colColors.bg}; border-color: ${colColors.bg}; color: ${colColors.text}; font-size: 0.7rem; font-weight: 500; padding: 1px 6px;">
+                            ${escapeHtml(catName)}
+                        </span>
+                        ${inlineDateHtml}
+                    </div>
+                    <div class="tx-item-right">
+                        <span class="tx-item-amount ${amountClass}">${amountPrefix} ${amtFormatted}</span>
+                        ${actionButtons}
+                        ${t.note ? `<i class="fa-solid fa-chevron-down tx-expand-chevron" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease; margin-left: 0.25rem;"></i>` : ''}
+                    </div>
+                </div>
+                ${t.note ? `
+                <div class="tx-item-drawer">
+                    <div class="tx-item-drawer-inner">
+                        <i class="fa-solid fa-comment-dots" style="color: var(--accent-primary); margin-right: 8px; margin-top: 2px;"></i>
+                        <span>${escapeHtml(t.note)}</span>
+                    </div>
+                </div>
+                ` : ''}
+            `;
+            container.appendChild(txItem);
+        }
+
+        function renderTransactionsTable() {
+            updateSortHeaders();
+            txListContainer.innerHTML = '';
+            
+            const txs = currentBill ? currentBill.transactions || [] : [];
+
+            // Apply search filter
+            let filteredTxs = [...txs];
+            if (searchTerm) {
+                filteredTxs = filteredTxs.filter(t => {
+                    const descMatch = t.description.toLowerCase().includes(searchTerm);
+                    // Special override for payment category name
+                    const isIncome = t.type === 'transfer' || t.type === 'income';
+                    const catName = isIncome ? 'pagamento' : (t.categoryName || 'Sem Categoria').toLowerCase();
+                    const catMatch = catName.includes(searchTerm);
+                    const noteMatch = t.note ? t.note.toLowerCase().includes(searchTerm) : false;
+                    const tagsMatch = t.tags ? t.tags.some(tag => tag.toLowerCase().includes(searchTerm)) : false;
+                    return descMatch || catMatch || noteMatch || tagsMatch;
+                });
+            }
+
+            if (filteredTxs.length === 0) {
+                noTxMsg.style.display = 'block';
+                noTxMsg.innerHTML = searchTerm 
+                    ? `<i class="fa-solid fa-magnifying-glass"></i> Nenhum resultado encontrado para "${escapeHtml(searchTerm)}".`
+                    : `<i class="fa-regular fa-folder-open"></i> Nenhum lançamento encontrado para esta fatura.`;
+                document.getElementById('bill-txs-list').style.display = 'none';
+                return;
+            }
+
+            noTxMsg.style.display = 'none';
+            document.getElementById('bill-txs-list').style.display = 'flex';
+
+            // Sorting logic
+            const sortedTxs = [...filteredTxs];
+            sortedTxs.sort((a, b) => {
+                let valA, valB;
+
+                if (sortColumn === 'date') {
+                    valA = a.date;
+                    valB = b.date;
+                } else if (sortColumn === 'description') {
+                    valA = a.description.toLowerCase();
+                    valB = b.description.toLowerCase();
+                } else if (sortColumn === 'category') {
+                    valA = (a.categoryName || 'Sem Categoria').toLowerCase();
+                    valB = (b.categoryName || 'Sem Categoria').toLowerCase();
+                } else if (sortColumn === 'amount') {
+                    valA = a.amount;
+                    valB = b.amount;
+                }
+
+                if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+                if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+
+                if (sortColumn !== 'date') {
+                    return a.date.localeCompare(b.date);
+                }
+                return 0;
+            });
+
+            if (sortColumn === 'date') {
+                // Grouping by Date
+                const groups = {};
+                sortedTxs.forEach(t => {
+                    const dateKey = t.date;
+                    if (!groups[dateKey]) {
+                        groups[dateKey] = {
+                            dateStr: dateKey,
+                            txs: [],
+                            total: 0
+                        };
+                    }
+                    groups[dateKey].txs.push(t);
+                    // Deduct payments from the totalizer, add purchases
+                    const isIncome = t.type === 'transfer' || t.type === 'income';
+                    if (isIncome) {
+                        groups[dateKey].total -= t.amount;
+                    } else {
+                        groups[dateKey].total += t.amount;
+                    }
+                });
+
+                // Sort day groups by date (respecting sortDirection)
+                const sortedGroupKeys = Object.keys(groups).sort((a, b) => {
+                    return sortDirection === 'asc' ? a.localeCompare(b) : b.localeCompare(a);
+                });
+
+                sortedGroupKeys.forEach(dateKey => {
+                    const group = groups[dateKey];
+                    
+                    // Formats for group header
+                    const dateObj = new Date(dateKey + 'T12:00:00');
+                    const formattedDate = dateObj.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+                    const capitalizedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
+                    
+                    const count = group.txs.length;
+                    const isBrl = activeCard && activeCard.currency === 'BRL';
+                    const currencySymbol = isBrl ? 'BRL' : (activeCard ? activeCard.currency : 'BRL');
+                    const groupTotalStr = new Intl.NumberFormat(isBrl ? 'pt-BR' : 'en-US', {
+                        style: 'currency',
+                        currency: currencySymbol
+                    }).format(group.total);
+
+                    // Create day group element
+                    const dayGroupDiv = document.createElement('div');
+                    dayGroupDiv.className = 'day-group';
+                    
+                    dayGroupDiv.innerHTML = `
+                        <div class="day-group-header">
+                            <span class="day-group-date"><i class="fa-solid fa-calendar-day"></i> ${capitalizedDate}</span>
+                            <span class="day-group-summary">${count} ${count === 1 ? 'lançamento' : 'lançamentos'} • <span class="day-group-sum-val">${groupTotalStr}</span></span>
+                        </div>
+                        <div class="day-group-items" id="items-${dateKey}"></div>
+                    `;
+                    txListContainer.appendChild(dayGroupDiv);
+
+                    const itemsContainer = document.getElementById(`items-${dateKey}`);
+
+                    // Render transactions for this day group
+                    group.txs.forEach(t => {
+                        renderTxItem(t, itemsContainer, false);
+                    });
+                });
+            } else {
+                // Flat list rendering for global sorting (without day groups)
+                const flatGroupDiv = document.createElement('div');
+                flatGroupDiv.className = 'day-group-items';
+                txListContainer.appendChild(flatGroupDiv);
+
+                sortedTxs.forEach(t => {
+                    renderTxItem(t, flatGroupDiv, true);
+                });
+            }
+        }
+
+        // Open modal to Add transaction
+        function openAddTxModal() {
+            if (!activeCard) return;
+
+            // Reset form
+            document.getElementById('form-add-tx').reset();
+
+            // Set default date
+            const refMonth = parseInt(monthSelect.value);
+            const refYear = parseInt(yearSelect.value);
+            const padMonth = String(refMonth).padStart(2, '0');
+            document.getElementById('add-date').value = `${refYear}-${padMonth}-01`;
+
+            // Populate Bill cycle options (Past, Current, Future relative)
+            const cycleSelect = document.getElementById('add-bill-cycle');
+            cycleSelect.innerHTML = '<option value="auto">Automática (Baseada na data)</option>';
+            
+            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+            const optionsCycles = [
+                getBillCycleInfo('past', refMonth, refYear),
+                { month: refMonth, year: refYear },
+                getBillCycleInfo('future', refMonth, refYear)
+            ];
+
+            optionsCycles.forEach(cy => {
+                const opt = document.createElement('option');
+                opt.value = `${cy.month}_${cy.year}`;
+                opt.textContent = `${monthNames[cy.month - 1]} ${cy.year}`;
+                if (cy.month === refMonth && cy.year === refYear) {
+                    opt.selected = true; // Default target
+                }
+                cycleSelect.appendChild(opt);
+            });
+
+            openModal('modal-add-tx');
+        }
+
+        // Add Transaction submit
+        async function handleAddTxSubmit(e) {
+            e.preventDefault();
+            if (!activeCard) return;
+
+            const desc = document.getElementById('add-desc').value;
+            const amt = parseFloat(document.getElementById('add-amount').value);
+            const dt = document.getElementById('add-date').value;
+            const cat = document.getElementById('add-category').value;
+            const billCycle = document.getElementById('add-bill-cycle').value;
+            const note = document.getElementById('add-note').value;
+            const tagsStr = document.getElementById('add-tags').value;
+            const tags = tagsStr.split(',')
+                .map(t => t.trim())
+                .filter(t => t.length > 0);
+
+            const payload = {
+                description: desc,
+                amount: amt,
+                type: 'expense',
+                date: dt,
+                card: activeCard.name,
+                category: cat,
+                note: note,
+                idempotencyKey: `purchase-${dt}-${desc}-${amt}-${Math.random().toString(36).substr(2, 9)}`
+            };
+
+            if (tags.length > 0) {
+                payload.tags = tags;
+            }
+
+            // Explicit bill re-assignment if not auto
+            if (billCycle !== 'auto') {
+                const parts = billCycle.split('_');
+                payload.billMonth = parseInt(parts[0]);
+                payload.billYear = parseInt(parts[1]);
+            }
+
+            closeModal('modal-add-tx');
+            txLoading.classList.add('active');
+            billLoading.classList.add('active');
+
+            try {
+                const res = await fetch('/api/credit-cards/purchases', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const errRes = await res.json();
+                    throw new Error(errRes.error?.hint || errRes.error?.message || "Falha ao criar transação");
+                }
+
+                showToast(`Compra "${desc}" adicionada com sucesso!`, 'success');
+                await loadBillDetails();
+            } catch (err) {
+                console.error("Add transaction error", err);
+                showToast(`Erro ao adicionar: ${err.message}`, 'error');
+            } finally {
+                txLoading.classList.remove('active');
+                billLoading.classList.remove('active');
+            }
+        }
+
+        // Open modal to Add credit card
+        function openAddCardModal() {
+            // Reset form
+            document.getElementById('form-add-card').reset();
+            
+            // Populate payment account select
+            const payAccSelect = document.getElementById('card-add-payment-account');
+            payAccSelect.innerHTML = '<option value="">Selecionar...</option>';
+            payAccSelect.style.color = 'var(--text-muted)';
+            const filteredAccounts = accounts.filter(acc => acc.type === 'checking' || acc.type === 'savings');
+            filteredAccounts.forEach(acc => {
+                const opt = document.createElement('option');
+                opt.value = acc.name;
+                opt.textContent = acc.name;
+                opt.style.color = 'var(--text-main)'; // Reset color inside options
+                payAccSelect.appendChild(opt);
+            });
+            
+            // Change color dynamically when selected
+            payAccSelect.onchange = () => {
+                if (payAccSelect.value === '') {
+                    payAccSelect.style.color = 'var(--text-muted)';
+                } else {
+                    payAccSelect.style.color = 'var(--text-main)';
+                }
+            };
+            
+            // Default select values
+            document.getElementById('card-add-closing-day').value = 5;
+            document.getElementById('card-add-due-day').value = 15;
+            
+            // Trigger preview render
+            updateCardPreview();
+            
+            openModal('modal-add-card');
+        }
+
+        // Update Card design Live Preview
+        function updateCardPreview() {
+            const nameInput = document.getElementById('card-add-name');
+            const limitInput = document.getElementById('card-add-limit');
+            
+            const name = nameInput.value || 'Nome do Cartão';
+            const limitVal = parseFloat(limitInput.value) || 0;
+            const currency = document.getElementById('card-add-currency').value || 'BRL';
+            
+            // Determine card brand logo
+            let brand = 'VISA';
+            const lowerName = name.toLowerCase();
+            if (lowerName.includes('mastercard') || lowerName.includes('black') || lowerName.includes('ultravioleta')) {
+                brand = 'Mastercard';
+            } else if (lowerName.includes('elo')) {
+                brand = 'Elo';
+            } else if (lowerName.includes('amex') || lowerName.includes('express')) {
+                brand = 'American Express';
+            }
+            
+            // Stable card number mock digits from name hash
+            const hash = getCardHash(name);
+            const lastDigitsVal = String(hash % 10000).padStart(4, '0');
+            
+            // Get style info
+            const styleInfo = getCardStyle(name);
+            const previewEl = document.getElementById('card-preview-element');
+            if (!previewEl) return;
+            
+            // Reset classes and styles
+            previewEl.className = `credit-card-mockup ${styleInfo.className} active`; // Always active/glowing in preview!
+            previewEl.style.cssText = 'pointer-events: none; width: 320px; height: 190px; margin: 0;';
+            
+            if (!styleInfo.isPreset) {
+                previewEl.setAttribute('style', `pointer-events: none; width: 320px; height: 190px; margin: 0; ${styleInfo.style}`);
+                previewEl.style.boxShadow = `0 0 25px ${styleInfo.glowColor}`;
+                previewEl.style.borderColor = `hsla(${styleInfo.hue}, 80%, 65%, 0.7)`;
+            } else {
+                // Preset styling glows
+                if (styleInfo.className === 'personnalite-black') {
+                    previewEl.style.borderColor = '#d4af37';
+                    previewEl.style.boxShadow = '0 0 25px rgba(212, 175, 55, 0.35)';
+                } else if (styleInfo.className === 'personnalite-infinite') {
+                    previewEl.style.borderColor = '#00c8ff';
+                    previewEl.style.boxShadow = '0 0 25px rgba(0, 200, 255, 0.35)';
+                } else if (styleInfo.className === 'ultravioleta-black') {
+                    previewEl.style.borderColor = '#a855f7';
+                    previewEl.style.boxShadow = '0 0 25px rgba(168, 85, 247, 0.35)';
+                }
+            }
+            
+            const fmtLimit = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: currency }).format(limitVal);
+            
+            previewEl.innerHTML = `
+                <div class="card-header-mock">
+                    <div class="card-name-mock">${escapeHtml(name)}</div>
+                    <div style="font-size:0.75rem; font-weight:700; opacity:0.8; letter-spacing:0.05em;">${brand}</div>
+                </div>
+                <div class="card-number-mock">•••• ${lastDigitsVal}</div>
+                <div class="card-chip"></div>
+                <div class="card-footer-mock">
+                    <div>
+                        <div class="card-holder-mock">Titular</div>
+                        <div class="card-holder-name">RAFAEL F CARNEIRO</div>
+                    </div>
+                    <div class="card-limit-mock">
+                        <div class="card-limit-label">Limite</div>
+                        <div class="card-limit-value">${fmtLimit}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Add Credit Card submit
+        async function handleAddCardSubmit(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('card-add-name').value;
+            const limit = parseFloat(document.getElementById('card-add-limit').value);
+            const closing = parseInt(document.getElementById('card-add-closing-day').value);
+            const due = parseInt(document.getElementById('card-add-due-day').value);
+            const currency = document.getElementById('card-add-currency').value;
+            const payAcc = document.getElementById('card-add-payment-account').value;
+            
+            const payload = {
+                name: name,
+                limit: limit,
+                closingDay: closing,
+                dueDay: due,
+                currency: currency
+            };
+            
+            if (payAcc) {
+                payload.paymentAccount = payAcc;
+            }
+            
+            closeModal('modal-add-card');
+            billLoading.classList.add('active');
+            
+            try {
+                const res = await fetch('/api/credit-cards', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!res.ok) {
+                    const errRes = await res.json();
+                    throw new Error(errRes.error?.message || "Falha ao criar cartão de crédito");
+                }
+                
+                showToast(`Cartão "${name}" criado com sucesso!`, 'success');
+                
+                // Reload cards and select the new one!
+                const freshCardsRes = await fetch('/api/credit-cards');
+                if (freshCardsRes.ok) {
+                    creditCards = await freshCardsRes.json();
+                    renderCardsCarousel();
+                    // Find the newly created card and select it
+                    const newCardObj = creditCards.find(c => c.name === name);
+                    if (newCardObj) {
+                        selectCard(newCardObj.id);
+                    }
+                }
+            } catch (err) {
+                console.error("Create credit card error", err);
+                showToast(`Erro ao criar cartão: ${err.message}`, 'error');
+            } finally {
+                billLoading.classList.remove('active');
+            }
+        }
+
+        // Open modal to Edit credit card
+        function openEditCardModal() {
+            if (!activeCard) return;
+
+            // Populate form fields with selected card details
+            document.getElementById('card-edit-name').value = activeCard.name;
+            document.getElementById('card-edit-limit').value = activeCard.limit;
+            document.getElementById('card-edit-closing-day').value = activeCard.closingDay;
+            document.getElementById('card-edit-due-day').value = activeCard.dueDay;
+            document.getElementById('card-edit-currency').value = activeCard.currency;
+
+            // Populate payment account select
+            const payAccSelect = document.getElementById('card-edit-payment-account');
+            payAccSelect.innerHTML = '<option value="">Selecionar...</option>';
+            payAccSelect.style.color = 'var(--text-muted)';
+            
+            // Filter accounts of same currency
+            const filteredAccounts = accounts.filter(acc => (acc.type === 'checking' || acc.type === 'savings') && acc.currency === activeCard.currency);
+            filteredAccounts.forEach(acc => {
+                const opt = document.createElement('option');
+                opt.value = acc.name;
+                opt.textContent = acc.name;
+                opt.style.color = 'var(--text-main)'; // Reset color inside options
+                if (activeCard.paymentAccountId === acc.id || activeCard.paymentAccountName === acc.name) {
+                    opt.selected = true;
+                    payAccSelect.style.color = 'var(--text-main)';
+                }
+                payAccSelect.appendChild(opt);
+            });
+
+            // Change color dynamically when selected
+            payAccSelect.onchange = () => {
+                if (payAccSelect.value === '') {
+                    payAccSelect.style.color = 'var(--text-muted)';
+                } else {
+                    payAccSelect.style.color = 'var(--text-main)';
+                }
+            };
+
+            // Trigger preview render
+            updateCardEditPreview();
+
+            openModal('modal-edit-card');
+        }
+
+        // Update Card design Live Preview (Edit Modal)
+        function updateCardEditPreview() {
+            const nameInput = document.getElementById('card-edit-name');
+            const limitInput = document.getElementById('card-edit-limit');
+            
+            const name = nameInput.value || 'Nome do Cartão';
+            const limitVal = parseFloat(limitInput.value) || 0;
+            const currency = document.getElementById('card-edit-currency').value || 'BRL';
+            
+            // Determine card brand logo
+            let brand = 'VISA';
+            const lowerName = name.toLowerCase();
+            if (lowerName.includes('mastercard') || lowerName.includes('black') || lowerName.includes('ultravioleta')) {
+                brand = 'Mastercard';
+            } else if (lowerName.includes('elo')) {
+                brand = 'Elo';
+            } else if (lowerName.includes('amex') || lowerName.includes('express')) {
+                brand = 'American Express';
+            }
+            
+            // Stable card number mock digits from name hash
+            const hash = getCardHash(name);
+            const lastDigitsVal = String(hash % 10000).padStart(4, '0');
+            
+            // Get style info
+            const styleInfo = getCardStyle(name);
+            const previewEl = document.getElementById('card-edit-preview-element');
+            if (!previewEl) return;
+            
+            // Reset classes and styles
+            previewEl.className = `credit-card-mockup ${styleInfo.className} active`; // Always active/glowing in preview!
+            previewEl.style.cssText = 'pointer-events: none; width: 320px; height: 190px; margin: 0;';
+            
+            if (!styleInfo.isPreset) {
+                previewEl.setAttribute('style', `pointer-events: none; width: 320px; height: 190px; margin: 0; ${styleInfo.style}`);
+                previewEl.style.boxShadow = `0 0 25px ${styleInfo.glowColor}`;
+                previewEl.style.borderColor = `hsla(${styleInfo.hue}, 80%, 65%, 0.7)`;
+            } else {
+                // Preset styling glows
+                if (styleInfo.className === 'personnalite-black') {
+                    previewEl.style.borderColor = '#d4af37';
+                    previewEl.style.boxShadow = '0 0 25px rgba(212, 175, 55, 0.35)';
+                } else if (styleInfo.className === 'personnalite-infinite') {
+                    previewEl.style.borderColor = '#00c8ff';
+                    previewEl.style.boxShadow = '0 0 25px rgba(0, 200, 255, 0.35)';
+                } else if (styleInfo.className === 'ultravioleta-black') {
+                    previewEl.style.borderColor = '#a855f7';
+                    previewEl.style.boxShadow = '0 0 25px rgba(168, 85, 247, 0.35)';
+                }
+            }
+            
+            const fmtLimit = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: currency }).format(limitVal);
+            
+            previewEl.innerHTML = `
+                <div class="card-header-mock">
+                    <div class="card-name-mock">${escapeHtml(name)}</div>
+                    <div style="font-size:0.75rem; font-weight:700; opacity:0.8; letter-spacing:0.05em;">${brand}</div>
+                </div>
+                <div class="card-number-mock">•••• ${lastDigitsVal}</div>
+                <div class="card-chip"></div>
+                <div class="card-footer-mock">
+                    <div>
+                        <div class="card-holder-mock">Titular</div>
+                        <div class="card-holder-name">RAFAEL F CARNEIRO</div>
+                    </div>
+                    <div class="card-limit-mock">
+                        <div class="card-limit-label">Limite</div>
+                        <div class="card-limit-value">${fmtLimit}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Edit Credit Card submit
+        async function handleEditCardSubmit(e) {
+            e.preventDefault();
+            if (!activeCard) return;
+
+            const name = document.getElementById('card-edit-name').value;
+            const limit = parseFloat(document.getElementById('card-edit-limit').value);
+            const closing = parseInt(document.getElementById('card-edit-closing-day').value);
+            const due = parseInt(document.getElementById('card-edit-due-day').value);
+            const payAcc = document.getElementById('card-edit-payment-account').value;
+
+            const payload = {
+                limit: limit,
+                closingDay: closing,
+                dueDay: due
+            };
+
+            if (name !== activeCard.name) {
+                payload.newName = name;
+            }
+            if (payAcc) {
+                payload.paymentAccount = payAcc;
+            }
+
+            closeModal('modal-edit-card');
+            billLoading.classList.add('active');
+
+            try {
+                const res = await fetch(`/api/credit-cards/${encodeURIComponent(activeCard.name)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const errRes = await res.json();
+                    throw new Error(errRes.error?.message || "Falha ao editar cartão de crédito");
+                }
+
+                showToast(`Cartão "${name}" atualizado com sucesso!`, 'success');
+
+                // Reload cards and reselect the updated one
+                await loadCreditCards();
+                
+                const updatedCard = creditCards.find(c => c.name === name) || creditCards[0];
+                if (updatedCard) {
+                    await selectCard(updatedCard.id);
+                } else {
+                    await loadBillDetails();
+                }
+            } catch (err) {
+                console.error("Failed to edit card:", err);
+                showToast(`Erro ao editar cartão: ${err.message}`, 'error');
+            } finally {
+                billLoading.classList.remove('active');
+            }
+        }
+
+        // Load credit cards list
+        async function loadCreditCards() {
+            const res = await fetch('/api/credit-cards');
+            if (res.ok) {
+                creditCards = await res.json();
+                renderCardsCarousel();
+            }
+        }
+
+        // Reassign Bill Modal
+        function openReassignModal(id, desc, date, amount) {
+            document.getElementById('reassign-tx-id').value = id;
+            document.getElementById('reassign-tx-desc').textContent = desc;
+            
+            const fmtAmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: activeCard.currency }).format(amount);
+            const dateObj = new Date(date + 'T12:00:00');
+            const dateStr = dateObj.toLocaleDateString('pt-BR');
+            document.getElementById('reassign-tx-details').textContent = `${dateStr} • ${fmtAmt}`;
+
+            const refMonth = parseInt(monthSelect.value);
+            const refYear = parseInt(yearSelect.value);
+            
+            const cycleSelect = document.getElementById('reassign-cycle');
+            cycleSelect.innerHTML = '';
+            
+            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+            const optionsCycles = [
+                getBillCycleInfo('past', refMonth, refYear),
+                { month: refMonth, year: refYear },
+                getBillCycleInfo('future', refMonth, refYear)
+            ];
+
+            optionsCycles.forEach(cy => {
+                const opt = document.createElement('option');
+                opt.value = `${cy.month}_${cy.year}`;
+                opt.textContent = `${monthNames[cy.month - 1]} ${cy.year}`;
+                
+                // Pre-select current target bill of current transaction if known
+                if (currentBill.bill && cy.month === currentBill.bill.month && cy.year === currentBill.bill.year) {
+                    opt.selected = true;
+                }
+                cycleSelect.appendChild(opt);
+            });
+
+            openModal('modal-reassign');
+        }
+
+        // Reassign Submit
+        async function handleReassignSubmit(e) {
+            e.preventDefault();
+            const txId = document.getElementById('reassign-tx-id').value;
+            const cycle = document.getElementById('reassign-cycle').value;
+            const parts = cycle.split('_');
+            const month = parseInt(parts[0]);
+            const year = parseInt(parts[1]);
+
+            closeModal('modal-reassign');
+            txLoading.classList.add('active');
+            billLoading.classList.add('active');
+
+            try {
+                const res = await fetch(`/api/credit-cards/transactions/${txId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        billMonth: month,
+                        billYear: year
+                    })
+                });
+
+                if (!res.ok) {
+                    const errRes = await res.json();
+                    throw new Error(errRes.error?.message || "Falha ao mudar fatura");
+                }
+
+                showToast("Fatura do lançamento reatribuída com sucesso!", "success");
+                await loadBillDetails();
+            } catch (err) {
+                console.error("Reassignment error", err);
+                showToast(`Erro ao reatribuir: ${err.message}`, "error");
+            } finally {
+                txLoading.classList.remove('active');
+                billLoading.classList.remove('active');
+            }
+        }
+
+        // Confirm Transaction
+        async function confirmTx(id, description, date, amount) {
+            document.getElementById('confirm-tx-id').value = id;
+            document.getElementById('confirm-tx-desc').textContent = description;
+            
+            const dateInput = document.getElementById('confirm-tx-date');
+            const todayStr = new Date().toISOString().split('T')[0];
+            
+            if (dateInput._flatpickr) {
+                dateInput._flatpickr.setDate(date || todayStr, true);
+                dateInput._flatpickr.set('maxDate', todayStr);
+            } else {
+                dateInput.value = date || todayStr;
+                dateInput.max = todayStr;
+            }
+            
+            document.getElementById('confirm-tx-amount').value = amount || '';
+            
+            openModal('modal-confirm-tx');
+        }
+
+        async function handleConfirmSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('confirm-tx-id').value;
+            const description = document.getElementById('confirm-tx-desc').textContent;
+            const date = document.getElementById('confirm-tx-date').value;
+            const amount = parseFloat(document.getElementById('confirm-tx-amount').value);
+
+            closeModal('modal-confirm-tx');
+            txLoading.classList.add('active');
+            billLoading.classList.add('active');
+
+            try {
+                const res = await fetch(`/api/transactions/${id}/confirm`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date, amount })
+                });
+
+                if (!res.ok) {
+                    const errRes = await res.json();
+                    throw new Error(errRes.error?.message || "Erro ao confirmar transação");
+                }
+
+                showToast(`Transação "${description}" confirmada com sucesso!`, 'success');
+                await loadBillDetails();
+            } catch (err) {
+                console.error("Confirmation error:", err);
+                showToast(`Erro ao confirmar: ${err.message}`, 'error');
+            } finally {
+                txLoading.classList.remove('active');
+                billLoading.classList.remove('active');
+            }
+        }
+
+        // Delete Transaction
+        async function deleteTx(id, description) {
+            if (!confirm(`Deseja excluir definitivamente o lançamento "${description}"?`)) {
+                return;
+            }
+
+            txLoading.classList.add('active');
+            billLoading.classList.add('active');
+
+            try {
+                const res = await fetch(`/api/credit-cards/transactions/${id}?confirm=true`, {
+                    method: 'DELETE'
+                });
+
+                if (!res.ok) throw new Error("Erro ao excluir transação");
+
+                showToast(`Lançamento "${description}" excluído com sucesso!`, 'success');
+                await loadBillDetails();
+            } catch (err) {
+                console.error("Deletion error:", err);
+                showToast(`Erro ao excluir: ${err.message}`, 'error');
+            } finally {
+                txLoading.classList.remove('active');
+                billLoading.classList.remove('active');
+            }
+        }
+
+        // Pay Bill Modal
+        function openPayModal() {
+            if (!currentBill || !activeCard) return;
+
+            document.getElementById('pay-card-name').textContent = activeCard.name;
+            
+            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+            const b = currentBill.bill || {};
+            document.getElementById('pay-bill-cycle').textContent = `Ciclo de Fatura: ${monthNames[b.month - 1]} / ${b.year}`;
+
+            const isBrl = activeCard.currency === 'BRL';
+            const fmtAmount = new Intl.NumberFormat(isBrl ? 'pt-BR' : 'en-US', {
+                style: 'currency',
+                currency: activeCard.currency
+            }).format(currentBill.total || 0);
+
+            document.getElementById('pay-bill-total').textContent = fmtAmount;
+
+            // Populate account select
+            const accSelect = document.getElementById('pay-account');
+            accSelect.innerHTML = '';
+            
+            // Only checking accounts or wallets matching the card currency (BRL or USD)
+            const validAccounts = accounts.filter(a => a.type !== 'credit' && a.currency === activeCard.currency);
+            
+            validAccounts.forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a.name;
+                opt.textContent = `${a.name}`;
+                
+                // Pre-select the payment account id match if matching
+                if (activeCard.paymentAccountId === a.id) {
+                    opt.selected = true;
+                }
+                accSelect.appendChild(opt);
+            });
+
+            // Pre-fill payment date to today and set max to today
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const todayStr = `${yyyy}-${mm}-${dd}`;
+            const dateInput = document.getElementById('pay-date');
+            if (dateInput._flatpickr) {
+                dateInput._flatpickr.setDate(todayStr, true);
+                dateInput._flatpickr.set('maxDate', todayStr);
+            } else {
+                dateInput.value = todayStr;
+                dateInput.max = todayStr;
+            }
+
+            openModal('modal-pay-bill');
+        }
+
+        // Pay Bill Submit
+        async function handlePaySubmit(e) {
+            e.preventDefault();
+            if (!currentBill || !activeCard) return;
+
+            const payAccName = document.getElementById('pay-account').value;
+            const payDate = document.getElementById('pay-date').value;
+            const b = currentBill.bill || {};
+
+            closeModal('modal-pay-bill');
+            billLoading.classList.add('active');
+
+            try {
+                const res = await fetch('/api/bills/pay', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        card: activeCard.name,
+                        month: b.month,
+                        year: b.year,
+                        account: payAccName,
+                        paymentDate: payDate
+                    })
+                });
+
+                if (!res.ok) {
+                    const errRes = await res.json();
+                    throw new Error(errRes.error?.message || "Erro no pagamento");
+                }
+
+                showToast(`Fatura de ${activeCard.name} paga com sucesso!`, 'success');
+                await loadBillDetails();
+            } catch (err) {
+                console.error("Pay bill error", err);
+                showToast(`Erro ao pagar fatura: ${err.message}`, 'error');
+            } finally {
+                billLoading.classList.remove('active');
+            }
+        }
+
+        // Revert Bill Payment
+        async function revertBillPayment() {
+            if (!currentBill || !activeCard) return;
+            const b = currentBill.bill || {};
+
+            if (!confirm(`Deseja realmente reverter o pagamento da fatura de ${activeCard.name} (${b.month}/${b.year})?`)) {
+                return;
+            }
+
+            billLoading.classList.add('active');
+
+            try {
+                const res = await fetch('/api/bills/revert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        card: activeCard.name,
+                        month: b.month,
+                        year: b.year
+                    })
+                });
+
+                if (!res.ok) {
+                    const errRes = await res.json();
+                    throw new Error(errRes.error?.message || "Erro ao reverter");
+                }
+
+                showToast(`Pagamento da fatura revertido com sucesso!`, 'success');
+                await loadBillDetails();
+            } catch (err) {
+                console.error("Revert payment error", err);
+                showToast(`Erro ao reverter: ${err.message}`, 'error');
+            } finally {
+                billLoading.classList.remove('active');
+            }
+        }
+
+        // HTML escaping
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;")
+                      .replace(/'/g, "&#039;");
+        }
+
+        // JS escaping
+        // Escapes a value for safe embedding as a single-quoted JS string literal *inside* an
+        // HTML attribute (e.g. onclick="fn('${escapeJsAttr(value)}')"). JS-escaping backslash+quote
+        // alone is not enough: the outer onclick="..." attribute is double-quoted, and the HTML
+        // parser (which finds the attribute's closing quote before any JS is parsed) doesn't
+        // understand a JS \" escape — a raw '"' still ends the attribute early. HTML-escaping the
+        // JS-escaped result closes that gap too.
+        function escapeJsAttr(str) {
+            if (!str) return '';
+            return escapeHtml(String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+        }
+
+        // Event listeners for month/year change
+        monthSelect.addEventListener('change', async () => {
+            updateTabLabels();
+            await determineDefaultBillType();
+        });
+        yearSelect.addEventListener('change', async () => {
+            updateTabLabels();
+            await determineDefaultBillType();
+        });
+
+        // Bootstrap App
+        
+// Translation engine and dictionaries
+var TRANSLATIONS = {
+    en: {
+        // Sidebar Menu
+        tooltip_overview: "Overview",
+        tooltip_pending: "Pending",
+        tooltip_comparative: "Comparative",
+        tooltip_projections: "Projections",
+        tooltip_accounts: "Bank Accounts",
+        tooltip_cards: "Credit Cards",
+        menu_categories: "Categories",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "January", february: "February", march: "March", april: "April", may: "May", june: "June",
+        july: "July", august: "August", september: "September", october: "October", november: "November", december: "December",
+        
+        // General UI terms
+        reference_label: "Reference:",
+        day_sun: "Sun", day_mon: "Mon", day_tue: "Tue", day_wed: "Wed", day_thu: "Thu", day_fri: "Fri", day_sat: "Sat",
+        paid: "Paid", unpaid: "Unpaid", active: "Active", inactive: "Inactive",
+        
+        // Overview Dashboard
+        overview_title: "Overview",
+        overview_subtitle: "Monthly financial summary, calendar, and quick shortcuts",
+        accounts_balance: "Accounts Balance",
+        expenses_month: "Expenses this Month",
+        card_bills: "Credit Card Bills",
+        incomes_month: "Incomes this Month",
+        final_projection: "Final Projection:",
+        recent_transactions: "Recent Transactions",
+        due_calendar: "Daily Flow & Dues",
+        expenses_distribution: "Expenses Distribution",
+        quick_shortcuts: "Quick Shortcuts",
+        new_transaction: "New Transaction",
+        new_transfer: "New Transfer",
+        new_category: "New Category",
+        new_card: "New Card",
+        new_account: "New Account",
+        no_expenses_month: "No expenses recorded this month.",
+        no_recent_transactions: "No recent transactions found.",
+        no_dues_period: "No transactions due in this period.",
+        income: "Income",
+        expense: "Expense",
+        paid_reconciled: "Paid / Reconciled",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Recurring & Installment Projections",
+        projections_subtitle: "Advanced visual mapping and projection of active recurrences and installments for the next months",
+        projection_label: "Projection:",
+        months_3: "3 Months",
+        months_6: "6 Months",
+        months_9: "9 Months",
+        months_12: "12 Months",
+        heatmap_income_title: "Recurrent / Installment Incomes",
+        heatmap_expense_title: "Recurrent / Installment Expenses",
+        total: "Total",
+        no_recurrent_incomes: "No active recurrent or installment incomes in the selected semester.",
+        no_recurrent_expenses: "No active recurrent or installment expenses in the selected semester.",
+        modal_details_title: "Projection Breakdown",
+        modal_details_subtitle: "Details of projected transactions for the category and month",
+        col_date: "Date",
+        col_desc: "Description",
+        col_value: "Value",
+        col_status: "Status",
+        btn_close: "Close",
+        
+        // Comparative Dashboard
+        comparative_title: "Comparative Dashboard",
+        comparative_subtitle: "Analysis and comparison of monthly incomes vs expenses, and category limits",
+        month_summary_title: "Month Summary",
+        cat_spending_title: "Spending by Category",
+        card_limits_title: "Category Budgets & Limits",
+        col_category: "Category",
+        col_limit: "Budget Limit",
+        col_spent: "Spent",
+        col_status_limit: "Status",
+        col_percentage: "Percentage",
+        within_limit: "Within Limit",
+        exceeded: "Exceeded",
+        reception: "Incomes",
+        deduction: "Expenses",
+        net_balance: "Net Balance",
+        performance: "Financial Health",
+        no_spending_month: "No category spend recorded this month.",
+        
+        // Accounts Dashboard
+        accounts_title: "Bank Accounts",
+        accounts_subtitle: "Manage accounts, checking balances, and reviewing statements",
+        active_account_statement: "Account Statement",
+        btn_new_transaction: "New Transaction",
+        btn_new_transfer: "New Transfer",
+        search_description_placeholder: "Type to search...",
+        filter_type_label: "Type",
+        filter_type_all: "All",
+        filter_type_income: "Incomes",
+        filter_type_expense: "Expenses",
+        col_actions: "Actions",
+        action_confirm: "Confirm",
+        action_edit: "Edit",
+        action_delete: "Delete",
+        no_transactions_account: "No transactions recorded for this account in the selected month.",
+        confirm_delete_title: "Are you sure you want to permanently delete this transaction?",
+        modal_new_tx_title: "New Transaction",
+        modal_new_transfer_title: "New Transfer",
+        label_account: "Account",
+        label_description: "Description",
+        label_value: "Value",
+        label_date: "Date",
+        label_category: "Category / Subcategory",
+        label_type: "Type",
+        label_status: "Status",
+        status_pending: "Pending",
+        status_confirmed: "Paid / Confirmed",
+        btn_cancel: "Cancel",
+        btn_save: "Save",
+        label_origin: "Origin Account",
+        label_destination: "Destination Account",
+        modal_confirm_tx_title: "Confirm Transaction",
+        label_confirm_date: "Confirmation Date",
+        btn_edit_card: "Edit Card",
+        btn_create_card: "Create Card",
+        modal_add_card_title: "New Credit Card",
+        modal_edit_card_title: "Edit Credit Card",
+        label_card_name: "Card Name",
+        label_closing_day: "Closing Day",
+        label_due_day: "Due Day",
+        label_currency: "Currency",
+        label_payment_account: "Default Paying Account",
+        design_preview: "Design Preview",
+        
+        // Pending Dashboard
+        pending_title: "Pending Transactions",
+        pending_subtitle: "Monitoring and quick confirmation of pending or future transactions",
+        pending_kpi_total: "Total Pending",
+        pending_kpi_incomes: "Pending Incomes",
+        pending_kpi_expenses: "Pending Expenses",
+        pending_chart_incomes: "Pending Incomes Trend",
+        pending_chart_expenses: "Pending Expenses Trend",
+        btn_confirm: "Confirm",
+        btn_edit: "Edit",
+        btn_delete: "Delete",
+        no_pending_transactions: "No pending transactions found for this period.",
+        toast_success_confirm: "Transaction confirmed successfully!",
+        
+        // Categories Dashboard
+        categories_title: "Category Management",
+        categories_subtitle: "Visualize, search, and manage categories and subcategories in a clean tree list",
+        btn_new_category: "New Category",
+        search_category_placeholder: "Search categories...",
+        col_type: "Type",
+        col_actions_cat: "Actions",
+        subcategories_label: "Subcategories",
+        no_subcategories: "No subcategories registered.",
+        modal_new_cat_title: "New Category",
+        modal_new_subcat_title: "New Subcategory",
+        label_name: "Name",
+        label_color: "Color",
+        label_parent_category: "Parent Category (Read-Only)",
+        toast_success_cat: "Category created successfully!",
+        toast_success_subcat: "Subcategory created successfully!",
+        
+        // Cards Dashboard
+        cards_title: "Credit Cards",
+        cards_subtitle: "Manage credit cards, credit limits, and statement history",
+        card_bill_details: "Card Bill Details",
+        btn_pay_bill: "Pay Bill",
+        btn_revert_payment: "Revert Payment",
+        bill_status: "Bill Status:",
+        status_open: "Open",
+        status_closed: "Closed",
+        status_paid: "Paid",
+        no_card_transactions: "No transactions recorded for this card bill in the selected cycle.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Dashboards Monitor",
+        dashboards_subtitle: "List, view source, and upload fintrack dashboards",
+        col_dashboard: "Dashboard",
+        col_last_update: "Last Updated",
+        btn_view_source: "View Source",
+        btn_download: "Download",
+        upload_new_dashboard: "Upload New Dashboard",
+        placeholder_dashboard_name: "Dashboard Name (e.g. pending)",
+        upload_instructions: "Select or drop HTML file here to upload",
+        btn_upload: "Upload",
+        modal_source_title: "HTML Source Code",
+        
+        // Tags Management
+        menu_tags: "Tags",
+        tags_title: "Tag Management",
+        tags_subtitle: "Manage tags to label and organize your transactions",
+        panel_title_tags: "Active Tags",
+        btn_new_tag: "New Tag",
+        label_tag_name: "Tag Name",
+        placeholder_tag_name: "E.g. work, travel, refund",
+        empty_tags_message: "No tags registered.",
+        btn_save: "Save",
+        btn_cancel: "Cancel",
+        toast_success_tag_created: 'Tag "{name}" created successfully!',
+        toast_success_tag_deleted: 'Tag "{name}" deleted successfully!',
+        confirm_delete_tag: 'Are you sure you want to delete tag "{name}"?\n(This action will remove the tag from all linked transactions)'
+    },
+    pt: {
+        // Sidebar Menu
+        tooltip_overview: "Visão Geral",
+        tooltip_pending: "Pendentes",
+        tooltip_comparative: "Comparativo",
+        tooltip_projections: "Projeções",
+        tooltip_accounts: "Contas Bancárias",
+        tooltip_cards: "Cartões de Crédito",
+        menu_categories: "Categorias",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "Janeiro", february: "Fevereiro", march: "Março", april: "Abril", may: "Maio", june: "Junho",
+        july: "Julho", august: "Agosto", september: "Setembro", october: "Outubro", november: "Novembro", december: "Dezembro",
+        
+        // General UI terms
+        reference_label: "Referência:",
+        day_sun: "Dom", day_mon: "Seg", day_tue: "Ter", day_wed: "Qua", day_thu: "Qui", day_fri: "Sex", day_sat: "Sáb",
+        paid: "Pago", unpaid: "Não Pago", active: "Ativo", inactive: "Inativo",
+        
+        // Overview Dashboard
+        overview_title: "Visão Geral",
+        overview_subtitle: "Consolidado financeiro mensal, calendário e atalhos rápidos",
+        accounts_balance: "Saldo em Contas",
+        expenses_month: "Despesas do Mês",
+        card_bills: "Faturas de Cartão",
+        incomes_month: "Receitas do Mês",
+        final_projection: "Projeção Final:",
+        recent_transactions: "Lançamentos Recentes",
+        due_calendar: "Fluxo Diário",
+        expenses_distribution: "Distribuição de Despesas",
+        quick_shortcuts: "Atalhos Rápidos",
+        new_transaction: "Novo Lançamento",
+        new_transfer: "Nova Transferência",
+        new_category: "Nova Categoria",
+        new_card: "Novo Cartão",
+        new_account: "Nova Conta",
+        no_expenses_month: "Sem despesas registradas neste mês.",
+        no_recent_transactions: "Nenhuma transação recente encontrada.",
+        no_dues_period: "Sem vencimentos neste período.",
+        income: "Receita",
+        expense: "Despesa",
+        paid_reconciled: "Pago / Conciliado",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Projeção de Recorrências e Parcelas",
+        projections_subtitle: "Mapeamento visual avançado e projeção de recorrências e parcelas ativas para os próximos meses",
+        projection_label: "Projeção:",
+        months_3: "3 Meses",
+        months_6: "6 Meses",
+        months_9: "9 Meses",
+        months_12: "12 Meses",
+        heatmap_income_title: "Receitas Recorrentes / Parceladas",
+        heatmap_expense_title: "Despesas Recorrentes / Parceladas",
+        total: "Total",
+        no_recurrent_incomes: "Nenhuma receita recorrente/parcelada ativa no semestre.",
+        no_recurrent_expenses: "Nenhuma despesa recorrente/parcelada ativa no semestre.",
+        modal_details_title: "Detalhamento de Projeções",
+        modal_details_subtitle: "Detalhes das transações projetadas para a categoria e mês",
+        col_date: "Data",
+        col_desc: "Descrição",
+        col_value: "Valor",
+        col_status: "Status",
+        btn_close: "Fechar",
+        
+        // Comparative Dashboard
+        comparative_title: "Dashboard Comparativo",
+        comparative_subtitle: "Análise e comparação mensal de receitas vs despesas e limites por categoria",
+        month_summary_title: "Resumo do Mês",
+        cat_spending_title: "Gastos por Categoria",
+        card_limits_title: "Orçamentos e Limites de Categorias",
+        col_category: "Categoria",
+        col_limit: "Limite de Orçamento",
+        col_spent: "Gasto",
+        col_status_limit: "Status",
+        col_percentage: "Porcentagem",
+        within_limit: "Dentro do Limite",
+        exceeded: "Excedido",
+        reception: "Receitas",
+        deduction: "Despesas",
+        net_balance: "Saldo Líquido",
+        performance: "Saúde Financeira",
+        no_spending_month: "Sem despesas registradas por categoria neste mês.",
+        
+        // Accounts Dashboard
+        accounts_title: "Minhas Contas",
+        accounts_subtitle: "Gerencie contas, consulte saldos e revise extratos",
+        active_account_statement: "Extrato de Conta",
+        btn_new_transaction: "Novo Lançamento",
+        btn_new_transfer: "Nova Transferência",
+        search_description_placeholder: "Digite para filtrar...",
+        filter_type_label: "Tipo",
+        filter_type_all: "Todos",
+        filter_type_income: "Receitas",
+        filter_type_expense: "Despesas",
+        col_actions: "Ações",
+        action_confirm: "Confirmar",
+        action_edit: "Editar",
+        action_delete: "Excluir",
+        no_transactions_account: "Nenhum lançamento nesta conta para o mês selecionado.",
+        confirm_delete_title: "Deseja excluir definitivamente a transação?",
+        modal_new_tx_title: "Novo Lançamento",
+        modal_new_transfer_title: "Nova Transferência",
+        label_account: "Conta",
+        label_description: "Descrição",
+        label_value: "Valor",
+        label_date: "Data",
+        label_category: "Categoria / Subcategoria",
+        label_type: "Tipo",
+        label_status: "Status",
+        status_pending: "Pendente",
+        status_confirmed: "Pago / Confirmado",
+        btn_cancel: "Cancelar",
+        btn_save: "Salvar",
+        label_origin: "Conta Origem",
+        label_destination: "Conta Destino",
+        modal_confirm_tx_title: "Confirmar Lançamento",
+        label_confirm_date: "Data da Confirmação",
+        btn_edit_card: "Editar Cartão",
+        btn_create_card: "Criar Cartão",
+        modal_add_card_title: "Novo Cartão de Crédito",
+        modal_edit_card_title: "Editar Cartão de Crédito",
+        label_card_name: "Nome do Cartão",
+        label_closing_day: "Fechamento",
+        label_due_day: "Vencimento",
+        label_currency: "Moeda",
+        label_payment_account: "Conta Padrão",
+        design_preview: "Pré-visualização do Design",
+        
+        // Pending Dashboard
+        pending_title: "Transações Pendentes",
+        pending_subtitle: "Monitoramento e confirmação rápida de lançamentos pendentes ou futuros",
+        pending_kpi_total: "Total Pendente",
+        pending_kpi_incomes: "Receitas Pendentes",
+        pending_kpi_expenses: "Despesas Pendentes",
+        pending_chart_incomes: "Tendência de Receitas Pendentes",
+        pending_chart_expenses: "Tendência de Despesas Pendentes",
+        btn_confirm: "Confirmar",
+        btn_edit: "Editar",
+        btn_delete: "Excluir",
+        no_pending_transactions: "Nenhuma transação pendente encontrada para este período.",
+        toast_success_confirm: "Transação confirmada com sucesso!",
+        
+        // Categories Dashboard
+        categories_title: "Gerenciamento de Categorias",
+        categories_subtitle: "Visualize, pesquise e gerencie categorias e subcategorias em árvore",
+        btn_new_category: "Nova Categoria",
+        search_category_placeholder: "Pesquisar categorias...",
+        col_type: "Tipo",
+        col_actions_cat: "Ações",
+        subcategories_label: "Subcategorias",
+        no_subcategories: "Nenhuma subcategoria cadastrada.",
+        modal_new_cat_title: "Nova Categoria",
+        modal_new_subcat_title: "Nova Subcategoria",
+        label_name: "Nome",
+        label_color: "Cor",
+        label_parent_category: "Categoria Pai (Somente Leitura)",
+        toast_success_cat: "Categoria criada com sucesso!",
+        toast_success_subcat: "Subcategoria criada com sucesso!",
+        
+        // Cards Dashboard
+        cards_title: "Cartões de Crédito",
+        cards_subtitle: "Gerencie cartões de crédito, limites e histórico de faturas",
+        card_bill_details: "Detalhamento de Fatura",
+        btn_pay_bill: "Pagar Fatura",
+        btn_revert_payment: "Estornar Pagamento",
+        bill_status: "Status da Fatura:",
+        status_open: "Aberta",
+        status_closed: "Fechada",
+        status_paid: "Paga",
+        no_card_transactions: "Nenhuma transação registrada nesta fatura para o ciclo selecionado.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Monitor de Dashboards",
+        dashboards_subtitle: "Liste, visualize o código fonte e envie dashboards para o servidor do fintrack",
+        col_dashboard: "Dashboard",
+        col_last_update: "Última Atualização",
+        btn_view_source: "Ver Código",
+        btn_download: "Baixar HTML",
+        upload_new_dashboard: "Enviar Novo Dashboard",
+        placeholder_dashboard_name: "Nome do Dashboard (ex: pending)",
+        upload_instructions: "Selecione ou solte o arquivo HTML aqui para upload",
+        btn_upload: "Fazer Upload",
+        modal_source_title: "Código Fonte HTML",
+        
+        // Tags Management
+        menu_tags: "Tags",
+        tags_title: "Gerenciar Tags",
+        tags_subtitle: "Gerencie as tags utilizadas para rotular e categorizar suas transações",
+        panel_title_tags: "Tags Ativas",
+        btn_new_tag: "Nova Tag",
+        label_tag_name: "Nome da Tag",
+        placeholder_tag_name: "Ex: trabalho, viagem, reembolso",
+        empty_tags_message: "Nenhuma tag cadastrada.",
+        btn_save: "Salvar",
+        btn_cancel: "Cancelar",
+        toast_success_tag_created: 'Tag "{name}" criada com sucesso!',
+        toast_success_tag_deleted: 'Tag "{name}" excluída com sucesso!',
+        confirm_delete_tag: 'Deseja realmente excluir a tag "{name}"?\n(Esta ação removerá a tag de todas as transações vinculadas)'
+    },
+    es: {
+        // Sidebar Menu
+        tooltip_overview: "Vista General",
+        tooltip_pending: "Pendientes",
+        tooltip_comparative: "Comparativo",
+        tooltip_projections: "Proyecciones",
+        tooltip_accounts: "Cuentas Bancárias",
+        tooltip_cards: "Tarjetas de Crédito",
+        menu_categories: "Categorías",
+        menu_dashboards: "Dashboards",
+        
+        // Month names
+        january: "Enero", february: "Febrero", march: "Marzo", april: "Abril", may: "Mayo", june: "Junio",
+        july: "Julio", august: "Agosto", september: "Septiembre", october: "Octubre", november: "Noviembre", december: "Diciembre",
+        
+        // General UI terms
+        reference_label: "Referencia:",
+        day_sun: "Dom", day_mon: "Lun", day_tue: "Mar", day_wed: "Mié", day_thu: "Jue", day_fri: "Vie", day_sat: "Sáb",
+        paid: "Pagado", unpaid: "No Pagado", active: "Activo", inactive: "Inactivo",
+        
+        // Overview Dashboard
+        overview_title: "Vista General",
+        overview_subtitle: "Resumen financiero mensual, calendario y accesos rápidos",
+        accounts_balance: "Saldo en Cuentas",
+        expenses_month: "Gastos del Mes",
+        card_bills: "Facturas de Tarjeta",
+        incomes_month: "Ingresos del Mes",
+        final_projection: "Proyección Final:",
+        recent_transactions: "Transacciones Recientes",
+        due_calendar: "Calendario de Pagos",
+        expenses_distribution: "Distribución de Gastos",
+        quick_shortcuts: "Accesos Rápidos",
+        new_transaction: "Nueva Transacción",
+        new_transfer: "Nueva Transferencia",
+        new_category: "Nueva Categoría",
+        new_card: "Nueva Tarjeta",
+        new_account: "Nueva Cuenta",
+        no_expenses_month: "No hay gastos registrados este mes.",
+        no_recent_transactions: "No se encontraron transacciones recientes.",
+        no_dues_period: "Sin vencimientos en este período.",
+        income: "Ingreso",
+        expense: "Gasto",
+        paid_reconciled: "Pagado / Conciliado",
+        
+        // Projections / Heatmap Dashboard
+        projections_title: "Proyección de Recurrencias y Cuotas",
+        projections_subtitle: "Mapeo visual avanzado y proyección de recurrencias y cuotas activas para los próximos meses",
+        projection_label: "Proyección:",
+        months_3: "3 Meses",
+        months_6: "6 Meses",
+        months_9: "9 Meses",
+        months_12: "12 Meses",
+        heatmap_income_title: "Ingresos Recurrentes / Cuotas",
+        heatmap_expense_title: "Gastos Recurrentes / Cuotas",
+        total: "Total",
+        no_recurrent_incomes: "Ningún ingreso recurrente o en cuotas activo en el semestre seleccionado.",
+        no_recurrent_expenses: "Ningún gasto recurrente o en cuotas activo en el semestre seleccionado.",
+        modal_details_title: "Detalle de Proyecciones",
+        modal_details_subtitle: "Detalles de transacciones proyectadas para la categoría y mes",
+        col_date: "Fecha",
+        col_desc: "Descripción",
+        col_value: "Valor",
+        col_status: "Estado",
+        btn_close: "Cerrar",
+        
+        // Comparative Dashboard
+        comparative_title: "Dashboard Comparativo",
+        comparative_subtitle: "Análisis y comparación mensual de ingresos vs gastos y límites por categoría",
+        month_summary_title: "Resumen del Mes",
+        cat_spending_title: "Gastos por Categoría",
+        card_limits_title: "Presupuestos y Límites de Categorías",
+        col_category: "Categoría",
+        col_limit: "Límite de Presupuesto",
+        col_spent: "Gastado",
+        col_status_limit: "Estado",
+        col_percentage: "Porcentaje",
+        within_limit: "Dentro del Límite",
+        exceeded: "Excedido",
+        reception: "Ingresos",
+        deduction: "Gastos",
+        net_balance: "Saldo Neto",
+        performance: "Salud Financiera",
+        no_spending_month: "No hay gastos registrados por categoría este mes.",
+        
+        // Accounts Dashboard
+        accounts_title: "Cuentas Bancarias",
+        accounts_subtitle: "Administre cuentas, consulte saldos y revise extractos",
+        active_account_statement: "Extracto de Cuenta",
+        btn_new_transaction: "Nueva Transacción",
+        btn_new_transfer: "Nueva Transferencia",
+        search_description_placeholder: "Escriba para filtrar...",
+        filter_type_label: "Tipo",
+        filter_type_all: "Todos",
+        filter_type_income: "Ingresos",
+        filter_type_expense: "Gastos",
+        col_actions: "Acciones",
+        action_confirm: "Confirmar",
+        action_edit: "Editar",
+        action_delete: "Eliminar",
+        no_transactions_account: "No hay transacciones registradas en esta cuenta en el mes seleccionado.",
+        confirm_delete_title: "¿Está seguro de eliminar definitivamente esta transacción?",
+        modal_new_tx_title: "Nueva Transacción",
+        modal_new_transfer_title: "Nueva Transferencia",
+        label_account: "Cuenta",
+        label_description: "Descripción",
+        label_value: "Valor",
+        label_date: "Fecha",
+        label_category: "Categoría / Subcategoría",
+        label_type: "Tipo",
+        label_status: "Estado",
+        status_pending: "Pendiente",
+        status_confirmed: "Pagado / Confirmado",
+        btn_cancel: "Cancelar",
+        btn_save: "Guardar",
+        label_origin: "Cuenta Origen",
+        label_destination: "Cuenta Destino",
+        modal_confirm_tx_title: "Confirmar Transacción",
+        label_confirm_date: "Fecha de Confirmación",
+        btn_edit_card: "Editar Tarjeta",
+        btn_create_card: "Crear Tarjeta",
+        modal_add_card_title: "Nueva Tarjeta de Crédito",
+        modal_edit_card_title: "Editar Tarjeta de Crédito",
+        label_card_name: "Nombre de la Tarjeta",
+        label_closing_day: "Corte",
+        label_due_day: "Vencimiento",
+        label_currency: "Moneda",
+        label_payment_account: "Cuenta Principal",
+        design_preview: "Vista Previa de Diseño",
+        
+        // Pending Dashboard
+        pending_title: "Transacciones Pendientes",
+        pending_subtitle: "Monitoreo y confirmación rápida de transacciones pendientes o futuras",
+        pending_kpi_total: "Total Pendiente",
+        pending_kpi_incomes: "Ingresos Pendientes",
+        pending_kpi_expenses: "Gastos Pendientes",
+        pending_chart_incomes: "Tendencia de Ingresos Pendientes",
+        pending_chart_expenses: "Tendencia de Gastos Pendientes",
+        btn_confirm: "Confirmar",
+        btn_edit: "Editar",
+        btn_delete: "Eliminar",
+        no_pending_transactions: "No se encontraron transacciones pendientes en este período.",
+        toast_success_confirm: "¡Transacción confirmada con éxito!",
+        
+        // Categories Dashboard
+        categories_title: "Gestión de Categorías",
+        categories_subtitle: "Visualice, busque y gestione categorías y subcategorías en árbol",
+        btn_new_category: "Nueva Categoría",
+        search_category_placeholder: "Buscar categorías...",
+        col_type: "Tipo",
+        col_actions_cat: "Acciones",
+        subcategories_label: "Subcategorías",
+        no_subcategories: "Ninguna subcategoría registrada.",
+        modal_new_cat_title: "Nueva Categoría",
+        modal_new_subcat_title: "Nueva Subcategoría",
+        label_name: "Nombre",
+        label_color: "Color",
+        label_parent_category: "Categoría Padre (Solo Lectura)",
+        toast_success_cat: "¡Categoría creada con éxito!",
+        toast_success_subcat: "¡Subcategoría creada con éxito!",
+        
+        // Cards Dashboard
+        cards_title: "Tarjetas de Crédito",
+        cards_subtitle: "Gestione tarjetas de crédito, límites y facturas",
+        card_bill_details: "Detalle de Factura",
+        btn_pay_bill: "Pagar Factura",
+        btn_revert_payment: "Revertir Pago",
+        bill_status: "Estado de la Factura:",
+        status_open: "Abierta",
+        status_closed: "Cerrada",
+        status_paid: "Pagada",
+        no_card_transactions: "Ninguna transacción registrada en esta factura para el ciclo seleccionado.",
+        
+        // Dashboards Manager Dashboard
+        dashboards_title: "Gestor de Dashboards",
+        dashboards_subtitle: "Liste, vea el código fuente y suba dashboards al servidor de fintrack",
+        col_dashboard: "Dashboard",
+        col_last_update: "Última Actualización",
+        btn_view_source: "Ver Código",
+        btn_download: "Descargar HTML",
+        upload_new_dashboard: "Subir Nuevo Dashboard",
+        placeholder_dashboard_name: "Nombre del Dashboard (ej: pending)",
+        upload_instructions: "Seleccione o arrastre el archivo HTML aquí para subir",
+        btn_upload: "Subir Dashboard",
+        modal_source_title: "Código Fuente HTML",
+        
+        // Tags Management
+        menu_tags: "Etiquetas",
+        tags_title: "Administrar Etiquetas",
+        tags_subtitle: "Administre las etiquetas utilizadas para etiquetar y organizar sus transacciones",
+        panel_title_tags: "Etiquetas Activas",
+        btn_new_tag: "Nueva Etiqueta",
+        label_tag_name: "Nombre de la Etiqueta",
+        placeholder_tag_name: "Ej: trabajo, viaje, reembolso",
+        empty_tags_message: "No hay etiquetas registradas.",
+        btn_save: "Guardar",
+        btn_cancel: "Cancelar",
+        toast_success_tag_created: '¡Etiqueta "{name}" creada con éxito!',
+        toast_success_tag_deleted: '¡Etiqueta "{name}" eliminada con éxito!',
+        confirm_delete_tag: '¿Realmente deseja eliminar la etiqueta "{name}"?\n(Esta acción eliminará la etiqueta de todas las transacciones vinculadas)'
+    }
+};
+
+var currentLocale = 'en'; // English as default
+
+// Helper to translate in JS
+function t(key) {
+    const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
+    return tDict[key] || key;
+}
+
+async function checkLocale() {
+    try {
+        const res = await fetch('/api/status');
+        if (res.ok) {
+            const data = await res.json();
+            if (data.locale && TRANSLATIONS[data.locale]) {
+                currentLocale = data.locale;
+            }
+        }
+    } catch (err) {
+        console.error("Failed to read locale preferences:", err);
+    }
+    translatePage();
+}
+
+function translatePage() {
+    const tDict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
+    
+    // 1. Static texts
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (tDict[key]) {
+            const icon = el.querySelector('i');
+            if (icon) {
+                const iconOuter = icon.outerHTML;
+                el.innerHTML = iconOuter + ' ' + tDict[key];
+            } else {
+                el.textContent = tDict[key];
+            }
+        }
+    });
+
+    // 2. Placeholders
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (tDict[key]) {
+            el.placeholder = tDict[key];
+        }
+    });
+
+    // 3. Tooltips
+    document.querySelectorAll('[data-i18n-tooltip]').forEach(el => {
+        const key = el.getAttribute('data-i18n-tooltip');
+        if (tDict[key]) {
+            el.setAttribute('data-tooltip', tDict[key]);
+        }
+    });
+    
+    // 4. Document title translation
+    if (tDict['overview_title'] && document.title.includes("Overview") || document.title.includes("Visão")) {
+        // dynamic title update fallback if needed
+    }
+
+    // 5. Translate select months
+    const monthSelects = [
+        document.getElementById('month-select'),
+        document.getElementById('start-month-select')
+    ];
+    monthSelects.forEach(monthSelect => {
+        if (monthSelect) {
+            const monthKeys = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+            Array.from(monthSelect.options).forEach((opt, idx) => {
+                const key = monthKeys[idx];
+                if (tDict[key]) {
+                    opt.textContent = tDict[key];
+                }
+            });
+        }
+    });
+
+    // 6. Translate projection months select options (3, 6, 9, 12 months)
+    const hmSelect = document.getElementById('heatmap-months-select');
+    if (hmSelect) {
+        Array.from(hmSelect.options).forEach(opt => {
+            const val = opt.value;
+            const key = `months_${val}`;
+            if (tDict[key]) {
+                opt.textContent = tDict[key];
+            }
+        });
+    }
+
+    // Automatically initialize/refresh custom selects on all pages
+    if (typeof initCustomSelects === 'function') {
+        initCustomSelects();
+    }
+}
+
+// Custom Select Component implementation
+function initCustomSelects() {
+    document.querySelectorAll('select.select-custom').forEach(select => {
+        if (select.nextElementSibling && select.nextElementSibling.classList.contains('select-container-custom')) {
+            // Already initialized, just sync selected value
+            const container = select.nextElementSibling;
+            const triggerSpan = container.querySelector('.select-trigger-custom span');
+            const selectedOpt = select.options[select.selectedIndex];
+            if (selectedOpt && triggerSpan) {
+                triggerSpan.textContent = selectedOpt.textContent;
+            }
+            return;
+        }
+        select.style.display = 'none';
+        const container = document.createElement('div');
+        container.className = 'select-container-custom';
+        
+        // Match specific element custom min-widths
+        if (select.id === 'heatmap-months-select') {
+            container.style.minWidth = '110px';
+        } else if (select.id === 'year-select') {
+            container.style.minWidth = '90px';
+        } else if (select.id === 'filter-type') {
+            container.style.minWidth = '130px';
+        }
+        
+        const trigger = document.createElement('div');
+        trigger.className = 'select-trigger-custom';
+        const triggerSpan = document.createElement('span');
+        trigger.appendChild(triggerSpan);
+        container.appendChild(trigger);
+        const optionsContainer = document.createElement('div');
+        optionsContainer.className = 'select-options-custom';
+        container.appendChild(optionsContainer);
+        
+        function syncSelected() {
+            const selectedOpt = select.options[select.selectedIndex] || select.options[0];
+            if (selectedOpt) {
+                triggerSpan.textContent = selectedOpt.textContent;
+                Array.from(optionsContainer.children).forEach(child => {
+                    if (child.getAttribute('data-value') === select.value) {
+                        child.classList.add('selected');
+                    } else {
+                        child.classList.remove('selected');
+                    }
+                });
+            }
+        }
+        
+        function populateOptions() {
+            optionsContainer.innerHTML = '';
+            Array.from(select.options).forEach(opt => {
+                const optDiv = document.createElement('div');
+                optDiv.className = 'select-option-custom';
+                optDiv.textContent = opt.textContent;
+                optDiv.setAttribute('data-value', opt.value);
+                optDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    select.value = opt.value;
+                    select.dispatchEvent(new Event('change'));
+                    syncSelected();
+                    container.classList.remove('open');
+                });
+                optionsContainer.appendChild(optDiv);
+            });
+        }
+        
+        populateOptions();
+        syncSelected();
+        
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = container.classList.contains('open');
+            document.querySelectorAll('.select-container-custom').forEach(el => {
+                el.classList.remove('open');
+            });
+            if (!isOpen) {
+                populateOptions();
+                syncSelected();
+                container.classList.add('open');
+                setTimeout(() => {
+                    const selectedEl = optionsContainer.querySelector('.select-option-custom.selected');
+                    if (selectedEl) {
+                        const itemHeight = selectedEl.offsetHeight || 36;
+                        optionsContainer.scrollTop = Math.max(0, selectedEl.offsetTop - itemHeight);
+                    }
+                }, 10);
+            }
+        });
+        
+        select.parentNode.insertBefore(container, select.nextSibling);
+        select.addEventListener('change', syncSelected);
+        
+        // Watch for dynamic options updates
+        const observer = new MutationObserver(() => {
+            syncSelected();
+        });
+        observer.observe(select, { childList: true, subtree: true });
+        
+        setTimeout(syncSelected, 200);
+        setTimeout(syncSelected, 1000);
+    });
+    
+    // Global click listener to close options dropdowns when clicking outside
+    if (!window.customSelectGlobalBound) {
+        window.customSelectGlobalBound = true;
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.select-container-custom').forEach(el => {
+                el.classList.remove('open');
+            });
+        });
+    }
+}
+
+        
+        fetchInitialData();
+        flatpickr("input[type='date']", {
+            locale: "pt",
+            dateFormat: "Y-m-d",
+            altInput: true,
+            altFormat: "d/m/Y",
+            allowInput: true,
+            disableMobile: true
+        });
+        
+        checkLocale();
+
+// ADR-027 Live-update listener
+window.fintrackOnDataChanged = function(entities) {
+    var affected = entities.some(function(tag) {
+        return ['creditCard', 'transaction', 'account'].indexOf(tag) !== -1;
+    });
+    if (affected) {
+        console.log("cards refetching due to entity change:", entities);
+        fetchInitialData();
+    }
+};
+
+</script>

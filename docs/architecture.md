@@ -5,6 +5,7 @@
 > Layer concepts: `docs/diplomatic-architecture.md` (where the layers are) and
 > `docs/functional-core-imperative-shell.md` (what crosses the write-path boundary between them — ADR-021,
 > mandatory reading alongside the Diplomat doc for any write-flow change).
+> Write-path mechanics: `docs/write-path.md`. Browser `/ui` surface: `docs/ui.md`.
 
 ## Stack
 
@@ -192,83 +193,15 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 16. **Unbounded collections page by keyset cursor with the paginated envelope (ADR-014).** `search_transactions` (first mover) returns `{ items, nextCursor?, total? }`; `ORDER BY` is composed only from a whitelisted enum-keyed column map (`ORDER_BY_COLUMN` in `wire/db/transactions.ts`, turned into SQL only in `diplomat/db/repos/transactions.ts`), the same mechanism as invariant 11 applied to ordering — caller text never reaches `ORDER BY`. Cursors are opaque, zod-validated at the boundary, and bound to the `sort`/`dir` that produced them (a mismatch is a `validation` error). `total` is opt-in (`includeTotal`) — an extra same-WHERE `COUNT(*)`, never paid by sequential "walk until no `nextCursor`" consumers. Small, cycle-bounded `list_*` endpoints stay plain arrays; the envelope is the signal a collection can page.
 17. **No god write flows for any transaction mutation (ADR-017, complete; ownership mechanism revised by ADR-020).** The only cross-cutting transaction surface is the read side (`search_transactions`, `get_spending_summary`, `aggregate_spending`, account balances); every write is an aggregate-specific entry point that validates ownership itself and never dispatches by inspection — there is no composition-root router. Update/delete: `update_card_transaction`/`delete_card_transaction`, `update_account_transaction`/`delete_account_transaction`. **Ownership is resolved by account type, not by a core structural discriminator (ADR-020), and each aggregate asks its own question rather than sharing one judgment:** `controllers/resolve.ts`'s `resolveLegAccounts` is a neutral I/O helper (resolves the accounts referenced by a transaction's leg(s) — `accountId`/`toAccountId` — via `deps.accounts.findById`; makes no ownership judgment of its own). The credit-card aggregate's own `assertCreditAccountLeg` (`controllers/creditCard/transaction.ts`) asks "is a leg `credit`" (ADR-010) — true for a card purchase (`accountId` **is** the card's own internal account) and the bill-payment transfer (`toAccountId` **is** that same account). The account aggregate's own `assertAccountOwnedLegs` (`controllers/account/transaction.ts`) asks the different, positive question "is every leg one of *my* types" against `logic/account.ts`'s `isAccountOwnedType` (an enumeration of `checking`/`savings`/`wallet`/`investment` — the account domain's own scope, not the negation of `credit`; vacuously true for an unattached movement with no legs at all). Neither aggregate reuses or negates the other's predicate, and the core owns no ownership discriminator at all. A wrong-tool call is rejected with a `validation` error naming the correct tool (`transactionErrors.wrongTool`, raised by each aggregate's own guard) — a guard, not a redirect the server performs on the caller's behalf. Card purchases and the bill-payment transfer are card-owned; regular movements and transfers are account-owned. Transfer *mutation* policy (`guardTransferMutability`, the `transferTypeImmutable`/`transferCategoryRejected` errors) lives wholly in the account context (`logic/account.ts`, `models/account.ts`) — the credit-card aggregate never reasons about transfer invariants; its one transfer (the bill-payment transfer) is blocked outright by its own bill-process guard — a `validation` error naming `revert_bill_payment` — not by transfer-immutability. Bulk: `import_card_statement`/`import_account_statement` are single-source — a statement belongs wholly to the ONE card/account the caller named, so there is no per-line owner to decide; the shared `controllers/transaction/bulk.ts` helpers (`defaultStatementLines`/`buildBulkResult`) only default per-line fields and shape the result, making no ownership decision.
 18. **The transaction core's movement schema is minimal (ADR-019 step 1).** `CreateTransactionSchema`/`UpdateTransactionSchema` (`models/transaction.ts`) carry only genuinely-shared ledger vocabulary (description, amount, type, status, date, category/subCategory, currency, idempotencyKey, rawInput, note, tags) — they name no sibling context's field. Each aggregate `.extend`s the core up with its own vocabulary rather than the core carrying the union for aggregates to `.omit` down: `AddCardPurchaseSchema` (`models/creditCard.ts`) adds `card`/`billMonth`/`billYear`; `UpdateCardTransactionSchema` adds `billMonth`/`billYear` (bill reassignment — no `card` field, since a transaction's card can't change on update); `AddAccountMovementSchema`/`UpdateAccountTransactionSchema` (`models/account.ts`) add `account`. The field-tied bill errors (`billPeriodIncomplete`, `billAssignmentRequiresCard`) moved with the fields to `cardErrors`. One documented exception: `UpdateCardTransactionSchema` also `.extend`s `account` (rather than leaving it out) purely so `controllers/creditCard/transaction.ts`'s `updateCardTransaction` can keep rejecting it with its dedicated `cardErrors.accountChangeRejectedForCard` message — omitting the field would replace that message with a generic `.strict()` unrecognized-key error, a worse-not-better outcome. Transfer is the boundary case: the transfer *row kind* (`TransactionType.enum.transfer`, balance/summary math, `TransactionView.toAccountId`) stays core because the shared read/balance side is structurally defined over it (`resolveEffectiveType` stays in `logic/transaction.ts`); transfer *policy* (`guardTransferMutability`, the `transferTypeImmutable`/`transferCategoryRejected` errors) lives in the account context (ADR-020). Currency resolution lives in `logic/money.ts` (context-neutral: a `{ currency } | null` funding source plus the input override); `assertBillPeriodPaired`/`withBillId` live in `logic/bill.ts` (credit-card context).
-19. **Every write flow returns its writes as data; none perform them (ADR-021, phases 1–3c complete:
-    `createAccount`, the account-context transaction flows, the credit-card transaction flows
-    `add_card_purchase`/`update_card_transaction`/`delete_card_transaction`, the bill flows
-    `pay_bill`/`revert_bill_payment`, the simple entity CRUD flows `update_account`/`delete_account`,
-    `create_tag`/`delete_tag`, `create_category`/`delete_category`/`create_sub_category`/`delete_sub_category`,
-    `create_credit_card`/`delete_credit_card`, the recurring flows `create_recurring`/`apply_due_recurring`, the
-    bulk-import flows `import_card_statement`/`import_account_statement`, and finally the three flows that sat
-    outside the ledger domain — `confirm_transaction` (reuses the existing `transactionApplier`), `save_dashboard`
-    (a new `dashboardApplier`), and `set_locale` (a new `settingsApplier`)).** See `docs/write-path.md`. A
-    converted controller's `deps` never receives a write method it calls directly — it builds one or more
-    `Persistable`s and returns them in `persist` (or, for bulk import's sequence of independent units, a
-    `StatementImportPlan` the shell runs through `runEffectsSequence`); only `diplomat/db/effects.ts` (invoked
-    from the MCP/REST handler) touches `Db`. This now holds **repo-wide**, not per-flow: `deps.<x>.create/update/
-    delete` methods for `accounts`, `tags`, `categories`, `subCategories`, and `creditCards` were checked for any
-    remaining caller once their flow converted — found genuinely dead (grep-confirmed zero callers, production or
-    test) — and removed in the same change rather than deferred (`AccountsRepo.update`/`.delete`,
-    `TagsRepo.create`/`.delete`, `CategoriesRepo.create`/`.delete`, `SubCategoriesRepo.create`/`.delete`,
-    `CreditCardsRepo.deleteCard`). `RecurringRepo.create`/`.advance` followed the same checked-and-removed path
-    once both recurring flows converted — grep-confirmed zero callers, removed in the same change.
-    `AccountsRepo.create`/`CreditCardsRepo.createWithAccount` were removed too —
-    integration tests seeding fixture accounts/cards switched to raw drizzle inserts
-    (`test/integration/db/effects.test.ts`'s `insertAccount`/`insertCreditCardWithAccount`) rather than keeping
-    a production write method alive solely for test convenience. **Bulk import (ADR-022 step 3) closes the last
-    gap.** The two transitional repo-driven paths it kept alive — `controllers/account/transaction.ts`'s
-    `addAccountMovementViaRepo` (sharing `planAccountMovement`'s decision with the FC/IS `addAccountMovement`)
-    and `controllers/creditCard/transaction.ts`'s `addCardPurchaseViaRepo` (sharing `planCardPurchase`'s decision
-    with the FC/IS `addCardPurchase`, setting `billId` via `deps.bills.ensureOpen`) — are deleted; `importCardStatement`/`importAccountStatement`
-    now default each line and bind it to the aggregate's own single-line flow unchanged, reusing
-    `runEffectsSequence`'s per-unit commit-then-re-invoke to dissolve the within-batch bill-cycle dedup those
-    via-repo paths existed for, rather than porting it. `deps.bills.ensureOpen` and `deps.transactions.create` —
-    their last remaining write-method callers — are removed with them; the same grep-checked-and-removed sweep
-    found `TransactionsRepo.update`/`.delete` already had zero callers too (dead since the credit-card aggregate
-    stopped delegating to `controllers/transaction/core.ts`'s `updateTransaction`/`deleteTransaction` in phase
-    2b) and removed those as well — the fixture seeding two integration tests did through them
-    (`test/integration/db/effects.test.ts`) switched to raw drizzle inserts (`insertOpenBill`/
-    `insertTransaction`), the same test-convenience-isn't-a-caller precedent `AccountsRepo.create` set.
-    `controllers/transaction/core.ts` no longer carries an `updateTransaction`/`deleteTransaction` of its own —
-    both aggregates' update/delete are FC/IS, sharing only the pure `decideTransactionUpdate`/
-    `resolveCategorySelection` reads-and-validation from the core.
-    **The final pass converted the three flows that sat outside the ledger domain entirely — the same
-    violation, just not covered by the migration above (a controller calling a repo write method).**
-    `confirmTransaction` (`controllers/transaction/core.ts`) now reads the transaction, decides in the domain
-    (pending → a version-guarded `update` flipping `status` to `effective`; already effective → an idempotent
-    no-op with an empty `persist`; missing → `notFound`) and reuses the existing `transactionApplier` — no new
-    applier needed. `TransactionsRepo.confirm` (the `UPDATE ... WHERE status = 'pending'` SQL predicate) is
-    deleted; the rule now lives in the domain, and the shell's version guard alone covers the race.
-    `saveDashboard` (`controllers/dashboards.ts`) reads `dashboards.findRefByName` — an id + version-only read,
-    since presence + those two is all the decision needs, never the (potentially ~500KB) `html` a full-row read
-    would pull on every save — and emits an `insert` (absent, minting `id: deps.newId()`) or a version-guarded
-    `update` (present, carrying the read `id`/`version`) — still upsert-by-name from the caller's perspective.
-    `dashboards` originally keyed on `name` itself; Feature Design 013 Phase 1 normalized it to a surrogate `id`
-    PK with `name UNIQUE` (`id` is internal-only, exactly like `version` — never on the wire/out `Dashboard`
-    shape; see § Dashboards / `/ui` surface), so its `EntityApplier` (`diplomat/db/repos/dashboards.ts`'s
-    `dashboardApplier`) is now `versionedTableApplier` wrapped the same way as `tagApplier`/`billApplier`: a
-    concurrent first save of a brand-new name mints two different ids, both insert, and the second raises
-    `SQLITE_CONSTRAINT_UNIQUE` on `name` — `dashboardApplier` recognizes it (`isUniqueConstraintViolation`,
-    `diplomat/db/sqliteErrors.ts`) and rethrows as `VersionConflict`, rolling back and re-invoking
-    `saveDashboard` — the retry re-reads, finds the row the race just inserted, and takes the update path
-    instead of racing another insert (regression-tested in `test/integration/db/effects.test.ts`'s
-    `dashboardApplier` describe block, including the actual retry landing a clean update). `DashboardsRepo.upsert`
-    (the `onConflictDoUpdate`) is deleted. `setLocale`
-    (`controllers/settings.ts`) reads the singleton settings row and emits an `insert` (absent) or
-    version-guarded `update` (present); `settings` fits the `id`/`version` convention despite being a singleton
-    (`id` is always `SETTINGS_SINGLETON_ID`). Unlike a random-UUID-keyed entity, though, an `id` collision on
-    insert here is a real concurrent-first-insert race, not a negligible chance event — the plain
-    `versionedTableApplier`'s `onConflictDoNothing` would silently no-op the loser's insert and let `setLocale`
-    report success without its value ever landing, so `settingsApplier` wraps `versionedTableApplier(settings)`
-    to check the insert outcome and rethrow `VersionConflict` on a no-op, the same false-success bug class as
-    `dashboardApplier`'s (regression-tested alongside it in `test/integration/db/effects.test.ts`).
-    `SettingsRepo.setLocale` (the `onConflictDoUpdate`) is deleted. The process-level locale cache reset that
-    used to be a second side effect the domain performed (`deps.resetLocale()`, called from inside `setLocale`
-    after its write) moved to the shell — see the `resetLocale` wiring bullet above — and `resetLocale` is gone
-    from `Deps` entirely.
-    **`deps` now exposes no write method at all, unconditionally — not for "every entity this migration
-    covers", for every entity in the system.** Every repo is read-only: it exposes queries (e.g.
-    `TransactionsRepo.search`, `BillsRepo.findById`) and nothing that mutates. No repo interface in the codebase
-    exposes a write method, and no domain rule survives as a SQL predicate in a repo.
+19. **Every write flow returns its writes as data; none perform them (ADR-021/022/023, complete repo-wide).**
+    A converted controller builds `Persistable`s and returns them in `persist` (or, for bulk import, a
+    `StatementImportPlan` the shell runs through `runEffectsSequence`); it never calls a repo write method and
+    never touches `Db`. **`deps` exposes no write method at all, for any entity** — every repo is read-only
+    (queries and pure helpers only), and no domain rule survives as a SQL predicate in a repo. Only
+    `diplomat/db/effects.ts` (invoked from the MCP/REST handler) touches `Db`. The per-flow conversion history,
+    the applier catalogue, the `versionedTableApplier` unique-conflict/singleton-race handling
+    (`dashboardApplier`/`settingsApplier`), and the `resetLocale`-to-shell move live in `docs/write-path.md`
+    and ADR-021/022/023 — not here.
 20. **An `effective` transaction's date is never in the future** (Feature Design 014). Enforced at `pay_bill`
     (phase A: the payment transfer's date must be on or before today) and `confirm_transaction` (phase B: the
     resolved date — the given `date`, or the existing date if omitted — must be on or before today,
@@ -375,195 +308,14 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement` — text and registration in `diplomat/mcp/prompts.ts`'s `registerPrompts`, called from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome; no DB access, no controller.
 
-## Dashboards / `/ui` surface (ADR-013 Phase A/B, app shell + fragments — ADR-027 Phase 1, file-backed defaults — ADR-027 Phase 2, live update — ADR-027 Phase 3)
+## Dashboards / `/ui` surface (ADR-013, ADR-027)
 
-The `dashboards` table (`id` PK, `name` UNIQUE, `html` nullable, `source: inline|file` DEFAULT `inline`, `path`
-nullable, `updated_at`) stores **content fragments**, keyed by name for every consumer-facing surface — `id` is
-a surrogate identity, internal only (Feature Design 013 Phase 1), never on the wire and never a tool argument.
-A fragment is a `<section>`-level markup + an inline `<script>` that runs its own init immediately once
-injected — **not** a full HTML page: no `<!doctype>`/`<html>`/`<head>`/`<style>` root. `save_dashboard` (MCP
-tool) / `POST /api/dashboards` (REST) is an **upsert**: saving to an existing name replaces its content
-immediately, no rebuild, restart, or migration. `GET /api/dashboards/:name` (REST) returns it as JSON
-(`{ name, html, updatedAt, source }`); absent name → `unknown_dashboard` (404).
-
-**`source` is the sole default/custom discriminator (ADR-027 Phase 2)** — no separate `kind` column:
-
-- **`file`** — content is resolved by reading a repo-relative `.html` file under `ui/dashboards/` at read time
-  (`dashboardsRepo`'s `get`/`findByName`, `diplomat/db/repos/dashboards.ts`); the row's own `html` column is
-  always `NULL`. Only bootstrap ever registers a `file`-backed row (see below) — never `save_dashboard`, which
-  closes the path-traversal surface entirely (a custom dashboard can never carry a caller-influenced `path`).
-  The file read is I/O, so it happens in the repo (never in `adapters/dashboards.ts`, which stays pure — the
-  repo passes the already-resolved content into `dashboardAdapters.dbToModel`/`dbToEntity` as a plain
-  argument); reads are cached in memory for the process lifetime, same pattern as
-  `diplomat/http/routes/ui.ts`'s shell/asset cache. `path` is confined to `ui/dashboards/` by a resolve-and-prefix-check
-  (`resolveDashboardFilePath`) — defense-in-depth, since `path` is only ever bootstrap-supplied, never
-  user input.
-- **`inline`** — content stored in the `html` column, as before Phase 2; `path` is always `NULL`.
-  `saveDashboard`/`renameDashboard` (`controllers/dashboards.ts`) and `adapters/dashboards.ts`'s `modelToDb`
-  enforce "exactly one of html/path per source" on the write side; a `CHECK` constraint
-  (`dashboard_source_content`, `diplomat/db/schema.ts`) enforces it at the schema level too.
-
-Bootstrap (`diplomat/db/bootstrap.ts`'s `seedDashboards`) **reconciles rows to the files actually present**
-under `ui/dashboards/` on every boot (`listDefaultDashboardFiles`, `diplomat/db/repos/dashboards.ts`): every
-`*.html` file there becomes a `source: 'file'` row named after its own filename (`overview.html` → `overview`),
-via `onConflictDoNothing` on the `name` UNIQUE constraint — dropping a new default file in that folder needs no
-code change. `save_dashboard`ing over an existing default's name **detaches** it: the row becomes `inline`
-with the caller's content and `path: NULL`, and no longer tracks the file (a later restart re-seeds the file's
-own name only if that name is free again — e.g. after `delete_dashboard`). `rename_dashboard` is a pure
-identity change and preserves `source`/`path` unchanged, so a renamed default stays file-backed under its new
-name. The menu (`ui/app.js`) groups `list_dashboards`' results straight off `source`: `file` rows render as
-flat top-level items, `inline` ones group under a labeled "Custom" submenu (`.dashboard-menu-group` in
-`ui/app.css`) — no separate grouping field to keep in sync.
-
-**The app shell** (ADR-027 Phase 1) is what actually renders a dashboard in a browser now — real,
-version-controlled files at the package root, sibling to `src/`/`drizzle/` (shipped via `package.json`'s
-`files` array, same as `drizzle/`):
-
-- **`ui/shell.html`** — the shared `<head>` (links `ui/app.css`, loads Chart.js once from the pinned CDN —
-  see § below), the menu bar (`#dashboard-menu`), and the `#content` container fragments render into.
-- **`ui/app.css`** — every style rule lifted verbatim from the pre-shell per-dashboard `<style>` blocks (the
-  look is unchanged), plus the new menu-bar/toolbar chrome rules the shell itself needed.
-- **`ui/app.js`** — the shell client: renders the menu from `GET /api/dashboards` (grouped by `source` — see
-  above), resolves the active dashboard name from `location.pathname` client-side, fetches its fragment
-  (`GET /api/dashboards/:name`), and injects it into `#content`. Handles both menu clicks
-  (`history.pushState`, no reload) and direct/refresh navigation to `/ui/:name`. A fragment's `<script>` is
-  inert once inserted via `innerHTML` — `app.js` replaces it with a freshly created `<script>` element (the
-  standard SPA workaround) to actually execute it; the fragment's own script runs its init **synchronously**
-  at that point rather than waiting for `DOMContentLoaded` (which only ever fires once, for the shell page
-  itself, not per navigation).
-- **`ui/dashboards/*.html`** (ADR-027 Phase 2) — the default dashboard fragments themselves, one file per
-  default (currently just `overview.html`), git-versioned and read-only at the install location; bootstrap
-  reconciles them into `source: 'file'` rows (see above). Also shipped via `package.json`'s `files` array —
-  it lists the parent `ui` directory, which npm includes recursively, so no separate entry was needed.
-
-`GET /ui` and `GET /ui/:name` (`registerUiRoutes`, `diplomat/http/routes/ui.ts`, mounted by `registerRoutes`
-in `diplomat/http/routes.ts` — non-`RouteDefinition` browser routes, same reasoning as the OpenAPI-exclusion
-below) **both serve the same shell file**, always `200`, with `cache-control: no-cache`. There is **no
-server-side existence check** on `:name` — the shell resolves it client-side and shows a not-found state
-inside `#content` if the fragment fetch 404s; `overview` is the default when the path is bare `/ui`. Static
-assets are served at `GET /ui/assets/app.css` / `GET /ui/assets/app.js` (also `registerUiRoutes`, also
-no-cache) — two fixed routes reading two fixed files (`ui/app.css`/`ui/app.js`), not a general static-file
-server, since Phase 1 has exactly those two assets. `ui/` is resolved relative to the serving module's own
-file location (`fileURLToPath(new URL('../../../../ui', import.meta.url))`), the same pattern
-`diplomat/db/bootstrap.ts` uses for the `drizzle/` migrations folder, so it works identically under
-`tsx src/...` (dev) and `node dist/...` (published package) regardless of `cwd`.
-
-`delete_dashboard` (MCP tool) / `DELETE /api/dashboards/:name` (REST) — idempotent-by-design (Feature Design 013
-Phase 2), mirroring `delete_tag`: `deleteDashboard` (`controllers/dashboards.ts`) reads `findRefByName`; absent →
-`{ deleted: false }` on an empty `persist` batch, no write; present → a version-guarded `remove` `Persistable`
-and `{ deleted: true }`. Never an error either way — `GET /api/dashboards/:name` 404s afterward (`GET /ui/:name`
-itself still 200s, per the no-existence-check behavior above — only the client-visible fragment content
-reflects the deletion).
-
-`rename_dashboard` (MCP tool) / `POST /api/dashboards/:name/rename` (REST) — the capability the surrogate `id`
-unlocks (Feature Design 013 Phase 3): `renameDashboard` (`controllers/dashboards.ts`) reads the full entity via
-`findByName` (`unknown_dashboard` if absent), guards `newName` is free via `findRefByName`
-(`dashboardErrors.duplicateName` if taken — a clean expected failure rather than surfacing through the
-applier's own unique-conflict retry), then emits a version-guarded `update` carrying the same `id` and `html`,
-the new `name`, a bumped `updatedAt`, and (ADR-027 Phase 2) the entity's own `source`/`path` unchanged — a
-rename never touches content or the default/custom discriminator, so a file-backed default stays file-backed
-under its new name. `GET /api/dashboards/:newName` serves it immediately; `GET /api/dashboards/:name` (the old
-name) 404s — the handle moved, the identity didn't.
-
-Before persisting, `saveDashboard` (`controllers/dashboards.ts`) runs `findHtmlValidationIssues`
-(`logic/dashboard.ts`, pure) and rejects with `validation` (422) if it fails: empty content, a full
-`<!doctype>`/`<html>` document root still present (the shell owns that now — a save carrying one is rejected,
-inverted from the pre-ADR-027 check), an external `<script src>` reference (fragments carry zero external
-references now — the shell's own `executeScripts` re-execution in `ui/app.js` would otherwise happily fetch
-and run one, so this is enforced server-side rather than left to the authoring skill's convention alone; the
-client additionally drops any `src`-bearing script as defense-in-depth for rows saved before this check
-existed), or an inline `<script>` that fails to *compile* (via Node's `vm.Script`
-— checked, never executed, so this can't itself run untrusted code). This is a narrow render-ability check,
-not sanitization: full HTML sanitization remains explicitly out of scope for this local single-user app
-(ADR-013 Phase A). A rejected save never reads `dashboards.findRefByName` or decides a `Persistable`, so the
-previously stored dashboard is untouched (`docs/write-path.md` — `saveDashboard` is FC/IS: it decides an
-insert/update as data, never writes directly). **`saveDashboard` always builds `source: 'inline'`, `path:
-null`** (ADR-027 Phase 2 non-negotiable) regardless of what the target name previously was — saving over a
-file-backed default's name detaches it into a custom, inline row.
-
-`/ui*` is deliberately **not** part of the `/api` OpenAPI document: that document exists to give an agent
-correct `fetch()` shapes for the JSON data API (§ OpenAPI contract above), and `/ui` is a browser-facing
-HTML/asset surface, not a JSON contract. Management of dashboards (list/get/save) does have REST parity under
-`/api/dashboards*` and is documented in the OpenAPI spec like every other route.
-
-A baseline dashboard (name `overview`) ships as `ui/dashboards/overview.html` (ADR-027 Phase 2 — previously a
-~500-line TS string literal in `src/diplomat/db/seed/dashboards.ts`, removed) and is registered as a
-`source: 'file'` row by bootstrap's directory scan (see above), so `GET /api/dashboards/overview` resolves —
-and `GET /ui`/`GET /ui/overview` render it — on a fresh install even before the agent has generated anything.
-Reconciliation uses `onConflictDoNothing` on the `name` UNIQUE constraint, so a `save_dashboard` override
-(which detaches it to `inline`) survives future restarts — bootstrap never re-seeds over a dashboard that
-already exists.
-
-**(Phase B, converted to a fragment by ADR-027 Phase 1; moved to `ui/dashboards/overview.html` and file-backed
-by ADR-027 Phase 2)** The default is a fragment — `<section>`s + one inline `<script>`, no page chrome (the shell now owns the document root, CSS, and the one Chart.js `<script>` tag). It renders income/expenses/balance, spending-by-category (chart + table), accounts & balances, recurring rules, and recent transactions, one block per currency, plus a clearly-labeled "coming soon" placeholder for installment projections (no endpoint exists yet — Phase C). Its script runs its init immediately (see the app-shell script re-exec note above) and issues same-origin `fetch('/api/...')` calls against the routes documented at `GET /api/openapi.json` (`/api/summary`, `/api/aggregate`, `/api/accounts/balances`, `/api/recurring`, `/api/transactions`), rendering whatever comes back with the localized labels the API already returns (`typeLabel`, `categoryName`, `periodLabel`, …) rather than hardcoding vocabulary. Every section has its own loading/empty/error state, so a slow or failing endpoint degrades one card instead of blanking the page. **The fragment embeds zero financial data or secrets** — this is the ADR-013 non-negotiable, and `test/integration/http/dashboardTemplate.test.ts` is a regression guard: it asserts the fragment (read via `GET /api/dashboards/overview`, resolved from the file at read time) contains the expected `fetch()` calls, contains no inline-data-blob patterns (e.g. `const spending = [...]`), carries no full document root, references no external host at all, and that every fetched path exists in the live OpenAPI document; a companion test asserts `GET /ui` references only the pinned Chart.js CDN host.
-
-**(Phase B, revised for the fragment model by ADR-027 Phase 1)** `skills/dashboard-building/SKILL.md` is the guardrail checklist an MCP client follows to build or
-adapt a dashboard for the user: read the contract (`fintrack://openapi`/`GET /api/openapi.json`) before
-writing any `fetch()` call, map each requested section to a real endpoint, start from the baseline fragment
-above as the structural pattern, then self-check the generated content (a fragment, not a full page; no
-embedded data; same-origin `/api` only; no own `<script src>` CDN reference — the shell already loads
-Chart.js once; per-currency grouping; localized labels; loading/empty/error states) before calling
-`save_dashboard`. It is a docs-only artifact — no runtime
-behavior depends on it — shipped in the published npm package via `package.json`'s `files` array so it's
-available alongside the server.
-
-### Live update — SSE, entity-tagged (ADR-027 Phase 3)
-
-**The change bus** (`src/diplomat/changeBus.ts`) is a plain `EventEmitter` wrapper — `createChangeBus()`
-returns `{ publish, subscribe }`. It lives at the `diplomat/` root rather than under `db/`, `http/`, or `mcp/`
-— shared plumbing owned by neither surface, only consumed by them. `createChangeBus()` itself is
-composition-root-only, called once in `main.ts`/`test/integration/app-builder.ts`; `diplomat/db`/
-`diplomat/http` only ever import the `PublishChange`/`ChangeBus` **types** from here and receive the bound
-`publish`/`subscribe` **function** as a parameter — the same pattern `RunEffects`/`resetLocale` already use
-to cross from the composition root into a diplomat edge, just with the type declared next to the concrete
-implementation instead of in `controllers/deps.ts` (there is no controller-facing capability here to route
-through that file — SSE is HTTP-only, never reachable from a controller). No external broker: the MCP
-server, HTTP sidecar, and scheduler share one process (ADR-024 context), so an in-process emitter is the
-whole mechanism.
-
-**The post-commit publish hook** lives in `diplomat/db/effects.ts`'s `attempt` (the one place a batch actually
-commits, shared by both `runEffects` and `runEffectsSequence`): once `applyBatch` reports `applied: true`, the
-deduped entity tags of every outcome that itself `applied: true` are published — an idempotent-duplicate
-insert's `applied: false` outcome changed nothing, so its entity is never published, and a version-conflict
-retry's failed attempts publish nothing either (only the eventual successful commit does). `publish` is the
-last parameter of `runEffects`/`runEffectsSequence`, defaulting to a no-op — every existing direct caller
-(chiefly tests) is unaffected; only the composition root binds the real change bus.
-
-**`GET /ui/events`** (`registerUiEventsRoute`, `diplomat/http/routes/ui.ts`) is the shell's `EventSource`
-target — not a `RouteDefinition`, same reasoning as the rest of `/ui*`. The handler calls `reply.hijack()`
-(opts out of Fastify's own response lifecycle — an SSE stream deliberately never ends the way a normal
-response does) and writes `data: {"entities":[...]}\n\n` on every change-bus publish for as long as the
-client stays connected; `reply.raw.on('close', unsubscribe)` cleans up per-connection on disconnect —
-`reply.raw`, not `req.raw`, matching `diplomat/mcp/route.ts`'s own hijacked route (the only other one in
-this codebase), since this handler owns the response's lifecycle after `hijack()`. The publish callback
-itself checks `reply.raw.destroyed` before writing — a publish can race a disconnect that hasn't reached the
-`close` handler yet, and skipping the write is simpler than reasoning about whether a stale write would be
-safe. `reply.raw.writeHead()` alone only sets internal state — Node doesn't put headers on the wire until the
-first `write()`/`end()` — so the handler calls `reply.raw.flushHeaders()` immediately after, or a client with
-nothing yet to publish would hang waiting for a response that was never actually sent. `buildHttpApp`'s
-Fastify instance sets `forceCloseConnections: true` for the same reason `/ui/events` exists at all: without
-it, `app.close()` waits for every open connection to end on its own, which a long-lived SSE stream never does
-— shutdown would hang for as long as any browser tab has a dashboard open.
-
-**The shell forwards, the fragment decides.** `ui/app.js` opens exactly one `EventSource('/ui/events')` for
-the page's whole lifetime (fragment swaps never reopen it) and, on every message, calls
-`window.fintrackOnDataChanged(entities)` if the currently-loaded fragment defined it — the shell has no
-knowledge of a fragment's internal sections, only this one well-known global slot. `renderFragment` resets
-the slot to `null` before tearing down the outgoing fragment's DOM (never after injecting the new one), so a
-stale closure referencing already-removed elements can't fire and a fragment whose script errors before
-reaching its own registration simply gets no live update rather than the previous fragment's. The baseline
-`ui/dashboards/overview.html` fragment implements the contract: a `SECTION_ENTITY_DEPENDENCIES` map declares
-which entity tags feed each of its section loaders (`summary`/`categorySpending`/`accounts`/`recurring`/
-`recentTransactions`), and `onDataChanged` refetches only the sections whose declared dependencies intersect
-the published entities, assigning itself to `window.fintrackOnDataChanged` as the last line of the script
-(after the initial load). `skills/dashboard-building/SKILL.md` documents the same hook as optional guidance
-for hand-authored/custom dashboards — a fragment that never sets it simply has no live update, same as before
-this phase.
-
-**Known limit (by design, ADR-027):** the change bus only reaches subscribers on this process — a write from
-a *different* stdio server won't push here. Mitigated because ADR-024 steers multi-client use to the single
-HTTP-transport server; a periodic client-side poll can backstop if cross-process live-update ever matters.
-Shipped SSE-in-process first.
+The browser dashboard surface — the app shell, dashboard **content fragments**, the `source: inline|file`
+discriminator (default dashboards are git-versioned `.html` files under `ui/dashboards/`; customs are DB-
+`inline`, and `save_dashboard` is **always** `inline` so path-traversal is structurally impossible), bootstrap
+reconciliation, the management flows (`save`/`delete`/`rename`, all FC/IS), and entity-tagged **SSE** live-update
+fed by the `runEffects` post-commit hook — is documented in full in **`docs/ui.md`**. The `dashboards` table
+shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-027.
 
 ## ADR index
 
@@ -583,14 +335,14 @@ Shipped SSE-in-process first.
 - ADR-014: cursor pagination + whitelisted ordering for collection endpoints (`search_transactions` first mover)
 - ADR-015: multi-write unit-of-work for transactional multi-step writes — **rejected** (superseded by ADR-016 before implementation)
 - ADR-016: domain/context boundaries — aggregate ownership (credit-card, account) over a shared transaction core
-- ADR-017: no god write flows — bounded-context ownership for every transaction mutation (extends ADR-016; step 1 [update/delete split] and step 2 [bulk split] both implemented — complete; ownership discriminator revised by ADR-020)
-- ADR-018: atomic bill payment via a transactional repo write — **superseded by ADR-021** before implementation (the atomicity it sought is generic in the shell, not a repo method)
-- ADR-019: minimal transaction core — aggregates `.extend` the shared movement schema up, never `.omit` it down (step 1 [schema compose-up] and step 2 [logic re-homing] both implemented — complete)
-- ADR-020: transaction ownership by account type, not structural field-presence (revises ADR-017's union rule; refines ADR-019 PR-2 — implemented)
-- ADR-021: functional core / imperative shell for the write path — controllers return the write as data (a `persist` batch) instead of performing it; a generic versioned unit of work applies it (supersedes ADR-018)
-- ADR-022: the shell's executor is a generic effect runner (`runEffects`/`runEffectsSequence`) rather than a DB-specific unit of work — persistence is one effect kind, response always produced, message dispatch a named future kind; runs either a single atomic unit or a sequence of independent units (renames/extends ADR-021)
-- ADR-023: an applier decides nothing and performs no reads at all — merchant creation, tag resolution, and the learning weight/origin move into the core; idempotency treatment becomes the engine's, declared by registration config (extends ADR-021/ADR-022 — **accepted**; step 1 [merchant entity + weight delta] implemented, also landed outcome-addressing-by-entity-tag as a prerequisite refactor; step 2 [tag links resolved in the core] implemented; step 3 [generic idempotency + the `transactionApplier` collapse; tag set re-addressed by transactionId with keep-existing-on-duplicate; invariant sharpened to "no reads at all"] implemented)
-- ADR-024: local SQLite concurrency posture — WAL + `busy_timeout` on the connection, and `SQLITE_BUSY` made retryable in `runEffects`, so multiple concurrent writers (stdio spawned per client) wait/retry instead of hard-failing; the physical-contention axis left open after ADR-015→022 solved logical atomicity (multi-client use is steered to the HTTP transport — ADR-007 — **accepted, implemented**)
-- ADR-025: diplomat edge organization — MCP tools/resources/prompts and HTTP routes live in per-domain modules mirroring `controllers/`; the entrypoints (`buildMcpServer`/`buildRouteDefinitions`) only aggregate; behavior-preserving split of the two large edge files, with a convention governing new edge work (**accepted** — phase 1 [MCP edge split] and phase 2 [HTTP routes split] both implemented)
-- ADR-026: multi-currency valuation — crypto currencies (USDC, BTC) as first-class, an agent-refreshed `currency_rates` table (the backend never fetches — local-first preserved), a `settings.base_currency`, and read-time conversion to the base currency on `get_account_balances`; relaxes no-implicit-conversion for **valuation** only (spend stays per-currency, conversions `as_of`-stamped) — resolves the cross-currency open question (**proposed**)
-- ADR-027: UI app shell — a shared shell (`ui/shell.html` + `app.css` + `app.js`) hosting dashboard **content fragments**; a `source: inline|file` discriminator so **default** dashboards are git-versioned `.html` files and **customs** stay DB-`inline` (`save_dashboard` always inline — path-traversal-safe); entity-tagged **SSE** live-update fed by the `runEffects` post-commit; overview is home; same Fastify, no build (extends/revises ADR-013 — **accepted**; phase 1 [app shell, shared `app.css`, fragment model, overview home, menu] and phase 2 [`source`/`path` discriminator, file-backed default dashboards under `ui/dashboards/*.html`, custom submenu grouping] implemented)
+- ADR-017: no god write flows — bounded-context ownership for every transaction mutation (extends ADR-016; ownership discriminator revised by ADR-020)
+- ADR-018: atomic bill payment via a transactional repo write — **superseded by ADR-021** before implementation
+- ADR-019: minimal transaction core — aggregates `.extend` the shared movement schema up, never `.omit` it down
+- ADR-020: transaction ownership by account type, not structural field-presence (revises ADR-017's union rule)
+- ADR-021: functional core / imperative shell for the write path — controllers return the write as data; a generic versioned unit of work applies it (supersedes ADR-018)
+- ADR-022: the shell's executor is a generic effect runner (`runEffects`/`runEffectsSequence`) — single atomic unit or sequence of independent units (renames/extends ADR-021)
+- ADR-023: an applier decides nothing and performs no reads — merchant/tag/learning decisions move into the core; idempotency is the engine's, declared by registration config (extends ADR-021/022)
+- ADR-024: local SQLite concurrency posture — WAL + `busy_timeout` + `SQLITE_BUSY` retryable in `runEffects`; multi-client use steered to the HTTP transport (ADR-007)
+- ADR-025: diplomat edge organization — MCP tools/resources/prompts and HTTP routes in per-domain modules mirroring `controllers/`; entrypoints only aggregate
+- ADR-026: multi-currency valuation — crypto (USDC, BTC) first-class, agent-refreshed `currency_rates` table, `settings.base_currency`, read-time conversion on `get_account_balances`; relaxes no-implicit-conversion for **valuation** only (**proposed**)
+- ADR-027: UI app shell — shared shell hosting dashboard **content fragments**; `source: inline|file` discriminator (defaults are git-versioned files, customs stay inline, `save_dashboard` always inline); entity-tagged **SSE** live-update; same Fastify, no build (extends/revises ADR-013; see `docs/ui.md`)

@@ -214,7 +214,12 @@ monthly-review/import-statement skills line below — MCP prompts are portable/s
 persist.
 
 ### Phase 4 — Surfaces & hardening
-Minimal web frontend rendering saved views; activate owner columns for multi-user groundwork; OFX/CSV importers behind an interface (Open Finance Brasil / Pluggy later); e2e against MCP transport. Multi-user/hosted would also reopen the auth + safety-guard work intentionally deferred for the local-first first release.
+The **web frontend is substantially delivered by ADR-027** (the `/ui` app shell: a shared shell hosting
+dashboard content fragments, git-versioned file-backed default dashboards + DB-`inline` customs under a menu,
+and entity-tagged SSE live-update — see `docs/ui.md`). Remaining Phase 4 work: activate owner columns for
+multi-user groundwork; OFX/CSV importers behind an interface (Open Finance Brasil / Pluggy later); e2e against
+MCP transport. Multi-user/hosted would also reopen the auth + safety-guard work intentionally deferred for the
+local-first first release.
 
 ## Testing
 

@@ -33,7 +33,7 @@ describe('GET /ui/assets/app.css', () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/css');
     expect(res.body).toContain(':root');
-    expect(res.body).toContain('#dashboard-menu');
+    expect(res.body).toContain('.sidebar-menu');
   });
 });
 
