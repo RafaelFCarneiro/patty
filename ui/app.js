@@ -230,9 +230,10 @@
     }
 
     var iconEl = h('i', { class: 'fa-solid ' + iconClass });
-    var link = h('a', { 
+    var link = h('a', {
       href: UI_PATH_PREFIX + encodeURIComponent(dashboard.name),
-      title: tooltipText
+      title: tooltipText,
+      'aria-label': tooltipText
     }, [iconEl]);
 
     if (dashboard.name === activeName) {
