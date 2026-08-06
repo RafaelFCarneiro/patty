@@ -62,6 +62,7 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   every fragment.
 - **`ui/app.css`** — shell/layout styling for the sidebar-nav shell (menu, toolbar chrome, Flatpickr theme
   overrides), reworked from the original per-dashboard `<style>` blocks rather than a verbatim lift of them.
+  Also owns the shared dashboard-fragment component classes — see below.
 - **`ui/app.js`** — the shell client: renders the menu from `GET /api/dashboards` (see the `source`
   discriminator section above for how defaults vs. customs are placed), resolves the active dashboard name
   from `location.pathname`, fetches its fragment (`GET /api/dashboards/:name`), and injects it into
@@ -72,6 +73,40 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   shell page, not per navigation).
 - **`ui/dashboards/*.html`** (ADR-027 Phase 2) — the default dashboard fragments, one file per default,
   git-versioned and read-only at the install location; bootstrap reconciles them into `source: 'file'` rows.
+
+## Shared component classes across fragments (issue #164)
+
+`ui/app.css` owns the base rule for eight component classes independently reused across the nine default
+fragments (`.spinner`, `.loading-overlay`, `.toast-container`/`.toast`, `.modal-overlay`/`.modal-box`/
+`.modal-title`, `.panel`, `.form-group label`/`.form-control`, `.kpi-card`) instead of each fragment defining
+its own full copy. What each fragment kept locally, and why, follows one rule:
+
+**A property is only moved into the shared base if every fragment that uses the class declares that
+property at all** — either with the identical value everywhere (safe outright), or with a majority value
+that becomes the base default while the minority keeps a small local override for just that one property (in
+the fragment's own `<style>` block, injected into `#content` after `app.css` in DOM order, so it wins the
+cascade for anything it declares). A property a fragment never declared for that class is **never** centralized,
+even when most fragments agree on it — centralizing it would make that fragment silently inherit a property it
+never asked for. This is why, for example, `.modal-overlay`'s `background`/`z-index` are shared with per-file
+overrides (every user sets both, just to different values) while its `width`/`height` stay fully local
+(`dashboards.html`'s modal uses `top/right/bottom/left` insets instead and never declared them at all).
+
+Several components turned out too structurally divergent to share a base safely under this rule and were left
+untouched: `dashboards.html`'s `.modal-card`/`.modal-header`/`.btn-close-modal` (a different markup shape from
+every other fragment's `.modal-box`, sharing only `.modal-overlay`/`.modal-title`'s name), and the `.toast`
+implementations in `categories.html`/`dashboards.html` (solid background, no backdrop-filter, a different
+animation) and `tags.html`/`overview.html` (each with their own container geometry or, for `overview.html`, no
+container at all — a single persistent `.toast` element toggled by a `.show` class instead) — these fragments'
+own `<style>` blocks still fully shadow `app.css`'s `.toast-container`/`.toast` base by declaring every
+property they need themselves, so nothing leaks.
+
+Verified with zero visual regression: for every fragment, `getComputedStyle` was captured (as a single hash
+over the full property set of every one of these selectors) before and after the refactor and confirmed
+byte-for-byte identical — not just spot-checked. [#164](https://github.com/RafaelFCarneiro/fintrack/issues/164)
+tracked this as deferred work when the fragments were first converted to files; still open: the CSS-lift issue
+itself also called out per-page `.form-control:focus`/`.toast`/`.kpi-card` state-modifier rules (`:hover`,
+`.income`/`.expense`/`.net` on `pending.html`'s richer `.kpi-card`, etc.) as candidates, but those never shared
+enough structure across fragments to lift safely under the rule above, so they remain fragment-local.
 
 ## Routes
 

@@ -1,28 +1,19 @@
 <style>
-/* Dashboard Panel Containers */
+/* Dashboard Panel Containers (base: ui/app.css, #164) */
         .panel {
-            background: var(--panel-bg);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--panel-border);
             border-radius: 20px;
             padding: 1.75rem;
-            box-shadow: var(--card-shadow);
             position: relative;
             margin-bottom: 2rem;
             overflow: hidden;
         }
 
-        /* Loading Spinner Overlay */
+        /* Loading Spinner Overlay (.loading-overlay/.spinner base: ui/app.css, #164) */
         .loading-overlay {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(12, 14, 23, 0.8);
+            right: 0; bottom: 0;
             backdrop-filter: blur(5px);
-            z-index: 10;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s ease;
@@ -34,16 +25,7 @@
         }
 
         .spinner {
-            width: 40px;
-            height: 40px;
             border: 3px solid rgba(255,255,255,0.05);
-            border-radius: 50%;
-            border-top-color: var(--accent-primary);
-            animation: spin 1s ease-in-out infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
         }
 
         /* Shared Header Rows inside panels */
@@ -129,48 +111,34 @@
             color: var(--text-muted);
         }
 
+        /* base: ui/app.css (#164) */
         .form-control {
             background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--panel-border);
-            border-radius: 8px;
-            color: var(--text-main);
             padding: 0.55rem 0.75rem;
             font-family: 'Plus Jakarta Sans', sans-serif;
             font-size: 0.85rem;
-            transition: var(--transition-smooth);
-            width: 100%;
         }
 
         .form-control:focus {
             outline: none;
-            border-color: var(--accent-primary);
             background: rgba(255, 255, 255, 0.05);
             box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25);
         }
 
-        /* Toast Notifications */
+        /* Toast Notifications (.toast-container/.toast base: ui/app.css, #164) */
         .toast-container {
-            position: fixed;
             bottom: 24px;
             right: 24px;
-            display: flex;
-            flex-direction: column;
             gap: 8px;
             z-index: 1100;
         }
 
         .toast {
             background: #0d0f1a;
-            border: 1px solid var(--panel-border);
-            color: #fff;
             padding: 0.85rem 1.25rem;
-            border-radius: 12px;
             font-size: 0.82rem;
             font-weight: 600;
             box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
             transform: translateY(20px);
             opacity: 0;
             animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
