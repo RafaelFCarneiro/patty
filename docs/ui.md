@@ -50,16 +50,16 @@ Real, version-controlled files at the package root, sibling to `src/`/`drizzle/`
 import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works under `tsx src/...` (dev) and
 `node dist/...` (published) regardless of `cwd`.
 
-- **`ui/shell.html`** — shared `<head>` (links `ui/app.css`; loads Chart.js, Flatpickr, Font Awesome, and
-  Google Fonts, each from a CDN — only Chart.js and Font Awesome are version-pinned today, Flatpickr is not
-  yet, tracked as a gap in
-  [#165](https://github.com/RafaelFCarneiro/fintrack/issues/165)), the left nav menu (`#dashboard-menu`), and
-  the `#content` container fragments render into. Fragments load none of these themselves — Chart.js and
+- **`ui/shell.html`** — shared `<head>` (links `ui/app.css`; loads Chart.js, Flatpickr, and Font Awesome from
+  a CDN, each version-pinned with an SRI `integrity` hash (#165); Google Fonts' CSS2 API is the one
+  intentional exception — its response varies by requesting User-Agent, so there's no single fixed body that
+  an SRI hash could pin, documented inline at that `<link>`), the left nav menu (`#dashboard-menu`), and the
+  `#content` container fragments render into. Fragments load none of these themselves — Chart.js and
   Flatpickr are called as shell-provided globals (`ui/dashboards/*.html`'s date inputs call `flatpickr(...)`
   directly) — so the shell's `<head>` is the *only* place external hosts are referenced; a fragment carrying
   its own `<script src>`/`<link>` is rejected by `save_dashboard` (see Management flows below).
-  `test/integration/http/dashboardTemplate.test.ts` pins the allowed host list for both the shell and every
-  fragment.
+  `test/integration/http/dashboardTemplate.test.ts` pins the allowed host+version list for both the shell and
+  every fragment.
 - **`ui/app.css`** — shell/layout styling for the sidebar-nav shell (menu, toolbar chrome, Flatpickr theme
   overrides), reworked from the original per-dashboard `<style>` blocks rather than a verbatim lift of them.
 - **`ui/app.js`** — the shell client: renders the menu from `GET /api/dashboards` (see the `source`

@@ -4,16 +4,40 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FinTrack</title>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Google Fonts: the CSS2 API response is generated per requesting User-Agent (different
+         @font-face src formats/URLs for different browsers), so there is no single fixed response
+         body that an SRI hash could pin — hashing today's response would break the stylesheet for any
+         browser whose UA gets a different variant, and Google may rotate the response at any time
+         regardless. No SRI is applied here for that reason; this is the accepted, documented gap
+         (#165). Chart.js/Flatpickr/Font Awesome below serve one fixed file per version and are
+         pinned + SRI'd. -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" referrerpolicy="no-referrer" />
     <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link
+      rel="stylesheet"
+      referrerpolicy="no-referrer"
+      crossorigin="anonymous"
+      integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw=="
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
     <!-- Flatpickr CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" />
+    <link
+      rel="stylesheet"
+      referrerpolicy="no-referrer"
+      crossorigin="anonymous"
+      integrity="sha384-RkASv+6KfBMW9eknReJIJ6b3UnjKOKC5bOUaNgIY778NFbQ8MtWq9Lr/khUgqtTt"
+      href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css"
+    />
+    <link
+      rel="stylesheet"
+      referrerpolicy="no-referrer"
+      crossorigin="anonymous"
+      integrity="sha384-heUUtXw0Djj2DElfLOVPlASSWFKNL3JDY6s3FEqQD03GYyWOeophY5DsfEG40sYX"
+      href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/themes/dark.css"
+    />
     <!-- Custom layout CSS -->
     <link rel="stylesheet" href="/ui/assets/app.css" />
-    
+
     <!-- Chart.js CDN -->
     <script
       defer
@@ -23,8 +47,20 @@
       src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
     ></script>
     <!-- Flatpickr JS -->
-    <script defer src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+    <script
+      defer
+      referrerpolicy="no-referrer"
+      crossorigin="anonymous"
+      integrity="sha384-5JqMv4L/Xa0hfvtF06qboNdhvuYXUku9ZrhZh3bSk8VXF0A/RuSLHpLsSV9Zqhl6"
+      src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"
+    ></script>
+    <script
+      defer
+      referrerpolicy="no-referrer"
+      crossorigin="anonymous"
+      integrity="sha384-agbVpcY312cNMSL1b3CUo060bj9FmbwUX8HUCNSE17+jOU/en4yz3w9ro9IWVusF"
+      src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/pt.js"
+    ></script>
   </head>
   <body>
     <!-- Left Navigation Sidebar -->

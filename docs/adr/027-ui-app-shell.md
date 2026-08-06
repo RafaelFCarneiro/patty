@@ -139,11 +139,13 @@ separate host: the zero-build, local-first posture (ADR-004/007/013) is unchange
 6. [x] Convert the remaining default dashboards to file-backed fragments (`feat/new-default-templates`): all
    nine defaults — `overview`, `accounts`, `cards`, `categories`, `comparative`, `dashboards`, `pending`,
    `projections`, `tags` — now ship as `ui/dashboards/*.html`, auto-registered as `source: 'file'` rows by
-   bootstrap's directory scan. Follow-ups tracked separately: lift the CSS components duplicated across
+   bootstrap's directory scan. Follow-up tracked separately: lift the CSS components duplicated across
    fragments (toast, modal, panel, form, kpi, spinner, loading-overlay) into `ui/app.css`
-   ([#164](https://github.com/RafaelFCarneiro/fintrack/issues/164)); pin version + SRI for the Flatpickr CDN
-   includes the same PR added to `ui/shell.html`, matching Chart.js's existing pattern
-   ([#165](https://github.com/RafaelFCarneiro/fintrack/issues/165)).
+   ([#164](https://github.com/RafaelFCarneiro/fintrack/issues/164)).
+7. [x] Pin version + SRI for the Flatpickr and Font Awesome CDN includes in `ui/shell.html`
+   (`fix/pin-shell-cdn-assets`), matching Chart.js's existing pattern; Google Fonts documented as the one
+   intentional exception (its CSS2 API response varies by requesting User-Agent, so there's no single fixed
+   body to hash). Closes [#165](https://github.com/RafaelFCarneiro/fintrack/issues/165).
 
 Each phase is feature-sized (schema and/or a new server capability, many files) → independent verification
 subagent per diff.

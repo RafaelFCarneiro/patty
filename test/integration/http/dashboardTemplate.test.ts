@@ -26,14 +26,16 @@ const DEFAULT_DASHBOARD_NAMES = [
 const INLINE_DATA_BLOB_PATTERN =
   /(?:const|let|var)\s+\w*(spending|transactions|balances|accounts|recurring)\w*\s*=\s*(?:\[(?!\s*\]|\s*\.\.\.)|\{(?!\s*\}))/i;
 
-// Pinned CDN prefixes the app shell (ui/shell.html) and every fragment are allowed to reference
-// externally — anything else means a new, unreviewed third-party host slipped in. Chart.js pins an
-// exact version; Font Awesome pins an exact version in its path. Flatpickr and Google Fonts' CSS2 API
-// have no comparable versioned URL to pin further.
+// Pinned CDN prefixes that the app shell (ui/shell.html) and every fragment are allowed to reference
+// externally — anything else means a new, unreviewed third-party host slipped in. Chart.js,
+// Flatpickr, and Font Awesome each pin an exact version (#165) — the prefix here includes the
+// version, so bumping or unpinning one without updating this list fails the test. Google Fonts'
+// CSS2 API has no comparable fixed, versionable URL (its response varies by requesting
+// User-Agent — see ui/shell.html's comment on that include) and stays unpinned by design.
 const ALLOWED_EXTERNAL_HOST_PREFIXES = [
-  'https://cdn.jsdelivr.net/npm/chart.js@',
-  'https://cdn.jsdelivr.net/npm/flatpickr',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/',
+  'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/',
+  'https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/',
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/',
   'https://fonts.googleapis.com/',
 ];
 
