@@ -773,12 +773,14 @@
 
         // View Dashboard HTML source code inside modal
         async function viewDashboardHtml(name) {
-            // Note: Since GET /api/dashboards only returns metadata, we can fetch the active page HTML from '/ui/' + name
+            // GET /ui/:name always serves the shell (same HTML for every dashboard, the client
+            // resolves :name itself) — the dashboard's own fragment lives in GET /api/dashboards/:name's
+            // `html` field instead.
             listLoading.classList.add('active');
             try {
-                const res = await fetch(`/ui/${name}`);
+                const res = await fetch(`/api/dashboards/${name}`);
                 if (res.ok) {
-                    const html = await res.text();
+                    const { html } = await res.json();
                     document.getElementById('modal-code-title').innerHTML = `<i class="fa-solid fa-code"></i> Código Fonte: ${escapeHtml(name)}.html`;
                     document.getElementById('modal-code-viewer').textContent = html;
                     openModal('modal-view-code');
@@ -821,11 +823,13 @@
 
         // Trigger dynamic file download in browser
         async function downloadDashboard(name) {
+            // Same reasoning as viewDashboardHtml: GET /ui/:name serves the shell, not this
+            // dashboard's own fragment — read GET /api/dashboards/:name's `html` field instead.
             listLoading.classList.add('active');
             try {
-                const res = await fetch(`/ui/${name}`);
+                const res = await fetch(`/api/dashboards/${name}`);
                 if (res.ok) {
-                    const html = await res.text();
+                    const { html } = await res.json();
                     const blob = new Blob([html], { type: 'text/html' });
                     const link = document.createElement('a');
                     link.href = URL.createObjectURL(blob);

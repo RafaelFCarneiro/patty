@@ -369,21 +369,26 @@
     var moreBtn = document.getElementById('more-btn');
     
     if (dropdown && moreContainer && moreBtn) {
+      var setMoreOpen = function (open) {
+        moreContainer.classList.toggle('open', open);
+        moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      };
+
       dropdown.addEventListener('click', function (event) {
         var link = event.target.closest('a');
         if (!link) return;
         event.preventDefault();
-        moreContainer.classList.remove('open');
+        setMoreOpen(false);
         navigate(nameFromMenuHref(link.getAttribute('href')), true);
       });
 
       moreBtn.addEventListener('click', function (event) {
         event.stopPropagation();
-        moreContainer.classList.toggle('open');
+        setMoreOpen(!moreContainer.classList.contains('open'));
       });
 
       document.addEventListener('click', function () {
-        moreContainer.classList.remove('open');
+        setMoreOpen(false);
       });
     }
 
