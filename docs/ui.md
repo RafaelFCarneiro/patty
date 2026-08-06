@@ -93,33 +93,26 @@ never asked for. This is why, for example, `.modal-overlay`'s `background`/`z-in
 overrides (every user sets both, just to different values) while its `width`/`height` stay fully local
 (`dashboards.html`'s modal uses `top/right/bottom/left` insets instead and never declared them at all).
 
-Several components turned out too structurally divergent to share a base safely under this rule and were left
-untouched: `dashboards.html`'s `.modal-card`/`.modal-header`/`.btn-close-modal` (a different markup shape from
-every other fragment's `.modal-box`, sharing only `.modal-overlay`/`.modal-title`'s name), and the `.toast`
-implementations in `categories.html`/`dashboards.html` (solid background, no backdrop-filter, a different
-animation) and `tags.html`/`overview.html` (each with their own container geometry or, for `overview.html`, no
-container at all — a single persistent `.toast` element toggled by a `.show` class instead) — these fragments'
-own `<style>` blocks still fully shadow `app.css`'s `.toast-container`/`.toast` base by declaring every
-property they need themselves, so nothing leaks.
+Several components turned out too structurally divergent to share a *full* base safely under this rule:
+`dashboards.html`'s `.modal-card`/`.modal-header`/`.btn-close-modal` (a different markup shape from every
+other fragment's `.modal-box`, sharing only `.modal-overlay`/`.modal-title`'s name with the lifted base), and
+the `.toast` implementations in `categories.html`/`dashboards.html` (solid background, no backdrop-filter, a
+different animation) and `tags.html`/`overview.html` (each with their own container geometry or, for
+`overview.html`, no container at all — a single persistent `.toast` element toggled by a `.show` class
+instead). These four still inherit the handful of `.toast`/`.toast-container` properties that *are* universal
+across every consumer (`align-items`, `border`, `border-radius`, `display`, `gap`) from `app.css`'s base —
+they're not fully self-contained — but every property specific to their own divergent shape (background,
+animation, timing, sizing, container geometry) stays in their own `<style>` block, declared explicitly, so
+none of that divergent styling leaks between fragments.
 
 One property was deliberately kept local everywhere despite passing the rule above: `.btn-action-primary`'s
 `display` is declared by all six of its consuming fragments (three `flex`, three `inline-flex`), which
 technically qualifies for a majority-default-plus-override lift like every other divergent property — but it
 was left fully local to each fragment instead, favoring the simplicity of "every fragment's own rule is
 self-contained for this one property" over chasing the base-vs-override split for a single, cheap-to-repeat
-declaration.
-
-Several components turned out too structurally divergent to share a base safely under the rule above and were
-left untouched: `dashboards.html`'s `.modal-card`/`.modal-header`/`.btn-close-modal` (a different markup shape
-from every other fragment's `.modal-box`, sharing only `.modal-overlay`/`.modal-title`'s name), and the
-`.toast` implementations in `categories.html`/`dashboards.html` (solid background, no backdrop-filter, a
-different animation) and `tags.html`/`overview.html` (each with their own container geometry or, for
-`overview.html`, no container at all — a single persistent `.toast` element toggled by a `.show` class
-instead) — these fragments' own `<style>` blocks still fully shadow `app.css`'s `.toast-container`/`.toast`
-base by declaring every property they need themselves, so nothing leaks. State-modifier rules the original
-issue also named as candidates (`:hover`/`:disabled` on `.btn-action-primary`, and `pending.html`'s richer
-`.kpi-card` variants — `:hover`, `.income`/`.expense`/`.net`) never shared enough structure across fragments
-to lift safely either, and stay fragment-local.
+declaration. State-modifier rules the original issue also named as candidates (`:hover`/`:disabled` on
+`.btn-action-primary`, and `pending.html`'s richer `.kpi-card` variants — `:hover`, `.income`/`.expense`/
+`.net`) never shared enough structure across fragments to lift safely either, and stay fragment-local.
 
 Verified with zero visual regression: for every fragment, `getComputedStyle` was captured (as a single hash
 over the full property set of every one of these selectors) before and after the refactor and confirmed

@@ -48,6 +48,11 @@
             flex-direction: column;
             gap: 0.5rem;
             backdrop-filter: blur(12px);
+            /* Pre-existing gap, not introduced by the #164 refactor (confirmed against origin/main):
+               .kpi-card::before (ui/app.css) is position:absolute and needs a positioned ancestor.
+               This file never set one, so the (invisible here — no .income/.expense/.net modifier
+               ever applies a background to it) accent bar was positioning against the viewport. */
+            position: relative;
         }
 
         .kpi-title {
