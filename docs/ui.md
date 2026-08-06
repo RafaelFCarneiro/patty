@@ -76,10 +76,11 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
 
 ## Shared component classes across fragments (issue #164)
 
-`ui/app.css` owns the base rule for eight component classes independently reused across the nine default
+`ui/app.css` owns the base rule for nine component classes independently reused across the nine default
 fragments (`.spinner`, `.loading-overlay`, `.toast-container`/`.toast`, `.modal-overlay`/`.modal-box`/
-`.modal-title`, `.panel`, `.form-group label`/`.form-control`, `.kpi-card`) instead of each fragment defining
-its own full copy. What each fragment kept locally, and why, follows one rule:
+`.modal-title`, `.panel`, `.form-group label`/`.form-control`/`.form-control:focus`, `.kpi-card`,
+`.btn-action-primary`) instead of each fragment defining its own full copy. What each fragment kept locally,
+and why, follows one rule:
 
 **A property is only moved into the shared base if every fragment that uses the class declares that
 property at all** — either with the identical value everywhere (safe outright), or with a majority value
@@ -100,13 +101,30 @@ container at all — a single persistent `.toast` element toggled by a `.show` c
 own `<style>` blocks still fully shadow `app.css`'s `.toast-container`/`.toast` base by declaring every
 property they need themselves, so nothing leaks.
 
+One property was deliberately kept local everywhere despite passing the rule above: `.btn-action-primary`'s
+`display` is declared by all six of its consuming fragments (three `flex`, three `inline-flex`), which
+technically qualifies for a majority-default-plus-override lift like every other divergent property — but it
+was left fully local to each fragment instead, favoring the simplicity of "every fragment's own rule is
+self-contained for this one property" over chasing the base-vs-override split for a single, cheap-to-repeat
+declaration.
+
+Several components turned out too structurally divergent to share a base safely under the rule above and were
+left untouched: `dashboards.html`'s `.modal-card`/`.modal-header`/`.btn-close-modal` (a different markup shape
+from every other fragment's `.modal-box`, sharing only `.modal-overlay`/`.modal-title`'s name), and the
+`.toast` implementations in `categories.html`/`dashboards.html` (solid background, no backdrop-filter, a
+different animation) and `tags.html`/`overview.html` (each with their own container geometry or, for
+`overview.html`, no container at all — a single persistent `.toast` element toggled by a `.show` class
+instead) — these fragments' own `<style>` blocks still fully shadow `app.css`'s `.toast-container`/`.toast`
+base by declaring every property they need themselves, so nothing leaks. State-modifier rules the original
+issue also named as candidates (`:hover`/`:disabled` on `.btn-action-primary`, and `pending.html`'s richer
+`.kpi-card` variants — `:hover`, `.income`/`.expense`/`.net`) never shared enough structure across fragments
+to lift safely either, and stay fragment-local.
+
 Verified with zero visual regression: for every fragment, `getComputedStyle` was captured (as a single hash
 over the full property set of every one of these selectors) before and after the refactor and confirmed
-byte-for-byte identical — not just spot-checked. [#164](https://github.com/RafaelFCarneiro/fintrack/issues/164)
-tracked this as deferred work when the fragments were first converted to files; still open: the CSS-lift issue
-itself also called out per-page `.form-control:focus`/`.toast`/`.kpi-card` state-modifier rules (`:hover`,
-`.income`/`.expense`/`.net` on `pending.html`'s richer `.kpi-card`, etc.) as candidates, but those never shared
-enough structure across fragments to lift safely under the rule above, so they remain fragment-local.
+byte-for-byte identical — not just spot-checked.
+[#164](https://github.com/RafaelFCarneiro/fintrack/issues/164) tracked this as deferred work when the
+fragments were first converted to files.
 
 ## Routes
 

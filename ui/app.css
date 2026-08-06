@@ -425,3 +425,21 @@ header, .dashboard-header {
     top: 0;
     width: 4px;
 }
+
+/* display is left out of this base even though every consuming fragment declares it: fragments
+   disagree between `flex` and `inline-flex`, and every fragment below declares its own value
+   explicitly rather than relying on 3 of the 6 matching the base default — one line of harmless
+   redundancy beats a property whose effective value depends on reading the base rule to know
+   whether a given fragment needed to override it. */
+.btn-action-primary {
+    align-items: center;
+    background: var(--accent-primary);
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    border-radius: 10px;
+    font-weight: 600;
+    gap: 0.5rem;
+    padding: 0.6rem 1.25rem;
+}

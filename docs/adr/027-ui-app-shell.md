@@ -148,7 +148,8 @@ separate host: the zero-build, local-first posture (ADR-004/007/013) is unchange
    body to hash). Closes [#165](https://github.com/RafaelFCarneiro/fintrack/issues/165).
 8. [x] Lift the CSS components duplicated across the nine fragments (`.spinner`, `.loading-overlay`,
    `.toast-container`/`.toast`, `.modal-overlay`/`.modal-box`/`.modal-title`, `.panel`,
-   `.form-group label`/`.form-control`, `.kpi-card`) into `ui/app.css`
+   `.form-group label`/`.form-control`/`.form-control:focus`, `.kpi-card`, `.btn-action-primary`) into
+   `ui/app.css`
    (`refactor/lift-common-dashboard-css`) — see `docs/ui.md`'s "Shared component classes" section for the
    safety rule that governed what could move (only properties every consuming fragment declares) and which
    components turned out too divergent to lift at all. Verified zero visual regression via a
