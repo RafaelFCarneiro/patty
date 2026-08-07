@@ -46,8 +46,8 @@ const { version } = require('../package.json') as { version: string };
 /**
  * Lazily imports the HTTP composition module (server.ts) so Fastify — and the whole REST /
  * MCP-over-HTTP route table it wires up — is never loaded during the default stdio-only
- * startup path, only when the sidecar is enabled or MCP_TRANSPORT=http actually needs it
- * (ADR-007). Isolated here as one named function instead of an inline import() at each call site.
+ * startup path, only when the sidecar is enabled or MCP_TRANSPORT=http actually needs it.
+ * Isolated here as one named function instead of an inline import() at each call site.
  */
 const loadServerModule = () => import('./server.js');
 
@@ -100,8 +100,6 @@ const main = async (): Promise<void> => {
     locale: localeResolver.locale,
   };
 
-  // Every converted entity's applier, keyed by its own tag (ADR-021) — assembled once here, the
-  // composition root, so `diplomat/db/effects.ts` itself never names a specific entity.
   const applierRegistry: ApplierRegistry = {
     [ACCOUNT_ENTITY_TAG]: accountApplier,
     [TRANSACTION_ENTITY_TAG]: transactionApplier,
@@ -117,8 +115,7 @@ const main = async (): Promise<void> => {
     [DASHBOARD_ENTITY_TAG]: dashboardApplier,
     [SETTINGS_ENTITY_TAG]: settingsApplier,
   };
-  // ADR-027 Phase 3: constructed once here, the composition root — diplomat/db only ever receives
-  // the bound `publish` (below), diplomat/http only ever receives the bound `subscribe`.
+  
   const changeBus = createChangeBus();
   const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
@@ -134,7 +131,6 @@ const main = async (): Promise<void> => {
     );
 
     // A bind failure inside startHttpSidecar is caught there and is never fatal — the stdio
-    // connection above is the resilient primary (ADR-013 Decision 7).
     const sidecar = await maybeStartSidecar(
       deps,
       version,
@@ -193,7 +189,7 @@ const main = async (): Promise<void> => {
   await app.listen({ port: config.PORT, host: LOOPBACK_HOST });
   // config.PORT may be 0 (OS-assigned); read back the address actually bound for the banner.
   const boundPort = (app.server.address() as AddressInfo).port;
-  // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe (ADR-007 restricts stdio only)
+  // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe. 
   console.log(
     `fintrack: REST http://${LOOPBACK_HOST}:${boundPort}/api` + ` · MCP http://${LOOPBACK_HOST}:${boundPort}/mcp`,
   );
