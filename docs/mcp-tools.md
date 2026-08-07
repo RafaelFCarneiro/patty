@@ -460,8 +460,10 @@ Attach tags at write time via the `tags` array on `add_card_purchase` / `add_acc
 ## create_budget / update_budget / delete_budget / list_budgets / get_budget_status
 
 Feature Design 015: a recurring monthly spending limit on a category or sub-category, in one currency.
-`category`/`subCategory` names across every tool below (including `get_budget_status`'s grouping key) are
-locale-resolved via `localizeCategoryName`, same as `aggregate_spending`/`find_correlations`.
+`list_budgets`/`get_budget_status` (including the latter's grouping key) locale-resolve `category`/
+`subCategory` via `localizeCategoryName`, same as `aggregate_spending`/`find_correlations`. So does
+`create_budget`/`update_budget` for a top-level-category target; for a sub-category target, the reported
+parent category name is still the raw, unlocalized one (tracked in #169).
 
 - `create_budget`: exactly one of `category`/`subCategory` (required — resolved by name like every other
   category reference), `currency`, `limit` (positive), `period` (optional, defaults to `monthly` — the only
