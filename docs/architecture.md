@@ -238,7 +238,15 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     `remaining` (limit − spent) and `pct` (spent / limit) can go negative / exceed 1 — over-budget
     is reported, never an error. The response groups every budget by its top-level category name
     (per-currency and per-sub-category lines read as one coherent unit; still no cross-currency
-    total — that needs FX, the deferred PLAN open question).
+    total — that needs FX, the deferred PLAN open question). **The read surface (`list_budgets`,
+    `get_budget_status`) honors invariant 13's locale resolution**: the repo
+    (`diplomat/db/repos/budgets.ts`) selects the budgeted node's (and, for a sub-category target,
+    its parent's) raw name plus `names` JSON only — no locale/display decision — and
+    `logic/budget.ts` resolves the display name from raw name + `names` + `deps.locale()`, over
+    the same repo join shape (`budgetTargetMatch`) `find_correlations`'s `budget_fit` analysis
+    already reads. `create_budget`/`update_budget` resolve the same way for a top-level-category
+    target; a sub-category target still reports its parent's raw, unlocalized name (tracked in
+    issue #169 — `SubCategory` carries no `parentNames`).
 
 ## Tool surface
 
