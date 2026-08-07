@@ -89,6 +89,7 @@ Agent-level non-negotiables:
 - **Code quality principles apply to every line.** Read `docs/code-quality.md` before generating code. Violations will be caught in review.
 - Keep `diplomat/*` thin (parse/delegate/translate) and put orchestration in controllers.
 - **Diplomat edge organization (ADR-025):** a new MCP tool/resource/prompt or HTTP route lives in the domain module matching its controller (`diplomat/mcp/tools/<domain>.ts`, `diplomat/http/routes/<domain>.ts`) — never inlined into `server.ts`/`routes.ts`, which stay thin aggregators. See `docs/architecture.md` § Diplomat edge organization.
+- **Read-side cross-aggregate correlation lives in controllers, not repos (ADR-028):** a repo queries only its own aggregate's table (including aggregations over its own dimensions); it never joins another aggregate's table to correlate or measure it — that's orchestration (controller) + a pure matching rule (`logic/`). A label-only `LEFT JOIN` (e.g. resolving a foreign key's display name) is not governed by this. See `docs/architecture.md` § Diplomat alignment in this project.
 - Keep `logic/*` pure (no I/O or runtime state reads).
 - Decode external boundaries with zod and keep expected failures on the Result track.
 - If behavior changes, update `docs/architecture.md` in the same change.

@@ -309,6 +309,19 @@ export const CategorySelectionSchema = z.object({
 });
 export type CategorySelection = z.infer<typeof CategorySelectionSchema>;
 
+/** One category node's expense spend over a period, split by status — the transactions repo's own
+ *  aggregation over its own dimensions (currency, `categoryId`, `subCategoryId`), with no knowledge
+ *  of who correlates it (ADR-028). `subCategoryId` null means the row is a top-level category's own
+ *  direct spend (not rolled up from a sub-category); `getBudgetStatus` (`controllers/budgets.ts`)
+ *  is the first caller, matching these rows against each budget's own target. */
+export type CategorySpend = {
+  currency: CurrencyCode;
+  categoryId: string;
+  subCategoryId: string | null;
+  effective: number;
+  pending: number;
+};
+
 /** Classification enriched with resolved category/merchant — returned alongside every transaction write. */
 export type ClassifyOutcome = Classification & {
   categoryId?: string;

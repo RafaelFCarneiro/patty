@@ -2,11 +2,13 @@
 
 **Type:** Feature design (a capability + technical assessment) · **Design status:** Accepted ·
 **Implementation status:** Done · **Date:** 2026-08-07 · Revises **Feature Design 015** phase 2
-(`get_budget_status`) and **invariant 21** in `docs/architecture.md`. Depends on nothing; the locale fix
-(`fix/budget-status-locale`, separate) is orthogonal and can land in either order.
+(`get_budget_status`) and **invariant 21** in `docs/architecture.md`. The two-measure change merged first with a
+fused repo join; **ADR-028** then moved that correlation out of the repo into the controller **on the same
+branch**, so `get_budget_status` reaches `main` already controller-orchestrated (no fused repo join ever lands
+on `main`). The locale fix (`fix/budget-status-locale`, #170) is orthogonal and already merged.
 
-> **Implementation status**: `Not started` · `In progress` · `Done` · `Blocked`. **One PR**:
-> `feat/pending-aware-budget-status`.
+> **Implementation status**: `Not started` · `In progress` · `Done` · `Blocked`. **Branch**:
+> `feat/pending-aware-budget-status` — carries both the two-measure change and the ADR-028 correlation refactor.
 
 ## Context
 
@@ -58,24 +60,24 @@ filters `type`, now applied to both status buckets).
 `remaining` stays a single top-level number (not per-measure) to keep the common "how much room is left"
 read one field; effective headroom is `limit − effective.amount` for any client that wants it.
 
-### Where each concern lives (diplomatic layering)
+### Where each concern lives (diplomatic layering — as-built under ADR-028)
 
-- **Repo (`diplomat/db/repos/budgets.ts`)** — `BUDGET_STATUS_SELECT` broadens the transaction join from
-  `t.status = 'effective'` to `t.status IN ('effective','pending')` and splits the sum with conditional
-  aggregation in one pass:
-  `COALESCE(SUM(CASE WHEN t.status = 'effective' THEN t.amount END), 0) AS spent_effective` and a matching
-  `spent_pending` (or `spent_committed`). No new join, no second query — the `budgetTargetMatch` predicate and
-  the `type = 'expense'` / currency / date filters are unchanged. The repo returns **raw measurement numbers
-  only** (plus the raw name material once the locale fix lands — see below); it computes no pct/remaining and
-  decides no display value.
-- **Logic (`logic/budget.ts`)** — post-#170 the pipeline is `groupStatusByCategory(rows, locale)` →
-  `rowToStatusEntry(row, locale)` (maps the repo row + localizes names) → `toStatusLine(entry)` (derives
-  `remaining`/`pct`). This feature splits the single `spent` into `spentEffective`/`spentPending` on the row
-  (`BudgetStatusInput`) and entry (`BudgetStatusEntry`); `toStatusLine` computes `pct`/`remaining` for both
-  measures from the two raw sums and the limit. Derivations stay here (pure, testable), exactly where the
-  single `spent/limit` computation already lives.
-- **Controller (`controllers/budgets.ts`)** — `getBudgetStatus` is unchanged in shape (fetch entries → group);
-  it gains no measurement logic.
+The two-measure change first shipped as a fused repo join (`BUDGET_STATUS_SELECT` broadened to
+`status IN ('effective','pending')` with conditional sums). **ADR-028 then moved the cross-aggregate
+correlation out of the repo**, so the as-built layering is:
+
+- **`transactions` repo** — owns one aggregation over its **own** dimensions: expense spend over `[from, to)`,
+  per currency, grouped by `category_id` **and** `subcategory_id`, split into effective/pending sums (composing
+  `txPredicates`). Knows nothing of budgets.
+- **`budgets` repo** — returns budgets only (`list`). `budgetTargetMatch` and the transaction join are removed.
+- **Controller (`controllers/budgets.ts`)** — `getBudgetStatus` fetches the two datasets (+ `deps.locale()`)
+  and hands them to logic; this is where the two aggregates are correlated (orchestration).
+- **Logic (`logic/budget.ts`)** — the target-match rule is pure code over the aggregated rows: a top-level
+  target sums rows whose `category_id` = target (sub-category spend rolls up via invariant 7), a sub-category
+  target sums rows whose `subcategory_id` = target. It splits `spent` into `spentEffective`/`spentPending`,
+  computes `pct`/`remaining` for both measures, and localizes names — all where the single `spent/limit`
+  computation already lived (`groupStatusByCategory`/`rowToStatusEntry`/`toStatusLine`, reshaped to consume the
+  correlated data rather than pre-matched repo rows).
 
 ### Interaction with the locale fix
 

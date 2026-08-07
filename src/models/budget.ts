@@ -44,8 +44,12 @@ export type BudgetView = z.infer<typeof BudgetViewSchema>;
 /** A resolved budgeted node — enough to guard eligibility and build a `BudgetView`; never persisted itself. */
 export type BudgetTarget = { id: string; category: string; subCategory?: string; kind: CategoryKind };
 
-/** The budgeted node's raw name material, unresolved to a display string. */
+/** The budgeted node's raw name material, unresolved to a display string, plus its own id
+ *  (`targetId`, == the owning budget's `categoryId`) — ADR-028: `logic/budget.ts` matches this
+ *  against `transactionsRepo.spendByCategory`'s rows itself, now that no repo joins `transactions`
+ *  to do that matching in SQL. */
 export type BudgetTargetRow = {
+  targetId: string;
   nodeName: string;
   nodeNames: Record<string, string> | null;
   nodeParentId: string | null;
@@ -54,8 +58,6 @@ export type BudgetTargetRow = {
 };
 
 export type BudgetViewInput = Pick<Budget, 'id' | 'currency' | 'limit' | 'period'> & BudgetTargetRow;
-
-export type BudgetStatusInput = BudgetViewInput & { spentEffective: number; spentPending: number };
 
 // `.describe()` is domain information. Defaults split by intent: integrity defaults live here
 // (`period` is required — a real value the domain always needs); quality-of-life convenience
@@ -85,7 +87,8 @@ export const UpdateBudgetSchema = z.object({
 });
 export type UpdateBudget = z.infer<typeof UpdateBudgetSchema>;
 
-/** The flat, ungrouped shape a repo row adapts to — `logic/budget.ts`'s `groupStatusByCategory`
+/** The flat, ungrouped shape a budget row correlates to once matched against its own spend
+ *  (ADR-028: `logic/budget.ts` does this matching, not a repo join) — `groupStatusByCategory`
  *  reshapes it into the grouped-by-category response. */
 export const BudgetStatusEntrySchema = BudgetViewSchema.extend({
   spentEffective: z

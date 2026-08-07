@@ -143,11 +143,14 @@ export const listBudgets = async (deps: Deps): Promise<BudgetView[]> =>
   );
 
 /** No write, so a plain async function rather than `ResultAsync`, mirroring `getSpendingSummary`
- *  (`controllers/summary.ts`). */
+ *  (`controllers/summary.ts`). This is the cross-aggregate read ADR-028 governs: `budgets` and
+ *  `transactions` are each fetched from their own repo (no repo joins the other's table), and this
+ *  controller — orchestration, not either aggregate's own concern — hands both to `logic/budget.ts`,
+ *  which does the actual target-to-spend correlation. */
 export const getBudgetStatus = async (deps: Deps, period: Period): Promise<BudgetStatusOut> => {
   const { from, to } = periodRange(period);
-  return R.pipe(await Promise.all([deps.budgets.status(from, to), deps.locale()] as const), ([rows, locale]) => ({
-    period,
-    categories: groupStatusByCategory(rows, locale),
-  }));
+  return R.pipe(
+    await Promise.all([deps.budgets.list(), deps.transactions.spendByCategory(from, to), deps.locale()] as const),
+    ([budgets, spend, locale]) => ({ period, categories: groupStatusByCategory(budgets, spend, locale) }),
+  );
 };

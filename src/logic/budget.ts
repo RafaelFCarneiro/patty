@@ -6,7 +6,6 @@ import type {
   BudgetMeasure,
   BudgetStatusEntry,
   BudgetStatusGroup,
-  BudgetStatusInput,
   BudgetStatusLine,
   BudgetTarget,
   BudgetTargetRow,
@@ -14,6 +13,7 @@ import type {
   BudgetViewInput,
 } from '../models/budget.js';
 import type { Locale } from '../models/locale.js';
+import type { CategorySpend } from '../models/transaction.js';
 
 /** A category-or-sub-category-by-name selection, budget's own minimal shape (unlike transactions'
  *  `CategoryFields`, a target is required — never both unset). */
@@ -47,10 +47,13 @@ export const toView = (
   subCategory: target.subCategory,
 });
 
+/** A top-level target's own `nodeParentId` is null; a sub-category target's is its parent's id. */
+const isSubCategoryRow = (row: BudgetTargetRow): boolean => row.nodeParentId !== null;
+
 /** `parentName!` is safe: a category's `parent_id` is a self-referencing FK `delete_category`
  *  never lets dangle, so the `LEFT JOIN parent` always matches when `nodeParentId` is set. */
 const resolveTargetNames = (row: BudgetTargetRow, locale: Locale): { category: string; subCategory?: string } => {
-  const isSubCategory = row.nodeParentId !== null;
+  const isSubCategory = isSubCategoryRow(row);
   const nodeName = localizeCategoryName(row.nodeName, row.nodeNames, locale) ?? row.nodeName;
   return {
     category: isSubCategory
@@ -77,15 +80,37 @@ export const rowsToViews = (rows: readonly BudgetViewInput[], locale: Locale): B
     R.sortBy([(v) => v.category, 'asc'], [(v) => v.subCategory ?? '', 'asc']),
   );
 
-const rowToStatusEntry = (row: BudgetStatusInput, locale: Locale): BudgetStatusEntry => ({
-  id: row.id,
-  currency: row.currency,
-  limit: row.limit,
-  period: row.period,
-  spentEffective: row.spentEffective,
-  spentPending: row.spentPending,
-  ...resolveTargetNames(row, locale),
-});
+/** The `budgetTargetMatch` rule, now pure code over `transactionsRepo.spendByCategory`'s rows
+ *  (ADR-028): a top-level target matches every row sharing its `categoryId` — a sub-category
+ *  transaction's `category_id` is always its parent's (invariant 7), so this rolls up sub-category
+ *  spend for free; a sub-category target matches only rows sharing its own id as `subCategoryId`. */
+const matchesTarget = (spend: CategorySpend, isSubCategory: boolean, targetId: string): boolean =>
+  isSubCategory ? spend.subCategoryId === targetId : spend.categoryId === targetId;
+
+const sumMatchedSpend = (
+  spend: readonly CategorySpend[],
+  row: BudgetViewInput,
+): { effective: number; pending: number } => {
+  const isSubCategory = isSubCategoryRow(row);
+  const matched = R.filter(
+    spend,
+    (s) => s.currency === row.currency && matchesTarget(s, isSubCategory, row.targetId),
+  );
+  return { effective: R.sumBy(matched, (s) => s.effective), pending: R.sumBy(matched, (s) => s.pending) };
+};
+
+const rowToStatusEntry = (row: BudgetViewInput, spend: readonly CategorySpend[], locale: Locale): BudgetStatusEntry => {
+  const matched = sumMatchedSpend(spend, row);
+  return {
+    id: row.id,
+    currency: row.currency,
+    limit: row.limit,
+    period: row.period,
+    spentEffective: matched.effective,
+    spentPending: matched.pending,
+    ...resolveTargetNames(row, locale),
+  };
+};
 
 const toMeasure = (amount: number, limit: number): BudgetMeasure => ({ amount, pct: amount / limit });
 
@@ -107,14 +132,21 @@ const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => {
   };
 };
 
-/** Per-currency and per-sub-category lines read as one coherent unit, never summed together (no
+/** Correlates each budget to its own spend and shapes the grouped-by-category response — the
+ *  cross-aggregate correlation ADR-028 moved out of the repo and into this pure function, called by
+ *  `getBudgetStatus` (`controllers/budgets.ts`) with both aggregates' own reads already in hand.
+ *  Per-currency and per-sub-category lines read as one coherent unit, never summed together (no
  *  cross-currency total). Sorted explicitly (mirrors `logic/summary.ts`'s `summarize` /
  *  `logic/aggregate.ts`'s `shapeAggregateResult`) rather than relying on the repo query's own
  *  ordering, so the response is deterministic regardless of row order in. */
-export const groupStatusByCategory = (rows: readonly BudgetStatusInput[], locale: Locale): BudgetStatusGroup[] =>
+export const groupStatusByCategory = (
+  budgets: readonly BudgetViewInput[],
+  spend: readonly CategorySpend[],
+  locale: Locale,
+): BudgetStatusGroup[] =>
   R.pipe(
-    rows,
-    R.map((row) => rowToStatusEntry(row, locale)),
+    budgets,
+    R.map((row) => rowToStatusEntry(row, spend, locale)),
     R.groupBy((e) => e.category),
     R.entries(),
     R.map(([category, categoryEntries]): BudgetStatusGroup => {

@@ -95,3 +95,20 @@ export const SummaryRowSchema = z
     ...rest,
     categoryNames: parseCategoryNames(category_names),
   }));
+
+// `spendByCategory`'s own row shape (ADR-028) — the transactions repo's aggregation over its own
+// dimensions, decoded and renamed to the domain's camelCase (`models/transaction.ts`'s `CategorySpend`)
+// at the boundary, same convention as every other wire/db row in this file.
+export const CategorySpendRowSchema = z
+  .object({
+    currency: CurrencyCode,
+    category_id: z.string(),
+    subcategory_id: z.string().nullable(),
+    effective: z.number(),
+    pending: z.number(),
+  })
+  .transform(({ category_id, subcategory_id, ...rest }) => ({
+    ...rest,
+    categoryId: category_id,
+    subCategoryId: subcategory_id,
+  }));
