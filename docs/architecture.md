@@ -221,24 +221,31 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     `expense` or `both`; a pure `income`-kind target is rejected, `budgetErrors.notExpenseCategory`)
     — a budget caps spending. Each period is measured independently; there is no unused-budget
     carryover. `create_budget`/`update_budget`/`delete_budget`/`list_budgets` (phase 1) manage the
-    limits themselves. **The measurement invariant (phase 2, `get_budget_status(month, year)`):**
-    for a budget targeting node `T`, `spent` sums `amount` over transactions that are `status =
-    'effective'`, `type = 'expense'`, `currency = budget.currency`, dated in the month, and
-    either `category_id = T` (`T` a top-level category — this is what rolls up sub-category spend
-    for free, since a sub-category transaction's `category_id` is always its parent's) or
-    `subcategory_id = T` (`T` a sub-category — its own spend alone). Effective-only reuses the
-    invariant `aggregate_spending`/`get_spending_summary` already filter on; **`type = 'expense'`,
-    not merely `!= 'transfer'`, is budgets' own addition** — a `both`-kind category is a legitimate
+    limits themselves. **The measurement invariant (phase 2, `get_budget_status(month, year)`,
+    revised by Feature Design 020 from effective-only to effective+committed):** for a budget
+    targeting node `T`, two sums of `amount` are taken over the same matched transactions —
+    `type = 'expense'`, `currency = budget.currency`, dated in the month, and either
+    `category_id = T` (`T` a top-level category — this is what rolls up sub-category spend for
+    free, since a sub-category transaction's `category_id` is always its parent's) or
+    `subcategory_id = T` (`T` a sub-category — its own spend alone) — split by status:
+    **`effective`** (`status = 'effective'`, cleared spend) and **`committed`** (`status IN
+    ('effective', 'pending')`, the earmark-aware measure). `pending` (committed − effective) is
+    derived for convenience. Each measure carries its own `amount` and `pct` (`amount / limit`);
+    reusing the same filter for both keeps them consistent by construction (one query, one WHERE,
+    conditional aggregation) rather than two queries that could drift. **`type = 'expense'`, not
+    merely `!= 'transfer'`, is budgets' own addition** — a `both`-kind category is a legitimate
     target (only pure `income` is rejected, above), and unlike `aggregate_spending`/
     `get_spending_summary` (which keep `type` as an explicit output dimension their callers/shaping
-    code separates), `spent` here is one collapsed scalar with no such dimension, so an income
+    code separates), each measure here is one collapsed scalar with no such dimension, so an income
     transaction booked to a `both`-kind category must be excluded at the filter itself or it would
     inflate a spending cap. A sub-category transaction counts toward both its own budget and its
     parent's, when both exist.
-    `remaining` (limit − spent) and `pct` (spent / limit) can go negative / exceed 1 — over-budget
-    is reported, never an error. The response groups every budget by its top-level category name
-    (per-currency and per-sub-category lines read as one coherent unit; still no cross-currency
-    total — that needs FX, the deferred PLAN open question). **The read surface (`list_budgets`,
+    `remaining` (limit − committed.amount, the earmark-aware headroom) and each measure's `pct` can
+    go negative / exceed 1 — over-budget is reported, never an error; effective headroom is
+    trivially `limit − effective.amount` for a caller that wants it. The response groups every
+    budget by its top-level category name (per-currency and per-sub-category lines read as one
+    coherent unit; still no cross-currency total — that needs FX, the deferred PLAN open question).
+    **The read surface (`list_budgets`,
     `get_budget_status`) honors invariant 13's locale resolution**: the repo
     (`diplomat/db/repos/budgets.ts`) selects the budgeted node's (and, for a sub-category target,
     its parent's) raw name plus `names` JSON only — no locale/display decision — and

@@ -175,11 +175,12 @@ describe('groupStatusByCategory', () => {
     nodeParentId: null,
     parentName: null,
     parentNames: null,
-    spent: 200,
+    spentEffective: 200,
+    spentPending: 0,
     ...overrides,
   });
 
-  it('computes remaining and pct for a single entry', () => {
+  it('computes remaining and pct for a single entry, effective-only (no pending)', () => {
     expect(groupStatusByCategory([statusRow()], Locale.enum.en)).toEqual([
       {
         category: 'Food',
@@ -190,13 +191,46 @@ describe('groupStatusByCategory', () => {
             limit: 500,
             period: BudgetPeriod.enum.monthly,
             subCategory: undefined,
-            spent: 200,
+            effective: { amount: 200, pct: 0.4 },
+            committed: { amount: 200, pct: 0.4 },
+            pending: { amount: 0, pct: 0 },
             remaining: 300,
-            pct: 0.4,
           },
         ],
       },
     ]);
+  });
+
+  it('mixes effective and pending: committed adds them, remaining is committed-relative', () => {
+    const [group] = groupStatusByCategory([statusRow({ spentEffective: 150, spentPending: 100 })], Locale.enum.en);
+    expect(group?.lines[0]).toMatchObject({
+      effective: { amount: 150, pct: 0.3 },
+      committed: { amount: 250, pct: 0.5 },
+      pending: { amount: 100, pct: 0.2 },
+      remaining: 250,
+    });
+  });
+
+  it('is over budget on committed while still under on effective — both reported, no clamp', () => {
+    const [group] = groupStatusByCategory([statusRow({ spentEffective: 300, spentPending: 300 })], Locale.enum.en);
+    expect(group?.lines[0]).toMatchObject({
+      effective: { amount: 300, pct: 0.6 },
+      committed: { amount: 600, pct: 1.2 },
+      remaining: -100,
+    });
+  });
+
+  it('divides by a zero limit the same way for every measure — Infinity/NaN, not a guard', () => {
+    const [group] = groupStatusByCategory(
+      [statusRow({ limit: 0, spentEffective: 0, spentPending: 0 })],
+      Locale.enum.en,
+    );
+    expect(group?.lines[0]).toMatchObject({
+      effective: { amount: 0, pct: NaN },
+      committed: { amount: 0, pct: NaN },
+      pending: { amount: 0, pct: NaN },
+      remaining: 0,
+    });
   });
 
   it('localizes the category name for the given locale', () => {
@@ -227,26 +261,30 @@ describe('groupStatusByCategory', () => {
   });
 
   it('reports over-budget as negative remaining and pct > 1, never an error', () => {
-    const [group] = groupStatusByCategory([statusRow({ spent: 600 })], Locale.enum.en);
-    expect(group?.lines[0]).toMatchObject({ remaining: -100, pct: 1.2 });
+    const [group] = groupStatusByCategory([statusRow({ spentEffective: 600 })], Locale.enum.en);
+    expect(group?.lines[0]).toMatchObject({ remaining: -100, effective: { pct: 1.2 }, committed: { pct: 1.2 } });
   });
 
-  it('reports spent: 0 for an empty month', () => {
-    const [group] = groupStatusByCategory([statusRow({ spent: 0 })], Locale.enum.en);
-    expect(group?.lines[0]).toMatchObject({ spent: 0, remaining: 500, pct: 0 });
+  it('reports amount: 0 for an empty month', () => {
+    const [group] = groupStatusByCategory([statusRow({ spentEffective: 0 })], Locale.enum.en);
+    expect(group?.lines[0]).toMatchObject({
+      effective: { amount: 0, pct: 0 },
+      committed: { amount: 0, pct: 0 },
+      remaining: 500,
+    });
   });
 
   it('groups a category budget and its sub-category budget under the same category', () => {
     const [group] = groupStatusByCategory(
       [
-        statusRow({ id: 'budget-food', spent: 200 }),
+        statusRow({ id: 'budget-food', spentEffective: 200 }),
         statusRow({
           id: 'budget-restaurants',
           nodeName: 'Restaurants',
           nodeParentId: 'cat-food',
           parentName: 'Food',
           limit: 100,
-          spent: 50,
+          spentEffective: 50,
         }),
       ],
       Locale.enum.en,
@@ -259,8 +297,8 @@ describe('groupStatusByCategory', () => {
   it('keeps per-currency lines separate under one category group — never combined', () => {
     const [group] = groupStatusByCategory(
       [
-        statusRow({ id: 'budget-brl', currency: CurrencyCode.enum.BRL, spent: 200 }),
-        statusRow({ id: 'budget-usd', currency: CurrencyCode.enum.USD, limit: 100, spent: 30 }),
+        statusRow({ id: 'budget-brl', currency: CurrencyCode.enum.BRL, spentEffective: 200 }),
+        statusRow({ id: 'budget-usd', currency: CurrencyCode.enum.USD, limit: 100, spentEffective: 30 }),
       ],
       Locale.enum.en,
     );
@@ -300,7 +338,7 @@ describe('groupStatusByCategory', () => {
           nodeParentId: 'cat-food',
           parentName: 'Food',
           limit: 100,
-          spent: 50,
+          spentEffective: 50,
         }),
         statusRow({ id: 'budget-food' }),
       ],
@@ -312,8 +350,8 @@ describe('groupStatusByCategory', () => {
   it('sorts same-target lines by currency, regardless of input order', () => {
     const [group] = groupStatusByCategory(
       [
-        statusRow({ id: 'budget-usd', currency: CurrencyCode.enum.USD, limit: 100, spent: 30 }),
-        statusRow({ id: 'budget-brl', currency: CurrencyCode.enum.BRL, spent: 200 }),
+        statusRow({ id: 'budget-usd', currency: CurrencyCode.enum.USD, limit: 100, spentEffective: 30 }),
+        statusRow({ id: 'budget-brl', currency: CurrencyCode.enum.BRL, spentEffective: 200 }),
       ],
       Locale.enum.en,
     );

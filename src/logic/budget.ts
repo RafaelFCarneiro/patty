@@ -3,6 +3,7 @@ import { localizeCategoryName } from './category.js';
 import { CategoryKind } from '../models/category.js';
 import type {
   Budget,
+  BudgetMeasure,
   BudgetStatusEntry,
   BudgetStatusGroup,
   BudgetStatusInput,
@@ -81,21 +82,30 @@ const rowToStatusEntry = (row: BudgetStatusInput, locale: Locale): BudgetStatusE
   currency: row.currency,
   limit: row.limit,
   period: row.period,
-  spent: row.spent,
+  spentEffective: row.spentEffective,
+  spentPending: row.spentPending,
   ...resolveTargetNames(row, locale),
 });
 
-/** Over-budget is reported as-is — `remaining`/`pct` are never clamped or flagged as an error. */
-const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => ({
-  id: entry.id,
-  currency: entry.currency,
-  limit: entry.limit,
-  period: entry.period,
-  subCategory: entry.subCategory,
-  spent: entry.spent,
-  remaining: entry.limit - entry.spent,
-  pct: entry.spent / entry.limit,
-});
+const toMeasure = (amount: number, limit: number): BudgetMeasure => ({ amount, pct: amount / limit });
+
+/** Over-budget is reported as-is — `pct`/`remaining` are never clamped or flagged as an error.
+ *  `committed` (effective + pending) is the earmark-aware measure `remaining` is reported against
+ *  (FD-020); effective headroom is trivially `limit - effective.amount` for a caller that wants it. */
+const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => {
+  const committedAmount = entry.spentEffective + entry.spentPending;
+  return {
+    id: entry.id,
+    currency: entry.currency,
+    limit: entry.limit,
+    period: entry.period,
+    subCategory: entry.subCategory,
+    effective: toMeasure(entry.spentEffective, entry.limit),
+    committed: toMeasure(committedAmount, entry.limit),
+    pending: toMeasure(entry.spentPending, entry.limit),
+    remaining: entry.limit - committedAmount,
+  };
+};
 
 /** Per-currency and per-sub-category lines read as one coherent unit, never summed together (no
  *  cross-currency total). Sorted explicitly (mirrors `logic/summary.ts`'s `summarize` /

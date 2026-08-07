@@ -52,7 +52,13 @@ const shapeTargetRow = <T extends Record<string, unknown>>({
 export const BudgetViewRowSchema = z.object({ ...budgetTargetRowShape, version: z.number() }).transform(shapeTargetRow);
 export type BudgetViewRow = z.output<typeof BudgetViewRowSchema>;
 
-// Same target-joined shape as `BudgetViewRowSchema`, plus the period's measured spend — no
-// `version`, a status read never guards a write.
-export const BudgetStatusRowSchema = z.object({ ...budgetTargetRowShape, spent: z.number() }).transform(shapeTargetRow);
+// Same target-joined shape as `BudgetViewRowSchema`, plus the period's two measured-spend sums (FD-020)
+// — no `version`, a status read never guards a write.
+export const BudgetStatusRowSchema = z
+  .object({ ...budgetTargetRowShape, spent_effective: z.number(), spent_pending: z.number() })
+  .transform(({ spent_effective, spent_pending, ...targetRow }) => ({
+    ...shapeTargetRow(targetRow),
+    spentEffective: spent_effective,
+    spentPending: spent_pending,
+  }));
 export type BudgetStatusRow = z.output<typeof BudgetStatusRowSchema>;

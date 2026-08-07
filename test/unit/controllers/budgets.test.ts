@@ -352,7 +352,8 @@ describe('getBudgetStatus', () => {
       nodeParentId: null,
       parentName: null,
       parentNames: null,
-      spent: 200,
+      spentEffective: 200,
+      spentPending: 0,
     };
     let calledWith: [string, string] | undefined;
     const deps = makeDeps({
@@ -379,9 +380,10 @@ describe('getBudgetStatus', () => {
               limit: 500,
               period: BudgetPeriod.enum.monthly,
               subCategory: undefined,
-              spent: 200,
+              effective: { amount: 200, pct: 0.4 },
+              committed: { amount: 200, pct: 0.4 },
+              pending: { amount: 0, pct: 0 },
               remaining: 300,
-              pct: 0.4,
             },
           ],
         },
@@ -400,7 +402,8 @@ describe('getBudgetStatus', () => {
       nodeParentId: null,
       parentName: null,
       parentNames: null,
-      spent: 200,
+      spentEffective: 200,
+      spentPending: 0,
     };
     const deps = makeDeps({
       budgets: { status: async () => [row] } as unknown as Deps['budgets'],

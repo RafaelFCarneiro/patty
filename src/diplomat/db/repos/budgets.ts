@@ -38,25 +38,30 @@ export const budgetTargetMatch = sql`
   OR (node.parent_id IS NOT NULL AND t.subcategory_id = b.category_id)
 `;
 
-/** Each budget's spend over `[from, to)`: `effective`, `expense`-typed, same-currency transactions
- *  matched to the target (`budgetTargetMatch`). `type = expense`, not just `!= transfer`: a
- *  `both`-kind category is a legitimate budget target (`isExpenseEligible`), and unlike
- *  `aggregate`/`summaryRows` (`diplomat/db/repos/transactions.ts`, which keep `type` as an output
- *  dimension their callers separate income from expense by), `spent` here is one collapsed scalar —
- *  an income transaction on a `both`-kind category has to be excluded at the filter itself, or it
- *  inflates the cap. `COALESCE(SUM(t.amount), 0)` yields `spent: 0` for a budget with no match,
- *  rather than a missing row. */
+/** Each budget's spend over `[from, to)`, split into two measures in one pass: `effective` (cleared,
+ *  `status = 'effective'`) and `pending` (expected-but-not-yet-cleared, `status = 'pending'`) —
+ *  Feature Design 020 revises invariant 21 from effective-only to effective+committed. Both sums
+ *  share the same join and filters (`expense`-typed, same-currency, matched to `budgetTargetMatch`),
+ *  so the LEFT JOIN itself now admits either status and each sum picks its own rows via conditional
+ *  aggregation, keeping the two measures consistent by construction (same WHERE, same matched rows)
+ *  rather than drifting across two queries. `type = expense`, not just `!= transfer`: a `both`-kind
+ *  category is a legitimate budget target (`isExpenseEligible`), and unlike `aggregate`/`summaryRows`
+ *  (`diplomat/db/repos/transactions.ts`, which keep `type` as an output dimension their callers
+ *  separate income from expense by), each sum here is one collapsed scalar — an income transaction on
+ *  a `both`-kind category has to be excluded at the filter itself, or it inflates the cap.
+ *  `COALESCE(SUM(...), 0)` yields `0` for a budget with no match, rather than a missing row. */
 const BUDGET_STATUS_SELECT = (from: string, to: string) => sql`
   SELECT b.id, b.currency, b.limit_amount, b.period,
          node.name AS node_name, node.names AS node_names, node.parent_id AS node_parent_id,
          parent.name AS parent_name, parent.names AS parent_names,
-         COALESCE(SUM(t.amount), 0) AS spent
+         COALESCE(SUM(CASE WHEN t.status = ${TransactionStatus.enum.effective} THEN t.amount END), 0) AS spent_effective,
+         COALESCE(SUM(CASE WHEN t.status = ${TransactionStatus.enum.pending} THEN t.amount END), 0) AS spent_pending
   FROM budgets b
   JOIN categories node ON node.id = b.category_id
   LEFT JOIN categories parent ON parent.id = node.parent_id
   LEFT JOIN transactions t
     ON t.currency = b.currency
-    AND t.status = ${TransactionStatus.enum.effective}
+    AND t.status IN (${TransactionStatus.enum.effective}, ${TransactionStatus.enum.pending})
     AND t.type = ${TransactionType.enum.expense}
     AND t.date >= ${from} AND t.date < ${to}
     AND (${budgetTargetMatch})
