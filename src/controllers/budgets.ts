@@ -2,12 +2,14 @@ import { errAsync, ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
+import { localizeCategoryName } from '../logic/category.js';
 import {
   groupStatusByCategory,
   hasCategory,
   hasExactlyOneTarget,
   hasSubCategory,
   isExpenseEligible,
+  rowsToViews,
   toView,
 } from '../logic/budget.js';
 import { periodRange } from '../logic/period.js';
@@ -24,6 +26,7 @@ import {
   type UpdateBudget,
 } from '../models/budget.js';
 import { notFound } from '../models/error.js';
+import type { Locale } from '../models/locale.js';
 import type { FlowOutcome } from '../models/persistable.js';
 import type { BudgetStatusOut } from '../wire/out/budgets.js';
 import type { Deps } from './deps.js';
@@ -66,11 +69,12 @@ const resolveBudgetTarget = (
 const describeCategoryTarget = (
   deps: Deps,
   categoryId: string,
+  locale: Locale,
 ): ResultAsync<Pick<BudgetTarget, 'category' | 'subCategory'>, AppError> =>
   safeTry(async function* () {
     const categories = await deps.categories.list();
     const category = R.find(categories, (c) => c.id === categoryId);
-    if (category) return ok({ category: category.name });
+    if (category) return ok({ category: localizeCategoryName(category.name, category.names, locale) ?? category.name });
 
     const subCategories = await deps.subCategories.list();
     const subCategory = yield* okOr(
@@ -117,7 +121,8 @@ export const updateBudget = (deps: Deps, input: UpdateBudget): ResultAsync<FlowO
       ? []
       : [persistence.update({ entity: BUDGET_ENTITY_TAG, model: entity })];
 
-    const target = yield* describeCategoryTarget(deps, existing.categoryId);
+    const locale = await deps.locale();
+    const target = yield* describeCategoryTarget(deps, existing.categoryId, locale);
     return ok({ persist, response: toView(entity, target) });
   });
 
@@ -132,12 +137,20 @@ export const deleteBudget = (deps: Deps, id: string): ResultAsync<FlowOutcome<{ 
     return ok({ persist, response: { deleted: true } });
   });
 
-export const listBudgets = (deps: Deps): Promise<BudgetView[]> => deps.budgets.list();
+/** No write, so a plain async function rather than `ResultAsync`, mirroring `getSpendingSummary`
+ *  (`controllers/summary.ts`) — which also pairs a repo read with `deps.locale()` via `R.pipe`
+ *  over the `Promise.all` tuple. */
+export const listBudgets = async (deps: Deps): Promise<BudgetView[]> =>
+  R.pipe(await Promise.all([deps.budgets.list(), deps.locale()] as const), ([rows, locale]) =>
+    rowsToViews(rows, locale),
+  );
 
-/** No name resolution, no write, so a plain async function rather than `ResultAsync`, mirroring
- *  `getSpendingSummary` (`controllers/summary.ts`). */
+/** No name resolution beyond locale, no write, so a plain async function rather than
+ *  `ResultAsync`, mirroring `getSpendingSummary` (`controllers/summary.ts`). */
 export const getBudgetStatus = async (deps: Deps, period: Period): Promise<BudgetStatusOut> => {
   const { from, to } = periodRange(period);
-  const entries = await deps.budgets.status(from, to);
-  return { period, categories: groupStatusByCategory(entries) };
+  return R.pipe(await Promise.all([deps.budgets.status(from, to), deps.locale()] as const), ([rows, locale]) => ({
+    period,
+    categories: groupStatusByCategory(rows, locale),
+  }));
 };

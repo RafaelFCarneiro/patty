@@ -1,8 +1,14 @@
 import { and, eq, sql } from 'drizzle-orm';
 import * as budgetAdapters from '../../../adapters/budgets.js';
-import type { BudgetEntity, BudgetPeriod, BudgetStatusEntry, BudgetView } from '../../../models/budget.js';
+import type { BudgetEntity, BudgetPeriod } from '../../../models/budget.js';
 import type { CurrencyCode } from '../../../models/money.js';
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
+import {
+  BudgetStatusRowSchema,
+  BudgetViewRowSchema,
+  type BudgetStatusRow,
+  type BudgetViewRow,
+} from '../../../wire/db/budgets.js';
 import type { Db } from '../driver.js';
 import { budgets } from '../schema.js';
 import { isUniqueConstraintViolation } from '../sqliteErrors.js';
@@ -11,10 +17,15 @@ import { VersionConflict, versionedTableApplier, type EntityApplier } from '../e
 // Budgets target either a top-level category or a sub-category — both rows in `categories` — so
 // the display projection always joins the node plus its (possibly absent) parent. Mirrors
 // `subCategoriesRepo`'s `SUB_SELECT` (`diplomat/db/repos/subCategories.ts`): a hand-written raw
-// join, not the query builder, for the same self-referencing-table reason.
+// join, not the query builder, for the same self-referencing-table reason. `node.names`/
+// `parent.names` (the seeded-translation JSON blobs) travel alongside the raw names — the repo
+// stays free of locale/display decisions (Feature Design 020); `logic/budget.ts` resolves the
+// display name from raw name + names + locale, mirroring `BUDGET_FIT_SELECT`
+// (`diplomat/db/repos/correlations.ts`), which shares this exact join shape.
 const BUDGET_VIEW_SELECT = sql`
   SELECT b.id, b.currency, b.limit_amount, b.period, b.version,
-         node.name AS node_name, node.parent_id AS node_parent_id, parent.name AS parent_name
+         node.name AS node_name, node.names AS node_names, node.parent_id AS node_parent_id,
+         parent.name AS parent_name, parent.names AS parent_names
   FROM budgets b
   JOIN categories node ON node.id = b.category_id
   LEFT JOIN categories parent ON parent.id = node.parent_id
@@ -40,7 +51,8 @@ export const budgetTargetMatch = sql`
  *  rather than a missing row. */
 const BUDGET_STATUS_SELECT = (from: string, to: string) => sql`
   SELECT b.id, b.currency, b.limit_amount, b.period,
-         node.name AS node_name, node.parent_id AS node_parent_id, parent.name AS parent_name,
+         node.name AS node_name, node.names AS node_names, node.parent_id AS node_parent_id,
+         parent.name AS parent_name, parent.names AS parent_names,
          COALESCE(SUM(t.amount), 0) AS spent
   FROM budgets b
   JOIN categories node ON node.id = b.category_id
@@ -56,15 +68,17 @@ const BUDGET_STATUS_SELECT = (from: string, to: string) => sql`
 `;
 
 export type BudgetsRepo = {
-  list: () => Promise<BudgetView[]>;
+  /** Raw name + names JSON, no locale/display decision — `logic/budget.ts`'s `rowsToViews`
+   *  resolves the display name. */
+  list: () => Promise<BudgetViewRow[]>;
   /** Existence check for the `(category_id, currency, period)` duplicate guard in `createBudget`. */
   findByTarget: (categoryId: string, currency: CurrencyCode, period: BudgetPeriod) => Promise<boolean>;
   /** Version-carrying read — for `updateBudget`/`deleteBudget`, which need it to build a
    *  version-guarded `Persistable`. */
   findById: (id: string) => Promise<BudgetEntity | null>;
-  /** Every budget's measured spend over `[from, to)` — `controllers/budgets.ts`'s `getBudgetStatus`
-   *  groups these flat entries by category. */
-  status: (from: string, to: string) => Promise<BudgetStatusEntry[]>;
+  /** Every budget's measured spend over `[from, to)`, raw name + names JSON — `logic/budget.ts`'s
+   *  `groupStatusByCategory` resolves the display name and groups these flat rows by category. */
+  status: (from: string, to: string) => Promise<BudgetStatusRow[]>;
 };
 
 export const budgetsRepo = (db: Db): BudgetsRepo => ({
@@ -73,7 +87,7 @@ export const budgetsRepo = (db: Db): BudgetsRepo => ({
       ${BUDGET_VIEW_SELECT}
       ORDER BY COALESCE(parent.name, node.name), node.name
     `);
-    return rows.map(budgetAdapters.dbToView);
+    return rows.map((r) => BudgetViewRowSchema.parse(r));
   },
 
   findByTarget: async (categoryId, currency, period) => {
@@ -92,7 +106,7 @@ export const budgetsRepo = (db: Db): BudgetsRepo => ({
 
   status: async (from, to) => {
     const rows = await db.all<Record<string, unknown>>(BUDGET_STATUS_SELECT(from, to));
-    return rows.map(budgetAdapters.dbToStatusEntry);
+    return rows.map((r) => BudgetStatusRowSchema.parse(r));
   },
 });
 

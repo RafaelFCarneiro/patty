@@ -76,7 +76,7 @@ const verdictFor = (baseline: number, limit: number, slackPct: number, overPct: 
 };
 
 /** A budget targets either the node itself or one of its sub-categories — mirrors
- *  `adapters/budgets.ts`'s `dbToView`/`dbToStatusEntry`. `parentName!` is safe: a category's
+ *  `logic/budget.ts`'s `resolveTargetNames`. `parentName!` is safe: a category's
  *  `parent_id` is a self-referencing FK `delete_category` never lets dangle, so the `LEFT JOIN
  *  parent` always matches when `nodeParentId` is set. */
 const resolveBudgetTargetNames = (row: BudgetFitInput, locale: Locale): { category: string; subCategory?: string } => {
