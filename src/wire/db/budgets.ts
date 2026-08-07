@@ -11,8 +11,7 @@ export type BudgetRow = typeof budgets.$inferSelect;
  *  hand schema like `SubCategoryRowSchema` (`wire/db/categories.ts`) until the raw reads are
  *  unified under drizzle-orm/zod. `node_parent_id` null means the budgeted node is itself a
  *  top-level category; set means it's a sub-category, with `parent_name`/`parent_names`
- *  describing its parent — mirrors `BudgetFitDbRowSchema` (`wire/db/correlations.ts`), which
- *  shares this exact join shape via `budgetTargetMatch`. */
+ *  describing its parent. */
 const budgetTargetRowShape = {
   id: z.string(),
   currency: CurrencyCode,
@@ -25,8 +24,6 @@ const budgetTargetRowShape = {
   parent_names: z.string().nullable().default(null),
 };
 
-/** Shared by `BudgetViewRowSchema`/`BudgetStatusRowSchema` — same field rename + JSON-decode,
- *  whatever extra column (`version`/`spent`) each SELECT carries alongside. */
 const shapeTargetRow = <T extends Record<string, unknown>>({
   limit_amount,
   node_name,
@@ -52,12 +49,10 @@ const shapeTargetRow = <T extends Record<string, unknown>>({
   parentNames: parseCategoryNames(parent_names),
 });
 
-// Same target-joined shape as `BudgetStatusRowSchema`, plus `version` (`diplomat/db/repos/
-// budgets.ts`'s `list` query) — a status read never guards a write, so it carries `spent` instead.
 export const BudgetViewRowSchema = z.object({ ...budgetTargetRowShape, version: z.number() }).transform(shapeTargetRow);
 export type BudgetViewRow = z.output<typeof BudgetViewRowSchema>;
 
-// Same target-joined shape as `BudgetViewRowSchema`, plus the period's measured spend
-// (`diplomat/db/repos/budgets.ts`'s `status` query) — no `version`.
+// Same target-joined shape as `BudgetViewRowSchema`, plus the period's measured spend — no
+// `version`, a status read never guards a write.
 export const BudgetStatusRowSchema = z.object({ ...budgetTargetRowShape, spent: z.number() }).transform(shapeTargetRow);
 export type BudgetStatusRow = z.output<typeof BudgetStatusRowSchema>;

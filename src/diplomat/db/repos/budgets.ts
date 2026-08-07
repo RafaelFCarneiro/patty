@@ -18,10 +18,7 @@ import { VersionConflict, versionedTableApplier, type EntityApplier } from '../e
 // the display projection always joins the node plus its (possibly absent) parent. Mirrors
 // `subCategoriesRepo`'s `SUB_SELECT` (`diplomat/db/repos/subCategories.ts`): a hand-written raw
 // join, not the query builder, for the same self-referencing-table reason. `node.names`/
-// `parent.names` (the seeded-translation JSON blobs) travel alongside the raw names — the repo
-// stays free of locale/display decisions (Feature Design 020); `logic/budget.ts` resolves the
-// display name from raw name + names + locale, mirroring `BUDGET_FIT_SELECT`
-// (`diplomat/db/repos/correlations.ts`), which shares this exact join shape.
+// `parent.names` travel alongside the raw names so the repo itself never has to decide a locale.
 const BUDGET_VIEW_SELECT = sql`
   SELECT b.id, b.currency, b.limit_amount, b.period, b.version,
          node.name AS node_name, node.names AS node_names, node.parent_id AS node_parent_id,
@@ -68,16 +65,14 @@ const BUDGET_STATUS_SELECT = (from: string, to: string) => sql`
 `;
 
 export type BudgetsRepo = {
-  /** Raw name + names JSON, no locale/display decision — `logic/budget.ts`'s `rowsToViews`
-   *  resolves the display name. */
   list: () => Promise<BudgetViewRow[]>;
   /** Existence check for the `(category_id, currency, period)` duplicate guard in `createBudget`. */
   findByTarget: (categoryId: string, currency: CurrencyCode, period: BudgetPeriod) => Promise<boolean>;
   /** Version-carrying read — for `updateBudget`/`deleteBudget`, which need it to build a
    *  version-guarded `Persistable`. */
   findById: (id: string) => Promise<BudgetEntity | null>;
-  /** Every budget's measured spend over `[from, to)`, raw name + names JSON — `logic/budget.ts`'s
-   *  `groupStatusByCategory` resolves the display name and groups these flat rows by category. */
+  /** Every budget's measured spend over `[from, to)` — `logic/budget.ts`'s `groupStatusByCategory`
+   *  groups these flat rows by category. */
   status: (from: string, to: string) => Promise<BudgetStatusRow[]>;
 };
 

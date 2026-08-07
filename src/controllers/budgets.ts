@@ -137,16 +137,13 @@ export const deleteBudget = (deps: Deps, id: string): ResultAsync<FlowOutcome<{ 
     return ok({ persist, response: { deleted: true } });
   });
 
-/** No write, so a plain async function rather than `ResultAsync`, mirroring `getSpendingSummary`
- *  (`controllers/summary.ts`) — which also pairs a repo read with `deps.locale()` via `R.pipe`
- *  over the `Promise.all` tuple. */
 export const listBudgets = async (deps: Deps): Promise<BudgetView[]> =>
   R.pipe(await Promise.all([deps.budgets.list(), deps.locale()] as const), ([rows, locale]) =>
     rowsToViews(rows, locale),
   );
 
-/** No name resolution beyond locale, no write, so a plain async function rather than
- *  `ResultAsync`, mirroring `getSpendingSummary` (`controllers/summary.ts`). */
+/** No write, so a plain async function rather than `ResultAsync`, mirroring `getSpendingSummary`
+ *  (`controllers/summary.ts`). */
 export const getBudgetStatus = async (deps: Deps, period: Period): Promise<BudgetStatusOut> => {
   const { from, to } = periodRange(period);
   return R.pipe(await Promise.all([deps.budgets.status(from, to), deps.locale()] as const), ([rows, locale]) => ({

@@ -10,9 +10,8 @@ type BudgetStatus = { categories?: BudgetStatusGroup[] };
 
 const STATUS_PERIOD = { month: 1, year: 2026 };
 
-/** Locale-aware coverage for the budgets read surface (Feature Design 020) — `get_budget_status`
- *  and `list_budgets` both join through a seeded (translated) category, so they must return the
- *  locale-resolved display name, not the raw English one, mirroring `summary-locale.test.ts`. */
+// Targets 'Food', a seeded default category — only defaults carry the `names` translations this
+// asserts against; a freshly `create_category`d one would have none.
 describe('MCP integration > budgets read surface locale', () => {
   let client: Client;
   let transport: StreamableHTTPClientTransport;

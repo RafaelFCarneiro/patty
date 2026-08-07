@@ -46,11 +46,8 @@ export const toView = (
   subCategory: target.subCategory,
 });
 
-/** A budget targets either the node itself or one of its sub-categories — mirrors
- *  `logic/correlations.ts`'s `resolveBudgetTargetNames` (same repo join shape, shared via
- *  `budgetTargetMatch`). `parentName!` is safe: a category's `parent_id` is a self-referencing FK
- *  `delete_category` never lets dangle, so the `LEFT JOIN parent` always matches when
- *  `nodeParentId` is set. */
+/** `parentName!` is safe: a category's `parent_id` is a self-referencing FK `delete_category`
+ *  never lets dangle, so the `LEFT JOIN parent` always matches when `nodeParentId` is set. */
 const resolveTargetNames = (row: BudgetTargetRow, locale: Locale): { category: string; subCategory?: string } => {
   const isSubCategory = row.nodeParentId !== null;
   const nodeName = localizeCategoryName(row.nodeName, row.nodeNames, locale) ?? row.nodeName;
@@ -62,9 +59,6 @@ const resolveTargetNames = (row: BudgetTargetRow, locale: Locale): { category: s
   };
 };
 
-/** From a raw target-joined repo row (`diplomat/db/repos/budgets.ts`'s `list` query) — the display
- *  projection actually returned to callers (never the internal `categoryId`), name resolved for
- *  `locale`. */
 export const rowToView = (row: BudgetViewInput, locale: Locale): BudgetView => ({
   id: row.id,
   currency: row.currency,
@@ -73,9 +67,8 @@ export const rowToView = (row: BudgetViewInput, locale: Locale): BudgetView => (
   ...resolveTargetNames(row, locale),
 });
 
-/** `controllers/budgets.ts`'s `listBudgets` — sorted by (localized) category/sub-category rather
- *  than relying on the repo query's own raw-name ordering, mirroring `groupStatusByCategory`'s
- *  own explicit sort below. */
+/** Sorted by the localized category/sub-category — the repo query's own ordering is by raw name,
+ *  which can disagree with the localized one. */
 export const rowsToViews = (rows: readonly BudgetViewInput[], locale: Locale): BudgetView[] =>
   R.pipe(
     rows,
@@ -83,8 +76,6 @@ export const rowsToViews = (rows: readonly BudgetViewInput[], locale: Locale): B
     R.sortBy([(v) => v.category, 'asc'], [(v) => v.subCategory ?? '', 'asc']),
   );
 
-/** From a raw target-joined + spend-summed repo row (`diplomat/db/repos/budgets.ts`'s `status`
- *  query) — the flat, ungrouped entry `groupStatusByCategory` reshapes, name resolved for `locale`. */
 const rowToStatusEntry = (row: BudgetStatusInput, locale: Locale): BudgetStatusEntry => ({
   id: row.id,
   currency: row.currency,

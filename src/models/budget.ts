@@ -44,10 +44,7 @@ export type BudgetView = z.infer<typeof BudgetViewSchema>;
 /** A resolved budgeted node — enough to guard eligibility and build a `BudgetView`; never persisted itself. */
 export type BudgetTarget = { id: string; category: string; subCategory?: string; kind: CategoryKind };
 
-/** The budgeted node's raw name material, unresolved to a display string — what `logic/budget.ts`'s
- *  `resolveTargetNames` needs to pick and localize the node-vs-parent display name. Structurally
- *  matches `BudgetViewRow`/`BudgetStatusRow` (`wire/db/budgets.ts`), mirroring `BudgetFitInput`
- *  (`models/correlations.ts`), which shares this exact join shape. */
+/** The budgeted node's raw name material, unresolved to a display string. */
 export type BudgetTargetRow = {
   nodeName: string;
   nodeNames: Record<string, string> | null;
@@ -56,10 +53,8 @@ export type BudgetTargetRow = {
   parentNames: Record<string, string> | null;
 };
 
-/** What `logic/budget.ts`'s `rowToView` needs per row. */
 export type BudgetViewInput = Pick<Budget, 'id' | 'currency' | 'limit' | 'period'> & BudgetTargetRow;
 
-/** What `logic/budget.ts`'s `rowToStatusEntry` needs per row. */
 export type BudgetStatusInput = BudgetViewInput & { spent: number };
 
 // `.describe()` is domain information. Defaults split by intent: integrity defaults live here
@@ -93,9 +88,7 @@ export type UpdateBudget = z.infer<typeof UpdateBudgetSchema>;
 /** The flat, ungrouped shape a repo row adapts to — `logic/budget.ts`'s `groupStatusByCategory`
  *  reshapes it into the grouped-by-category response. */
 export const BudgetStatusEntrySchema = BudgetViewSchema.extend({
-  spent: z
-    .number()
-    .describe('Sum of effective, expense-only, same-currency spend against this target in the period'),
+  spent: z.number().describe('Sum of effective, expense-only, same-currency spend against this target in the period'),
 });
 export type BudgetStatusEntry = z.infer<typeof BudgetStatusEntrySchema>;
 
