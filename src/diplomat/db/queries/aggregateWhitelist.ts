@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { AggregateGroupBy, AggregateMetric } from '../../models/aggregate.js';
+import { AggregateGroupBy, AggregateMetric } from '../../../models/aggregate.js';
 
 type SqlFragment = ReturnType<typeof sql>;
 

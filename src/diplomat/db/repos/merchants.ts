@@ -6,7 +6,7 @@ import { ClassificationMethod } from '../../../models/transaction.js';
 import { MerchantTopDbRowSchema, type MerchantTopDbRow } from '../../../wire/db/merchants.js';
 import type { Db } from '../driver.js';
 import { merchantCategory, merchants } from '../schema.js';
-import { txPredicates } from '../txPredicates.js';
+import { txPredicates } from '../queries/txPredicates.js';
 import type { EntityApplier } from '../effects.js';
 
 const MatchRow = z.object({

@@ -1,5 +1,5 @@
 import { sql, type SQL } from 'drizzle-orm';
-import { TransactionStatus, TransactionType } from '../../models/transaction.js';
+import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
 
 const col = (alias: string, name: string): SQL => sql.raw(alias ? `${alias}.${name}` : name);
 

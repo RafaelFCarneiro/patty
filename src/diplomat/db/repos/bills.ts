@@ -8,7 +8,7 @@ import { BillRowSchema } from '../../../wire/db/bills.js';
 import type { Db } from '../driver.js';
 import { bills } from '../schema.js';
 import { isUniqueConstraintViolation } from '../sqliteErrors.js';
-import { fullTxSelect } from '../transactionSelect.js';
+import { fullTxSelect } from '../queries/transactionSelect.js';
 import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
 
 /** Includes `creditCardId`/`version` — for the FC/IS credit-card transaction flows' own

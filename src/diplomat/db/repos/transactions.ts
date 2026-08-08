@@ -14,12 +14,12 @@ import {
 import type { SummaryRow } from '../../../models/summary.js';
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js';
 import { CategorySpendRowSchema, ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
-import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
+import { GROUP_BY_MAP, METRIC_MAP } from '../queries/aggregateWhitelist.js';
 import type { Db } from '../driver.js';
-import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
+import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../queries/filters.js';
 import { transactions } from '../schema.js';
-import { fullTxSelect } from '../transactionSelect.js';
-import { txPredicates } from '../txPredicates.js';
+import { fullTxSelect } from '../queries/transactionSelect.js';
+import { txPredicates } from '../queries/txPredicates.js';
 import { versionedTableApplier, type EntityApplier, type Tx } from '../effects.js';
 
 // search_transactions' includeTotal COUNT(*) row — decoded like every other SQL row (ADR
@@ -111,7 +111,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     return rows.map(transactionAdapters.dbToModel);
   },
 
-  // `search`/`count`'s status/type filters (`buildSearchWhere`, `diplomat/db/filters.ts`) stay a
+  // `search`/`count`'s status/type filters (`buildSearchWhere`, `diplomat/db/queries/filters.ts`) stay a
   // plain `t.status = ${filters.status}`/`t.type = ${filters.type}` equality against whatever value
   // the caller passed (or omit entirely) — audited against ADR-028's txPredicates single-sourcing
   // and intentionally left alone: there is no fixed effective/pending/expense/non-transfer policy
