@@ -97,9 +97,8 @@ export type TransactionsRepo = {
     transfersOut: number;
   }>;
   /** Expense spend over `[from, to)`, grouped by this repo's own dimensions (currency, category,
-   *  sub-category), split into effective/pending sums (ADR-028) — no knowledge of budgets or any
-   *  other correlating aggregate. `getBudgetStatus` (`controllers/budgets.ts`) is the first caller:
-   *  it fetches this alongside `budgets.list()` and correlates the two itself. */
+   *  sub-category), split into effective/pending sums — no knowledge of budgets or any other
+   *  correlating aggregate (ADR-028). */
   spendByCategory: (from: string, to: string) => Promise<CategorySpend[]>;
 };
 
@@ -111,11 +110,8 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     return rows.map(transactionAdapters.dbToModel);
   },
 
-  // `search`/`count`'s status/type filters (`buildSearchWhere`, `diplomat/db/queries/filters.ts`) stay a
-  // plain `t.status = ${filters.status}`/`t.type = ${filters.type}` equality against whatever value
-  // the caller passed (or omit entirely) — audited against ADR-028's txPredicates single-sourcing
-  // and intentionally left alone: there is no fixed effective/pending/expense/non-transfer policy
-  // here to extract, since `search_transactions` exposes every status/type, caller-selected.
+  // search/count's status/type filters (buildSearchWhere) stay a plain equality against whatever
+  // value the caller passed — no fixed policy predicate here to extract onto txPredicates.
   search: async (input, refs) => {
     const filters = toSearchFilters(input, refs);
     const conditions = buildSearchWhere(filters);
@@ -213,9 +209,8 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     };
   },
 
-  // `category_id IS NOT NULL` excludes uncategorized spend — it can never match a budget target
-  // (a budget's own target is always a real category/sub-category id), so keeping it out here
-  // both trims the row set and keeps `category_id` non-nullable on `CategorySpend`.
+  // Excludes uncategorized spend — it can never match a budget target, and keeps `category_id`
+  // non-nullable on `CategorySpend`.
   spendByCategory: async (from, to) => {
     const rows = await db.all<Record<string, unknown>>(sql`
       SELECT t.currency, t.category_id, t.subcategory_id,

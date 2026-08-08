@@ -21,9 +21,8 @@ export const SpendingShiftDbRowSchema = z
 export type SpendingShiftDbRow = z.output<typeof SpendingShiftDbRowSchema>;
 
 /** Same current/baseline split as `SpendingShiftDbRowSchema`, but matched to the budget's own
- *  target (`budgetTargetMatch`, `diplomat/db/repos/correlations.ts` — ADR-028's one remaining
- *  fused-join site, pending its own phase-3 migration). `nodeParentId` null means a top-level
- *  target; set means a sub-category, with `parentName`/`parentNames` describing its parent. */
+ *  target (`budgetTargetMatch`). `nodeParentId` null means a top-level target; set means a
+ *  sub-category, with `parentName`/`parentNames` describing its parent. */
 export const BudgetFitDbRowSchema = z
   .object({
     id: z.string().min(1),

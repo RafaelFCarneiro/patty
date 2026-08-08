@@ -496,9 +496,7 @@ describe('MCP integration > get_budget_status', () => {
   it('a future-dated expense with no explicit status defaults to pending, counted only in committed', async () => {
     const stamp = Date.now();
     const categoryName = `Status-FutureDefault-${stamp}`;
-    // Well beyond STATUS_DATE/STATUS_PERIOD and always ahead of "today" (the date-aware create
-    // default resolves a future date to pending, never effective, with no explicit status given —
-    // invariant 20 in docs/architecture.md).
+    // Always ahead of "today" — a future date with no explicit status defaults to pending (invariant 20).
     const futureDate = '2099-06-15';
     const futurePeriod = { month: 6, year: 2099 };
     const { client, transport } = makeClient();

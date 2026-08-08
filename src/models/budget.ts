@@ -45,9 +45,8 @@ export type BudgetView = z.infer<typeof BudgetViewSchema>;
 export type BudgetTarget = { id: string; category: string; subCategory?: string; kind: CategoryKind };
 
 /** The budgeted node's raw name material, unresolved to a display string, plus its own id
- *  (`targetId`, == the owning budget's `categoryId`) — ADR-028: `logic/budget.ts` matches this
- *  against `transactionsRepo.spendByCategory`'s rows itself, now that no repo joins `transactions`
- *  to do that matching in SQL. */
+ *  (`targetId`, == the owning budget's `categoryId`) for `logic/budget.ts` to match against spend
+ *  itself (ADR-028). */
 export type BudgetTargetRow = {
   targetId: string;
   nodeName: string;
@@ -87,9 +86,8 @@ export const UpdateBudgetSchema = z.object({
 });
 export type UpdateBudget = z.infer<typeof UpdateBudgetSchema>;
 
-/** The flat, ungrouped shape a budget row correlates to once matched against its own spend
- *  (ADR-028: `logic/budget.ts` does this matching, not a repo join) — `groupStatusByCategory`
- *  reshapes it into the grouped-by-category response. */
+/** The flat, ungrouped shape a budget row correlates to once matched against its own spend —
+ *  `groupStatusByCategory` reshapes it into the grouped-by-category response. */
 export const BudgetStatusEntrySchema = BudgetViewSchema.extend({
   spentEffective: z
     .number()
@@ -100,9 +98,8 @@ export const BudgetStatusEntrySchema = BudgetViewSchema.extend({
 });
 export type BudgetStatusEntry = z.infer<typeof BudgetStatusEntrySchema>;
 
-/** One measure's reading against a budget's limit (FD-020: `get_budget_status` reports `effective`
- *  and `committed` side by side, never folded into one scalar). Over-budget is reported as-is —
- *  `pct` is never clamped or flagged as an error. */
+/** One measure's reading against a budget's limit. Over-budget is reported as-is — `pct` is never
+ *  clamped or flagged as an error. */
 export const BudgetMeasureSchema = z.object({
   amount: z.number().describe("This measure's spend amount"),
   pct: z.number().describe('amount / limit; exceeds 1 when over budget'),
@@ -111,11 +108,8 @@ export type BudgetMeasure = z.infer<typeof BudgetMeasureSchema>;
 
 /** One budget's status within its category group — `category` is lifted to the group itself
  *  (`BudgetStatusGroupSchema`), so a line only needs `subCategory` to distinguish a sub-category's
- *  own line from its parent category's. Two measures against the limit (FD-020, revises invariant
- *  21's effective-only measurement): `effective` (cleared spend only) and `committed` (effective +
- *  pending — the earmark-aware measure); `pending` (committed - effective) is derivable and surfaced
- *  for convenience. `remaining` stays a single top-level number, reported against `committed` (the
- *  planning-relevant headroom) — effective headroom is trivially `limit - effective.amount`. */
+ *  own line from its parent category's. `remaining` stays a single top-level number, reported
+ *  against `committed` (the planning-relevant headroom) rather than per-measure. */
 export const BudgetStatusLineSchema = BudgetStatusEntrySchema.omit({
   category: true,
   spentEffective: true,

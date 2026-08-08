@@ -11,9 +11,8 @@ export type BudgetRow = typeof budgets.$inferSelect;
  *  hand schema like `SubCategoryRowSchema` (`wire/db/categories.ts`) until the raw reads are
  *  unified under drizzle-orm/zod. `node_parent_id` null means the budgeted node is itself a
  *  top-level category; set means it's a sub-category, with `parent_name`/`parent_names`
- *  describing its parent. `target_id` is the budgeted node's own id (`node.id`, == `b.category_id`)
- *  — ADR-028: `logic/budget.ts` needs it to match this row against `transactionsRepo.spendByCategory`
- *  itself, now that the repo no longer joins `transactions` to do that matching in SQL. */
+ *  describing its parent. `target_id` (`node.id`, == `b.category_id`) is for `logic/budget.ts` to
+ *  match this row against spend itself (ADR-028). */
 const budgetTargetRowShape = {
   id: z.string(),
   currency: CurrencyCode,

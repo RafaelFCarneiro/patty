@@ -47,7 +47,6 @@ export const toView = (
   subCategory: target.subCategory,
 });
 
-/** A top-level target's own `nodeParentId` is null; a sub-category target's is its parent's id. */
 const isSubCategoryRow = (row: BudgetTargetRow): boolean => row.nodeParentId !== null;
 
 /** `parentName!` is safe: a category's `parent_id` is a self-referencing FK `delete_category`
@@ -80,10 +79,9 @@ export const rowsToViews = (rows: readonly BudgetViewInput[], locale: Locale): B
     R.sortBy([(v) => v.category, 'asc'], [(v) => v.subCategory ?? '', 'asc']),
   );
 
-/** The `budgetTargetMatch` rule, now pure code over `transactionsRepo.spendByCategory`'s rows
- *  (ADR-028): a top-level target matches every row sharing its `categoryId` — a sub-category
- *  transaction's `category_id` is always its parent's (invariant 7), so this rolls up sub-category
- *  spend for free; a sub-category target matches only rows sharing its own id as `subCategoryId`. */
+/** A top-level target matches every row sharing its `categoryId` — a sub-category transaction's
+ *  `category_id` is always its parent's (invariant 7), so this rolls up sub-category spend for
+ *  free; a sub-category target matches only rows sharing its own id as `subCategoryId`. */
 const matchesTarget = (spend: CategorySpend, isSubCategory: boolean, targetId: string): boolean =>
   isSubCategory ? spend.subCategoryId === targetId : spend.categoryId === targetId;
 
@@ -115,8 +113,8 @@ const rowToStatusEntry = (row: BudgetViewInput, spend: readonly CategorySpend[],
 const toMeasure = (amount: number, limit: number): BudgetMeasure => ({ amount, pct: amount / limit });
 
 /** Over-budget is reported as-is — `pct`/`remaining` are never clamped or flagged as an error.
- *  `committed` (effective + pending) is the earmark-aware measure `remaining` is reported against
- *  (FD-020); effective headroom is trivially `limit - effective.amount` for a caller that wants it. */
+ *  `remaining` is reported against `committed` (effective + pending), the earmark-aware measure;
+ *  effective headroom is `limit - effective.amount`. */
 const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => {
   const committedAmount = entry.spentEffective + entry.spentPending;
   return {
@@ -132,13 +130,12 @@ const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => {
   };
 };
 
-/** Correlates each budget to its own spend and shapes the grouped-by-category response — the
- *  cross-aggregate correlation ADR-028 moved out of the repo and into this pure function, called by
- *  `getBudgetStatus` (`controllers/budgets.ts`) with both aggregates' own reads already in hand.
- *  Per-currency and per-sub-category lines read as one coherent unit, never summed together (no
- *  cross-currency total). Sorted explicitly (mirrors `logic/summary.ts`'s `summarize` /
- *  `logic/aggregate.ts`'s `shapeAggregateResult`) rather than relying on the repo query's own
- *  ordering, so the response is deterministic regardless of row order in. */
+/** Correlates each budget to its own spend (ADR-028 moved this out of the repo into pure logic)
+ *  and shapes the grouped-by-category response. Per-currency and per-sub-category lines read as
+ *  one coherent unit, never summed together (no cross-currency total). Sorted explicitly (mirrors
+ *  `logic/summary.ts`'s `summarize` / `logic/aggregate.ts`'s `shapeAggregateResult`) rather than
+ *  relying on the repo query's own ordering, so the response is deterministic regardless of row
+ *  order in. */
 export const groupStatusByCategory = (
   budgets: readonly BudgetViewInput[],
   spend: readonly CategorySpend[],

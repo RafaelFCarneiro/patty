@@ -13,10 +13,8 @@ import { VersionConflict, versionedTableApplier, type EntityApplier } from '../e
 // `subCategoriesRepo`'s `SUB_SELECT` (`diplomat/db/repos/subCategories.ts`): a hand-written raw
 // join, not the query builder, for the same self-referencing-table reason. `node.names`/
 // `parent.names` travel alongside the raw names so the repo itself never has to decide a locale.
-// `node.id` (== `b.category_id` by construction, the JOIN condition) travels too as `target_id` —
-// ADR-028: this repo no longer joins `transactions` to correlate a budget to its spend, so the
-// caller (`getBudgetStatus`, `controllers/budgets.ts`) needs the target's own id to do that
-// matching itself, in `logic/budget.ts`, against `transactionsRepo.spendByCategory`'s rows.
+// `node.id` (== `b.category_id`) travels too as `target_id`, needed to match spend against it in
+// `logic/budget.ts` now that this repo no longer joins `transactions` (ADR-028).
 const BUDGET_VIEW_SELECT = sql`
   SELECT b.id, b.currency, b.limit_amount, b.period, b.version, node.id AS target_id,
          node.name AS node_name, node.names AS node_names, node.parent_id AS node_parent_id,
@@ -27,9 +25,8 @@ const BUDGET_VIEW_SELECT = sql`
 `;
 
 export type BudgetsRepo = {
-  /** Budgets only — no spend (ADR-028: correlating a budget to its transactions is orchestration,
-   *  not a repo join). `getBudgetStatus` (`controllers/budgets.ts`) reuses this same list, fetching
-   *  `transactionsRepo.spendByCategory` alongside it and correlating the two in `logic/budget.ts`. */
+  /** Budgets only — no spend. Correlating a budget to its transactions is orchestration, not a
+   *  repo join (ADR-028). */
   list: () => Promise<BudgetViewRow[]>;
   /** Existence check for the `(category_id, currency, period)` duplicate guard in `createBudget`. */
   findByTarget: (categoryId: string, currency: CurrencyCode, period: BudgetPeriod) => Promise<boolean>;
