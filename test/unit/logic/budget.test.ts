@@ -293,6 +293,8 @@ describe('groupStatusByCategory', () => {
       });
     });
 
+    // BudgetSchema.limit is positive-only, so create_budget can never persist 0 — but this pure
+    // function's own input type is a plain number, so its behavior for 0 is still its own contract.
     it('divides by a zero limit the same way for every measure — Infinity/NaN, not a guard', () => {
       const [group] = groupStatusByCategory([budgetRow({ limit: 0 })], [], Locale.enum.en);
       expect(group?.lines[0]).toMatchObject({
