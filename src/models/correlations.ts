@@ -194,21 +194,6 @@ export const BudgetFitLineSchema = z.object({
 });
 export type BudgetFitLine = z.infer<typeof BudgetFitLineSchema>;
 
-/** What `logic/correlations.ts`'s `shapeBudgetFitLines` needs per row — same rationale as
- *  `SpendingShiftInput` above; structurally matches `BudgetFitDbRow` (`wire/db/correlations.ts`). */
-export type BudgetFitInput = {
-  id: string;
-  currency: CurrencyCode;
-  limit: number;
-  nodeName: string;
-  nodeNames: Record<string, string> | null;
-  nodeParentId: string | null;
-  parentName: string | null;
-  parentNames: Record<string, string> | null;
-  current: number;
-  baselineTotal: number;
-};
-
 export const UnbudgetedSpendSchema = z.object({
   category: z.string().min(1).describe('Top-level category name with material spend but no budget at all'),
   currency: CurrencyCode,

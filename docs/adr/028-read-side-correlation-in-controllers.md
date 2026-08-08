@@ -116,7 +116,7 @@ repo join ever hits `main`). This ADR doc rides the same branch. Phase 3 is a se
    status-split, composing `txPredicates`); move the budget target-match into `logic/budget.ts`;
    `getBudgetStatus` orchestrates; delete `budgetTargetMatch` + `BUDGET_STATUS_SELECT`'s transaction join. The
    FD-020 two-measure response contract is preserved (the shape merged on this branch already); tests updated.
-3. **Phase 3 (`refactor/budget-fit-controller-correlation`, follow-up)** — apply the same to
+3. **Phase 3 (`refactor/budget-fit-controller-correlation`, complete)** — apply the same to
    `find_correlations`' `budget_fit` mode; retire the shared `budgetTargetMatch` entirely.
 
 ## Action Items
@@ -127,8 +127,11 @@ repo join ever hits `main`). This ADR doc rides the same branch. Phase 3 is a se
    budgets (relocated, no longer exported, to `diplomat/db/repos/correlations.ts` — its one remaining consumer
    until phase 3); revise Feature Design 020 to the controller-orchestrated shape; update invariant 21 wording —
    same branch.
-4. [ ] Phase 3 — `budget_fit` correlation moved to the controller; `budgetTargetMatch` fully retired (follow-up
-   branch).
+4. [x] Phase 3 — `budget_fit` correlation moved to the controller (`transactionsRepo`'s new
+   `spendByCategoryWindowed`, correlated via `logic/budget.ts`'s exported `isSubCategoryRow`/
+   `resolveTargetNames`/`matchesTarget`, reused rather than re-derived in `logic/correlations.ts`);
+   `budgetTargetMatch`/`BUDGET_FIT_SELECT` fully retired from `correlationsRepo` — same branch
+   (`refactor/budget-fit-controller-correlation`).
 5. [x] Record the read-side correlation convention in `docs/architecture.md` (dependency/layering section) and a
    one-line pointer in `CLAUDE.md` (mirrored to `.github/copilot-instructions.md`).
 

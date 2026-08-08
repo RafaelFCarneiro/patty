@@ -1,9 +1,11 @@
 import * as R from 'remeda';
 import { unknownLabels } from './aggregate.js';
 import { localizeCategoryName } from './category.js';
+import { isSubCategoryRow, matchesTarget, resolveTargetNames } from './budget.js';
 import { roundMoney } from './money.js';
 import { daysBetween } from './period.js';
 import { nextDue } from './recurring.js';
+import type { BudgetViewInput } from '../models/budget.js';
 import {
   BudgetFitVerdict,
   CADENCE_AMOUNT_TOLERANCE_PCT,
@@ -11,7 +13,6 @@ import {
   CADENCE_NOMINAL_GAP_DAYS,
   SpendingShiftDirection,
   SUGGESTED_LIMIT_MARGIN_PCT,
-  type BudgetFitInput,
   type BudgetFitLine,
   type CategoryConcentration,
   type MerchantConcentrationInput,
@@ -24,6 +25,7 @@ import {
 } from '../models/correlations.js';
 import type { Locale } from '../models/locale.js';
 import type { CurrencyCode } from '../models/money.js';
+import type { CategoryWindowedSpend } from '../models/transaction.js';
 import { RecurringPeriod } from '../models/recurring.js';
 
 /** A shift with no measurable baseline (brand-new spend) has no percentage to compare against
@@ -75,51 +77,56 @@ const verdictFor = (baseline: number, limit: number, slackPct: number, overPct: 
   return BudgetFitVerdict.enum.realistic;
 };
 
-/** A budget targets either the node itself or one of its sub-categories — mirrors
- *  `logic/budget.ts`'s `resolveTargetNames`. `parentName!` is safe: a category's
- *  `parent_id` is a self-referencing FK `delete_category` never lets dangle, so the `LEFT JOIN
- *  parent` always matches when `nodeParentId` is set. */
-const resolveBudgetTargetNames = (row: BudgetFitInput, locale: Locale): { category: string; subCategory?: string } => {
-  const isSubCategory = row.nodeParentId !== null;
-  const nodeName = localizeCategoryName(row.nodeName, row.nodeNames, locale) ?? row.nodeName;
-  return {
-    category: isSubCategory
-      ? (localizeCategoryName(row.parentName, row.parentNames, locale) ?? row.parentName!)
-      : nodeName,
-    subCategory: isSubCategory ? nodeName : undefined,
-  };
+/** Correlates one budget to its own windowed spend (ADR-028 phase 3 moved this out of
+ *  `correlationsRepo` into pure logic, reusing `logic/budget.ts`'s `matchesTarget`/
+ *  `isSubCategoryRow` — the same top-level-rolls-up-sub-category rule `groupStatusByCategory`
+ *  applies to `get_budget_status`) — sums every spend row whose `currency` matches the budget's
+ *  own and whose category node matches its target. */
+const sumWindowedSpend = (
+  spend: readonly CategoryWindowedSpend[],
+  budget: BudgetViewInput,
+): { current: number; baselineTotal: number } => {
+  const isSubCategory = isSubCategoryRow(budget);
+  const matched = R.filter(
+    spend,
+    (s) => s.currency === budget.currency && matchesTarget(s, isSubCategory, budget.targetId),
+  );
+  return { current: R.sumBy(matched, (s) => s.current), baselineTotal: R.sumBy(matched, (s) => s.baselineTotal) };
 };
 
 const toBudgetFitLine = (
-  row: BudgetFitInput,
+  budget: BudgetViewInput,
+  spend: readonly CategoryWindowedSpend[],
   baselineMonths: number,
   slackPct: number,
   overPct: number,
   locale: Locale,
 ): BudgetFitLine => {
-  const rawBaseline = row.baselineTotal / baselineMonths;
+  const matched = sumWindowedSpend(spend, budget);
+  const rawBaseline = matched.baselineTotal / baselineMonths;
   return {
-    id: row.id,
-    ...resolveBudgetTargetNames(row, locale),
-    currency: row.currency,
-    limit: row.limit,
-    current: roundMoney(row.current),
+    id: budget.id,
+    ...resolveTargetNames(budget, locale),
+    currency: budget.currency,
+    limit: budget.limit,
+    current: roundMoney(matched.current),
     baseline: roundMoney(rawBaseline),
-    verdict: verdictFor(rawBaseline, row.limit, slackPct, overPct),
+    verdict: verdictFor(rawBaseline, budget.limit, slackPct, overPct),
     suggestedLimit: suggestedLimitFor(rawBaseline),
   };
 };
 
 export const shapeBudgetFitLines = (
-  rows: readonly BudgetFitInput[],
+  budgets: readonly BudgetViewInput[],
+  spend: readonly CategoryWindowedSpend[],
   baselineMonths: number,
   slackPct: number,
   overPct: number,
   locale: Locale,
 ): BudgetFitLine[] =>
   R.pipe(
-    rows,
-    R.map((row) => toBudgetFitLine(row, baselineMonths, slackPct, overPct, locale)),
+    budgets,
+    R.map((budget) => toBudgetFitLine(budget, spend, baselineMonths, slackPct, overPct, locale)),
     R.sortBy([(line) => line.category, 'asc'], [(line) => line.currency, 'asc'], [(line) => line.subCategory ?? '', 'asc']),
   );
 

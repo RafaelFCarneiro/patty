@@ -7,14 +7,12 @@ import {
   shapeSpendingShifts,
   shapeUnbudgetedSpend,
 } from '../../../src/logic/correlations.js';
+import { BudgetPeriod, type BudgetViewInput } from '../../../src/models/budget.js';
 import type { BudgetFitLine, RecurringCandidateInput } from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import type {
-  BudgetFitDbRow,
-  MerchantSpendDbRow,
-  SpendingShiftDbRow,
-} from '../../../src/wire/db/correlations.js';
+import type { CategoryWindowedSpend } from '../../../src/models/transaction.js';
+import type { MerchantSpendDbRow, SpendingShiftDbRow } from '../../../src/wire/db/correlations.js';
 
 const row = (overrides: Partial<SpendingShiftDbRow> = {}): SpendingShiftDbRow => ({
   category: 'Food',
@@ -25,16 +23,25 @@ const row = (overrides: Partial<SpendingShiftDbRow> = {}): SpendingShiftDbRow =>
   ...overrides,
 });
 
-const budgetRow = (overrides: Partial<BudgetFitDbRow> = {}): BudgetFitDbRow => ({
+const budget = (overrides: Partial<BudgetViewInput> = {}): BudgetViewInput => ({
   id: 'budget-1',
   currency: CurrencyCode.enum.BRL,
+  limit: 300,
+  period: BudgetPeriod.enum.monthly,
+  targetId: 'cat-food',
   nodeName: 'Food',
   nodeParentId: null,
   parentName: null,
   nodeNames: null,
   parentNames: null,
+  ...overrides,
+});
+
+const windowedSpend = (overrides: Partial<CategoryWindowedSpend> = {}): CategoryWindowedSpend => ({
+  currency: CurrencyCode.enum.BRL,
+  categoryId: 'cat-food',
+  subCategoryId: null,
   current: 0,
-  limit: 300,
   baselineTotal: 900,
   ...overrides,
 });
@@ -119,42 +126,59 @@ describe('shapeSpendingShifts', () => {
 describe('shapeBudgetFitLines', () => {
   it('reports unrealistic and a suggestedLimit above baseline for a materially over-budget category', () => {
     // baseline = 900/3 = 300; ratio = 300/200 = 1.5, over the default 20% overPct band (> 1.2)
-    const [line] = shapeBudgetFitLines([budgetRow({ limit: 200, baselineTotal: 900 })], 3, 20, 20, Locale.enum.en);
-    expect(line).toMatchObject({ limit: 200, baseline: 300, verdict: 'unrealistic', suggestedLimit: 330 });
-  });
-
-  it('reports generous for a baseline well under the limit', () => {
-    // ratio = 300/1000 = 0.3, under the default 20% slackPct band (< 0.8)
-    const [line] = shapeBudgetFitLines([budgetRow({ limit: 1000, baselineTotal: 900 })], 3, 20, 20, Locale.enum.en);
-    expect(line?.verdict).toBe('generous');
-  });
-
-  it('reports realistic when baseline is within tolerance of the limit', () => {
-    const [line] = shapeBudgetFitLines([budgetRow({ limit: 300, baselineTotal: 900 })], 3, 20, 20, Locale.enum.en);
-    expect(line?.verdict).toBe('realistic');
-  });
-
-  it('respects wider slackPct/overPct tolerances', () => {
-    // ratio 1.5 is "unrealistic" at overPct 20 but "realistic" at overPct 60
-    const rows = [budgetRow({ limit: 200, baselineTotal: 900 })];
-    expect(shapeBudgetFitLines(rows, 3, 20, 20, Locale.enum.en)[0]?.verdict).toBe('unrealistic');
-    expect(shapeBudgetFitLines(rows, 3, 20, 60, Locale.enum.en)[0]?.verdict).toBe('realistic');
-  });
-
-  it('handles a budget with no spend at all (baseline 0) as generous, not a divide-by-zero error', () => {
     const [line] = shapeBudgetFitLines(
-      [budgetRow({ limit: 300, baselineTotal: 0, current: 0 })],
+      [budget({ limit: 200 })],
+      [windowedSpend({ baselineTotal: 900 })],
       3,
       20,
       20,
       Locale.enum.en,
     );
+    expect(line).toMatchObject({ limit: 200, baseline: 300, verdict: 'unrealistic', suggestedLimit: 330 });
+  });
+
+  it('reports generous for a baseline well under the limit', () => {
+    // ratio = 300/1000 = 0.3, under the default 20% slackPct band (< 0.8)
+    const [line] = shapeBudgetFitLines(
+      [budget({ limit: 1000 })],
+      [windowedSpend({ baselineTotal: 900 })],
+      3,
+      20,
+      20,
+      Locale.enum.en,
+    );
+    expect(line?.verdict).toBe('generous');
+  });
+
+  it('reports realistic when baseline is within tolerance of the limit', () => {
+    const [line] = shapeBudgetFitLines(
+      [budget({ limit: 300 })],
+      [windowedSpend({ baselineTotal: 900 })],
+      3,
+      20,
+      20,
+      Locale.enum.en,
+    );
+    expect(line?.verdict).toBe('realistic');
+  });
+
+  it('respects wider slackPct/overPct tolerances', () => {
+    // ratio 1.5 is "unrealistic" at overPct 20 but "realistic" at overPct 60
+    const budgets = [budget({ limit: 200 })];
+    const spend = [windowedSpend({ baselineTotal: 900 })];
+    expect(shapeBudgetFitLines(budgets, spend, 3, 20, 20, Locale.enum.en)[0]?.verdict).toBe('unrealistic');
+    expect(shapeBudgetFitLines(budgets, spend, 3, 20, 60, Locale.enum.en)[0]?.verdict).toBe('realistic');
+  });
+
+  it('handles a budget with no spend at all (baseline 0) as generous, not a divide-by-zero error', () => {
+    const [line] = shapeBudgetFitLines([budget({ limit: 300 })], [], 3, 20, 20, Locale.enum.en);
     expect(line).toMatchObject({ current: 0, baseline: 0, verdict: 'generous' });
   });
 
   it('reports a sub-category budget under its parent category name', () => {
     const [line] = shapeBudgetFitLines(
-      [budgetRow({ nodeName: 'Restaurants', nodeParentId: 'cat-food', parentName: 'Food' })],
+      [budget({ targetId: 'sub-restaurants', nodeName: 'Restaurants', nodeParentId: 'cat-food', parentName: 'Food' })],
+      [],
       3,
       20,
       20,
@@ -166,8 +190,12 @@ describe('shapeBudgetFitLines', () => {
   it('isolates verdicts per currency for the same category', () => {
     const lines = shapeBudgetFitLines(
       [
-        budgetRow({ id: 'b-brl', currency: CurrencyCode.enum.BRL, limit: 200, baselineTotal: 900 }), // unrealistic
-        budgetRow({ id: 'b-usd', currency: CurrencyCode.enum.USD, limit: 1000, baselineTotal: 900 }), // generous
+        budget({ id: 'b-brl', currency: CurrencyCode.enum.BRL, limit: 200 }), // unrealistic
+        budget({ id: 'b-usd', currency: CurrencyCode.enum.USD, limit: 1000 }), // generous
+      ],
+      [
+        windowedSpend({ currency: CurrencyCode.enum.BRL, baselineTotal: 900 }),
+        windowedSpend({ currency: CurrencyCode.enum.USD, baselineTotal: 900 }),
       ],
       3,
       20,
@@ -180,7 +208,8 @@ describe('shapeBudgetFitLines', () => {
 
   it('localizes the category name via the names map for the given locale', () => {
     const [line] = shapeBudgetFitLines(
-      [budgetRow({ nodeName: 'Food', nodeNames: { pt: 'Alimentação' } })],
+      [budget({ nodeName: 'Food', nodeNames: { pt: 'Alimentação' } })],
+      [],
       3,
       20,
       20,
@@ -192,16 +221,66 @@ describe('shapeBudgetFitLines', () => {
   it('sorts deterministically by category, then currency, then sub-category', () => {
     const lines = shapeBudgetFitLines(
       [
-        budgetRow({ id: 'usd', nodeName: 'Food', currency: CurrencyCode.enum.USD }),
-        budgetRow({ id: 'brl-sub', nodeName: 'Restaurants', nodeParentId: 'cat-food', parentName: 'Food' }),
-        budgetRow({ id: 'brl', nodeName: 'Food' }),
+        budget({ id: 'usd', nodeName: 'Food', currency: CurrencyCode.enum.USD }),
+        budget({
+          id: 'brl-sub',
+          targetId: 'sub-restaurants',
+          nodeName: 'Restaurants',
+          nodeParentId: 'cat-food',
+          parentName: 'Food',
+        }),
+        budget({ id: 'brl', nodeName: 'Food' }),
       ],
+      [],
       3,
       20,
       20,
       Locale.enum.en,
     );
     expect(lines.map((l) => l.id)).toEqual(['brl', 'brl-sub', 'usd']);
+  });
+
+  it('matches a top-level budget target against every spend row sharing its categoryId, sub-category or not', () => {
+    const [line] = shapeBudgetFitLines(
+      [budget({ targetId: 'cat-food', limit: 300 })],
+      [
+        windowedSpend({ categoryId: 'cat-food', subCategoryId: null, baselineTotal: 600 }),
+        windowedSpend({ categoryId: 'cat-food', subCategoryId: 'sub-restaurants', baselineTotal: 300 }),
+      ],
+      3,
+      20,
+      20,
+      Locale.enum.en,
+    );
+    expect(line?.baseline).toBe(300); // (600 + 300) / 3
+  });
+
+  it('matches a sub-category budget target only against rows sharing its own id as subCategoryId', () => {
+    const [line] = shapeBudgetFitLines(
+      [budget({ targetId: 'sub-restaurants', nodeName: 'Restaurants', nodeParentId: 'cat-food', parentName: 'Food' })],
+      [
+        windowedSpend({ categoryId: 'cat-food', subCategoryId: 'sub-restaurants', baselineTotal: 300 }),
+        // the parent's own direct spend — excluded
+        windowedSpend({ categoryId: 'cat-food', subCategoryId: null, baselineTotal: 900 }),
+      ],
+      3,
+      20,
+      20,
+      Locale.enum.en,
+    );
+    expect(line?.baseline).toBe(100); // 300 / 3, the parent's direct spend excluded
+  });
+
+  it('ignores spend in a different currency than the budget', () => {
+    const [line] = shapeBudgetFitLines(
+      [budget({ currency: CurrencyCode.enum.BRL })],
+      [windowedSpend({ currency: CurrencyCode.enum.USD, baselineTotal: 999 })],
+      3,
+      20,
+      20,
+      Locale.enum.en,
+    );
+    expect(line).toMatchObject({ current: 0, baseline: 0 });
   });
 });
 

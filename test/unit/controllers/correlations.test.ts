@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { findCorrelations } from '../../../src/controllers/correlations.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { CategoryKind, type Category } from '../../../src/models/category.js';
+import { BudgetPeriod } from '../../../src/models/budget.js';
 import { FindCorrelationsAnalysis, type ResolvedFindCorrelations } from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
+import type { CategoryWindowedSpend } from '../../../src/models/transaction.js';
+import type { BudgetViewRow } from '../../../src/wire/db/budgets.js';
 import type {
-  BudgetFitDbRow,
   MerchantSpendDbRow,
   RecurringCandidateDbRow,
   SpendingShiftDbRow,
@@ -17,12 +19,11 @@ const foodCategory: Category = { id: 'cat-food', name: 'Food', kind: CategoryKin
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   accounts: {} as Deps['accounts'],
   bills: {} as Deps['bills'],
-  budgets: {} as Deps['budgets'],
+  budgets: { list: async () => [] } as unknown as Deps['budgets'],
   categories: { list: async () => [foodCategory] } as unknown as Deps['categories'],
   subCategories: {} as Deps['subCategories'],
   correlations: {
     spendingShifts: async () => [],
-    budgetFit: async () => [],
     merchantConcentration: async () => [],
     recurringCandidates: async () => [],
   } as unknown as Deps['correlations'],
@@ -33,7 +34,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   recurring: {} as Deps['recurring'],
   settings: {} as Deps['settings'],
   tags: {} as Deps['tags'],
-  transactions: {} as Deps['transactions'],
+  transactions: { spendByCategoryWindowed: async () => [] } as unknown as Deps['transactions'],
   // Noon UTC, not midnight — a bare date-only string parses as UTC midnight, which `toIsoDate`'s
   // local-time getters can roll back a day in a negative-offset timezone (mirrors dashboards.test.ts's
   // FIXED_CLOCK).
@@ -137,30 +138,43 @@ describe('findCorrelations — spending_shifts', () => {
 const budgetFitInput = (overrides: Partial<ResolvedFindCorrelations> = {}): ResolvedFindCorrelations =>
   input({ analysis: FindCorrelationsAnalysis.enum.budget_fit, ...overrides });
 
-const budgetRow = (overrides: Partial<BudgetFitDbRow> = {}): BudgetFitDbRow => ({
+const budgetViewRow = (overrides: Partial<BudgetViewRow> = {}): BudgetViewRow => ({
   id: 'budget-1',
+  version: 1,
   currency: CurrencyCode.enum.BRL,
+  limit: 300,
+  period: BudgetPeriod.enum.monthly,
+  targetId: 'cat-food',
   nodeName: 'Food',
   nodeParentId: null,
   parentName: null,
   nodeNames: null,
   parentNames: null,
+  ...overrides,
+});
+
+const windowedSpendRow = (overrides: Partial<CategoryWindowedSpend> = {}): CategoryWindowedSpend => ({
+  currency: CurrencyCode.enum.BRL,
+  categoryId: 'cat-food',
+  subCategoryId: null,
   current: 0,
-  limit: 300,
   baselineTotal: 900,
   ...overrides,
 });
 
 describe('findCorrelations — budget_fit', () => {
-  it('derives the same current/baseline windows as spending_shifts and calls both repo methods', async () => {
-    let budgetFitCalledWith: [string, string, string] | undefined;
+  it('derives the current/baseline windows and calls spendByCategoryWindowed + spendingShifts with them', async () => {
+    let windowedCalledWith: [string, string, string] | undefined;
     let shiftsCalledWith: [string, string, string] | undefined;
     const deps = makeDeps({
-      correlations: {
-        budgetFit: async (baselineFrom: string, currentFrom: string, currentTo: string) => {
-          budgetFitCalledWith = [baselineFrom, currentFrom, currentTo];
+      budgets: { list: async () => [] } as unknown as Deps['budgets'],
+      transactions: {
+        spendByCategoryWindowed: async (baselineFrom: string, currentFrom: string, currentTo: string) => {
+          windowedCalledWith = [baselineFrom, currentFrom, currentTo];
           return [];
         },
+      } as unknown as Deps['transactions'],
+      correlations: {
         spendingShifts: async (baselineFrom: string, currentFrom: string, currentTo: string) => {
           shiftsCalledWith = [baselineFrom, currentFrom, currentTo];
           return [];
@@ -170,7 +184,7 @@ describe('findCorrelations — budget_fit', () => {
 
     const result = await findCorrelations(deps, budgetFitInput());
 
-    expect(budgetFitCalledWith).toEqual(['2026-04-01', '2026-07-01', '2026-08-01']);
+    expect(windowedCalledWith).toEqual(['2026-04-01', '2026-07-01', '2026-08-01']);
     expect(shiftsCalledWith).toEqual(['2026-04-01', '2026-07-01', '2026-08-01']);
     expect(result._unsafeUnwrap()).toEqual({
       analysis: 'budget_fit',
@@ -182,11 +196,13 @@ describe('findCorrelations — budget_fit', () => {
   });
 
   it('reports unrealistic + a suggestedLimit near baseline for a materially over-budget category', async () => {
+    // baseline 300, ratio 1.5
     const deps = makeDeps({
-      correlations: {
-        budgetFit: async () => [budgetRow({ limit: 200, baselineTotal: 900 })], // baseline 300, ratio 1.5
-        spendingShifts: async () => [],
-      } as unknown as Deps['correlations'],
+      budgets: { list: async () => [budgetViewRow({ limit: 200 })] } as unknown as Deps['budgets'],
+      transactions: {
+        spendByCategoryWindowed: async () => [windowedSpendRow({ baselineTotal: 900 })],
+      } as unknown as Deps['transactions'],
+      correlations: { spendingShifts: async () => [] } as unknown as Deps['correlations'],
     });
 
     const result = await findCorrelations(deps, budgetFitInput());
@@ -196,11 +212,13 @@ describe('findCorrelations — budget_fit', () => {
   });
 
   it('reports generous for a category well under its limit', async () => {
+    // baseline 300, ratio 0.3
     const deps = makeDeps({
-      correlations: {
-        budgetFit: async () => [budgetRow({ limit: 1000, baselineTotal: 900 })], // baseline 300, ratio 0.3
-        spendingShifts: async () => [],
-      } as unknown as Deps['correlations'],
+      budgets: { list: async () => [budgetViewRow({ limit: 1000 })] } as unknown as Deps['budgets'],
+      transactions: {
+        spendByCategoryWindowed: async () => [windowedSpendRow({ baselineTotal: 900 })],
+      } as unknown as Deps['transactions'],
+      correlations: { spendingShifts: async () => [] } as unknown as Deps['correlations'],
     });
 
     const result = await findCorrelations(deps, budgetFitInput());
@@ -208,11 +226,13 @@ describe('findCorrelations — budget_fit', () => {
   });
 
   it('reports realistic when baseline is within tolerance of the limit', async () => {
+    // baseline 300, ratio 1.0
     const deps = makeDeps({
-      correlations: {
-        budgetFit: async () => [budgetRow({ limit: 300, baselineTotal: 900 })], // baseline 300, ratio 1.0
-        spendingShifts: async () => [],
-      } as unknown as Deps['correlations'],
+      budgets: { list: async () => [budgetViewRow({ limit: 300 })] } as unknown as Deps['budgets'],
+      transactions: {
+        spendByCategoryWindowed: async () => [windowedSpendRow({ baselineTotal: 900 })],
+      } as unknown as Deps['transactions'],
+      correlations: { spendingShifts: async () => [] } as unknown as Deps['correlations'],
     });
 
     const result = await findCorrelations(deps, budgetFitInput());
@@ -221,10 +241,9 @@ describe('findCorrelations — budget_fit', () => {
 
   it('handles a budget with no spend at all (current: 0, baseline: 0) without error', async () => {
     const deps = makeDeps({
-      correlations: {
-        budgetFit: async () => [budgetRow({ limit: 300, baselineTotal: 0, current: 0 })],
-        spendingShifts: async () => [],
-      } as unknown as Deps['correlations'],
+      budgets: { list: async () => [budgetViewRow({ limit: 300 })] } as unknown as Deps['budgets'],
+      transactions: { spendByCategoryWindowed: async () => [] } as unknown as Deps['transactions'],
+      correlations: { spendingShifts: async () => [] } as unknown as Deps['correlations'],
     });
 
     const result = await findCorrelations(deps, budgetFitInput());
@@ -233,18 +252,23 @@ describe('findCorrelations — budget_fit', () => {
 
   it('reports a sub-category budget under its parent category name', async () => {
     const deps = makeDeps({
-      correlations: {
-        budgetFit: async () => [
-          budgetRow({
+      budgets: {
+        list: async () => [
+          budgetViewRow({
+            targetId: 'sub-restaurants',
             nodeName: 'Restaurants',
             nodeParentId: 'cat-food',
             parentName: 'Food',
             limit: 300,
-            baselineTotal: 900,
           }),
         ],
-        spendingShifts: async () => [],
-      } as unknown as Deps['correlations'],
+      } as unknown as Deps['budgets'],
+      transactions: {
+        spendByCategoryWindowed: async () => [
+          windowedSpendRow({ categoryId: 'cat-food', subCategoryId: 'sub-restaurants', baselineTotal: 900 }),
+        ],
+      } as unknown as Deps['transactions'],
+      correlations: { spendingShifts: async () => [] } as unknown as Deps['correlations'],
     });
 
     const result = await findCorrelations(deps, budgetFitInput());
@@ -253,8 +277,9 @@ describe('findCorrelations — budget_fit', () => {
 
   it('surfaces a category with an established baseline and no budget as unbudgeted', async () => {
     const deps = makeDeps({
+      budgets: { list: async () => [] } as unknown as Deps['budgets'],
+      transactions: { spendByCategoryWindowed: async () => [] } as unknown as Deps['transactions'],
       correlations: {
-        budgetFit: async () => [],
         spendingShifts: async () => [
           {
             category: 'Transport',
@@ -275,8 +300,11 @@ describe('findCorrelations — budget_fit', () => {
 
   it('excludes a category already covered by a budget from unbudgeted', async () => {
     const deps = makeDeps({
+      budgets: { list: async () => [budgetViewRow({ limit: 300 })] } as unknown as Deps['budgets'], // category "Food"
+      transactions: {
+        spendByCategoryWindowed: async () => [windowedSpendRow({ baselineTotal: 900 })],
+      } as unknown as Deps['transactions'],
       correlations: {
-        budgetFit: async () => [budgetRow({ limit: 300, baselineTotal: 900 })], // category "Food"
         spendingShifts: async () => [
           {
             category: 'Food',
@@ -295,8 +323,9 @@ describe('findCorrelations — budget_fit', () => {
 
   it('excludes a brand-new (zero-baseline) category from unbudgeted — no established pattern yet', async () => {
     const deps = makeDeps({
+      budgets: { list: async () => [] } as unknown as Deps['budgets'],
+      transactions: { spendByCategoryWindowed: async () => [] } as unknown as Deps['transactions'],
       correlations: {
-        budgetFit: async () => [],
         spendingShifts: async () => [
           {
             category: 'Brand New',

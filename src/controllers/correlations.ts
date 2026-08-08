@@ -57,10 +57,22 @@ const budgetFit: AnalysisHandler = (deps, input, locale) =>
     yield* guard(hasPeriod(input), findCorrelationsErrors.missingPeriod(input.analysis));
     const period = resolvePeriod(input);
     const { baselineFrom, currentFrom, currentTo } = resolveWindows(period, input.baselineMonths);
-    const budgetRows = await deps.correlations.budgetFit(baselineFrom, currentFrom, currentTo);
-    const budgeted = shapeBudgetFitLines(budgetRows, input.baselineMonths, input.slackPct, input.overPct, locale);
-    // Reuses Phase A's own query to find unbudgeted candidates, excluding what `budgeted` covers.
-    const shiftRows = await deps.correlations.spendingShifts(baselineFrom, currentFrom, currentTo);
+    // Budgets and their windowed spend are each aggregate's own read (ADR-028) — correlated in
+    // logic/correlations.ts, not fused in a repo join. shiftRows reuses Phase A's own query to find
+    // unbudgeted candidates, excluding what `budgeted` covers.
+    const [budgets, windowedSpend, shiftRows] = await Promise.all([
+      deps.budgets.list(),
+      deps.transactions.spendByCategoryWindowed(baselineFrom, currentFrom, currentTo),
+      deps.correlations.spendingShifts(baselineFrom, currentFrom, currentTo),
+    ]);
+    const budgeted = shapeBudgetFitLines(
+      budgets,
+      windowedSpend,
+      input.baselineMonths,
+      input.slackPct,
+      input.overPct,
+      locale,
+    );
     return ok({
       analysis: FindCorrelationsAnalysis.enum.budget_fit,
       month: period.month,

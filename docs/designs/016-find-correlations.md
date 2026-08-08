@@ -210,15 +210,22 @@ handling rather than duplicated).
 existing budgets and unbudgeted-significant-spend suggestions; result shape; docs. Read-only — no budget writes
 here (the AI applies suggestions via `create_budget`/`update_budget`). Depends on Phase A.
 
-**As built:** the query lives in `correlationsRepo.budgetFit` (`diplomat/db/repos/correlations.ts`), joining
-`budgets`/`categories`/`transactions` via a `budgetTargetMatch` predicate extracted from `budgetsRepo.status`
-(shared so the two measurement queries can't drift — mirrors `transactionsRepo.correlatedToCard`), with the same
-current/baseline conditional-SUM split as Phase A's query. "Unbudgeted" materiality is `baseline > 0` (an
-established trailing spend pattern) — no separate threshold param, since the design's Params list didn't name
-one beyond `slackPct`/`overPct`. The design left the over-budget verdict's name undecided ("tight/unrealistic")
-— resolved to a single `unrealistic` verdict (three total: `realistic`/`unrealistic`/`generous`). `suggestedLimit`
-is `baseline * 1.10` (`SUGGESTED_LIMIT_MARGIN_PCT`), applied uniformly regardless of verdict, per the design's
-"baseline plus a small margin" phrasing.
+**As built:** originally, the query lived in `correlationsRepo.budgetFit`, joining `budgets`/`categories`/
+`transactions` via a `budgetTargetMatch` predicate extracted from `budgetsRepo.status` (shared so the two
+measurement queries couldn't drift — mirroring `transactionsRepo.correlatedToCard`), with the same
+current/baseline conditional-SUM split as Phase A's query. **ADR-028 phase 3** (`refactor/budget-fit-controller-
+correlation`) retired that fused join: `correlationsRepo` no longer touches `budgets`; `transactionsRepo`'s new
+`spendByCategoryWindowed` extends the `get_budget_status`-derived `spendByCategory` pattern with a
+baseline/current window split (still effective-only, expense-only). The `findCorrelations` controller
+(`controllers/correlations.ts`) fetches `budgetsRepo.list()` and this windowed spend, handing both to
+`logic/correlations.ts`'s `shapeBudgetFitLines`, which reuses `logic/budget.ts`'s exported `isSubCategoryRow`/
+`resolveTargetNames`/`matchesTarget` — the same top-level-rollup/sub-category-match rule `get_budget_status`
+applies, now shared rather than duplicated. The response contract is unchanged. "Unbudgeted" materiality is
+`baseline > 0` (an established trailing spend pattern) — no separate threshold param, since the design's Params
+list didn't name one beyond `slackPct`/`overPct`. The design left the over-budget verdict's name undecided
+("tight/unrealistic") — resolved to a single `unrealistic` verdict (three total: `realistic`/`unrealistic`/
+`generous`). `suggestedLimit` is `baseline * 1.10` (`SUGGESTED_LIMIT_MARGIN_PCT`), applied uniformly regardless
+of verdict, per the design's "baseline plus a small margin" phrasing.
 
 ### Finish (every push, every phase)
 Run the Definition of Done (CLAUDE.md): the self-review pass + the gate

@@ -321,6 +321,18 @@ export type CategorySpend = {
   pending: number;
 };
 
+/** One category node's effective, expense-only spend, split into a baseline/current window pair
+ *  instead of `CategorySpend`'s effective/pending split — the repo's own dimensions, with no
+ *  knowledge of who correlates it (ADR-028). What `find_correlations`'s `budget_fit` analysis
+ *  correlates against budgets in `logic/correlations.ts`. */
+export type CategoryWindowedSpend = {
+  currency: CurrencyCode;
+  categoryId: string;
+  subCategoryId: string | null;
+  current: number;
+  baselineTotal: number;
+};
+
 /** Classification enriched with resolved category/merchant — returned alongside every transaction write. */
 export type ClassifyOutcome = Classification & {
   categoryId?: string;

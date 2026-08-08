@@ -1,26 +1,14 @@
 import { sql } from 'drizzle-orm';
 import { TransactionStatus, TransactionType } from '../../../models/transaction.js';
 import {
-  BudgetFitDbRowSchema,
   MerchantSpendDbRowSchema,
   RecurringCandidateDbRowSchema,
   SpendingShiftDbRowSchema,
-  type BudgetFitDbRow,
   type MerchantSpendDbRow,
   type RecurringCandidateDbRow,
   type SpendingShiftDbRow,
 } from '../../../wire/db/correlations.js';
 import type { Db } from '../driver.js';
-
-/** A top-level target (`node.parent_id IS NULL`) matches on `t.category_id`, rolling up
- *  sub-category spend for free; a sub-category target matches only `t.subcategory_id`. Assumes the
- *  query aliases `budgets b`/`categories node` the same way `BUDGET_FIT_SELECT` does. Local now —
- *  ADR-028 moved `budgetsRepo`'s own correlation to the controller; this retires with `budgetFit`'s
- *  phase-3 migration. */
-const budgetTargetMatch = sql`
-  (node.parent_id IS NULL AND t.category_id = b.category_id)
-  OR (node.parent_id IS NOT NULL AND t.subcategory_id = b.category_id)
-`;
 
 /** One conditional-SUM pass splits `[baselineFrom, currentTo)` into `current`/`baseline_total` —
  *  covers a category present in only one window (brand-new or dropped) without a `FULL OUTER JOIN`
@@ -37,27 +25,6 @@ const SPENDING_SHIFTS_SELECT = (baselineFrom: string, currentFrom: string, curre
     AND t.status = ${TransactionStatus.enum.effective}
     AND t.type = ${TransactionType.enum.expense}
   GROUP BY t.currency, c.id
-`;
-
-/** Same current/baseline conditional-SUM split as `SPENDING_SHIFTS_SELECT`, but matched to each
- *  budget's own target via the shared `budgetTargetMatch` predicate (top-level rollup or
- *  sub-category alone) instead of a plain category rollup — Feature Design 016 phase D. */
-const BUDGET_FIT_SELECT = (baselineFrom: string, currentFrom: string, currentTo: string) => sql`
-  SELECT b.id, b.currency, b.limit_amount,
-         node.name AS node_name, node.names AS node_names,
-         node.parent_id AS node_parent_id, parent.name AS parent_name, parent.names AS parent_names,
-         COALESCE(SUM(CASE WHEN t.date >= ${currentFrom} THEN t.amount ELSE 0 END), 0) AS current,
-         COALESCE(SUM(CASE WHEN t.date < ${currentFrom} THEN t.amount ELSE 0 END), 0) AS baseline_total
-  FROM budgets b
-  JOIN categories node ON node.id = b.category_id
-  LEFT JOIN categories parent ON parent.id = node.parent_id
-  LEFT JOIN transactions t
-    ON t.currency = b.currency
-    AND t.status = ${TransactionStatus.enum.effective}
-    AND t.type = ${TransactionType.enum.expense}
-    AND t.date >= ${baselineFrom} AND t.date < ${currentTo}
-    AND (${budgetTargetMatch})
-  GROUP BY b.id
 `;
 
 /** Per-merchant spend within `[from, to)`, optionally narrowed to one category — Feature Design
@@ -93,8 +60,6 @@ export type CorrelationsRepo = {
   /** `[baselineFrom, currentFrom)` is the trailing baseline window; `[currentFrom, currentTo)` is
    *  the reference month. */
   spendingShifts: (baselineFrom: string, currentFrom: string, currentTo: string) => Promise<SpendingShiftDbRow[]>;
-  /** One row per existing budget, same window semantics as `spendingShifts`. */
-  budgetFit: (baselineFrom: string, currentFrom: string, currentTo: string) => Promise<BudgetFitDbRow[]>;
   /** One row per (category, currency, merchant) with spend in `[from, to)`. */
   merchantConcentration: (from: string, to: string, categoryId: string | null) => Promise<MerchantSpendDbRow[]>;
   /** One row per qualifying transaction in `[from, today]`, not already covered by a rule. */
@@ -105,11 +70,6 @@ export const correlationsRepo = (db: Db): CorrelationsRepo => ({
   spendingShifts: async (baselineFrom, currentFrom, currentTo) => {
     const rows = await db.all<Record<string, unknown>>(SPENDING_SHIFTS_SELECT(baselineFrom, currentFrom, currentTo));
     return rows.map((r) => SpendingShiftDbRowSchema.parse(r));
-  },
-
-  budgetFit: async (baselineFrom, currentFrom, currentTo) => {
-    const rows = await db.all<Record<string, unknown>>(BUDGET_FIT_SELECT(baselineFrom, currentFrom, currentTo));
-    return rows.map((r) => BudgetFitDbRowSchema.parse(r));
   },
 
   merchantConcentration: async (from, to, categoryId) => {
