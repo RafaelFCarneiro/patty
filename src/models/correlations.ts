@@ -4,9 +4,8 @@ import type { ValidationError } from './error.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
 
-/** Analysis modes for `find_correlations` (Feature Design 016) — one mode added per PR (A:
- *  `spending_shifts`, D: `budget_fit`, C: `merchant_concentration`, B: `recurring_candidates`).
- *  Whitelisted enum, mirroring `aggregate_spending`'s `groupBy` (ADR-011). */
+/** Analysis modes for `find_correlations`. Whitelisted enum, mirroring `aggregate_spending`'s
+ *  `groupBy` (ADR-011). */
 export const FindCorrelationsAnalysis = z.enum([
   'spending_shifts',
   'budget_fit',

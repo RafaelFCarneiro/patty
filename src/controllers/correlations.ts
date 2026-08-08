@@ -57,7 +57,7 @@ const budgetFit: AnalysisHandler = (deps, input, locale) =>
     yield* guard(hasPeriod(input), findCorrelationsErrors.missingPeriod(input.analysis));
     const period = resolvePeriod(input);
     const { baselineFrom, currentFrom, currentTo } = resolveWindows(period, input.baselineMonths);
-    // shiftRows reuses Phase A's own query to find unbudgeted candidates, excluding what `budgeted` covers.
+    // shiftRows reuses spendingShifts' own query to find unbudgeted candidates, excluding what `budgeted` covers.
     const [budgets, windowedSpend, shiftRows] = await Promise.all([
       deps.budgets.list(),
       deps.transactions.spendByCategoryWindowed(baselineFrom, currentFrom, currentTo),

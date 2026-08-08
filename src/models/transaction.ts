@@ -243,9 +243,9 @@ export const UpdateTransactionSchema = z.object({
 });
 export type UpdateTransaction = z.infer<typeof UpdateTransactionSchema>;
 
-/** Confirm input (Design 014 phase B): flips a `pending` transaction to `effective`, optionally
- *  correcting `amount`/`date` in the same call — the only edit surface confirm exposes (reclassifying
- *  stays `update_*`'s job). Both fields are rejected on a transfer/bill-payment (`isTransfer`,
+/** Confirm input: flips a `pending` transaction to `effective`, optionally correcting `amount`/
+ *  `date` in the same call — the only edit surface confirm exposes (reclassifying stays
+ *  `update_*`'s job). Both fields are rejected on a transfer/bill-payment (`isTransfer`,
  *  `logic/transaction.ts`); a plain status-only confirm of one is still fine. */
 export const ConfirmTransactionSchema = z.object({
   id: z.string().min(1).describe('Transaction id (from search_transactions with status: "pending")'),
@@ -425,7 +425,7 @@ export const transactionErrors = {
     code: 'validation',
     issues: ['cursor is malformed, stale, or does not match the requested sort/dir — start a fresh first page'],
   } satisfies TransactionError,
-  // Design 014 phase B: the effective ⇒ not-future-dated invariant, enforced at confirm.
+  // The effective ⇒ not-future-dated invariant, enforced at confirm.
   cannotConfirmFutureDated: (date: string): TransactionError => ({
     code: 'validation',
     issues: [`cannot confirm: ${date} is in the future — an effective transaction's date is never in the future`],

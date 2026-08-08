@@ -27,9 +27,9 @@ const SPENDING_SHIFTS_SELECT = (baselineFrom: string, currentFrom: string, curre
   GROUP BY t.currency, c.id
 `;
 
-/** Per-merchant spend within `[from, to)`, optionally narrowed to one category — Feature Design
- *  016 phase C. `categoryId` binds as a parameter when present; the fragment is empty (no
- *  string-built clause) when absent, so caller text never reaches the query shape itself. */
+/** Per-merchant spend within `[from, to)`, optionally narrowed to one category. `categoryId`
+ *  binds as a parameter when present; the fragment is empty (no string-built clause) when absent,
+ *  so caller text never reaches the query shape itself. */
 const MERCHANT_CONCENTRATION_SELECT = (from: string, to: string, categoryId: string | null) => sql`
   SELECT c.name AS category, c.names AS category_names, t.currency, t.merchant_key, SUM(t.amount) AS spent
   FROM transactions t
