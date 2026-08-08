@@ -2,10 +2,11 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { MerchantMatch } from '../../../logic/classify.js';
 import type { Merchant, MerchantCategoryEdge } from '../../../models/merchant.js';
-import { ClassificationMethod, TransactionStatus, TransactionType } from '../../../models/transaction.js';
+import { ClassificationMethod } from '../../../models/transaction.js';
 import { MerchantTopDbRowSchema, type MerchantTopDbRow } from '../../../wire/db/merchants.js';
 import type { Db } from '../driver.js';
 import { merchantCategory, merchants } from '../schema.js';
+import { txPredicates } from '../queries/txPredicates.js';
 import type { EntityApplier } from '../effects.js';
 
 const MatchRow = z.object({
@@ -31,8 +32,8 @@ const MERCHANTS_TOP_SELECT = (limit: number) => sql`
   WITH merchant_totals AS (
     SELECT t.merchant_key, COUNT(*) AS transaction_count
     FROM transactions t
-    WHERE t.status = ${TransactionStatus.enum.effective}
-      AND t.type != ${TransactionType.enum.transfer}
+    WHERE ${txPredicates.effective()}
+      AND ${txPredicates.nonTransfer()}
       AND t.merchant_key IS NOT NULL
     GROUP BY t.merchant_key
     ORDER BY transaction_count DESC
@@ -42,8 +43,8 @@ const MERCHANTS_TOP_SELECT = (limit: number) => sql`
     SELECT t.merchant_key, t.category_id, COUNT(*) AS category_count
     FROM transactions t
     JOIN merchant_totals mt ON mt.merchant_key = t.merchant_key
-    WHERE t.status = ${TransactionStatus.enum.effective}
-      AND t.type != ${TransactionType.enum.transfer}
+    WHERE ${txPredicates.effective()}
+      AND ${txPredicates.nonTransfer()}
       AND t.category_id IS NOT NULL
     GROUP BY t.merchant_key, t.category_id
   )

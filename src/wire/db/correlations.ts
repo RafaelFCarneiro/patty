@@ -22,8 +22,7 @@ export type SpendingShiftDbRow = z.output<typeof SpendingShiftDbRowSchema>;
 
 /** Same current/baseline split as `SpendingShiftDbRowSchema`, but matched to the budget's own
  *  target (`budgetTargetMatch`). `nodeParentId` null means a top-level target; set means a
- *  sub-category, with `parentName`/`parentNames` describing its parent — mirrors
- *  `BudgetStatusRowSchema` (`wire/db/budgets.ts`). */
+ *  sub-category, with `parentName`/`parentNames` describing its parent. */
 export const BudgetFitDbRowSchema = z
   .object({
     id: z.string().min(1),

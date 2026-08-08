@@ -60,6 +60,12 @@ sub by the target's own `parentId`.)*
 
 ### Measurement — how `spent` is computed (must reconcile with `aggregate_spending`)
 
+> **Superseded by Feature Design 020** (`docs/designs/020-pending-aware-budget-status.md`): the single
+> effective-only `spent`/`remaining`/`pct` triple described below is replaced by two measures — `effective`
+> and `committed` (effective + pending) — each with its own `amount`/`pct`, plus a `pending` convenience
+> measure and a `committed`-relative `remaining`. This section is kept for history; see FD-020 and
+> `docs/architecture.md` invariant 21 for the current shape.
+
 For a budget targeting node `T` in month `[from, to)`, `spent` = sum of `amount` over transactions that are
 **`status = 'effective'`**, **`type = 'expense'`**, **`currency = budget.currency`**, dated in the month, and:
 

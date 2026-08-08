@@ -11,7 +11,16 @@ import {
   type SpendingShiftDbRow,
 } from '../../../wire/db/correlations.js';
 import type { Db } from '../driver.js';
-import { budgetTargetMatch } from './budgets.js';
+
+/** A top-level target (`node.parent_id IS NULL`) matches on `t.category_id`, rolling up
+ *  sub-category spend for free; a sub-category target matches only `t.subcategory_id`. Assumes the
+ *  query aliases `budgets b`/`categories node` the same way `BUDGET_FIT_SELECT` does. Local now —
+ *  ADR-028 moved `budgetsRepo`'s own correlation to the controller; this retires with `budgetFit`'s
+ *  phase-3 migration. */
+const budgetTargetMatch = sql`
+  (node.parent_id IS NULL AND t.category_id = b.category_id)
+  OR (node.parent_id IS NOT NULL AND t.subcategory_id = b.category_id)
+`;
 
 /** One conditional-SUM pass splits `[baselineFrom, currentTo)` into `current`/`baseline_total` —
  *  covers a category present in only one window (brand-new or dropped) without a `FULL OUTER JOIN`

@@ -70,14 +70,17 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
     {
       title: 'Get budget status',
       description:
-        'Spend-vs-limit for every budget in a month (Feature Design 015 phase 2) — grouped by top-level ' +
-        "category so a category's own budget and each of its sub-categories' own budgets read as one " +
-        'coherent unit; no cross-currency total (per-currency lines, BRL and USD never mixed). `spent` sums ' +
-        'effective, expense-only, same-currency transactions in the month (income and transfers never count, ' +
-        "even on a both-kind category); a category budget rolls up its sub-categories' spend, a sub-category " +
-        'budget measures only its own (and also counts toward its ' +
-        "parent's, if the parent has a budget too). `remaining` (limit - spent) and `pct` (spent / limit) " +
-        'can go negative / exceed 1 when over budget — over-budget is reported, never an error.',
+        'Spend-vs-limit for every budget in a month (Feature Design 015 phase 2, measurement revised by ' +
+        "Feature Design 020) — grouped by top-level category so a category's own budget and each of its " +
+        "sub-categories' own budgets read as one coherent unit; no cross-currency total (per-currency lines, " +
+        'BRL and USD never mixed). Reports two measures against each limit: `effective` (cleared spend only) ' +
+        "and `committed` (effective + pending — the earmark-aware view of what's already spoken for); " +
+        '`pending` (committed - effective) is derived for convenience. Each measure carries `amount` and `pct` ' +
+        '(amount / limit); both sums are expense-only, same-currency (income and transfers never count, even ' +
+        "on a both-kind category); a category budget rolls up its sub-categories' spend, a sub-category budget " +
+        "measures only its own (and also counts toward its parent's, if the parent has a budget too). " +
+        '`remaining` (limit - committed.amount) can go negative when over budget — over-budget is reported, ' +
+        'never an error.',
       inputSchema: PeriodSchema.shape,
     },
     async (args) => json(await getBudgetStatus(deps, args)),

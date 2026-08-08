@@ -95,3 +95,17 @@ export const SummaryRowSchema = z
     ...rest,
     categoryNames: parseCategoryNames(category_names),
   }));
+
+export const CategorySpendRowSchema = z
+  .object({
+    currency: CurrencyCode,
+    category_id: z.string(),
+    subcategory_id: z.string().nullable(),
+    effective: z.number(),
+    pending: z.number(),
+  })
+  .transform(({ category_id, subcategory_id, ...rest }) => ({
+    ...rest,
+    categoryId: category_id,
+    subCategoryId: subcategory_id,
+  }));

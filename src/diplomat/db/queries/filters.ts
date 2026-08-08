@@ -1,12 +1,12 @@
 import { sql } from 'drizzle-orm';
-import type { AggregateGroupBy, AggregateMetric } from '../../models/aggregate.js';
-import type { CursorKey, SortDirection } from '../../models/page.js';
+import type { AggregateGroupBy, AggregateMetric } from '../../../models/aggregate.js';
+import type { CursorKey, SortDirection } from '../../../models/page.js';
 import type {
   ResolvedSearchRefs,
   SearchTransactions,
   TransactionSortField,
   TransactionStatus,
-} from '../../models/transaction.js';
+} from '../../../models/transaction.js';
 import { toMatchQuery } from './fts.js';
 
 export type CommonFilters = {

@@ -11,14 +11,17 @@ type Budget = {
   period?: string;
 };
 
+type BudgetMeasure = { amount?: number; pct?: number };
+
 type BudgetStatusLine = {
   id?: string;
   subCategory?: string;
   currency?: string;
   limit?: number;
-  spent?: number;
+  effective?: BudgetMeasure;
+  committed?: BudgetMeasure;
+  pending?: BudgetMeasure;
   remaining?: number;
-  pct?: number;
 };
 
 type BudgetStatusGroup = { category?: string; lines?: BudgetStatusLine[] };
@@ -356,8 +359,10 @@ describe('MCP integration > get_budget_status', () => {
 
       const categoryLine = group.lines?.find((l) => l.subCategory === undefined);
       const subLine = group.lines?.find((l) => l.subCategory === subCategoryName);
-      expect(categoryLine).toMatchObject({ spent: 450, remaining: 550 }); // rollup: 300 + 150
-      expect(subLine).toMatchObject({ spent: 150, remaining: 50 }); // its own spend only, not 450
+      // rollup: 300 + 150
+      expect(categoryLine).toMatchObject({ effective: { amount: 450 }, committed: { amount: 450 }, remaining: 550 });
+      // its own spend only, not 450
+      expect(subLine).toMatchObject({ effective: { amount: 150 }, committed: { amount: 150 }, remaining: 50 });
     } finally {
       await transport.close();
     }
@@ -390,13 +395,18 @@ describe('MCP integration > get_budget_status', () => {
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
       const group = findGroup(status, categoryName);
       ensure(group, `no status group for ${categoryName}`);
-      expect(group.lines?.[0]).toMatchObject({ currency: 'BRL', spent: 0, remaining: 500 });
+      expect(group.lines?.[0]).toMatchObject({
+        currency: 'BRL',
+        effective: { amount: 0 },
+        committed: { amount: 0 },
+        remaining: 500,
+      });
     } finally {
       await transport.close();
     }
   });
 
-  it('excludes pending transactions — only effective spend counts', async () => {
+  it('excludes pending from effective but includes it in committed (FD-020)', async () => {
     const stamp = Date.now();
     const categoryName = `Status-Pending-${stamp}`;
     const { client, transport } = makeClient();
@@ -412,7 +422,7 @@ describe('MCP integration > get_budget_status', () => {
       createdBudgetIds.push(budget.id);
 
       await addExpense(client, {
-        description: 'pending spend, should not count',
+        description: 'pending spend — excluded from effective, counted in committed',
         amount: 400,
         category: categoryName,
         currency: 'BRL',
@@ -424,7 +434,101 @@ describe('MCP integration > get_budget_status', () => {
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
       const group = findGroup(status, categoryName);
       ensure(group, `no status group for ${categoryName}`);
-      expect(group.lines?.[0]).toMatchObject({ spent: 0, remaining: 500 });
+      expect(group.lines?.[0]).toMatchObject({
+        effective: { amount: 0, pct: 0 },
+        committed: { amount: 400, pct: 0.8 },
+        pending: { amount: 400, pct: 0.8 },
+        remaining: 100,
+      });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('mixes effective and pending on the same target: committed sums both, effective stays cleared-only', async () => {
+    const stamp = Date.now();
+    const categoryName = `Status-Mixed-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+
+      const budget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: categoryName, currency: 'BRL', limit: 500 },
+      })) as Budget;
+      ensure(budget.id, 'budget id missing');
+      createdBudgetIds.push(budget.id);
+
+      await addExpense(client, {
+        description: 'cleared spend',
+        amount: 150,
+        category: categoryName,
+        currency: 'BRL',
+        status: 'effective',
+        date: STATUS_DATE,
+        idempotencyKey: `status-mixed-effective-${stamp}`,
+      });
+      await addExpense(client, {
+        description: 'earmarked, not yet cleared',
+        amount: 100,
+        category: categoryName,
+        currency: 'BRL',
+        status: 'pending',
+        date: STATUS_DATE,
+        idempotencyKey: `status-mixed-pending-${stamp}`,
+      });
+
+      const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
+      const group = findGroup(status, categoryName);
+      ensure(group, `no status group for ${categoryName}`);
+      expect(group.lines?.[0]).toMatchObject({
+        effective: { amount: 150, pct: 0.3 },
+        committed: { amount: 250, pct: 0.5 },
+        pending: { amount: 100, pct: 0.2 },
+        remaining: 250,
+      });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('a future-dated expense with no explicit status defaults to pending, counted only in committed', async () => {
+    const stamp = Date.now();
+    const categoryName = `Status-FutureDefault-${stamp}`;
+    // Always ahead of "today" — a future date with no explicit status defaults to pending (invariant 20).
+    const futureDate = '2099-06-15';
+    const futurePeriod = { month: 6, year: 2099 };
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+
+      const budget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: categoryName, currency: 'BRL', limit: 500 },
+      })) as Budget;
+      ensure(budget.id, 'budget id missing');
+      createdBudgetIds.push(budget.id);
+
+      await addExpense(client, {
+        description: 'future-dated, status omitted — defaults to pending',
+        amount: 200,
+        category: categoryName,
+        currency: 'BRL',
+        date: futureDate,
+        idempotencyKey: `status-future-default-${stamp}`,
+      });
+
+      const status = (await callTool(client, { name: 'get_budget_status', args: futurePeriod })) as BudgetStatus;
+      const group = findGroup(status, categoryName);
+      ensure(group, `no status group for ${categoryName}`);
+      expect(group.lines?.[0]).toMatchObject({
+        effective: { amount: 0 },
+        committed: { amount: 200 },
+        pending: { amount: 200 },
+        remaining: 300,
+      });
     } finally {
       await transport.close();
     }
@@ -483,14 +587,19 @@ describe('MCP integration > get_budget_status', () => {
       const group = findGroup(status, categoryName);
       ensure(group, `no status group for ${categoryName}`);
       // A transfer carries no category, so it can never match a budget's category/subcategory —
-      // this asserts spent isn't inflated by the transfer's amount regardless (e.g. via a join bug).
-      expect(group.lines?.[0]).toMatchObject({ spent: 100, remaining: 400 });
+      // this asserts spend isn't inflated by the transfer's amount regardless (e.g. via a join bug),
+      // on either measure.
+      expect(group.lines?.[0]).toMatchObject({
+        effective: { amount: 100 },
+        committed: { amount: 100 },
+        remaining: 400,
+      });
     } finally {
       await transport.close();
     }
   });
 
-  it('excludes income from spend on a both-kind category — a spending cap is never inflated by income', async () => {
+  it('excludes income from spend on a both-kind category — never inflates the cap, on either measure', async () => {
     const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
@@ -511,6 +620,15 @@ describe('MCP integration > get_budget_status', () => {
         date: STATUS_DATE,
         idempotencyKey: `status-investment-income-${stamp}`,
       });
+      await addIncome(client, {
+        description: 'pending dividend, should not count as spend either',
+        amount: 3000,
+        category: 'Investments',
+        currency: 'BRL',
+        status: 'pending',
+        date: STATUS_DATE,
+        idempotencyKey: `status-investment-income-pending-${stamp}`,
+      });
 
       await addExpense(client, {
         description: 'money moved into the investment, the actual spend',
@@ -524,7 +642,11 @@ describe('MCP integration > get_budget_status', () => {
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
       const group = findGroup(status, 'Investments');
       ensure(group, 'no status group for Investments');
-      expect(group.lines?.[0]).toMatchObject({ spent: 100, remaining: 400 });
+      expect(group.lines?.[0]).toMatchObject({
+        effective: { amount: 100 },
+        committed: { amount: 100 },
+        remaining: 400,
+      });
     } finally {
       await transport.close();
     }
@@ -557,13 +679,17 @@ describe('MCP integration > get_budget_status', () => {
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
       const group = findGroup(status, categoryName);
       ensure(group, `no status group for ${categoryName}`);
-      expect(group.lines?.[0]).toMatchObject({ spent: 250, remaining: -150, pct: 2.5 });
+      expect(group.lines?.[0]).toMatchObject({
+        effective: { amount: 250, pct: 2.5 },
+        committed: { amount: 250, pct: 2.5 },
+        remaining: -150,
+      });
     } finally {
       await transport.close();
     }
   });
 
-  it('reports spent: 0 for a budget with no matching transactions this period', async () => {
+  it('reports amount: 0 on every measure for a budget with no matching transactions this period', async () => {
     const stamp = Date.now();
     const categoryName = `Status-Empty-${stamp}`;
     const { client, transport } = makeClient();
@@ -581,7 +707,12 @@ describe('MCP integration > get_budget_status', () => {
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
       const group = findGroup(status, categoryName);
       ensure(group, `no status group for ${categoryName}`);
-      expect(group.lines?.[0]).toMatchObject({ spent: 0, remaining: 500, pct: 0 });
+      expect(group.lines?.[0]).toMatchObject({
+        effective: { amount: 0, pct: 0 },
+        committed: { amount: 0, pct: 0 },
+        pending: { amount: 0, pct: 0 },
+        remaining: 500,
+      });
     } finally {
       await transport.close();
     }

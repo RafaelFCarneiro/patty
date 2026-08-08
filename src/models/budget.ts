@@ -44,8 +44,11 @@ export type BudgetView = z.infer<typeof BudgetViewSchema>;
 /** A resolved budgeted node — enough to guard eligibility and build a `BudgetView`; never persisted itself. */
 export type BudgetTarget = { id: string; category: string; subCategory?: string; kind: CategoryKind };
 
-/** The budgeted node's raw name material, unresolved to a display string. */
+/** The budgeted node's raw name material, unresolved to a display string, plus its own id
+ *  (`targetId`, == the owning budget's `categoryId`) for `logic/budget.ts` to match against spend
+ *  itself (ADR-028). */
 export type BudgetTargetRow = {
+  targetId: string;
   nodeName: string;
   nodeNames: Record<string, string> | null;
   nodeParentId: string | null;
@@ -54,8 +57,6 @@ export type BudgetTargetRow = {
 };
 
 export type BudgetViewInput = Pick<Budget, 'id' | 'currency' | 'limit' | 'period'> & BudgetTargetRow;
-
-export type BudgetStatusInput = BudgetViewInput & { spent: number };
 
 // `.describe()` is domain information. Defaults split by intent: integrity defaults live here
 // (`period` is required — a real value the domain always needs); quality-of-life convenience
@@ -85,19 +86,41 @@ export const UpdateBudgetSchema = z.object({
 });
 export type UpdateBudget = z.infer<typeof UpdateBudgetSchema>;
 
-/** The flat, ungrouped shape a repo row adapts to — `logic/budget.ts`'s `groupStatusByCategory`
- *  reshapes it into the grouped-by-category response. */
+/** The flat, ungrouped shape a budget row correlates to once matched against its own spend —
+ *  `groupStatusByCategory` reshapes it into the grouped-by-category response. */
 export const BudgetStatusEntrySchema = BudgetViewSchema.extend({
-  spent: z.number().describe('Sum of effective, expense-only, same-currency spend against this target in the period'),
+  spentEffective: z
+    .number()
+    .describe('Sum of effective (cleared), expense-only, same-currency spend against this target in the period'),
+  spentPending: z
+    .number()
+    .describe('Sum of pending (not yet cleared), expense-only, same-currency spend against this target in the period'),
 });
 export type BudgetStatusEntry = z.infer<typeof BudgetStatusEntrySchema>;
 
+/** One measure's reading against a budget's limit. Over-budget is reported as-is — `pct` is never
+ *  clamped or flagged as an error. */
+export const BudgetMeasureSchema = z.object({
+  amount: z.number().describe("This measure's spend amount"),
+  pct: z.number().describe('amount / limit; exceeds 1 when over budget'),
+});
+export type BudgetMeasure = z.infer<typeof BudgetMeasureSchema>;
+
 /** One budget's status within its category group — `category` is lifted to the group itself
  *  (`BudgetStatusGroupSchema`), so a line only needs `subCategory` to distinguish a sub-category's
- *  own line from its parent category's. */
-export const BudgetStatusLineSchema = BudgetStatusEntrySchema.omit({ category: true }).extend({
-  remaining: z.number().describe('limit - spent; negative when over budget'),
-  pct: z.number().describe('spent / limit; exceeds 1 when over budget'),
+ *  own line from its parent category's. `remaining` stays a single top-level number, reported
+ *  against `committed` (the planning-relevant headroom) rather than per-measure. */
+export const BudgetStatusLineSchema = BudgetStatusEntrySchema.omit({
+  category: true,
+  spentEffective: true,
+  spentPending: true,
+}).extend({
+  effective: BudgetMeasureSchema.describe('Cleared spend (status = effective) against the limit'),
+  committed: BudgetMeasureSchema.describe(
+    'Cleared + pending spend (status IN (effective, pending)) against the limit — the earmark-aware measure',
+  ),
+  pending: BudgetMeasureSchema.describe('committed - effective, surfaced for convenience'),
+  remaining: z.number().describe('limit - committed.amount; negative when over budget'),
 });
 export type BudgetStatusLine = z.infer<typeof BudgetStatusLineSchema>;
 

@@ -3,9 +3,9 @@ import { localizeCategoryName } from './category.js';
 import { CategoryKind } from '../models/category.js';
 import type {
   Budget,
+  BudgetMeasure,
   BudgetStatusEntry,
   BudgetStatusGroup,
-  BudgetStatusInput,
   BudgetStatusLine,
   BudgetTarget,
   BudgetTargetRow,
@@ -13,6 +13,7 @@ import type {
   BudgetViewInput,
 } from '../models/budget.js';
 import type { Locale } from '../models/locale.js';
+import type { CategorySpend } from '../models/transaction.js';
 
 /** A category-or-sub-category-by-name selection, budget's own minimal shape (unlike transactions'
  *  `CategoryFields`, a target is required — never both unset). */
@@ -46,10 +47,12 @@ export const toView = (
   subCategory: target.subCategory,
 });
 
+const isSubCategoryRow = (row: BudgetTargetRow): boolean => row.nodeParentId !== null;
+
 /** `parentName!` is safe: a category's `parent_id` is a self-referencing FK `delete_category`
  *  never lets dangle, so the `LEFT JOIN parent` always matches when `nodeParentId` is set. */
 const resolveTargetNames = (row: BudgetTargetRow, locale: Locale): { category: string; subCategory?: string } => {
-  const isSubCategory = row.nodeParentId !== null;
+  const isSubCategory = isSubCategoryRow(row);
   const nodeName = localizeCategoryName(row.nodeName, row.nodeNames, locale) ?? row.nodeName;
   return {
     category: isSubCategory
@@ -76,35 +79,71 @@ export const rowsToViews = (rows: readonly BudgetViewInput[], locale: Locale): B
     R.sortBy([(v) => v.category, 'asc'], [(v) => v.subCategory ?? '', 'asc']),
   );
 
-const rowToStatusEntry = (row: BudgetStatusInput, locale: Locale): BudgetStatusEntry => ({
-  id: row.id,
-  currency: row.currency,
-  limit: row.limit,
-  period: row.period,
-  spent: row.spent,
-  ...resolveTargetNames(row, locale),
-});
+/** A top-level target matches every row sharing its `categoryId` — a sub-category transaction's
+ *  `category_id` is always its parent's (invariant 7), so this rolls up sub-category spend for
+ *  free; a sub-category target matches only rows sharing its own id as `subCategoryId`. */
+const matchesTarget = (spend: CategorySpend, isSubCategory: boolean, targetId: string): boolean =>
+  isSubCategory ? spend.subCategoryId === targetId : spend.categoryId === targetId;
 
-/** Over-budget is reported as-is — `remaining`/`pct` are never clamped or flagged as an error. */
-const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => ({
-  id: entry.id,
-  currency: entry.currency,
-  limit: entry.limit,
-  period: entry.period,
-  subCategory: entry.subCategory,
-  spent: entry.spent,
-  remaining: entry.limit - entry.spent,
-  pct: entry.spent / entry.limit,
-});
+const sumMatchedSpend = (
+  spend: readonly CategorySpend[],
+  row: BudgetViewInput,
+): { effective: number; pending: number } => {
+  const isSubCategory = isSubCategoryRow(row);
+  const matched = R.filter(
+    spend,
+    (s) => s.currency === row.currency && matchesTarget(s, isSubCategory, row.targetId),
+  );
+  return { effective: R.sumBy(matched, (s) => s.effective), pending: R.sumBy(matched, (s) => s.pending) };
+};
 
-/** Per-currency and per-sub-category lines read as one coherent unit, never summed together (no
- *  cross-currency total). Sorted explicitly (mirrors `logic/summary.ts`'s `summarize` /
- *  `logic/aggregate.ts`'s `shapeAggregateResult`) rather than relying on the repo query's own
- *  ordering, so the response is deterministic regardless of row order in. */
-export const groupStatusByCategory = (rows: readonly BudgetStatusInput[], locale: Locale): BudgetStatusGroup[] =>
+const rowToStatusEntry = (row: BudgetViewInput, spend: readonly CategorySpend[], locale: Locale): BudgetStatusEntry => {
+  const matched = sumMatchedSpend(spend, row);
+  return {
+    id: row.id,
+    currency: row.currency,
+    limit: row.limit,
+    period: row.period,
+    spentEffective: matched.effective,
+    spentPending: matched.pending,
+    ...resolveTargetNames(row, locale),
+  };
+};
+
+const toMeasure = (amount: number, limit: number): BudgetMeasure => ({ amount, pct: amount / limit });
+
+/** Over-budget is reported as-is — `pct`/`remaining` are never clamped or flagged as an error.
+ *  `remaining` is reported against `committed` (effective + pending), the earmark-aware measure;
+ *  effective headroom is `limit - effective.amount`. */
+const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => {
+  const committedAmount = entry.spentEffective + entry.spentPending;
+  return {
+    id: entry.id,
+    currency: entry.currency,
+    limit: entry.limit,
+    period: entry.period,
+    subCategory: entry.subCategory,
+    effective: toMeasure(entry.spentEffective, entry.limit),
+    committed: toMeasure(committedAmount, entry.limit),
+    pending: toMeasure(entry.spentPending, entry.limit),
+    remaining: entry.limit - committedAmount,
+  };
+};
+
+/** Correlates each budget to its own spend (ADR-028 moved this out of the repo into pure logic)
+ *  and shapes the grouped-by-category response. Per-currency and per-sub-category lines read as
+ *  one coherent unit, never summed together (no cross-currency total). Sorted explicitly (mirrors
+ *  `logic/summary.ts`'s `summarize` / `logic/aggregate.ts`'s `shapeAggregateResult`) rather than
+ *  relying on the repo query's own ordering, so the response is deterministic regardless of row
+ *  order in. */
+export const groupStatusByCategory = (
+  budgets: readonly BudgetViewInput[],
+  spend: readonly CategorySpend[],
+  locale: Locale,
+): BudgetStatusGroup[] =>
   R.pipe(
-    rows,
-    R.map((row) => rowToStatusEntry(row, locale)),
+    budgets,
+    R.map((row) => rowToStatusEntry(row, spend, locale)),
     R.groupBy((e) => e.category),
     R.entries(),
     R.map(([category, categoryEntries]): BudgetStatusGroup => {

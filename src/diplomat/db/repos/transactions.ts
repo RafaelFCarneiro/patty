@@ -4,8 +4,8 @@ import * as transactionAdapters from '../../../adapters/transactions.js';
 import { expectPresent, rowNotFoundAfterWrite } from '../present.js';
 import { SortDirection, type CursorKey } from '../../../models/page.js';
 import {
-  TransactionStatus,
   TransactionType,
+  type CategorySpend,
   type ResolvedSearchRefs,
   type SearchTransactions,
   type RawTransactionView,
@@ -13,12 +13,13 @@ import {
 } from '../../../models/transaction.js';
 import type { SummaryRow } from '../../../models/summary.js';
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js';
-import { ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
-import { GROUP_BY_MAP, METRIC_MAP } from '../aggregateWhitelist.js';
+import { CategorySpendRowSchema, ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
+import { GROUP_BY_MAP, METRIC_MAP } from '../queries/aggregateWhitelist.js';
 import type { Db } from '../driver.js';
-import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../filters.js';
+import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../queries/filters.js';
 import { transactions } from '../schema.js';
-import { fullTxSelect } from '../transactionSelect.js';
+import { fullTxSelect } from '../queries/transactionSelect.js';
+import { txPredicates } from '../queries/txPredicates.js';
 import { versionedTableApplier, type EntityApplier, type Tx } from '../effects.js';
 
 // search_transactions' includeTotal COUNT(*) row — decoded like every other SQL row (ADR
@@ -95,6 +96,10 @@ export type TransactionsRepo = {
     transfersIn: number;
     transfersOut: number;
   }>;
+  /** Expense spend over `[from, to)`, grouped by this repo's own dimensions (currency, category,
+   *  sub-category), split into effective/pending sums — no knowledge of budgets or any other
+   *  correlating aggregate (ADR-028). */
+  spendByCategory: (from: string, to: string) => Promise<CategorySpend[]>;
 };
 
 export const transactionsRepo = (db: Db): TransactionsRepo => ({
@@ -105,6 +110,8 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     return rows.map(transactionAdapters.dbToModel);
   },
 
+  // search/count's status/type filters (buildSearchWhere) stay a plain equality against whatever
+  // value the caller passed — no fixed policy predicate here to extract onto txPredicates.
   search: async (input, refs) => {
     const filters = toSearchFilters(input, refs);
     const conditions = buildSearchWhere(filters);
@@ -138,8 +145,8 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     const metric = METRIC_MAP[filters.metric];
 
     const conditions = buildCommonWhere(filters);
-    conditions.push(sql`t.status = ${TransactionStatus.enum.effective}`);
-    conditions.push(sql`t.type != ${TransactionType.enum.transfer}`);
+    conditions.push(txPredicates.effective());
+    conditions.push(txPredicates.nonTransfer());
 
     const where = sql.join(conditions, sql` AND `);
 
@@ -164,8 +171,8 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       FROM transactions t
       LEFT JOIN categories c ON c.id = t.category_id
       WHERE t.date >= ${from} AND t.date < ${to}
-        AND t.type != ${TransactionType.enum.transfer}
-        AND t.status = ${TransactionStatus.enum.effective}
+        AND ${txPredicates.nonTransfer()}
+        AND ${txPredicates.effective()}
       GROUP BY t.currency, t.type, c.id
     `);
     return rows.map((r) => SummaryRowSchema.parse(r));
@@ -186,12 +193,12 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
           SELECT SUM(t2.amount) FROM transactions t2
           WHERE t2.to_account_id = ${accountId}
             AND t2.type = ${TransactionType.enum.transfer}
-            AND t2.status = ${TransactionStatus.enum.pending}
+            AND ${txPredicates.pending('t2')}
             AND t2.date <= ${asOf}
         ), 0) AS transfers_in
       FROM transactions t
       WHERE t.from_account_id = ${accountId}
-        AND t.status = ${TransactionStatus.enum.pending}
+        AND ${txPredicates.pending()}
         AND t.date <= ${asOf}
     `);
     return {
@@ -200,6 +207,23 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       transfersIn: row?.transfers_in ?? 0,
       transfersOut: row?.transfers_out ?? 0,
     };
+  },
+
+  // Excludes uncategorized spend — it can never match a budget target, and keeps `category_id`
+  // non-nullable on `CategorySpend`.
+  spendByCategory: async (from, to) => {
+    const rows = await db.all<Record<string, unknown>>(sql`
+      SELECT t.currency, t.category_id, t.subcategory_id,
+             COALESCE(SUM(CASE WHEN ${txPredicates.effective()} THEN t.amount END), 0) AS effective,
+             COALESCE(SUM(CASE WHEN ${txPredicates.pending()} THEN t.amount END), 0) AS pending
+      FROM transactions t
+      WHERE ${txPredicates.expense()}
+        AND ${txPredicates.committed()}
+        AND t.date >= ${from} AND t.date < ${to}
+        AND t.category_id IS NOT NULL
+      GROUP BY t.currency, t.category_id, t.subcategory_id
+    `);
+    return rows.map((r) => CategorySpendRowSchema.parse(r));
   },
 });
 

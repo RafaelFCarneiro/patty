@@ -11,7 +11,6 @@ import {
   BUDGET_ENTITY_TAG,
   BudgetPeriod,
   type BudgetEntity,
-  type BudgetStatusInput,
   type BudgetView,
   type BudgetViewInput,
 } from '../../../src/models/budget.js';
@@ -20,6 +19,7 @@ import { CategoryKind } from '../../../src/models/category.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp } from '../../../src/models/persistable.js';
+import type { CategorySpend } from '../../../src/models/transaction.js';
 
 const foodCategory: Category = { id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense, names: null };
 const salaryCategory: Category = { id: 'cat-salary', name: 'Salary', kind: CategoryKind.enum.income, names: null };
@@ -310,19 +310,23 @@ describe('deleteBudget — functional core', () => {
   });
 });
 
+const budgetViewRow = (overrides: Partial<BudgetViewInput> = {}): BudgetViewInput => ({
+  id: 'budget-1',
+  currency: CurrencyCode.enum.BRL,
+  limit: 500,
+  period: BudgetPeriod.enum.monthly,
+  targetId: 'cat-food',
+  nodeName: 'Food',
+  nodeNames: null,
+  nodeParentId: null,
+  parentName: null,
+  parentNames: null,
+  ...overrides,
+});
+
 describe('listBudgets', () => {
   it('delegates to the repo, localizing the raw name+names row for the locale', async () => {
-    const row: BudgetViewInput = {
-      id: 'budget-1',
-      currency: CurrencyCode.enum.BRL,
-      limit: 500,
-      period: BudgetPeriod.enum.monthly,
-      nodeName: 'Food',
-      nodeNames: { pt: 'Comida' },
-      nodeParentId: null,
-      parentName: null,
-      parentNames: null,
-    };
+    const row = budgetViewRow({ nodeNames: { pt: 'Comida' } });
     const deps = makeDeps({
       budgets: { list: async () => [row] } as unknown as Deps['budgets'],
       locale: async () => Locale.enum.pt,
@@ -341,27 +345,24 @@ describe('listBudgets', () => {
 });
 
 describe('getBudgetStatus', () => {
-  it('converts month/year to the [from, to) range status is queried with, and groups the result', async () => {
-    const row: BudgetStatusInput = {
-      id: 'budget-1',
+  it('converts month/year to the [from, to) range for spendByCategory, and correlates the result', async () => {
+    const row = budgetViewRow();
+    const spend: CategorySpend = {
       currency: CurrencyCode.enum.BRL,
-      limit: 500,
-      period: BudgetPeriod.enum.monthly,
-      nodeName: 'Food',
-      nodeNames: null,
-      nodeParentId: null,
-      parentName: null,
-      parentNames: null,
-      spent: 200,
+      categoryId: 'cat-food',
+      subCategoryId: null,
+      effective: 200,
+      pending: 0,
     };
     let calledWith: [string, string] | undefined;
     const deps = makeDeps({
-      budgets: {
-        status: async (from: string, to: string) => {
+      budgets: { list: async () => [row] } as unknown as Deps['budgets'],
+      transactions: {
+        spendByCategory: async (from: string, to: string) => {
           calledWith = [from, to];
-          return [row];
+          return [spend];
         },
-      } as unknown as Deps['budgets'],
+      } as unknown as Deps['transactions'],
     });
 
     const result = await getBudgetStatus(deps, { month: 7, year: 2026 });
@@ -379,9 +380,10 @@ describe('getBudgetStatus', () => {
               limit: 500,
               period: BudgetPeriod.enum.monthly,
               subCategory: undefined,
-              spent: 200,
+              effective: { amount: 200, pct: 0.4 },
+              committed: { amount: 200, pct: 0.4 },
+              pending: { amount: 0, pct: 0 },
               remaining: 300,
-              pct: 0.4,
             },
           ],
         },
@@ -390,20 +392,10 @@ describe('getBudgetStatus', () => {
   });
 
   it("localizes the category name via the row's names JSON for the resolved locale", async () => {
-    const row: BudgetStatusInput = {
-      id: 'budget-1',
-      currency: CurrencyCode.enum.BRL,
-      limit: 500,
-      period: BudgetPeriod.enum.monthly,
-      nodeName: 'Food',
-      nodeNames: { pt: 'Comida' },
-      nodeParentId: null,
-      parentName: null,
-      parentNames: null,
-      spent: 200,
-    };
+    const row = budgetViewRow({ nodeNames: { pt: 'Comida' } });
     const deps = makeDeps({
-      budgets: { status: async () => [row] } as unknown as Deps['budgets'],
+      budgets: { list: async () => [row] } as unknown as Deps['budgets'],
+      transactions: { spendByCategory: async () => [] } as unknown as Deps['transactions'],
       locale: async () => Locale.enum.pt,
     });
     const result = await getBudgetStatus(deps, { month: 7, year: 2026 });
@@ -411,7 +403,10 @@ describe('getBudgetStatus', () => {
   });
 
   it('returns an empty categories array when there are no budgets', async () => {
-    const deps = makeDeps({ budgets: { status: async () => [] } as unknown as Deps['budgets'] });
+    const deps = makeDeps({
+      budgets: { list: async () => [] } as unknown as Deps['budgets'],
+      transactions: { spendByCategory: async () => [] } as unknown as Deps['transactions'],
+    });
     const result = await getBudgetStatus(deps, { month: 1, year: 2026 });
     expect(result).toEqual({ period: { month: 1, year: 2026 }, categories: [] });
   });

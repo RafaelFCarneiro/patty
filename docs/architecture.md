@@ -37,6 +37,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 4. Adaptation boundaries: adapters are pure translators for all boundary crossings, not only db. They convert `wire/in -> model`, `model -> wire/out`, and `model <-> wire/db`.
 5. Persistence adaptation: controllers hand repos **domain drafts** (models — e.g. `TransactionDraft` with nested `classification`); `diplomat/db` may use adapters internally to flatten model→db and decode db→model. Controllers never build db-wire shapes and never call adapters.
 6. Edge flow contract: `diplomat/http`, `diplomat/mcp`, and other diplomats adapt external payloads with wire schemas + adapters before calling controllers, then adapt controller results back to wire/out.
+7. **Read-side cross-aggregate correlation lives in controllers, not repos (ADR-028).** A repo queries only its own aggregate's table, including aggregations over that aggregate's own dimensions (ADR-011 still governs how the SQL itself is composed) — it never `JOIN`s another aggregate's table to correlate or measure it. A repo may still `LEFT JOIN` a reference table purely to fetch a label (e.g. a category's `name`/`names` for display) — the test is whether the repo is encoding another aggregate's business rule or matching two aggregates' rows (governed, move to the controller) versus merely resolving a foreign key's display label (acceptable). When two aggregates' data must be correlated, each repo returns its own read and the **controller** fetches both, handing them to **`logic/`** to correlate and shape the response — the matching rule is pure, unit-testable domain code, not SQL. Transaction "what counts" predicates (effective/pending/committed/expense/non-transfer) are single-sourced as named composable fragments (`diplomat/db/queries/txPredicates.ts`) rather than re-authored as raw SQL per repo. **Query-composition helpers live in `diplomat/db/queries/`** (`txPredicates.ts`, `filters.ts`, `transactionSelect.ts`, `aggregateWhitelist.ts`, `fts.ts`) — the one place to audit what SQL-shaping machinery exists outside `repos/`'s own per-aggregate queries, distinct from `diplomat/db`'s infra plumbing (`driver.ts`, `effects.ts`, `schema.ts`, …). This groups the *shared* composition helpers; it does not by itself capture every raw join/WHERE still authored inline inside a `repos/*.ts` file — auditing that inline SQL is a separate, ongoing exercise.
 
 ### Dependency direction (enforced)
 
@@ -221,24 +222,33 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     `expense` or `both`; a pure `income`-kind target is rejected, `budgetErrors.notExpenseCategory`)
     — a budget caps spending. Each period is measured independently; there is no unused-budget
     carryover. `create_budget`/`update_budget`/`delete_budget`/`list_budgets` (phase 1) manage the
-    limits themselves. **The measurement invariant (phase 2, `get_budget_status(month, year)`):**
-    for a budget targeting node `T`, `spent` sums `amount` over transactions that are `status =
-    'effective'`, `type = 'expense'`, `currency = budget.currency`, dated in the month, and
-    either `category_id = T` (`T` a top-level category — this is what rolls up sub-category spend
-    for free, since a sub-category transaction's `category_id` is always its parent's) or
-    `subcategory_id = T` (`T` a sub-category — its own spend alone). Effective-only reuses the
-    invariant `aggregate_spending`/`get_spending_summary` already filter on; **`type = 'expense'`,
-    not merely `!= 'transfer'`, is budgets' own addition** — a `both`-kind category is a legitimate
-    target (only pure `income` is rejected, above), and unlike `aggregate_spending`/
-    `get_spending_summary` (which keep `type` as an explicit output dimension their callers/shaping
-    code separates), `spent` here is one collapsed scalar with no such dimension, so an income
-    transaction booked to a `both`-kind category must be excluded at the filter itself or it would
-    inflate a spending cap. A sub-category transaction counts toward both its own budget and its
-    parent's, when both exist.
-    `remaining` (limit − spent) and `pct` (spent / limit) can go negative / exceed 1 — over-budget
-    is reported, never an error. The response groups every budget by its top-level category name
-    (per-currency and per-sub-category lines read as one coherent unit; still no cross-currency
-    total — that needs FX, the deferred PLAN open question). **The read surface (`list_budgets`,
+    limits themselves. **The measurement invariant (phase 2, `get_budget_status(month, year)`,
+    revised by Feature Design 020 from effective-only to effective+committed, and by ADR-028 from a
+    fused repo join to controller-orchestrated correlation):** `transactionsRepo.spendByCategory`
+    owns one aggregation over **its own** dimensions — `type = 'expense'`, dated in the month, split
+    by `currency`/`category_id`/`subcategory_id`, with two conditional sums per row: **`effective`**
+    (`status = 'effective'`, cleared spend) and **`pending`** (`status = 'pending'`) — one query, one
+    WHERE, so the two stay consistent by construction. It knows nothing of budgets. `getBudgetStatus`
+    (`controllers/budgets.ts`) fetches this alongside `budgetsRepo.list()` and hands both to
+    `logic/budget.ts`, which does the actual correlation — the `budgetTargetMatch` rule, now pure
+    code: a budget targeting top-level node `T` sums every spend row whose `category_id = T` (this is
+    what rolls up sub-category spend for free, since a sub-category transaction's `category_id` is
+    always its parent's); a budget targeting sub-category `T` sums only rows whose
+    `subcategory_id = T`. `committed` (effective + pending, the earmark-aware measure) and `pending`
+    (committed − effective, surfaced for convenience) are then derived per budget, each measure
+    carrying its own `amount` and `pct` (`amount / limit`). **`type = 'expense'`, not merely
+    `!= 'transfer'`, is budgets' own addition** — a `both`-kind category is a legitimate target (only
+    pure `income` is rejected, above), and unlike `aggregate_spending`/`get_spending_summary` (which
+    keep `type` as an explicit output dimension their callers/shaping code separates), each measure
+    here is one collapsed scalar with no such dimension, so an income transaction booked to a
+    `both`-kind category must be excluded at the filter itself or it would inflate a spending cap. A
+    sub-category transaction counts toward both its own budget and its parent's, when both exist.
+    `remaining` (limit − committed.amount, the earmark-aware headroom) and each measure's `pct` can
+    go negative / exceed 1 — over-budget is reported, never an error; effective headroom is
+    trivially `limit − effective.amount` for a caller that wants it. The response groups every
+    budget by its top-level category name (per-currency and per-sub-category lines read as one
+    coherent unit; still no cross-currency total — that needs FX, the deferred PLAN open question).
+    **The read surface (`list_budgets`,
     `get_budget_status`) honors invariant 13's locale resolution**: the repo
     (`diplomat/db/repos/budgets.ts`) selects the budgeted node's (and, for a sub-category target,
     its parent's) raw name plus `names` JSON only — no locale/display decision — and
@@ -354,3 +364,4 @@ shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-0
 - ADR-025: diplomat edge organization — MCP tools/resources/prompts and HTTP routes in per-domain modules mirroring `controllers/`; entrypoints only aggregate
 - ADR-026: multi-currency valuation — crypto (USDC, BTC) first-class, agent-refreshed `currency_rates` table, `settings.base_currency`, read-time conversion on `get_account_balances`; relaxes no-implicit-conversion for **valuation** only (**proposed**)
 - ADR-027: UI app shell — shared shell hosting dashboard **content fragments**; `source: inline|file` discriminator (defaults are git-versioned files, customs stay inline, `save_dashboard` always inline); entity-tagged **SSE** live-update; same Fastify, no build (extends/revises ADR-013; see `docs/ui.md`)
+- ADR-028: read-side cross-aggregate correlation lives in controllers, not repos — refines ADR-011 (aggregation stays in the repo; correlating two aggregates does not); transaction "what counts" predicates single-sourced (`txPredicates`); first applied to `get_budget_status`, `find_correlations`' `budget_fit` migrates next (phase 3, follow-up)

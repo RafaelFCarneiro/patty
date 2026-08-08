@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toMatchQuery } from '../../../../src/diplomat/db/fts.js';
+import { toMatchQuery } from '../../../../../src/diplomat/db/queries/fts.js';
 
 describe('toMatchQuery', () => {
   it('quotes a single token', () => {

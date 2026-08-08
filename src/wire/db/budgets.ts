@@ -11,12 +11,14 @@ export type BudgetRow = typeof budgets.$inferSelect;
  *  hand schema like `SubCategoryRowSchema` (`wire/db/categories.ts`) until the raw reads are
  *  unified under drizzle-orm/zod. `node_parent_id` null means the budgeted node is itself a
  *  top-level category; set means it's a sub-category, with `parent_name`/`parent_names`
- *  describing its parent. */
+ *  describing its parent. `target_id` (`node.id`, == `b.category_id`) is for `logic/budget.ts` to
+ *  match this row against spend itself (ADR-028). */
 const budgetTargetRowShape = {
   id: z.string(),
   currency: CurrencyCode,
   limit_amount: z.number(),
   period: BudgetPeriod,
+  target_id: z.string(),
   node_name: z.string(),
   node_names: z.string().nullable().default(null),
   node_parent_id: z.string().nullable(),
@@ -26,6 +28,7 @@ const budgetTargetRowShape = {
 
 const shapeTargetRow = <T extends Record<string, unknown>>({
   limit_amount,
+  target_id,
   node_name,
   node_names,
   node_parent_id,
@@ -34,6 +37,7 @@ const shapeTargetRow = <T extends Record<string, unknown>>({
   ...rest
 }: T & {
   limit_amount: number;
+  target_id: string;
   node_name: string;
   node_names: string | null;
   node_parent_id: string | null;
@@ -42,6 +46,7 @@ const shapeTargetRow = <T extends Record<string, unknown>>({
 }) => ({
   ...rest,
   limit: limit_amount,
+  targetId: target_id,
   nodeName: node_name,
   nodeNames: parseCategoryNames(node_names),
   nodeParentId: node_parent_id,
@@ -51,8 +56,3 @@ const shapeTargetRow = <T extends Record<string, unknown>>({
 
 export const BudgetViewRowSchema = z.object({ ...budgetTargetRowShape, version: z.number() }).transform(shapeTargetRow);
 export type BudgetViewRow = z.output<typeof BudgetViewRowSchema>;
-
-// Same target-joined shape as `BudgetViewRowSchema`, plus the period's measured spend — no
-// `version`, a status read never guards a write.
-export const BudgetStatusRowSchema = z.object({ ...budgetTargetRowShape, spent: z.number() }).transform(shapeTargetRow);
-export type BudgetStatusRow = z.output<typeof BudgetStatusRowSchema>;

@@ -143,11 +143,12 @@ export const listBudgets = async (deps: Deps): Promise<BudgetView[]> =>
   );
 
 /** No write, so a plain async function rather than `ResultAsync`, mirroring `getSpendingSummary`
- *  (`controllers/summary.ts`). */
+ *  (`controllers/summary.ts`). Correlates `budgets`/`transactions`' own reads in `logic/budget.ts`
+ *  rather than a repo join (ADR-028). */
 export const getBudgetStatus = async (deps: Deps, period: Period): Promise<BudgetStatusOut> => {
   const { from, to } = periodRange(period);
-  return R.pipe(await Promise.all([deps.budgets.status(from, to), deps.locale()] as const), ([rows, locale]) => ({
-    period,
-    categories: groupStatusByCategory(rows, locale),
-  }));
+  return R.pipe(
+    await Promise.all([deps.budgets.list(), deps.transactions.spendByCategory(from, to), deps.locale()] as const),
+    ([budgets, spend, locale]) => ({ period, categories: groupStatusByCategory(budgets, spend, locale) }),
+  );
 };
