@@ -253,10 +253,26 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     (`diplomat/db/repos/budgets.ts`) selects the budgeted node's (and, for a sub-category target,
     its parent's) raw name plus `names` JSON only — no locale/display decision — and
     `logic/budget.ts` resolves the display name from raw name + `names` + `deps.locale()`, over
-    the same repo join shape (`budgetTargetMatch`) `find_correlations`'s `budget_fit` analysis
-    already reads. `create_budget`/`update_budget` resolve the same way for a top-level-category
-    target; a sub-category target still reports its parent's raw, unlocalized name (tracked in
-    issue #169 — `SubCategory` carries no `parentNames`).
+    the same `budgetsRepo.list()` read `find_correlations`'s `budget_fit` analysis now reads too
+    (ADR-028 phase 3, below). `create_budget`/`update_budget` resolve the same way for a
+    top-level-category target; a sub-category target still reports its parent's raw, unlocalized
+    name (tracked in issue #169 — `SubCategory` carries no `parentNames`).
+
+22. **`find_correlations`'s `budget_fit` analysis is controller-orchestrated, same as
+    `get_budget_status` (ADR-028 phase 3, completes the migration).** `correlationsRepo` no longer
+    joins `budgets`; the `budgetTargetMatch`/`BUDGET_FIT_SELECT` fused-join query is retired
+    entirely. `transactionsRepo.spendByCategoryWindowed` extends the `spendByCategory` pattern
+    (invariant 21) with a **baseline/current** window split instead of an **effective/pending**
+    status split — same own dimensions (currency, `category_id`, `subcategory_id`), same
+    `txPredicates`-composed WHERE (`expense` + `effective` only — `budget_fit` measures cleared
+    spend, not pending). The `findCorrelations` controller (`controllers/correlations.ts`) fetches
+    `budgetsRepo.list()` and this windowed spend in parallel and hands both to
+    `logic/correlations.ts`'s `shapeBudgetFitLines`, which reuses `logic/budget.ts`'s
+    `isSubCategoryRow`/`resolveTargetNames`/`matchesTarget` (exported for this one reason) rather
+    than re-deriving the same top-level-rollup/sub-category-match rule a second time — one matching
+    rule, two consumers. The `budgeted`/`unbudgeted` response contract is unchanged; `unbudgeted`
+    still reuses `correlationsRepo.spendingShifts` (a category-only, budget-unaware read — out of
+    ADR-028's scope).
 
 ## Tool surface
 
@@ -364,4 +380,4 @@ shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-0
 - ADR-025: diplomat edge organization — MCP tools/resources/prompts and HTTP routes in per-domain modules mirroring `controllers/`; entrypoints only aggregate
 - ADR-026: multi-currency valuation — crypto (USDC, BTC) first-class, agent-refreshed `currency_rates` table, `settings.base_currency`, read-time conversion on `get_account_balances`; relaxes no-implicit-conversion for **valuation** only (**proposed**)
 - ADR-027: UI app shell — shared shell hosting dashboard **content fragments**; `source: inline|file` discriminator (defaults are git-versioned files, customs stay inline, `save_dashboard` always inline); entity-tagged **SSE** live-update; same Fastify, no build (extends/revises ADR-013; see `docs/ui.md`)
-- ADR-028: read-side cross-aggregate correlation lives in controllers, not repos — refines ADR-011 (aggregation stays in the repo; correlating two aggregates does not); transaction "what counts" predicates single-sourced (`txPredicates`); first applied to `get_budget_status`, `find_correlations`' `budget_fit` migrates next (phase 3, follow-up)
+- ADR-028: read-side cross-aggregate correlation lives in controllers, not repos — refines ADR-011 (aggregation stays in the repo; correlating two aggregates does not); transaction "what counts" predicates single-sourced (`txPredicates`); applied to `get_budget_status` (phase 2) and `find_correlations`' `budget_fit` (phase 3, complete) — `budgetTargetMatch` fully retired

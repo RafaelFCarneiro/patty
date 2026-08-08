@@ -4,9 +4,8 @@ import type { ValidationError } from './error.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
 
-/** Analysis modes for `find_correlations` (Feature Design 016) — one mode added per PR (A:
- *  `spending_shifts`, D: `budget_fit`, C: `merchant_concentration`, B: `recurring_candidates`).
- *  Whitelisted enum, mirroring `aggregate_spending`'s `groupBy` (ADR-011). */
+/** Analysis modes for `find_correlations`. Whitelisted enum, mirroring `aggregate_spending`'s
+ *  `groupBy` (ADR-011). */
 export const FindCorrelationsAnalysis = z.enum([
   'spending_shifts',
   'budget_fit',
@@ -193,21 +192,6 @@ export const BudgetFitLineSchema = z.object({
   suggestedLimit: z.number().describe('A more realistic limit given actual spend: baseline plus a small margin'),
 });
 export type BudgetFitLine = z.infer<typeof BudgetFitLineSchema>;
-
-/** What `logic/correlations.ts`'s `shapeBudgetFitLines` needs per row — same rationale as
- *  `SpendingShiftInput` above; structurally matches `BudgetFitDbRow` (`wire/db/correlations.ts`). */
-export type BudgetFitInput = {
-  id: string;
-  currency: CurrencyCode;
-  limit: number;
-  nodeName: string;
-  nodeNames: Record<string, string> | null;
-  nodeParentId: string | null;
-  parentName: string | null;
-  parentNames: Record<string, string> | null;
-  current: number;
-  baselineTotal: number;
-};
 
 export const UnbudgetedSpendSchema = z.object({
   category: z.string().min(1).describe('Top-level category name with material spend but no budget at all'),

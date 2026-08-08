@@ -109,3 +109,18 @@ export const CategorySpendRowSchema = z
     categoryId: category_id,
     subCategoryId: subcategory_id,
   }));
+
+export const CategoryWindowedSpendRowSchema = z
+  .object({
+    currency: CurrencyCode,
+    category_id: z.string(),
+    subcategory_id: z.string().nullable(),
+    current: z.number(),
+    baseline_total: z.number(),
+  })
+  .transform(({ category_id, subcategory_id, baseline_total, ...rest }) => ({
+    ...rest,
+    categoryId: category_id,
+    subCategoryId: subcategory_id,
+    baselineTotal: baseline_total,
+  }));

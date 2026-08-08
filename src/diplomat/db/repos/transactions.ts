@@ -6,6 +6,7 @@ import { SortDirection, type CursorKey } from '../../../models/page.js';
 import {
   TransactionType,
   type CategorySpend,
+  type CategoryWindowedSpend,
   type ResolvedSearchRefs,
   type SearchTransactions,
   type RawTransactionView,
@@ -13,7 +14,12 @@ import {
 } from '../../../models/transaction.js';
 import type { SummaryRow } from '../../../models/summary.js';
 import { AggregateDbRowSchema, type AggregateDbRow } from '../../../wire/db/aggregate.js';
-import { CategorySpendRowSchema, ORDER_BY_COLUMN, SummaryRowSchema } from '../../../wire/db/transactions.js';
+import {
+  CategorySpendRowSchema,
+  CategoryWindowedSpendRowSchema,
+  ORDER_BY_COLUMN,
+  SummaryRowSchema,
+} from '../../../wire/db/transactions.js';
 import { GROUP_BY_MAP, METRIC_MAP } from '../queries/aggregateWhitelist.js';
 import type { Db } from '../driver.js';
 import { buildCommonWhere, buildSearchWhere, toSearchFilters, type AggregateFilters } from '../queries/filters.js';
@@ -100,6 +106,15 @@ export type TransactionsRepo = {
    *  sub-category), split into effective/pending sums — no knowledge of budgets or any other
    *  correlating aggregate (ADR-028). */
   spendByCategory: (from: string, to: string) => Promise<CategorySpend[]>;
+  /** Effective, expense-only spend over `[baselineFrom, currentTo)`, grouped by this repo's own
+   *  dimensions (currency, category, sub-category) like `spendByCategory`, but split into a
+   *  baseline/current window pair (at `currentFrom`) instead of effective/pending. No knowledge
+   *  of budgets (ADR-028). */
+  spendByCategoryWindowed: (
+    baselineFrom: string,
+    currentFrom: string,
+    currentTo: string,
+  ) => Promise<CategoryWindowedSpend[]>;
 };
 
 export const transactionsRepo = (db: Db): TransactionsRepo => ({
@@ -224,6 +239,22 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
       GROUP BY t.currency, t.category_id, t.subcategory_id
     `);
     return rows.map((r) => CategorySpendRowSchema.parse(r));
+  },
+
+  // Excludes uncategorized spend, same rationale as spendByCategory.
+  spendByCategoryWindowed: async (baselineFrom, currentFrom, currentTo) => {
+    const rows = await db.all<Record<string, unknown>>(sql`
+      SELECT t.currency, t.category_id, t.subcategory_id,
+             SUM(CASE WHEN t.date >= ${currentFrom} THEN t.amount ELSE 0 END) AS current,
+             SUM(CASE WHEN t.date < ${currentFrom} THEN t.amount ELSE 0 END) AS baseline_total
+      FROM transactions t
+      WHERE ${txPredicates.expense()}
+        AND ${txPredicates.effective()}
+        AND t.date >= ${baselineFrom} AND t.date < ${currentTo}
+        AND t.category_id IS NOT NULL
+      GROUP BY t.currency, t.category_id, t.subcategory_id
+    `);
+    return rows.map((r) => CategoryWindowedSpendRowSchema.parse(r));
   },
 });
 
