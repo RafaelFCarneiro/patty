@@ -108,9 +108,8 @@ export type TransactionsRepo = {
   spendByCategory: (from: string, to: string) => Promise<CategorySpend[]>;
   /** Effective, expense-only spend over `[baselineFrom, currentTo)`, grouped by this repo's own
    *  dimensions (currency, category, sub-category) like `spendByCategory`, but split into a
-   *  baseline/current window pair (at `currentFrom`) instead of effective/pending — what
-   *  `find_correlations`'s `budget_fit` analysis correlates against budgets in
-   *  `logic/correlations.ts` (ADR-028 phase 3). No knowledge of budgets. */
+   *  baseline/current window pair (at `currentFrom`) instead of effective/pending. No knowledge
+   *  of budgets (ADR-028). */
   spendByCategoryWindowed: (
     baselineFrom: string,
     currentFrom: string,
@@ -242,9 +241,7 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
     return rows.map((r) => CategorySpendRowSchema.parse(r));
   },
 
-  // Effective-only (unlike spendByCategory's effective/pending split) — budget_fit measures
-  // cleared spend, mirroring the fused join it replaces. Excludes uncategorized spend, same
-  // rationale as spendByCategory.
+  // Excludes uncategorized spend, same rationale as spendByCategory.
   spendByCategoryWindowed: async (baselineFrom, currentFrom, currentTo) => {
     const rows = await db.all<Record<string, unknown>>(sql`
       SELECT t.currency, t.category_id, t.subcategory_id,

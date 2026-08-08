@@ -47,14 +47,10 @@ export const toView = (
   subCategory: target.subCategory,
 });
 
-/** Whether a budget/correlation target row targets a sub-category rather than a top-level
- *  category — exported so `logic/correlations.ts`'s `budget_fit` correlation (ADR-028 phase 3)
- *  shares this one rule instead of re-deriving it. */
 export const isSubCategoryRow = (row: BudgetTargetRow): boolean => row.nodeParentId !== null;
 
 /** `parentName!` is safe: a category's `parent_id` is a self-referencing FK `delete_category`
- *  never lets dangle, so the `LEFT JOIN parent` always matches when `nodeParentId` is set.
- *  Exported for the same reuse reason as `isSubCategoryRow`. */
+ *  never lets dangle, so the `LEFT JOIN parent` always matches when `nodeParentId` is set. */
 export const resolveTargetNames = (
   row: BudgetTargetRow,
   locale: Locale,
@@ -86,15 +82,12 @@ export const rowsToViews = (rows: readonly BudgetViewInput[], locale: Locale): B
     R.sortBy([(v) => v.category, 'asc'], [(v) => v.subCategory ?? '', 'asc']),
   );
 
-/** A spend row's own category-node identity — the minimal shape `matchesTarget` needs, satisfied
- *  structurally by both `CategorySpend` and `CategoryWindowedSpend` (`models/transaction.ts`)
- *  regardless of which value fields (effective/pending vs current/baselineTotal) they carry. */
+// The minimal shape both CategorySpend and CategoryWindowedSpend satisfy structurally.
 type SpendCategoryKey = { categoryId: string; subCategoryId: string | null };
 
 /** A top-level target matches every row sharing its `categoryId` — a sub-category transaction's
  *  `category_id` is always its parent's (invariant 7), so this rolls up sub-category spend for
- *  free; a sub-category target matches only rows sharing its own id as `subCategoryId`. Exported
- *  so `logic/correlations.ts`'s `budget_fit` correlation (ADR-028 phase 3) shares this one rule. */
+ *  free; a sub-category target matches only rows sharing its own id as `subCategoryId`. */
 export const matchesTarget = (spend: SpendCategoryKey, isSubCategory: boolean, targetId: string): boolean =>
   isSubCategory ? spend.subCategoryId === targetId : spend.categoryId === targetId;
 

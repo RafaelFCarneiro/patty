@@ -77,11 +77,6 @@ const verdictFor = (baseline: number, limit: number, slackPct: number, overPct: 
   return BudgetFitVerdict.enum.realistic;
 };
 
-/** Correlates one budget to its own windowed spend (ADR-028 phase 3 moved this out of
- *  `correlationsRepo` into pure logic, reusing `logic/budget.ts`'s `matchesTarget`/
- *  `isSubCategoryRow` — the same top-level-rolls-up-sub-category rule `groupStatusByCategory`
- *  applies to `get_budget_status`) — sums every spend row whose `currency` matches the budget's
- *  own and whose category node matches its target. */
 const sumWindowedSpend = (
   spend: readonly CategoryWindowedSpend[],
   budget: BudgetViewInput,
