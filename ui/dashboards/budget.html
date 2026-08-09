@@ -687,6 +687,7 @@ var TRANSLATIONS = {
         kpi_planned_balance: "Saldo Planificado (Ingreso - Presupuesto)",
         kpi_effective: "Efectuado:",
         kpi_pending: "Pendiente:",
+        kpi_remaining: "Restante:",
         kpi_committed: "Comprometido:",
         kpi_usage: "Uso:",
         kpi_balance_desc: "Resultado mensual estimado según presupuesto activo",
@@ -695,6 +696,10 @@ var TRANSLATIONS = {
         panel_income_cat_title: "Ingresos por Categoría",
         panel_expense_budget_title: "Gastos vs Presupuesto por Categoría",
         cat_no_limit: "Sin Límite",
+        week: "Semana",
+        day_label: "Día",
+        to_range: "a",
+        cumulative: "Acumulado",
         col_date: "Fecha",
         col_description: "Descripción",
         col_account: "Cuenta",
@@ -723,6 +728,19 @@ var TRANSLATIONS = {
 var compareChart = null;
 var trendChart = null;
 var currentLocale = 'en';
+
+// Sync the reference selectors to ?month&year query params (deep links) or today's date, instead
+// of always loading the HTML's static placeholder selection — mirrors pending.html's pattern.
+(function initDefaultPeriod() {
+    var params = new URLSearchParams(window.location.search);
+    var now = new Date();
+    var defaultMonth = parseInt(params.get('month'), 10) || (now.getMonth() + 1);
+    var defaultYear = parseInt(params.get('year'), 10) || now.getFullYear();
+    var monthSelect = document.getElementById('month-select');
+    var yearSelect = document.getElementById('year-select');
+    if (monthSelect) monthSelect.value = String(defaultMonth);
+    if (yearSelect) yearSelect.value = String(defaultYear);
+})();
 
 function t(key) {
     const dict = TRANSLATIONS[currentLocale] || TRANSLATIONS['en'];
@@ -772,21 +790,34 @@ function translatePage() {
         });
     }
 }
-function toBaseVal(val, currency) {
-    var amt = Number(val) || 0;
-    return (currency || 'BRL') === 'USD' ? amt * 5.5 : amt;
-}
-
 function addMultiCurrency(map, currency, amount) {
     var c = currency || 'BRL';
     var a = Number(amount) || 0;
     map[c] = (map[c] || 0) + a;
 }
 
-function sumMultiCurrency(map) {
+// Multi-currency amounts are never converted or summed together (docs/architecture.md: summaries
+// group per currency, never convert implicitly) — a single number (a KPI, a percentage, a chart
+// value) can only ever read ONE real currency's own amount, never a blended/converted total.
+function primaryCurrencyOf(map) {
+    var keys = Object.keys(map || {}).filter(function(c) { return map[c]; });
+    if (keys.length === 0) keys = Object.keys(map || {});
+    if (keys.indexOf('BRL') !== -1) return 'BRL';
+    keys.sort();
+    return keys[0] || 'BRL';
+}
+
+function valueIn(map, currency) {
+    return (map && map[currency]) || 0;
+}
+
+// Row/category display ORDER only, never a number shown to the user — a plain sum of raw units
+// across currencies (deliberately not a currency conversion) so rows with more overall activity
+// sort first regardless of currency mix. See primaryCurrencyOf/valueIn for anything displayed.
+function magnitudeOf(map) {
     var sum = 0;
     for (var c in map) {
-        sum += toBaseVal(map[c], c);
+        sum += Number(map[c]) || 0;
     }
     return sum;
 }
@@ -947,7 +978,7 @@ async function loadDashboardData() {
             addMultiCurrency(totalIncome, c, incomeTotalPend[c]);
         }
 
-        // Process Budget Status from MCP for all currencies
+        // Process Budget Status (fetched via REST, GET /api/budgets/status) for all currencies
         const totalBudgetLimit = {};
         const totalBudgetCommitted = {};
         const totalBudgetEffective = {};
@@ -1033,13 +1064,16 @@ async function loadDashboardData() {
 
         document.getElementById('kpi-budget-limit-val').textContent = formatMultiCurrency(totalBudgetLimit, ' / ');
         document.getElementById('kpi-budget-comm-val').textContent = formatMultiCurrency(totalBudgetCommitted);
-        
-        const baseLimit = sumMultiCurrency(totalBudgetLimit);
-        const baseCommitted = sumMultiCurrency(totalBudgetCommitted);
-        const overallBudgetPct = baseLimit > 0 ? (baseCommitted / baseLimit) : 0;
+
+        // "Usage" is a single percentage, so it can only read one real currency's own limit/committed
+        // — never a blended total across currencies.
+        const budgetCurrency = primaryCurrencyOf(totalBudgetLimit);
+        const budgetLimitInCurrency = valueIn(totalBudgetLimit, budgetCurrency);
+        const budgetCommittedInCurrency = valueIn(totalBudgetCommitted, budgetCurrency);
+        const overallBudgetPct = budgetLimitInCurrency > 0 ? (budgetCommittedInCurrency / budgetLimitInCurrency) : 0;
         document.getElementById('kpi-budget-pct-val').textContent = formatPct(overallBudgetPct);
 
-        // Planned Balance (Income map - Limit map)
+        // Planned Balance (Income map - Limit map), kept per-currency — never combined into one total.
         const plannedBalance = {};
         const allCurrs = new Set([...Object.keys(totalIncome), ...Object.keys(totalBudgetLimit)]);
         allCurrs.forEach(c => {
@@ -1050,8 +1084,8 @@ async function loadDashboardData() {
         const balanceValEl = document.getElementById('kpi-balance-val');
         balanceValEl.textContent = formatMultiCurrency(plannedBalance, ' / ');
 
-        const basePlannedBalance = sumMultiCurrency(plannedBalance);
-        if (basePlannedBalance < 0) {
+        const primaryBalanceCurrency = primaryCurrencyOf(plannedBalance);
+        if (valueIn(plannedBalance, primaryBalanceCurrency) < 0) {
             balanceCard.classList.add('negative');
         } else {
             balanceCard.classList.remove('negative');
@@ -1066,13 +1100,16 @@ async function loadDashboardData() {
         // Render Expense vs Budget Categories List
         renderExpenseBudgetCategories(budgetCategoryMap);
 
-        // Render Charts (pass accumulated base BRL values)
+        // Render Charts — Chart.js needs single numeric series, so pick ONE real currency (never a
+        // converted/blended total; the KPI cards above already show every currency correctly).
+        const compareChartCurrency = primaryCurrencyOf(Object.assign({}, totalIncome, totalBudgetLimit));
         renderMonthlyCompareChart({
-            effIncome: sumMultiCurrency(incomeTotalEff),
-            pendIncome: sumMultiCurrency(incomeTotalPend),
-            limitExpense: baseLimit,
-            effExpense: sumMultiCurrency(totalBudgetEffective),
-            pendExpense: sumMultiCurrency(totalBudgetPending)
+            currency: compareChartCurrency,
+            effIncome: valueIn(incomeTotalEff, compareChartCurrency),
+            pendIncome: valueIn(incomeTotalPend, compareChartCurrency),
+            limitExpense: valueIn(totalBudgetLimit, compareChartCurrency),
+            effExpense: valueIn(totalBudgetEffective, compareChartCurrency),
+            pendExpense: valueIn(totalBudgetPending, compareChartCurrency)
         });
         renderTrendChart(year, month);
 
@@ -1093,7 +1130,7 @@ async function loadDashboardData() {
 
 function renderIncomeCategories(incomeCats, totalIncome) {
     const listEl = document.getElementById('income-categories-list');
-    const sortedCatNames = Object.keys(incomeCats).sort((a, b) => sumMultiCurrency(incomeCats[b].total) - sumMultiCurrency(incomeCats[a].total));
+    const sortedCatNames = Object.keys(incomeCats).sort((a, b) => magnitudeOf(incomeCats[b].total) - magnitudeOf(incomeCats[a].total));
 
     if (sortedCatNames.length === 0) {
         listEl.innerHTML = `
@@ -1107,17 +1144,21 @@ function renderIncomeCategories(incomeCats, totalIncome) {
     let html = '';
     sortedCatNames.forEach((catName, idx) => {
         const data = incomeCats[catName];
-        const baseTotal = sumMultiCurrency(data.total);
-        const baseTotalIncome = sumMultiCurrency(totalIncome);
-        const pct = baseTotalIncome > 0 ? (baseTotal / baseTotalIncome) * 100 : 0;
-        const effPct = baseTotal > 0 ? (sumMultiCurrency(data.effective) / baseTotal) * 100 : 0;
-        const pendPct = baseTotal > 0 ? (sumMultiCurrency(data.pending) / baseTotal) * 100 : 0;
+        // A displayed percentage can only compare amounts in the same currency — this category's
+        // own share of that same currency's total income, never a blend across currencies.
+        const rowCurrency = primaryCurrencyOf(data.total);
+        const rowTotal = valueIn(data.total, rowCurrency);
+        const rowEffective = valueIn(data.effective, rowCurrency);
+        const rowPending = valueIn(data.pending, rowCurrency);
+        const pct = valueIn(totalIncome, rowCurrency) > 0 ? (rowTotal / valueIn(totalIncome, rowCurrency)) * 100 : 0;
+        const effPct = rowTotal > 0 ? (rowEffective / rowTotal) * 100 : 0;
+        const pendPct = rowTotal > 0 ? (rowPending / rowTotal) * 100 : 0;
 
         const rowId = `inc-cat-${idx}`;
 
         html += `
             <div class="category-row-container" id="${rowId}">
-                <div class="category-row-header" onclick="toggleAccordion('${rowId}')">
+                <div class="category-row-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion('${rowId}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAccordion('${rowId}'); }">
                     <div class="cat-meta-info">
                         <div class="cat-name-label">
                             <i class="fa-solid fa-chevron-down"></i> ${escapeHtml(catName)}
@@ -1148,8 +1189,8 @@ function renderIncomeCategories(incomeCats, totalIncome) {
 function renderExpenseBudgetCategories(budgetCategoryMap) {
     const listEl = document.getElementById('expense-categories-list');
     const catNames = Object.keys(budgetCategoryMap).sort((a, b) => {
-        const bVal = sumMultiCurrency(budgetCategoryMap[b].committed) || sumMultiCurrency(budgetCategoryMap[b].limit);
-        const aVal = sumMultiCurrency(budgetCategoryMap[a].committed) || sumMultiCurrency(budgetCategoryMap[a].limit);
+        const bVal = magnitudeOf(budgetCategoryMap[b].committed) || magnitudeOf(budgetCategoryMap[b].limit);
+        const aVal = magnitudeOf(budgetCategoryMap[a].committed) || magnitudeOf(budgetCategoryMap[a].limit);
         return bVal - aVal;
     });
 
@@ -1165,25 +1206,29 @@ function renderExpenseBudgetCategories(budgetCategoryMap) {
     let html = '';
     catNames.forEach((catName, idx) => {
         const data = budgetCategoryMap[catName];
-        const baseLimit = sumMultiCurrency(data.limit);
-        const baseCommitted = sumMultiCurrency(data.committed);
-        const baseRemaining = sumMultiCurrency(data.remaining);
-        const isOver = baseLimit > 0 && baseCommitted > baseLimit;
-        const pctUsed = baseLimit > 0 ? (baseCommitted / baseLimit) * 100 : 0;
-        
-        const baseEffective = sumMultiCurrency(data.effective);
-        const basePending = sumMultiCurrency(data.pending);
-        
-        let effPct = baseLimit > 0 ? (baseEffective / baseLimit) * 100 : 0;
-        let pendPct = baseLimit > 0 ? (basePending / baseLimit) * 100 : 0;
-        
+        // A displayed pct/over-budget flag/progress bar can only read one real currency's own
+        // limit-vs-committed — never a blended total across currencies (formatMultiCurrency below
+        // still shows every currency correctly as text).
+        const rowCurrency = primaryCurrencyOf(Object.assign({}, data.limit, data.committed));
+        const rowLimit = valueIn(data.limit, rowCurrency);
+        const rowCommitted = valueIn(data.committed, rowCurrency);
+        const rowRemaining = valueIn(data.remaining, rowCurrency);
+        const isOver = rowLimit > 0 && rowCommitted > rowLimit;
+        const pctUsed = rowLimit > 0 ? (rowCommitted / rowLimit) * 100 : 0;
+
+        const rowEffective = valueIn(data.effective, rowCurrency);
+        const rowPending = valueIn(data.pending, rowCurrency);
+
+        let effPct = rowLimit > 0 ? (rowEffective / rowLimit) * 100 : 0;
+        let pendPct = rowLimit > 0 ? (rowPending / rowLimit) * 100 : 0;
+
         if (effPct > 100) {
             effPct = 100;
             pendPct = 0;
         } else if (effPct + pendPct > 100) {
             pendPct = 100 - effPct;
         }
-        
+
         let barClass = 'budget-ok';
         if (pctUsed > 100) barClass = 'budget-over';
         else if (pctUsed > 80) barClass = 'budget-warn';
@@ -1196,7 +1241,7 @@ function renderExpenseBudgetCategories(budgetCategoryMap) {
 
         html += `
             <div class="category-row-container ${isOver ? 'over-budget' : ''}" id="${rowId}">
-                <div class="category-row-header" onclick="toggleAccordion('${rowId}')">
+                <div class="category-row-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion('${rowId}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleAccordion('${rowId}'); }">
                     <div class="cat-meta-info">
                         <div class="cat-name-label">
                             <i class="fa-solid fa-chevron-down"></i> ${escapeHtml(catName)}
@@ -1213,7 +1258,7 @@ function renderExpenseBudgetCategories(budgetCategoryMap) {
                     <div class="cat-breakdown-text">
                         <span>${t('kpi_effective')} <strong>${formatMultiCurrency(data.effective)}</strong></span>
                         <span>${t('kpi_pending')} <strong>${formatMultiCurrency(data.pending)}</strong></span>
-                        <span>Rest: <strong style="color: ${baseRemaining < 0 ? '#f43f5e' : '#10b981'}">${formatMultiCurrency(data.remaining)}</strong></span>
+                        <span>${t('kpi_remaining')} <strong style="color: ${rowRemaining < 0 ? '#f43f5e' : '#10b981'}">${formatMultiCurrency(data.remaining)}</strong></span>
                     </div>
                 </div>
                 <div class="category-tx-details">
@@ -1271,15 +1316,18 @@ function toggleAccordion(rowId) {
     const el = document.getElementById(rowId);
     if (!el) return;
     const isOpen = el.classList.contains('open');
-    
+
     // Toggle details visibility
     const details = el.querySelector('.category-tx-details');
+    const header = el.querySelector('.category-row-header');
     if (isOpen) {
         el.classList.remove('open');
         if (details) details.style.display = 'none';
+        if (header) header.setAttribute('aria-expanded', 'false');
     } else {
         el.classList.add('open');
         if (details) details.style.display = 'block';
+        if (header) header.setAttribute('aria-expanded', 'true');
     }
 }
 
@@ -1379,24 +1427,24 @@ function renderMonthlyCompareChart(data) {
                             var v2 = (ctx.chart.data.datasets[2] && ctx.chart.data.datasets[2].data[dataIndex]) || 0;
                             
                             var separator = label.endsWith(':') ? ' ' : ': ';
-                            var individualStr = label + separator + formatCurrency(val, 'BRL');
-                            
+                            var individualStr = label + separator + formatCurrency(val, data.currency);
+
                             var accumLabel = t('cumulative') || 'Acumulado';
                             var accumSeparator = accumLabel.endsWith(':') ? ' ' : ': ';
-                            
+
                             if (datasetIndex === 0) {
                                 return individualStr;
                             } else if (datasetIndex === 1) {
                                 var cum = v0 + v1;
                                 return [
                                     individualStr,
-                                    '• ' + accumLabel + accumSeparator + formatCurrency(cum, 'BRL')
+                                    '• ' + accumLabel + accumSeparator + formatCurrency(cum, data.currency)
                                 ];
                             } else if (datasetIndex === 2) {
                                 var cum = v0 + v1 + v2;
                                 return [
                                     individualStr,
-                                    '• ' + accumLabel + accumSeparator + formatCurrency(cum, 'BRL')
+                                    '• ' + accumLabel + accumSeparator + formatCurrency(cum, data.currency)
                                 ];
                             }
                             return individualStr;
@@ -1415,7 +1463,7 @@ function renderMonthlyCompareChart(data) {
                     grid: { color: 'rgba(255, 255, 255, 0.05)' },
                     ticks: {
                         color: '#9ca3af',
-                        callback: function(val) { return formatCurrency(val, 'BRL'); }
+                        callback: function(val) { return formatCurrency(val, data.currency); }
                     }
                 }
             }
@@ -1435,25 +1483,34 @@ async function renderTrendChart(selectedYear, selectedMonth) {
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
     const numWeeks = daysInMonth > 28 ? 5 : 4;
 
-    // Fetch budget status for the selected month to get the monthly budget limit
+    // Fetch budget status for the selected month to get the monthly budget limit, per currency
     const bStatus = await fetchBudgetStatus(selectedMonth, selectedYear);
-    let totalMonthlyLimit = 0;
+    const monthlyLimitByCurrency = {};
     if (bStatus && Array.isArray(bStatus.categories)) {
         bStatus.categories.forEach(cg => {
             (cg.lines || []).forEach(l => {
-                totalMonthlyLimit += toBaseVal(l.limit, l.currency);
+                addMultiCurrency(monthlyLimitByCurrency, l.currency, Number(l.limit) || 0);
             });
         });
     }
+
+    // Fetch all transactions for the selected month
+    const txs = await fetchAllTransactionsForMonth(selectedYear, selectedMonth);
+    const monthlyIncomeByCurrency = {};
+    txs.forEach(tx => {
+        if (tx.type === 'income') addMultiCurrency(monthlyIncomeByCurrency, tx.currency, Number(tx.amount) || 0);
+    });
+
+    // A line chart needs a single numeric series, so pick ONE real currency (never a
+    // converted/blended total) — weekly figures below only include that currency's own transactions.
+    const trendCurrency = primaryCurrencyOf(Object.assign({}, monthlyLimitByCurrency, monthlyIncomeByCurrency));
+    const totalMonthlyLimit = valueIn(monthlyLimitByCurrency, trendCurrency);
 
     const labels = ["1"];
     const incomeData = [0];
     const budgetData = [totalMonthlyLimit];
     const actualExpenseData = [0];
     const balanceData = [0];
-
-    // Fetch all transactions for the selected month
-    const txs = await fetchAllTransactionsForMonth(selectedYear, selectedMonth);
 
     let accumIncome = 0;
     let accumExpense = 0;
@@ -1464,9 +1521,10 @@ async function renderTrendChart(selectedYear, selectedMonth) {
 
         labels.push(endDay.toString());
 
-        // Filter transactions for this week
+        // Filter transactions for this week, restricted to the chart's single currency
         const weekTxs = txs.filter(tx => {
             if (!tx.date) return false;
+            if ((tx.currency || 'BRL') !== trendCurrency) return false;
             const parts = tx.date.split('T')[0].split('-');
             const day = parseInt(parts[2], 10);
             return day >= startDay && day <= endDay;
@@ -1474,11 +1532,11 @@ async function renderTrendChart(selectedYear, selectedMonth) {
 
         const weeklyIncome = weekTxs
             .filter(t => t.type === 'income')
-            .reduce((sum, t) => sum + toBaseVal(t.amount, t.currency), 0);
+            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
         const weeklyActualExpense = weekTxs
             .filter(t => t.type === 'expense')
-            .reduce((sum, t) => sum + toBaseVal(t.amount, t.currency), 0);
+            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
         accumIncome += weeklyIncome;
         accumExpense += weeklyActualExpense;
@@ -1538,7 +1596,7 @@ async function renderTrendChart(selectedYear, selectedMonth) {
                 tooltip: {
                     callbacks: {
                         label: function(ctx) {
-                            return `${ctx.dataset.label}: ${formatCurrency(ctx.raw, 'BRL')}`;
+                            return `${ctx.dataset.label}: ${formatCurrency(ctx.raw, trendCurrency)}`;
                         }
                     }
                 }
@@ -1552,7 +1610,7 @@ async function renderTrendChart(selectedYear, selectedMonth) {
                     grid: { color: 'rgba(255, 255, 255, 0.05)' },
                     ticks: {
                         color: '#9ca3af',
-                        callback: function(val) { return formatCurrency(val, 'BRL'); }
+                        callback: function(val) { return formatCurrency(val, trendCurrency); }
                     }
                 }
             }
