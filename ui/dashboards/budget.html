@@ -831,32 +831,14 @@ function onFilterChange() {
     loadDashboardData();
 }
 
-async function fetchMcpTool(toolName, args = {}) {
+async function fetchBudgetStatus(month, year) {
     try {
-        const res = await fetch('/mcp', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json, text/event-stream'
-            },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: Date.now(),
-                method: 'tools/call',
-                params: {
-                    name: toolName,
-                    arguments: args
-                }
-            })
-        });
+        const params = new URLSearchParams({ month: String(month), year: String(year) });
+        const res = await fetch(`/api/budgets/status?${params.toString()}`);
         if (!res.ok) return null;
-        const data = await res.json();
-        if (data.result && data.result.content && data.result.content[0] && data.result.content[0].text) {
-            return JSON.parse(data.result.content[0].text);
-        }
-        return null;
+        return await res.json();
     } catch (err) {
-        console.error(`Error calling MCP tool ${toolName}:`, err);
+        console.error('Error fetching budget status:', err);
         return null;
     }
 }
@@ -924,7 +906,7 @@ async function loadDashboardData() {
 
     try {
         const [budgetStatus, txItems] = await Promise.all([
-            fetchMcpTool('get_budget_status', { month, year }),
+            fetchBudgetStatus(month, year),
             fetchAllTransactionsForMonth(year, month)
         ]);
 
@@ -1454,7 +1436,7 @@ async function renderTrendChart(selectedYear, selectedMonth) {
     const numWeeks = daysInMonth > 28 ? 5 : 4;
 
     // Fetch budget status for the selected month to get the monthly budget limit
-    const bStatus = await fetchMcpTool('get_budget_status', { month: selectedMonth, year: selectedYear });
+    const bStatus = await fetchBudgetStatus(selectedMonth, selectedYear);
     let totalMonthlyLimit = 0;
     if (bStatus && Array.isArray(bStatus.categories)) {
         bStatus.categories.forEach(cg => {

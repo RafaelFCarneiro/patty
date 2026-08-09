@@ -276,7 +276,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 
 ## Tool surface
 
-51 MCP tools (contract: `docs/mcp-tools.md`), most mirrored as REST routes, both thin over the same controllers — the 5 budget tools (Feature Design 015) and `find_correlations` (Feature Design 016) are MCP-only for now, no REST mirror yet. Client connections: `docs/mcp-clients.md`.
+51 MCP tools (contract: `docs/mcp-tools.md`), most mirrored as REST routes, both thin over the same controllers — `list_budgets`/`get_budget_status` (Feature Design 015) now have REST parity (`GET /api/budgets`, `GET /api/budgets/status`); `create_budget`/`update_budget`/`delete_budget` and `find_correlations` (Feature Design 016) are MCP-only for now, no REST mirror yet. Client connections: `docs/mcp-clients.md`.
 
 **Transport:** controlled by `MCP_TRANSPORT` (zod enum, `config.ts`). Default is **`stdio`** — the client spawns the process; no port, no Fastify. Set `MCP_TRANSPORT=http` to start the Fastify server (REST + streamable HTTP MCP on `PORT`). Both transports connect the same `buildMcpServer(deps, version)` core; no domain code moves. (ADR-007)
 
