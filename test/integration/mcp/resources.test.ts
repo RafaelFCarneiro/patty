@@ -28,7 +28,7 @@ describe('MCP reference resources (Feature Design 018)', () => {
     await transport.close();
   });
 
-  it('lists all six reference resources plus openapi', async () => {
+  it('lists all reference resources plus openapi', async () => {
     const { resources } = await client.listResources();
     const uris = resources.map((r) => r.uri);
     expect(uris).toEqual(
@@ -37,6 +37,7 @@ describe('MCP reference resources (Feature Design 018)', () => {
         'fintrack://categories',
         'fintrack://accounts',
         'fintrack://currencies',
+        'fintrack://exchange-rates',
         'fintrack://tags',
         'fintrack://credit-cards',
         'fintrack://merchants/top',
@@ -69,6 +70,18 @@ describe('MCP reference resources (Feature Design 018)', () => {
     const byCode = Object.fromEntries(currencies.map((c) => [c.code, c]));
     expect(byCode.BTC).toMatchObject({ symbol: '₿', decimals: 8 });
     expect(byCode.USDC).toMatchObject({ decimals: 6 });
+  });
+
+  it('fintrack://exchange-rates returns the same data as list_exchange_rates (ADR-026)', async () => {
+    await callTool(client, {
+      name: 'set_exchange_rate',
+      args: { from: 'USD', to: 'BRL', rate: 5.2, asOf: '2026-08-10T10:00:00.000Z' },
+    });
+    const [resource, tool] = await Promise.all([
+      readResourceJson(client, 'fintrack://exchange-rates'),
+      callTool(client, { name: 'list_exchange_rates' }),
+    ]);
+    expect(resource).toEqual(tool);
   });
 
   it('fintrack://tags returns the same data as list_tags', async () => {

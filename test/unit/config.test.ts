@@ -114,4 +114,34 @@ describe('loadConfig', () => {
     process.env['PORT'] = '4000';
     expect(loadConfig().PORT).toBe(4000);
   });
+
+  it('FIAT_RATE_STALE_HOURS defaults to 24 when omitted', () => {
+    delete process.env['FIAT_RATE_STALE_HOURS'];
+    expect(loadConfig().FIAT_RATE_STALE_HOURS).toBe(24);
+  });
+
+  it('FIAT_RATE_STALE_HOURS env override is respected', () => {
+    process.env['FIAT_RATE_STALE_HOURS'] = '12';
+    expect(loadConfig().FIAT_RATE_STALE_HOURS).toBe(12);
+  });
+
+  it('FIAT_RATE_STALE_HOURS rejects a non-positive value', () => {
+    process.env['FIAT_RATE_STALE_HOURS'] = '0';
+    expect(() => loadConfig()).toThrow();
+  });
+
+  it('CRYPTO_RATE_STALE_HOURS defaults to 1 when omitted', () => {
+    delete process.env['CRYPTO_RATE_STALE_HOURS'];
+    expect(loadConfig().CRYPTO_RATE_STALE_HOURS).toBe(1);
+  });
+
+  it('CRYPTO_RATE_STALE_HOURS env override is respected', () => {
+    process.env['CRYPTO_RATE_STALE_HOURS'] = '0.5';
+    expect(loadConfig().CRYPTO_RATE_STALE_HOURS).toBe(0.5);
+  });
+
+  it('CRYPTO_RATE_STALE_HOURS rejects a negative value', () => {
+    process.env['CRYPTO_RATE_STALE_HOURS'] = '-1';
+    expect(() => loadConfig()).toThrow();
+  });
 });

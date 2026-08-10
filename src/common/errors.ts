@@ -3,6 +3,7 @@ import type { BillError } from '../models/bill.js';
 import type { BudgetError } from '../models/budget.js';
 import type { CategoryError } from '../models/category.js';
 import type { CardError } from '../models/creditCard.js';
+import type { CurrencyRateError } from '../models/currencyRate.js';
 import type { DashboardError } from '../models/dashboard.js';
 import type { Conflict } from '../models/error.js';
 import type { LocaleError } from '../models/locale.js';
@@ -19,6 +20,7 @@ export type AppError =
   | BudgetError
   | TagError
   | LocaleError
+  | CurrencyRateError
   | DashboardError
   | Conflict;
 

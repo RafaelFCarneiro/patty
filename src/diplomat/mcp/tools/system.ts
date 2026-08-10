@@ -1,7 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getPreferences, setLocale } from '../../../controllers/settings.js';
+import { getPreferences, setBaseCurrency, setLocale } from '../../../controllers/settings.js';
 import { getStatus } from '../../../controllers/status.js';
 import { Locale, LocaleSource } from '../../../models/locale.js';
+import { CurrencyCode } from '../../../models/money.js';
 import * as settingsAdapters from '../../../adapters/settings.js';
 import type { McpContext } from '../context.js';
 import { fromResult, json } from '../respond.js';
@@ -39,13 +40,30 @@ export const registerSystemTools = (server: McpServer, ctx: McpContext): void =>
     {
       title: 'Get user preferences',
       description:
-        'Returns the stored locale preference and locale_source. Use this to check whether the user set the ' +
-        'locale explicitly before attempting an inferred switch. Note: the FINTRACK_LOCALE env var can ' +
-        'override the effective display locale used by list_categories; ' +
-        'this tool reports the stored preference, not the effective override.',
+        'Returns the stored locale preference, locale_source, and the resolved base currency. Use this to ' +
+        'check whether the user set the locale explicitly before attempting an inferred switch. Note: the ' +
+        'FINTRACK_LOCALE env var can override the effective display locale used by list_categories; ' +
+        'this tool reports the stored preference, not the effective override. base_currency is either an ' +
+        'explicit override (set_base_currency) or derived from locale (pt→BRL, en/es→USD) when unset.',
       inputSchema: {},
     },
     async () => json(await getPreferences(deps)),
+  );
+
+  server.registerTool(
+    'set_base_currency',
+    {
+      title: 'Set base currency',
+      description:
+        'Set the explicit base currency — the default target for future read-time valuation (ADR-026). ' +
+        "Unset, it's derived from locale (pt→BRL, en/es→USD); this tool overrides that derivation. " +
+        'Use get_preferences to check the currently resolved value.',
+      inputSchema: { baseCurrency: CurrencyCode },
+    },
+    async (args) => {
+      const flow = () => setBaseCurrency(deps, args).map(settingsAdapters.outcomeToDb);
+      return fromResult(await runEffects(flow));
+    },
   );
 
   server.registerTool(

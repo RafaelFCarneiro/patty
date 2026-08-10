@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { canAutoSwitchLocale } from '../../../src/logic/locale.js';
-import { localeErrors, LocaleSource } from '../../../src/models/locale.js';
+import { canAutoSwitchLocale, localeToBaseCurrency, resolveBaseCurrency } from '../../../src/logic/locale.js';
+import { localeErrors, Locale, LocaleSource } from '../../../src/models/locale.js';
+import { CurrencyCode } from '../../../src/models/money.js';
 
 describe('canAutoSwitchLocale', () => {
   it('allows inferred change when current source is default', () => {
@@ -32,5 +33,33 @@ describe('localeErrors', () => {
   it('explicitLocaleBlock is a validation error', () => {
     expect(localeErrors.explicitLocaleBlock.code).toBe('validation');
     expect(localeErrors.explicitLocaleBlock.issues[0]).toContain('explicit');
+  });
+});
+
+describe('localeToBaseCurrency', () => {
+  it('maps pt to BRL', () => {
+    expect(localeToBaseCurrency(Locale.enum.pt)).toBe(CurrencyCode.enum.BRL);
+  });
+
+  it('maps en to USD', () => {
+    expect(localeToBaseCurrency(Locale.enum.en)).toBe(CurrencyCode.enum.USD);
+  });
+
+  it('maps es to USD', () => {
+    expect(localeToBaseCurrency(Locale.enum.es)).toBe(CurrencyCode.enum.USD);
+  });
+});
+
+describe('resolveBaseCurrency', () => {
+  it('prefers the stored explicit override over the locale-derived default', () => {
+    expect(resolveBaseCurrency(CurrencyCode.enum.USDC, Locale.enum.pt)).toBe(CurrencyCode.enum.USDC);
+  });
+
+  it('derives from locale when stored is null', () => {
+    expect(resolveBaseCurrency(null, Locale.enum.pt)).toBe(CurrencyCode.enum.BRL);
+  });
+
+  it('derives from locale when stored is undefined', () => {
+    expect(resolveBaseCurrency(undefined, Locale.enum.en)).toBe(CurrencyCode.enum.USD);
   });
 });

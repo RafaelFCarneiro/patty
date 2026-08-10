@@ -95,6 +95,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
     findRawById: async () => ({ ...card(), version: 7 }) as CreditCardEntity,
   } as unknown as Deps['creditCards'],
   currencies: {} as Deps['currencies'],
+  currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
   merchants: {} as Deps['merchants'],

@@ -108,7 +108,12 @@ effect runner, appliers, outcomes, and the per-flow notes.
   create of the same target races into a real `SQLITE_CONSTRAINT_UNIQUE` the id-scoped `onConflictDoNothing`
   doesn't swallow; `budgetApplier` rethrows it as `VersionConflict` and the flow retries, the retry's own
   `findByTarget` then returning `duplicate_budget`. `update`/`delete` stay plain — neither touches the
-  target/currency/period key.
+  target/currency/period key. `currencyRateApplier` (`diplomat/db/repos/currencyRates.ts`, ADR-026 Phase 2)
+  joins the same family for `currency_rates`' secondary `UNIQUE(from_code, to_code)`, but with the opposite
+  retry outcome from every other member: `set_exchange_rate` is **upsert-latest**, not reject-duplicate, so a
+  concurrent first insert of the same new pair retries into an **update** (the retry's own `findByPair` now sees
+  the committed row and overwrites it) rather than surfacing a domain error — both concurrent callers succeed,
+  the later commit wins. `update`/`delete` stay plain, same as `budgetApplier`.
 - **The `merchant` entity** — key-only, hand-written `merchantApplier` (insert-only, `onConflictDoNothing`).
   Every flow whose decision implies a merchant emits its own `MERCHANT_ENTITY_TAG` `Persistable` ahead of
   whatever references it, via `logic/merchant.ts`'s `withMerchant` (transaction inserts) and

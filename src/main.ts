@@ -18,6 +18,7 @@ import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js';
 import { correlationsRepo } from './diplomat/db/repos/correlations.js';
 import { creditCardApplier, creditCardsRepo } from './diplomat/db/repos/creditCards.js';
 import { currenciesRepo } from './diplomat/db/repos/currencies.js';
+import { currencyRateApplier, currencyRatesRepo } from './diplomat/db/repos/currencyRates.js';
 import { dashboardApplier, dashboardsRepo } from './diplomat/db/repos/dashboards.js';
 import { merchantApplier, merchantCategoryApplier, merchantsRepo } from './diplomat/db/repos/merchants.js';
 import { recurringRepo, recurringRuleApplier } from './diplomat/db/repos/recurring.js';
@@ -32,6 +33,7 @@ import { BILL_ENTITY_TAG } from './models/bill.js';
 import { BUDGET_ENTITY_TAG } from './models/budget.js';
 import { CATEGORY_ENTITY_TAG } from './models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from './models/creditCard.js';
+import { CURRENCY_RATE_ENTITY_TAG } from './models/currencyRate.js';
 import { DASHBOARD_ENTITY_TAG } from './models/dashboard.js';
 import { SETTINGS_ENTITY_TAG } from './models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from './models/merchant.js';
@@ -90,6 +92,7 @@ const main = async (): Promise<void> => {
     correlations: correlationsRepo(db),
     creditCards: creditCardsRepo(db),
     currencies: currenciesRepo(db),
+    currencyRates: currencyRatesRepo(db),
     dashboards: dashboardsRepo(db),
     health: healthRepo(db),
     merchants: merchantsRepo(db),
@@ -113,11 +116,12 @@ const main = async (): Promise<void> => {
     [TAG_ENTITY_TAG]: tagApplier,
     [CATEGORY_ENTITY_TAG]: categoryApplier,
     [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
+    [CURRENCY_RATE_ENTITY_TAG]: currencyRateApplier,
     [RECURRING_ENTITY_TAG]: recurringRuleApplier,
     [DASHBOARD_ENTITY_TAG]: dashboardApplier,
     [SETTINGS_ENTITY_TAG]: settingsApplier,
   };
-  
+
   const changeBus = createChangeBus();
   const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
@@ -191,7 +195,7 @@ const main = async (): Promise<void> => {
   await app.listen({ port: config.PORT, host: LOOPBACK_HOST });
   // config.PORT may be 0 (OS-assigned); read back the address actually bound for the banner.
   const boundPort = (app.server.address() as AddressInfo).port;
-  // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe. 
+  // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe.
   console.log(
     `fintrack: REST http://${LOOPBACK_HOST}:${boundPort}/api` + ` · MCP http://${LOOPBACK_HOST}:${boundPort}/mcp`,
   );

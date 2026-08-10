@@ -39,6 +39,10 @@ const Env = z.object({
     .string()
     .optional()
     .transform((v) => v !== 'false'),
+  // Per-class staleness windows for currency_rates (ADR-026 Phase 2) — crypto moves fast enough to
+  // need a much tighter window than fiat; both configurable rather than hardcoded in logic/.
+  FIAT_RATE_STALE_HOURS: z.coerce.number().positive().default(24),
+  CRYPTO_RATE_STALE_HOURS: z.coerce.number().positive().default(1),
 });
 
 export type Config = z.infer<typeof Env>;

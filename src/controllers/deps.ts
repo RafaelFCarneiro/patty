@@ -10,6 +10,7 @@ import type { SubCategoriesRepo } from '../diplomat/db/repos/subCategories.js';
 import type { CorrelationsRepo } from '../diplomat/db/repos/correlations.js';
 import type { CreditCardsRepo } from '../diplomat/db/repos/creditCards.js';
 import type { CurrenciesRepo } from '../diplomat/db/repos/currencies.js';
+import type { CurrencyRatesRepo } from '../diplomat/db/repos/currencyRates.js';
 import type { DashboardsRepo } from '../diplomat/db/repos/dashboards.js';
 import type { HealthRepo } from '../diplomat/db/repos/health.js';
 import type { MerchantsRepo } from '../diplomat/db/repos/merchants.js';
@@ -28,6 +29,7 @@ export type Deps = {
   correlations: CorrelationsRepo;
   creditCards: CreditCardsRepo;
   currencies: CurrenciesRepo;
+  currencyRates: CurrencyRatesRepo;
   dashboards: DashboardsRepo;
   health: HealthRepo;
   merchants: MerchantsRepo;

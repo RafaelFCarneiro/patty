@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { listAccounts } from '../../controllers/account/account.js';
 import { listCategories } from '../../controllers/categories.js';
 import { listCurrencies } from '../../controllers/currencies.js';
+import { listExchangeRates } from '../../controllers/currencyRates.js';
 import { topMerchants } from '../../controllers/merchants.js';
 import { listCreditCards } from '../../controllers/creditCard/creditCard.js';
 import { listTags } from '../../controllers/tags.js';
@@ -66,6 +67,20 @@ export const registerResources = (server: McpServer, ctx: McpContext, openApiDoc
       mimeType: 'application/json',
     },
     async (uri) => jsonResource(uri, await listCurrencies(deps)),
+  );
+
+  server.registerResource(
+    'exchange-rates',
+    'fintrack://exchange-rates',
+    {
+      title: 'Exchange rates',
+      description:
+        'All cached exchange rates, each with its own as_of — the same data list_exchange_rates returns. ' +
+        'FinTrack never fetches rates itself (local-first, ADR-026); read this to see which pairs are ' +
+        'cached and how fresh they are before deciding whether to refresh via set_exchange_rate(s).',
+      mimeType: 'application/json',
+    },
+    async (uri) => jsonResource(uri, await listExchangeRates(deps)),
   );
 
   server.registerResource(

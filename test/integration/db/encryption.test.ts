@@ -28,9 +28,6 @@ describe('openDatabase directory creation', () => {
     const db = await openDatabase({
       DB_PATH: nestedPath,
       FINTRACK_DB_KEY: CORRECT_KEY,
-      PORT: 3001,
-      MCP_TRANSPORT: McpTransport.enum.http,
-      FINTRACK_HTTP: true,
     });
     await bootstrap(db);
   });
@@ -41,9 +38,6 @@ describe('encryption at rest', () => {
     const db = await openDatabase({
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: CORRECT_KEY,
-      PORT: 3001,
-      MCP_TRANSPORT: McpTransport.enum.http,
-      FINTRACK_HTTP: true,
     });
     await bootstrap(db);
 
@@ -56,9 +50,6 @@ describe('encryption at rest', () => {
     const db = await openDatabase({
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: CORRECT_KEY,
-      PORT: 3001,
-      MCP_TRANSPORT: McpTransport.enum.http,
-      FINTRACK_HTTP: true,
     });
     await bootstrap(db);
 
@@ -66,9 +57,6 @@ describe('encryption at rest', () => {
     const wrongDb = await openDatabase({
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: WRONG_KEY,
-      PORT: 3001,
-      MCP_TRANSPORT: McpTransport.enum.http,
-      FINTRACK_HTTP: true,
     });
     await expect(wrongDb.query.currencies.findMany()).rejects.toThrow();
   });
@@ -79,9 +67,6 @@ describe('concurrency posture (ADR-024)', () => {
     const db = await openDatabase({
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: CORRECT_KEY,
-      PORT: 3001,
-      MCP_TRANSPORT: McpTransport.enum.http,
-      FINTRACK_HTTP: true,
     });
     await bootstrap(db);
 

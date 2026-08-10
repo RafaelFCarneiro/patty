@@ -4,7 +4,7 @@ import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/cl
 import { callTool, callToolError, makeClient } from './helpers.js';
 
 type Category = { id: string; name: string; kind: string; names: Record<string, string> | null };
-type Preferences = { locale: string; localeSource: string };
+type Preferences = { locale: string; localeSource: string; baseCurrency: string };
 
 describe('MCP integration > i18n', () => {
   let client: Client;
@@ -40,7 +40,11 @@ describe('MCP integration > i18n', () => {
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } });
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'inferred' } });
     const prefs = (await callTool(client, { name: 'get_preferences' })) as Preferences;
-    expect(prefs).toEqual({ locale: 'en', localeSource: 'explicit' });
+    // baseCurrency is asserted loosely — it's shared singleton state another test file may have
+    // set explicitly (order across files isn't something this test should depend on); only
+    // locale/localeSource are this test's own concern.
+    expect(prefs.locale).toBe('en');
+    expect(prefs.localeSource).toBe('explicit');
   });
 
   it('set_locale to es switches category names to Spanish', async () => {

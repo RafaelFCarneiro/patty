@@ -16,6 +16,7 @@ export const settingsRepo = (db: Db): SettingsRepo => ({
       id: row.id,
       locale: row.locale,
       localeSource: row.localeSource,
+      baseCurrency: row.baseCurrency,
       version: row.version,
     });
   },
