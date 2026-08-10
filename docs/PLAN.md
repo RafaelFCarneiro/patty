@@ -269,7 +269,9 @@ local-first first release.
 - ~~Credit card invoices~~ **Decided**: faturas are `bills` rows (`bills.credit_card_id`, `transactions.bill_id`). "Bill" over "Invoice" — invoice is B2B; "bill" matches everyday usage and Nubank's own API naming. Bills carry `close_date`/`due_date`/`status`; card transactions attach to the open bill at write time.
 - ~~`Result` library~~ **Decided** (ADR-001): neverthrow.
 - ~~Database~~ **Decided** (ADR-004/005/006): local-first encrypted libSQL + Drizzle, key in OS keychain.
-- ~~Cross-currency conversion~~ **Direction set (ADR-026, proposed):** crypto (USDC/BTC) first-class, an
+- ~~Cross-currency conversion~~ **Decided (ADR-026, accepted):** crypto (USDC/BTC) first-class, an
   agent-refreshed `currency_rates` table (backend never fetches — local-first), a `settings.base_currency`, and
   **read-time** valuation on `get_account_balances` (spend stays per-currency; conversions are `as_of`-stamped).
-  Resolves the write-time-vs-read-time and rate-source forks. Pending: accept ADR-026 and build phase 1.
+  Resolves the write-time-vs-read-time and rate-source forks. **Phase 1 shipped** (crypto currencies first-class
+  — `CurrencyCode` += USDC/BTC, `currencies.decimals`, crypto-aware formatting; purely additive, no conversion
+  yet); phases 2–3 (rates + base currency, account valuation) pending.
