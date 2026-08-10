@@ -69,9 +69,11 @@ a write `set_exchange_rate(s)` (upsert) and a read `list_exchange_rates`. Rates 
 `as_of`, so freshness is visible. The write flow is FC/IS like any other (controller returns a `Persistable`,
 the shell applies it via a `currencyRateApplier`; ADR-021/022/023).
 
-- **Staleness is surfaced, never hidden.** Every conversion returns the rate's `as_of` and a `stale` flag (older
-  than a configurable threshold); a **missing** rate yields the per-currency value plus a `no_rate` marker —
-  the system never fabricates a number.
+- **Staleness is surfaced, never hidden.** Every conversion returns the rate's `as_of` and a `stale` flag; a
+  **missing** rate yields the per-currency value plus a `no_rate` marker — the system never fabricates a number.
+  **Threshold is per-class (decided): fiat 24h, crypto 1h** — a rate pair touching a crypto currency
+  (USDC/BTC on either side) uses the tighter crypto window, since crypto moves fast; both thresholds are
+  configurable (env). Classification is by `CurrencyCode` membership, not a new column.
 
 ### 4. Base currency in `settings`
 
@@ -168,7 +170,7 @@ read-time, and always stamped with its `as_of`.* Per-currency remains the defaul
    [#176](https://github.com/RafaelFCarneiro/fintrack/issues/176) (bulk-import idempotency keys flatten BTC/USDC
    precision) and [#177](https://github.com/RafaelFCarneiro/fintrack/issues/177) (`find_correlations` still
    rounds crypto amounts to fiat's 2 decimals) — see § Migration plan.
-4. [ ] Phase 2 — `currency_rates` entity + `set/list_exchange_rates` + `settings.base_currency` + the pure
+4. [x] Phase 2 — `currency_rates` entity + `set/list_exchange_rates` + `settings.base_currency` + the pure
    conversion helper.
 5. [ ] Phase 3 — `get_account_balances` valuation (converted values + net total, staleness-flagged),
    controller-orchestrated per ADR-028.

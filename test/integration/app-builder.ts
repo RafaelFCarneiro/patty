@@ -12,6 +12,7 @@ import { subCategoriesRepo } from '../../src/diplomat/db/repos/subCategories.js'
 import { correlationsRepo } from '../../src/diplomat/db/repos/correlations.js';
 import { creditCardApplier, creditCardsRepo } from '../../src/diplomat/db/repos/creditCards.js';
 import { currenciesRepo } from '../../src/diplomat/db/repos/currencies.js';
+import { currencyRateApplier, currencyRatesRepo } from '../../src/diplomat/db/repos/currencyRates.js';
 import { dashboardApplier, dashboardsRepo } from '../../src/diplomat/db/repos/dashboards.js';
 import { merchantApplier, merchantCategoryApplier, merchantsRepo } from '../../src/diplomat/db/repos/merchants.js';
 import { recurringRepo, recurringRuleApplier } from '../../src/diplomat/db/repos/recurring.js';
@@ -21,12 +22,12 @@ import { transactionApplier, transactionsRepo } from '../../src/diplomat/db/repo
 import { transactionTagApplier } from '../../src/diplomat/db/repos/transactionTags.js';
 import { healthRepo } from '../../src/diplomat/db/repos/health.js';
 import { createLocaleResolver } from '../../src/diplomat/db/localeCache.js';
-import { McpTransport } from '../../src/config.js';
 import { ACCOUNT_ENTITY_TAG } from '../../src/models/account.js';
 import { BILL_ENTITY_TAG } from '../../src/models/bill.js';
 import { BUDGET_ENTITY_TAG } from '../../src/models/budget.js';
 import { CATEGORY_ENTITY_TAG } from '../../src/models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from '../../src/models/creditCard.js';
+import { CURRENCY_RATE_ENTITY_TAG } from '../../src/models/currencyRate.js';
 import { DASHBOARD_ENTITY_TAG } from '../../src/models/dashboard.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from '../../src/models/merchant.js';
 import { RECURRING_ENTITY_TAG } from '../../src/models/recurring.js';
@@ -54,9 +55,6 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
   const db = await openDatabase({
     DB_PATH: opts?.dbPath ?? (inject('DB_PATH' as never) as string),
     FINTRACK_DB_KEY: TEST_ENCRYPTION_KEY,
-    PORT: opts?.port ?? 0,
-    MCP_TRANSPORT: McpTransport.enum.http,
-    FINTRACK_HTTP: true,
   });
 
   await bootstrap(db);
@@ -73,6 +71,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     correlations: correlationsRepo(db),
     creditCards: creditCardsRepo(db),
     currencies: currenciesRepo(db),
+    currencyRates: currencyRatesRepo(db),
     dashboards: dashboardsRepo(db),
     health: healthRepo(db),
     merchants: merchantsRepo(db),
@@ -99,6 +98,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     [TAG_ENTITY_TAG]: tagApplier,
     [CATEGORY_ENTITY_TAG]: categoryApplier,
     [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
+    [CURRENCY_RATE_ENTITY_TAG]: currencyRateApplier,
     [RECURRING_ENTITY_TAG]: recurringRuleApplier,
     [DASHBOARD_ENTITY_TAG]: dashboardApplier,
     [SETTINGS_ENTITY_TAG]: settingsApplier,

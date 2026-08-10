@@ -527,9 +527,25 @@ REST mirror: `GET /api/dashboards` (list, HTML omitted), `GET /api/dashboards/:n
 
 `set_locale`: `locale` (`en|es|pt`), `source` (`inferred|explicit`). Sets the display language for default category names. The AI agent calls this with `source: "inferred"` when it detects the user's language from conversation, or `source: "explicit"` when the user directly requests a locale change. **Guardrails**: (1) Anti-churn — only switch on a clear, sustained language change, not isolated foreign words, merchant names, or proper nouns. (2) Respect explicit — if the current `locale_source` is `"explicit"`, an `inferred` switch is rejected with a `validation` error; the user must explicitly request the change. Error: `validation`.
 
-`get_preferences`: no input. Returns `{ locale, localeSource }` — the **stored** preference, not the effective display locale. Use to check whether the user set the locale explicitly before attempting an inferred switch. Note: when `FINTRACK_LOCALE` is set, `list_categories` uses the env value for display names, which may differ from the stored `locale` returned here.
+`get_preferences`: no input. Returns `{ locale, localeSource, baseCurrency }` — the **stored** locale preference, not the effective display locale, plus the **resolved** base currency (explicit override if set, else derived from locale). Use to check whether the user set the locale explicitly before attempting an inferred switch. Note: when `FINTRACK_LOCALE` is set, `list_categories` uses the env value for display names, which may differ from the stored `locale` returned here.
 
 **Resolution order** (for display names): `FINTRACK_LOCALE` env var → `settings.locale` → `'en'` (cold-start default).
+
+## set_base_currency
+
+ADR-026 Phase 2. `baseCurrency` (required, `CurrencyCode`). Sets an explicit override for the default valuation target currency, stored on the `settings` singleton. Unset (`null`), it's derived from locale (pt→BRL, en/es→USD — `logic/locale.ts`'s `resolveBaseCurrency`, the same resolution shape as locale itself: explicit stored value wins, else derived). No consumer reads this yet (account valuation is Phase 3) — this only sets the value `get_preferences.baseCurrency` reports. Returns `{ baseCurrency }`. Idempotent: setting the same value again is a no-op (no write, same response).
+
+REST mirror: `GET /api/preferences` (`get_preferences`), `POST /api/settings/base-currency` (`set_base_currency`).
+
+## set_exchange_rate / set_exchange_rates / list_exchange_rates
+
+ADR-026 Phase 2. A cached, agent-refreshed rate table (`currency_rates`) — **FinTrack never fetches rates itself** (local-first, zero external calls, ADR-004/005). The agent (or a scheduled task) sources current rates (e.g. PTAX for fiat, a crypto price API) and upserts them here; nothing in the backend reaches the network. Rates are self-contained and carry their own `asOf`, so freshness is always visible to whoever reads them. **This is not a history log** — a pair (`from`, `to`) has at most one stored rate; a later `set_exchange_rate` for the same pair **overwrites** it (upsert-latest), never appends. No read surface converts anything yet (`get_account_balances` valuation is Phase 3) — these tools only populate/inspect the cache.
+
+- `set_exchange_rate`: `from`, `to` (`CurrencyCode`, required, must differ — `validation` if equal), `rate` (positive number — 1 unit of `from` = `rate` units of `to`), `asOf` (ISO 8601 timestamp, required), `source` (optional free-text provenance, e.g. `"PTAX"`, `"coingecko"`). Returns the stored view `{ from, to, rate, asOf, source? }`. Error: `validation` (`from === to`).
+- `set_exchange_rates`: `rates` (array of the same shape as `set_exchange_rate`'s input, 1–50 items). Bulk upsert with **partial success** — each item is applied independently (its own transaction/retry), so one bad pair never blocks the others. Returns `{ items: [{ status: "ok", rate: {...} } | { status: "error", from, to, error }] }`, one entry per input item in order.
+- `list_exchange_rates`: no input. Returns every stored rate as `{ from, to, rate, asOf, source? }[]`. Staleness is not evaluated here — this is the raw cache; a future valuation consumer (Phase 3) applies its own per-class staleness window (fiat 24h / crypto 1h, both configurable via `FIAT_RATE_STALE_HOURS`/`CRYPTO_RATE_STALE_HOURS`) when it reads from it.
+
+REST mirror: `GET /api/exchange-rates` (`list_exchange_rates`), `POST /api/exchange-rates` (`set_exchange_rate`), `POST /api/exchange-rates/bulk` (`set_exchange_rates`). MCP resource: `fintrack://exchange-rates` mirrors `list_exchange_rates`.
 
 ## get_status
 
@@ -562,6 +578,7 @@ Static-URI, read-only resources exposing the user's vocabulary — categories, a
 - **`fintrack://credit-cards`** — same array as `list_credit_cards`.
 - **`fintrack://merchants/top`** — the 20 (`DEFAULT_TOP_MERCHANTS_LIMIT`, `models/merchant.ts`) merchants with the most effective, non-transfer transactions, each `{ merchant, transactionCount, categoryName }` ordered by `transactionCount` descending. `categoryName` is the category the merchant is most often classified into (by transaction frequency, not spend), locale-resolved; `null` when every one of the merchant's transactions is uncategorized. A reference/vocabulary list, not a spend report — no per-currency amounts, no caller-supplied limit (static URI, no `ResourceTemplate` parameters).
 - **`fintrack://currencies`** (ADR-026 Phase 1) — same array as `GET /api/currencies`: `{ code, symbol, name, decimals }` for every currency (fiat BRL/USD, crypto USDC/BTC). No matching `list_*` tool — currencies are a seeded reference table with no write path, so this resource is the read surface. `decimals` is what lets a client format a non-ISO code correctly: `Intl.NumberFormat`'s `style: 'currency'` mode either throws (a malformed code) or silently mis-formats (a well-formed-but-unrecognized 3-letter code like `BTC` — 2 decimals, no real symbol) for USDC/BTC, so format with `symbol` + `decimals` instead for any code not in `Intl.supportedValuesOf('currency')`.
+- **`fintrack://exchange-rates`** (ADR-026 Phase 2) — same array as `list_exchange_rates`: `{ from, to, rate, asOf, source? }` for every cached rate. Unlike `fintrack://currencies`, this **does** have a write path (`set_exchange_rate(s)`) — read it to see which pairs are cached and how stale they are before deciding whether to refresh.
 
 ## Prompts (Feature Design 019)
 

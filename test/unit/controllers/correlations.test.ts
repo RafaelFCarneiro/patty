@@ -29,6 +29,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   } as unknown as Deps['correlations'],
   creditCards: {} as Deps['creditCards'],
   currencies: {} as Deps['currencies'],
+  currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
   merchants: {} as Deps['merchants'],

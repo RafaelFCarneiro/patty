@@ -21,7 +21,9 @@ const KEYCHAIN_ACCOUNT = 'db-encryption-key';
 const JOURNAL_MODE_WAL = 'WAL';
 const BUSY_TIMEOUT_MS = 5000;
 
-const resolveEncryptionKey = (config: Config): string => {
+type DbConfig = Pick<Config, 'DB_PATH' | 'FINTRACK_DB_KEY'>;
+
+const resolveEncryptionKey = (config: DbConfig): string => {
   // Env-var override: CI, headless, or manual recovery (ADR-005). We log that we are in
   // env-var mode (never the key value itself) so the weaker posture is visible.
   if (config.FINTRACK_DB_KEY) {
@@ -80,7 +82,7 @@ export const enableWal = async (client: ReturnType<typeof createClient>): Promis
  * The encryption key comes from FINTRACK_DB_KEY or the OS keychain (generated on first
  * run); throws if neither is available so the DB is never opened unencrypted.
  */
-export const openDatabase = async (config: Config): Promise<Db> => {
+export const openDatabase = async (config: DbConfig): Promise<Db> => {
   const encryptionKey = resolveEncryptionKey(config);
   // mode 0o700 applies only when the directory is first created; pre-existing directories
   // keep their current permissions (Node does not retroactively tighten them).

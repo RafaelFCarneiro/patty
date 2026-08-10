@@ -1,0 +1,151 @@
+import { err, ok } from 'neverthrow';
+import { describe, expect, it } from 'vitest';
+import { buildBulkResult, convert, isCryptoPair, isStale, toBulkItem } from '../../../src/logic/currencyRate.js';
+import { CurrencyCode } from '../../../src/models/money.js';
+import type { CurrencyRate, CurrencyRateView, SetExchangeRateInput } from '../../../src/models/currencyRate.js';
+
+const { BRL, USD, USDC, BTC } = CurrencyCode.enum;
+
+const rate = (overrides: Partial<CurrencyRate> = {}): CurrencyRate => ({
+  id: 'rate-1',
+  fromCode: USD,
+  toCode: BRL,
+  rate: 5,
+  asOf: '2026-08-10T12:00:00.000Z',
+  source: null,
+  ...overrides,
+});
+
+const OPTIONS = { decimals: 2, thresholds: { fiatHours: 24, cryptoHours: 1 } };
+const NOW = new Date('2026-08-10T12:00:00.000Z');
+
+describe('isCryptoPair', () => {
+  it('is false for a pure fiat pair', () => {
+    expect(isCryptoPair(USD, BRL)).toBe(false);
+  });
+
+  it('is true when the from side is crypto', () => {
+    expect(isCryptoPair(BTC, USD)).toBe(true);
+  });
+
+  it('is true when the to side is crypto', () => {
+    expect(isCryptoPair(USD, USDC)).toBe(true);
+  });
+
+  it('is true when both sides are crypto', () => {
+    expect(isCryptoPair(BTC, USDC)).toBe(true);
+  });
+});
+
+describe('isStale', () => {
+  it('is false exactly at the threshold boundary', () => {
+    const asOf = new Date(NOW.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    expect(isStale(asOf, NOW, 24)).toBe(false);
+  });
+
+  it('is true just past the threshold boundary', () => {
+    const asOf = new Date(NOW.getTime() - 24 * 60 * 60 * 1000 - 1).toISOString();
+    expect(isStale(asOf, NOW, 24)).toBe(true);
+  });
+
+  it('is false for a fresh timestamp', () => {
+    expect(isStale(NOW.toISOString(), NOW, 24)).toBe(false);
+  });
+});
+
+describe('convert', () => {
+  it('identity: from === to always converts at rate 1, never stale, independent of rates', () => {
+    const result = convert(100, USD, USD, [], NOW, OPTIONS);
+    expect(result).toEqual({ value: 100, rate: 1, asOf: NOW.toISOString(), stale: false, noRate: false });
+  });
+
+  it('identity rounds to the target currency decimals', () => {
+    const result = convert(1.005, BTC, BTC, [], NOW, { ...OPTIONS, decimals: 8 });
+    expect(result.value).toBe(1.005);
+    expect(result.noRate).toBe(false);
+  });
+
+  it('missing pair reports noRate, never fabricating a value', () => {
+    const result = convert(100, USD, BRL, [], NOW, OPTIONS);
+    expect(result).toEqual({ value: null, rate: null, asOf: null, stale: false, noRate: true });
+  });
+
+  it('converts amount * rate and rounds to the target decimals', () => {
+    const result = convert(10, USD, BRL, [rate({ rate: 5.123456 })], NOW, OPTIONS);
+    expect(result.value).toBe(51.23);
+    expect(result.rate).toBe(5.123456);
+    expect(result.noRate).toBe(false);
+  });
+
+  it('rounds a crypto target to its own (non-fiat) decimals rather than flattening to 2', () => {
+    const rates = [rate({ fromCode: USD, toCode: BTC, rate: 0.00002 })];
+    const result = convert(100, USD, BTC, rates, NOW, { ...OPTIONS, decimals: 8 });
+    expect(result.value).toBe(0.002);
+  });
+
+  it('a fiat pair uses the fiat threshold: fresh just inside 24h is not stale', () => {
+    const asOf = new Date(NOW.getTime() - 23 * 60 * 60 * 1000).toISOString();
+    const result = convert(10, USD, BRL, [rate({ asOf })], NOW, OPTIONS);
+    expect(result.stale).toBe(false);
+  });
+
+  it('a fiat pair uses the fiat threshold: stale just past 24h', () => {
+    const asOf = new Date(NOW.getTime() - 25 * 60 * 60 * 1000).toISOString();
+    const result = convert(10, USD, BRL, [rate({ asOf })], NOW, OPTIONS);
+    expect(result.stale).toBe(true);
+  });
+
+  it('a pair touching crypto uses the tighter crypto threshold, even converting into fiat', () => {
+    const asOf = new Date(NOW.getTime() - 2 * 60 * 60 * 1000).toISOString();
+    const rates = [rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf })];
+    // 2h old: within the 24h fiat window but past the 1h crypto window.
+    const result = convert(1, BTC, USD, rates, NOW, OPTIONS);
+    expect(result.stale).toBe(true);
+  });
+
+  it('a crypto pair fresh within 1h is not stale', () => {
+    const asOf = new Date(NOW.getTime() - 30 * 60 * 1000).toISOString();
+    const rates = [rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf })];
+    const result = convert(1, BTC, USD, rates, NOW, OPTIONS);
+    expect(result.stale).toBe(false);
+  });
+
+  it('only matches the exact (from, to) pair, not its inverse', () => {
+    const rates = [rate({ fromCode: USD, toCode: BRL, rate: 5 })];
+    const result = convert(10, BRL, USD, rates, NOW, OPTIONS);
+    expect(result.noRate).toBe(true);
+  });
+});
+
+describe('toBulkItem / buildBulkResult', () => {
+  const input = (from: CurrencyCode, to: CurrencyCode): SetExchangeRateInput => ({
+    from,
+    to,
+    rate: 5,
+    asOf: NOW.toISOString(),
+  });
+
+  const view = (from: CurrencyCode, to: CurrencyCode): CurrencyRateView => ({
+    from,
+    to,
+    rate: 5,
+    asOf: NOW.toISOString(),
+  });
+
+  it('toBulkItem maps an Ok result to a status: ok item', () => {
+    expect(toBulkItem(input(USD, BRL), ok(view(USD, BRL)))).toEqual({ status: 'ok', rate: view(USD, BRL) });
+  });
+
+  it("toBulkItem maps an Err result to a status: error item carrying the input's pair", () => {
+    expect(toBulkItem(input(USD, USD), err('boom'))).toEqual({ status: 'error', from: USD, to: USD, error: 'boom' });
+  });
+
+  it('buildBulkResult zips items with outcomes positionally', () => {
+    const items = [input(USD, BRL), input(USD, USD)];
+    const outcomes = [ok(view(USD, BRL)), err('same pair')];
+    expect(buildBulkResult(items, outcomes)).toEqual([
+      { status: 'ok', rate: view(USD, BRL) },
+      { status: 'error', from: USD, to: USD, error: 'same pair' },
+    ]);
+  });
+});

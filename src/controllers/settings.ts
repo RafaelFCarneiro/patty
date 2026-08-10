@@ -1,7 +1,7 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import { guard } from '../common/result.js';
-import { canAutoSwitchLocale } from '../logic/locale.js';
+import { canAutoSwitchLocale, resolveBaseCurrency } from '../logic/locale.js';
 import * as persistence from '../logic/persistence.js';
 import {
   Locale,
@@ -9,7 +9,10 @@ import {
   LocaleSource,
   SETTINGS_ENTITY_TAG,
   SETTINGS_SINGLETON_ID,
+  type BaseCurrencyPreferences,
+  type LocalePreferences,
   type Preferences,
+  type SetBaseCurrencyInput,
   type SetLocaleInput,
   type SettingsEntity,
 } from '../models/locale.js';
@@ -18,15 +21,17 @@ import type { Deps } from './deps.js';
 
 export const getPreferences = async (deps: Deps): Promise<Preferences> => {
   const row = await deps.settings.getLocale();
+  const locale = row?.locale ?? Locale.enum.en;
   return {
-    locale: row?.locale ?? Locale.enum.en,
+    locale,
     localeSource: row?.localeSource ?? LocaleSource.enum.default,
+    baseCurrency: resolveBaseCurrency(row?.baseCurrency, locale),
   };
 };
 
 // The locale cache reset (main.ts's process-level cache) is shell bookkeeping, not a domain
 // effect — the shell resets it after this flow's write commits, never from here.
-export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<FlowOutcome<Preferences>, AppError> =>
+export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<FlowOutcome<LocalePreferences>, AppError> =>
   safeTry(async function* () {
     const current = await deps.settings.getLocale();
     const wouldChange = current?.locale !== input.locale;
@@ -41,10 +46,36 @@ export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<FlowOu
       id: SETTINGS_SINGLETON_ID,
       locale: input.locale,
       localeSource: input.source,
+      baseCurrency: current?.baseCurrency ?? null,
     };
     const persist: Persistable[] = current
       ? [persistence.update({ entity: SETTINGS_ENTITY_TAG, model: { ...entity, version: current.version } })]
       : [persistence.insert({ entity: SETTINGS_ENTITY_TAG, model: entity })];
 
     return ok({ persist, response: { locale: input.locale, localeSource: input.source } });
+  });
+
+/** Mirrors `setLocale`'s upsert-singleton shape — no guardrail to enforce (any `CurrencyCode` is a
+ *  valid base currency), so unlike `setLocale` there is no `guard`/anti-churn step. */
+export const setBaseCurrency = (
+  deps: Deps,
+  input: SetBaseCurrencyInput,
+): ResultAsync<FlowOutcome<BaseCurrencyPreferences>, AppError> =>
+  safeTry(async function* () {
+    const current = await deps.settings.getLocale();
+    if (current?.baseCurrency === input.baseCurrency) {
+      return ok({ persist: [], response: { baseCurrency: input.baseCurrency } });
+    }
+
+    const entity: Omit<SettingsEntity, 'version'> = {
+      id: SETTINGS_SINGLETON_ID,
+      locale: current?.locale ?? Locale.enum.en,
+      localeSource: current?.localeSource ?? LocaleSource.enum.default,
+      baseCurrency: input.baseCurrency,
+    };
+    const persist: Persistable[] = current
+      ? [persistence.update({ entity: SETTINGS_ENTITY_TAG, model: { ...entity, version: current.version } })]
+      : [persistence.insert({ entity: SETTINGS_ENTITY_TAG, model: entity })];
+
+    return ok({ persist, response: { baseCurrency: input.baseCurrency } });
   });

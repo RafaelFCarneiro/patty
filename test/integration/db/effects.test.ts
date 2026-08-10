@@ -7,7 +7,6 @@ import { sql } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppError } from '../../../src/common/errors.js';
-import { McpTransport } from '../../../src/config.js';
 import * as accountAdapters from '../../../src/adapters/accounts.js';
 import * as billAdapters from '../../../src/adapters/bills.js';
 import * as creditCardAdapters from '../../../src/adapters/creditCards.js';
@@ -85,9 +84,6 @@ beforeEach(async () => {
   db = await openDatabase({
     DB_PATH: join(tmpDir, 'uow.db'),
     FINTRACK_DB_KEY: TEST_KEY,
-    PORT: 0,
-    MCP_TRANSPORT: McpTransport.enum.http,
-    FINTRACK_HTTP: true,
   });
   await bootstrap(db);
   registry = { [ACCOUNT_ENTITY_TAG]: accountApplier };
@@ -1547,6 +1543,7 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
       correlations: {} as Deps['correlations'],
       creditCards: creditCardsR,
       currencies: {} as Deps['currencies'],
+      currencyRates: {} as Deps['currencyRates'],
       dashboards: {} as Deps['dashboards'],
       health: {} as Deps['health'],
       merchants: {} as Deps['merchants'],
@@ -2270,6 +2267,7 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       correlations: {} as Deps['correlations'],
       creditCards: creditCardsR,
       currencies: {} as Deps['currencies'],
+      currencyRates: {} as Deps['currencyRates'],
       dashboards: {} as Deps['dashboards'],
       health: {} as Deps['health'],
       merchants: {} as Deps['merchants'],

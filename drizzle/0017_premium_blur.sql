@@ -1,0 +1,1 @@
+ALTER TABLE `settings` ADD `base_currency` text REFERENCES currencies(code);

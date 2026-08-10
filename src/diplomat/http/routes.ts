@@ -10,8 +10,10 @@ import { budgetRoutes } from './routes/budget.js';
 import { categoryRoutes } from './routes/category.js';
 import { creditCardRoutes } from './routes/creditCard.js';
 import { currencyRoutes } from './routes/currency.js';
+import { currencyRateRoutes } from './routes/currencyRates.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { recurringRoutes } from './routes/recurring.js';
+import { settingsRoutes } from './routes/settings.js';
 import { summaryRoutes } from './routes/summary.js';
 import { systemRoutes } from './routes/system.js';
 import { tagRoutes } from './routes/tag.js';
@@ -44,6 +46,8 @@ export const buildRouteDefinitions = (
     ...categoryRoutes(ctx),
     ...creditCardRoutes(ctx),
     ...currencyRoutes(ctx),
+    ...currencyRateRoutes(ctx),
+    ...settingsRoutes(ctx),
     ...transferRoutes(ctx),
     ...recurringRoutes(ctx),
     ...transactionRoutes(ctx),

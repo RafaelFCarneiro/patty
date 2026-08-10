@@ -14,6 +14,7 @@ import { subCategoriesRepo } from '../../../src/diplomat/db/repos/subCategories.
 import { correlationsRepo } from '../../../src/diplomat/db/repos/correlations.js';
 import { creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
 import { currenciesRepo } from '../../../src/diplomat/db/repos/currencies.js';
+import { currencyRatesRepo } from '../../../src/diplomat/db/repos/currencyRates.js';
 import { dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { healthRepo } from '../../../src/diplomat/db/repos/health.js';
 import { merchantsRepo } from '../../../src/diplomat/db/repos/merchants.js';
@@ -22,8 +23,8 @@ import { settingsApplier, settingsRepo } from '../../../src/diplomat/db/repos/se
 import { tagsRepo } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
 import { runEffects, type ApplierRegistry } from '../../../src/diplomat/db/effects.js';
-import { McpTransport } from '../../../src/config.js';
 import { Locale, LocaleSource, SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
+import { CurrencyCode } from '../../../src/models/money.js';
 import { listCategories } from '../../../src/controllers/categories.js';
 import { getPreferences, setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
@@ -42,9 +43,6 @@ describe('empty DB (ADR-008)', () => {
     db = await openDatabase({
       DB_PATH: join(tmpDir, 'empty.db'),
       FINTRACK_DB_KEY: TEST_KEY,
-      PORT: 0,
-      MCP_TRANSPORT: McpTransport.enum.stdio,
-      FINTRACK_HTTP: true,
     });
     await migrate(db, { migrationsFolder: MIGRATIONS });
 
@@ -58,6 +56,7 @@ describe('empty DB (ADR-008)', () => {
       correlations: correlationsRepo(db),
       creditCards: creditCardsRepo(db),
       currencies: currenciesRepo(db),
+      currencyRates: currencyRatesRepo(db),
       dashboards: dashboardsRepo(db),
       health: healthRepo(db),
       merchants: merchantsRepo(db),
@@ -84,9 +83,13 @@ describe('empty DB (ADR-008)', () => {
     expect(categories).toEqual([]);
   });
 
-  it('get_preferences returns default locale on fresh DB', async () => {
+  it('get_preferences returns default locale on fresh DB, base currency derived from it', async () => {
     const prefs = await getPreferences(deps);
-    expect(prefs).toEqual({ locale: Locale.enum.en, localeSource: LocaleSource.enum.default });
+    expect(prefs).toEqual({
+      locale: Locale.enum.en,
+      localeSource: LocaleSource.enum.default,
+      baseCurrency: CurrencyCode.enum.USD,
+    });
   });
 
   it('inferred set_locale switches locale and stores inferred source', async () => {
@@ -94,6 +97,10 @@ describe('empty DB (ADR-008)', () => {
     const result = await runEffects(db, registry, flow);
     expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });
     const prefs = await getPreferences(deps);
-    expect(prefs).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });
+    expect(prefs).toEqual({
+      locale: Locale.enum.pt,
+      localeSource: LocaleSource.enum.inferred,
+      baseCurrency: CurrencyCode.enum.BRL,
+    });
   });
 });

@@ -11,6 +11,7 @@ import { registerBudgetTools } from './tools/budget.js';
 import { registerCategoryTools } from './tools/category.js';
 import { registerCorrelationsTools } from './tools/correlations.js';
 import { registerCreditCardTools } from './tools/creditCard.js';
+import { registerCurrencyRateTools } from './tools/currencyRates.js';
 import { registerDashboardTools } from './tools/dashboard.js';
 import { registerRecurringTools } from './tools/recurring.js';
 import { registerSummaryTools } from './tools/summary.js';
@@ -42,6 +43,7 @@ export const buildMcpServer = (
 
   registerAccountTools(server, ctx);
   registerCreditCardTools(server, ctx);
+  registerCurrencyRateTools(server, ctx);
   registerTransactionTools(server, ctx);
   registerTransferTools(server, ctx);
   registerBudgetTools(server, ctx);

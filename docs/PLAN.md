@@ -274,4 +274,6 @@ local-first first release.
   **read-time** valuation on `get_account_balances` (spend stays per-currency; conversions are `as_of`-stamped).
   Resolves the write-time-vs-read-time and rate-source forks. **Phase 1 shipped** (crypto currencies first-class
   — `CurrencyCode` += USDC/BTC, `currencies.decimals`, crypto-aware formatting; purely additive, no conversion
-  yet); phases 2–3 (rates + base currency, account valuation) pending.
+  yet); **Phase 2 shipped** (`currency_rates` entity + `set/list_exchange_rates` + `settings.base_currency` +
+  the pure `convert` helper in `logic/` — no consumer wired yet); Phase 3 (`get_account_balances` valuation)
+  pending.

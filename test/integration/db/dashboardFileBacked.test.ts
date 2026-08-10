@@ -4,7 +4,6 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { McpTransport } from '../../../src/config.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
 import { openDatabase } from '../../../src/diplomat/db/driver.js';
@@ -25,9 +24,6 @@ beforeEach(async () => {
   db = await openDatabase({
     DB_PATH: join(tmpDir, 'file-backed.db'),
     FINTRACK_DB_KEY: TEST_KEY,
-    PORT: 0,
-    MCP_TRANSPORT: McpTransport.enum.http,
-    FINTRACK_HTTP: true,
   });
   await bootstrap(db);
 });

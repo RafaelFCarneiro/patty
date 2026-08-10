@@ -5,7 +5,9 @@ import type { SettingsRepo } from '../../../../src/diplomat/db/repos/settings.js
 
 const makeSettings = (locale?: Locale): SettingsRepo => ({
   getLocale: vi.fn(async (): Promise<SettingsEntity | undefined> =>
-    locale ? { id: SETTINGS_SINGLETON_ID, locale, localeSource: LocaleSource.enum.explicit, version: 0 } : undefined,
+    locale
+      ? { id: SETTINGS_SINGLETON_ID, locale, localeSource: LocaleSource.enum.explicit, baseCurrency: null, version: 0 }
+      : undefined,
   ),
 });
 

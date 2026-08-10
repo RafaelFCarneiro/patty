@@ -223,5 +223,30 @@ export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
   locale: text('locale', { enum: Locale.options }).notNull().default(Locale.enum.en),
   localeSource: text('locale_source', { enum: LocaleSource.options }).notNull().default(LocaleSource.enum.default),
+  // Nullable — unset means "derive from locale" (pt->BRL, en/es->USD), resolved at read time by
+  // logic/locale.ts's resolveBaseCurrency (ADR-026 Phase 2); no DB default, unlike locale/localeSource,
+  // since there is no third "explicit vs inferred" source to track here.
+  baseCurrency: text('base_currency').references(() => currencies.code),
   version: integer('version').notNull().default(0),
 });
+
+export const currencyRates = sqliteTable(
+  'currency_rates',
+  {
+    id: text('id').primaryKey(),
+    // 1 unit of fromCode = `rate` units of toCode, as of `asOf` (ADR-026 Phase 2).
+    fromCode: text('from_code')
+      .notNull()
+      .references(() => currencies.code),
+    toCode: text('to_code')
+      .notNull()
+      .references(() => currencies.code),
+    rate: real('rate').notNull(),
+    asOf: text('as_of').notNull(),
+    // Free-text provenance (e.g. "PTAX", "coingecko") — agent-supplied, never validated against a
+    // fixed list; nullable since the agent may not always report one.
+    source: text('source'),
+    version: integer('version').notNull().default(0),
+  },
+  (t) => [uniqueIndex('currency_rates_from_to').on(t.fromCode, t.toCode)],
+);
