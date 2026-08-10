@@ -163,29 +163,32 @@ exists; the file's own name re-seeds only if it becomes free again (e.g. after `
   a version-guarded `update` carrying the same `id`/`html` and the entity's `source`/`path` **unchanged** — so
   a renamed default stays file-backed under its new name.
 
-## The nine default dashboards
+## The ten default dashboards
 
-All nine ship as `ui/dashboards/*.html` (ADR-027 Phase 2 completed the set — `overview` first, the remaining
-eight joined in a follow-up conversion, all file-backed the same way): `overview`, `accounts`, `cards`,
-`categories`, `comparative`, `dashboards` (a management UI for dashboards themselves), `pending`, `projections`,
-`tags`. Each is registered as a `source: 'file'` row by bootstrap's directory scan, so `GET
-/api/dashboards/<name>` resolves and `GET /ui`/`GET /ui/<name>` render on a fresh install before the agent
-generates anything. `overview` (income/expenses/balance, spending-by-category, accounts & balances, upcoming
-bills, recent transactions) is the default for bare `/ui`; the rest cover one functional area each, reachable
-from the shell's nav menu.
+All ten ship as `ui/dashboards/*.html` (ADR-027 Phase 2 completed the original nine — `overview` first, the
+remaining eight joined in a follow-up conversion, all file-backed the same way; `budget` joined later, same
+mechanism): `overview`, `accounts`, `budget`, `cards`, `categories`, `comparative`, `dashboards` (a management UI
+for dashboards themselves), `pending`, `projections`, `tags`. Each is registered as a `source: 'file'` row by
+bootstrap's directory scan, so `GET /api/dashboards/<name>` resolves and `GET /ui`/`GET /ui/<name>` render on a
+fresh install before the agent generates anything. `overview` (income/expenses/balance, spending-by-category,
+accounts & balances, upcoming bills, recent transactions) is the default for bare `/ui`; the rest cover one
+functional area each, reachable from the shell's nav menu.
 
 Every default's script fetches its data same-origin from `/api/...` (accounts, categories, credit cards, bills,
-transactions, tags, dashboards themselves, …) and renders whatever returns with the localized labels the API
-already provides (`typeLabel`, `categoryName`, `periodLabel`, …); date inputs call the shell-provided
+transactions, tags, budgets, dashboards themselves, …) and renders whatever returns with the localized labels
+the API already provides (`typeLabel`, `categoryName`, `periodLabel`, …); date inputs call the shell-provided
 `flatpickr(...)` global rather than loading their own picker. Every section has its own loading/empty/error
 state, so a slow or failing endpoint degrades one card, not the page.
 
 **Every fragment embeds zero financial data or secrets** — the ADR-013 non-negotiable, held equally across all
-nine. `test/integration/http/dashboardTemplate.test.ts` is the regression guard, parameterized over all nine
+ten. `test/integration/http/dashboardTemplate.test.ts` is the regression guard, parameterized over all ten
 names: each fragment must contain a `fetch()` call, match no inline-data-blob pattern, carry no full document
-root, reference no external host outside the pinned CDN allowlist, and fetch only `/api` paths that exist in
-the live OpenAPI document; a companion test asserts `GET /ui` (the shell itself) references no external host
-outside that same allowlist.
+root, reference no external host outside the pinned CDN allowlist, fetch only `/api` paths that exist in the
+live OpenAPI document, and — checked independently of that OpenAPI-membership check, so a fetch target that
+isn't a documented `/api` path fails loudly instead of silently passing through unchecked — target only a
+same-origin `/api/*` path when expressed as a literal or template literal (no `/mcp`, no other origin; a
+`fetch(someVariable)` call is opaque to this static check either way and stays uncovered); a companion test
+asserts `GET /ui` (the shell itself) references no external host outside that same allowlist.
 
 `skills/dashboard-building/SKILL.md` is the guardrail checklist an MCP client follows to build or adapt a
 dashboard: read the contract (`fintrack://openapi`) first, map each section to a real endpoint, start from the

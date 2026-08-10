@@ -54,7 +54,8 @@
     pending: 'fa-clock',
     projections: 'fa-chart-line',
     comparative: 'fa-scale-balanced',
-    dashboards: 'fa-sliders'
+    dashboards: 'fa-sliders',
+    budget: 'fa-bullseye'
   };
 
   var LOCALIZED_TOOLTIPS = {
@@ -67,7 +68,8 @@
       pending: 'Pending',
       projections: 'Projections',
       comparative: 'Comparative',
-      dashboards: 'Dashboards Manager'
+      dashboards: 'Dashboards Manager',
+      budget: 'Budget'
     },
     pt: {
       overview: 'Visão Geral',
@@ -78,7 +80,8 @@
       pending: 'Pendentes',
       projections: 'Projeções',
       comparative: 'Comparativo',
-      dashboards: 'Gerenciador de Dashboards'
+      dashboards: 'Gerenciador de Dashboards',
+      budget: 'Orçamento'
     },
     es: {
       overview: 'Visión General',
@@ -89,7 +92,8 @@
       pending: 'Pendientes',
       projections: 'Proyecciones',
       comparative: 'Comparativo',
-      dashboards: 'Gestor de Dashboards'
+      dashboards: 'Gestor de Dashboards',
+      budget: 'Presupuesto'
     }
   };
 
@@ -272,7 +276,7 @@
     clearNode(dropdown);
 
     // Order of items in the main sidebar list:
-    var mainSequence = ['overview', 'pending', 'comparative', 'projections', 'accounts', 'cards'];
+    var mainSequence = ['overview', 'pending', 'budget', 'comparative', 'projections', 'accounts', 'cards'];
     // Order of items in the dropdown list:
     var dropdownSequence = ['categories', 'tags', 'dashboards'];
 

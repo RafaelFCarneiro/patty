@@ -497,7 +497,7 @@ parent category name is still the raw, unlocalized one (tracked in #169).
   negative / exceed 1 when over budget — over-budget is reported, never an error. A month with no matching
   transactions reports `amount: 0` for every measure of every budget.
 
-No REST mirror yet (MCP-only).
+REST mirror: `GET /api/budgets` (`list_budgets`), `GET /api/budgets/status?month&year` (`get_budget_status`). `create_budget`/`update_budget`/`delete_budget` have no REST mirror yet (MCP-only).
 
 ## save_dashboard / list_dashboards / delete_dashboard / rename_dashboard
 

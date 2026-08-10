@@ -6,6 +6,7 @@ import { buildOpenApiDocument, mountRoutes, type RouteDefinition } from './opena
 import { CACHE_CONTROL_NO_CACHE } from './respond.js';
 import { accountRoutes } from './routes/account.js';
 import { aggregateRoutes } from './routes/aggregate.js';
+import { budgetRoutes } from './routes/budget.js';
 import { categoryRoutes } from './routes/category.js';
 import { creditCardRoutes } from './routes/creditCard.js';
 import { dashboardRoutes } from './routes/dashboard.js';
@@ -48,6 +49,7 @@ export const buildRouteDefinitions = (
     ...dashboardRoutes(ctx),
     ...aggregateRoutes(ctx),
     ...summaryRoutes(ctx),
+    ...budgetRoutes(ctx),
   ];
 };
 

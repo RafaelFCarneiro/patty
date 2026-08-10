@@ -4,12 +4,13 @@ import { setupHttpTest } from './setup.js';
 
 const { inject } = setupHttpTest();
 
-// The nine default dashboards, each a file-backed fragment under ui/dashboards/ (ADR-027 Phase 2).
+// The ten default dashboards, each a file-backed fragment under ui/dashboards/ (ADR-027 Phase 2).
 // Kept as a literal list (not read off disk) so an added/removed default fails the drift check below
 // instead of silently expanding or shrinking what this suite covers.
 const DEFAULT_DASHBOARD_NAMES = [
   'overview',
   'accounts',
+  'budget',
   'cards',
   'categories',
   'comparative',
@@ -57,6 +58,17 @@ const apiPathsFetchedIn = (html: string): string[] => {
   return [...new Set(matches.map(([, path]) => (path ?? '').split('?')[0] ?? ''))];
 };
 
+// Every literal/template-literal first argument passed to fetch() in a fragment — unlike
+// apiPathsFetchedIn (which only matches strings containing "/api/"), this catches any fetch
+// target expressed as a literal or template literal (a fetch(someVariable) call is invisible
+// to static regex matching either way and stays uncovered), so a fragment fetching something
+// other than a same-origin /api/* path via a literal (the /mcp JSON-RPC endpoint, an absolute
+// URL, another origin) fails loudly instead of silently skipping the check that let the /mcp
+// fetch through in the first place.
+const FETCH_TARGET_PATTERN = /fetch\(\s*[`'"]([^`'"]*)[`'"]/g;
+const fetchTargetsIn = (html: string): string[] =>
+  [...html.matchAll(FETCH_TARGET_PATTERN)].map(([, target]) => target ?? '');
+
 // Truncates a path at its first dynamic segment (`${` in a fragment's template literal, `{` in an
 // OpenAPI path template), so a fetched `/api/transactions/${id}/confirm` can be compared against the
 // documented `/api/transactions/{id}/confirm` on their shared static prefix, without matching param
@@ -82,6 +94,15 @@ describe('default dashboard fragments are data-less (ADR-013 Phase B, converted 
 
       // It's also not a full page — the shell (ui/shell.html) owns the document root now.
       expect(html).not.toMatch(/<!doctype html|<html[\s>]/i);
+    });
+
+    it('fetches only same-origin /api/* paths — no /mcp, no other origin', async () => {
+      const res = await inject({ method: 'GET', url: `/api/dashboards/${name}` });
+      const { html } = res.json() as { html: string };
+
+      for (const target of fetchTargetsIn(html)) {
+        expect(target.startsWith('/api/'), `fetch target "${target}" is not a same-origin /api/* path`).toBe(true);
+      }
     });
 
     it('registers the live-update hook (ADR-027 Phase 3)', async () => {
