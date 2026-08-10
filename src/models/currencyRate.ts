@@ -12,7 +12,7 @@ export const SetExchangeRateSchema = z.object({
   from: CurrencyCode.describe('Base currency — 1 unit of this equals `rate` units of `to`'),
   to: CurrencyCode.describe('Quote currency — the unit `rate` is expressed in'),
   rate: z.number().positive().describe('1 unit of `from` = `rate` units of `to`, as of `asOf`'),
-  asOf: z.string().min(1).describe('ISO 8601 timestamp this rate was observed/sourced'),
+  asOf: z.string().datetime({ offset: true }).describe('ISO 8601 timestamp this rate was observed/sourced'),
   source: z.string().min(1).optional().describe('Free-text provenance, e.g. "PTAX", "coingecko"'),
 });
 export type SetExchangeRateInput = z.infer<typeof SetExchangeRateSchema>;
@@ -24,7 +24,10 @@ export const CurrencyRateSchema = z.object({
   fromCode: CurrencyCode.describe('Base currency — 1 unit of this equals `rate` units of toCode'),
   toCode: CurrencyCode.describe('Quote currency — the unit `rate` is expressed in'),
   rate: z.number().positive().describe('1 unit of fromCode = `rate` units of toCode, as of `asOf`'),
-  asOf: z.string().min(1).describe('ISO 8601 timestamp this rate was observed/sourced (agent-supplied)'),
+  asOf: z
+    .string()
+    .datetime({ offset: true })
+    .describe('ISO 8601 timestamp this rate was observed/sourced (agent-supplied)'),
   source: z
     .string()
     .min(1)
@@ -46,7 +49,7 @@ export const CurrencyRateViewSchema = z.object({
   from: CurrencyCode.describe('Base currency'),
   to: CurrencyCode.describe('Quote currency'),
   rate: z.number().positive().describe('1 unit of `from` = `rate` units of `to`, as of `asOf`'),
-  asOf: z.string().min(1).describe('ISO 8601 timestamp this rate was observed/sourced'),
+  asOf: z.string().datetime({ offset: true }).describe('ISO 8601 timestamp this rate was observed/sourced'),
   source: z.string().min(1).optional().describe('Free-text provenance, e.g. "PTAX", "coingecko"'),
 });
 export type CurrencyRateView = z.infer<typeof CurrencyRateViewSchema>;

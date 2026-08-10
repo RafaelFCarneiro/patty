@@ -5,7 +5,6 @@ import * as persistence from '../logic/persistence.js';
 import {
   CURRENCY_RATE_ENTITY_TAG,
   currencyRateErrors,
-  CurrencyRateViewSchema,
   type CurrencyRateEntity,
   type CurrencyRateView,
   type SetExchangeRateInput,
@@ -15,7 +14,11 @@ import type { Deps } from './deps.js';
 
 type RateFields = Pick<SetExchangeRateInput, 'from' | 'to' | 'rate' | 'asOf' | 'source'>;
 
-const toView = (fields: RateFields): CurrencyRateView => CurrencyRateViewSchema.parse(fields);
+// `fields` is already boundary-decoded (SetExchangeRateSchema at the MCP/REST edge, or
+// dbToEntity at the repo edge) — trust it rather than re-validating already-typed internal data
+// (docs/code-quality.md "Fail loudly at boundaries, trust internally"). RateFields and
+// CurrencyRateView share the same shape, so this is a plain pass-through, not a real adaptation.
+const toView = (fields: RateFields): CurrencyRateView => fields;
 
 const entityToFields = (entity: CurrencyRateEntity): RateFields => ({
   from: entity.fromCode,

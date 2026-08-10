@@ -51,6 +51,15 @@ describe('POST /api/exchange-rates', () => {
     });
     expect(res.statusCode).toBe(422);
   });
+
+  it('rejects a non-ISO-8601 asOf with 422 rather than persisting an unparseable timestamp', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/exchange-rates',
+      payload: { from: 'USD', to: 'BTC', rate: 0.00002, asOf: 'unknown' },
+    });
+    expect(res.statusCode).toBe(422);
+  });
 });
 
 describe('GET /api/exchange-rates', () => {
