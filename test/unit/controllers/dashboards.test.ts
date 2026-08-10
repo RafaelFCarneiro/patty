@@ -39,6 +39,7 @@ const makeDeps = (overrides?: Partial<Deps['dashboards']>): Deps => ({
   clock: () => FIXED_CLOCK,
   newId: () => 'test-id',
   locale: async () => 'en',
+  rateStaleness: { fiatHours: 24, cryptoHours: 1 },
 });
 
 describe('saveDashboard', () => {

@@ -12,18 +12,23 @@ import {
   withTypeLabel,
 } from '../../logic/account.js';
 import { computeBalance, computeProjectedBalance } from '../../logic/balance.js';
+import { consolidateNetWorth, valueAccount } from '../../logic/currencyRate.js';
+import { resolveBaseCurrency } from '../../logic/locale.js';
+import { decimalsLookup } from '../../logic/money.js';
 import * as persistence from '../../logic/persistence.js';
 import { resolveByName } from '../../logic/resolve.js';
 import { accountErrors, ACCOUNT_ENTITY_TAG } from '../../models/account.js';
 import type {
   Account,
   AccountBalance,
+  AccountBalancesResult,
   AccountEntity,
   AccountType,
   CreateAccount,
   UpdateAccount,
 } from '../../models/account.js';
 import { notFound } from '../../models/error.js';
+import { Locale } from '../../models/locale.js';
 import type { FlowOutcome, Persistable } from '../../models/persistable.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
@@ -52,11 +57,15 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
     return ok({ persist, response: account });
   });
 
-/** Balances are derived: initialBalance + income − expenses + transfers in − transfers out. */
+/** Balances are derived: initialBalance + income − expenses + transfers in − transfers out. Also
+ *  values each balance against the base currency and a consolidated net worth (ADR-026 Phase 3):
+ *  correlates the `accounts` and `currency_rates` aggregates here, in the controller, never via a
+ *  repo join (ADR-028) — `deps.accounts`/`deps.currencyRates` each stay scoped to their own table,
+ *  and `logic/currencyRate.ts`'s `valueAccount`/`consolidateNetWorth` do the (pure) correlating. */
 export const getAccountBalances = (
   deps: Deps,
   filter?: { account?: string; type?: AccountType; projectedAsOf?: string },
-): ResultAsync<AccountBalance[], AppError> =>
+): ResultAsync<AccountBalancesResult, AppError> =>
   safeTry(async function* () {
     const candidates = await listAccounts(deps, filter?.type);
     const accounts = filter?.account
@@ -77,7 +86,22 @@ export const getAccountBalances = (
 
       balances.push({ ...account, ...parts, balance, projectedBalance });
     }
-    return ok(balances);
+
+    const [settingsRow, currencies, rates] = await Promise.all([
+      deps.settings.getLocale(),
+      deps.currencies.list(),
+      deps.currencyRates.list(),
+    ]);
+    const baseCurrency = resolveBaseCurrency(settingsRow?.baseCurrency, settingsRow?.locale ?? Locale.enum.en);
+    const baseDecimals = decimalsLookup(currencies)(baseCurrency);
+    const now = deps.clock();
+
+    const valued = balances.map((b) =>
+      valueAccount(b, baseCurrency, rates, now, baseDecimals, deps.rateStaleness),
+    );
+    const consolidatedNetWorth = consolidateNetWorth(valued, baseCurrency, baseDecimals);
+
+    return ok({ balances: valued, consolidatedNetWorth });
   });
 
 export const deleteAccount = (deps: Deps, name: string): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>

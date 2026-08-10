@@ -31,6 +31,7 @@ const makeDeps = (overrides?: Partial<Deps['currencyRates']>): Deps => ({
   clock: () => new Date('2026-08-10T12:00:00.000Z'),
   newId: () => 'rate-new',
   locale: async () => 'en',
+  rateStaleness: { fiatHours: 24, cryptoHours: 1 },
 });
 
 const existingRate = (overrides: Partial<CurrencyRateEntity> = {}): CurrencyRateEntity => ({

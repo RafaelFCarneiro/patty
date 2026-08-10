@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createAccount, deleteAccount, updateAccount } from '../../../../src/controllers/account/account.js';
+import {
+  createAccount,
+  deleteAccount,
+  getAccountBalances,
+  updateAccount,
+} from '../../../../src/controllers/account/account.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
 import { PersistOp } from '../../../../src/models/persistable.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../../src/models/account.js';
-import { CurrencyCode } from '../../../../src/models/money.js';
+import type { CurrencyRateEntity } from '../../../../src/models/currencyRate.js';
+import { CurrencyCode, type Currency } from '../../../../src/models/money.js';
 import { Locale } from '../../../../src/models/locale.js';
 
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
@@ -26,6 +32,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   clock: () => new Date('2026-06-01'),
   newId: () => 'account-id-1',
   locale: async () => Locale.enum.en,
+  rateStaleness: { fiatHours: 24, cryptoHours: 1 },
   ...overrides,
 });
 
@@ -259,5 +266,175 @@ describe('updateAccount — functional core (ADR-021 phase 3a)', () => {
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'duplicate_name', entity: 'account', name: 'Taken' });
+  });
+});
+
+describe('getAccountBalances — valuation (ADR-026 Phase 3, controller-orchestrated per ADR-028)', () => {
+  const NOW = new Date('2026-08-10T12:00:00.000Z');
+  const ZERO_PARTS = { income: 0, expenses: 0, transfersIn: 0, transfersOut: 0 };
+  const CURRENCIES: Currency[] = [
+    { code: CurrencyCode.enum.BRL, symbol: 'R$', name: 'Real', decimals: 2 },
+    { code: CurrencyCode.enum.USD, symbol: '$', name: 'Dollar', decimals: 2 },
+    { code: CurrencyCode.enum.USDC, symbol: 'USDC', name: 'USD Coin', decimals: 6 },
+    { code: CurrencyCode.enum.BTC, symbol: '₿', name: 'Bitcoin', decimals: 8 },
+  ];
+
+  const usdRate = (overrides: Partial<CurrencyRateEntity> = {}): CurrencyRateEntity => ({
+    id: 'rate-usd-brl',
+    fromCode: CurrencyCode.enum.USD,
+    toCode: CurrencyCode.enum.BRL,
+    rate: 5,
+    asOf: NOW.toISOString(),
+    source: null,
+    version: 0,
+    ...overrides,
+  });
+
+  const balanceDeps = (opts: {
+    accounts: Account[];
+    rates?: CurrencyRateEntity[];
+    baseCurrency?: CurrencyCode | null;
+  }): Deps =>
+    makeDeps({
+      clock: () => NOW,
+      accounts: {
+        list: async () => opts.accounts,
+        findByName: async (name: string) => opts.accounts.find((a) => a.name === name) ?? null,
+        balanceParts: async () => ZERO_PARTS,
+      } as unknown as Deps['accounts'],
+      currencies: { list: async () => CURRENCIES } as Deps['currencies'],
+      currencyRates: { list: async () => opts.rates ?? [] } as unknown as Deps['currencyRates'],
+      settings: {
+        getLocale: async () => ({
+          id: 'singleton',
+          locale: Locale.enum.en,
+          localeSource: 'default',
+          baseCurrency: opts.baseCurrency ?? null,
+          version: 0,
+        }),
+      } as unknown as Deps['settings'],
+    });
+
+  it('base-currency account: identity conversion, included in the net total, no rate lookup needed', async () => {
+    const usdAccount = account({
+      id: 'acc-usd',
+      name: 'USD Checking',
+      currency: CurrencyCode.enum.USD,
+      initialBalance: 100,
+    });
+    const deps = balanceDeps({ accounts: [usdAccount], baseCurrency: CurrencyCode.enum.USD });
+
+    const result = await getAccountBalances(deps);
+
+    expect(result.isOk()).toBe(true);
+    const { balances, consolidatedNetWorth } = result._unsafeUnwrap();
+    expect(balances[0]!.converted).toEqual({
+      baseCurrency: CurrencyCode.enum.USD,
+      value: 100,
+      rate: 1,
+      asOf: NOW.toISOString(),
+      stale: false,
+    });
+    expect(consolidatedNetWorth).toEqual({ baseCurrency: CurrencyCode.enum.USD, total: 100, excluded: [] });
+  });
+
+  it('cross-currency account with a fresh rate: converts and rounds to the base currency decimals', async () => {
+    const brlAccount = account({
+      id: 'acc-brl',
+      name: 'BRL Wallet',
+      currency: CurrencyCode.enum.BRL,
+      initialBalance: 100,
+    });
+    const deps = balanceDeps({
+      accounts: [brlAccount],
+      baseCurrency: CurrencyCode.enum.USD,
+      rates: [usdRate({ fromCode: CurrencyCode.enum.BRL, toCode: CurrencyCode.enum.USD, rate: 0.2 })],
+    });
+
+    const result = await getAccountBalances(deps);
+
+    expect(result.isOk()).toBe(true);
+    const { balances, consolidatedNetWorth } = result._unsafeUnwrap();
+    expect(balances[0]!.converted).toEqual({
+      baseCurrency: CurrencyCode.enum.USD,
+      value: 20,
+      rate: 0.2,
+      asOf: NOW.toISOString(),
+      stale: false,
+    });
+    expect(consolidatedNetWorth.total).toBe(20);
+  });
+
+  it('a rate older than the class threshold is flagged stale, but still valued and included', async () => {
+    const usdAccount = account({
+      id: 'acc-usd',
+      name: 'USD Checking',
+      currency: CurrencyCode.enum.USD,
+      initialBalance: 100,
+    });
+    const staleAsOf = new Date(NOW.getTime() - 25 * 60 * 60 * 1000).toISOString(); // > 24h fiat threshold
+    const deps = balanceDeps({
+      accounts: [usdAccount],
+      baseCurrency: CurrencyCode.enum.BRL,
+      rates: [usdRate({ asOf: staleAsOf })],
+    });
+
+    const result = await getAccountBalances(deps);
+
+    const { balances, consolidatedNetWorth } = result._unsafeUnwrap();
+    expect(balances[0]!.converted?.stale).toBe(true);
+    expect(consolidatedNetWorth.excluded).toEqual([]);
+  });
+
+  it('a missing rate excludes the account from the net total, without dropping it from balances', async () => {
+    const btcAccount = account({
+      id: 'acc-btc',
+      name: 'BTC Wallet',
+      currency: CurrencyCode.enum.BTC,
+      initialBalance: 1,
+    });
+    const usdAccount = account({
+      id: 'acc-usd',
+      name: 'USD Checking',
+      currency: CurrencyCode.enum.USD,
+      initialBalance: 100,
+    });
+    const deps = balanceDeps({
+      accounts: [btcAccount, usdAccount],
+      baseCurrency: CurrencyCode.enum.USD,
+      rates: [], // no BTC->USD rate on file
+    });
+
+    const result = await getAccountBalances(deps);
+
+    const { balances, consolidatedNetWorth } = result._unsafeUnwrap();
+    expect(balances).toHaveLength(2);
+    expect(balances.find((b) => b.id === 'acc-btc')!.converted).toBeUndefined();
+    expect(consolidatedNetWorth).toEqual({ baseCurrency: CurrencyCode.enum.USD, total: 100, excluded: ['acc-btc'] });
+  });
+
+  it('sums multiple convertible balances into one net total', async () => {
+    const usdAccount = account({
+      id: 'acc-usd',
+      name: 'USD Checking',
+      currency: CurrencyCode.enum.USD,
+      initialBalance: 100,
+    });
+    const brlAccount = account({
+      id: 'acc-brl',
+      name: 'BRL Wallet',
+      currency: CurrencyCode.enum.BRL,
+      initialBalance: 500,
+    });
+    const deps = balanceDeps({
+      accounts: [usdAccount, brlAccount],
+      baseCurrency: CurrencyCode.enum.USD,
+      rates: [usdRate({ fromCode: CurrencyCode.enum.BRL, toCode: CurrencyCode.enum.USD, rate: 0.2 })],
+    });
+
+    const result = await getAccountBalances(deps);
+
+    const { consolidatedNetWorth } = result._unsafeUnwrap();
+    expect(consolidatedNetWorth).toEqual({ baseCurrency: CurrencyCode.enum.USD, total: 200, excluded: [] });
   });
 });

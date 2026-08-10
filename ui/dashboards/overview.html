@@ -1796,7 +1796,7 @@ function initCustomSelects() {
                 // 1. Fetch metadata (accounts, balances, cards, categories) in parallel
                 const [accountsData, balancesData, cardsData, categoriesData] = await Promise.all([
                     fetch('/api/accounts').then(r => r.json()),
-                    fetch(`/api/accounts/balances?projectedAsOf=${projectedAsOfStr}`).then(r => r.json()).catch(err => {
+                    fetch(`/api/accounts/balances?projectedAsOf=${projectedAsOfStr}`).then(r => r.json()).then(data => data.balances).catch(err => {
                         console.error("Failed to load balances", err);
                         return [];
                     }),

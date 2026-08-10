@@ -93,6 +93,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   clock: () => new Date('2026-06-15'),
   newId: () => 'new-tx-id',
   locale: async () => Locale.enum.en,
+  rateStaleness: { fiatHours: 24, cryptoHours: 1 },
   ...overrides,
 });
 

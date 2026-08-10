@@ -11,6 +11,7 @@ const makeDeps = (stored?: SettingsEntity, envLocale?: Locale): Deps => ({
     getLocale: async () => stored,
   },
   locale: async () => envLocale ?? stored?.locale ?? Locale.enum.en,
+  rateStaleness: { fiatHours: 24, cryptoHours: 1 },
   accounts: {} as Deps['accounts'],
   bills: {} as Deps['bills'],
   budgets: {} as Deps['budgets'],

@@ -217,6 +217,42 @@
             font-weight: 600;
         }
 
+        .acc-converted-bal {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+        .acc-converted-bal.stale {
+            color: var(--warning-color);
+        }
+        .acc-converted-bal.na {
+            font-style: italic;
+            opacity: 0.7;
+        }
+
+        .net-worth-summary {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+        }
+        .net-worth-summary .nw-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .net-worth-summary .nw-total {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #fff;
+        }
+        .net-worth-summary .nw-excluded {
+            font-size: 0.65rem;
+            color: var(--warning-color);
+            margin-top: 0.15rem;
+        }
+
         /* Account Gradient themes */
         .acc-checking {
             background: linear-gradient(135deg, #101524 0%, #1c233a 100%);
@@ -980,6 +1016,8 @@
                     <i class="fa-solid fa-wallet" style="color: var(--accent-primary);"></i>
                     <span data-i18n="accounts_title">Bank Accounts</span>
                 </div>
+                <!-- Consolidated net worth (ADR-026 Phase 3) -->
+                <div class="net-worth-summary" id="net-worth-summary" style="display:none;"></div>
                 <!-- Account Type Pills -->
                 <div class="type-filter-pills" id="type-pills">
                     <button class="pill-btn" data-filter="all" onclick="selectAccountTypeFilter('all')">
@@ -1310,6 +1348,7 @@
         var accounts = []; // Filtered accounts (non-credit cards)
         var activeAccount = null; // Current Account Object
         var accountBalances = {}; // name -> balance info
+        var consolidatedNetWorth = null; // { baseCurrency, total, excluded } from get_account_balances (ADR-026)
         var transactions = [];
         var categories = [];
         var selectedTypeFilter = 'checking'; // 'all' | 'checking' | 'savings' | 'investment' | 'wallet'
@@ -1635,14 +1674,16 @@
                 const res = await fetch(`/api/accounts/balances?projectedAsOf=${projectedAsOfStr}`);
                 if (!res.ok) throw new Error("Erro ao carregar saldos das contas");
 
-                const balances = await res.json();
+                const data = await res.json();
                 accountBalances = {};
-                balances.forEach(b => {
+                data.balances.forEach(b => {
                     accountBalances[b.name] = b;
                 });
+                consolidatedNetWorth = data.consolidatedNetWorth;
 
                 renderAccountsGrid();
-                
+                renderNetWorth();
+
                 // Keep active account selected or fallback
                 if (activeAccount) {
                     selectAccount(activeAccount.name);
@@ -1653,6 +1694,26 @@
             } finally {
                 accountsLoading.classList.remove('active');
             }
+        }
+
+        // Consolidated net worth summary (ADR-026 Phase 3) — base-currency total across every
+        // account, with a note when some accounts couldn't be valued (no exchange rate on file).
+        function renderNetWorth() {
+            const el = document.getElementById('net-worth-summary');
+            if (!consolidatedNetWorth) {
+                el.style.display = 'none';
+                return;
+            }
+            const totalText = window.formatMoney(consolidatedNetWorth.total, consolidatedNetWorth.baseCurrency);
+            const excludedCount = consolidatedNetWorth.excluded.length;
+            el.innerHTML = `
+                <div class="nw-label">Patrimônio Consolidado</div>
+                <div class="nw-total">${totalText}</div>
+                ${excludedCount > 0
+                    ? `<div class="nw-excluded"><i class="fa-solid fa-triangle-exclamation"></i> ${excludedCount} conta(s) sem cotação</div>`
+                    : ''}
+            `;
+            el.style.display = 'block';
         }
 
         // Render Accounts Grid inside Sidebar (Compact list cards)
@@ -1694,6 +1755,21 @@
                 const projBalText = window.formatMoney(balInfo.projectedBalance, a.currency);
                 const isProjNegative = balInfo.projectedBalance < 0;
 
+                // Converted valuation (ADR-026 Phase 3) — native amount stays primary; this is a
+                // secondary line, and only shown when the account isn't already in the base currency.
+                let convertedHtml = '';
+                if (consolidatedNetWorth && a.currency !== consolidatedNetWorth.baseCurrency) {
+                    if (balInfo.converted) {
+                        const convertedText = window.formatMoney(balInfo.converted.value, consolidatedNetWorth.baseCurrency);
+                        convertedHtml = `
+                            <div class="acc-converted-bal ${balInfo.converted.stale ? 'stale' : ''}">
+                                ≈ ${convertedText}${balInfo.converted.stale ? ' <i class="fa-solid fa-triangle-exclamation" title="Cotação desatualizada"></i>' : ''}
+                            </div>`;
+                    } else {
+                        convertedHtml = '<div class="acc-converted-bal na">Sem cotação</div>';
+                    }
+                }
+
                 div.innerHTML = `
                     <div class="acc-info-left">
                         <div class="acc-name-title">${escapeHtml(a.name)}</div>
@@ -1707,6 +1783,7 @@
                         <div class="acc-projected-bal ${isProjNegative ? 'negative' : ''}">
                             Proj: <span>${projBalText}</span>
                         </div>
+                        ${convertedHtml}
                     </div>
                 `;
                 accountsContainer.appendChild(div);

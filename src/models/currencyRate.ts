@@ -54,6 +54,17 @@ export const CurrencyRateViewSchema = z.object({
 });
 export type CurrencyRateView = z.infer<typeof CurrencyRateViewSchema>;
 
+/** A single balance's read-time valuation against a base currency (ADR-026 Phase 3) — omitted by
+ *  the caller building the response when unconvertible (no rate on file for the pair). */
+export const ConvertedValueSchema = z.object({
+  baseCurrency: CurrencyCode.describe('The currency this value is expressed in'),
+  value: z.number().describe('Amount converted to baseCurrency, rounded to its own decimals'),
+  rate: z.number().positive().describe('Exchange rate applied (1 when the source currency already is baseCurrency)'),
+  asOf: z.string().datetime({ offset: true }).describe('When the applied rate was observed/sourced'),
+  stale: z.boolean().describe('True when the rate is older than its class staleness threshold'),
+});
+export type ConvertedValue = z.infer<typeof ConvertedValueSchema>;
+
 export type CurrencyRateError = ValidationError;
 
 export const currencyRateErrors = {

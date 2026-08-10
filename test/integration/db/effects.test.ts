@@ -1554,6 +1554,7 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
       clock: () => new Date('2026-06-15'),
       newId: () => randomUUID(),
       locale: async () => Locale.enum.en,
+      rateStaleness: { fiatHours: 24, cryptoHours: 1 },
     };
 
     return { deps, cardName };
@@ -2278,6 +2279,7 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       clock: () => new Date('2026-06-15'),
       newId: () => randomUUID(),
       locale: async () => Locale.enum.en,
+      rateStaleness: { fiatHours: 24, cryptoHours: 1 },
     };
 
     return { deps, cardName, payerId };

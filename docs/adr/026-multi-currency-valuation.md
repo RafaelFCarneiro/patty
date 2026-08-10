@@ -154,10 +154,11 @@ read-time, and always stamped with its `as_of`.* Per-currency remains the defaul
 2. **Rates + base currency** (`feat/currency-rates`): the `currency_rates` table + entity + `set/list_exchange_rates`
    tools (agent-refreshed, FC/IS write flow); `settings.base_currency` + its setter; the read-time conversion
    helper in `logic/` (pure: amount × rate, with `as_of`/`stale`/`no_rate` outcomes) — no consumer yet.
-3. **Account valuation** (`feat/account-valuation`): `get_account_balances` gains per-account converted values +
-   the consolidated base-currency net total (stale/missing flagged), **controller-orchestrated per ADR-028**
-   (accounts repo + rates repo each per-aggregate; `logic/` converts). Optionally, the opt-in `displayCurrency`
-   grand-totals on summaries/budgets/`find_correlations` as a follow-on.
+3. **Account valuation** (`feat/account-valuation`, shipped): `get_account_balances` gains per-account converted
+   values + the consolidated base-currency net total (stale/missing flagged), **controller-orchestrated per
+   ADR-028** (accounts repo + rates repo each per-aggregate; `logic/` converts). Optionally, the opt-in
+   `displayCurrency` grand-totals on summaries/budgets/`find_correlations` as a follow-on (not part of this
+   phase).
 
 ## Action Items
 
@@ -172,9 +173,9 @@ read-time, and always stamped with its `as_of`.* Per-currency remains the defaul
    rounds crypto amounts to fiat's 2 decimals) — see § Migration plan.
 4. [x] Phase 2 — `currency_rates` entity + `set/list_exchange_rates` + `settings.base_currency` + the pure
    conversion helper.
-5. [ ] Phase 3 — `get_account_balances` valuation (converted values + net total, staleness-flagged),
+5. [x] Phase 3 — `get_account_balances` valuation (converted values + net total, staleness-flagged),
    controller-orchestrated per ADR-028.
-6. [ ] Record the relaxed valuation invariant + the local-first "rates are agent-refreshed, backend never
+6. [x] Record the relaxed valuation invariant + the local-first "rates are agent-refreshed, backend never
    fetches" note in `docs/architecture.md`; PLAN open-question → resolved.
 
 Each phase touches the schema and/or a new write flow → feature-sized → independent verification subagent per

@@ -160,8 +160,11 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
     {
       title: 'Get account balances',
       description:
-        'Current balance per account, derived: initialBalance + income − expenses ' +
-        '+ transfers in − transfers out. Optionally filter by account name or type.',
+        'Returns { balances, consolidatedNetWorth }. Each balance is derived: initialBalance + income − expenses ' +
+        '+ transfers in − transfers out, plus an optional converted block (read-time valuation against the base ' +
+        'currency, with rate/asOf/stale — absent when no exchange rate is on file). consolidatedNetWorth sums ' +
+        'every convertible balance in the base currency; accounts with no rate are listed in its excluded array. ' +
+        'Optionally filter by account name or type.',
       inputSchema: {
         account: z.string().optional().describe('Single account by name'),
         type: AccountType.optional(),

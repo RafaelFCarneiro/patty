@@ -82,6 +82,7 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     clock: () => new Date(),
     newId: () => randomUUID(),
     locale: localeResolver.locale,
+    rateStaleness: { fiatHours: 24, cryptoHours: 1 },
   };
 
   const require = createRequire(import.meta.url);

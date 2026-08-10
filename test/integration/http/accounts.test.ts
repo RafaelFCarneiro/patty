@@ -363,7 +363,9 @@ describe('GET /api/accounts/balances', () => {
     });
     const res = await inject({ method: 'GET', url: '/api/accounts/balances?account=BalanceAcct' });
     expect(res.statusCode).toBe(200);
-    const balances = res.json() as Array<{ balance: number; income: number; expenses: number }>;
+    const { balances } = res.json() as {
+      balances: Array<{ balance: number; income: number; expenses: number }>;
+    };
     expect(balances[0]!.balance).toBe(1300);
     expect(balances[0]!.income).toBe(500);
     expect(balances[0]!.expenses).toBe(200);
@@ -388,18 +390,85 @@ describe('GET /api/accounts/balances', () => {
       },
     });
     const noProj = await inject({ method: 'GET', url: '/api/accounts/balances?account=ProjAcct' });
-    expect(noProj.json()[0].balance).toBe(1000);
-    expect(noProj.json()[0].projectedBalance).toBeUndefined();
+    expect(noProj.json().balances[0].balance).toBe(1000);
+    expect(noProj.json().balances[0].projectedBalance).toBeUndefined();
     const withProj = await inject({
       method: 'GET',
       url: '/api/accounts/balances?account=ProjAcct&projectedAsOf=2026-06-30',
     });
-    expect(withProj.json()[0].balance).toBe(1000);
-    expect(withProj.json()[0].projectedBalance).toBe(700);
+    expect(withProj.json().balances[0].balance).toBe(1000);
+    expect(withProj.json().balances[0].projectedBalance).toBe(700);
   });
 
   it('rejects invalid projectedAsOf (422)', async () => {
     const res = await inject({ method: 'GET', url: '/api/accounts/balances?projectedAsOf=bad' });
     expect(res.statusCode).toBe(422);
+  });
+
+  it('valuation (ADR-026): converts a non-base-currency balance and sums a consolidated net worth', async () => {
+    await inject({
+      method: 'POST',
+      url: '/api/settings/base-currency',
+      payload: { baseCurrency: 'USD' },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/exchange-rates',
+      payload: { from: 'BRL', to: 'USD', rate: 0.2, asOf: '2026-08-10T10:00:00.000Z' },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'ValUsdAcct', type: 'checking', currency: 'USD', initialBalance: 100 },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'ValBrlAcct', type: 'checking', currency: 'BRL', initialBalance: 500 },
+    });
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: 'ValBtcAcct', type: 'checking', currency: 'BTC', initialBalance: 1 },
+    });
+
+    type BalancesBody = {
+      balances: Array<{ id: string; converted?: { value: number; rate: number; stale: boolean } }>;
+      consolidatedNetWorth: { baseCurrency: string; total: number; excluded: string[] };
+    };
+    // Filtered by account, one at a time, so other accounts created elsewhere in this suite never
+    // pollute the net-worth total this test asserts.
+    const usdRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValUsdAcct' });
+    const brlRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValBrlAcct' });
+    const btcRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValBtcAcct' });
+    expect(usdRes.statusCode).toBe(200);
+    const usdBody = usdRes.json() as BalancesBody;
+    const brlBody = brlRes.json() as BalancesBody;
+    const btcBody = btcRes.json() as BalancesBody;
+
+    expect(usdBody.balances[0]!.converted).toEqual({
+      baseCurrency: 'USD',
+      value: 100,
+      rate: 1,
+      asOf: expect.any(String),
+      stale: false,
+    });
+    expect(usdBody.consolidatedNetWorth).toEqual({ baseCurrency: 'USD', total: 100, excluded: [] });
+
+    expect(brlBody.balances[0]!.converted).toEqual({
+      baseCurrency: 'USD',
+      value: 100,
+      rate: 0.2,
+      asOf: expect.any(String),
+      stale: false,
+    });
+    expect(brlBody.consolidatedNetWorth).toEqual({ baseCurrency: 'USD', total: 100, excluded: [] });
+
+    expect(btcBody.balances[0]!.converted).toBeUndefined();
+    expect(btcBody.consolidatedNetWorth).toEqual({
+      baseCurrency: 'USD',
+      total: 0,
+      excluded: [btcBody.balances[0]!.id],
+    });
   });
 });

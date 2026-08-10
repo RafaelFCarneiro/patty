@@ -54,10 +54,10 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
       });
 
       // The card's internal account should show negative balance (debt)
-      const balances = (await callTool(client, {
+      const { balances } = (await callTool(client, {
         name: 'get_account_balances',
         args: { account: `Card: ${cardName}` },
-      })) as Array<{ balance?: number; expenses?: number }>;
+      })) as { balances: Array<{ balance?: number; expenses?: number }> };
       expect(balances[0]?.balance).toBe(-250);
       expect(balances[0]?.expenses).toBe(250);
     } finally {

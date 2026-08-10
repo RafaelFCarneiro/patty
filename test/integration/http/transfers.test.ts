@@ -23,9 +23,9 @@ describe('POST /api/transfers', () => {
     expect(res.statusCode).toBe(201);
     expect(res.json()).toHaveProperty('created', true);
     const srcBal = await inject({ method: 'GET', url: '/api/accounts/balances?account=TransferFrom' });
-    expect(srcBal.json()[0].balance).toBe(300);
+    expect(srcBal.json().balances[0].balance).toBe(300);
     const dstBal = await inject({ method: 'GET', url: '/api/accounts/balances?account=TransferTo' });
-    expect(dstBal.json()[0].balance).toBe(200);
+    expect(dstBal.json().balances[0].balance).toBe(200);
   });
 
   it('transfer excluded from expense/income search', async () => {
