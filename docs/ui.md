@@ -71,6 +71,16 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   freshly created `<script>` element (standard SPA workaround) to execute it; the fragment's script runs its
   init **synchronously** at that point rather than waiting for `DOMContentLoaded` (which fires once, for the
   shell page, not per navigation).
+- **`ui/money.js`** (ADR-026 Phase 1) — shell-provided `window.formatMoney(value, currencyCode, opts?)`, loaded
+  before `app.js` so it's ready before the first fragment script runs. ISO fiat (BRL/USD) formats via
+  `Intl.NumberFormat`'s currency style unchanged; a non-ISO code (USDC/BTC) falls back to that currency's own
+  symbol + decimals instead — **not** via try/catch (a syntactically-valid-but-unrecognized 3-letter code like
+  `BTC` never throws there; it silently mis-formats with a fiat-shaped 2 decimals and no real symbol), but via
+  an explicit `Intl.supportedValuesOf('currency')` membership check. Symbol/decimals come from
+  `window.__fintrackCurrencies`, populated once at shell boot from `GET /api/currencies`
+  (`app.js`'s `bootPromise`, sequenced before the first `loadDashboard()` call so the metadata is never missing
+  on first paint). Every fragment that formats money calls this instead of its own `Intl.NumberFormat(...,
+  {style:'currency', ...})`.
 - **`ui/dashboards/*.html`** (ADR-027 Phase 2) — the default dashboard fragments, one file per default,
   git-versioned and read-only at the install location; bootstrap reconciles them into `source: 'file'` rows.
 
@@ -126,8 +136,8 @@ fragments were first converted to files.
   shell file**, always `200`, `cache-control: no-cache`. There is **no server-side existence check** on
   `:name` — the shell resolves it client-side and shows a not-found state inside `#content` if the fragment
   fetch 404s; `overview` is the default for bare `/ui`.
-- **`GET /ui/assets/app.css` / `GET /ui/assets/app.js`** — two fixed routes reading two fixed files (not a
-  general static server), also `no-cache`.
+- **`GET /ui/assets/app.css` / `GET /ui/assets/app.js` / `GET /ui/assets/money.js`** — three fixed routes
+  reading three fixed files (not a general static server), also `no-cache`.
 - **`GET /ui/events`** — the SSE live-update stream (see below).
 - These are browser-facing routes, **not** `RouteDefinition`s, so `/ui*` is deliberately excluded from the
   `/api` OpenAPI document (that document exists to give agents `fetch()` shapes for the JSON API). Dashboard

@@ -128,7 +128,8 @@ ADR-022).
 not aggregates a flow returns as a `Persistable`.
 
 ```
-currencies          (code PK, symbol, name)
+currencies          (code PK, symbol, name, decimals DEFAULT 2 — BRL/USD=2, USDC=6, BTC=8,
+                     ADR-026 Phase 1; fiat + crypto, purely additive, no conversion/rates yet)
 accounts            (id PK, name, type: checking|savings|wallet|investment|credit,
                      initial_balance, currency FK→currencies, version)
 credit_cards        (id PK, name, currency FK, closing_day, due_day, limit_amount?,
@@ -175,7 +176,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 
 1. **Idempotency**: every Transaction write uses `UNIQUE(idempotency_key)` + `onConflictDoNothing()`; `rowsAffected === 0` means duplicate — return the existing row, `created: false`.
 2. **Transfers** are `type: 'transfer'` with both `from_account_id` AND `to_account_id` set (ADR-002); summary/classification queries MUST exclude them (`t.type != 'transfer'`).
-3. **Currency**: transactions denormalize the account/card currency at write time; aggregations group per currency, never convert.
+3. **Currency**: transactions denormalize the account/card currency at write time; aggregations group per currency, never convert. `CurrencyCode` is BRL/USD/USDC/BTC (ADR-026 Phase 1) — crypto is first-class alongside fiat, purely additive; there is still no conversion or base-currency valuation (that's ADR-026 phases 2–3). Money-amount rounding in `logic/` (`summarize`, `shapeAggregateResult`) is currency-decimals-aware (`roundToDecimals`, `logic/money.ts`) — a currency's own `decimals` (fiat 2, USDC 6, BTC 8) is looked up via `decimalsLookup` from the `currencies` reference list, never hardcoded to 2, so a native BTC/USDC amount isn't flattened to fiat precision.
 4. **Balances are derived**, never stored: `initialBalance + income − expenses + transfers in − transfers out`. **Only `effective` transactions count** — pending transactions never affect the current balance. Projection (balance + pending-through-date) is opt-in via `projectedAsOf` on `get_account_balances`.
    - **Effective-only invariant (Feature Design 001)**: `get_account_balances` and `get_spending_summary` MUST filter `status = 'effective'`. Projection queries explicitly include `pending`. Classification ignores status. This is enforced in `diplomat/db/repos/` — violations are bugs.
 5. **Classification via merchant_category**: normalized description → `merchants.key` → strongest `merchant_category` edge; user corrections increment `weight` (`onConflictDoUpdate`). **Recurring rules carry a merchant too (Feature Design 017)**: `create_recurring` resolves `recurring_rules.merchant_key` from an explicit `merchant` (stored as given, normalized) or, failing that, the same `merchant_category` match-first precedence `planAccountMovement` uses for transactions — reusing an already-learned key over a fresh full-description normalize — so a rule reinforces the same merchant identity a matching transaction would; every occurrence `apply_due_recurring` materializes inherits the rule's `merchant_key`, so recurring spend participates in merchant concentration and classification like any other transaction. Rules created before the migration have `merchant_key = null` (no backfill — `normalizeMerchant` can't be faithfully reproduced in SQL) until re-saved. This `merchant_key` is what `find_correlations`'s `recurring_candidates` mode (Feature Design 016 phase B) excludes on exactly: a candidate merchant already backing a rule is filtered out in SQL via `t.merchant_key NOT IN (SELECT merchant_key FROM recurring_rules WHERE merchant_key IS NOT NULL)` — a pre-017 rule (`merchant_key = null`) doesn't match and so can still surface as a candidate until re-saved.
@@ -299,15 +300,15 @@ no module carries the full parameter list. `server.ts` reduces to construction +
 build `ctx`, call each `register…` once.
 
 **HTTP — `diplomat/http`.** `routes/<domain>.ts` (`account`, `category`, `creditCard` — including `Bills`
-alongside credit cards, same as the MCP side — `transfer`, `recurring`, `transaction`, `tag`, `dashboard`,
-`aggregate`, `summary`, `system`) each export a `<domain>Routes(ctx): RouteDefinition[]` — exactly the routes
+alongside credit cards, same as the MCP side — `transfer`, `recurring`, `transaction`, `tag`, `currency`,
+`dashboard`, `aggregate`, `summary`, `system`) each export a `<domain>Routes(ctx): RouteDefinition[]` — exactly the routes
 whose controller lives in that domain. Each module declares its own `<DOMAIN>_TAG` constant(s) for its OpenAPI
 tag(s) (`creditCard.ts` alone has two: `CreditCards` and `Bills`) rather than pulling from a shared enumeration,
 since no tag is used by more than one domain file. `respond.ts` holds the shared response helpers (`send`,
 `parse`) and OpenAPI response/param shorthands (`validation422`, `notFound404`, `conflict409`, `nameParam`,
 `idParam`, `confirmQuery`, `CACHE_CONTROL_NO_CACHE`); `context.ts` defines `HttpContext` (`{ deps, version,
 runEffects, runEffectsSequence }`), built once in `routes.ts` and passed to every route builder. `GET /ui`,
-`GET /ui/:name`, and `GET /ui/assets/{app.css,app.js}` — browser-facing HTML/asset routes, not
+`GET /ui/:name`, and `GET /ui/assets/{app.css,app.js,money.js}` — browser-facing HTML/asset routes, not
 `RouteDefinition`s (no OpenAPI entry) — are mounted by `routes/ui.ts`'s `registerUiRoutes(app)`, called from
 `registerRoutes` alongside `mountRoutes` (ADR-027 Phase 1; see § Dashboards / `/ui` surface). `routes.ts`
 reduces to construction + aggregation: `buildRouteDefinitions` concatenates every domain's array into the one
@@ -336,7 +337,7 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 ## Reference resources (Feature Design 018)
 
-`fintrack://categories`/`accounts`/`tags`/`credit-cards` (`diplomat/mcp/resources.ts`) are read-only, static-URI MCP resources that reuse the matching `list_*` read controller verbatim and serialize its result — the resource and its tool can never disagree, same principle as `fintrack://openapi` reusing `buildOpenApiDocument`. `fintrack://merchants/top` is the one addition with a new read path: `MerchantsRepo.top(limit)` (`diplomat/db/repos/merchants.ts`) groups effective, non-transfer transactions by `merchant_key`, resolves each merchant's dominant category (by transaction frequency, ties broken alphabetically), orders by count descending, and caps at `DEFAULT_TOP_MERCHANTS_LIMIT` (`models/merchant.ts`, 20) — a `controllers/merchants.ts#topMerchants` locale-resolves the category name before the resource serializes it. No `ResourceTemplate`/caller-supplied limit — it's a vocabulary list, not a tunable report.
+`fintrack://categories`/`accounts`/`tags`/`credit-cards` (`diplomat/mcp/resources.ts`) are read-only, static-URI MCP resources that reuse the matching `list_*` read controller verbatim and serialize its result — the resource and its tool can never disagree, same principle as `fintrack://openapi` reusing `buildOpenApiDocument`. `fintrack://merchants/top` is the one addition with a new read path: `MerchantsRepo.top(limit)` (`diplomat/db/repos/merchants.ts`) groups effective, non-transfer transactions by `merchant_key`, resolves each merchant's dominant category (by transaction frequency, ties broken alphabetically), orders by count descending, and caps at `DEFAULT_TOP_MERCHANTS_LIMIT` (`models/merchant.ts`, 20) — a `controllers/merchants.ts#topMerchants` locale-resolves the category name before the resource serializes it. No `ResourceTemplate`/caller-supplied limit — it's a vocabulary list, not a tunable report. `fintrack://currencies` (ADR-026 Phase 1) mirrors `GET /api/currencies` — both call `controllers/currencies.ts#listCurrencies` (`CurrenciesRepo.list()`, `diplomat/db/repos/currencies.ts`) — rather than a `list_*` tool, since there is no MCP write-side counterpart for currencies (a seeded reference table, never user-mutated): `{code, symbol, name, decimals}` per currency, the metadata a client needs to format a code `Intl.NumberFormat`'s currency mode can't handle correctly — `USDC` throws (4 letters fail its syntax check) but `BTC` doesn't (3 letters pass, then it's silently mis-formatted with fiat-shaped precision and no real symbol) — so detection must be explicit (`Intl.supportedValuesOf('currency')`), not try/catch; see `ui/money.js` (`docs/ui.md`).
 
 ## Guided-workflow prompts (Feature Design 019)
 
@@ -378,6 +379,6 @@ shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-0
 - ADR-023: an applier decides nothing and performs no reads — merchant/tag/learning decisions move into the core; idempotency is the engine's, declared by registration config (extends ADR-021/022)
 - ADR-024: local SQLite concurrency posture — WAL + `busy_timeout` + `SQLITE_BUSY` retryable in `runEffects`; multi-client use steered to the HTTP transport (ADR-007)
 - ADR-025: diplomat edge organization — MCP tools/resources/prompts and HTTP routes in per-domain modules mirroring `controllers/`; entrypoints only aggregate
-- ADR-026: multi-currency valuation — crypto (USDC, BTC) first-class, agent-refreshed `currency_rates` table, `settings.base_currency`, read-time conversion on `get_account_balances`; relaxes no-implicit-conversion for **valuation** only (**proposed**)
+- ADR-026: multi-currency valuation — crypto (USDC, BTC) first-class, agent-refreshed `currency_rates` table, `settings.base_currency`, read-time conversion on `get_account_balances`; relaxes no-implicit-conversion for **valuation** only (**accepted**; Phase 1 — crypto currencies — complete, phases 2–3 — rates/base-currency, account valuation — pending)
 - ADR-027: UI app shell — shared shell hosting dashboard **content fragments**; `source: inline|file` discriminator (defaults are git-versioned files, customs stay inline, `save_dashboard` always inline); entity-tagged **SSE** live-update; same Fastify, no build (extends/revises ADR-013; see `docs/ui.md`)
 - ADR-028: read-side cross-aggregate correlation lives in controllers, not repos — refines ADR-011 (aggregation stays in the repo; correlating two aggregates does not); transaction "what counts" predicates single-sourced (`txPredicates`); applied to `get_budget_status` (phase 2) and `find_correlations`' `budget_fit` (phase 3, complete) — `budgetTargetMatch` fully retired

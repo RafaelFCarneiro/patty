@@ -561,6 +561,7 @@ Static-URI, read-only resources exposing the user's vocabulary — categories, a
 - **`fintrack://tags`** — same array as `list_tags`.
 - **`fintrack://credit-cards`** — same array as `list_credit_cards`.
 - **`fintrack://merchants/top`** — the 20 (`DEFAULT_TOP_MERCHANTS_LIMIT`, `models/merchant.ts`) merchants with the most effective, non-transfer transactions, each `{ merchant, transactionCount, categoryName }` ordered by `transactionCount` descending. `categoryName` is the category the merchant is most often classified into (by transaction frequency, not spend), locale-resolved; `null` when every one of the merchant's transactions is uncategorized. A reference/vocabulary list, not a spend report — no per-currency amounts, no caller-supplied limit (static URI, no `ResourceTemplate` parameters).
+- **`fintrack://currencies`** (ADR-026 Phase 1) — same array as `GET /api/currencies`: `{ code, symbol, name, decimals }` for every currency (fiat BRL/USD, crypto USDC/BTC). No matching `list_*` tool — currencies are a seeded reference table with no write path, so this resource is the read surface. `decimals` is what lets a client format a non-ISO code correctly: `Intl.NumberFormat`'s `style: 'currency'` mode either throws (a malformed code) or silently mis-formats (a well-formed-but-unrecognized 3-letter code like `BTC` — 2 decimals, no real symbol) for USDC/BTC, so format with `symbol` + `decimals` instead for any code not in `Intl.supportedValuesOf('currency')`.
 
 ## Prompts (Feature Design 019)
 

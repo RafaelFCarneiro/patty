@@ -834,9 +834,12 @@
         var panelsLoading = document.getElementById('panels-loading');
         var heatmapLoading = document.getElementById('heatmap-loading');
 
-        // Helpers
+        // Helpers. NOTE: this dashboard blends every transaction's amount into one total regardless
+        // of its actual currency, always labeled BRL — a pre-existing gap (#174) unrelated to this
+        // formatter swap; formatBRL still always formats as BRL, byte-for-byte the same as before,
+        // just routed through the shared crypto-aware helper.
         function formatBRL(val) {
-            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+            return window.formatMoney(val, 'BRL');
         }
 
         function escapeHtml(str) {

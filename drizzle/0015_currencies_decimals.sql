@@ -1,0 +1,1 @@
+ALTER TABLE `currencies` ADD `decimals` integer DEFAULT 2 NOT NULL;

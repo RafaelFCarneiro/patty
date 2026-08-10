@@ -21,6 +21,9 @@ export const currencies = sqliteTable('currencies', {
   code: text('code').primaryKey(),
   symbol: text('symbol').notNull(),
   name: text('name').notNull(),
+  // Fractional digits for display/rounding (fiat 2, USDC 6, BTC 8) — ADR-026 Phase 1. Defaults to
+  // fiat's 2 so the migration backfill needs no per-row logic.
+  decimals: integer('decimals').notNull().default(2),
 });
 
 export const accounts = sqliteTable('accounts', {

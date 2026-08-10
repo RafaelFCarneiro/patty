@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { summarize } from '../../../src/logic/summary.js';
+import type { DecimalsFor } from '../../../src/logic/money.js';
+
+// Fiat-shaped 2 decimals for every currency, matching existing behavior before ADR-026 — tests
+// that care about a different currency's own decimals pass their own lookup explicitly.
+const decimalsFor: DecimalsFor = () => 2;
 
 const row = (overrides: Partial<Parameters<typeof summarize>[0][number]>) => ({
   currency: 'BRL' as const,
@@ -20,6 +25,7 @@ describe('summarize', () => {
         row({ currency: 'USD', type: 'expense', category: 'Assinaturas', total: 20, count: 2 }),
       ],
       'en',
+      decimalsFor,
     );
     expect(out).toHaveLength(2);
     const brl = out.find((s) => s.currency === 'BRL')!;
@@ -29,17 +35,21 @@ describe('summarize', () => {
   });
 
   it('labels null category with locale-aware fallback and sorts by total desc', () => {
-    const out = summarize([row({ category: null, total: 10 }), row({ category: 'Lazer', total: 200, count: 2 })], 'pt');
+    const out = summarize(
+      [row({ category: null, total: 10 }), row({ category: 'Lazer', total: 200, count: 2 })],
+      'pt',
+      decimalsFor,
+    );
     expect(out[0]!.byCategory.map((c) => c.category)).toEqual(['Lazer', 'Sem categoria']);
   });
 
   it('uncategorized label follows locale — en', () => {
-    const out = summarize([row({ category: null, total: 10 })], 'en');
+    const out = summarize([row({ category: null, total: 10 })], 'en', decimalsFor);
     expect(out[0]!.byCategory[0]!.category).toBe('Uncategorized');
   });
 
   it('uncategorized label follows locale — es', () => {
-    const out = summarize([row({ category: null, total: 10 })], 'es');
+    const out = summarize([row({ category: null, total: 10 })], 'es', decimalsFor);
     expect(out[0]!.byCategory[0]!.category).toBe('Sin categoría');
   });
 
@@ -47,17 +57,22 @@ describe('summarize', () => {
     const out = summarize(
       [row({ category: 'Food', categoryNames: { pt: 'Alimentação', es: 'Alimentación' }, total: 50 })],
       'pt',
+      decimalsFor,
     );
     expect(out[0]!.byCategory[0]!.category).toBe('Alimentação');
   });
 
   it('falls back to canonical name when translation is missing', () => {
-    const out = summarize([row({ category: 'Food', categoryNames: { pt: 'Alimentação' }, total: 50 })], 'es');
+    const out = summarize(
+      [row({ category: 'Food', categoryNames: { pt: 'Alimentação' }, total: 50 })],
+      'es',
+      decimalsFor,
+    );
     expect(out[0]!.byCategory[0]!.category).toBe('Food');
   });
 
   it('user-created category (names=null) shows literal name', () => {
-    const out = summarize([row({ category: 'My Custom', categoryNames: null, total: 30 })], 'pt');
+    const out = summarize([row({ category: 'My Custom', categoryNames: null, total: 30 })], 'pt', decimalsFor);
     expect(out[0]!.byCategory[0]!.category).toBe('My Custom');
   });
 
@@ -69,6 +84,7 @@ describe('summarize', () => {
         row({ type: 'expense', category: 'Transporte', total: 0.05 }),
       ],
       'en',
+      decimalsFor,
     );
 
     expect(out).toHaveLength(1);
@@ -96,10 +112,20 @@ describe('summarize', () => {
         count: 1,
       }),
     ];
-    const en = summarize(rows, 'en');
-    const pt = summarize(rows, 'pt');
+    const en = summarize(rows, 'en', decimalsFor);
+    const pt = summarize(rows, 'pt', decimalsFor);
     expect(en[0]!.income).toBe(pt[0]!.income);
     expect(en[0]!.expenses).toBe(pt[0]!.expenses);
     expect(en[0]!.balance).toBe(pt[0]!.balance);
+  });
+
+  it("rounds a currency's total to its own decimals (ADR-026) — a flat 2 would corrupt BTC", () => {
+    const btcDecimalsFor: DecimalsFor = (code) => (code === 'BTC' ? 8 : 2);
+    const out = summarize(
+      [row({ currency: 'BTC', type: 'income', category: 'Mining', total: 0.123456785 })],
+      'en',
+      btcDecimalsFor,
+    );
+    expect(out[0]!.income).toBe(0.12345679); // rounded to 8 decimals, not flattened to 0.12
   });
 });

@@ -106,10 +106,23 @@
   var Api = {
     status: '/api/status',
     dashboards: '/api/dashboards',
+    currencies: '/api/currencies',
     dashboard: function (name) {
       return '/api/dashboards/' + encodeURIComponent(name);
     },
   };
+
+  // Keyed by code — window.formatMoney (ui/money.js) reads this to format a currency Intl's
+  // currency mode can't handle correctly: USDC (4 letters) throws, BTC (3 letters, syntactically
+  // valid) doesn't throw but silently mis-formats with fiat-shaped precision and no real symbol.
+  // Both fall back to this currency's own symbol/decimals instead.
+  function indexCurrenciesByCode(currencies) {
+    var map = {};
+    (currencies || []).forEach(function (c) {
+      map[c.code] = c;
+    });
+    return map;
+  }
 
   function h(tag, props, children) {
     var el = document.createElement(tag);
@@ -397,9 +410,12 @@
     }
 
     var initialName = currentDashboardName();
-    
-    // First read system status for locale, then fetch and render dashboards
-    fetchJson(Api.status)
+
+    // Currency metadata (symbol/decimals) must be cached before the first dashboard renders — its
+    // fragment script calls window.formatMoney synchronously while rendering, with no re-render on
+    // late-arriving data. Sequenced with locale (both fast local calls); the dashboards list fetch
+    // (menu chrome) stays parallel to content, same as before this sequencing existed.
+    var bootPromise = fetchJson(Api.status)
       .then(function (status) {
         if (status && status.locale) {
           currentLocale = status.locale;
@@ -409,6 +425,32 @@
         // Fallback to English silently
       })
       .then(function () {
+        return fetchJson(Api.currencies);
+      })
+      .then(function (currencies) {
+        window.__fintrackCurrencies = indexCurrenciesByCode(currencies);
+      })
+      .catch(function (err) {
+        // Fiat (BRL/USD) is unaffected — formatMoney's ISO path never reads this metadata. A
+        // crypto amount (BTC/USDC) would silently degrade to fiat-shaped 2-decimal precision and
+        // no real symbol without it, which is exactly the wrong-precision-with-no-signal gotcha
+        // this file exists to avoid — so surface it loudly instead of proceeding silently.
+        window.__fintrackCurrencies = window.__fintrackCurrencies || {};
+        showDiagnosticError(
+          'Could not load currency metadata: ' +
+            err.message +
+            '. Crypto amounts (BTC/USDC) may display at the wrong precision until this is refreshed.',
+        );
+      });
+
+    bootPromise.then(function () {
+      return loadDashboard(initialName);
+    }).then(function () {
+      connectEvents();
+    });
+
+    bootPromise
+      .then(function () {
         return fetchJson(Api.dashboards);
       })
       .then(function (dashboards) {
@@ -417,8 +459,5 @@
       .catch(function (err) {
         setError(menu, err.message);
       });
-      
-    loadDashboard(initialName);
-    connectEvents();
   });
 })();

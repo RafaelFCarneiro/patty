@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { listAccounts } from '../../controllers/account/account.js';
 import { listCategories } from '../../controllers/categories.js';
+import { listCurrencies } from '../../controllers/currencies.js';
 import { topMerchants } from '../../controllers/merchants.js';
 import { listCreditCards } from '../../controllers/creditCard/creditCard.js';
 import { listTags } from '../../controllers/tags.js';
@@ -51,6 +52,20 @@ export const registerResources = (server: McpServer, ctx: McpContext, openApiDoc
       mimeType: 'application/json',
     },
     async (uri) => jsonResource(uri, await listAccounts(deps)),
+  );
+
+  server.registerResource(
+    'currencies',
+    'fintrack://currencies',
+    {
+      title: 'Currencies',
+      description:
+        'All currencies (fiat and crypto) with symbol and decimals — the same data GET /api/currencies returns. ' +
+        "Read this to format an amount correctly: crypto codes (USDC, BTC) aren't ISO 4217, so a generic currency " +
+        'formatter must use the symbol + decimals given here instead of assuming 2 decimal places.',
+      mimeType: 'application/json',
+    },
+    async (uri) => jsonResource(uri, await listCurrencies(deps)),
   );
 
   server.registerResource(

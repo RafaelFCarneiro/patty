@@ -1,7 +1,7 @@
 import * as R from 'remeda';
 import { purry } from 'remeda';
 import { localizeCategoryName } from './category.js';
-import { roundMoney } from './money.js';
+import { roundToDecimals, type DecimalsFor } from './money.js';
 import type { CurrencyCode } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
 import type { CurrencySummary, SummaryRow } from '../models/summary.js';
@@ -13,29 +13,36 @@ const uncategorizedLabels: Record<Locale, string> = {
   es: 'Sin categoría',
 };
 
-const sumOf = (rows: readonly SummaryRow[], type: TransactionType): number =>
-  roundMoney(
+const sumOf = (rows: readonly SummaryRow[], type: TransactionType, decimals: number): number =>
+  roundToDecimals(
     R.pipe(
       rows,
       R.filter((r) => r.type === type),
       R.sumBy((r) => r.total),
     ),
+    decimals,
   );
 
-const _toCurrencySummary = ([currency, rows]: [string, SummaryRow[]], locale: Locale): CurrencySummary => {
-  const income = sumOf(rows, TransactionType.enum.income);
-  const expenses = sumOf(rows, TransactionType.enum.expense);
+const _toCurrencySummary = (
+  [currency, rows]: [string, SummaryRow[]],
+  locale: Locale,
+  decimalsFor: DecimalsFor,
+): CurrencySummary => {
+  const code = currency as CurrencyCode;
+  const decimals = decimalsFor(code);
+  const income = sumOf(rows, TransactionType.enum.income, decimals);
+  const expenses = sumOf(rows, TransactionType.enum.expense, decimals);
   return {
-    currency: currency as CurrencyCode,
+    currency: code,
     income,
     expenses,
-    balance: roundMoney(income - expenses),
+    balance: roundToDecimals(income - expenses, decimals),
     byCategory: R.pipe(
       rows,
       R.map((r) => ({
         category: localizeCategoryName(r.category, r.categoryNames, locale) ?? uncategorizedLabels[locale],
         type: r.type,
-        total: roundMoney(r.total),
+        total: roundToDecimals(r.total, decimals),
         count: r.count,
       })),
       R.sortBy([(c) => c.total, 'desc']),
@@ -43,18 +50,25 @@ const _toCurrencySummary = ([currency, rows]: [string, SummaryRow[]], locale: Lo
   };
 };
 
-function toCurrencySummary(entry: [string, SummaryRow[]], locale: Locale): CurrencySummary;
-function toCurrencySummary(locale: Locale): (entry: [string, SummaryRow[]]) => CurrencySummary;
+function toCurrencySummary(
+  entry: [string, SummaryRow[]],
+  locale: Locale,
+  decimalsFor: DecimalsFor,
+): CurrencySummary;
+function toCurrencySummary(
+  locale: Locale,
+  decimalsFor: DecimalsFor,
+): (entry: [string, SummaryRow[]]) => CurrencySummary;
 function toCurrencySummary(...args: readonly unknown[]) {
   return purry(_toCurrencySummary, args);
 }
 
 /** Group raw rows per currency — NEVER mix currencies in totals. */
-export const summarize = (rows: readonly SummaryRow[], locale: Locale): CurrencySummary[] =>
+export const summarize = (rows: readonly SummaryRow[], locale: Locale, decimalsFor: DecimalsFor): CurrencySummary[] =>
   R.pipe(
     rows,
     R.groupBy((r) => r.currency),
     R.entries(),
-    R.map(toCurrencySummary(locale)),
+    R.map(toCurrencySummary(locale, decimalsFor)),
     R.sortBy((s) => s.currency),
   );

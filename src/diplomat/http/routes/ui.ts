@@ -13,13 +13,14 @@ const UI_ROOT = fileURLToPath(new URL('../../../../ui', import.meta.url));
 const SHELL_PATH = `${UI_ROOT}/shell.html`;
 const APP_CSS_PATH = `${UI_ROOT}/app.css`;
 const APP_JS_PATH = `${UI_ROOT}/app.js`;
+const MONEY_JS_PATH = `${UI_ROOT}/money.js`;
 
 const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
 const CSS_CONTENT_TYPE = 'text/css; charset=utf-8';
 const JS_CONTENT_TYPE = 'text/javascript; charset=utf-8';
 const SSE_CONTENT_TYPE = 'text/event-stream; charset=utf-8';
 
-// These three files are fixed package assets — never rewritten at runtime — so the first read of
+// These four files are fixed package assets — never rewritten at runtime — so the first read of
 // each is cached in memory for the life of the process; only a *successful* read is cached (never
 // a rejected promise), so a transient read error doesn't wedge every later request into repeating
 // the same failure. `cache-control: no-cache` below governs the browser's cache, not this one.
@@ -89,5 +90,6 @@ export const registerUiRoutes = (app: FastifyInstance, subscribeToChanges: Chang
   app.get('/ui/:name', async (_req, reply) => serveUiFile(reply, SHELL_PATH, HTML_CONTENT_TYPE));
   app.get('/ui/assets/app.css', async (_req, reply) => serveUiFile(reply, APP_CSS_PATH, CSS_CONTENT_TYPE));
   app.get('/ui/assets/app.js', async (_req, reply) => serveUiFile(reply, APP_JS_PATH, JS_CONTENT_TYPE));
+  app.get('/ui/assets/money.js', async (_req, reply) => serveUiFile(reply, MONEY_JS_PATH, JS_CONTENT_TYPE));
   registerUiEventsRoute(app, subscribeToChanges);
 };

@@ -1685,20 +1685,13 @@
                 if (a.type === 'investment') cardClass = 'acc-investment';
                 if (a.type === 'wallet') cardClass = 'acc-wallet';
 
-                const isUSD = a.currency === 'USD';
-                
-                const fmtFormatter = new Intl.NumberFormat(isUSD ? 'en-US' : 'pt-BR', {
-                    style: 'currency',
-                    currency: a.currency
-                });
-
                 const div = document.createElement('div');
                 div.className = `account-card ${cardClass} ${activeAccount && activeAccount.name === a.name ? 'active' : ''}`;
                 div.dataset.name = a.name;
                 div.onclick = () => selectAccount(a.name);
 
-                const currentBalText = fmtFormatter.format(balInfo.balance);
-                const projBalText = fmtFormatter.format(balInfo.projectedBalance);
+                const currentBalText = window.formatMoney(balInfo.balance, a.currency);
+                const projBalText = window.formatMoney(balInfo.projectedBalance, a.currency);
                 const isProjNegative = balInfo.projectedBalance < 0;
 
                 div.innerHTML = `
@@ -1952,12 +1945,8 @@
                 }
 
                 // Currency formatting
-                const isUSD = t.currency === 'USD';
                 const rawAmt = t.amount;
-                const amtFormatted = new Intl.NumberFormat(isUSD ? 'en-US' : 'pt-BR', {
-                    style: 'currency',
-                    currency: t.currency
-                }).format(rawAmt);
+                const amtFormatted = window.formatMoney(rawAmt, t.currency);
 
                 // Check if it's a credit card bill payment
                 const isBillPayment = t.type === 'transfer' && (t.billId || (t.idempotencyKey && t.idempotencyKey.startsWith('billpay-')) || (t.description && t.description.startsWith('Bill payment:')));

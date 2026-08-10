@@ -12,6 +12,7 @@ describe('GET /ui', () => {
     expect(res.body).toContain('id="dashboard-menu"');
     expect(res.body).toContain('id="content"');
     expect(res.body).toContain('/ui/assets/app.css');
+    expect(res.body).toContain('/ui/assets/money.js');
     expect(res.body).toContain('/ui/assets/app.js');
   });
 });
@@ -43,6 +44,15 @@ describe('GET /ui/assets/app.js', () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('javascript');
     expect(res.body).toContain('/api/dashboards');
+  });
+});
+
+describe('GET /ui/assets/money.js', () => {
+  it('serves the shared crypto-aware money formatter', async () => {
+    const res = await inject({ method: 'GET', url: '/ui/assets/money.js' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('javascript');
+    expect(res.body).toContain('window.formatMoney');
   });
 });
 
