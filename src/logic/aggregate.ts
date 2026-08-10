@@ -1,6 +1,6 @@
 import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
-import { roundMoney } from './money.js';
+import { roundMoney, roundToDecimals, type DecimalsFor } from './money.js';
 import { AggregateGroupBy, AggregateSort, type AggregateRow, type CurrencyBlock } from '../models/aggregate.js';
 import type { CurrencyCode } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
@@ -44,6 +44,7 @@ export const shapeAggregateResult = (
   groupBy: AggregateGroupBy,
   sort: AggregateSort,
   locale: Locale,
+  decimalsFor: DecimalsFor,
   limit?: number,
 ): CurrencyBlock[] =>
   R.pipe(
@@ -51,7 +52,9 @@ export const shapeAggregateResult = (
     R.groupBy((r) => r.currency),
     R.entries(),
     R.map(([currency, currencyRows]): CurrencyBlock => {
-      const total = roundMoney(R.sumBy(currencyRows, (r) => r.value));
+      const code = currency as CurrencyCode;
+      const decimals = decimalsFor(code);
+      const total = roundToDecimals(R.sumBy(currencyRows, (r) => r.value), decimals);
       const sorted =
         sort === AggregateSort.enum.asc
           ? R.sortBy(currencyRows, (r) => r.value)
@@ -60,11 +63,11 @@ export const shapeAggregateResult = (
       const shapedRows: AggregateRow[] = limited.map((r) => ({
         key: resolveKey(r, groupBy),
         label: resolveLabel(r, groupBy, locale),
-        value: roundMoney(r.value),
+        value: roundToDecimals(r.value, decimals),
         count: r.count,
         pct: pct(r.value, total),
       }));
-      return { currency: currency as CurrencyCode, total, rows: shapedRows };
+      return { currency: code, total, rows: shapedRows };
     }),
     R.sortBy((b) => b.currency),
   );

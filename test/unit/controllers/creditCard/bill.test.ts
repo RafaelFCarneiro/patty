@@ -81,6 +81,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   subCategories: {} as Deps['subCategories'],
   correlations: {} as Deps['correlations'],
   creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
+  currencies: {} as Deps['currencies'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
   merchants: {} as Deps['merchants'],

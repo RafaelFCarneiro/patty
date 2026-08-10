@@ -17,6 +17,7 @@ const makeDeps = (stored?: SettingsEntity, envLocale?: Locale): Deps => ({
   subCategories: {} as Deps['subCategories'],
   correlations: {} as Deps['correlations'],
   creditCards: {} as Deps['creditCards'],
+  currencies: {} as Deps['currencies'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
   merchants: {} as Deps['merchants'],

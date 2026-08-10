@@ -840,9 +840,12 @@
         var categories = [];
         var expensePieChartInstance = null;
 
-        // Number utilities
+        // Number utilities. NOTE: this dashboard blends every transaction's amount into one total
+        // regardless of its actual currency, always labeled BRL — a pre-existing gap (#174)
+        // unrelated to this formatter swap; formatBRL still always formats as BRL, byte-for-byte
+        // the same as before, just routed through the shared crypto-aware helper.
         function formatBRL(value) {
-            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+            return window.formatMoney(value, 'BRL');
         }
 
         function formatBRLNoSymbol(value) {

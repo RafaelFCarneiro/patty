@@ -106,10 +106,21 @@
   var Api = {
     status: '/api/status',
     dashboards: '/api/dashboards',
+    currencies: '/api/currencies',
     dashboard: function (name) {
       return '/api/dashboards/' + encodeURIComponent(name);
     },
   };
+
+  // Keyed by code — window.formatMoney (ui/money.js) reads this to format a non-ISO currency
+  // (USDC/BTC) via its own symbol/decimals instead of Intl's currency mode, which throws for them.
+  function indexCurrenciesByCode(currencies) {
+    var map = {};
+    (currencies || []).forEach(function (c) {
+      map[c.code] = c;
+    });
+    return map;
+  }
 
   function h(tag, props, children) {
     var el = document.createElement(tag);
@@ -397,9 +408,12 @@
     }
 
     var initialName = currentDashboardName();
-    
-    // First read system status for locale, then fetch and render dashboards
-    fetchJson(Api.status)
+
+    // Currency metadata (symbol/decimals) must be cached before the first dashboard renders — its
+    // fragment script calls window.formatMoney synchronously while rendering, with no re-render on
+    // late-arriving data. Sequenced with locale (both fast local calls); the dashboards list fetch
+    // (menu chrome) stays parallel to content, same as before this sequencing existed.
+    var bootPromise = fetchJson(Api.status)
       .then(function (status) {
         if (status && status.locale) {
           currentLocale = status.locale;
@@ -409,6 +423,24 @@
         // Fallback to English silently
       })
       .then(function () {
+        return fetchJson(Api.currencies);
+      })
+      .then(function (currencies) {
+        window.__fintrackCurrencies = indexCurrenciesByCode(currencies);
+      })
+      .catch(function () {
+        // formatMoney degrades gracefully (code-as-symbol, 2 decimals) when metadata never arrives.
+        window.__fintrackCurrencies = window.__fintrackCurrencies || {};
+      });
+
+    bootPromise.then(function () {
+      return loadDashboard(initialName);
+    }).then(function () {
+      connectEvents();
+    });
+
+    bootPromise
+      .then(function () {
         return fetchJson(Api.dashboards);
       })
       .then(function (dashboards) {
@@ -417,8 +449,5 @@
       .catch(function (err) {
         setError(menu, err.message);
       });
-      
-    loadDashboard(initialName);
-    connectEvents();
   });
 })();

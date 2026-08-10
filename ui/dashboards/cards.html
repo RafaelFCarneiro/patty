@@ -1965,7 +1965,7 @@
                     }
                 }
 
-                const fmtLimit = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: c.currency }).format(c.limit);
+                const fmtLimit = window.formatMoney(c.limit, c.currency, { locale: 'pt-BR' });
 
                 div.innerHTML = `
                     <div class="card-header-mock">
@@ -2072,14 +2072,10 @@
             billDueDate.textContent = fmtDate(b.dueDate);
 
             // Total Amount
-            const isBrl = activeCard.currency === 'BRL';
             document.getElementById('bill-total-label').textContent = `Total da Fatura (${activeCard.currency})`;
-            
-            const fmtAmount = new Intl.NumberFormat(isBrl ? 'pt-BR' : 'en-US', {
-                style: 'currency',
-                currency: activeCard.currency
-            }).format(currentBill.total || 0);
-            
+
+            const fmtAmount = window.formatMoney(currentBill.total || 0, activeCard.currency);
+
             billTotalVal.textContent = fmtAmount;
 
             // Handle actions visibility
@@ -2138,11 +2134,7 @@
 
         // Render a single transaction item in the list
         function renderTxItem(t, container, showDateInline) {
-            const isBrl = t.currency === 'BRL';
-            const amtFormatted = new Intl.NumberFormat(isBrl ? 'pt-BR' : 'en-US', {
-                style: 'currency',
-                currency: t.currency
-            }).format(t.amount);
+            const amtFormatted = window.formatMoney(t.amount, t.currency);
 
             const isIncome = t.type === 'transfer' || t.type === 'income';
             const amountClass = isIncome ? 'income' : 'expense';
@@ -2351,12 +2343,7 @@
                     const capitalizedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
                     
                     const count = group.txs.length;
-                    const isBrl = activeCard && activeCard.currency === 'BRL';
-                    const currencySymbol = isBrl ? 'BRL' : (activeCard ? activeCard.currency : 'BRL');
-                    const groupTotalStr = new Intl.NumberFormat(isBrl ? 'pt-BR' : 'en-US', {
-                        style: 'currency',
-                        currency: currencySymbol
-                    }).format(group.total);
+                    const groupTotalStr = window.formatMoney(group.total, activeCard ? activeCard.currency : 'BRL');
 
                     // Create day group element
                     const dayGroupDiv = document.createElement('div');
@@ -2581,7 +2568,7 @@
                 }
             }
             
-            const fmtLimit = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: currency }).format(limitVal);
+            const fmtLimit = window.formatMoney(limitVal, currency, { locale: 'pt-BR' });
             
             previewEl.innerHTML = `
                 <div class="card-header-mock">
@@ -2758,7 +2745,7 @@
                 }
             }
             
-            const fmtLimit = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: currency }).format(limitVal);
+            const fmtLimit = window.formatMoney(limitVal, currency, { locale: 'pt-BR' });
             
             previewEl.innerHTML = `
                 <div class="card-header-mock">
@@ -2852,7 +2839,7 @@
             document.getElementById('reassign-tx-id').value = id;
             document.getElementById('reassign-tx-desc').textContent = desc;
             
-            const fmtAmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: activeCard.currency }).format(amount);
+            const fmtAmt = window.formatMoney(amount, activeCard.currency, { locale: 'pt-BR' });
             const dateObj = new Date(date + 'T12:00:00');
             const dateStr = dateObj.toLocaleDateString('pt-BR');
             document.getElementById('reassign-tx-details').textContent = `${dateStr} • ${fmtAmt}`;
@@ -3017,11 +3004,7 @@
             const b = currentBill.bill || {};
             document.getElementById('pay-bill-cycle').textContent = `Ciclo de Fatura: ${monthNames[b.month - 1]} / ${b.year}`;
 
-            const isBrl = activeCard.currency === 'BRL';
-            const fmtAmount = new Intl.NumberFormat(isBrl ? 'pt-BR' : 'en-US', {
-                style: 'currency',
-                currency: activeCard.currency
-            }).format(currentBill.total || 0);
+            const fmtAmount = window.formatMoney(currentBill.total || 0, activeCard.currency);
 
             document.getElementById('pay-bill-total').textContent = fmtAmount;
 

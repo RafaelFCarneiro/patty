@@ -28,7 +28,7 @@ describe('MCP reference resources (Feature Design 018)', () => {
     await transport.close();
   });
 
-  it('lists all five reference resources plus openapi', async () => {
+  it('lists all six reference resources plus openapi', async () => {
     const { resources } = await client.listResources();
     const uris = resources.map((r) => r.uri);
     expect(uris).toEqual(
@@ -36,6 +36,7 @@ describe('MCP reference resources (Feature Design 018)', () => {
         'fintrack://openapi',
         'fintrack://categories',
         'fintrack://accounts',
+        'fintrack://currencies',
         'fintrack://tags',
         'fintrack://credit-cards',
         'fintrack://merchants/top',
@@ -57,6 +58,17 @@ describe('MCP reference resources (Feature Design 018)', () => {
       callTool(client, { name: 'list_accounts' }),
     ]);
     expect(resource).toEqual(tool);
+  });
+
+  it('fintrack://currencies returns fiat and crypto with symbol/decimals (ADR-026)', async () => {
+    const currencies = (await readResourceJson(client, 'fintrack://currencies')) as Array<{
+      code: string;
+      symbol: string;
+      decimals: number;
+    }>;
+    const byCode = Object.fromEntries(currencies.map((c) => [c.code, c]));
+    expect(byCode.BTC).toMatchObject({ symbol: '₿', decimals: 8 });
+    expect(byCode.USDC).toMatchObject({ decimals: 6 });
   });
 
   it('fintrack://tags returns the same data as list_tags', async () => {

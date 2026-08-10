@@ -843,15 +843,8 @@ function formatMultiCurrency(map, delimiter) {
 
 function formatCurrency(val, currency = 'BRL') {
     const code = currency || 'BRL';
-    try {
-        const loc = currentLocale === 'pt' ? 'pt-BR' : (currentLocale === 'es' ? 'es-ES' : 'en-US');
-        return new Intl.NumberFormat(loc, {
-            style: 'currency',
-            currency: code
-        }).format(val || 0);
-    } catch (e) {
-        return `${code} ${(val || 0).toFixed(2)}`;
-    }
+    const loc = currentLocale === 'pt' ? 'pt-BR' : (currentLocale === 'es' ? 'es-ES' : 'en-US');
+    return window.formatMoney(val || 0, code, { locale: loc });
 }
 
 function formatPct(val) {

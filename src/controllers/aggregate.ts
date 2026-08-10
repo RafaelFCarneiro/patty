@@ -2,6 +2,7 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import { guard } from '../common/result.js';
 import { shapeAggregateResult } from '../logic/aggregate.js';
+import { decimalsLookup } from '../logic/money.js';
 import { assertHasPeriodOrRange, resolveDateRange } from '../logic/period.js';
 import { aggregateErrors, type ResolvedAggregateSpending } from '../models/aggregate.js';
 import type { AggregateResult } from '../models/aggregate.js';
@@ -20,7 +21,7 @@ export const aggregateSpending = (
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
 
-    const locale = await deps.locale();
+    const [locale, currencyList] = await Promise.all([deps.locale(), deps.currencies.list()]);
 
     const rows = await deps.transactions.aggregate({
       groupBy: input.groupBy,
@@ -33,7 +34,14 @@ export const aggregateSpending = (
       tagNames: input.tags ?? [],
     });
 
-    const currencies = shapeAggregateResult(rows, input.groupBy, input.sort, locale, input.limit);
+    const currencies = shapeAggregateResult(
+      rows,
+      input.groupBy,
+      input.sort,
+      locale,
+      decimalsLookup(currencyList),
+      input.limit,
+    );
 
     return ok({
       groupBy: input.groupBy,

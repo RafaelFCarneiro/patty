@@ -144,7 +144,9 @@ read-time, and always stamped with its `as_of`.* Per-currency remains the defaul
 
 1. [x] Review/accept this ADR (accepted 2026-08-09; refreshed onto `main` from the unmerged
    `docs/plan-phase-3-complete` branch).
-2. [ ] Phase 1 — crypto currencies (enum + seed + `decimals` + formatting).
+2. [x] Phase 1 — crypto currencies (enum + seed + `decimals` + formatting; `GET /api/currencies` +
+   `fintrack://currencies` expose the metadata; `logic/money.ts`'s `roundToDecimals`/`decimalsLookup`
+   make `get_spending_summary`/`aggregate_spending` rounding currency-decimals-aware).
 3. [ ] Phase 2 — `currency_rates` entity + `set/list_exchange_rates` + `settings.base_currency` + the pure
    conversion helper.
 4. [ ] Phase 3 — `get_account_balances` valuation (converted values + net total, staleness-flagged),

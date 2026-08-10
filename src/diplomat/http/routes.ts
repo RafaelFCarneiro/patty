@@ -9,6 +9,7 @@ import { aggregateRoutes } from './routes/aggregate.js';
 import { budgetRoutes } from './routes/budget.js';
 import { categoryRoutes } from './routes/category.js';
 import { creditCardRoutes } from './routes/creditCard.js';
+import { currencyRoutes } from './routes/currency.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { recurringRoutes } from './routes/recurring.js';
 import { summaryRoutes } from './routes/summary.js';
@@ -42,6 +43,7 @@ export const buildRouteDefinitions = (
     ...accountRoutes(ctx),
     ...categoryRoutes(ctx),
     ...creditCardRoutes(ctx),
+    ...currencyRoutes(ctx),
     ...transferRoutes(ctx),
     ...recurringRoutes(ctx),
     ...transactionRoutes(ctx),
