@@ -200,20 +200,38 @@ Fastify + zod scaffold with diplomat layout; local libSQL + migrations + seed (c
 ### Phase 2 — Classification loop + bulk input ✅ (2026-06-11)
 Merchant normalization logic; `merchant_category` weight learning from corrections; `create_transactions_bulk`; credit cards with `bills` lifecycle (open → closed → paid) + recurring rules; transfers (ADR-002), sub-categories, tags, derived balances. **Exit:** paste a statement → classified transactions with confidence flags; corrections improve future classification.
 
-### Phase 3 — Insights + analysis (in progress)
-`aggregate_spending`, `find_correlations` (Feature Design 016 — one tool, `analysis`-discriminated, all four
-phases done: A `spending_shifts` ✅, D `budget_fit` ✅, C `merchant_concentration` ✅, B `recurring_candidates` ✅
-— unblocked by Feature Design 017's recurring-rule merchant key), budgets ✅
-(Feature Design 015 —
-`create_budget`/`update_budget`/`delete_budget`/`list_budgets`/`get_budget_status`), goals, saved views; MCP
-resources ✅ (Feature Design 018 — `fintrack://categories`/`accounts`/`tags`/`credit-cards`/`merchants/top`) +
-prompts ✅ (Feature Design 019 — `monthly_review`/`budget_checkup`/`import_statement`; this subsumes the
-monthly-review/import-statement skills line below — MCP prompts are portable/server-side where a Claude
-`SKILL.md` would just restate the same tool orchestration, so no skills are built), saved views. **Exit:**
-"how was my spending vs budget, and what's driving the change?" answered with composed queries; views
-persist.
+### Phase 3 — Insights + analysis ✅ (2026-07-26)
+`aggregate_spending` ✅; `find_correlations` ✅ (Feature Design 016 — one tool, `analysis`-discriminated:
+`spending_shifts`, `budget_fit`, `merchant_concentration`, `recurring_candidates`; the last unblocked by Feature
+Design 017's recurring-rule merchant key); budgets ✅ (Feature Design 015 — per-category / per-currency monthly
+limits: `create`/`update`/`delete`/`list_budgets` + `get_budget_status`, pending-aware effective+committed via
+Feature Design 020); saved views ✅ (dashboards, Feature Design 013 — full lifecycle save/list/get/delete/rename
+over the `/ui` surface); MCP resources ✅ (Feature Design 018 — `categories`/`accounts`/`tags`/`credit-cards`/
+`merchants-top`) and guided-workflow prompts ✅ (Feature Design 019 — `monthly_review`/`budget_checkup`/
+`import_statement`; subsumes the skills line — MCP prompts are portable/server-side where a Claude `SKILL.md`
+would restate the same orchestration, so no skills are built). **Goals deferred** (see below). **Exit met:**
+"how was my spending vs budget, and what's driving the change?" is answered by composed queries + the
+monthly-review prompt; dashboards persist.
 
-### Phase 4 — Surfaces & hardening
+**Landed alongside Phase 3 — architecture hardening (ADR-021 → ADR-028):** the functional-core / imperative-shell
+write path (the domain returns effects as data, a generic shell applies them; appliers decide and read nothing —
+ADR-021/022/023), the local-SQLite concurrency posture (WAL + `busy_timeout` + `SQLITE_BUSY` retry — ADR-024),
+the diplomat-edge reorganization (per-domain modules mirroring `controllers/`, thin aggregators — ADR-025), the
+UI app shell (file-backed default dashboards, fragments, SSE live-update — ADR-027), and read-side cross-aggregate
+correlation moved to controllers (repos strictly per-aggregate — ADR-028).
+
+### Deferred / parked (revisit when triggered)
+- **Goals** (`create_goal` / `get_goals_progress`) — consciously skipped in Phase 3; a near-clone of the budgets
+  entity (Feature Design 015), so a fast build when wanted.
+- **`update_recurring`** — recurring rules can't be edited today; notably an existing rule can't acquire a
+  `merchant_key` without delete + recreate (Feature Design 017).
+- **Future-dated confirm via create/import** — `confirm_transaction` / `pay_bill` enforce "an effective
+  transaction's date is never in the future"; a create/import tool that passes `status: effective` with a future
+  date is not yet guarded (architecture.md invariant note).
+- **Idempotency key → `Persistable` envelope** (#134) — the key rides on entity models as an ordinary column
+  today; its honest home is the persistence envelope.
+
+### Phase 4 — Surfaces & hardening (next)
 The **web frontend is substantially delivered by ADR-027** (the `/ui` app shell: a shared shell hosting
 dashboard content fragments, git-versioned file-backed default dashboards + DB-`inline` customs under a menu,
 and entity-tagged SSE live-update — see `docs/ui.md`). Remaining Phase 4 work: activate owner columns for
@@ -226,11 +244,10 @@ local-first first release.
 - `logic/`: plain vitest unit tests — pure functions, no mocks needed. This is where FP pays off.
 - Diplomat/db: integration tests against an in-process libSQL DB (Testcontainers where a real engine is needed) — no Docker required for the common path.
 - MCP e2e: drive tools through the MCP SDK client — the contract that matters most.
-- **REST e2e (gap to close):** the HTTP routes (`src/diplomat/http/routes.ts`) currently have **no** integration
-  coverage — only MCP does. Add HTTP-level integration tests (Fastify `inject` against an in-process libSQL DB)
-  covering each `/api` route's status codes, validation, and payloads. This becomes load-bearing under **ADR-013**
-  (REST is the dashboards' data layer), so it gates that work. Tracked by
-  [#21](https://github.com/RafaelFCarneiro/fintrack/issues/21).
+- **REST e2e — largely closed ([#21]).** The HTTP routes now have integration coverage under
+  `test/integration/http/*` (Fastify `inject` against an in-process libSQL DB) covering each `/api` route's
+  status codes, validation, and payloads — added alongside the dashboards work (REST is the dashboards' data
+  layer, ADR-013). Confirm the remaining coverage and close [#21](https://github.com/RafaelFCarneiro/fintrack/issues/21).
 - Golden set: ~100 realistic BR transaction descriptions with expected categories; classification accuracy tracked as a regression test.
 
 ## Risks & mitigations
@@ -252,4 +269,7 @@ local-first first release.
 - ~~Credit card invoices~~ **Decided**: faturas are `bills` rows (`bills.credit_card_id`, `transactions.bill_id`). "Bill" over "Invoice" — invoice is B2B; "bill" matches everyday usage and Nubank's own API naming. Bills carry `close_date`/`due_date`/`status`; card transactions attach to the open bill at write time.
 - ~~`Result` library~~ **Decided** (ADR-001): neverthrow.
 - ~~Database~~ **Decided** (ADR-004/005/006): local-first encrypted libSQL + Drizzle, key in OS keychain.
-- Cross-currency conversion: which FX-rate source (BCB PTAX API is free and official for BRL/USD), and whether to store the rate on the transaction at write time or convert at read time. Until decided, all analytics are per-currency.
+- ~~Cross-currency conversion~~ **Direction set (ADR-026, proposed):** crypto (USDC/BTC) first-class, an
+  agent-refreshed `currency_rates` table (backend never fetches — local-first), a `settings.base_currency`, and
+  **read-time** valuation on `get_account_balances` (spend stays per-currency; conversions are `as_of`-stamped).
+  Resolves the write-time-vs-read-time and rate-source forks. Pending: accept ADR-026 and build phase 1.
