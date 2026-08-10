@@ -112,8 +112,10 @@
     },
   };
 
-  // Keyed by code — window.formatMoney (ui/money.js) reads this to format a non-ISO currency
-  // (USDC/BTC) via its own symbol/decimals instead of Intl's currency mode, which throws for them.
+  // Keyed by code — window.formatMoney (ui/money.js) reads this to format a currency Intl's
+  // currency mode can't handle correctly: USDC (4 letters) throws, BTC (3 letters, syntactically
+  // valid) doesn't throw but silently mis-formats with fiat-shaped precision and no real symbol.
+  // Both fall back to this currency's own symbol/decimals instead.
   function indexCurrenciesByCode(currencies) {
     var map = {};
     (currencies || []).forEach(function (c) {
@@ -428,9 +430,17 @@
       .then(function (currencies) {
         window.__fintrackCurrencies = indexCurrenciesByCode(currencies);
       })
-      .catch(function () {
-        // formatMoney degrades gracefully (code-as-symbol, 2 decimals) when metadata never arrives.
+      .catch(function (err) {
+        // Fiat (BRL/USD) is unaffected — formatMoney's ISO path never reads this metadata. A
+        // crypto amount (BTC/USDC) would silently degrade to fiat-shaped 2-decimal precision and
+        // no real symbol without it, which is exactly the wrong-precision-with-no-signal gotcha
+        // this file exists to avoid — so surface it loudly instead of proceeding silently.
         window.__fintrackCurrencies = window.__fintrackCurrencies || {};
+        showDiagnosticError(
+          'Could not load currency metadata: ' +
+            err.message +
+            '. Crypto amounts (BTC/USDC) may display at the wrong precision until this is refreshed.',
+        );
       });
 
     bootPromise.then(function () {

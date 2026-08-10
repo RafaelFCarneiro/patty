@@ -26,9 +26,12 @@ Grounded constraints this must respect (verified against current `main`):
 
 - **Amounts are stored as float** (`amount real`; `Money = z.number().positive()`). Fine for fiat; imprecise for
   BTC's 8 decimals.
-- **`CurrencyCode` is a zod enum** currently seeded **BRL/USD only** (`src/models/money.ts`); crypto codes
-  (USDC, BTC) are **not** ISO 4217, so `Intl.NumberFormat`'s currency mode can't format them — display needs
-  per-currency symbol + decimals.
+- **`CurrencyCode` is a zod enum**, pre-Phase-1 seeded **BRL/USD only** (`src/models/money.ts`); crypto codes
+  (USDC, BTC) are **not** ISO 4217, so `Intl.NumberFormat`'s currency mode can't format them correctly — not
+  uniformly by throwing, though: a 4-letter code like `USDC` fails `Intl`'s currency-code syntax check and
+  throws, but a 3-letter code like `BTC` passes that check and is **silently** formatted with fiat-shaped 2
+  decimals and no real symbol instead. Either way, display needs per-currency symbol + decimals, detected
+  explicitly rather than via throw/no-throw.
 - **`settings` has only `locale`** (language en/es/pt) — no notion of a display/home currency. Locale ≠ currency.
 - **The backend makes zero external HTTP calls** (local-first, zero-infra — ADR-004/005). Fetching FX/crypto
   rates would be the first such dependency.
@@ -43,9 +46,11 @@ external calls.
 
 Add **USDC** and **BTC** to the `CurrencyCode` enum and the `currencies` seed. Add a **`decimals`** column to
 `currencies` (fiat 2, USDC 6, BTC 8) so amounts format correctly; display uses the currency's `symbol` +
-`decimals` (a crypto-aware path in `formatMoney`, since `Intl.NumberFormat` currency mode rejects non-ISO codes).
-This alone lets the user *hold* USDC/BTC accounts and record transactions in them — independent of any
-conversion.
+`decimals` (a crypto-aware path in `formatMoney`) for any code `Intl.NumberFormat`'s currency mode can't handle
+correctly — a malformed code (`USDC`) throws, but a well-formed-but-unrecognized one (`BTC`) doesn't throw and
+silently mis-formats instead, so detection must be explicit (`Intl.supportedValuesOf('currency')`), not
+try/catch. This alone lets the user *hold* USDC/BTC accounts and record transactions in them — independent of
+any conversion.
 
 ### 2. Amounts stay float — risk documented, escape hatch named
 
