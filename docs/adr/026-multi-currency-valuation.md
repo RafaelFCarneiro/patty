@@ -137,6 +137,18 @@ read-time, and always stamped with its `as_of`.* Per-currency remains the defaul
 1. **Crypto currencies first-class** (`feat/crypto-currencies`): `CurrencyCode` += USDC/BTC + seed;
    `currencies.decimals`; crypto-aware money formatting (`formatMoney` + the dashboard). No conversion yet — the
    user can hold and transact in USDC/BTC. Purely additive.
+   - **Phase 1b — precision hardening (tracked, non-blocking; not part of the Phase 1 diff):** two gaps found in
+     PR #175 review, where a BTC/USDC amount is still flattened to fiat's 2 decimals outside
+     `get_spending_summary`/`aggregate_spending`. Neither blocks Phase 2 — both are self-contained fixes to
+     Phase 1's own surface, not rate/valuation work, so they stay under Phase 1 rather than folding into Phase 2.
+     - [#176](https://github.com/RafaelFCarneiro/fintrack/issues/176): bulk statement import
+       (`import_account_statement`/`import_card_statement`) derives its default idempotency key via
+       `amount.toFixed(2)` (`logic/transaction.ts#deriveIdempotencyKey`) — two distinct same-day BTC lines can
+       collide on a `...-0.00` key and the second is silently dropped as a duplicate.
+     - [#177](https://github.com/RafaelFCarneiro/fintrack/issues/177): `find_correlations`'s five shaping
+       functions (`logic/correlations.ts`) still round real money amounts via the fixed-2-decimal `roundMoney`
+       — a genuine one-satoshi BTC spending shift or recurring candidate rounds to `0`. `decimalsLookup` needs
+       threading through here the same way it was threaded through `summary.ts`/`aggregate.ts`.
 2. **Rates + base currency** (`feat/currency-rates`): the `currency_rates` table + entity + `set/list_exchange_rates`
    tools (agent-refreshed, FC/IS write flow); `settings.base_currency` + its setter; the read-time conversion
    helper in `logic/` (pure: amount × rate, with `as_of`/`stale`/`no_rate` outcomes) — no consumer yet.
@@ -152,11 +164,15 @@ read-time, and always stamped with its `as_of`.* Per-currency remains the defaul
 2. [x] Phase 1 — crypto currencies (enum + seed + `decimals` + formatting; `GET /api/currencies` +
    `fintrack://currencies` expose the metadata; `logic/money.ts`'s `roundToDecimals`/`decimalsLookup`
    make `get_spending_summary`/`aggregate_spending` rounding currency-decimals-aware).
-3. [ ] Phase 2 — `currency_rates` entity + `set/list_exchange_rates` + `settings.base_currency` + the pure
+3. [ ] Phase 1b — precision hardening (non-blocking): fix
+   [#176](https://github.com/RafaelFCarneiro/fintrack/issues/176) (bulk-import idempotency keys flatten BTC/USDC
+   precision) and [#177](https://github.com/RafaelFCarneiro/fintrack/issues/177) (`find_correlations` still
+   rounds crypto amounts to fiat's 2 decimals) — see § Migration plan.
+4. [ ] Phase 2 — `currency_rates` entity + `set/list_exchange_rates` + `settings.base_currency` + the pure
    conversion helper.
-4. [ ] Phase 3 — `get_account_balances` valuation (converted values + net total, staleness-flagged),
+5. [ ] Phase 3 — `get_account_balances` valuation (converted values + net total, staleness-flagged),
    controller-orchestrated per ADR-028.
-5. [ ] Record the relaxed valuation invariant + the local-first "rates are agent-refreshed, backend never
+6. [ ] Record the relaxed valuation invariant + the local-first "rates are agent-refreshed, backend never
    fetches" note in `docs/architecture.md`; PLAN open-question → resolved.
 
 Each phase touches the schema and/or a new write flow → feature-sized → independent verification subagent per
