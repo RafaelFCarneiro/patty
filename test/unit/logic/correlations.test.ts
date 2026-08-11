@@ -14,16 +14,16 @@ import { decimalsLookup, type DecimalsFor } from '../../../src/logic/money.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import type { CategoryWindowedSpend } from '../../../src/models/transaction.js';
 import type { MerchantSpendDbRow, SpendingShiftDbRow } from '../../../src/wire/db/correlations.js';
-import { ADR_026_CURRENCIES } from '../fixtures/currencies.js';
+import { SEEDED_CURRENCIES } from '../fixtures/currencies.js';
 
 // Every existing test exercises fiat (BRL/USD) rows only — a flat 2 decimals reproduces the
-// pre-ADR-026-Phase-1b `roundMoney` behavior exactly, so this is a regression fixture as much as
-// a convenience one.
+// prior fixed-2-decimal `roundMoney` behavior exactly, so this is a regression fixture as much
+// as a convenience one.
 const fiatDecimals: DecimalsFor = () => 2;
 
 // Exercises currency-aware rounding directly, built through the same `decimalsLookup` the
-// controller uses, off the shared ADR-026 currencies fixture.
-const decimalsFor: DecimalsFor = decimalsLookup(ADR_026_CURRENCIES);
+// controller uses, off the shared seeded-currencies fixture.
+const decimalsFor: DecimalsFor = decimalsLookup(SEEDED_CURRENCIES);
 
 const row = (overrides: Partial<SpendingShiftDbRow> = {}): SpendingShiftDbRow => ({
   category: 'Food',
@@ -159,7 +159,7 @@ describe('shapeSpendingShifts', () => {
     expect(shapeSpendingShifts([], 3, 20, Locale.enum.en, fiatDecimals)).toEqual([]);
   });
 
-  it('rounds BTC current/baseline to 8 decimals instead of flattening to fiat-shaped 2 (ADR-026 Phase 1b)', () => {
+  it('rounds BTC current/baseline to 8 decimals instead of flattening to fiat-shaped 2', () => {
     const [shift] = shapeSpendingShifts(
       [row({ currency: CurrencyCode.enum.BTC, current: 0.123456789, baselineTotal: 0.246913578 })],
       1,
@@ -354,7 +354,7 @@ describe('shapeBudgetFitLines', () => {
     expect(line).toMatchObject({ current: 0, baseline: 0 });
   });
 
-  it('rounds USDC baseline/suggestedLimit to 6 decimals instead of flattening to fiat-shaped 2 (ADR-026 1b)', () => {
+  it('rounds USDC baseline/suggestedLimit to 6 decimals instead of flattening to fiat-shaped 2', () => {
     const [line] = shapeBudgetFitLines(
       [budget({ currency: CurrencyCode.enum.USDC, limit: 1 })],
       [windowedSpend({ currency: CurrencyCode.enum.USDC, current: 0, baselineTotal: 1 })],
@@ -441,7 +441,7 @@ describe('shapeUnbudgetedSpend', () => {
     expect(entries.map((e) => e.currency)).toEqual(['BRL', 'USD']);
   });
 
-  it('rounds BTC baseline/suggestedLimit to 8 decimals instead of flattening to fiat-shaped 2 (ADR-026 1b)', () => {
+  it('rounds BTC baseline/suggestedLimit to 8 decimals instead of flattening to fiat-shaped 2', () => {
     const rows = [row({ category: 'Crypto Buys', currency: CurrencyCode.enum.BTC, baselineTotal: 1 })];
     const [entry] = shapeUnbudgetedSpend(rows, noBudgets, 3, Locale.enum.en, decimalsFor);
     expect(entry).toMatchObject({
@@ -563,7 +563,7 @@ describe('shapeMerchantConcentration', () => {
     expect(shapeMerchantConcentration([], 5, Locale.enum.en, fiatDecimals)).toEqual([]);
   });
 
-  it('rounds USDC spent/categoryTotal to 6 decimals instead of flattening to fiat-shaped 2 (ADR-026 Phase 1b)', () => {
+  it('rounds USDC spent/categoryTotal to 6 decimals instead of flattening to fiat-shaped 2', () => {
     const [group] = shapeMerchantConcentration(
       [merchantRow({ currency: CurrencyCode.enum.USDC, merchantKey: 'a', spent: 0.123456789 })],
       5,
@@ -649,7 +649,7 @@ describe('detectRecurringCadence', () => {
     expect(detectRecurringCadence(withinDrift, 3, 2)).not.toBeNull();
   });
 
-  it('rounds typicalAmount to the passed-in decimals rather than a flat 2 (ADR-026 Phase 1b)', () => {
+  it('rounds typicalAmount to the passed-in decimals rather than a flat 2', () => {
     const series = [
       { date: '2026-01-05', amount: 0.12345678 },
       { date: '2026-02-04', amount: 0.12345678 },
@@ -752,7 +752,7 @@ describe('shapeRecurringCandidates', () => {
     expect(shapeRecurringCandidates([], 3, Locale.enum.en, fiatDecimals)).toEqual([]);
   });
 
-  it('rounds BTC typicalAmount to 8 decimals instead of flattening to fiat-shaped 2 (ADR-026 Phase 1b)', () => {
+  it('rounds BTC typicalAmount to 8 decimals instead of flattening to fiat-shaped 2', () => {
     const rows = [
       recurringRow({ currency: CurrencyCode.enum.BTC, amount: 0.12345678, date: '2026-01-05' }),
       recurringRow({ currency: CurrencyCode.enum.BTC, amount: 0.12345678, date: '2026-02-04' }),

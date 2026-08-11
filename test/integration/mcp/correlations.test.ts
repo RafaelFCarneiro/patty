@@ -452,7 +452,7 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
     }
   });
 
-  it('preserves BTC current/baseline precision to 8dp, not flattened to fiat-shaped 2dp (ADR-026 1b)', async () => {
+  it('preserves BTC current/baseline precision to 8dp, not flattened to fiat-shaped 2dp', async () => {
     const stamp = Date.now();
     const categoryName = `Corr-BTC-${stamp}`;
     const { client, transport } = makeClient();
@@ -854,7 +854,7 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
     }
   });
 
-  it('preserves USDC spent/categoryTotal precision to 6dp, not flattened to fiat-shaped 2dp (ADR-026 1b)', async () => {
+  it('preserves USDC spent/categoryTotal precision to 6dp, not flattened to fiat-shaped 2dp', async () => {
     const stamp = Date.now();
     const categoryName = `Corr-Concentration-USDC-${stamp}`;
     const { client, transport } = makeClient();
@@ -1031,7 +1031,7 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
     }
   });
 
-  it('preserves BTC typicalAmount precision to 8dp, not flattened to fiat-shaped 2dp (ADR-026 1b)', async () => {
+  it('preserves BTC typicalAmount precision to 8dp, not flattened to fiat-shaped 2dp', async () => {
     const merchant = 'Corr Candidate BTC';
     const { client, transport } = makeClient();
     try {
