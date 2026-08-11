@@ -436,8 +436,7 @@ describe('GET /api/accounts/balances', () => {
       balances: Array<{ id: string; converted?: { value: number; rate: number; stale: boolean } }>;
       consolidatedNetWorth: { baseCurrency: string; total: number; excluded: string[] };
     };
-    // Filtered by account, one at a time, so other accounts created elsewhere in this suite never
-    // pollute the net-worth total this test asserts.
+    // Filtered per account so other accounts created elsewhere in this suite don't pollute the total.
     const usdRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValUsdAcct' });
     const brlRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValBrlAcct' });
     const btcRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValBtcAcct' });

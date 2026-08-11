@@ -1696,8 +1696,7 @@
             }
         }
 
-        // Consolidated net worth summary (ADR-026 Phase 3) — base-currency total across every
-        // account, with a note when some accounts couldn't be valued (no exchange rate on file).
+        // Render consolidated net worth summary (ADR-026)
         function renderNetWorth() {
             const el = document.getElementById('net-worth-summary');
             if (!consolidatedNetWorth) {
@@ -1755,8 +1754,7 @@
                 const projBalText = window.formatMoney(balInfo.projectedBalance, a.currency);
                 const isProjNegative = balInfo.projectedBalance < 0;
 
-                // Converted valuation (ADR-026 Phase 3) — native amount stays primary; this is a
-                // secondary line, and only shown when the account isn't already in the base currency.
+                // Hidden when the account is already in the base currency — native stays primary (ADR-026).
                 let convertedHtml = '';
                 if (consolidatedNetWorth && a.currency !== consolidatedNetWorth.baseCurrency) {
                     if (balInfo.converted) {

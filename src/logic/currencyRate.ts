@@ -95,14 +95,10 @@ export const convert = (
 
 // ─── Account balance valuation (ADR-026 Phase 3, ADR-028 controller-orchestrated) ──────────────
 
-/** The shape `valueAccount`/`consolidateNetWorth` need from a balance — deliberately minimal so
- *  they stay generic over whatever concrete balance type the account controller passes in. */
 export type ValuableBalance = { id: string; currency: CurrencyCode; balance: number };
 
-/** Attaches `converted` (base-currency valuation of `balance`) to a balance whose currency has a
- *  known rate to `baseCurrency` — `convert`'s own identity case covers `currency === baseCurrency`
- *  (rate 1, never stale). Omits `converted` entirely on a missing pair rather than fabricating a
- *  value (ADR-026) — the caller never sees a `noRate` marker on the wire, just absence. */
+/** Omits `converted` entirely on a missing rate rather than fabricating a value or exposing
+ *  `convert`'s `noRate` marker on the wire (ADR-026). */
 export const valueAccount = <A extends ValuableBalance>(
   account: A,
   baseCurrency: CurrencyCode,
@@ -121,8 +117,7 @@ export const valueAccount = <A extends ValuableBalance>(
 
 export type ConsolidatedNetWorth = { baseCurrency: CurrencyCode; total: number; excluded: string[] };
 
-/** Sums every valued balance's `converted.value`; a balance with no `converted` block (no rate on
- *  file) is listed in `excluded` and left out of `total` rather than being silently dropped. */
+/** A balance with no `converted` block is listed in `excluded`, not silently dropped from the total. */
 export const consolidateNetWorth = <A extends { id: string; converted?: ConvertedValue }>(
   balances: readonly A[],
   baseCurrency: CurrencyCode,

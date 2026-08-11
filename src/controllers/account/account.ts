@@ -57,11 +57,9 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Flo
     return ok({ persist, response: account });
   });
 
-/** Balances are derived: initialBalance + income − expenses + transfers in − transfers out. Also
- *  values each balance against the base currency and a consolidated net worth (ADR-026 Phase 3):
- *  correlates the `accounts` and `currency_rates` aggregates here, in the controller, never via a
- *  repo join (ADR-028) — `deps.accounts`/`deps.currencyRates` each stay scoped to their own table,
- *  and `logic/currencyRate.ts`'s `valueAccount`/`consolidateNetWorth` do the (pure) correlating. */
+/** Balances are derived: initialBalance + income − expenses + transfers in − transfers out.
+ *  Valuation against the base currency (ADR-026) correlates the `accounts` and `currency_rates`
+ *  aggregates here, in the controller, never via a repo join (ADR-028). */
 export const getAccountBalances = (
   deps: Deps,
   filter?: { account?: string; type?: AccountType; projectedAsOf?: string },

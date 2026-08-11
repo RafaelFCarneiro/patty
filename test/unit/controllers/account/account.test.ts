@@ -402,7 +402,7 @@ describe('getAccountBalances — valuation (ADR-026 Phase 3, controller-orchestr
     const deps = balanceDeps({
       accounts: [btcAccount, usdAccount],
       baseCurrency: CurrencyCode.enum.USD,
-      rates: [], // no BTC->USD rate on file
+      rates: [],
     });
 
     const result = await getAccountBalances(deps);
