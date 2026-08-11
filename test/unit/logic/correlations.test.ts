@@ -10,9 +10,25 @@ import {
 import { BudgetPeriod, type BudgetViewInput } from '../../../src/models/budget.js';
 import type { BudgetFitLine, RecurringCandidateInput } from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
-import { CurrencyCode } from '../../../src/models/money.js';
+import { decimalsLookup, type DecimalsFor } from '../../../src/logic/money.js';
+import { CurrencyCode, type Currency } from '../../../src/models/money.js';
 import type { CategoryWindowedSpend } from '../../../src/models/transaction.js';
 import type { MerchantSpendDbRow, SpendingShiftDbRow } from '../../../src/wire/db/correlations.js';
+
+// Every existing test exercises fiat (BRL/USD) rows only — a flat 2 decimals reproduces the
+// pre-ADR-026-Phase-1b `roundMoney` behavior exactly, so this is a regression fixture as much as
+// a convenience one.
+const fiatDecimals: DecimalsFor = () => 2;
+
+// Mirrors the real ADR-026 decimals table (BRL/USD 2, USDC 6, BTC 8) for tests that exercise
+// currency-aware rounding directly, built through the same `decimalsLookup` the controller uses.
+const CURRENCIES: Currency[] = [
+  { code: CurrencyCode.enum.BRL, symbol: 'R$', name: 'Real', decimals: 2 },
+  { code: CurrencyCode.enum.USD, symbol: '$', name: 'Dollar', decimals: 2 },
+  { code: CurrencyCode.enum.USDC, symbol: 'USDC', name: 'USD Coin', decimals: 6 },
+  { code: CurrencyCode.enum.BTC, symbol: '₿', name: 'Bitcoin', decimals: 8 },
+];
+const decimalsFor: DecimalsFor = decimalsLookup(CURRENCIES);
 
 const row = (overrides: Partial<SpendingShiftDbRow> = {}): SpendingShiftDbRow => ({
   category: 'Food',
@@ -57,18 +73,30 @@ const merchantRow = (overrides: Partial<MerchantSpendDbRow> = {}): MerchantSpend
 
 describe('shapeSpendingShifts', () => {
   it('computes baseline as the average over baselineMonths and deltaPct from it', () => {
-    const [shift] = shapeSpendingShifts([row({ current: 1200, baselineTotal: 900 })], 3, 0, Locale.enum.en);
+    const [shift] = shapeSpendingShifts(
+      [row({ current: 1200, baselineTotal: 900 })],
+      3,
+      0,
+      Locale.enum.en,
+      fiatDecimals,
+    );
     // baseline = 900 / 3 = 300; deltaPct = (1200 - 300) / 300 * 100 = 300
     expect(shift).toMatchObject({ category: 'Food', current: 1200, baseline: 300, deltaPct: 300, direction: 'up' });
   });
 
   it('reports direction down when current is below baseline', () => {
-    const [shift] = shapeSpendingShifts([row({ current: 150, baselineTotal: 900 })], 3, 0, Locale.enum.en);
+    const [shift] = shapeSpendingShifts(
+      [row({ current: 150, baselineTotal: 900 })],
+      3,
+      0,
+      Locale.enum.en,
+      fiatDecimals,
+    );
     expect(shift).toMatchObject({ baseline: 300, deltaPct: -50, direction: 'down' });
   });
 
   it('reports a brand-new category (no baseline spend) as deltaPct: null, direction: up', () => {
-    const [shift] = shapeSpendingShifts([row({ current: 500, baselineTotal: 0 })], 3, 20, Locale.enum.en);
+    const [shift] = shapeSpendingShifts([row({ current: 500, baselineTotal: 0 })], 3, 20, Locale.enum.en, fiatDecimals);
     expect(shift).toMatchObject({ current: 500, baseline: 0, deltaPct: null, direction: 'up' });
   });
 
@@ -76,7 +104,13 @@ describe('shapeSpendingShifts', () => {
     // baselineTotal 0.01 over 3 months -> raw baseline ~0.00333, which *rounds* to 0.00 for display
     // but must not be treated as "no baseline spend" (deltaPct: null) — the divide-by-zero decision
     // has to use the unrounded value.
-    const [shift] = shapeSpendingShifts([row({ current: 100, baselineTotal: 0.01 })], 3, 0, Locale.enum.en);
+    const [shift] = shapeSpendingShifts(
+      [row({ current: 100, baselineTotal: 0.01 })],
+      3,
+      0,
+      Locale.enum.en,
+      fiatDecimals,
+    );
     expect(shift?.baseline).toBe(0);
     expect(shift?.deltaPct).not.toBeNull();
     expect(shift?.deltaPct).toBeGreaterThan(1000);
@@ -85,12 +119,18 @@ describe('shapeSpendingShifts', () => {
 
   it('filters out shifts below minDeltaPct', () => {
     // baseline = 900/3 = 300; current = 320 -> deltaPct ~ 6.67%, below a 20% threshold
-    const shifts = shapeSpendingShifts([row({ current: 320, baselineTotal: 900 })], 3, 20, Locale.enum.en);
+    const shifts = shapeSpendingShifts(
+      [row({ current: 320, baselineTotal: 900 })],
+      3,
+      20,
+      Locale.enum.en,
+      fiatDecimals,
+    );
     expect(shifts).toEqual([]);
   });
 
   it('always includes a brand-new category regardless of minDeltaPct', () => {
-    const shifts = shapeSpendingShifts([row({ current: 50, baselineTotal: 0 })], 3, 20, Locale.enum.en);
+    const shifts = shapeSpendingShifts([row({ current: 50, baselineTotal: 0 })], 3, 20, Locale.enum.en, fiatDecimals);
     expect(shifts).toHaveLength(1);
   });
 
@@ -104,6 +144,7 @@ describe('shapeSpendingShifts', () => {
       3,
       0,
       Locale.enum.en,
+      fiatDecimals,
     );
     expect(shifts.map((s) => s.category)).toEqual(['Brand new', 'Big move', 'Small move']);
   });
@@ -114,12 +155,35 @@ describe('shapeSpendingShifts', () => {
       3,
       0,
       Locale.enum.pt,
+      fiatDecimals,
     );
     expect(shift?.category).toBe('Alimentação');
   });
 
   it('returns an empty array for no rows (e.g. an empty reference month)', () => {
-    expect(shapeSpendingShifts([], 3, 20, Locale.enum.en)).toEqual([]);
+    expect(shapeSpendingShifts([], 3, 20, Locale.enum.en, fiatDecimals)).toEqual([]);
+  });
+
+  it('rounds BTC current/baseline to 8 decimals instead of flattening to fiat-shaped 2 (ADR-026 Phase 1b)', () => {
+    const [shift] = shapeSpendingShifts(
+      [row({ currency: CurrencyCode.enum.BTC, current: 0.123456789, baselineTotal: 0.246913578 })],
+      1,
+      0,
+      Locale.enum.en,
+      decimalsFor,
+    );
+    expect(shift).toMatchObject({ currency: 'BTC', current: 0.12345679, baseline: 0.24691358 });
+  });
+
+  it('keeps deltaPct at 2 decimals (a percentage, not money) even for a BTC row', () => {
+    const [shift] = shapeSpendingShifts(
+      [row({ currency: CurrencyCode.enum.BTC, current: 0.1, baselineTotal: 0.09 })],
+      1,
+      0,
+      Locale.enum.en,
+      decimalsFor,
+    );
+    expect(shift?.deltaPct).toBe(11.11);
   });
 });
 
@@ -133,6 +197,7 @@ describe('shapeBudgetFitLines', () => {
       20,
       20,
       Locale.enum.en,
+      fiatDecimals,
     );
     expect(line).toMatchObject({ limit: 200, baseline: 300, verdict: 'unrealistic', suggestedLimit: 330 });
   });
@@ -146,6 +211,7 @@ describe('shapeBudgetFitLines', () => {
       20,
       20,
       Locale.enum.en,
+      fiatDecimals,
     );
     expect(line?.verdict).toBe('generous');
   });
@@ -158,6 +224,7 @@ describe('shapeBudgetFitLines', () => {
       20,
       20,
       Locale.enum.en,
+      fiatDecimals,
     );
     expect(line?.verdict).toBe('realistic');
   });
@@ -166,12 +233,14 @@ describe('shapeBudgetFitLines', () => {
     // ratio 1.5 is "unrealistic" at overPct 20 but "realistic" at overPct 60
     const budgets = [budget({ limit: 200 })];
     const spend = [windowedSpend({ baselineTotal: 900 })];
-    expect(shapeBudgetFitLines(budgets, spend, 3, 20, 20, Locale.enum.en)[0]?.verdict).toBe('unrealistic');
-    expect(shapeBudgetFitLines(budgets, spend, 3, 20, 60, Locale.enum.en)[0]?.verdict).toBe('realistic');
+    expect(shapeBudgetFitLines(budgets, spend, 3, 20, 20, Locale.enum.en, fiatDecimals)[0]?.verdict).toBe(
+      'unrealistic',
+    );
+    expect(shapeBudgetFitLines(budgets, spend, 3, 20, 60, Locale.enum.en, fiatDecimals)[0]?.verdict).toBe('realistic');
   });
 
   it('handles a budget with no spend at all (baseline 0) as generous, not a divide-by-zero error', () => {
-    const [line] = shapeBudgetFitLines([budget({ limit: 300 })], [], 3, 20, 20, Locale.enum.en);
+    const [line] = shapeBudgetFitLines([budget({ limit: 300 })], [], 3, 20, 20, Locale.enum.en, fiatDecimals);
     expect(line).toMatchObject({ current: 0, baseline: 0, verdict: 'generous' });
   });
 
@@ -183,6 +252,7 @@ describe('shapeBudgetFitLines', () => {
       20,
       20,
       Locale.enum.en,
+      fiatDecimals,
     );
     expect(line).toMatchObject({ category: 'Food', subCategory: 'Restaurants' });
   });
@@ -201,6 +271,7 @@ describe('shapeBudgetFitLines', () => {
       20,
       20,
       Locale.enum.en,
+      fiatDecimals,
     );
     expect(lines.find((l) => l.currency === 'BRL')?.verdict).toBe('unrealistic');
     expect(lines.find((l) => l.currency === 'USD')?.verdict).toBe('generous');
@@ -214,6 +285,7 @@ describe('shapeBudgetFitLines', () => {
       20,
       20,
       Locale.enum.pt,
+      fiatDecimals,
     );
     expect(line?.category).toBe('Alimentação');
   });
@@ -236,6 +308,7 @@ describe('shapeBudgetFitLines', () => {
       20,
       20,
       Locale.enum.en,
+      fiatDecimals,
     );
     expect(lines.map((l) => l.id)).toEqual(['brl', 'brl-sub', 'usd']);
   });
@@ -251,6 +324,7 @@ describe('shapeBudgetFitLines', () => {
       20,
       20,
       Locale.enum.en,
+      fiatDecimals,
     );
     expect(line?.baseline).toBe(300); // (600 + 300) / 3
   });
@@ -267,6 +341,7 @@ describe('shapeBudgetFitLines', () => {
       20,
       20,
       Locale.enum.en,
+      fiatDecimals,
     );
     expect(line?.baseline).toBe(100); // 300 / 3, the parent's direct spend excluded
   });
@@ -279,8 +354,22 @@ describe('shapeBudgetFitLines', () => {
       20,
       20,
       Locale.enum.en,
+      fiatDecimals,
     );
     expect(line).toMatchObject({ current: 0, baseline: 0 });
+  });
+
+  it('rounds USDC baseline/suggestedLimit to 6 decimals instead of flattening to fiat-shaped 2 (ADR-026 1b)', () => {
+    const [line] = shapeBudgetFitLines(
+      [budget({ currency: CurrencyCode.enum.USDC, limit: 1 })],
+      [windowedSpend({ currency: CurrencyCode.enum.USDC, current: 0, baselineTotal: 1 })],
+      3,
+      20,
+      20,
+      Locale.enum.en,
+      decimalsFor,
+    );
+    expect(line).toMatchObject({ currency: 'USDC', baseline: 0.333333, suggestedLimit: 0.366667 });
   });
 });
 
@@ -289,7 +378,7 @@ describe('shapeUnbudgetedSpend', () => {
 
   it('surfaces a category with an established baseline and no budget', () => {
     const rows = [row({ category: 'Transport', baselineTotal: 900 })];
-    const [entry] = shapeUnbudgetedSpend(rows, noBudgets, 3, Locale.enum.en);
+    const [entry] = shapeUnbudgetedSpend(rows, noBudgets, 3, Locale.enum.en, fiatDecimals);
     expect(entry).toMatchObject({ category: 'Transport', currency: 'BRL', baseline: 300, suggestedLimit: 330 });
   });
 
@@ -306,13 +395,19 @@ describe('shapeUnbudgetedSpend', () => {
         suggestedLimit: 330,
       },
     ];
-    const entries = shapeUnbudgetedSpend([row({ category: 'Food', baselineTotal: 900 })], budgeted, 3, Locale.enum.en);
+    const entries = shapeUnbudgetedSpend(
+      [row({ category: 'Food', baselineTotal: 900 })],
+      budgeted,
+      3,
+      Locale.enum.en,
+      fiatDecimals,
+    );
     expect(entries).toEqual([]);
   });
 
   it('excludes a brand-new (zero-baseline) category — no established pattern to suggest a limit from', () => {
     const rows = [row({ category: 'Brand New', baselineTotal: 0 })];
-    expect(shapeUnbudgetedSpend(rows, noBudgets, 3, Locale.enum.en)).toEqual([]);
+    expect(shapeUnbudgetedSpend(rows, noBudgets, 3, Locale.enum.en, fiatDecimals)).toEqual([]);
   });
 
   it('does not cross-exclude the same category name in a different currency', () => {
@@ -333,12 +428,13 @@ describe('shapeUnbudgetedSpend', () => {
       budgeted,
       3,
       Locale.enum.en,
+      fiatDecimals,
     );
     expect(entries).toHaveLength(1);
   });
 
   it('returns an empty array when there are no shift rows', () => {
-    expect(shapeUnbudgetedSpend([], noBudgets, 3, Locale.enum.en)).toEqual([]);
+    expect(shapeUnbudgetedSpend([], noBudgets, 3, Locale.enum.en, fiatDecimals)).toEqual([]);
   });
 
   it('breaks ties by currency for the same category name, deterministically', () => {
@@ -346,14 +442,25 @@ describe('shapeUnbudgetedSpend', () => {
       row({ category: 'Food', currency: CurrencyCode.enum.USD, baselineTotal: 900 }),
       row({ category: 'Food', currency: CurrencyCode.enum.BRL, baselineTotal: 900 }),
     ];
-    const entries = shapeUnbudgetedSpend(rows, noBudgets, 3, Locale.enum.en);
+    const entries = shapeUnbudgetedSpend(rows, noBudgets, 3, Locale.enum.en, fiatDecimals);
     expect(entries.map((e) => e.currency)).toEqual(['BRL', 'USD']);
+  });
+
+  it('rounds BTC baseline/suggestedLimit to 8 decimals instead of flattening to fiat-shaped 2 (ADR-026 1b)', () => {
+    const rows = [row({ category: 'Crypto Buys', currency: CurrencyCode.enum.BTC, baselineTotal: 1 })];
+    const [entry] = shapeUnbudgetedSpend(rows, noBudgets, 3, Locale.enum.en, decimalsFor);
+    expect(entry).toMatchObject({
+      category: 'Crypto Buys',
+      currency: 'BTC',
+      baseline: 0.33333333,
+      suggestedLimit: 0.36666667,
+    });
   });
 });
 
 describe('shapeMerchantConcentration', () => {
   it('reports 100% share and zero othersSpent for a single-merchant category', () => {
-    const [group] = shapeMerchantConcentration([merchantRow({ spent: 100 })], 5, Locale.enum.en);
+    const [group] = shapeMerchantConcentration([merchantRow({ spent: 100 })], 5, Locale.enum.en, fiatDecimals);
     expect(group).toEqual({
       category: 'Food',
       currency: 'BRL',
@@ -369,27 +476,21 @@ describe('shapeMerchantConcentration', () => {
       merchantRow({ merchantKey: 'b', spent: 200 }),
       merchantRow({ merchantKey: 'c', spent: 100 }),
     ];
-    const [group] = shapeMerchantConcentration(rows, 2, Locale.enum.en);
+    const [group] = shapeMerchantConcentration(rows, 2, Locale.enum.en, fiatDecimals);
     expect(group?.categoryTotal).toBe(600);
     expect(group?.merchants.map((m) => m.merchant)).toEqual(['a', 'b']);
     expect(group?.othersSpent).toBe(100);
   });
 
   it('sorts merchants by spend descending regardless of input order', () => {
-    const rows = [
-      merchantRow({ merchantKey: 'small', spent: 10 }),
-      merchantRow({ merchantKey: 'big', spent: 90 }),
-    ];
-    const [group] = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    const rows = [merchantRow({ merchantKey: 'small', spent: 10 }), merchantRow({ merchantKey: 'big', spent: 90 })];
+    const [group] = shapeMerchantConcentration(rows, 5, Locale.enum.en, fiatDecimals);
     expect(group?.merchants.map((m) => m.merchant)).toEqual(['big', 'small']);
   });
 
   it('accumulates cumulativeShare in descending-spend order', () => {
-    const rows = [
-      merchantRow({ merchantKey: 'a', spent: 60 }),
-      merchantRow({ merchantKey: 'b', spent: 40 }),
-    ];
-    const [group] = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    const rows = [merchantRow({ merchantKey: 'a', spent: 60 }), merchantRow({ merchantKey: 'b', spent: 40 })];
+    const [group] = shapeMerchantConcentration(rows, 5, Locale.enum.en, fiatDecimals);
     expect(group?.merchants).toEqual([
       { merchant: 'a', spent: 60, share: 0.6, cumulativeShare: 0.6 },
       { merchant: 'b', spent: 40, share: 0.4, cumulativeShare: 1 },
@@ -403,14 +504,19 @@ describe('shapeMerchantConcentration', () => {
       merchantRow({ merchantKey: 'c', spent: 15 }),
       merchantRow({ merchantKey: 'd', spent: 5 }),
     ];
-    const [group] = shapeMerchantConcentration(rows, 2, Locale.enum.en);
+    const [group] = shapeMerchantConcentration(rows, 2, Locale.enum.en, fiatDecimals);
     const merchantShareSum = group!.merchants.reduce((sum, m) => sum + m.share, 0);
     const othersShare = group!.othersSpent / group!.categoryTotal;
     expect(merchantShareSum + othersShare).toBeCloseTo(1, 4);
   });
 
   it('groups a null merchant_key under a localized "Unknown"', () => {
-    const [group] = shapeMerchantConcentration([merchantRow({ merchantKey: null, spent: 50 })], 5, Locale.enum.pt);
+    const [group] = shapeMerchantConcentration(
+      [merchantRow({ merchantKey: null, spent: 50 })],
+      5,
+      Locale.enum.pt,
+      fiatDecimals,
+    );
     expect(group?.merchants[0]?.merchant).toBe('Desconhecido');
   });
 
@@ -419,7 +525,7 @@ describe('shapeMerchantConcentration', () => {
       merchantRow({ currency: CurrencyCode.enum.BRL, spent: 100 }),
       merchantRow({ currency: CurrencyCode.enum.USD, spent: 50 }),
     ];
-    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en, fiatDecimals);
     expect(groups).toHaveLength(2);
     expect(groups.find((g) => g.currency === 'BRL')?.categoryTotal).toBe(100);
     expect(groups.find((g) => g.currency === 'USD')?.categoryTotal).toBe(50);
@@ -430,13 +536,14 @@ describe('shapeMerchantConcentration', () => {
       [merchantRow({ category: 'Food', categoryNames: { pt: 'Alimentação' } })],
       5,
       Locale.enum.pt,
+      fiatDecimals,
     );
     expect(group?.category).toBe('Alimentação');
   });
 
   it('sorts the returned categories alphabetically', () => {
     const rows = [merchantRow({ category: 'Transport' }), merchantRow({ category: 'Food' })];
-    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en, fiatDecimals);
     expect(groups.map((g) => g.category)).toEqual(['Food', 'Transport']);
   });
 
@@ -445,23 +552,44 @@ describe('shapeMerchantConcentration', () => {
       merchantRow({ category: 'Food', currency: CurrencyCode.enum.USD }),
       merchantRow({ category: 'Food', currency: CurrencyCode.enum.BRL }),
     ];
-    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en, fiatDecimals);
     expect(groups.map((g) => g.currency)).toEqual(['BRL', 'USD']);
   });
 
   it('does not merge a category whose name contains the internal key delimiter with an unrelated one', () => {
-    const rows = [
-      merchantRow({ category: 'Food::Drinks', spent: 100 }),
-      merchantRow({ category: 'Food', spent: 50 }),
-    ];
-    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en);
+    const rows = [merchantRow({ category: 'Food::Drinks', spent: 100 }), merchantRow({ category: 'Food', spent: 50 })];
+    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en, fiatDecimals);
     expect(groups).toHaveLength(2);
     expect(groups.find((g) => g.category === 'Food::Drinks')?.categoryTotal).toBe(100);
     expect(groups.find((g) => g.category === 'Food')?.categoryTotal).toBe(50);
   });
 
   it('returns an empty array for no rows (e.g. an empty period)', () => {
-    expect(shapeMerchantConcentration([], 5, Locale.enum.en)).toEqual([]);
+    expect(shapeMerchantConcentration([], 5, Locale.enum.en, fiatDecimals)).toEqual([]);
+  });
+
+  it('rounds USDC spent/categoryTotal to 6 decimals instead of flattening to fiat-shaped 2 (ADR-026 Phase 1b)', () => {
+    const [group] = shapeMerchantConcentration(
+      [merchantRow({ currency: CurrencyCode.enum.USDC, merchantKey: 'a', spent: 0.123456789 })],
+      5,
+      Locale.enum.en,
+      decimalsFor,
+    );
+    expect(group).toMatchObject({
+      currency: 'USDC',
+      categoryTotal: 0.123457,
+      merchants: [{ merchant: 'a', spent: 0.123457 }],
+      othersSpent: 0,
+    });
+  });
+
+  it('keeps share/cumulativeShare at 4 decimals (ratios, not money) even for a USDC category', () => {
+    const rows = [
+      merchantRow({ currency: CurrencyCode.enum.USDC, merchantKey: 'a', spent: 1 }),
+      merchantRow({ currency: CurrencyCode.enum.USDC, merchantKey: 'b', spent: 2 }),
+    ];
+    const [group] = shapeMerchantConcentration(rows, 5, Locale.enum.en, decimalsFor);
+    expect(group?.merchants.find((m) => m.merchant === 'a')?.share).toBe(0.3333);
   });
 });
 
@@ -473,7 +601,7 @@ describe('detectRecurringCadence', () => {
   ];
 
   it('flags a clean monthly series with the right typicalAmount/occurrences/lastDate/suggestedNextDue', () => {
-    const result = detectRecurringCadence(monthlySeries, 3);
+    const result = detectRecurringCadence(monthlySeries, 3, 2);
     expect(result).toEqual({
       typicalAmount: 100,
       occurrences: 3,
@@ -484,11 +612,11 @@ describe('detectRecurringCadence', () => {
 
   it('sorts an out-of-order series internally before measuring gaps', () => {
     const shuffled = [monthlySeries[2]!, monthlySeries[0]!, monthlySeries[1]!];
-    expect(detectRecurringCadence(shuffled, 3)).toEqual(detectRecurringCadence(monthlySeries, 3));
+    expect(detectRecurringCadence(shuffled, 3, 2)).toEqual(detectRecurringCadence(monthlySeries, 3, 2));
   });
 
   it('rejects a series below minOccurrences, regardless of cadence', () => {
-    expect(detectRecurringCadence(monthlySeries.slice(0, 2), 3)).toBeNull();
+    expect(detectRecurringCadence(monthlySeries.slice(0, 2), 3, 2)).toBeNull();
   });
 
   it('rejects irregular gaps', () => {
@@ -497,7 +625,7 @@ describe('detectRecurringCadence', () => {
       { date: '2026-01-15', amount: 100 }, // 14-day gap — too short
       { date: '2026-03-01', amount: 100 }, // 45-day gap — too long
     ];
-    expect(detectRecurringCadence(irregular, 3)).toBeNull();
+    expect(detectRecurringCadence(irregular, 3, 2)).toBeNull();
   });
 
   it('accepts a gap exactly at the tolerance boundary', () => {
@@ -505,7 +633,7 @@ describe('detectRecurringCadence', () => {
       { date: '2026-01-01', amount: 100 },
       { date: '2026-02-05', amount: 100 }, // exactly 35 days
     ];
-    expect(detectRecurringCadence(boundary, 2)).not.toBeNull();
+    expect(detectRecurringCadence(boundary, 2, 2)).not.toBeNull();
   });
 
   it('rejects amount drift beyond tolerance', () => {
@@ -514,7 +642,7 @@ describe('detectRecurringCadence', () => {
       { date: '2026-02-04', amount: 100 },
       { date: '2026-03-06', amount: 200 }, // far beyond ±10% of the ~133 average
     ];
-    expect(detectRecurringCadence(drifting, 3)).toBeNull();
+    expect(detectRecurringCadence(drifting, 3, 2)).toBeNull();
   });
 
   it('accepts amount drift within tolerance', () => {
@@ -523,7 +651,17 @@ describe('detectRecurringCadence', () => {
       { date: '2026-02-04', amount: 100 },
       { date: '2026-03-06', amount: 105 },
     ];
-    expect(detectRecurringCadence(withinDrift, 3)).not.toBeNull();
+    expect(detectRecurringCadence(withinDrift, 3, 2)).not.toBeNull();
+  });
+
+  it('rounds typicalAmount to the passed-in decimals rather than a flat 2 (ADR-026 Phase 1b)', () => {
+    const series = [
+      { date: '2026-01-05', amount: 0.12345678 },
+      { date: '2026-02-04', amount: 0.12345678 },
+      { date: '2026-03-06', amount: 0.12345678 },
+    ];
+    expect(detectRecurringCadence(series, 3, 8)?.typicalAmount).toBe(0.12345678);
+    expect(detectRecurringCadence(series, 3, 2)?.typicalAmount).toBe(0.12);
   });
 });
 
@@ -544,7 +682,7 @@ describe('shapeRecurringCandidates', () => {
       recurringRow({ date: '2026-02-04' }),
       recurringRow({ date: '2026-03-06' }),
     ];
-    const [candidate] = shapeRecurringCandidates(rows, 3, Locale.enum.en);
+    const [candidate] = shapeRecurringCandidates(rows, 3, Locale.enum.en, fiatDecimals);
     expect(candidate).toEqual({
       merchant: 'netflix',
       currency: 'BRL',
@@ -562,7 +700,7 @@ describe('shapeRecurringCandidates', () => {
       recurringRow({ date: '2026-01-15' }), // irregular gap
       recurringRow({ date: '2026-03-01' }),
     ];
-    expect(shapeRecurringCandidates(rows, 3, Locale.enum.en)).toEqual([]);
+    expect(shapeRecurringCandidates(rows, 3, Locale.enum.en, fiatDecimals)).toEqual([]);
   });
 
   it('keeps merchants separate per currency', () => {
@@ -571,7 +709,7 @@ describe('shapeRecurringCandidates', () => {
       recurringRow({ currency: CurrencyCode.enum.BRL, date: '2026-02-04' }),
       recurringRow({ currency: CurrencyCode.enum.USD, date: '2026-01-05' }),
     ];
-    const candidates = shapeRecurringCandidates(rows, 2, Locale.enum.en);
+    const candidates = shapeRecurringCandidates(rows, 2, Locale.enum.en, fiatDecimals);
     expect(candidates).toHaveLength(1);
     expect(candidates[0]).toMatchObject({ currency: 'BRL', occurrences: 2 });
   });
@@ -582,7 +720,7 @@ describe('shapeRecurringCandidates', () => {
       recurringRow({ date: '2026-02-04', category: 'Streaming' }),
       recurringRow({ date: '2026-03-06', category: 'Subscriptions' }),
     ];
-    const [candidate] = shapeRecurringCandidates(rows, 3, Locale.enum.en);
+    const [candidate] = shapeRecurringCandidates(rows, 3, Locale.enum.en, fiatDecimals);
     expect(candidate?.category).toBe('Subscriptions');
   });
 
@@ -592,7 +730,7 @@ describe('shapeRecurringCandidates', () => {
       recurringRow({ date: '2026-02-04', category: 'Food', categoryNames: { pt: 'Alimentação' } }),
       recurringRow({ date: '2026-03-06', category: 'Food', categoryNames: { pt: 'Alimentação' } }),
     ];
-    const [candidate] = shapeRecurringCandidates(rows, 3, Locale.enum.pt);
+    const [candidate] = shapeRecurringCandidates(rows, 3, Locale.enum.pt, fiatDecimals);
     expect(candidate?.category).toBe('Alimentação');
   });
 
@@ -611,11 +749,21 @@ describe('shapeRecurringCandidates', () => {
       recurringRow({ merchantKey: 'c', date: '2026-02-04' }),
       recurringRow({ merchantKey: 'c', date: '2026-03-06' }),
     ];
-    const candidates = shapeRecurringCandidates(rows, 3, Locale.enum.en);
+    const candidates = shapeRecurringCandidates(rows, 3, Locale.enum.en, fiatDecimals);
     expect(candidates.map((c) => c.merchant)).toEqual(['b', 'a', 'c']);
   });
 
   it('returns an empty array for no rows', () => {
-    expect(shapeRecurringCandidates([], 3, Locale.enum.en)).toEqual([]);
+    expect(shapeRecurringCandidates([], 3, Locale.enum.en, fiatDecimals)).toEqual([]);
+  });
+
+  it('rounds BTC typicalAmount to 8 decimals instead of flattening to fiat-shaped 2 (ADR-026 Phase 1b)', () => {
+    const rows = [
+      recurringRow({ currency: CurrencyCode.enum.BTC, amount: 0.12345678, date: '2026-01-05' }),
+      recurringRow({ currency: CurrencyCode.enum.BTC, amount: 0.12345678, date: '2026-02-04' }),
+      recurringRow({ currency: CurrencyCode.enum.BTC, amount: 0.12345678, date: '2026-03-06' }),
+    ];
+    const [candidate] = shapeRecurringCandidates(rows, 3, Locale.enum.en, decimalsFor);
+    expect(candidate).toMatchObject({ currency: 'BTC', typicalAmount: 0.12345678 });
   });
 });

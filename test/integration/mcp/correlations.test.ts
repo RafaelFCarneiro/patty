@@ -451,6 +451,36 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
       await transport.close();
     }
   });
+
+  it('preserves BTC current/baseline precision to 8dp, not flattened to fiat-shaped 2dp (ADR-026 1b)', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-BTC-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await seedBaseline(client, categoryName, 0.12345678, 'BTC', stamp);
+      await addExpense(client, {
+        description: 'BTC current spend',
+        amount: 0.87654321,
+        category: categoryName,
+        currency: 'BTC',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-btc-current-${stamp}`,
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'spending_shifts', ...REFERENCE, minDeltaPct: 0 },
+      })) as FindCorrelationsResult;
+
+      const shift = findShift(result, categoryName, 'BTC');
+      ensure(shift, `no BTC shift for ${categoryName}`);
+      expect(shift).toMatchObject({ current: 0.87654321, baseline: 0.12345678 });
+    } finally {
+      await transport.close();
+    }
+  });
 });
 
 describe('MCP integration > find_correlations (budget_fit)', () => {
@@ -823,6 +853,35 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
       await transport.close();
     }
   });
+
+  it('preserves USDC spent/categoryTotal precision to 6dp, not flattened to fiat-shaped 2dp (ADR-026 1b)', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Concentration-USDC-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await addExpense(client, {
+        description: 'USDC payment',
+        amount: 123.123456,
+        category: categoryName,
+        currency: 'USDC',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-conc-usdc-${stamp}`,
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'merchant_concentration', ...REFERENCE },
+      })) as FindCorrelationsResult;
+
+      const group = findConcentration(result, categoryName, 'USDC');
+      ensure(group, `no USDC group for ${categoryName}`);
+      expect(group.categoryTotal).toBe(123.123456);
+    } finally {
+      await transport.close();
+    }
+  });
 });
 
 describe('MCP integration > find_correlations (recurring_candidates)', () => {
@@ -967,6 +1026,35 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
       })) as FindCorrelationsResult;
 
       expect(findCandidate(result, 'corr candidate irregular')).toBeUndefined();
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('preserves BTC typicalAmount precision to 8dp, not flattened to fiat-shaped 2dp (ADR-026 1b)', async () => {
+    const merchant = 'Corr Candidate BTC';
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      for (const [i, offset] of [90, 60, 30, 0].entries()) {
+        await addExpense(client, {
+          description: merchant,
+          amount: 0.00123456,
+          category: 'Subscriptions',
+          currency: 'BTC',
+          date: daysAgo(offset),
+          idempotencyKey: `corr-candidate-btc-${i}`,
+        });
+      }
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'recurring_candidates' },
+      })) as FindCorrelationsResult;
+
+      const candidate = findCandidate(result, 'corr candidate btc');
+      ensure(candidate, 'expected corr candidate btc to qualify');
+      expect(candidate).toMatchObject({ currency: 'BTC', typicalAmount: 0.00123456 });
     } finally {
       await transport.close();
     }
