@@ -62,18 +62,18 @@ describe('MCP integration > pending transactions', () => {
       expect(pending.transaction?.status).toBe('pending');
 
       // Balance reflects only the effective income (1000), NOT the pending expense
-      const balances = (await callTool(client, {
+      const { balances } = (await callTool(client, {
         name: 'get_account_balances',
         args: { account: accountName },
-      })) as Array<{ balance?: number; projectedBalance?: number }>;
+      })) as { balances: Array<{ balance?: number; projectedBalance?: number }> };
       expect(balances[0]?.balance).toBe(1000);
       expect(balances[0]?.projectedBalance).toBeUndefined();
 
       // projectedAsOf includes the pending expense
-      const projected = (await callTool(client, {
+      const { balances: projected } = (await callTool(client, {
         name: 'get_account_balances',
         args: { account: accountName, projectedAsOf: '2026-01-31' },
-      })) as Array<{ balance?: number; projectedBalance?: number }>;
+      })) as { balances: Array<{ balance?: number; projectedBalance?: number }> };
       expect(projected[0]?.balance).toBe(1000);
       expect(projected[0]?.projectedBalance).toBe(700);
 
@@ -110,10 +110,10 @@ describe('MCP integration > pending transactions', () => {
       expect(reconfirm.status).toBe('effective');
 
       // Balance now drops by 300 after confirm
-      const afterConfirm = (await callTool(client, {
+      const { balances: afterConfirm } = (await callTool(client, {
         name: 'get_account_balances',
         args: { account: accountName },
-      })) as Array<{ balance?: number }>;
+      })) as { balances: Array<{ balance?: number }> };
       expect(afterConfirm[0]?.balance).toBe(700);
     } finally {
       await transport.close();

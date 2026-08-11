@@ -161,9 +161,9 @@ describe('POST /api/bills/pay', () => {
     expect(res.json()).not.toHaveProperty('creditCardId');
     expect(res.json()).not.toHaveProperty('version');
     const balances = await inject({ method: 'GET', url: '/api/accounts/balances?account=PayBillAcc' });
-    expect(balances.json()[0].balance).toBe(4700);
+    expect(balances.json().balances[0].balance).toBe(4700);
     const cardBal = await inject({ method: 'GET', url: '/api/accounts/balances?account=Card%3A%20PayBillCard' });
-    expect(cardBal.json()[0].balance).toBe(0);
+    expect(cardBal.json().balances[0].balance).toBe(0);
   });
 
   it('pay_bill without account and without card default returns 422', async () => {
@@ -274,7 +274,7 @@ describe('POST /api/bills/revert', () => {
     expect(reverted.json().paymentTransactionId).toBeFalsy();
 
     const balances = await inject({ method: 'GET', url: '/api/accounts/balances?account=RevertBillAcc' });
-    expect(balances.json()[0].balance).toBe(1000);
+    expect(balances.json().balances[0].balance).toBe(1000);
   });
 
   it('reverting a bill that is not paid is a no-op success', async () => {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Id } from './id.js';
+import { ConvertedValueSchema } from './currencyRate.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
 import {
@@ -70,8 +71,24 @@ export const AccountBalanceSchema = AccountSchema.extend({
   transfersIn: z.number(),
   transfersOut: z.number(),
   projectedBalance: z.number().optional().describe('Effective balance + pending through projectedAsOf, if supplied'),
+  converted: ConvertedValueSchema.optional().describe(
+    'Read-time valuation of balance in the base currency (ADR-026); absent when no exchange rate is on file',
+  ),
 });
 export type AccountBalance = z.infer<typeof AccountBalanceSchema>;
+
+export const ConsolidatedNetWorthSchema = z.object({
+  baseCurrency: CurrencyCode.describe('The base currency all included balances are summed in'),
+  total: z.number().describe('Sum of every included balance converted value'),
+  excluded: z.array(Id).describe('Account ids left out of total because no exchange rate is on file for their currency'),
+});
+export type ConsolidatedNetWorth = z.infer<typeof ConsolidatedNetWorthSchema>;
+
+export const AccountBalancesResultSchema = z.object({
+  balances: z.array(AccountBalanceSchema),
+  consolidatedNetWorth: ConsolidatedNetWorthSchema,
+});
+export type AccountBalancesResult = z.infer<typeof AccountBalancesResultSchema>;
 
 /** Natural input for an account expense/income: the transaction core's minimal
  *  `CreateTransactionSchema` plus `account`, minus `type` (the movement kind is the tool

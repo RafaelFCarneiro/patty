@@ -53,10 +53,10 @@ describe('MCP integration > localized enum labels', () => {
   });
 
   it('get_account_balances returns typeLabel', async () => {
-    const balances = (await callTool(client, {
+    const { balances } = (await callTool(client, {
       name: 'get_account_balances',
       args: { account: accountName },
-    })) as AccountBalance[];
+    })) as { balances: AccountBalance[] };
     expect(balances).toHaveLength(1);
     expect(balances[0]!.typeLabel).toBe('Checking');
   });

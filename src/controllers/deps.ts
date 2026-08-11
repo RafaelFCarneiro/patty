@@ -1,5 +1,6 @@
 import type { Result, ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
+import type { StalenessThresholds } from '../logic/currencyRate.js';
 import type { FlowOutcome } from '../models/persistable.js';
 import type { Locale } from '../models/locale.js';
 import type { AccountsRepo } from '../diplomat/db/repos/accounts.js';
@@ -40,6 +41,7 @@ export type Deps = {
   clock: () => Date;
   newId: () => string;
   locale: () => Promise<Locale>;
+  rateStaleness: StalenessThresholds;
 };
 
 /**

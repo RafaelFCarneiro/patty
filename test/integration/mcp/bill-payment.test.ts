@@ -66,10 +66,10 @@ describe('MCP integration > bill payment (Design 003)', () => {
       expect(paidBill.status).toBe('paid');
 
       // Payer balance should be reduced
-      const balances = (await callTool(client, {
+      const { balances } = (await callTool(client, {
         name: 'get_account_balances',
         args: {},
-      })) as Array<{ name?: string; balance?: number }>;
+      })) as { balances: Array<{ name?: string; balance?: number }> };
 
       const bank = balances.find((b) => b.name === bankName);
       expect(bank?.balance).toBe(4700); // 5000 - 300
@@ -326,10 +326,10 @@ describe('MCP integration > bill payment (Design 003)', () => {
       expect(err.error?.code).toBe('unknown_card');
 
       // Bank account balance should be restored (payment transfer removed)
-      const balances = (await callTool(client, {
+      const { balances } = (await callTool(client, {
         name: 'get_account_balances',
         args: { account: delBank },
-      })) as Array<{ balance?: number }>;
+      })) as { balances: Array<{ balance?: number }> };
       expect(balances[0]?.balance).toBe(2000); // back to initial
     } finally {
       await transport.close();
@@ -443,15 +443,15 @@ describe('MCP integration > bill payment (Design 003)', () => {
       expect(afterRevert.length).toBe(0);
 
       // Balances restored to pre-pay values.
-      const balances = (await callTool(client, {
+      const { balances } = (await callTool(client, {
         name: 'get_account_balances',
         args: { account: revertBankName },
-      })) as Array<{ balance?: number }>;
+      })) as { balances: Array<{ balance?: number }> };
       expect(balances[0]?.balance).toBe(1000);
-      const cardBalances = (await callTool(client, {
+      const { balances: cardBalances } = (await callTool(client, {
         name: 'get_account_balances',
         args: { account: `Card: ${revertCardName}` },
-      })) as Array<{ balance?: number }>;
+      })) as { balances: Array<{ balance?: number }> };
       expect(cardBalances[0]?.balance).toBe(-200);
 
       // Paying again after a revert succeeds (idempotency key was freed by the delete).

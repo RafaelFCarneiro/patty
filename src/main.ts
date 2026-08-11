@@ -103,6 +103,7 @@ const main = async (): Promise<void> => {
     clock: () => new Date(),
     newId: () => randomUUID(),
     locale: localeResolver.locale,
+    rateStaleness: { fiatHours: config.FIAT_RATE_STALE_HOURS, cryptoHours: config.CRYPTO_RATE_STALE_HOURS },
   };
 
   const applierRegistry: ApplierRegistry = {

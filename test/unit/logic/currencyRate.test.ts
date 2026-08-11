@@ -1,6 +1,15 @@
 import { err, ok } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
-import { buildBulkResult, convert, isCryptoPair, isStale, toBulkItem } from '../../../src/logic/currencyRate.js';
+import {
+  buildBulkResult,
+  consolidateNetWorth,
+  convert,
+  isCryptoPair,
+  isStale,
+  toBulkItem,
+  valueAccount,
+  type ValuableBalance,
+} from '../../../src/logic/currencyRate.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import type { CurrencyRate, CurrencyRateView, SetExchangeRateInput } from '../../../src/models/currencyRate.js';
 
@@ -114,6 +123,103 @@ describe('convert', () => {
     const rates = [rate({ fromCode: USD, toCode: BRL, rate: 5 })];
     const result = convert(10, BRL, USD, rates, NOW, OPTIONS);
     expect(result.noRate).toBe(true);
+  });
+});
+
+describe('valueAccount / consolidateNetWorth (ADR-026 Phase 3, ADR-028 controller-orchestrated)', () => {
+  const balance = (overrides: Partial<ValuableBalance> = {}): ValuableBalance => ({
+    id: 'acc-1',
+    currency: USD,
+    balance: 100,
+    ...overrides,
+  });
+
+  it('valueAccount: identity when the balance is already in the base currency — rate 1, never stale', () => {
+    const valued = valueAccount(balance(), USD, [], NOW, 2, OPTIONS.thresholds);
+    expect(valued.converted).toEqual({ baseCurrency: USD, value: 100, rate: 1, asOf: NOW.toISOString(), stale: false });
+  });
+
+  it('valueAccount: cross-currency with a rate on file converts and rounds to the base decimals', () => {
+    const rates = [rate({ fromCode: BRL, toCode: USD, rate: 0.2 })];
+    const valued = valueAccount(balance({ currency: BRL, balance: 100 }), USD, rates, NOW, 2, OPTIONS.thresholds);
+    expect(valued.converted).toEqual({
+      baseCurrency: USD,
+      value: 20,
+      rate: 0.2,
+      asOf: NOW.toISOString(),
+      stale: false,
+    });
+  });
+
+  it('valueAccount: a negative balance (e.g. a credit-card liability) converts with the sign preserved', () => {
+    const rates = [rate({ fromCode: BRL, toCode: USD, rate: 0.2 })];
+    const valued = valueAccount(balance({ currency: BRL, balance: -500 }), USD, rates, NOW, 2, OPTIONS.thresholds);
+    expect(valued.converted).toEqual({
+      baseCurrency: USD,
+      value: -100,
+      rate: 0.2,
+      asOf: NOW.toISOString(),
+      stale: false,
+    });
+  });
+
+  it('valueAccount: a missing rate omits converted entirely rather than fabricating a value', () => {
+    const valued = valueAccount(balance({ currency: BRL }), USD, [], NOW, 2, OPTIONS.thresholds);
+    expect(valued.converted).toBeUndefined();
+    expect(valued).toEqual(balance({ currency: BRL }));
+  });
+
+  it('valueAccount: a stale rate still converts, flagged', () => {
+    const staleAsOf = new Date(NOW.getTime() - 25 * 60 * 60 * 1000).toISOString();
+    const rates = [rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: staleAsOf })];
+    const valued = valueAccount(balance({ currency: BRL }), USD, rates, NOW, 2, OPTIONS.thresholds);
+    expect(valued.converted?.stale).toBe(true);
+  });
+
+  it('consolidateNetWorth: sums every included converted value, rounded to the base decimals', () => {
+    const valuedAccounts = [
+      valueAccount(balance({ id: 'acc-usd', currency: USD, balance: 100 }), USD, [], NOW, 2, OPTIONS.thresholds),
+      valueAccount(
+        balance({ id: 'acc-brl', currency: BRL, balance: 500 }),
+        USD,
+        [rate({ fromCode: BRL, toCode: USD, rate: 0.2 })],
+        NOW,
+        2,
+        OPTIONS.thresholds,
+      ),
+    ];
+    expect(consolidateNetWorth(valuedAccounts, USD, 2)).toEqual({ baseCurrency: USD, total: 200, excluded: [] });
+  });
+
+  it('consolidateNetWorth: a negative (liability) balance offsets positive ones with the correct sign', () => {
+    const valuedAccounts = [
+      valueAccount(balance({ id: 'acc-usd', currency: USD, balance: 100 }), USD, [], NOW, 2, OPTIONS.thresholds),
+      valueAccount(
+        balance({ id: 'acc-card', currency: BRL, balance: -500 }),
+        USD,
+        [rate({ fromCode: BRL, toCode: USD, rate: 0.2 })],
+        NOW,
+        2,
+        OPTIONS.thresholds,
+      ),
+    ];
+    expect(consolidateNetWorth(valuedAccounts, USD, 2)).toEqual({ baseCurrency: USD, total: 0, excluded: [] });
+  });
+
+  it('consolidateNetWorth: excludes accounts with no converted value from the total, but still lists their id', () => {
+    const valuedAccounts = [
+      valueAccount(balance({ id: 'acc-usd', currency: USD, balance: 100 }), USD, [], NOW, 2, OPTIONS.thresholds),
+      valueAccount(balance({ id: 'acc-btc', currency: BTC, balance: 1 }), USD, [], NOW, 2, OPTIONS.thresholds),
+    ];
+    expect(consolidateNetWorth(valuedAccounts, USD, 2)).toEqual({
+      baseCurrency: USD,
+      total: 100,
+      excluded: ['acc-btc'],
+    });
+  });
+
+  it('consolidateNetWorth: an empty list totals 0 with nothing excluded', () => {
+    expect(consolidateNetWorth([], USD, 2)).toEqual({ baseCurrency: USD, total: 0, excluded: [] });
   });
 });
 

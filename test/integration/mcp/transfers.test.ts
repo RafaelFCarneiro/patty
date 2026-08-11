@@ -47,10 +47,10 @@ describe('MCP integration > transfers', () => {
       createdTxIds.push(txId);
       expect(transfer.created).toBe(true);
 
-      const balances = (await callTool(client, {
+      const { balances } = (await callTool(client, {
         name: 'get_account_balances',
         args: {},
-      })) as Array<{ name?: string; balance?: number }>;
+      })) as { balances: Array<{ name?: string; balance?: number }> };
 
       const src = balances.find((b) => b.name === sourceName);
       const dst = balances.find((b) => b.name === destName);

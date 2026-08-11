@@ -43,10 +43,10 @@ describe('MCP integration > crypto currencies (ADR-026 Phase 1)', () => {
       if (income.transaction?.id) createdTxIds.push(income.transaction.id);
       expect(income.transaction?.amount).toBe(0.00000001);
 
-      const balances = (await callTool(client, {
+      const { balances } = (await callTool(client, {
         name: 'get_account_balances',
         args: { account: accountName },
-      })) as Array<{ name?: string; balance?: number }>;
+      })) as { balances: Array<{ name?: string; balance?: number }> };
       const bal = balances.find((b) => b.name === accountName);
       ensure(bal, `Balance for "${accountName}" not found`);
       expect(bal.balance).toBe(0.12345679); // 0.12345678 + 0.00000001, not rounded away
@@ -93,10 +93,10 @@ describe('MCP integration > crypto currencies (ADR-026 Phase 1)', () => {
       if (expense.transaction?.id) createdTxIds.push(expense.transaction.id);
       expect(expense.transaction?.amount).toBe(0.000001);
 
-      const balances = (await callTool(client, {
+      const { balances } = (await callTool(client, {
         name: 'get_account_balances',
         args: { account: accountName },
-      })) as Array<{ name?: string; balance?: number }>;
+      })) as { balances: Array<{ name?: string; balance?: number }> };
       const bal = balances.find((b) => b.name === accountName);
       ensure(bal, `Balance for "${accountName}" not found`);
       expect(bal.balance).toBe(100.123455); // 100.123456 - 0.000001

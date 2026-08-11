@@ -17,7 +17,7 @@ import {
   updateAccountTransaction,
 } from '../../../controllers/account/transaction.js';
 import { buildBulkResult } from '../../../controllers/transaction/bulk.js';
-import { AccountBalanceSchema, AccountSchema } from '../../../models/account.js';
+import { AccountBalancesResultSchema, AccountSchema } from '../../../models/account.js';
 import { TransactionSource, TransactionViewSchema } from '../../../models/transaction.js';
 import * as wireInAccounts from '../../../wire/in/accounts.js';
 import { DeletedOut } from '../../../wire/out/common.js';
@@ -61,7 +61,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Get account balances',
       request: { query: wireInAccounts.AccountBalancesQuerySchema },
       responses: {
-        200: okResponse('Account balances', z.array(AccountBalanceSchema)),
+        200: okResponse('Account balances + consolidated net worth', AccountBalancesResultSchema),
         404: notFound404,
         409: conflict409,
         422: validation422,
