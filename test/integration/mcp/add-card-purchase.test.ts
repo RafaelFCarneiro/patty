@@ -322,6 +322,75 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
     }
   });
 
+  it('persists two near-identical BTC lines without falsely deduping them (crypto idempotency precision)', async () => {
+    const cardName = `AddPurchase BTC Card ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BTC' },
+      });
+
+      // Both round to 0.12 at a flat 2 decimals — the old idempotency key would collide them into
+      // one "duplicate", silently dropping the second line. At BTC's own 8 decimals they're distinct.
+      const result = (await callTool(client, {
+        name: 'import_card_statement',
+        args: {
+          card: cardName,
+          items: [
+            { description: 'BTC buy', amount: 0.12340001, type: 'expense', date: today },
+            { description: 'BTC buy', amount: 0.12349999, type: 'expense', date: today },
+          ],
+        },
+      })) as {
+        summary?: { created?: number; needsReview?: number; duplicates?: number };
+        items?: Array<{ status?: string; transaction?: { amount?: number } }>;
+      };
+
+      const items = result.items ?? [];
+      expect(items.length).toBe(2);
+      const { created = 0, needsReview = 0, duplicates = 0 } = result.summary ?? {};
+      expect(created + needsReview).toBe(2);
+      expect(duplicates).toBe(0);
+      expect(items.map((i) => i.transaction?.amount).sort()).toEqual([0.12340001, 0.12349999].sort());
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('still dedupes a true duplicate BTC line on re-import (regression)', async () => {
+    const cardName = `AddPurchase BTC Dup Card ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BTC' },
+      });
+
+      const item = { description: 'BTC recurring buy', amount: 0.00123456, type: 'expense', date: today };
+
+      const first = (await callTool(client, {
+        name: 'import_card_statement',
+        args: { card: cardName, items: [item] },
+      })) as { items?: Array<{ status?: string }> };
+      expect(first.items?.[0]?.status).not.toBe('error');
+
+      const reimport = (await callTool(client, {
+        name: 'import_card_statement',
+        args: { card: cardName, items: [item] },
+      })) as { summary?: { duplicates?: number } };
+      expect(reimport.summary?.duplicates).toBe(1);
+    } finally {
+      await transport.close();
+    }
+  });
+
   // Two lines landing on the SAME brand-new cycle don't coordinate inside one batch — the second
   // line's flow simply reads the bill the first line's flow already committed (each line is its
   // own transaction, applied sequentially).

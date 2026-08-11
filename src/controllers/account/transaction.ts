@@ -8,7 +8,7 @@ import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import { assertNonCreditType, guardTransferMutability, isAccountOwnedType } from '../../logic/account.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
-import { resolveCurrency } from '../../logic/money.js';
+import { decimalsLookup, resolveCurrency } from '../../logic/money.js';
 import { normalizeMerchant, resolveMerchantCorrection, withMerchant, withMerchantLearning } from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
@@ -28,6 +28,7 @@ import {
   type ImportAccountStatementItem,
   type UpdateAccountTransaction,
 } from '../../models/account.js';
+import { CurrencyCode } from '../../models/money.js';
 import { type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import {
   ClassificationMethod,
@@ -160,12 +161,28 @@ export const addAccountIncome = (
   addAccountMovement(deps, input, MovementType.enum.income, source);
 
 // Single-source: every item belongs to the ONE account named in `input.account` (or unattached).
-export const importAccountStatement = (
+export const importAccountStatement = async (
   deps: Deps,
   input: ImportAccountStatement,
   source: TransactionSource,
-): StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult> => {
-  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
+): Promise<StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult>> => {
+  // An unresolvable account name still builds a valid plan — each line's own addAccountExpense/
+  // Income re-resolves the account and reports the real notFound error per line; this fallback
+  // only affects the idempotency key's own rounding, never the transaction's actual currency.
+  // Unattached (no account) statements default to USD here too, same as resolveCurrency's own
+  // null-source fallback — a per-item currency override on an unattached statement is out of scope.
+  const [accountResult, currencies] = await Promise.all([
+    input.account ? resolveAccountRef(deps, input.account) : null,
+    deps.currencies.list(),
+  ]);
+  const decimalsFor = decimalsLookup(currencies);
+  const decimals = accountResult
+    ? accountResult.match(
+        (account) => decimalsFor(account.currency),
+        () => decimalsFor(CurrencyCode.enum.USD),
+      )
+    : decimalsFor(CurrencyCode.enum.USD);
+  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput, decimals);
   // Resolves locale once for the whole import rather than once per line: every line's flow reads
   // deps.locale() to build its localized response, so overriding it here to the same in-flight
   // promise keeps every item's labels consistent even if the process-level locale cache resets

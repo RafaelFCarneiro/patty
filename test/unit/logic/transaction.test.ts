@@ -34,19 +34,35 @@ import {
 describe('deriveIdempotencyKey', () => {
   it('is stable for the same statement line', () => {
     const item = { date: '2026-06-09', description: 'PAG*UberTrip 99-SP', amount: 32.5 };
-    expect(deriveIdempotencyKey(item)).toBe('2026-06-09-ubertrip-sp-32.50');
-    expect(deriveIdempotencyKey(item)).toBe(deriveIdempotencyKey({ ...item }));
+    expect(deriveIdempotencyKey(item, 2)).toBe('2026-06-09-ubertrip-sp-32.50');
+    expect(deriveIdempotencyKey(item, 2)).toBe(deriveIdempotencyKey({ ...item }, 2));
   });
 
   it('differs when amount differs', () => {
     const a = { date: '2026-06-09', description: 'IFOOD', amount: 30 };
-    expect(deriveIdempotencyKey(a)).not.toBe(deriveIdempotencyKey({ ...a, amount: 31 }));
+    expect(deriveIdempotencyKey(a, 2)).not.toBe(deriveIdempotencyKey({ ...a, amount: 31 }, 2));
+  });
+
+  it('rounds the amount component to 2 decimals for fiat, unchanged from the flat-2 behavior (regression)', () => {
+    const item = { date: '2026-06-09', description: 'Coffee', amount: 5.999 };
+    expect(deriveIdempotencyKey(item, 2)).toBe('2026-06-09-coffee-6.00');
+  });
+
+  it('gives DISTINCT keys for two amounts differing only past the 2nd decimal when decimals is 8 (BTC)', () => {
+    const a = { date: '2026-06-09', description: 'BTC buy', amount: 0.12345671 };
+    const b = { date: '2026-06-09', description: 'BTC buy', amount: 0.12345679 };
+    expect(deriveIdempotencyKey(a, 8)).not.toBe(deriveIdempotencyKey(b, 8));
+  });
+
+  it('gives IDENTICAL keys for identical amounts at 8 decimals (BTC)', () => {
+    const item = { date: '2026-06-09', description: 'BTC buy', amount: 0.12345678 };
+    expect(deriveIdempotencyKey(item, 8)).toBe(deriveIdempotencyKey({ ...item }, 8));
   });
 });
 
-describe('defaultStatementLines — pure per-line defaulting (ADR-022 step 3)', () => {
+describe('defaultStatementLines — pure per-line defaulting', () => {
   it('defaults date to the caller-resolved today and derives an idempotencyKey when both are absent', () => {
-    const line = defaultStatementLines('2026-06-10', [{ description: 'Coffee', amount: 5 }], undefined)[0]!;
+    const line = defaultStatementLines('2026-06-10', [{ description: 'Coffee', amount: 5 }], undefined, 2)[0]!;
 
     expect(line.date).toBe('2026-06-10');
     expect(line.idempotencyKey).toBeTruthy();
@@ -58,6 +74,7 @@ describe('defaultStatementLines — pure per-line defaulting (ADR-022 step 3)', 
       '2026-06-10',
       [{ description: 'Coffee', amount: 5, date: '2026-01-01', idempotencyKey: 'explicit' }],
       undefined,
+      2,
     )[0]!;
 
     expect(line.date).toBe('2026-01-01');
@@ -72,9 +89,24 @@ describe('defaultStatementLines — pure per-line defaulting (ADR-022 step 3)', 
         { description: 'Taxi', amount: 12 },
       ],
       'pasted statement text',
+      2,
     );
 
     expect(lines.map((l) => l.rawInput)).toEqual(['pasted statement text', 'pasted statement text']);
+  });
+
+  it('threads decimals through to the derived idempotencyKey, keeping two near-duplicate BTC lines distinct', () => {
+    const lines = defaultStatementLines(
+      '2026-06-10',
+      [
+        { description: 'BTC buy', amount: 0.12345671 },
+        { description: 'BTC buy', amount: 0.12345679 },
+      ],
+      undefined,
+      8,
+    );
+
+    expect(lines[0]!.idempotencyKey).not.toBe(lines[1]!.idempotencyKey);
   });
 });
 

@@ -51,7 +51,11 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
       inputSchema: ImportCardStatementSchema.shape,
     },
     async (args) => {
-      const plan = importCardStatement(deps, importCardStatementWireInToModel(args), TransactionSource.enum.import);
+      const plan = await importCardStatement(
+        deps,
+        importCardStatementWireInToModel(args),
+        TransactionSource.enum.import,
+      );
       const outcomes = await runEffectsSequence(
         plan.lines,
         (line) => () => plan.flowFor(line)().map(billAdapters.outcomeToDb).map(outcomeToDb),

@@ -16,6 +16,7 @@ import { TransactionSource, type RawTransactionView } from '../../../../src/mode
 import type { ValidationError } from '../../../../src/models/error.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../../../src/models/transactionTag.js';
 import { Locale } from '../../../../src/models/locale.js';
+import { SEEDED_CURRENCIES } from '../../fixtures/currencies.js';
 
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   accounts: { list: async () => [], findById: async () => null } as unknown as Deps['accounts'],
@@ -713,12 +714,16 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
   });
 });
 
-describe('importAccountStatement — pure per-line plan for the shell (ADR-022 step 3)', () => {
-  it("defaults every line and stamps the whole import's rawInput onto each", () => {
+describe('importAccountStatement — pure per-line plan for the shell', () => {
+  it("defaults every line and stamps the whole import's rawInput onto each", async () => {
     const clock = new Date('2026-06-01');
-    const deps = makeDeps({ clock: () => clock });
+    const deps = makeDeps({
+      clock: () => clock,
+      accounts: { list: async () => [account()] } as unknown as Deps['accounts'],
+      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
+    });
 
-    const plan = importAccountStatement(
+    const plan = await importAccountStatement(
       deps,
       {
         account: 'Nubank',
@@ -738,9 +743,12 @@ describe('importAccountStatement — pure per-line plan for the shell (ADR-022 s
   });
 
   it("routes an 'expense' line through addAccountExpense, an 'income' one through addAccountIncome", async () => {
-    const deps = makeDeps({ accounts: { list: async () => [account()] } as unknown as Deps['accounts'] });
+    const deps = makeDeps({
+      accounts: { list: async () => [account()] } as unknown as Deps['accounts'],
+      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
+    });
 
-    const plan = importAccountStatement(
+    const plan = await importAccountStatement(
       deps,
       {
         account: 'Nubank',
@@ -774,9 +782,10 @@ describe('importAccountStatement — pure per-line plan for the shell (ADR-022 s
   it("binds every line to the statement's fixed account, not a per-line one", async () => {
     const deps = makeDeps({
       accounts: { list: async () => [account({ name: 'Nubank' })] } as unknown as Deps['accounts'],
+      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
     });
 
-    const plan = importAccountStatement(
+    const plan = await importAccountStatement(
       deps,
       {
         account: 'Nubank',
@@ -794,5 +803,54 @@ describe('importAccountStatement — pure per-line plan for the shell (ADR-022 s
       }
     ).model;
     expect(model.refs.accountId).toBe('acc-1');
+  });
+
+  it("resolves the account's currency decimals for the idempotency key, keeping BTC lines distinct", async () => {
+    const deps = makeDeps({
+      accounts: { list: async () => [account({ currency: CurrencyCode.enum.BTC })] } as unknown as Deps['accounts'],
+      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
+    });
+
+    const plan = await importAccountStatement(
+      deps,
+      {
+        account: 'Nubank',
+        items: [
+          { description: 'BTC buy', amount: 0.12345671, type: 'expense' },
+          { description: 'BTC buy', amount: 0.12345679, type: 'expense' },
+        ],
+      },
+      TransactionSource.enum.import,
+    );
+
+    expect(plan.lines[0]!.idempotencyKey).not.toBe(plan.lines[1]!.idempotencyKey);
+  });
+
+  it('falls back to a valid plan (no throw) when the account name does not resolve', async () => {
+    const deps = makeDeps({
+      accounts: { list: async () => [] } as unknown as Deps['accounts'],
+      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
+    });
+
+    const plan = await importAccountStatement(
+      deps,
+      { account: 'Nonexistent', items: [{ description: 'iFood', amount: 45, type: 'expense' }] },
+      TransactionSource.enum.import,
+    );
+
+    expect(plan.lines).toHaveLength(1);
+    expect(plan.lines[0]!.idempotencyKey).toBeTruthy();
+  });
+
+  it('defaults to USD decimals for an unattached (no-account) statement', async () => {
+    const deps = makeDeps({ currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'] });
+
+    const plan = await importAccountStatement(
+      deps,
+      { items: [{ description: 'Cash spend', amount: 5.999, type: 'expense' }] },
+      TransactionSource.enum.import,
+    );
+
+    expect(plan.lines[0]!.idempotencyKey).toMatch(/-6\.00$/);
   });
 });

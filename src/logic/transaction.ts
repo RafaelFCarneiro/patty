@@ -160,19 +160,27 @@ export const entityFromExisting = (existing: RawTransactionView): TransactionEnt
 
 // ─── Bulk ─────────────────────────────────────────────────────────────────────
 
-/** Stable idempotency key derived from statement line: re-importing is a no-op. */
-export const deriveIdempotencyKey = (item: { date: string; description: string; amount: number }): string =>
-  `${item.date}-${normalizeMerchant(item.description).replace(/\s+/g, '-') || 'tx'}-${item.amount.toFixed(2)}`;
+/** Stable idempotency key derived from statement line: re-importing is a no-op. `decimals` rounds
+ *  the amount component to the line's own currency precision — a flat 2 would collide two BTC/USDC
+ *  amounts that only differ past the 2nd decimal, silently dropping the second as a duplicate. */
+export const deriveIdempotencyKey = (
+  item: { date: string; description: string; amount: number },
+  decimals: number,
+): string =>
+  `${item.date}-${normalizeMerchant(item.description).replace(/\s+/g, '-') || 'tx'}-${item.amount.toFixed(decimals)}`;
 
 // today is the caller's already-resolved toIsoDate(deps.clock()) — logic never reads the clock.
+// decimals is the batch's own currency precision, resolved once by the caller — logic never reads
+// the currencies reference list itself.
 export const defaultStatementLines = <Line extends StatementLine>(
   today: string,
   lines: readonly Line[],
   rawInput: string | undefined,
+  decimals: number,
 ): DefaultedStatementLine<Line>[] =>
   lines.map((line) => {
     const date = line.date ?? today;
-    const idempotencyKey = line.idempotencyKey ?? deriveIdempotencyKey({ ...line, date });
+    const idempotencyKey = line.idempotencyKey ?? deriveIdempotencyKey({ ...line, date }, decimals);
     return { ...line, date, idempotencyKey, rawInput };
   });
 
