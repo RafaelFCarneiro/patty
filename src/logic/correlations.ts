@@ -2,7 +2,7 @@ import * as R from 'remeda';
 import { unknownLabels } from './aggregate.js';
 import { localizeCategoryName } from './category.js';
 import { isSubCategoryRow, matchesTarget, resolveTargetNames } from './budget.js';
-import { roundMoney } from './money.js';
+import { roundMoney, roundToDecimals, type DecimalsFor } from './money.js';
 import { daysBetween } from './period.js';
 import { nextDue } from './recurring.js';
 import type { BudgetViewInput } from '../models/budget.js';
@@ -36,20 +36,24 @@ const shiftMagnitude = (deltaPct: number | null): number =>
 const passesThreshold = (deltaPct: number | null, minDeltaPct: number): boolean =>
   deltaPct === null || Math.abs(deltaPct) >= minDeltaPct;
 
-const toSpendingShift = (row: SpendingShiftInput, baselineMonths: number, locale: Locale): SpendingShift => {
+const toSpendingShift = (
+  row: SpendingShiftInput,
+  baselineMonths: number,
+  locale: Locale,
+  decimalsFor: DecimalsFor,
+): SpendingShift => {
   // Decide null/direction/deltaPct off the unrounded baseline — rounding first could turn a real
   // (if tiny) baseline into a false 0.00, misclassifying it as brand-new.
   const rawBaseline = row.baselineTotal / baselineMonths;
   const deltaPct = rawBaseline === 0 ? null : roundMoney(((row.current - rawBaseline) / rawBaseline) * 100);
   const direction =
-    deltaPct === null || row.current >= rawBaseline
-      ? SpendingShiftDirection.enum.up
-      : SpendingShiftDirection.enum.down;
+    deltaPct === null || row.current >= rawBaseline ? SpendingShiftDirection.enum.up : SpendingShiftDirection.enum.down;
+  const decimals = decimalsFor(row.currency);
   return {
     category: localizeCategoryName(row.category, row.categoryNames, locale) ?? row.category,
     currency: row.currency,
-    current: roundMoney(row.current),
-    baseline: roundMoney(rawBaseline),
+    current: roundToDecimals(row.current, decimals),
+    baseline: roundToDecimals(rawBaseline, decimals),
     deltaPct,
     direction,
   };
@@ -60,15 +64,17 @@ export const shapeSpendingShifts = (
   baselineMonths: number,
   minDeltaPct: number,
   locale: Locale,
+  decimalsFor: DecimalsFor,
 ): SpendingShift[] =>
   R.pipe(
     rows,
-    R.map((row) => toSpendingShift(row, baselineMonths, locale)),
+    R.map((row) => toSpendingShift(row, baselineMonths, locale, decimalsFor)),
     R.filter((shift) => passesThreshold(shift.deltaPct, minDeltaPct)),
     R.sortBy([(shift) => shiftMagnitude(shift.deltaPct), 'desc']),
   );
 
-const suggestedLimitFor = (baseline: number): number => roundMoney(baseline * (1 + SUGGESTED_LIMIT_MARGIN_PCT / 100));
+const suggestedLimitFor = (baseline: number, decimals: number): number =>
+  roundToDecimals(baseline * (1 + SUGGESTED_LIMIT_MARGIN_PCT / 100), decimals);
 
 const verdictFor = (baseline: number, limit: number, slackPct: number, overPct: number): BudgetFitVerdict => {
   const ratio = baseline / limit;
@@ -96,18 +102,20 @@ const toBudgetFitLine = (
   slackPct: number,
   overPct: number,
   locale: Locale,
+  decimalsFor: DecimalsFor,
 ): BudgetFitLine => {
   const matched = sumWindowedSpend(spend, budget);
   const rawBaseline = matched.baselineTotal / baselineMonths;
+  const decimals = decimalsFor(budget.currency);
   return {
     id: budget.id,
     ...resolveTargetNames(budget, locale),
     currency: budget.currency,
     limit: budget.limit,
-    current: roundMoney(matched.current),
-    baseline: roundMoney(rawBaseline),
+    current: roundToDecimals(matched.current, decimals),
+    baseline: roundToDecimals(rawBaseline, decimals),
     verdict: verdictFor(rawBaseline, budget.limit, slackPct, overPct),
-    suggestedLimit: suggestedLimitFor(rawBaseline),
+    suggestedLimit: suggestedLimitFor(rawBaseline, decimals),
   };
 };
 
@@ -118,11 +126,16 @@ export const shapeBudgetFitLines = (
   slackPct: number,
   overPct: number,
   locale: Locale,
+  decimalsFor: DecimalsFor,
 ): BudgetFitLine[] =>
   R.pipe(
     budgets,
-    R.map((budget) => toBudgetFitLine(budget, spend, baselineMonths, slackPct, overPct, locale)),
-    R.sortBy([(line) => line.category, 'asc'], [(line) => line.currency, 'asc'], [(line) => line.subCategory ?? '', 'asc']),
+    R.map((budget) => toBudgetFitLine(budget, spend, baselineMonths, slackPct, overPct, locale, decimalsFor)),
+    R.sortBy(
+      [(line) => line.category, 'asc'],
+      [(line) => line.currency, 'asc'],
+      [(line) => line.subCategory ?? '', 'asc'],
+    ),
   );
 
 /** Composite grouping key for a (category, currency) pair — JSON-encoded rather than
@@ -139,6 +152,7 @@ export const shapeUnbudgetedSpend = (
   budgeted: readonly BudgetFitLine[],
   baselineMonths: number,
   locale: Locale,
+  decimalsFor: DecimalsFor,
 ): UnbudgetedSpend[] => {
   const budgetedKeys = new Set(budgeted.map((line) => categoryCurrencyKey(line.category, line.currency)));
   return R.pipe(
@@ -151,14 +165,15 @@ export const shapeUnbudgetedSpend = (
     R.filter(
       (shift) => shift.rawBaseline > 0 && !budgetedKeys.has(categoryCurrencyKey(shift.category, shift.currency)),
     ),
-    R.map(
-      (shift): UnbudgetedSpend => ({
+    R.map((shift): UnbudgetedSpend => {
+      const decimals = decimalsFor(shift.currency);
+      return {
         category: shift.category,
         currency: shift.currency,
-        baseline: roundMoney(shift.rawBaseline),
-        suggestedLimit: suggestedLimitFor(shift.rawBaseline),
-      }),
-    ),
+        baseline: roundToDecimals(shift.rawBaseline, decimals),
+        suggestedLimit: suggestedLimitFor(shift.rawBaseline, decimals),
+      };
+    }),
     R.sortBy([(entry) => entry.category, 'asc'], [(entry) => entry.currency, 'asc']),
   );
 };
@@ -177,6 +192,7 @@ const toMerchantShares = (
   top: readonly MerchantConcentrationInput[],
   categoryTotal: number,
   locale: Locale,
+  decimals: number,
 ): MerchantShare[] => {
   let cumulative = 0;
   return top.map((row): MerchantShare => {
@@ -184,7 +200,7 @@ const toMerchantShares = (
     cumulative += share;
     return {
       merchant: resolveMerchantLabel(row.merchantKey, locale),
-      spent: roundMoney(row.spent),
+      spent: roundToDecimals(row.spent, decimals),
       share: roundShare(share),
       cumulativeShare: roundShare(cumulative),
     };
@@ -195,17 +211,19 @@ const toCategoryConcentration = (
   rows: readonly MerchantConcentrationInput[],
   topN: number,
   locale: Locale,
+  decimalsFor: DecimalsFor,
 ): CategoryConcentration => {
   // Safe: a group from R.groupBy is never empty — every row shares the same category/currency.
   const { category, categoryNames, currency } = rows[0]!;
+  const decimals = decimalsFor(currency);
   const categoryTotal = R.sumBy(rows, (row) => row.spent);
   const top = R.take(R.sortBy(rows, [(row) => row.spent, 'desc']), topN);
   return {
     category: localizeCategoryName(category, categoryNames, locale) ?? category,
     currency,
-    categoryTotal: roundMoney(categoryTotal),
-    merchants: toMerchantShares(top, categoryTotal, locale),
-    othersSpent: roundMoney(categoryTotal - R.sumBy(top, (row) => row.spent)),
+    categoryTotal: roundToDecimals(categoryTotal, decimals),
+    merchants: toMerchantShares(top, categoryTotal, locale, decimals),
+    othersSpent: roundToDecimals(categoryTotal - R.sumBy(top, (row) => row.spent), decimals),
   };
 };
 
@@ -213,12 +231,13 @@ export const shapeMerchantConcentration = (
   rows: readonly MerchantConcentrationInput[],
   topN: number,
   locale: Locale,
+  decimalsFor: DecimalsFor,
 ): CategoryConcentration[] =>
   R.pipe(
     rows,
     R.groupBy((row) => categoryCurrencyKey(row.category, row.currency)),
     R.values(),
-    R.map((groupRows) => toCategoryConcentration(groupRows, topN, locale)),
+    R.map((groupRows) => toCategoryConcentration(groupRows, topN, locale, decimalsFor)),
     R.sortBy([(entry) => entry.category, 'asc'], [(entry) => entry.currency, 'asc']),
   );
 
@@ -240,6 +259,7 @@ type CadenceResult = {
 export const detectRecurringCadence = (
   series: readonly { date: string; amount: number }[],
   minOccurrences: number,
+  decimals: number,
 ): CadenceResult | null => {
   const sorted = R.sortBy(series, [(point) => point.date, 'asc']);
   if (sorted.length < minOccurrences) return null;
@@ -257,7 +277,7 @@ export const detectRecurringCadence = (
 
   const lastDate = sorted[sorted.length - 1]!.date;
   return {
-    typicalAmount: roundMoney(typicalAmount),
+    typicalAmount: roundToDecimals(typicalAmount, decimals),
     occurrences: sorted.length,
     lastDate,
     suggestedNextDue: nextDue(lastDate, RecurringPeriod.enum.monthly),
@@ -268,10 +288,11 @@ const toRecurringCandidate = (
   rows: readonly RecurringCandidateInput[],
   minOccurrences: number,
   locale: Locale,
+  decimalsFor: DecimalsFor,
 ): RecurringCandidate | null => {
-  const cadence = detectRecurringCadence(rows, minOccurrences);
-  if (!cadence) return null;
   const { merchantKey, currency } = rows[0]!;
+  const cadence = detectRecurringCadence(rows, minOccurrences, decimalsFor(currency));
+  if (!cadence) return null;
   // A merchant's category is stable in practice — no need for a full mode-count over the series.
   const latest = R.firstBy(rows, [(row) => row.date, 'desc'])!;
   return {
@@ -286,12 +307,13 @@ export const shapeRecurringCandidates = (
   rows: readonly RecurringCandidateInput[],
   minOccurrences: number,
   locale: Locale,
+  decimalsFor: DecimalsFor,
 ): RecurringCandidate[] =>
   R.pipe(
     rows,
     R.groupBy((row) => merchantCurrencyKey(row.merchantKey, row.currency)),
     R.values(),
-    R.map((groupRows) => toRecurringCandidate(groupRows, minOccurrences, locale)),
+    R.map((groupRows) => toRecurringCandidate(groupRows, minOccurrences, locale, decimalsFor)),
     R.filter(R.isNonNull),
     R.sortBy([(candidate) => candidate.occurrences, 'desc'], [(candidate) => candidate.merchant, 'asc']),
   );

@@ -8,6 +8,7 @@ import {
   shapeSpendingShifts,
   shapeUnbudgetedSpend,
 } from '../logic/correlations.js';
+import { decimalsLookup, type DecimalsFor } from '../logic/money.js';
 import { baselineRange, hasPeriod, lookbackFrom, periodRange, toIsoDate } from '../logic/period.js';
 import {
   findCorrelationsErrors,
@@ -36,9 +37,10 @@ type AnalysisHandler = (
   deps: Deps,
   input: ResolvedFindCorrelations,
   locale: Locale,
+  decimalsFor: DecimalsFor,
 ) => ResultAsync<FindCorrelationsResult, AppError>;
 
-const spendingShifts: AnalysisHandler = (deps, input, locale) =>
+const spendingShifts: AnalysisHandler = (deps, input, locale, decimalsFor) =>
   safeTry(async function* () {
     yield* guard(hasPeriod(input), findCorrelationsErrors.missingPeriod(input.analysis));
     const period = resolvePeriod(input);
@@ -48,11 +50,11 @@ const spendingShifts: AnalysisHandler = (deps, input, locale) =>
       analysis: FindCorrelationsAnalysis.enum.spending_shifts,
       month: period.month,
       year: period.year,
-      shifts: shapeSpendingShifts(rows, input.baselineMonths, input.minDeltaPct, locale),
+      shifts: shapeSpendingShifts(rows, input.baselineMonths, input.minDeltaPct, locale, decimalsFor),
     });
   });
 
-const budgetFit: AnalysisHandler = (deps, input, locale) =>
+const budgetFit: AnalysisHandler = (deps, input, locale, decimalsFor) =>
   safeTry(async function* () {
     yield* guard(hasPeriod(input), findCorrelationsErrors.missingPeriod(input.analysis));
     const period = resolvePeriod(input);
@@ -70,17 +72,18 @@ const budgetFit: AnalysisHandler = (deps, input, locale) =>
       input.slackPct,
       input.overPct,
       locale,
+      decimalsFor,
     );
     return ok({
       analysis: FindCorrelationsAnalysis.enum.budget_fit,
       month: period.month,
       year: period.year,
       budgeted,
-      unbudgeted: shapeUnbudgetedSpend(shiftRows, budgeted, input.baselineMonths, locale),
+      unbudgeted: shapeUnbudgetedSpend(shiftRows, budgeted, input.baselineMonths, locale, decimalsFor),
     });
   });
 
-const merchantConcentration: AnalysisHandler = (deps, input, locale) =>
+const merchantConcentration: AnalysisHandler = (deps, input, locale, decimalsFor) =>
   safeTry(async function* () {
     yield* guard(hasPeriod(input), findCorrelationsErrors.missingPeriod(input.analysis));
     const period = resolvePeriod(input);
@@ -91,18 +94,18 @@ const merchantConcentration: AnalysisHandler = (deps, input, locale) =>
       analysis: FindCorrelationsAnalysis.enum.merchant_concentration,
       month: period.month,
       year: period.year,
-      categories: shapeMerchantConcentration(rows, input.topN, locale),
+      categories: shapeMerchantConcentration(rows, input.topN, locale, decimalsFor),
     });
   });
 
-const recurringCandidates: AnalysisHandler = (deps, input, locale) =>
+const recurringCandidates: AnalysisHandler = (deps, input, locale, decimalsFor) =>
   safeTry(async function* () {
     const today = toIsoDate(deps.clock());
     const from = lookbackFrom(today, input.lookbackMonths);
     const rows = await deps.correlations.recurringCandidates(from, today);
     return ok({
       analysis: FindCorrelationsAnalysis.enum.recurring_candidates,
-      candidates: shapeRecurringCandidates(rows, input.minOccurrences, locale),
+      candidates: shapeRecurringCandidates(rows, input.minOccurrences, locale, decimalsFor),
     });
   });
 
@@ -117,7 +120,9 @@ export const findCorrelations = (
   deps: Deps,
   input: ResolvedFindCorrelations,
 ): ResultAsync<FindCorrelationsResult, AppError> =>
-  ResultAsync.fromSafePromise(deps.locale()).andThen((locale) => {
+  ResultAsync.fromSafePromise(Promise.all([deps.locale(), deps.currencies.list()])).andThen(([locale, currencies]) => {
     const handler = ANALYSIS_HANDLERS[input.analysis];
-    return handler ? handler(deps, input, locale) : errAsync(findCorrelationsErrors.unhandledAnalysis(input.analysis));
+    return handler
+      ? handler(deps, input, locale, decimalsLookup(currencies))
+      : errAsync(findCorrelationsErrors.unhandledAnalysis(input.analysis));
   });

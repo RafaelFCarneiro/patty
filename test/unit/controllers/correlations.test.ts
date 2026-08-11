@@ -13,6 +13,7 @@ import type {
   RecurringCandidateDbRow,
   SpendingShiftDbRow,
 } from '../../../src/wire/db/correlations.js';
+import { SEEDED_CURRENCIES } from '../fixtures/currencies.js';
 
 const foodCategory: Category = { id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense, names: null };
 
@@ -28,7 +29,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
     recurringCandidates: async () => [],
   } as unknown as Deps['correlations'],
   creditCards: {} as Deps['creditCards'],
-  currencies: {} as Deps['currencies'],
+  currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
   currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
@@ -135,6 +136,27 @@ describe('findCorrelations — spending_shifts', () => {
     const result = await findCorrelations(deps, input({ month: undefined, year: undefined }));
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation' });
+  });
+
+  it('rounds a BTC row to 8 decimals instead of flattening to fiat-shaped 2', async () => {
+    const deps = makeDeps({
+      correlations: {
+        spendingShifts: async () => [
+          {
+            category: 'Crypto Buys',
+            categoryNames: null,
+            currency: CurrencyCode.enum.BTC,
+            current: 0.123456789,
+            baselineTotal: 0.246913578,
+          } satisfies SpendingShiftDbRow,
+        ],
+      } as unknown as Deps['correlations'],
+    });
+
+    const result = await findCorrelations(deps, input({ baselineMonths: 1 }));
+    expect(result._unsafeUnwrap()).toMatchObject({
+      shifts: [{ currency: 'BTC', current: 0.12345679, baseline: 0.24691358 }],
+    });
   });
 });
 
