@@ -11,24 +11,19 @@ import { BudgetPeriod, type BudgetViewInput } from '../../../src/models/budget.j
 import type { BudgetFitLine, RecurringCandidateInput } from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
 import { decimalsLookup, type DecimalsFor } from '../../../src/logic/money.js';
-import { CurrencyCode, type Currency } from '../../../src/models/money.js';
+import { CurrencyCode } from '../../../src/models/money.js';
 import type { CategoryWindowedSpend } from '../../../src/models/transaction.js';
 import type { MerchantSpendDbRow, SpendingShiftDbRow } from '../../../src/wire/db/correlations.js';
+import { ADR_026_CURRENCIES } from '../fixtures/currencies.js';
 
 // Every existing test exercises fiat (BRL/USD) rows only — a flat 2 decimals reproduces the
 // pre-ADR-026-Phase-1b `roundMoney` behavior exactly, so this is a regression fixture as much as
 // a convenience one.
 const fiatDecimals: DecimalsFor = () => 2;
 
-// Mirrors the real ADR-026 decimals table (BRL/USD 2, USDC 6, BTC 8) for tests that exercise
-// currency-aware rounding directly, built through the same `decimalsLookup` the controller uses.
-const CURRENCIES: Currency[] = [
-  { code: CurrencyCode.enum.BRL, symbol: 'R$', name: 'Real', decimals: 2 },
-  { code: CurrencyCode.enum.USD, symbol: '$', name: 'Dollar', decimals: 2 },
-  { code: CurrencyCode.enum.USDC, symbol: 'USDC', name: 'USD Coin', decimals: 6 },
-  { code: CurrencyCode.enum.BTC, symbol: '₿', name: 'Bitcoin', decimals: 8 },
-];
-const decimalsFor: DecimalsFor = decimalsLookup(CURRENCIES);
+// Exercises currency-aware rounding directly, built through the same `decimalsLookup` the
+// controller uses, off the shared ADR-026 currencies fixture.
+const decimalsFor: DecimalsFor = decimalsLookup(ADR_026_CURRENCIES);
 
 const row = (overrides: Partial<SpendingShiftDbRow> = {}): SpendingShiftDbRow => ({
   category: 'Food',

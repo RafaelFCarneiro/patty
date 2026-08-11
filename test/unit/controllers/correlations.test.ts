@@ -5,7 +5,7 @@ import { CategoryKind, type Category } from '../../../src/models/category.js';
 import { BudgetPeriod } from '../../../src/models/budget.js';
 import { FindCorrelationsAnalysis, type ResolvedFindCorrelations } from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
-import { CurrencyCode, type Currency } from '../../../src/models/money.js';
+import { CurrencyCode } from '../../../src/models/money.js';
 import type { CategoryWindowedSpend } from '../../../src/models/transaction.js';
 import type { BudgetViewRow } from '../../../src/wire/db/budgets.js';
 import type {
@@ -13,17 +13,9 @@ import type {
   RecurringCandidateDbRow,
   SpendingShiftDbRow,
 } from '../../../src/wire/db/correlations.js';
+import { ADR_026_CURRENCIES } from '../fixtures/currencies.js';
 
 const foodCategory: Category = { id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense, names: null };
-
-// ADR-026 decimals table — used to prove find_correlations threads decimalsFor through to the
-// shaping logic, not just that the default fiat rows keep working.
-const CURRENCIES: Currency[] = [
-  { code: CurrencyCode.enum.BRL, symbol: 'R$', name: 'Real', decimals: 2 },
-  { code: CurrencyCode.enum.USD, symbol: '$', name: 'Dollar', decimals: 2 },
-  { code: CurrencyCode.enum.USDC, symbol: 'USDC', name: 'USD Coin', decimals: 6 },
-  { code: CurrencyCode.enum.BTC, symbol: '₿', name: 'Bitcoin', decimals: 8 },
-];
 
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   accounts: {} as Deps['accounts'],
@@ -37,7 +29,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
     recurringCandidates: async () => [],
   } as unknown as Deps['correlations'],
   creditCards: {} as Deps['creditCards'],
-  currencies: { list: async () => CURRENCIES } as unknown as Deps['currencies'],
+  currencies: { list: async () => ADR_026_CURRENCIES } as unknown as Deps['currencies'],
   currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
