@@ -111,15 +111,12 @@ export const valueAccount = <A extends ValuableBalance>(
   baseDecimals: number,
   thresholds: StalenessThresholds,
 ): A & { converted?: ConvertedValue } => {
-  const result = convert(account.balance, account.currency, baseCurrency, rates, now, {
+  const { value, rate, asOf, stale, noRate } = convert(account.balance, account.currency, baseCurrency, rates, now, {
     decimals: baseDecimals,
     thresholds,
   });
-  if (result.noRate) return account;
-  return {
-    ...account,
-    converted: { baseCurrency, value: result.value!, rate: result.rate!, asOf: result.asOf!, stale: result.stale },
-  };
+  if (noRate || value === null || rate === null || asOf === null) return account;
+  return { ...account, converted: { baseCurrency, value, rate, asOf, stale } };
 };
 
 export type ConsolidatedNetWorth = { baseCurrency: CurrencyCode; total: number; excluded: string[] };
