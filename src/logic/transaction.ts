@@ -170,8 +170,7 @@ export const deriveIdempotencyKey = (
   `${item.date}-${normalizeMerchant(item.description).replace(/\s+/g, '-') || 'tx'}-${item.amount.toFixed(decimals)}`;
 
 // today is the caller's already-resolved toIsoDate(deps.clock()) — logic never reads the clock.
-// decimals is the batch's own currency precision, resolved once by the caller — logic never reads
-// the currencies reference list itself.
+// decimals is likewise resolved by the caller, never read here.
 export const defaultStatementLines = <Line extends StatementLine>(
   today: string,
   lines: readonly Line[],

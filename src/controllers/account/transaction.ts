@@ -9,7 +9,12 @@ import { guard, okOr } from '../../common/result.js';
 import { assertNonCreditType, guardTransferMutability, isAccountOwnedType } from '../../logic/account.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
 import { decimalsLookup, resolveCurrency } from '../../logic/money.js';
-import { normalizeMerchant, resolveMerchantCorrection, withMerchant, withMerchantLearning } from '../../logic/merchant.js';
+import {
+  normalizeMerchant,
+  resolveMerchantCorrection,
+  withMerchant,
+  withMerchantLearning,
+} from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { overlayResolvedTags } from '../../logic/tag.js';
@@ -166,11 +171,10 @@ export const importAccountStatement = async (
   input: ImportAccountStatement,
   source: TransactionSource,
 ): Promise<StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult>> => {
-  // An unresolvable account name still builds a valid plan — each line's own addAccountExpense/
-  // Income re-resolves the account and reports the real notFound error per line; this fallback
-  // only affects the idempotency key's own rounding, never the transaction's actual currency.
-  // Unattached (no account) statements default to USD here too, same as resolveCurrency's own
-  // null-source fallback — a per-item currency override on an unattached statement is out of scope.
+  // A not-found account name, or an unattached statement, falls back to USD decimals here —
+  // affects only the idempotency key's rounding; addAccountExpense/Income re-resolves the real
+  // account, currency, and any notFound error independently per line. An unattached statement's
+  // per-item currency override isn't consulted for this fallback (out of scope).
   const [accountResult, currencies] = await Promise.all([
     input.account ? resolveAccountRef(deps, input.account) : null,
     deps.currencies.list(),

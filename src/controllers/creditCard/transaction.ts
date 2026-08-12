@@ -214,9 +214,8 @@ export const importCardStatement = async (
   input: ImportCardStatement,
   source: TransactionSource,
 ): Promise<StatementImportPlan<ImportCardStatementItem, ClassifiedUpsertResult>> => {
-  // An unresolvable card name still builds a valid plan — each line's own addCardPurchase re-resolves
-  // the card and reports the real notFound error per line; this fallback only affects the
-  // idempotency key's own rounding, never the transaction's actual currency.
+  // A not-found card name falls back to USD decimals here, affecting only the idempotency key's
+  // rounding — addCardPurchase re-resolves the real card and notFound error independently per line.
   const [cardResult, currencies] = await Promise.all([resolveCardRef(deps, input.card), deps.currencies.list()]);
   const decimalsFor = decimalsLookup(currencies);
   const decimals = cardResult.match(
