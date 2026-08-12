@@ -414,7 +414,7 @@ describe('GET /api/accounts/balances', () => {
     await inject({
       method: 'POST',
       url: '/api/exchange-rates',
-      payload: { from: 'BRL', to: 'USD', rate: 0.2, asOf: '2026-08-10T10:00:00.000Z' },
+      payload: { from: 'BRL', to: 'USD', rate: 0.2, asOf: new Date().toISOString() },
     });
     await inject({
       method: 'POST',
