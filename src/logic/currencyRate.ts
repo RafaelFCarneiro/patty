@@ -1,7 +1,14 @@
 import type { Result } from 'neverthrow';
 import * as R from 'remeda';
 import { CurrencyCode } from '../models/money.js';
-import type { ConvertedValue, CurrencyRate, CurrencyRateView, SetExchangeRateInput } from '../models/currencyRate.js';
+import { ExclusionReason } from '../models/currencyRate.js';
+import type {
+  ConvertedTotal,
+  ConvertedValue,
+  CurrencyRate,
+  CurrencyRateView,
+  SetExchangeRateInput,
+} from '../models/currencyRate.js';
 import { roundToDecimals } from './money.js';
 
 // ─── Bulk write shaping (set_exchange_rates) ───────────────────────────────────────────────────
@@ -117,16 +124,74 @@ export const valueAccount = <A extends ValuableBalance>(
 
 export type ConsolidatedNetWorth = { baseCurrency: CurrencyCode; total: number; excluded: string[] };
 
+/** Shared core for both consolidation shapes below: sum every already-converted contribution,
+ *  round to the target decimals, and partition out the ones with nothing to sum (`converted`
+ *  undefined) by their own key — an account id for `consolidateNetWorth`, a `CurrencyCode` for
+ *  `consolidateInCurrency`. `asOf` is the oldest (least fresh) contributing timestamp, the same
+ *  worst-case instinct as `stale` (true if ANY contribution is stale) — a total is only as
+ *  current as its stalest input. */
+const consolidate = <K>(
+  contributions: readonly { key: K; converted?: Pick<ConvertedValue, 'value' | 'asOf' | 'stale'> }[],
+  decimals: number,
+): { total: number; stale: boolean; asOf: string | null; excludedKeys: K[] } => {
+  const [included, excluded] = R.partition(contributions, (c) => c.converted !== undefined);
+  const oldest = R.firstBy(included, (c) => new Date(c.converted!.asOf).getTime());
+  return {
+    total: roundToDecimals(R.sumBy(included, (c) => c.converted!.value), decimals),
+    stale: included.some((c) => c.converted!.stale),
+    asOf: oldest?.converted!.asOf ?? null,
+    excludedKeys: excluded.map((c) => c.key),
+  };
+};
+
 /** A balance with no `converted` block is listed in `excluded`, not silently dropped from the total. */
 export const consolidateNetWorth = <A extends { id: string; converted?: ConvertedValue }>(
   balances: readonly A[],
   baseCurrency: CurrencyCode,
   baseDecimals: number,
 ): ConsolidatedNetWorth => {
-  const [included, excluded] = R.partition(balances, (b) => b.converted !== undefined);
+  const { total, excludedKeys } = consolidate(
+    balances.map((b) => ({ key: b.id, converted: b.converted })),
+    baseDecimals,
+  );
+  return { baseCurrency, total, excluded: excludedKeys };
+};
+
+// ─── Read-side grand totals across a per-currency read's own currencies ─────────────────────────
+
+/** One per-currency amount to fold into a `displayCurrency` grand total — at most one entry per
+ *  currency, e.g. a spending summary's per-currency `expenses`. */
+export type CurrencyAmount = { currency: CurrencyCode; amount: number };
+
+export type ConsolidatedInCurrency = Omit<ConvertedTotal, 'displayCurrency'>;
+
+/** Generalizes `consolidateNetWorth`: converts each per-currency amount against `rates` itself
+ *  (rather than taking pre-converted items), sums the convertible ones, and never fabricates a
+ *  value for a currency with no rate to `target` — it is listed in `excluded` instead. A zero
+ *  amount (e.g. a currency with no expenses this period) is skipped before conversion rather than
+ *  looked up: it contributes nothing to the total either way, so it must not cost that currency an
+ *  `excluded` entry for a missing rate, nor flip `stale` on a rate it never actually needed. */
+export const consolidateInCurrency = (
+  amountsByCurrency: readonly CurrencyAmount[],
+  target: CurrencyCode,
+  rates: readonly CurrencyRate[],
+  now: Date,
+  thresholds: StalenessThresholds,
+  targetDecimals: number,
+): ConsolidatedInCurrency => {
+  const contributions = amountsByCurrency
+    .filter(({ amount }) => amount !== 0)
+    .map(({ currency, amount }) => {
+      const result = convert(amount, currency, target, rates, now, { decimals: targetDecimals, thresholds });
+      return result.noRate
+        ? { key: currency, converted: undefined }
+        : { key: currency, converted: { value: result.value!, asOf: result.asOf!, stale: result.stale } };
+    });
+  const { total, stale, asOf, excludedKeys } = consolidate(contributions, targetDecimals);
   return {
-    baseCurrency,
-    total: roundToDecimals(R.sumBy(included, (b) => b.converted!.value), baseDecimals),
-    excluded: excluded.map((b) => b.id),
+    total,
+    stale,
+    asOf,
+    excluded: excludedKeys.map((currency) => ({ currency, reason: ExclusionReason.enum.no_rate })),
   };
 };

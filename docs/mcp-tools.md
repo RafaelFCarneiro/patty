@@ -379,6 +379,10 @@ No REST mirror yet (MCP-only).
 
 Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `balance`, `byCategory` (sorted by total desc). Currencies are never mixed or converted.
 
+**Optional `displayCurrency` (Feature Design 021, ADR-028 controller-orchestrated):** a `CurrencyCode` that adds a top-level `converted` block — `{ displayCurrency, total, stale, asOf, excluded }` — a read-time grand total of `expenses` across every currency's line, converted against `currency_rates` (the same conversion `get_account_balances` uses, generalized by `logic/currencyRate.ts`'s `consolidateInCurrency`). `total` sums every convertible currency's `expenses`; a currency with no rate to `displayCurrency` is listed in `excluded` (`{ currency, reason: "no_rate" }`) and left out of `total`, never fabricated. A currency with zero `expenses` this period (e.g. income-only) is skipped before conversion entirely — it never costs an `excluded` entry for a missing rate, and a stale rate on file for it never flips the total `stale`. `stale` is true if any contributing (non-zero) rate is stale (fiat 24h / crypto 1h); `asOf` is the oldest contributing rate's timestamp (the total is only as fresh as its stalest input), or `null` when nothing converted. Omitting `displayCurrency` leaves the response byte-identical to before this option existed — `currencies[]` is unaffected either way. Invalid `displayCurrency` is rejected at the schema boundary (422 over REST).
+
+REST mirror: `GET /api/summary?month=6&year=2026&displayCurrency=USD`.
+
 ## update_account
 
 Update a bank account by name. `name` (via `newName`) and `initialBalance` are always editable. `type` is only editable when the account has no transactions/transfers (and cannot be set to `credit`). `currency` is only editable when the account has no transactions/transfers, no recurring rules, and is not a credit card payment account.

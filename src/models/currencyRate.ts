@@ -65,6 +65,34 @@ export const ConvertedValueSchema = z.object({
 });
 export type ConvertedValue = z.infer<typeof ConvertedValueSchema>;
 
+/** Why a currency was left out of a `displayCurrency` grand total — currently the only reason is a
+ *  missing rate to the target; a named enum keeps the wire value out of raw string literals, same
+ *  as any other domain vocabulary. */
+export const ExclusionReason = z.enum(['no_rate']);
+export type ExclusionReason = z.infer<typeof ExclusionReason>;
+
+export const ExcludedCurrencySchema = z.object({
+  currency: CurrencyCode.describe('Currency left out of the converted total'),
+  reason: ExclusionReason.describe('Why this currency could not be converted to the display currency'),
+});
+export type ExcludedCurrency = z.infer<typeof ExcludedCurrencySchema>;
+
+/** A converted grand total across a per-currency read's own currencies — the generalized
+ *  `consolidatedNetWorth` shape, reusable by any per-currency read that wants an opt-in
+ *  converted total on top of its unchanged per-currency lines. */
+export const ConvertedTotalSchema = z.object({
+  displayCurrency: CurrencyCode.describe('Currency the grand total is expressed in'),
+  total: z.number().describe('Sum of every convertible per-currency amount, rounded to displayCurrency decimals'),
+  stale: z.boolean().describe('True when any contributing rate is older than its class staleness threshold'),
+  asOf: z
+    .string()
+    .datetime({ offset: true })
+    .nullable()
+    .describe('Oldest contributing rate timestamp, or null when nothing was converted'),
+  excluded: z.array(ExcludedCurrencySchema).describe('Currencies with no rate to displayCurrency, left out of total'),
+});
+export type ConvertedTotal = z.infer<typeof ConvertedTotalSchema>;
+
 export type CurrencyRateError = ValidationError;
 
 export const currencyRateErrors = {

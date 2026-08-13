@@ -2,6 +2,7 @@ import { err, ok } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import {
   buildBulkResult,
+  consolidateInCurrency,
   consolidateNetWorth,
   convert,
   isCryptoPair,
@@ -220,6 +221,112 @@ describe('valueAccount / consolidateNetWorth (ADR-026 Phase 3, ADR-028 controlle
 
   it('consolidateNetWorth: an empty list totals 0 with nothing excluded', () => {
     expect(consolidateNetWorth([], USD, 2)).toEqual({ baseCurrency: USD, total: 0, excluded: [] });
+  });
+});
+
+describe('consolidateInCurrency', () => {
+  const amount = (currency: CurrencyCode, value: number) => ({ currency, amount: value });
+
+  it('target === source is identity: converts at rate 1, asOf = now, never stale', () => {
+    const result = consolidateInCurrency([amount(USD, 100)], USD, [], NOW, OPTIONS.thresholds, 2);
+    expect(result).toEqual({ total: 100, stale: false, asOf: NOW.toISOString(), excluded: [] });
+  });
+
+  it('mixed fiat + crypto: converts each against its own rate and sums, rounded to the target decimals', () => {
+    const rates = [
+      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: NOW.toISOString() }),
+      rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: NOW.toISOString() }),
+    ];
+    const result = consolidateInCurrency(
+      [amount(BRL, 500), amount(BTC, 0.01), amount(USD, 50)],
+      USD,
+      rates,
+      NOW,
+      OPTIONS.thresholds,
+      2,
+    );
+    // BRL: 500 * 0.2 = 100; BTC: 0.01 * 60000 = 600; USD: 50 (identity) → 750
+    expect(result.total).toBe(750);
+    expect(result.excluded).toEqual([]);
+    expect(result.stale).toBe(false);
+  });
+
+  it('a currency with no rate to the target is excluded (not fabricated) and listed with its reason', () => {
+    const rates = [rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: NOW.toISOString() })];
+    const result = consolidateInCurrency(
+      [amount(BRL, 500), amount(BTC, 1)],
+      USD,
+      rates,
+      NOW,
+      OPTIONS.thresholds,
+      2,
+    );
+    expect(result.total).toBe(100);
+    expect(result.excluded).toEqual([{ currency: BTC, reason: 'no_rate' }]);
+  });
+
+  it('stale is true iff ANY contributing rate is stale, at the per-class threshold boundary', () => {
+    const freshFiat = new Date(NOW.getTime() - 23 * 60 * 60 * 1000).toISOString(); // within 24h fiat window
+    const staleCrypto = new Date(NOW.getTime() - 2 * 60 * 60 * 1000).toISOString(); // past 1h crypto window
+    const rates = [
+      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: freshFiat }),
+      rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: staleCrypto }),
+    ];
+    const result = consolidateInCurrency(
+      [amount(BRL, 100), amount(BTC, 1)],
+      USD,
+      rates,
+      NOW,
+      OPTIONS.thresholds,
+      2,
+    );
+    expect(result.stale).toBe(true);
+  });
+
+  it('stale is false when every contributing rate is fresh', () => {
+    const rates = [rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: NOW.toISOString() })];
+    const result = consolidateInCurrency([amount(BRL, 100)], USD, rates, NOW, OPTIONS.thresholds, 2);
+    expect(result.stale).toBe(false);
+  });
+
+  it('asOf reflects the oldest contributing rate — the total is only as fresh as its stalest input', () => {
+    const older = new Date(NOW.getTime() - 10 * 60 * 60 * 1000).toISOString();
+    const newer = new Date(NOW.getTime() - 1 * 60 * 60 * 1000).toISOString();
+    const rates = [
+      rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: older }),
+      rate({ fromCode: USDC, toCode: USD, rate: 1, asOf: newer }),
+    ];
+    const result = consolidateInCurrency(
+      [amount(BRL, 100), amount(USDC, 100)],
+      USD,
+      rates,
+      NOW,
+      OPTIONS.thresholds,
+      2,
+    );
+    expect(result.asOf).toBe(older);
+  });
+
+  it('an empty amount list totals 0 with nothing excluded and no asOf', () => {
+    const result = consolidateInCurrency([], USD, [], NOW, OPTIONS.thresholds, 2);
+    expect(result).toEqual({ total: 0, stale: false, asOf: null, excluded: [] });
+  });
+
+  it('when every currency is excluded, asOf is null rather than a stale leftover', () => {
+    const result = consolidateInCurrency([amount(BTC, 1)], USD, [], NOW, OPTIONS.thresholds, 2);
+    expect(result).toEqual({ total: 0, stale: false, asOf: null, excluded: [{ currency: BTC, reason: 'no_rate' }] });
+  });
+
+  it('a zero amount with no rate on file is skipped entirely, not excluded — it contributes nothing either way', () => {
+    const result = consolidateInCurrency([amount(BTC, 0), amount(USD, 100)], USD, [], NOW, OPTIONS.thresholds, 2);
+    expect(result).toEqual({ total: 100, stale: false, asOf: NOW.toISOString(), excluded: [] });
+  });
+
+  it('a zero amount with a stale rate on file does not flip the total stale', () => {
+    const staleAsOf = new Date(NOW.getTime() - 25 * 60 * 60 * 1000).toISOString();
+    const rates = [rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: staleAsOf })];
+    const result = consolidateInCurrency([amount(BTC, 0), amount(USD, 100)], USD, rates, NOW, OPTIONS.thresholds, 2);
+    expect(result).toEqual({ total: 100, stale: false, asOf: NOW.toISOString(), excluded: [] });
   });
 });
 
