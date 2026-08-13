@@ -89,7 +89,7 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
     },
     async (args) => {
       const model = accountAdapters.importAccountStatementWireInToModel(args);
-      const plan = importAccountStatement(deps, model, TransactionSource.enum.import);
+      const plan = await importAccountStatement(deps, model, TransactionSource.enum.import);
       const outcomes = await runEffectsSequence(plan.lines, (line) => () => plan.flowFor(line)().map(outcomeToDb));
       return json(bulkResultToWireOut(buildBulkResult(outcomes, plan.lines)));
     },

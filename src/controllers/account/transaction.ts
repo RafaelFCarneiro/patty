@@ -8,8 +8,13 @@ import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import { assertNonCreditType, guardTransferMutability, isAccountOwnedType } from '../../logic/account.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
-import { resolveCurrency } from '../../logic/money.js';
-import { normalizeMerchant, resolveMerchantCorrection, withMerchant, withMerchantLearning } from '../../logic/merchant.js';
+import { decimalsLookup, resolveCurrency } from '../../logic/money.js';
+import {
+  normalizeMerchant,
+  resolveMerchantCorrection,
+  withMerchant,
+  withMerchantLearning,
+} from '../../logic/merchant.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { overlayResolvedTags } from '../../logic/tag.js';
@@ -28,6 +33,7 @@ import {
   type ImportAccountStatementItem,
   type UpdateAccountTransaction,
 } from '../../models/account.js';
+import { CurrencyCode } from '../../models/money.js';
 import { type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import {
   ClassificationMethod,
@@ -160,12 +166,27 @@ export const addAccountIncome = (
   addAccountMovement(deps, input, MovementType.enum.income, source);
 
 // Single-source: every item belongs to the ONE account named in `input.account` (or unattached).
-export const importAccountStatement = (
+export const importAccountStatement = async (
   deps: Deps,
   input: ImportAccountStatement,
   source: TransactionSource,
-): StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult> => {
-  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
+): Promise<StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult>> => {
+  // A not-found account name, or an unattached statement, falls back to USD decimals here —
+  // affects only the idempotency key's rounding; addAccountExpense/Income re-resolves the real
+  // account, currency, and any notFound error independently per line. An unattached statement's
+  // per-item currency override isn't consulted for this fallback (out of scope).
+  const [accountResult, currencies] = await Promise.all([
+    input.account ? resolveAccountRef(deps, input.account) : null,
+    deps.currencies.list(),
+  ]);
+  const decimalsFor = decimalsLookup(currencies);
+  const decimals = accountResult
+    ? accountResult.match(
+        (account) => decimalsFor(account.currency),
+        () => decimalsFor(CurrencyCode.enum.USD),
+      )
+    : decimalsFor(CurrencyCode.enum.USD);
+  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput, decimals);
   // Resolves locale once for the whole import rather than once per line: every line's flow reads
   // deps.locale() to build its localized response, so overriding it here to the same in-flight
   // promise keeps every item's labels consistent even if the process-level locale cache resets

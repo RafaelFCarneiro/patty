@@ -15,7 +15,7 @@ import {
   type BillPeriod,
 } from '../../logic/bill.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
-import { resolveCurrency } from '../../logic/money.js';
+import { decimalsLookup, resolveCurrency } from '../../logic/money.js';
 import {
   normalizeMerchant,
   resolveMerchantCorrection,
@@ -42,6 +42,7 @@ import {
   type UpdateCardTransaction,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
+import { CurrencyCode } from '../../models/money.js';
 import { type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import {
   ClassificationMethod,
@@ -208,12 +209,20 @@ export const addCardPurchase = (
 // Single-source: every item is a purchase on the ONE card named in `input.card`. Because the
 // shell re-invokes each line's flow only after the previous line committed, two lines landing on
 // the same new bill cycle simply share it — no within-batch dedup needed.
-export const importCardStatement = (
+export const importCardStatement = async (
   deps: Deps,
   input: ImportCardStatement,
   source: TransactionSource,
-): StatementImportPlan<ImportCardStatementItem, ClassifiedUpsertResult> => {
-  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
+): Promise<StatementImportPlan<ImportCardStatementItem, ClassifiedUpsertResult>> => {
+  // A not-found card name falls back to USD decimals here, affecting only the idempotency key's
+  // rounding — addCardPurchase re-resolves the real card and notFound error independently per line.
+  const [cardResult, currencies] = await Promise.all([resolveCardRef(deps, input.card), deps.currencies.list()]);
+  const decimalsFor = decimalsLookup(currencies);
+  const decimals = cardResult.match(
+    (card) => decimalsFor(card.currency),
+    () => decimalsFor(CurrencyCode.enum.USD),
+  );
+  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput, decimals);
   // Resolves locale once for the whole import rather than once per line: every line's flow reads
   // deps.locale() to build its localized response, so overriding it here to the same in-flight
   // promise keeps every item's labels consistent even if the process-level locale cache resets

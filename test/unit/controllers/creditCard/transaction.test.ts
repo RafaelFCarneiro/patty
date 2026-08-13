@@ -20,6 +20,7 @@ import {
 } from '../../../../src/models/transaction.js';
 import type { ValidationError } from '../../../../src/models/error.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../../../src/models/transactionTag.js';
+import { SEEDED_CURRENCIES } from '../../fixtures/currencies.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({
   id: 'acc-checking',
@@ -375,12 +376,16 @@ describe('addCardPurchase — tag-set resolution (ADR-023 step 2)', () => {
   });
 });
 
-describe('importCardStatement — pure per-line plan for the shell (ADR-022 step 3)', () => {
-  it("defaults date/idempotencyKey per line and stamps the whole import's rawInput onto each", () => {
+describe('importCardStatement — pure per-line plan for the shell', () => {
+  it("defaults date/idempotencyKey per line and stamps the whole import's rawInput onto each", async () => {
     const clock = new Date('2026-06-10');
-    const deps = makeDeps({ clock: () => clock });
+    const deps = makeDeps({
+      clock: () => clock,
+      creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
+      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
+    });
 
-    const plan = importCardStatement(
+    const plan = await importCardStatement(
       deps,
       {
         card: 'Test Card',
@@ -402,11 +407,12 @@ describe('importCardStatement — pure per-line plan for the shell (ADR-022 step
   it("flowFor binds a defaulted line to addCardPurchase's own single-line flow, with the fixed card", async () => {
     const deps = makeDeps({
       creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
+      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
       bills: { findByCycle: async () => null } as unknown as Deps['bills'],
       newId: sequentialNewId(),
     });
 
-    const plan = importCardStatement(
+    const plan = await importCardStatement(
       deps,
       {
         card: 'Test Card',
@@ -424,6 +430,43 @@ describe('importCardStatement — pure per-line plan for the shell (ADR-022 step
     expect(persist).toHaveLength(2);
     expect(persist[0]).toMatchObject({ op: PersistOp.enum.insert, entity: 'bill' });
     expect(persist[1]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });
+  });
+
+  it("resolves the card's currency decimals for the idempotency key, keeping BTC lines distinct", async () => {
+    const deps = makeDeps({
+      creditCards: { list: async () => [card({ currency: CurrencyCode.enum.BTC })] } as unknown as Deps['creditCards'],
+      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
+    });
+
+    const plan = await importCardStatement(
+      deps,
+      {
+        card: 'Test Card',
+        items: [
+          { description: 'BTC buy', amount: 0.12345671, type: 'expense' },
+          { description: 'BTC buy', amount: 0.12345679, type: 'expense' },
+        ],
+      },
+      TransactionSource.enum.import,
+    );
+
+    expect(plan.lines[0]!.idempotencyKey).not.toBe(plan.lines[1]!.idempotencyKey);
+  });
+
+  it('falls back to a valid plan (no throw) when the card name does not resolve', async () => {
+    const deps = makeDeps({
+      creditCards: { list: async () => [] } as unknown as Deps['creditCards'],
+      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
+    });
+
+    const plan = await importCardStatement(
+      deps,
+      { card: 'Nonexistent Card', items: [{ description: 'Coffee', amount: 5, type: 'expense' }] },
+      TransactionSource.enum.import,
+    );
+
+    expect(plan.lines).toHaveLength(1);
+    expect(plan.lines[0]!.idempotencyKey).toBeTruthy();
   });
 });
 

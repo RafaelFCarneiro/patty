@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, callToolError, ensure, makeClient } from './helpers.js';
+import { callTool, callToolError, deleteTransactions, ensure, makeClient } from './helpers.js';
 
 describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
   const now = new Date();
@@ -12,6 +12,12 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
   const month = pinned.getMonth() + 1;
   const year = pinned.getFullYear();
   const nextCycle = month === 12 ? { month: 1, year: year + 1 } : { month: month + 1, year };
+  let createdTxIds: string[] = [];
+
+  afterEach(async () => {
+    await deleteTransactions(createdTxIds);
+    createdTxIds = [];
+  });
 
   it('joins the default cycle bill (auto-assignment)', async () => {
     const cardName = `AddPurchase Card ${stamp}`;
@@ -317,6 +323,80 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
       const [cardItem] = result.items;
       expect(cardItem?.status).not.toBe('error');
       ensure(cardItem?.transaction?.billId, 'expected the statement line to be attached to a bill');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('persists two near-identical BTC lines without falsely deduping them (crypto idempotency precision)', async () => {
+    const cardName = `AddPurchase BTC Card ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BTC' },
+      });
+
+      // Both round to 0.12 at a flat 2 decimals — the old idempotency key would collide them into
+      // one "duplicate", silently dropping the second line. At BTC's own 8 decimals they're distinct.
+      const result = (await callTool(client, {
+        name: 'import_card_statement',
+        args: {
+          card: cardName,
+          items: [
+            { description: 'BTC buy', amount: 0.12340001, type: 'expense', date: today },
+            { description: 'BTC buy', amount: 0.12349999, type: 'expense', date: today },
+          ],
+        },
+      })) as {
+        summary?: { created?: number; needsReview?: number; duplicates?: number };
+        items?: Array<{ status?: string; transaction?: { id?: string; amount?: number } }>;
+      };
+
+      const items = result.items ?? [];
+      expect(items.length).toBe(2);
+      for (const item of items) {
+        if (item.transaction?.id) createdTxIds.push(item.transaction.id);
+      }
+      const { created = 0, needsReview = 0, duplicates = 0 } = result.summary ?? {};
+      expect(created + needsReview).toBe(2);
+      expect(duplicates).toBe(0);
+      expect(items.map((i) => i.transaction?.amount).sort()).toEqual([0.12340001, 0.12349999].sort());
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('still dedupes a true duplicate BTC line on re-import (regression)', async () => {
+    const cardName = `AddPurchase BTC Dup Card ${stamp}`;
+    const { client, transport } = makeClient();
+
+    try {
+      await client.connect(transport);
+
+      await callTool(client, {
+        name: 'create_credit_card',
+        args: { name: cardName, closingDay: 28, dueDay: 5, currency: 'BTC' },
+      });
+
+      const item = { description: 'BTC recurring buy', amount: 0.00123456, type: 'expense', date: today };
+
+      const first = (await callTool(client, {
+        name: 'import_card_statement',
+        args: { card: cardName, items: [item] },
+      })) as { items?: Array<{ status?: string; transaction?: { id?: string } }> };
+      const createdItem = first.items?.[0];
+      expect(createdItem?.status).not.toBe('error');
+      if (createdItem?.transaction?.id) createdTxIds.push(createdItem.transaction.id);
+
+      const reimport = (await callTool(client, {
+        name: 'import_card_statement',
+        args: { card: cardName, items: [item] },
+      })) as { summary?: { duplicates?: number } };
+      expect(reimport.summary?.duplicates).toBe(1);
     } finally {
       await transport.close();
     }

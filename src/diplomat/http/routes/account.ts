@@ -195,7 +195,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
         const wireIn = parse(wireInAccounts.ImportAccountStatementSchema, req.body, reply);
         if (!wireIn) return reply;
         const model = accountAdapters.importAccountStatementWireInToModel(wireIn);
-        const plan = importAccountStatement(deps, model, TransactionSource.enum.import);
+        const plan = await importAccountStatement(deps, model, TransactionSource.enum.import);
         const outcomes = await runEffectsSequence(
           plan.lines,
           (line) => () => plan.flowFor(line)().map(transactionAdapters.outcomeToDb),

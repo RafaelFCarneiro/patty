@@ -143,11 +143,16 @@ read-time, and always stamped with its `as_of`.* Per-currency remains the defaul
      PR #175 review, where a BTC/USDC amount is still flattened to fiat's 2 decimals outside
      `get_spending_summary`/`aggregate_spending`. Neither blocks Phase 2 — both are self-contained fixes to
      Phase 1's own surface, not rate/valuation work, so they stay under Phase 1 rather than folding into Phase 2.
-     - [#176](https://github.com/RafaelFCarneiro/fintrack/issues/176): bulk statement import
-       (`import_account_statement`/`import_card_statement`) derives its default idempotency key via
-       `amount.toFixed(2)` (`logic/transaction.ts#deriveIdempotencyKey`) — two distinct same-day BTC lines can
-       collide on a `...-0.00` key and the second is silently dropped as a duplicate.
-     - [#177](https://github.com/RafaelFCarneiro/fintrack/issues/177) (fixed here, closes on merge): `find_correlations`'s five shaping
+     - [#176](https://github.com/RafaelFCarneiro/fintrack/issues/176) (fixed here, closes on merge): bulk statement
+       import (`import_account_statement`/`import_card_statement`) derived its default idempotency key via
+       `amount.toFixed(2)` (`logic/transaction.ts#deriveIdempotencyKey`) — two distinct same-day BTC lines could
+       collide on a `...-0.00` key and the second was silently dropped as a duplicate. Fixed by threading the
+       importing account/card's own currency decimals (`decimalsLookup`) through `defaultStatementLines` into
+       `deriveIdempotencyKey`, resolved once per import in `controllers/creditCard|account/transaction.ts`, for
+       any statement naming an account or card. An unattached statement with per-item currency overrides still
+       resolves decimals once for the whole batch (defaults to USD) — tracked separately as
+       [#184](https://github.com/RafaelFCarneiro/fintrack/issues/184).
+     - [#177](https://github.com/RafaelFCarneiro/fintrack/issues/177) (closed): `find_correlations`'s five shaping
        functions (`logic/correlations.ts`) rounded real money amounts via the fixed-2-decimal `roundMoney` — a
        genuine one-satoshi BTC spending shift or recurring candidate rounded to `0`. Fixed by threading
        `decimalsLookup` through the same way it was threaded through `summary.ts`/`aggregate.ts`; ratio/percentage
@@ -168,12 +173,16 @@ read-time, and always stamped with its `as_of`.* Per-currency remains the defaul
 2. [x] Phase 1 — crypto currencies (enum + seed + `decimals` + formatting; `GET /api/currencies` +
    `fintrack://currencies` expose the metadata; `logic/money.ts`'s `roundToDecimals`/`decimalsLookup`
    make `get_spending_summary`/`aggregate_spending` rounding currency-decimals-aware).
-3. [ ] Phase 1b — precision hardening (non-blocking):
+3. [x] Phase 1b — precision hardening (non-blocking):
    - [x] [#177](https://github.com/RafaelFCarneiro/fintrack/issues/177) (`find_correlations` still
      rounds crypto amounts to fiat's 2 decimals) — fixed: `decimalsLookup` threaded through
      `logic/correlations.ts`'s five shaping functions, sourced from `controllers/correlations.ts`.
-   - [ ] [#176](https://github.com/RafaelFCarneiro/fintrack/issues/176) (bulk-import idempotency keys flatten
-     BTC/USDC precision) — still open, deliberately parked.
+   - [x] [#176](https://github.com/RafaelFCarneiro/fintrack/issues/176) (bulk-import idempotency keys flatten
+     BTC/USDC precision) — fixed for any statement naming an account or card: the importing account/card's own
+     currency decimals threaded through `defaultStatementLines` into `deriveIdempotencyKey`. An unattached
+     statement with per-item currency overrides still resolves decimals once for the whole batch (defaults to
+     USD) — tracked separately as [#184](https://github.com/RafaelFCarneiro/fintrack/issues/184). #134
+     (idempotency key → `Persistable` envelope, an unrelated architectural change) stays parked.
 4. [x] Phase 2 — `currency_rates` entity + `set/list_exchange_rates` + `settings.base_currency` + the pure
    conversion helper.
 5. [x] Phase 3 — `get_account_balances` valuation (converted values + net total, staleness-flagged),

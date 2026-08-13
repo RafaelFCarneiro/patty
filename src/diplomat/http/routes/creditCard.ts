@@ -83,7 +83,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
         const wireIn = parse(wireInCreditCards.ImportCardStatementSchema, req.body, reply);
         if (!wireIn) return reply;
         const model = creditCardAdapters.importCardStatementWireInToModel(wireIn);
-        const plan = importCardStatement(deps, model, TransactionSource.enum.import);
+        const plan = await importCardStatement(deps, model, TransactionSource.enum.import);
         const outcomes = await runEffectsSequence(
           plan.lines,
           (line) => () => plan.flowFor(line)().map(billAdapters.outcomeToDb).map(transactionAdapters.outcomeToDb),
