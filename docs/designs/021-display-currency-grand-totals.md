@@ -1,7 +1,7 @@
 # Feature Design 021: `displayCurrency` — opt-in converted grand totals on per-currency reads
 
 **Type:** Feature design (a capability + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress (Phase 1 done) · **Date:** 2026-08-10 · This design implements the
+**Implementation status:** In progress (Phases 1-2 done) · **Date:** 2026-08-10 · This design implements the
 follow-on ADR-026 scoped ("an opt-in `displayCurrency`/convert flag can later add a converted grand-total on
 top of budgets' and `find_correlations`' per-currency lines"). Governed by **ADR-028** (the conversion
 correlates two aggregates, so it is controller-orchestrated — no repo joins `currency_rates`). Reuses the
@@ -76,8 +76,14 @@ response gains a **converted grand total** in that currency, computed read-time 
    `consolidateNetWorth` → `consolidateInCurrency` (`logic/currencyRate.ts`, both now share a private `consolidate`
    core); added `displayCurrency?` to `get_spending_summary` (MCP + `GET /api/summary`); controller-orchestrated
    conversion of the summary's per-currency `expenses` into the top-level `converted` block — the exemplar.
-2. **`get_budget_status`** (`feat/display-currency-budgets`): `displayCurrency?` on the tool + `GET /api/budgets/status`;
-   converted total across the per-currency/per-category lines.
+2. **`get_budget_status`** (`feat/display-currency-budgets`, **done**): `displayCurrency?` on the tool +
+   `GET /api/budgets/status`; controller-orchestrated conversion of **committed** (effective + pending) spend per
+   currency into the top-level `converted` block. The per-currency amount consolidated is computed once per
+   currency directly from the underlying spend matched by at least one budget (`logic/budget.ts`'s
+   `budgetedCommittedByCurrency`), not by summing each line's own `committed.amount` — a spend row counted
+   toward both a sub-category budget and its rolled-up parent budget (the envelope behavior) would otherwise be
+   double-counted in the grand total. Limits are not separately converted (deliberately out of scope — the page
+   is about spend-vs-limit, and a converted-limits total wasn't requested).
 3. **`find_correlations`** (`feat/display-currency-correlations`): `displayCurrency?` on the tool (MCP-only —
    `find_correlations` has no REST mirror); converted totals where a mode reports per-currency money
    (`spending_shifts`, `budget_fit`, `merchant_concentration`).

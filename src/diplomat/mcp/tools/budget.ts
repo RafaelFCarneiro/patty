@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { createBudget, deleteBudget, getBudgetStatus, listBudgets, updateBudget } from '../../../controllers/budgets.js';
 import { PeriodSchema } from '../../../models/date.js';
+import { CurrencyCode } from '../../../models/money.js';
 import { CreateBudgetSchema, UpdateBudgetSchema } from '../../../wire/in/budgets.js';
 import * as budgetAdapters from '../../../adapters/budgets.js';
 import type { McpContext } from '../context.js';
@@ -72,17 +73,27 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
       description:
         'Spend-vs-limit for every budget in a month (Feature Design 015 phase 2, measurement revised by ' +
         "Feature Design 020) — grouped by top-level category so a category's own budget and each of its " +
-        "sub-categories' own budgets read as one coherent unit; no cross-currency total (per-currency lines, " +
-        'BRL and USD never mixed). Reports two measures against each limit: `effective` (cleared spend only) ' +
-        "and `committed` (effective + pending — the earmark-aware view of what's already spoken for); " +
-        '`pending` (committed - effective) is derived for convenience. Each measure carries `amount` and `pct` ' +
-        '(amount / limit); both sums are expense-only, same-currency (income and transfers never count, even ' +
-        "on a both-kind category); a category budget rolls up its sub-categories' spend, a sub-category budget " +
-        "measures only its own (and also counts toward its parent's, if the parent has a budget too). " +
-        '`remaining` (limit - committed.amount) can go negative when over budget — over-budget is reported, ' +
-        'never an error.',
-      inputSchema: PeriodSchema.shape,
+        "sub-categories' own budgets read as one coherent unit; no cross-currency total on the per-currency " +
+        'lines themselves (BRL and USD never mixed there). Reports two measures against each limit: ' +
+        '`effective` (cleared spend only) and `committed` (effective + pending — the earmark-aware view of ' +
+        "what's already spoken for); `pending` (committed - effective) is derived for convenience. Each " +
+        'measure carries `amount` and `pct` (amount / limit); both sums are expense-only, same-currency ' +
+        "(income and transfers never count, even on a both-kind category); a category budget rolls up its " +
+        "sub-categories' spend, a sub-category budget measures only its own (and also counts toward its " +
+        "parent's, if the parent has a budget too). `remaining` (limit - committed.amount) can go negative " +
+        'when over budget — over-budget is reported, never an error. Optional displayCurrency adds a ' +
+        'top-level converted block: a read-time grand total of committed spend across every budgeted ' +
+        "category's currency, converted against currency_rates (as_of-stamped, stale-flagged; a currency " +
+        'with no rate to displayCurrency is listed in converted.excluded and left out of the total, never ' +
+        'fabricated). A spend row counted toward both a sub-category budget and its rolled-up parent budget ' +
+        'contributes to this total once, not twice. Per-currency/per-category lines are unaffected either way.',
+      inputSchema: {
+        ...PeriodSchema.shape,
+        displayCurrency: CurrencyCode.optional().describe(
+          'Also return a converted grand total of committed spend in this currency',
+        ),
+      },
     },
-    async (args) => json(await getBudgetStatus(deps, args)),
+    async (args) => json(await getBudgetStatus(deps, args, args.displayCurrency)),
   );
 };

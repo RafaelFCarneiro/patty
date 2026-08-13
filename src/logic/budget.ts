@@ -1,5 +1,6 @@
 import * as R from 'remeda';
 import { localizeCategoryName } from './category.js';
+import type { CurrencyAmount } from './currencyRate.js';
 import { CategoryKind } from '../models/category.js';
 import type {
   Budget,
@@ -12,6 +13,7 @@ import type {
   BudgetView,
   BudgetViewInput,
 } from '../models/budget.js';
+import type { CurrencyCode } from '../models/money.js';
 import type { Locale } from '../models/locale.js';
 import type { CategorySpend } from '../models/transaction.js';
 
@@ -135,6 +137,29 @@ const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => {
     remaining: entry.limit - committedAmount,
   };
 };
+
+/** Committed (effective + pending) spend per currency, across every spend row matched by at least
+ *  one budget — the amount an opt-in `displayCurrency` grand total converts (Feature Design 021).
+ *  A spend row matched by more than one budget line (a sub-category and its rolled-up parent both
+ *  budgeted) is summed once here, not once per matching line — `groupStatusByCategory`'s per-line
+ *  `committed` intentionally double-counts that row for each line's own reading, which is correct
+ *  per-line but would inflate a cross-line total. */
+export const budgetedCommittedByCurrency = (
+  budgets: readonly BudgetViewInput[],
+  spend: readonly CategorySpend[],
+): CurrencyAmount[] =>
+  R.pipe(
+    spend,
+    R.filter((s) =>
+      budgets.some((b) => b.currency === s.currency && matchesTarget(s, isSubCategoryRow(b), b.targetId)),
+    ),
+    R.groupBy((s) => s.currency),
+    R.entries(),
+    R.map(([currency, rows]): CurrencyAmount => ({
+      currency: currency as CurrencyCode,
+      amount: R.sumBy(rows, (s) => s.effective + s.pending),
+    })),
+  );
 
 /** Correlates each budget to its own spend (ADR-028 moved this out of the repo into pure logic)
  *  and shapes the grouped-by-category response. Per-currency and per-sub-category lines read as

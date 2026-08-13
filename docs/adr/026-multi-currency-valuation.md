@@ -192,7 +192,7 @@ read-time, and always stamped with its `as_of`.* Per-currency remains the defaul
 7. Follow-on — Feature Design 021 (opt-in `displayCurrency` grand totals on the read surfaces § 5 scoped as a
    later addition, generalizing `consolidateNetWorth` → `consolidateInCurrency`):
    - [x] Phase 1 — `get_spending_summary` (the exemplar + the shared helper).
-   - [ ] Phase 2 — `get_budget_status`.
+   - [x] Phase 2 — `get_budget_status`.
    - [ ] Phase 3 — `find_correlations`.
 
 Each phase touches the schema and/or a new write flow → feature-sized → independent verification subagent per

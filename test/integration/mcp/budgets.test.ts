@@ -718,3 +718,203 @@ describe('MCP integration > get_budget_status', () => {
     }
   });
 });
+
+type ConvertedTotal = {
+  displayCurrency?: string;
+  total?: number;
+  stale?: boolean;
+  asOf?: string | null;
+  excluded?: Array<{ currency?: string; reason?: string }>;
+};
+type BudgetStatusWithConverted = BudgetStatus & { converted?: ConvertedTotal };
+
+describe('MCP integration > get_budget_status displayCurrency', () => {
+  it('omitted displayCurrency: response has no converted block (regression pin)', async () => {
+    const stamp = Date.now();
+    const categoryName = `Status-Dc-Omit-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      const budget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: categoryName, currency: 'USD', limit: 200 },
+      })) as Budget;
+      ensure(budget.id, 'budget id missing');
+      createdBudgetIds.push(budget.id);
+
+      const status = (await callTool(client, {
+        name: 'get_budget_status',
+        args: STATUS_PERIOD,
+      })) as BudgetStatusWithConverted;
+      expect(status).not.toHaveProperty('converted');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('provided displayCurrency: converts and sums committed spend, per-category lines unchanged', async () => {
+    const stamp = Date.now();
+    const usdCategoryName = `Status-Dc-Usd-${stamp}`;
+    const brlCategoryName = `Status-Dc-Brl-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, {
+        name: 'set_exchange_rate',
+        args: { from: 'BRL', to: 'USD', rate: 0.2, asOf: new Date().toISOString() },
+      });
+      await callTool(client, { name: 'create_category', args: { name: usdCategoryName } });
+      await callTool(client, { name: 'create_category', args: { name: brlCategoryName } });
+
+      const usdBudget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: usdCategoryName, currency: 'USD', limit: 500 },
+      })) as Budget;
+      ensure(usdBudget.id, 'usd budget id missing');
+      createdBudgetIds.push(usdBudget.id);
+      const brlBudget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: brlCategoryName, currency: 'BRL', limit: 1000 },
+      })) as Budget;
+      ensure(brlBudget.id, 'brl budget id missing');
+      createdBudgetIds.push(brlBudget.id);
+
+      await addExpense(client, {
+        description: 'usd budget spend',
+        amount: 100,
+        category: usdCategoryName,
+        currency: 'USD',
+        date: STATUS_DATE,
+        idempotencyKey: `status-dc-usd-${stamp}`,
+      });
+      await addExpense(client, {
+        description: 'brl budget spend',
+        amount: 500,
+        category: brlCategoryName,
+        currency: 'BRL',
+        date: STATUS_DATE,
+        idempotencyKey: `status-dc-brl-${stamp}`,
+      });
+
+      const withoutConversion = (await callTool(client, {
+        name: 'get_budget_status',
+        args: STATUS_PERIOD,
+      })) as BudgetStatusWithConverted;
+      const withConversion = (await callTool(client, {
+        name: 'get_budget_status',
+        args: { ...STATUS_PERIOD, displayCurrency: 'USD' },
+      })) as BudgetStatusWithConverted;
+
+      expect(withConversion.categories).toEqual(withoutConversion.categories);
+      // args also carries displayCurrency — period must not leak it (regression).
+      expect(withConversion.period).toEqual(STATUS_PERIOD);
+      ensure(withConversion.converted, 'converted block missing when displayCurrency was supplied');
+      expect(withConversion.converted).toMatchObject({ displayCurrency: 'USD', stale: false, excluded: [] });
+      // Includes every USD/BRL committed budgeted spend created across this suite's own runs
+      // (shared DB), not just this test's own 100 + 500*0.2 = 100 -> 200 — assert a floor, not exact.
+      expect(withConversion.converted.total).toBeGreaterThanOrEqual(200);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('does not double-count a spend row matched by both a sub-category and its rolled-up parent budget', async () => {
+    const stamp = Date.now();
+    const categoryName = `Status-Dc-Rollup-${stamp}`;
+    const subCategoryName = `Status-Dc-Rollup-Sub-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const category = (await callTool(client, { name: 'create_category', args: { name: categoryName } })) as {
+        id?: string;
+      };
+      ensure(category.id, 'category id missing');
+      await callTool(client, { name: 'create_sub_category', args: { name: subCategoryName, parentId: category.id } });
+
+      const parentBudget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: categoryName, currency: 'USD', limit: 500 },
+      })) as Budget;
+      ensure(parentBudget.id, 'parent budget id missing');
+      createdBudgetIds.push(parentBudget.id);
+      const subBudget = (await callTool(client, {
+        name: 'create_budget',
+        args: { subCategory: subCategoryName, currency: 'USD', limit: 200 },
+      })) as Budget;
+      ensure(subBudget.id, 'sub budget id missing');
+      createdBudgetIds.push(subBudget.id);
+
+      await addExpense(client, {
+        description: 'sub-category spend, rolls up into the parent budget too',
+        amount: 100,
+        subCategory: subCategoryName,
+        currency: 'USD',
+        date: STATUS_DATE,
+        idempotencyKey: `status-dc-rollup-${stamp}`,
+      });
+
+      const before = (await callTool(client, {
+        name: 'get_budget_status',
+        args: STATUS_PERIOD,
+      })) as BudgetStatusWithConverted;
+      const beforeTotal = before.converted?.total ?? 0;
+
+      const after = (await callTool(client, {
+        name: 'get_budget_status',
+        args: { ...STATUS_PERIOD, displayCurrency: 'USD' },
+      })) as BudgetStatusWithConverted;
+
+      // Both the parent and sub-category lines separately report committed.amount: 100 (the rollup
+      // rule), but the underlying spend is a single 100 — the grand total must rise by only 100.
+      expect((after.converted?.total ?? 0) - beforeTotal).toBe(100);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('a currency with no rate to displayCurrency is excluded from the total and listed', async () => {
+    const stamp = Date.now();
+    const categoryName = `Status-Dc-Btc-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      const budget = (await callTool(client, {
+        name: 'create_budget',
+        args: { category: categoryName, currency: 'BTC', limit: 1 },
+      })) as Budget;
+      ensure(budget.id, 'budget id missing');
+      createdBudgetIds.push(budget.id);
+
+      await addExpense(client, {
+        description: 'btc budget spend',
+        amount: 0.1,
+        category: categoryName,
+        currency: 'BTC',
+        date: STATUS_DATE,
+        idempotencyKey: `status-dc-btc-${stamp}`,
+      });
+
+      const status = (await callTool(client, {
+        name: 'get_budget_status',
+        args: { ...STATUS_PERIOD, displayCurrency: 'USD' },
+      })) as BudgetStatusWithConverted;
+      expect(status.converted?.excluded).toContainEqual({ currency: 'BTC', reason: 'no_rate' });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('rejects an unknown displayCurrency at the protocol level (not a valid CurrencyCode enum member)', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await expect(
+        callTool(client, { name: 'get_budget_status', args: { ...STATUS_PERIOD, displayCurrency: 'EUR' } }),
+      ).rejects.toThrow();
+    } finally {
+      await transport.close();
+    }
+  });
+});

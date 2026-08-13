@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { getBudgetStatus, listBudgets } from '../../../controllers/budgets.js';
 import { BudgetViewSchema } from '../../../models/budget.js';
-import { CoercedPeriodSchema } from '../../../wire/in/period.js';
+import { BudgetStatusQuerySchema } from '../../../wire/in/budgets.js';
 import { BudgetStatusOutSchema } from '../../../wire/out/budgets.js';
 import type { HttpContext } from '../context.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
@@ -25,12 +25,12 @@ export const budgetRoutes = (ctx: HttpContext): RouteDefinition[] => {
       path: '/api/budgets/status',
       tags: [BUDGETS_TAG],
       summary: 'Get budget status',
-      request: { query: CoercedPeriodSchema },
+      request: { query: BudgetStatusQuerySchema },
       responses: { 200: okResponse('Budget status', BudgetStatusOutSchema), 422: validation422 },
       handler: async (req, reply) => {
-        const input = parse(CoercedPeriodSchema, req.query, reply);
+        const input = parse(BudgetStatusQuerySchema, req.query, reply);
         if (!input) return reply;
-        return reply.send(await getBudgetStatus(deps, input));
+        return reply.send(await getBudgetStatus(deps, input, input.displayCurrency));
       },
     },
   ];
