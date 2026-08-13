@@ -1,6 +1,6 @@
 import { getSpendingSummary } from '../../../controllers/summary.js';
-import { CoercedPeriodSchema } from '../../../wire/in/period.js';
 import { SpendingSummaryOut } from '../../../wire/out/summary.js';
+import { SummaryQuerySchema } from '../../../wire/in/summary.js';
 import type { HttpContext } from '../context.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
 import { parse, validation422 } from '../respond.js';
@@ -15,12 +15,12 @@ export const summaryRoutes = (ctx: HttpContext): RouteDefinition[] => {
       path: '/api/summary',
       tags: [SUMMARY_TAG],
       summary: 'Get spending summary',
-      request: { query: CoercedPeriodSchema },
+      request: { query: SummaryQuerySchema },
       responses: { 200: okResponse('Spending summary', SpendingSummaryOut), 422: validation422 },
       handler: async (req, reply) => {
-        const input = parse(CoercedPeriodSchema, req.query, reply);
+        const input = parse(SummaryQuerySchema, req.query, reply);
         if (!input) return reply;
-        return reply.send(await getSpendingSummary(deps, input));
+        return reply.send(await getSpendingSummary(deps, input, input.displayCurrency));
       },
     },
   ];
