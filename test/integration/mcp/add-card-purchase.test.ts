@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, callToolError, ensure, makeClient } from './helpers.js';
+import { callTool, callToolError, deleteTransactions, ensure, makeClient } from './helpers.js';
 
 describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
   const now = new Date();
@@ -12,6 +12,12 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
   const month = pinned.getMonth() + 1;
   const year = pinned.getFullYear();
   const nextCycle = month === 12 ? { month: 1, year: year + 1 } : { month: month + 1, year };
+  let createdTxIds: string[] = [];
+
+  afterEach(async () => {
+    await deleteTransactions(createdTxIds);
+    createdTxIds = [];
+  });
 
   it('joins the default cycle bill (auto-assignment)', async () => {
     const cardName = `AddPurchase Card ${stamp}`;
@@ -347,11 +353,14 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
         },
       })) as {
         summary?: { created?: number; needsReview?: number; duplicates?: number };
-        items?: Array<{ status?: string; transaction?: { amount?: number } }>;
+        items?: Array<{ status?: string; transaction?: { id?: string; amount?: number } }>;
       };
 
       const items = result.items ?? [];
       expect(items.length).toBe(2);
+      for (const item of items) {
+        if (item.transaction?.id) createdTxIds.push(item.transaction.id);
+      }
       const { created = 0, needsReview = 0, duplicates = 0 } = result.summary ?? {};
       expect(created + needsReview).toBe(2);
       expect(duplicates).toBe(0);
@@ -378,8 +387,10 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
       const first = (await callTool(client, {
         name: 'import_card_statement',
         args: { card: cardName, items: [item] },
-      })) as { items?: Array<{ status?: string }> };
-      expect(first.items?.[0]?.status).not.toBe('error');
+      })) as { items?: Array<{ status?: string; transaction?: { id?: string } }> };
+      const createdItem = first.items?.[0];
+      expect(createdItem?.status).not.toBe('error');
+      if (createdItem?.transaction?.id) createdTxIds.push(createdItem.transaction.id);
 
       const reimport = (await callTool(client, {
         name: 'import_card_statement',
