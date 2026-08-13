@@ -14,9 +14,14 @@ import type { Deps } from './deps.js';
  *  `displayCurrency` keeps the response byte-identical to before this option existed. */
 export const getSpendingSummary = async (
   deps: Deps,
-  period: Period,
+  periodInput: Period,
   displayCurrency?: CurrencyCode,
 ): Promise<SpendingSummaryOut> => {
+  // Both diplomat callers pass their whole parsed query/args object as `periodInput`, which also
+  // carries `displayCurrency` when supplied — rebuild `period` from its two declared fields so
+  // that extra field never leaks into the response (`json`/`reply.send` serialize this object
+  // as-is, with no schema-driven stripping).
+  const period: Period = { month: periodInput.month, year: periodInput.year };
   const { from, to } = periodRange(period);
   const [rows, locale, currencies] = await Promise.all([
     deps.transactions.summaryRows(from, to),

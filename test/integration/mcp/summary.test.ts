@@ -92,6 +92,8 @@ describe('MCP integration > get_spending_summary displayCurrency', () => {
       })) as SpendingSummary;
 
       expect(withConversion.currencies).toEqual(withoutConversion.currencies);
+      // args also carries displayCurrency — period must not leak it (regression).
+      expect(withConversion.period).toEqual({ month, year });
       ensure(withConversion.converted, 'converted block missing when displayCurrency was supplied');
       expect(withConversion.converted).toMatchObject({ displayCurrency: 'USD', stale: false, excluded: [] });
       // Includes every USD/BRL expense created across this suite's own runs (shared DB), not just
@@ -125,6 +127,40 @@ describe('MCP integration > get_spending_summary displayCurrency', () => {
         args: { month, year, displayCurrency: 'USD' },
       })) as SpendingSummary;
       expect(result.converted?.excluded).toContainEqual({ currency: 'BTC', reason: 'no_rate' });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('an income-only currency (zero expenses, no rate on file) is not excluded', async () => {
+    // USDC, not BTC: this suite shares its MCP server/DB with every other integration test file
+    // (fileParallelism: false), and several of them give BTC a non-zero expense dated today with
+    // no rate on file — so BTC may already legitimately sit in `excluded` regardless of this test.
+    // USDC only has a USD -> USDC rate on file elsewhere (the opposite direction, which `convert`
+    // never matches), so it stays untouched by this suite's other fixtures — asserting it, not the
+    // whole array, keeps this test independent of file execution order.
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const stamp = Date.now();
+      const usdcName = `Summary Dc USDC Income ${stamp}`;
+      await callTool(client, { name: 'create_account', args: { name: usdcName, currency: 'USDC' } });
+      await callTool(client, {
+        name: 'add_account_income',
+        args: {
+          description: 'Dc usdc income',
+          amount: 1,
+          date,
+          account: usdcName,
+          idempotencyKey: `summary-dc-usdc-income-${stamp}`,
+        },
+      });
+
+      const result = (await callTool(client, {
+        name: 'get_spending_summary',
+        args: { month, year, displayCurrency: 'USD' },
+      })) as SpendingSummary;
+      expect(result.converted?.excluded).not.toContainEqual({ currency: 'USDC', reason: 'no_rate' });
     } finally {
       await transport.close();
     }

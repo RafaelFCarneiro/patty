@@ -167,7 +167,10 @@ export type ConsolidatedInCurrency = Omit<ConvertedTotal, 'displayCurrency'>;
 
 /** Generalizes `consolidateNetWorth`: converts each per-currency amount against `rates` itself
  *  (rather than taking pre-converted items), sums the convertible ones, and never fabricates a
- *  value for a currency with no rate to `target` — it is listed in `excluded` instead. */
+ *  value for a currency with no rate to `target` — it is listed in `excluded` instead. A zero
+ *  amount (e.g. a currency with no expenses this period) is skipped before conversion rather than
+ *  looked up: it contributes nothing to the total either way, so it must not cost that currency an
+ *  `excluded` entry for a missing rate, nor flip `stale` on a rate it never actually needed. */
 export const consolidateInCurrency = (
   amountsByCurrency: readonly CurrencyAmount[],
   target: CurrencyCode,
@@ -176,12 +179,14 @@ export const consolidateInCurrency = (
   thresholds: StalenessThresholds,
   targetDecimals: number,
 ): ConsolidatedInCurrency => {
-  const contributions = amountsByCurrency.map(({ currency, amount }) => {
-    const result = convert(amount, currency, target, rates, now, { decimals: targetDecimals, thresholds });
-    return result.noRate
-      ? { key: currency, converted: undefined }
-      : { key: currency, converted: { value: result.value!, asOf: result.asOf!, stale: result.stale } };
-  });
+  const contributions = amountsByCurrency
+    .filter(({ amount }) => amount !== 0)
+    .map(({ currency, amount }) => {
+      const result = convert(amount, currency, target, rates, now, { decimals: targetDecimals, thresholds });
+      return result.noRate
+        ? { key: currency, converted: undefined }
+        : { key: currency, converted: { value: result.value!, asOf: result.asOf!, stale: result.stale } };
+    });
   const { total, stale, asOf, excludedKeys } = consolidate(contributions, targetDecimals);
   return {
     total,

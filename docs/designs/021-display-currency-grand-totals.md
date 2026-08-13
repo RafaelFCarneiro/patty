@@ -1,11 +1,11 @@
 # Feature Design 021: `displayCurrency` — opt-in converted grand totals on per-currency reads
 
-**Type:** Feature design (a capability + technical assessment) · **Design status:** Proposed ·
-**Implementation status:** In progress (Phase 1 done) · **Date:** 2026-08-10 · The **follow-on ADR-026 scoped** ("an opt-in
-`displayCurrency`/convert flag can later add a converted grand-total on top of budgets' and `find_correlations`'
-per-currency lines"). Governed by **ADR-028** (the conversion correlates two aggregates, so it is
-controller-orchestrated — no repo joins `currency_rates`). Reuses the phase-3 conversion logic
-(`logic/currencyRate.ts`).
+**Type:** Feature design (a capability + technical assessment) · **Design status:** Accepted ·
+**Implementation status:** In progress (Phase 1 done) · **Date:** 2026-08-10 · This design implements the
+follow-on ADR-026 scoped ("an opt-in `displayCurrency`/convert flag can later add a converted grand-total on
+top of budgets' and `find_correlations`' per-currency lines"). Governed by **ADR-028** (the conversion
+correlates two aggregates, so it is controller-orchestrated — no repo joins `currency_rates`). Reuses the
+phase-3 conversion logic (`logic/currencyRate.ts`).
 
 > **Implementation status**: `Not started` · `In progress` · `Done` · `Blocked`. Phased (see Migration plan);
 > one branch per phase.

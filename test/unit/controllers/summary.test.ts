@@ -120,4 +120,31 @@ describe('getSpendingSummary — displayCurrency', () => {
       excluded: [{ currency: BTC, reason: 'no_rate' }],
     });
   });
+
+  it('an income-only currency (zero expenses, no rate on file) is not excluded and does not flip stale', async () => {
+    const deps = makeDeps({
+      rows: [row({ currency: USD, total: 100 }), row({ currency: BTC, type: 'income', total: 5 })],
+    });
+
+    const result = await getSpendingSummary(deps, PERIOD, USD);
+
+    expect(result.converted).toEqual({
+      displayCurrency: USD,
+      total: 100,
+      stale: false,
+      asOf: NOW.toISOString(),
+      excluded: [],
+    });
+  });
+
+  it('rebuilds period from its declared fields — both diplomat callers pass their whole args object, ' +
+    'which also carries displayCurrency', async () => {
+    const deps = makeDeps({ rows: [row({ currency: USD, total: 100 })] });
+    const periodWithExtraField = { ...PERIOD, displayCurrency: USD } as unknown as typeof PERIOD;
+
+    const result = await getSpendingSummary(deps, periodWithExtraField, USD);
+
+    expect(result.period).toEqual(PERIOD);
+    expect(result.period).not.toHaveProperty('displayCurrency');
+  });
 });

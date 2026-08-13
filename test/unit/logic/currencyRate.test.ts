@@ -316,6 +316,18 @@ describe('consolidateInCurrency', () => {
     const result = consolidateInCurrency([amount(BTC, 1)], USD, [], NOW, OPTIONS.thresholds, 2);
     expect(result).toEqual({ total: 0, stale: false, asOf: null, excluded: [{ currency: BTC, reason: 'no_rate' }] });
   });
+
+  it('a zero amount with no rate on file is skipped entirely, not excluded — it contributes nothing either way', () => {
+    const result = consolidateInCurrency([amount(BTC, 0), amount(USD, 100)], USD, [], NOW, OPTIONS.thresholds, 2);
+    expect(result).toEqual({ total: 100, stale: false, asOf: NOW.toISOString(), excluded: [] });
+  });
+
+  it('a zero amount with a stale rate on file does not flip the total stale', () => {
+    const staleAsOf = new Date(NOW.getTime() - 25 * 60 * 60 * 1000).toISOString();
+    const rates = [rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: staleAsOf })];
+    const result = consolidateInCurrency([amount(BTC, 0), amount(USD, 100)], USD, rates, NOW, OPTIONS.thresholds, 2);
+    expect(result).toEqual({ total: 100, stale: false, asOf: NOW.toISOString(), excluded: [] });
+  });
 });
 
 describe('toBulkItem / buildBulkResult', () => {

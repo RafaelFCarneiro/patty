@@ -65,6 +65,7 @@ describe('GET /api/summary', () => {
     const FIXED_NOW = new Date('2026-08-10T12:00:00.000Z');
 
     type SummaryBody = {
+      period: { month: number; year: number };
       currencies: Array<{ currency: string; expenses: number }>;
       converted?: {
         displayCurrency: string;
@@ -155,6 +156,8 @@ describe('GET /api/summary', () => {
         const withBody = withConversion.json() as SummaryBody;
 
         expect(withBody.currencies).toEqual(withoutBody.currencies);
+        // The query string also carries displayCurrency — period must not leak it (regression).
+        expect(withBody.period).toEqual({ month: 8, year: 2026 });
         // USD identity 100 + BRL 500 * 0.2 = 100 → 200
         expect(withBody.converted).toEqual({
           displayCurrency: 'USD',
@@ -189,6 +192,30 @@ describe('GET /api/summary', () => {
       expect(res.statusCode).toBe(200);
       const body = res.json() as SummaryBody;
       expect(body.converted?.excluded).toContainEqual({ currency: 'BTC', reason: 'no_rate' });
+    });
+
+    it('an income-only currency (zero expenses, no rate on file) is not excluded and does not flip stale', async () => {
+      await inject({
+        method: 'POST',
+        url: '/api/accounts',
+        payload: { name: 'DcBtcIncomeAcct', type: 'checking', currency: 'BTC', initialBalance: 0 },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts/income',
+        payload: {
+          description: 'Dc btc income',
+          amount: 1,
+          date: '2026-02-03',
+          account: 'DcBtcIncomeAcct',
+          idempotencyKey: 'dc-btc-income-1',
+        },
+      });
+      const res = await inject({ method: 'GET', url: '/api/summary?month=2&year=2026&displayCurrency=USD' });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as SummaryBody;
+      expect(body.converted?.excluded).toEqual([]);
+      expect(body.converted?.stale).toBe(false);
     });
 
     it('rejects an unknown displayCurrency (422)', async () => {
