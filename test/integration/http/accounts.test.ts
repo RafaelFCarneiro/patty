@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { setupHttpTest } from './setup.js';
 
-const { inject } = setupHttpTest();
+const { inject, getDeps } = setupHttpTest();
 
 describe('GET /api/accounts', () => {
   it('lists seeded accounts', async () => {
@@ -406,68 +406,80 @@ describe('GET /api/accounts/balances', () => {
   });
 
   it('valuation (ADR-026): converts a non-base-currency balance and sums a consolidated net worth', async () => {
-    await inject({
-      method: 'POST',
-      url: '/api/settings/base-currency',
-      payload: { baseCurrency: 'USD' },
-    });
-    await inject({
-      method: 'POST',
-      url: '/api/exchange-rates',
-      payload: { from: 'BRL', to: 'USD', rate: 0.2, asOf: '2026-08-10T10:00:00.000Z' },
-    });
-    await inject({
-      method: 'POST',
-      url: '/api/accounts',
-      payload: { name: 'ValUsdAcct', type: 'checking', currency: 'USD', initialBalance: 100 },
-    });
-    await inject({
-      method: 'POST',
-      url: '/api/accounts',
-      payload: { name: 'ValBrlAcct', type: 'checking', currency: 'BRL', initialBalance: 500 },
-    });
-    await inject({
-      method: 'POST',
-      url: '/api/accounts',
-      payload: { name: 'ValBtcAcct', type: 'checking', currency: 'BTC', initialBalance: 1 },
-    });
+    // Pins deps.clock so staleness (now - asOf vs. the 24h fiat window) is deterministic — a
+    // real Date.now() call here would flip `stale` once wall-clock time drifts past the window.
+    const RATE_ASOF = '2026-08-10T10:00:00.000Z';
+    const FIXED_NOW = new Date('2026-08-10T12:00:00.000Z');
+    const deps = getDeps();
+    const originalClock = deps.clock;
+    deps.clock = () => FIXED_NOW;
 
-    type BalancesBody = {
-      balances: Array<{ id: string; converted?: { value: number; rate: number; stale: boolean } }>;
-      consolidatedNetWorth: { baseCurrency: string; total: number; excluded: string[] };
-    };
-    // Filtered per account so other accounts created elsewhere in this suite don't pollute the total.
-    const usdRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValUsdAcct' });
-    const brlRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValBrlAcct' });
-    const btcRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValBtcAcct' });
-    expect(usdRes.statusCode).toBe(200);
-    const usdBody = usdRes.json() as BalancesBody;
-    const brlBody = brlRes.json() as BalancesBody;
-    const btcBody = btcRes.json() as BalancesBody;
+    try {
+      await inject({
+        method: 'POST',
+        url: '/api/settings/base-currency',
+        payload: { baseCurrency: 'USD' },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/exchange-rates',
+        payload: { from: 'BRL', to: 'USD', rate: 0.2, asOf: RATE_ASOF },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts',
+        payload: { name: 'ValUsdAcct', type: 'checking', currency: 'USD', initialBalance: 100 },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts',
+        payload: { name: 'ValBrlAcct', type: 'checking', currency: 'BRL', initialBalance: 500 },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts',
+        payload: { name: 'ValBtcAcct', type: 'checking', currency: 'BTC', initialBalance: 1 },
+      });
 
-    expect(usdBody.balances[0]!.converted).toEqual({
-      baseCurrency: 'USD',
-      value: 100,
-      rate: 1,
-      asOf: expect.any(String),
-      stale: false,
-    });
-    expect(usdBody.consolidatedNetWorth).toEqual({ baseCurrency: 'USD', total: 100, excluded: [] });
+      type BalancesBody = {
+        balances: Array<{ id: string; converted?: { value: number; rate: number; stale: boolean } }>;
+        consolidatedNetWorth: { baseCurrency: string; total: number; excluded: string[] };
+      };
+      // Filtered per account so other accounts created elsewhere in this suite don't pollute the total.
+      const usdRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValUsdAcct' });
+      const brlRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValBrlAcct' });
+      const btcRes = await inject({ method: 'GET', url: '/api/accounts/balances?account=ValBtcAcct' });
+      expect(usdRes.statusCode).toBe(200);
+      const usdBody = usdRes.json() as BalancesBody;
+      const brlBody = brlRes.json() as BalancesBody;
+      const btcBody = btcRes.json() as BalancesBody;
 
-    expect(brlBody.balances[0]!.converted).toEqual({
-      baseCurrency: 'USD',
-      value: 100,
-      rate: 0.2,
-      asOf: expect.any(String),
-      stale: false,
-    });
-    expect(brlBody.consolidatedNetWorth).toEqual({ baseCurrency: 'USD', total: 100, excluded: [] });
+      expect(usdBody.balances[0]!.converted).toEqual({
+        baseCurrency: 'USD',
+        value: 100,
+        rate: 1,
+        asOf: FIXED_NOW.toISOString(),
+        stale: false,
+      });
+      expect(usdBody.consolidatedNetWorth).toEqual({ baseCurrency: 'USD', total: 100, excluded: [] });
 
-    expect(btcBody.balances[0]!.converted).toBeUndefined();
-    expect(btcBody.consolidatedNetWorth).toEqual({
-      baseCurrency: 'USD',
-      total: 0,
-      excluded: [btcBody.balances[0]!.id],
-    });
+      expect(brlBody.balances[0]!.converted).toEqual({
+        baseCurrency: 'USD',
+        value: 100,
+        rate: 0.2,
+        asOf: RATE_ASOF,
+        stale: false,
+      });
+      expect(brlBody.consolidatedNetWorth).toEqual({ baseCurrency: 'USD', total: 100, excluded: [] });
+
+      expect(btcBody.balances[0]!.converted).toBeUndefined();
+      expect(btcBody.consolidatedNetWorth).toEqual({
+        baseCurrency: 'USD',
+        total: 0,
+        excluded: [btcBody.balances[0]!.id],
+      });
+    } finally {
+      deps.clock = originalClock;
+    }
   });
 });
