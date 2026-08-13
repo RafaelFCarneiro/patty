@@ -249,6 +249,16 @@ effect runner, appliers, outcomes, and the per-flow notes.
   handler runs it through `runEffectsSequence` and shapes the `SequenceOutcome[]` into `BulkResult` (`bulk.ts`'s
   `buildBulkResult`; `needs_review` from each line's own classification confidence). No within-batch cycle dedup —
   line *i+1* reads the bill line *i* just committed.
+- **Bulk import pre-plan currency resolution** (ADR-026 Phase 1b) — before building lines, `importCardStatement`/
+  `importAccountStatement` resolve the account/card ref and `deps.currencies.list()` in parallel, then look up
+  that currency's `decimals` (`decimalsLookup`, `logic/money.ts`) once for the whole batch and pass it into
+  `defaultStatementLines` so every line's idempotency key rounds its amount to the right precision (fiat 2, USDC
+  6, BTC 8) instead of a flat 2 — otherwise two crypto lines differing only past the 2nd decimal collide on the
+  same key. A not-found ref, or an unattached (no-account) statement, falls back to `CurrencyCode.enum.USD`
+  decimals for this lookup only; it doesn't affect the line's real currency or the per-line `notFound` error,
+  which `addCardPurchase`/`addAccountExpense`/`addAccountIncome` re-resolve independently downstream. An
+  unattached statement's per-item currency override isn't consulted for this fallback — same-batch USD decimals
+  are used regardless of what an individual line names (known gap, `docs/architecture.md` § Invariants).
 - **Merchant key is always stored, matched or not** (`planAccountMovement`): when classification found no
   merchant, it falls back to `normalizeMerchant(description)` (empty-string guarded) so a later category
   correction (`resolveMerchantCorrection`) has a merchant to attach to. `add_card_purchase` still lacks this
