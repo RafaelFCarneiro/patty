@@ -139,11 +139,10 @@ const toStatusLine = (entry: BudgetStatusEntry): BudgetStatusLine => {
 };
 
 /** Committed (effective + pending) spend per currency, across every spend row matched by at least
- *  one budget — the amount an opt-in `displayCurrency` grand total converts (Feature Design 021).
- *  A spend row matched by more than one budget line (a sub-category and its rolled-up parent both
- *  budgeted) is summed once here, not once per matching line — `groupStatusByCategory`'s per-line
- *  `committed` intentionally double-counts that row for each line's own reading, which is correct
- *  per-line but would inflate a cross-line total. */
+ *  one budget. A spend row matched by more than one budget line (a sub-category and its rolled-up
+ *  parent both budgeted) is summed once here, not once per matching line — `groupStatusByCategory`'s
+ *  per-line `committed` intentionally double-counts that row for each line's own reading, which is
+ *  correct per-line but would inflate a cross-line total. */
 export const budgetedCommittedByCurrency = (
   budgets: readonly BudgetViewInput[],
   spend: readonly CategorySpend[],

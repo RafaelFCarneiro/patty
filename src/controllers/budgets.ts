@@ -148,9 +148,9 @@ export const listBudgets = async (deps: Deps): Promise<BudgetView[]> =>
 
 /** No write, so a plain async function rather than `ResultAsync`, mirroring `getSpendingSummary`
  *  (`controllers/summary.ts`). Correlates `budgets`/`transactions`' own reads in `logic/budget.ts`
- *  rather than a repo join (ADR-028). Converting to `displayCurrency` correlates a second aggregate
+ *  rather than a repo join. Converting to `displayCurrency` correlates a second aggregate
  *  (`currency_rates`), so it's orchestrated here too — omitting it keeps the response byte-identical
- *  to before this option existed (Feature Design 021 phase 2). */
+ *  to before this option existed. */
 export const getBudgetStatus = async (
   deps: Deps,
   periodInput: Period,

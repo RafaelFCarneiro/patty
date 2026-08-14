@@ -78,7 +78,7 @@ describe('GET /api/budgets/status', () => {
   });
 
   describe('displayCurrency', () => {
-    // Pins deps.clock so staleness/asOf is deterministic, same pattern as the summary endpoint's test.
+    // Pins deps.clock so staleness/asOf is deterministic.
     const RATE_ASOF = '2026-08-10T10:00:00.000Z';
     const FIXED_NOW = new Date('2026-08-10T12:00:00.000Z');
 

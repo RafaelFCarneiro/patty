@@ -829,11 +829,8 @@ function translatePage() {
     }
 }
 
-// Populates the "Currency" selector with every known currency (window.__fintrackCurrencies,
-// cached by the shell — ui/app.js — before this fragment's script runs) plus the always-present
-// "No conversion" option, and defaults the selection to the resolved base currency (GET
-// /api/preferences) so the converted grand total (opt-in `displayCurrency` on GET
-// /api/budgets/status) shows up out of the box without requiring the user to pick anything first.
+// window.__fintrackCurrencies is populated by the shell (ui/app.js) before this script runs.
+// Defaults the selection to the base currency so the converted total shows without an extra click.
 async function initCurrencySelector() {
     const select = document.getElementById('currency-select');
     if (!select) return;
@@ -1197,11 +1194,8 @@ async function loadDashboardData() {
     }
 }
 
-// Renders the opt-in converted grand total (GET /api/budgets/status?displayCurrency=...,
-// `converted` block) under the Budget Limits KPI card. `converted` sums committed (effective +
-// pending) spend across every budgeted category's own currency into one number in
-// `displayCurrency` — deliberately not a replacement for the per-currency figures above it, which
-// stay the source of truth (docs/designs/021-display-currency-grand-totals.md).
+// `converted` is a cross-currency grand total — deliberately not a replacement for the per-currency
+// figures rendered elsewhere on this page, which stay the source of truth.
 function renderConvertedTotal(converted) {
     const el = document.getElementById('kpi-budget-converted');
     if (!el) return;
