@@ -166,6 +166,22 @@
     color: #f59e0b;
 }
 
+.kpi-converted .stale-flag {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-left: 0.25rem;
+    color: inherit;
+    font: inherit;
+    cursor: help;
+}
+
+.kpi-converted .stale-flag:focus-visible {
+    outline: 2px solid #f59e0b;
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
 /* Charts Grid */
 .charts-grid {
     display: grid;
@@ -1207,11 +1223,18 @@ function renderConvertedTotal(converted) {
 
     const totalText = formatCurrency(converted.total, converted.displayCurrency);
     const excludedCount = converted.excluded.length;
-    const staleTitle = converted.stale ? ` title="${escapeHtml(t('rate_stale_tooltip'))}"` : '';
+    const staleLabel = escapeHtml(t('rate_stale_tooltip'));
+    // A `title` tooltip alone is invisible to keyboard/screen-reader users (no way to trigger a
+    // hover, and `title` isn't reliably announced) — the warning icon is a real focusable button
+    // with an aria-label carrying the same text, so it's reachable and announced either way.
+    const staleFlag = converted.stale
+        ? ` <button type="button" class="stale-flag" title="${staleLabel}" aria-label="${staleLabel}">` +
+          '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></button>'
+        : '';
 
     el.classList.toggle('stale', converted.stale);
     el.innerHTML = `
-        <span${staleTitle}>${t('kpi_converted_label')} <strong>${totalText}</strong>${converted.stale ? ' <i class="fa-solid fa-triangle-exclamation"></i>' : ''}</span>
+        <span>${t('kpi_converted_label')} <strong>${totalText}</strong>${staleFlag}</span>
         ${excludedCount > 0
             ? `<span class="kpi-converted-excluded">${t('kpi_converted_excluded').replace('{n}', String(excludedCount))}</span>`
             : ''}
