@@ -148,6 +148,24 @@
 
 .kpi-details span strong { color: #fff; }
 
+.kpi-converted {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--panel-border);
+}
+
+.kpi-converted strong { color: #fff; }
+
+.kpi-converted.stale strong { color: #f59e0b; }
+
+.kpi-converted .kpi-converted-excluded {
+    display: block;
+    margin-top: 0.15rem;
+    color: #f59e0b;
+}
+
 /* Charts Grid */
 .charts-grid {
     display: grid;
@@ -477,6 +495,12 @@
                     <option value="2027">2027</option>
                 </select>
             </div>
+            <div class="controls-group">
+                <label for="currency-select" data-i18n="currency_label">Currency:</label>
+                <select id="currency-select" class="select-custom" onchange="onFilterChange()">
+                    <option value="" data-i18n="currency_none">No conversion</option>
+                </select>
+            </div>
         </div>
     </header>
 
@@ -504,6 +528,7 @@
                 <span><span data-i18n="kpi_committed">Committed:</span> <strong id="kpi-budget-comm-val" style="color: var(--expense-color,#f43f5e)">$ 0.00</strong></span>
                 <span><span data-i18n="kpi_usage">Usage:</span> <strong id="kpi-budget-pct-val">0%</strong></span>
             </div>
+            <div class="kpi-converted" id="kpi-budget-converted" style="display:none;"></div>
         </div>
 
         <!-- Planned Balance -->
@@ -585,6 +610,10 @@ var TRANSLATIONS = {
         header_subtitle: "Monitor your monthly limits, committed spending, and category balance",
         period_label: "Period:",
         currency_label: "Currency:",
+        currency_none: "No conversion",
+        kpi_converted_label: "Converted total:",
+        kpi_converted_excluded: "{n} currency(ies) excluded (no rate)",
+        rate_stale_tooltip: "Outdated exchange rate",
         btn_update: "Update",
         kpi_income_total: "Total Incomes",
         kpi_budget_limits: "Budget Limits",
@@ -633,6 +662,10 @@ var TRANSLATIONS = {
         header_subtitle: "Monitore seus limites mensais, despesas comprometidas e saldo por categoria",
         period_label: "Período:",
         currency_label: "Moeda:",
+        currency_none: "Sem conversão",
+        kpi_converted_label: "Total convertido:",
+        kpi_converted_excluded: "{n} moeda(s) excluída(s) (sem cotação)",
+        rate_stale_tooltip: "Cotação desatualizada",
         btn_update: "Atualizar",
         kpi_income_total: "Receitas Totais",
         kpi_budget_limits: "Despesas Orçadas (Limites)",
@@ -681,6 +714,10 @@ var TRANSLATIONS = {
         header_subtitle: "Monitoree sus límites mensuales, gastos comprometidos y saldo por categoría",
         period_label: "Período:",
         currency_label: "Moneda:",
+        currency_none: "Sin conversión",
+        kpi_converted_label: "Total convertido:",
+        kpi_converted_excluded: "{n} moneda(s) excluida(s) (sin cotización)",
+        rate_stale_tooltip: "Tipo de cambio desactualizado",
         btn_update: "Actualizar",
         kpi_income_total: "Ingresos Totales",
         kpi_budget_limits: "Presupuestos (Límites)",
@@ -728,6 +765,7 @@ var TRANSLATIONS = {
 var compareChart = null;
 var trendChart = null;
 var currentLocale = 'en';
+var currentDisplayCurrency = '';
 
 // Sync the reference selectors to ?month&year query params (deep links) or today's date, instead
 // of always loading the HTML's static placeholder selection — mirrors pending.html's pattern.
@@ -790,6 +828,39 @@ function translatePage() {
         });
     }
 }
+
+// Populates the "Currency" selector with every known currency (window.__fintrackCurrencies,
+// cached by the shell — ui/app.js — before this fragment's script runs) plus the always-present
+// "No conversion" option, and defaults the selection to the resolved base currency (GET
+// /api/preferences) so the converted grand total (opt-in `displayCurrency` on GET
+// /api/budgets/status) shows up out of the box without requiring the user to pick anything first.
+async function initCurrencySelector() {
+    const select = document.getElementById('currency-select');
+    if (!select) return;
+
+    const codes = Object.keys(window.__fintrackCurrencies || {}).sort();
+    codes.forEach(code => {
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = code;
+        select.appendChild(opt);
+    });
+
+    try {
+        const res = await fetch('/api/preferences');
+        if (res.ok) {
+            const prefs = await res.json();
+            if (prefs.baseCurrency && codes.indexOf(prefs.baseCurrency) !== -1) {
+                select.value = prefs.baseCurrency;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load preferences:', e);
+    }
+
+    currentDisplayCurrency = select.value;
+}
+
 function addMultiCurrency(map, currency, amount) {
     var c = currency || 'BRL';
     var a = Number(amount) || 0;
@@ -852,12 +923,15 @@ function formatPct(val) {
 }
 
 function onFilterChange() {
+    const currencySelect = document.getElementById('currency-select');
+    currentDisplayCurrency = currencySelect ? currencySelect.value : '';
     loadDashboardData();
 }
 
-async function fetchBudgetStatus(month, year) {
+async function fetchBudgetStatus(month, year, displayCurrency) {
     try {
         const params = new URLSearchParams({ month: String(month), year: String(year) });
+        if (displayCurrency) params.set('displayCurrency', displayCurrency);
         const res = await fetch(`/api/budgets/status?${params.toString()}`);
         if (!res.ok) return null;
         return await res.json();
@@ -930,7 +1004,7 @@ async function loadDashboardData() {
 
     try {
         const [budgetStatus, txItems] = await Promise.all([
-            fetchBudgetStatus(month, year),
+            fetchBudgetStatus(month, year, currentDisplayCurrency),
             fetchAllTransactionsForMonth(year, month)
         ]);
 
@@ -1066,6 +1140,8 @@ async function loadDashboardData() {
         const overallBudgetPct = budgetLimitInCurrency > 0 ? (budgetCommittedInCurrency / budgetLimitInCurrency) : 0;
         document.getElementById('kpi-budget-pct-val').textContent = formatPct(overallBudgetPct);
 
+        renderConvertedTotal(budgetStatus && budgetStatus.converted);
+
         // Planned Balance (Income map - Limit map), kept per-currency — never combined into one total.
         const plannedBalance = {};
         const allCurrs = new Set([...Object.keys(totalIncome), ...Object.keys(totalBudgetLimit)]);
@@ -1119,6 +1195,34 @@ async function loadDashboardData() {
                 <div>${t('error_loading_budget')}</div>
             </div>`;
     }
+}
+
+// Renders the opt-in converted grand total (GET /api/budgets/status?displayCurrency=...,
+// `converted` block) under the Budget Limits KPI card. `converted` sums committed (effective +
+// pending) spend across every budgeted category's own currency into one number in
+// `displayCurrency` — deliberately not a replacement for the per-currency figures above it, which
+// stay the source of truth (docs/designs/021-display-currency-grand-totals.md).
+function renderConvertedTotal(converted) {
+    const el = document.getElementById('kpi-budget-converted');
+    if (!el) return;
+    if (!converted) {
+        el.style.display = 'none';
+        el.classList.remove('stale');
+        return;
+    }
+
+    const totalText = formatCurrency(converted.total, converted.displayCurrency);
+    const excludedCount = converted.excluded.length;
+    const staleTitle = converted.stale ? ` title="${escapeHtml(t('rate_stale_tooltip'))}"` : '';
+
+    el.classList.toggle('stale', converted.stale);
+    el.innerHTML = `
+        <span${staleTitle}>${t('kpi_converted_label')} <strong>${totalText}</strong>${converted.stale ? ' <i class="fa-solid fa-triangle-exclamation"></i>' : ''}</span>
+        ${excludedCount > 0
+            ? `<span class="kpi-converted-excluded">${t('kpi_converted_excluded').replace('{n}', String(excludedCount))}</span>`
+            : ''}
+    `;
+    el.style.display = 'block';
 }
 
 function renderIncomeCategories(incomeCats, totalIncome) {
@@ -1624,6 +1728,7 @@ function escapeHtml(str) {
 // Initial boot with locale detection
 (async function init() {
     await checkLocale();
+    await initCurrencySelector();
     loadDashboardData();
 })();
 
