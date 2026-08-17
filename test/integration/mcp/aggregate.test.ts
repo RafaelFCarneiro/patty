@@ -1,11 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { callTool, makeClient } from './helpers.js';
+import { callTool, ensure, makeClient } from './helpers.js';
 
 type AggRow = { key: string; label: string; value: number; count: number; pct: number };
 type CurrencyBlock = { currency: string; total: number; rows: AggRow[] };
-type AggResult = { groupBy: string; metric: string; currencies: CurrencyBlock[] };
+type AggResult = {
+  groupBy: string;
+  metric: string;
+  currencies: CurrencyBlock[];
+  converted?: { displayCurrency: string; total: number; stale: boolean; asOf: string | null; excluded: unknown[] };
+};
 
 const month = 3;
 const year = 2025;
@@ -231,5 +236,201 @@ describe('MCP integration > aggregate_spending', () => {
 
     // restore
     await callTool(client, { name: 'set_locale', args: { locale: 'en', source: 'explicit' } });
+  });
+});
+
+// Feature Design 021 Phase 4 — separate describe so each test owns an isolated client/fixtures,
+// same convention as get_spending_summary's own displayCurrency suite.
+describe('MCP integration > aggregate_spending displayCurrency', () => {
+  it('omitted displayCurrency: response has no converted block (regression pin)', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const stamp = Date.now();
+      const accountName = `Agg Dc Omit ${stamp}`;
+      await callTool(client, { name: 'create_account', args: { name: accountName, currency: 'USD' } });
+      await callTool(client, {
+        name: 'add_account_expense',
+        args: { description: 'Dc omit', amount: 20, date, account: accountName, idempotencyKey: `agg-dc-omit-${stamp}` },
+      });
+
+      const result = (await callTool(client, {
+        name: 'aggregate_spending',
+        args: { groupBy: 'category', month, year, account: accountName },
+      })) as AggResult;
+      expect(result).not.toHaveProperty('converted');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('metric=sum + displayCurrency: converts and sums the per-currency block totals, lines unchanged', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const stamp = Date.now();
+      const usdName = `Agg Dc USD ${stamp}`;
+      const brlName = `Agg Dc BRL ${stamp}`;
+
+      await callTool(client, {
+        name: 'set_exchange_rate',
+        args: { from: 'BRL', to: 'USD', rate: 0.2, asOf: new Date().toISOString() },
+      });
+      await callTool(client, { name: 'create_account', args: { name: usdName, currency: 'USD' } });
+      await callTool(client, { name: 'create_account', args: { name: brlName, currency: 'BRL' } });
+      await callTool(client, {
+        name: 'add_account_expense',
+        args: { description: 'Dc usd', amount: 100, date, account: usdName, idempotencyKey: `agg-dc-usd-${stamp}` },
+      });
+      await callTool(client, {
+        name: 'add_account_expense',
+        args: { description: 'Dc brl', amount: 500, date, account: brlName, idempotencyKey: `agg-dc-brl-${stamp}` },
+      });
+
+      const withoutConversion = (await callTool(client, {
+        name: 'aggregate_spending',
+        args: { groupBy: 'account', month, year },
+      })) as AggResult;
+      const withConversion = (await callTool(client, {
+        name: 'aggregate_spending',
+        args: { groupBy: 'account', month, year, displayCurrency: 'USD' },
+      })) as AggResult;
+
+      expect(withConversion.currencies).toEqual(withoutConversion.currencies);
+      ensure(withConversion.converted, 'converted block missing when displayCurrency was supplied');
+      expect(withConversion.converted).toMatchObject({ displayCurrency: 'USD', stale: false, excluded: [] });
+      // Sums every USD/BRL block total across this suite's own runs (shared DB) — assert a floor,
+      // not an exact total: 100 + 500*0.2 = 100 from this test's own fixtures alone.
+      expect(withConversion.converted.total).toBeGreaterThanOrEqual(200);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('a currency with no rate to displayCurrency is excluded from the total and listed', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const stamp = Date.now();
+      const btcName = `Agg Dc BTC ${stamp}`;
+      await callTool(client, { name: 'create_account', args: { name: btcName, currency: 'BTC' } });
+      await callTool(client, {
+        name: 'add_account_expense',
+        args: { description: 'Dc btc', amount: 1, date, account: btcName, idempotencyKey: `agg-dc-btc-${stamp}` },
+      });
+
+      const result = (await callTool(client, {
+        name: 'aggregate_spending',
+        args: { groupBy: 'account', month, year, displayCurrency: 'USD' },
+      })) as AggResult;
+      expect(result.converted?.excluded).toContainEqual({ currency: 'BTC', reason: 'no_rate' });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('converts the currency block total, not the sum of rows truncated by limit', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const stamp = Date.now();
+      const accountName = `Agg Dc Limit ${stamp}`;
+      await callTool(client, { name: 'create_account', args: { name: accountName, currency: 'USD' } });
+      // Two categories in the same USD block; limit:1 below returns only one row, but the block's
+      // own `total` (and therefore the converted grand total) must still reflect both.
+      await callTool(client, {
+        name: 'add_account_expense',
+        args: {
+          description: 'Dc limit food',
+          amount: 100,
+          date,
+          account: accountName,
+          category: 'Food',
+          idempotencyKey: `agg-dc-limit-food-${stamp}`,
+        },
+      });
+      await callTool(client, {
+        name: 'add_account_expense',
+        args: {
+          description: 'Dc limit transport',
+          amount: 40,
+          date,
+          account: accountName,
+          category: 'Transport',
+          idempotencyKey: `agg-dc-limit-transport-${stamp}`,
+        },
+      });
+
+      const result = (await callTool(client, {
+        name: 'aggregate_spending',
+        args: { groupBy: 'category', month, year, account: accountName, limit: 1, displayCurrency: 'USD' },
+      })) as AggResult;
+      const usd = result.currencies.find((c) => c.currency === 'USD')!;
+      expect(usd.rows).toHaveLength(1);
+      expect(usd.total).toBe(140);
+      ensure(result.converted, 'converted block missing when displayCurrency was supplied');
+      expect(result.converted.total).toBe(140);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('metric=count: displayCurrency is a no-op — no converted block even when supplied', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const stamp = Date.now();
+      const accountName = `Agg Dc Count ${stamp}`;
+      await callTool(client, { name: 'create_account', args: { name: accountName, currency: 'USD' } });
+      await callTool(client, {
+        name: 'add_account_expense',
+        args: { description: 'Dc count', amount: 20, date, account: accountName, idempotencyKey: `agg-dc-count-${stamp}` },
+      });
+
+      const result = (await callTool(client, {
+        name: 'aggregate_spending',
+        args: { groupBy: 'category', metric: 'count', month, year, account: accountName, displayCurrency: 'USD' },
+      })) as AggResult;
+      expect(result).not.toHaveProperty('converted');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('metric=avg: displayCurrency is a no-op — no converted block even when supplied', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const stamp = Date.now();
+      const accountName = `Agg Dc Avg ${stamp}`;
+      await callTool(client, { name: 'create_account', args: { name: accountName, currency: 'USD' } });
+      await callTool(client, {
+        name: 'add_account_expense',
+        args: { description: 'Dc avg', amount: 20, date, account: accountName, idempotencyKey: `agg-dc-avg-${stamp}` },
+      });
+
+      const result = (await callTool(client, {
+        name: 'aggregate_spending',
+        args: { groupBy: 'category', metric: 'avg', month, year, account: accountName, displayCurrency: 'USD' },
+      })) as AggResult;
+      expect(result).not.toHaveProperty('converted');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('rejects an unknown displayCurrency at the protocol level (not a valid CurrencyCode enum member)', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await expect(
+        callTool(client, {
+          name: 'aggregate_spending',
+          args: { groupBy: 'category', month, year, displayCurrency: 'EUR' },
+        }),
+      ).rejects.toThrow();
+    } finally {
+      await transport.close();
+    }
   });
 });

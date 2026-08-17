@@ -256,4 +256,199 @@ describe('GET /api/aggregate', () => {
     const res = await inject({ method: 'GET', url: '/api/aggregate?month=6&year=2026' });
     expect(res.statusCode).toBe(422);
   });
+
+  describe('displayCurrency', () => {
+    type AggBody = {
+      groupBy: string;
+      metric: string;
+      currencies: Array<{ currency: string; total: number; rows: unknown[] }>;
+      converted?: {
+        displayCurrency: string;
+        total: number;
+        stale: boolean;
+        asOf: string | null;
+        excluded: Array<{ currency: string; reason: string }>;
+      };
+    };
+
+    it('omitted displayCurrency: response has no converted block (regression pin)', async () => {
+      await inject({
+        method: 'POST',
+        url: '/api/accounts',
+        payload: { name: 'AggDcOmitAcct', type: 'checking', currency: 'USD', initialBalance: 0 },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts/expenses',
+        payload: {
+          description: 'Agg dc omit',
+          amount: 40,
+          date: '2025-03-15',
+          account: 'AggDcOmitAcct',
+          idempotencyKey: 'agg-dc-omit',
+        },
+      });
+      const res = await inject({
+        method: 'GET',
+        url: '/api/aggregate?groupBy=category&month=3&year=2025&account=AggDcOmitAcct',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).not.toHaveProperty('converted');
+    });
+
+    it('metric=sum + displayCurrency: converts and sums the per-currency block totals, lines unchanged', async () => {
+      await inject({
+        method: 'POST',
+        url: '/api/exchange-rates',
+        payload: { from: 'BRL', to: 'USD', rate: 0.2, asOf: '2025-03-01T00:00:00.000Z' },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts',
+        payload: { name: 'AggDcUsdAcct', type: 'checking', currency: 'USD', initialBalance: 0 },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts',
+        payload: { name: 'AggDcBrlAcct', type: 'checking', currency: 'BRL', initialBalance: 0 },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts/expenses',
+        payload: {
+          description: 'Agg dc usd',
+          amount: 100,
+          date: '2025-03-15',
+          account: 'AggDcUsdAcct',
+          idempotencyKey: 'agg-dc-usd',
+        },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts/expenses',
+        payload: {
+          description: 'Agg dc brl',
+          amount: 500,
+          date: '2025-03-15',
+          account: 'AggDcBrlAcct',
+          idempotencyKey: 'agg-dc-brl',
+        },
+      });
+
+      const withoutConversion = await inject({
+        method: 'GET',
+        url: '/api/aggregate?groupBy=account&month=3&year=2025',
+      });
+      const withConversion = await inject({
+        method: 'GET',
+        url: '/api/aggregate?groupBy=account&month=3&year=2025&displayCurrency=USD',
+      });
+      expect(withConversion.statusCode).toBe(200);
+      const withoutBody = withoutConversion.json() as AggBody;
+      const withBody = withConversion.json() as AggBody;
+
+      expect(withBody.currencies).toEqual(withoutBody.currencies);
+      // Sums every USD/BRL block total across this suite's own runs (shared DB) — assert a floor,
+      // not an exact total: 100 + 500*0.2 = 100 from this test's own fixtures alone.
+      expect(withBody.converted?.displayCurrency).toBe('USD');
+      expect(withBody.converted?.excluded).toEqual([]);
+      expect(withBody.converted?.total).toBeGreaterThanOrEqual(200);
+    });
+
+    it('a currency with no rate to displayCurrency is excluded from the total and listed', async () => {
+      await inject({
+        method: 'POST',
+        url: '/api/accounts',
+        payload: { name: 'AggDcBtcAcct', type: 'checking', currency: 'BTC', initialBalance: 0 },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts/expenses',
+        payload: {
+          description: 'Agg dc btc',
+          amount: 1,
+          date: '2025-03-15',
+          account: 'AggDcBtcAcct',
+          idempotencyKey: 'agg-dc-btc',
+        },
+      });
+      const res = await inject({
+        method: 'GET',
+        url: '/api/aggregate?groupBy=account&month=3&year=2025&displayCurrency=USD',
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as AggBody;
+      expect(body.converted?.excluded).toContainEqual({ currency: 'BTC', reason: 'no_rate' });
+    });
+
+    it('converts the currency block total, not the sum of rows truncated by limit', async () => {
+      await inject({
+        method: 'POST',
+        url: '/api/accounts',
+        payload: { name: 'AggDcLimitAcct', type: 'checking', currency: 'USD', initialBalance: 0 },
+      });
+      // Two categories in the same USD block; limit=1 below returns only one row, but the block's
+      // own `total` (and therefore the converted grand total) must still reflect both.
+      await inject({
+        method: 'POST',
+        url: '/api/accounts/expenses',
+        payload: {
+          description: 'Agg dc limit food',
+          amount: 100,
+          date: '2025-03-15',
+          account: 'AggDcLimitAcct',
+          category: 'Food',
+          idempotencyKey: 'agg-dc-limit-food',
+        },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts/expenses',
+        payload: {
+          description: 'Agg dc limit transport',
+          amount: 40,
+          date: '2025-03-15',
+          account: 'AggDcLimitAcct',
+          category: 'Transport',
+          idempotencyKey: 'agg-dc-limit-transport',
+        },
+      });
+      const res = await inject({
+        method: 'GET',
+        url: '/api/aggregate?groupBy=category&month=3&year=2025&account=AggDcLimitAcct&limit=1&displayCurrency=USD',
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as AggBody;
+      const usd = body.currencies.find((c) => c.currency === 'USD')!;
+      expect(usd.rows).toHaveLength(1);
+      expect(usd.total).toBe(140);
+      expect(body.converted?.total).toBe(140);
+    });
+
+    it('metric=count: displayCurrency is a no-op — no converted block even when supplied', async () => {
+      const res = await inject({
+        method: 'GET',
+        url: '/api/aggregate?groupBy=category&metric=count&month=3&year=2025&account=AggDcOmitAcct&displayCurrency=USD',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).not.toHaveProperty('converted');
+    });
+
+    it('metric=avg: displayCurrency is a no-op — no converted block even when supplied', async () => {
+      const res = await inject({
+        method: 'GET',
+        url: '/api/aggregate?groupBy=category&metric=avg&month=3&year=2025&account=AggDcOmitAcct&displayCurrency=USD',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).not.toHaveProperty('converted');
+    });
+
+    it('rejects an unknown displayCurrency (422)', async () => {
+      const res = await inject({
+        method: 'GET',
+        url: '/api/aggregate?groupBy=category&month=3&year=2025&displayCurrency=EUR',
+      });
+      expect(res.statusCode).toBe(422);
+    });
+  });
 });
