@@ -239,8 +239,8 @@ describe('MCP integration > aggregate_spending', () => {
   });
 });
 
-// Feature Design 021 Phase 4 — separate describe so each test owns an isolated client/fixtures,
-// same convention as get_spending_summary's own displayCurrency suite.
+// Separate describe so each test owns an isolated client/fixtures, same convention as
+// get_spending_summary's own displayCurrency suite.
 describe('MCP integration > aggregate_spending displayCurrency', () => {
   it('omitted displayCurrency: response has no converted block (regression pin)', async () => {
     const { client, transport } = makeClient();
@@ -336,8 +336,8 @@ describe('MCP integration > aggregate_spending displayCurrency', () => {
       const stamp = Date.now();
       const accountName = `Agg Dc Limit ${stamp}`;
       await callTool(client, { name: 'create_account', args: { name: accountName, currency: 'USD' } });
-      // Two categories in the same USD block; limit:1 below returns only one row, but the block's
-      // own `total` (and therefore the converted grand total) must still reflect both.
+      // limit:1 below returns only one row — the block's own `total` (and the converted grand
+      // total) must still reflect both categories.
       await callTool(client, {
         name: 'add_account_expense',
         args: {

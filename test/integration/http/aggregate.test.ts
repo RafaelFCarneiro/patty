@@ -387,8 +387,8 @@ describe('GET /api/aggregate', () => {
         url: '/api/accounts',
         payload: { name: 'AggDcLimitAcct', type: 'checking', currency: 'USD', initialBalance: 0 },
       });
-      // Two categories in the same USD block; limit=1 below returns only one row, but the block's
-      // own `total` (and therefore the converted grand total) must still reflect both.
+      // limit=1 below returns only one row — the block's own `total` (and the converted grand
+      // total) must still reflect both categories.
       await inject({
         method: 'POST',
         url: '/api/accounts/expenses',
