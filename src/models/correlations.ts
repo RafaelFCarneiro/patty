@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { IsoDate, PeriodSchema } from './date.js';
+import { ConvertedTotalSchema } from './currencyRate.js';
 import type { ValidationError } from './error.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
@@ -113,6 +114,10 @@ export const FindCorrelationsSchema = z.object({
       `recurring_candidates: minimum qualifying occurrences within the lookback window to flag a candidate ` +
         `(default ${DEFAULT_MIN_OCCURRENCES})`,
     ),
+  displayCurrency: CurrencyCode.optional().describe(
+    'Also return a converted grand total in this currency for spending_shifts/budget_fit/merchant_concentration ' +
+      '(recurring_candidates is unaffected — its candidates are proposed rules, not per-currency spend totals)',
+  ),
 });
 export type FindCorrelations = z.infer<typeof FindCorrelationsSchema>;
 
@@ -164,6 +169,10 @@ export const SpendingShiftsResultSchema = z.object({
   shifts: z
     .array(SpendingShiftSchema)
     .describe('Sorted by |deltaPct| descending; brand-new-spend categories (deltaPct: null) sort first'),
+  converted: ConvertedTotalSchema.optional().describe(
+    'Opt-in converted grand total of the reference month\'s effective, expense-only spend across every ' +
+      'currency — present only when displayCurrency was supplied',
+  ),
 });
 export type SpendingShiftsResult = z.infer<typeof SpendingShiftsResultSchema>;
 
@@ -211,6 +220,10 @@ export const BudgetFitResultSchema = z.object({
   unbudgeted: z
     .array(UnbudgetedSpendSchema)
     .describe('Categories with an established (nonzero baseline) spend pattern but no budget at all'),
+  converted: ConvertedTotalSchema.optional().describe(
+    'Opt-in converted grand total of committed (effective + pending) spend matched to a budget, across every ' +
+      'currency — the same measure get_budget_status converts; present only when displayCurrency was supplied',
+  ),
 });
 export type BudgetFitResult = z.infer<typeof BudgetFitResultSchema>;
 
@@ -248,6 +261,11 @@ export const MerchantConcentrationResultSchema = z.object({
   categories: z
     .array(CategoryConcentrationSchema)
     .describe('One entry per (category, currency) with spend in the period; sorted by category name'),
+  converted: ConvertedTotalSchema.optional().describe(
+    'Opt-in converted grand total of the per-currency spend the concentration is computed over (each ' +
+      'currency\'s categoryTotal, summed once — not each merchant line) — present only when displayCurrency ' +
+      'was supplied',
+  ),
 });
 export type MerchantConcentrationResult = z.infer<typeof MerchantConcentrationResultSchema>;
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  currentSpendByCurrency,
   detectRecurringCadence,
+  merchantSpendByCurrency,
   shapeBudgetFitLines,
   shapeMerchantConcentration,
   shapeRecurringCandidates,
@@ -8,7 +10,11 @@ import {
   shapeUnbudgetedSpend,
 } from '../../../src/logic/correlations.js';
 import { BudgetPeriod, type BudgetViewInput } from '../../../src/models/budget.js';
-import type { BudgetFitLine, RecurringCandidateInput } from '../../../src/models/correlations.js';
+import type {
+  BudgetFitLine,
+  CategoryConcentration,
+  RecurringCandidateInput,
+} from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
 import { decimalsLookup, type DecimalsFor } from '../../../src/logic/money.js';
 import { CurrencyCode } from '../../../src/models/money.js';
@@ -179,6 +185,38 @@ describe('shapeSpendingShifts', () => {
       decimalsFor,
     );
     expect(shift?.deltaPct).toBe(11.11);
+  });
+});
+
+describe('currentSpendByCurrency', () => {
+  it('sums current per currency, ignoring baseline', () => {
+    const result = currentSpendByCurrency([
+      row({ category: 'Food', current: 100, baselineTotal: 900 }),
+      row({ category: 'Transport', current: 50, baselineTotal: 0 }),
+    ]);
+    expect(result).toEqual([{ currency: 'BRL', amount: 150 }]);
+  });
+
+  it('keeps distinct currencies separate', () => {
+    const result = currentSpendByCurrency([
+      row({ currency: CurrencyCode.enum.BRL, current: 100 }),
+      row({ currency: CurrencyCode.enum.USD, current: 40 }),
+    ]);
+    expect(result).toEqual(
+      expect.arrayContaining([
+        { currency: 'BRL', amount: 100 },
+        { currency: 'USD', amount: 40 },
+      ]),
+    );
+  });
+
+  it('is not affected by minDeltaPct filtering — it sums every row, not just shaped shifts', () => {
+    const result = currentSpendByCurrency([row({ current: 105, baselineTotal: 100 })]);
+    expect(result).toEqual([{ currency: 'BRL', amount: 105 }]);
+  });
+
+  it('returns an empty array for no rows', () => {
+    expect(currentSpendByCurrency([])).toEqual([]);
   });
 });
 
@@ -585,6 +623,66 @@ describe('shapeMerchantConcentration', () => {
     ];
     const [group] = shapeMerchantConcentration(rows, 5, Locale.enum.en, decimalsFor);
     expect(group?.merchants.find((m) => m.merchant === 'a')?.share).toBe(0.3333);
+  });
+});
+
+describe('merchantSpendByCurrency', () => {
+  const group = (overrides: Partial<CategoryConcentration> = {}): CategoryConcentration => ({
+    category: 'Food',
+    currency: CurrencyCode.enum.BRL,
+    categoryTotal: 100,
+    merchants: [],
+    othersSpent: 0,
+    ...overrides,
+  });
+
+  it('sums categoryTotal per currency across every category group', () => {
+    const result = merchantSpendByCurrency([
+      group({ category: 'Food', categoryTotal: 100 }),
+      group({ category: 'Transport', categoryTotal: 50 }),
+    ]);
+    expect(result).toEqual([{ currency: 'BRL', amount: 150 }]);
+  });
+
+  it('equals the sum of every category group\'s categoryTotal from the actual shaped response', () => {
+    const rows = [
+      merchantRow({ category: 'Food', merchantKey: 'a', spent: 60 }),
+      merchantRow({ category: 'Food', merchantKey: 'b', spent: 40 }),
+      merchantRow({ category: 'Transport', merchantKey: 'c', spent: 25 }),
+    ];
+    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en, fiatDecimals);
+    const totalFromGroups = groups.reduce((sum, g) => sum + g.categoryTotal, 0);
+    expect(merchantSpendByCurrency(groups)).toEqual([{ currency: 'BRL', amount: totalFromGroups }]);
+  });
+
+  it('sums the already-rounded categoryTotal, not raw sub-cent spend — reconciles with the displayed lines', () => {
+    // Money carries no decimal-precision constraint, so a category can carry a raw spend below the
+    // currency's own smallest unit; shapeMerchantConcentration rounds each categoryTotal to 0.00 —
+    // the converted grand total must sum those displayed zeros, not the raw 0.004 + 0.004 = 0.008.
+    const rows = [
+      merchantRow({ category: 'Food', merchantKey: 'a', spent: 0.004 }),
+      merchantRow({ category: 'Transport', merchantKey: 'b', spent: 0.004 }),
+    ];
+    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en, fiatDecimals);
+    expect(groups.map((g) => g.categoryTotal)).toEqual([0, 0]);
+    expect(merchantSpendByCurrency(groups)).toEqual([{ currency: 'BRL', amount: 0 }]);
+  });
+
+  it('keeps distinct currencies separate', () => {
+    const result = merchantSpendByCurrency([
+      group({ currency: CurrencyCode.enum.BRL, categoryTotal: 100 }),
+      group({ currency: CurrencyCode.enum.USD, categoryTotal: 40 }),
+    ]);
+    expect(result).toEqual(
+      expect.arrayContaining([
+        { currency: 'BRL', amount: 100 },
+        { currency: 'USD', amount: 40 },
+      ]),
+    );
+  });
+
+  it('returns an empty array for no groups', () => {
+    expect(merchantSpendByCurrency([])).toEqual([]);
   });
 });
 

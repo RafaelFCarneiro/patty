@@ -3,10 +3,11 @@ import { findCorrelations } from '../../../src/controllers/correlations.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { CategoryKind, type Category } from '../../../src/models/category.js';
 import { BudgetPeriod } from '../../../src/models/budget.js';
+import type { CurrencyRate } from '../../../src/models/currencyRate.js';
 import { FindCorrelationsAnalysis, type ResolvedFindCorrelations } from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import type { CategoryWindowedSpend } from '../../../src/models/transaction.js';
+import type { CategorySpend, CategoryWindowedSpend } from '../../../src/models/transaction.js';
 import type { BudgetViewRow } from '../../../src/wire/db/budgets.js';
 import type {
   MerchantSpendDbRow,
@@ -59,6 +60,17 @@ const input = (overrides: Partial<ResolvedFindCorrelations> = {}): ResolvedFindC
   topN: 5,
   lookbackMonths: 6,
   minOccurrences: 3,
+  ...overrides,
+});
+
+// Matches makeDeps' fixed clock (2026-07-15T12:00:00.000Z) — used by the displayCurrency tests below.
+const usdBrlRate = (overrides: Partial<CurrencyRate> = {}): CurrencyRate => ({
+  id: 'rate-1',
+  fromCode: CurrencyCode.enum.BRL,
+  toCode: CurrencyCode.enum.USD,
+  rate: 0.2,
+  asOf: '2026-07-15T12:00:00.000Z',
+  source: null,
   ...overrides,
 });
 
@@ -156,6 +168,65 @@ describe('findCorrelations — spending_shifts', () => {
     const result = await findCorrelations(deps, input({ baselineMonths: 1 }));
     expect(result._unsafeUnwrap()).toMatchObject({
       shifts: [{ currency: 'BTC', current: 0.12345679, baseline: 0.24691358 }],
+    });
+  });
+
+  it('omitted displayCurrency: no converted block, and currency_rates is never fetched', async () => {
+    let ratesFetched = false;
+    const deps = makeDeps({
+      correlations: {
+        spendingShifts: async () => [
+          { category: 'Food', categoryNames: null, currency: CurrencyCode.enum.BRL, current: 100, baselineTotal: 0 },
+        ],
+      } as unknown as Deps['correlations'],
+      currencyRates: { list: async () => ((ratesFetched = true), []) } as unknown as Deps['currencyRates'],
+    });
+
+    const result = await findCorrelations(deps, input({ minDeltaPct: 0 }));
+    expect(result._unsafeUnwrap()).not.toHaveProperty('converted');
+    expect(ratesFetched).toBe(false);
+  });
+
+  it('provided displayCurrency: converts the sum of every row\'s current, unfiltered by minDeltaPct', async () => {
+    const deps = makeDeps({
+      correlations: {
+        spendingShifts: async () => [
+          { category: 'Food', categoryNames: null, currency: CurrencyCode.enum.BRL, current: 300, baselineTotal: 0 },
+          // baseline = 147/3 = 49; deltaPct ~2% — below the 20% minDeltaPct threshold, dropped from
+          // `shifts`, but must still count toward the converted total.
+          {
+            category: 'Transport',
+            categoryNames: null,
+            currency: CurrencyCode.enum.BRL,
+            current: 50,
+            baselineTotal: 147,
+          },
+        ],
+      } as unknown as Deps['correlations'],
+      currencyRates: { list: async () => [usdBrlRate()] } as unknown as Deps['currencyRates'],
+    });
+
+    const result = await findCorrelations(deps, input({ displayCurrency: CurrencyCode.enum.USD }));
+    expect(result._unsafeUnwrap()).toMatchObject({
+      shifts: [{ category: 'Food' }], // Transport filtered out of shifts (below minDeltaPct)
+      // (300 + 50) * 0.2 = 70 — Transport still counts toward the converted total
+      converted: { displayCurrency: 'USD', total: 70, stale: false, excluded: [] },
+    });
+  });
+
+  it('provided displayCurrency: a currency with no rate is excluded from the total and listed', async () => {
+    const deps = makeDeps({
+      correlations: {
+        spendingShifts: async () => [
+          { category: 'Food', categoryNames: null, currency: CurrencyCode.enum.BTC, current: 1, baselineTotal: 0 },
+        ],
+      } as unknown as Deps['correlations'],
+      currencyRates: { list: async () => [] } as unknown as Deps['currencyRates'],
+    });
+
+    const result = await findCorrelations(deps, input({ displayCurrency: CurrencyCode.enum.USD, minDeltaPct: 0 }));
+    expect(result._unsafeUnwrap()).toMatchObject({
+      converted: { total: 0, excluded: [{ currency: 'BTC', reason: 'no_rate' }] },
     });
   });
 });
@@ -366,6 +437,80 @@ describe('findCorrelations — budget_fit', () => {
     const result = await findCorrelations(deps, budgetFitInput());
     expect(result._unsafeUnwrap()).toMatchObject({ analysis: 'budget_fit', unbudgeted: [] });
   });
+
+  it('omitted displayCurrency: no converted block, and spendByCategory/currency_rates are never fetched', async () => {
+    let committedFetched = false;
+    let ratesFetched = false;
+    const deps = makeDeps({
+      budgets: { list: async () => [budgetViewRow({ limit: 200 })] } as unknown as Deps['budgets'],
+      transactions: {
+        spendByCategoryWindowed: async () => [windowedSpendRow({ baselineTotal: 300 })],
+        spendByCategory: async () => ((committedFetched = true), []),
+      } as unknown as Deps['transactions'],
+      correlations: { spendingShifts: async () => [] } as unknown as Deps['correlations'],
+      currencyRates: { list: async () => ((ratesFetched = true), []) } as unknown as Deps['currencyRates'],
+    });
+
+    const result = await findCorrelations(deps, budgetFitInput());
+    expect(result._unsafeUnwrap()).not.toHaveProperty('converted');
+    expect(committedFetched).toBe(false);
+    expect(ratesFetched).toBe(false);
+  });
+
+  it('provided displayCurrency: converts committed (effective + pending) spend matched to budgets, ' +
+    'the same measure get_budget_status uses — not windowedSpend', async () => {
+    const committedSpendRow: CategorySpend = {
+      currency: CurrencyCode.enum.BRL,
+      categoryId: 'cat-food',
+      subCategoryId: null,
+      effective: 150,
+      pending: 50,
+    };
+    const deps = makeDeps({
+      budgets: { list: async () => [budgetViewRow({ limit: 500 })] } as unknown as Deps['budgets'],
+      transactions: {
+        // windowedSpend intentionally differs from committedSpend — the converted total must come
+        // from the latter (spendByCategory), not be re-derived from the former.
+        spendByCategoryWindowed: async () => [windowedSpendRow({ baselineTotal: 900 })],
+        spendByCategory: async () => [committedSpendRow],
+      } as unknown as Deps['transactions'],
+      correlations: { spendingShifts: async () => [] } as unknown as Deps['correlations'],
+      currencyRates: { list: async () => [usdBrlRate()] } as unknown as Deps['currencyRates'],
+    });
+
+    const result = await findCorrelations(deps, budgetFitInput({ displayCurrency: CurrencyCode.enum.USD }));
+    // (150 + 50) * 0.2 = 40
+    expect(result._unsafeUnwrap()).toMatchObject({
+      converted: { displayCurrency: 'USD', total: 40, stale: false, excluded: [] },
+    });
+  });
+
+  it('provided displayCurrency: a currency with no rate is excluded from the total and listed', async () => {
+    const deps = makeDeps({
+      budgets: {
+        list: async () => [budgetViewRow({ currency: CurrencyCode.enum.BTC, limit: 1 })],
+      } as unknown as Deps['budgets'],
+      transactions: {
+        spendByCategoryWindowed: async () => [],
+        spendByCategory: async () => [
+          {
+            currency: CurrencyCode.enum.BTC,
+            categoryId: 'cat-food',
+            subCategoryId: null,
+            effective: 0.1,
+            pending: 0,
+          } satisfies CategorySpend,
+        ],
+      } as unknown as Deps['transactions'],
+      correlations: { spendingShifts: async () => [] } as unknown as Deps['correlations'],
+      currencyRates: { list: async () => [] } as unknown as Deps['currencyRates'],
+    });
+
+    const result = await findCorrelations(deps, budgetFitInput({ displayCurrency: CurrencyCode.enum.USD }));
+    expect(result._unsafeUnwrap()).toMatchObject({
+      converted: { total: 0, excluded: [{ currency: 'BTC', reason: 'no_rate' }] },
+    });
+  });
 });
 
 const merchantConcentrationInput = (overrides: Partial<ResolvedFindCorrelations> = {}): ResolvedFindCorrelations =>
@@ -458,6 +603,52 @@ describe('findCorrelations — merchant_concentration', () => {
       month: 7,
       year: 2026,
       categories: [],
+    });
+  });
+
+  it('omitted displayCurrency: no converted block, and currency_rates is never fetched', async () => {
+    let ratesFetched = false;
+    const deps = makeDeps({
+      correlations: { merchantConcentration: async () => [merchantRow()] } as unknown as Deps['correlations'],
+      currencyRates: { list: async () => ((ratesFetched = true), []) } as unknown as Deps['currencyRates'],
+    });
+
+    const result = await findCorrelations(deps, merchantConcentrationInput());
+    expect(result._unsafeUnwrap()).not.toHaveProperty('converted');
+    expect(ratesFetched).toBe(false);
+  });
+
+  it('provided displayCurrency: converts the per-currency total the concentration is computed over ' +
+    '(each currency\'s categoryTotal summed once, not each merchant line)', async () => {
+    const deps = makeDeps({
+      correlations: {
+        merchantConcentration: async () => [
+          merchantRow({ category: 'Food', merchantKey: 'a', spent: 60 }),
+          merchantRow({ category: 'Food', merchantKey: 'b', spent: 40 }),
+          merchantRow({ category: 'Transport', merchantKey: 'c', spent: 25 }),
+        ],
+      } as unknown as Deps['correlations'],
+      currencyRates: { list: async () => [usdBrlRate()] } as unknown as Deps['currencyRates'],
+    });
+
+    const result = await findCorrelations(deps, merchantConcentrationInput({ displayCurrency: CurrencyCode.enum.USD }));
+    // (60 + 40 + 25) * 0.2 = 25
+    expect(result._unsafeUnwrap()).toMatchObject({
+      converted: { displayCurrency: 'USD', total: 25, stale: false, excluded: [] },
+    });
+  });
+
+  it('provided displayCurrency: a currency with no rate is excluded from the total and listed', async () => {
+    const deps = makeDeps({
+      correlations: {
+        merchantConcentration: async () => [merchantRow({ currency: CurrencyCode.enum.BTC, spent: 0.1 })],
+      } as unknown as Deps['correlations'],
+      currencyRates: { list: async () => [] } as unknown as Deps['currencyRates'],
+    });
+
+    const result = await findCorrelations(deps, merchantConcentrationInput({ displayCurrency: CurrencyCode.enum.USD }));
+    expect(result._unsafeUnwrap()).toMatchObject({
+      converted: { total: 0, excluded: [{ currency: 'BTC', reason: 'no_rate' }] },
     });
   });
 });
@@ -564,5 +755,23 @@ describe('findCorrelations — recurring_candidates', () => {
     const deps = makeDeps();
     const result = await findCorrelations(deps, recurringCandidatesInput());
     expect(result._unsafeUnwrap()).toEqual({ analysis: 'recurring_candidates', candidates: [] });
+  });
+
+  it('displayCurrency is a no-op: no converted block, and currency_rates is never fetched', async () => {
+    let ratesFetched = false;
+    const deps = makeDeps({
+      correlations: {
+        recurringCandidates: async () => [
+          recurringRow({ date: '2026-01-05' }),
+          recurringRow({ date: '2026-02-04' }),
+          recurringRow({ date: '2026-03-06' }),
+        ],
+      } as unknown as Deps['correlations'],
+      currencyRates: { list: async () => ((ratesFetched = true), []) } as unknown as Deps['currencyRates'],
+    });
+
+    const result = await findCorrelations(deps, recurringCandidatesInput({ displayCurrency: CurrencyCode.enum.USD }));
+    expect(result._unsafeUnwrap()).not.toHaveProperty('converted');
+    expect(ratesFetched).toBe(false);
   });
 });

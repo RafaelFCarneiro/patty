@@ -1,15 +1,20 @@
 import { errAsync, ok, ResultAsync, safeTry } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import { guard } from '../common/result.js';
+import { budgetedCommittedByCurrency } from '../logic/budget.js';
 import {
+  currentSpendByCurrency,
+  merchantSpendByCurrency,
   shapeBudgetFitLines,
   shapeMerchantConcentration,
   shapeRecurringCandidates,
   shapeSpendingShifts,
   shapeUnbudgetedSpend,
 } from '../logic/correlations.js';
+import { consolidateInCurrency, type CurrencyAmount } from '../logic/currencyRate.js';
 import { decimalsLookup, type DecimalsFor } from '../logic/money.js';
 import { baselineRange, hasPeriod, lookbackFrom, periodRange, toIsoDate } from '../logic/period.js';
+import type { ConvertedTotal } from '../models/currencyRate.js';
 import {
   findCorrelationsErrors,
   FindCorrelationsAnalysis,
@@ -18,6 +23,7 @@ import {
 } from '../models/correlations.js';
 import type { Period } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
+import type { CurrencyCode } from '../models/money.js';
 import type { Deps } from './deps.js';
 import { resolveCategoryRef } from './resolve.js';
 
@@ -33,6 +39,27 @@ const resolveWindows = (
   return { baselineFrom, currentFrom, currentTo };
 };
 
+/** Converts a mode's own per-currency amounts to `displayCurrency` — correlates a second aggregate
+ *  (`currency_rates`), so it's orchestrated here rather than in a repo, mirroring
+ *  `getSpendingSummary`/`getBudgetStatus`. */
+const convertedTotal = async (
+  deps: Deps,
+  amounts: readonly CurrencyAmount[],
+  displayCurrency: CurrencyCode,
+  decimalsFor: DecimalsFor,
+): Promise<ConvertedTotal> => {
+  const rates = await deps.currencyRates.list();
+  const converted = consolidateInCurrency(
+    amounts,
+    displayCurrency,
+    rates,
+    deps.clock(),
+    deps.rateStaleness,
+    decimalsFor(displayCurrency),
+  );
+  return { displayCurrency, ...converted };
+};
+
 type AnalysisHandler = (
   deps: Deps,
   input: ResolvedFindCorrelations,
@@ -46,11 +73,22 @@ const spendingShifts: AnalysisHandler = (deps, input, locale, decimalsFor) =>
     const period = resolvePeriod(input);
     const { baselineFrom, currentFrom, currentTo } = resolveWindows(period, input.baselineMonths);
     const rows = await deps.correlations.spendingShifts(baselineFrom, currentFrom, currentTo);
+    const shifts = shapeSpendingShifts(rows, input.baselineMonths, input.minDeltaPct, locale, decimalsFor);
+    if (!input.displayCurrency) {
+      return ok({
+        analysis: FindCorrelationsAnalysis.enum.spending_shifts,
+        month: period.month,
+        year: period.year,
+        shifts,
+      });
+    }
+    const converted = await convertedTotal(deps, currentSpendByCurrency(rows), input.displayCurrency, decimalsFor);
     return ok({
       analysis: FindCorrelationsAnalysis.enum.spending_shifts,
       month: period.month,
       year: period.year,
-      shifts: shapeSpendingShifts(rows, input.baselineMonths, input.minDeltaPct, locale, decimalsFor),
+      shifts,
+      converted,
     });
   });
 
@@ -74,12 +112,32 @@ const budgetFit: AnalysisHandler = (deps, input, locale, decimalsFor) =>
       locale,
       decimalsFor,
     );
+    const unbudgeted = shapeUnbudgetedSpend(shiftRows, budgeted, input.baselineMonths, locale, decimalsFor);
+    if (!input.displayCurrency) {
+      return ok({
+        analysis: FindCorrelationsAnalysis.enum.budget_fit,
+        month: period.month,
+        year: period.year,
+        budgeted,
+        unbudgeted,
+      });
+    }
+    // A fresh committed-spend read (get_budget_status's own measure), not windowedSpend above
+    // (current-vs-baseline only) — so the two surfaces' converted totals agree.
+    const committedSpend = await deps.transactions.spendByCategory(currentFrom, currentTo);
+    const converted = await convertedTotal(
+      deps,
+      budgetedCommittedByCurrency(budgets, committedSpend),
+      input.displayCurrency,
+      decimalsFor,
+    );
     return ok({
       analysis: FindCorrelationsAnalysis.enum.budget_fit,
       month: period.month,
       year: period.year,
       budgeted,
-      unbudgeted: shapeUnbudgetedSpend(shiftRows, budgeted, input.baselineMonths, locale, decimalsFor),
+      unbudgeted,
+      converted,
     });
   });
 
@@ -90,11 +148,27 @@ const merchantConcentration: AnalysisHandler = (deps, input, locale, decimalsFor
     const { from, to } = periodRange(period);
     const category = input.category ? yield* resolveCategoryRef(deps, input.category) : null;
     const rows = await deps.correlations.merchantConcentration(from, to, category?.id ?? null);
+    const categories = shapeMerchantConcentration(rows, input.topN, locale, decimalsFor);
+    if (!input.displayCurrency) {
+      return ok({
+        analysis: FindCorrelationsAnalysis.enum.merchant_concentration,
+        month: period.month,
+        year: period.year,
+        categories,
+      });
+    }
+    const converted = await convertedTotal(
+      deps,
+      merchantSpendByCurrency(categories),
+      input.displayCurrency,
+      decimalsFor,
+    );
     return ok({
       analysis: FindCorrelationsAnalysis.enum.merchant_concentration,
       month: period.month,
       year: period.year,
-      categories: shapeMerchantConcentration(rows, input.topN, locale, decimalsFor),
+      categories,
+      converted,
     });
   });
 

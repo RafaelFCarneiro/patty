@@ -1,7 +1,7 @@
 # Feature Design 021: `displayCurrency` — opt-in converted grand totals on per-currency reads
 
 **Type:** Feature design (a capability + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** In progress (Phases 1-2 done) · **Date:** 2026-08-10 · This design implements the
+**Implementation status:** Done (Phases 1-3 done) · **Date:** 2026-08-10 · This design implements the
 follow-on ADR-026 scoped ("an opt-in `displayCurrency`/convert flag can later add a converted grand-total on
 top of budgets' and `find_correlations`' per-currency lines"). Governed by **ADR-028** (the conversion
 correlates two aggregates, so it is controller-orchestrated — no repo joins `currency_rates`). Reuses the
@@ -84,9 +84,19 @@ response gains a **converted grand total** in that currency, computed read-time 
    toward both a sub-category budget and its rolled-up parent budget (the envelope behavior) would otherwise be
    double-counted in the grand total. Limits are not separately converted (deliberately out of scope — the page
    is about spend-vs-limit, and a converted-limits total wasn't requested).
-3. **`find_correlations`** (`feat/display-currency-correlations`): `displayCurrency?` on the tool (MCP-only —
-   `find_correlations` has no REST mirror); converted totals where a mode reports per-currency money
-   (`spending_shifts`, `budget_fit`, `merchant_concentration`).
+3. **`find_correlations`** (`feat/display-currency-correlations`, **done**): `displayCurrency?` added to the tool
+   (MCP-only — `find_correlations` has no REST mirror); controller-orchestrated converted totals attached per
+   mode, only where that mode reports per-currency money: `spending_shifts` (the reference month's effective,
+   expense-only spend total per currency, summed from every row `deps.correlations.spendingShifts` returns —
+   unfiltered by `minDeltaPct`, so a display filter never shrinks the total); `budget_fit` (committed —
+   effective + pending — spend matched to a budget, computed via `logic/budget.ts`'s
+   `budgetedCommittedByCurrency` over a fresh `spendByCategory` read for the reference period, the same measure
+   `get_budget_status` converts, so the two surfaces agree — not `spendByCategoryWindowed`'s current/baseline
+   pair, which the mode's own `budgeted`/`unbudgeted` lines use); `merchant_concentration` (each currency's
+   `categoryTotal`, summed once per currency via `logic/correlations.ts`'s new `merchantSpendByCurrency` — not
+   each merchant line, avoiding a double count). `recurring_candidates` is excluded — its candidates are
+   proposed rules, not per-currency spend totals, so `displayCurrency` is a no-op there. `logic/correlations.ts`
+   also gained `currentSpendByCurrency` for `spending_shifts`.
 4. **(Optional) `aggregate_spending`** — same param + helper, if wanted.
 
 Optionally, the overview/budget dashboards can surface the converted grand total (using `window.formatMoney` in

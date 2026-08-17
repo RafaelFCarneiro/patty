@@ -46,6 +46,14 @@ type RecurringCandidate = {
   suggestedNextDue?: string;
 };
 
+type ConvertedTotal = {
+  displayCurrency?: string;
+  total?: number;
+  stale?: boolean;
+  asOf?: string | null;
+  excluded?: Array<{ currency?: string; reason?: string }>;
+};
+
 type FindCorrelationsResult = {
   analysis?: string;
   month?: number;
@@ -55,6 +63,7 @@ type FindCorrelationsResult = {
   unbudgeted?: UnbudgetedSpend[];
   categories?: CategoryConcentration[];
   candidates?: RecurringCandidate[];
+  converted?: ConvertedTotal;
 };
 
 // A fixed reference period and its trailing 3-month baseline window, always in the past so this
@@ -1055,6 +1064,264 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
       const candidate = findCandidate(result, 'corr candidate btc');
       ensure(candidate, 'expected corr candidate btc to qualify');
       expect(candidate).toMatchObject({ currency: 'BTC', typicalAmount: 0.00123456 });
+    } finally {
+      await transport.close();
+    }
+  });
+});
+
+describe('MCP integration > find_correlations displayCurrency', () => {
+  it('spending_shifts: omitted displayCurrency has no converted block (regression pin)', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'spending_shifts', ...REFERENCE },
+      })) as FindCorrelationsResult;
+      expect(result).not.toHaveProperty('converted');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('spending_shifts: provided displayCurrency converts the reference month\'s per-currency spend total, ' +
+    'per-line shifts unaffected', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Dc-Shift-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, {
+        name: 'set_exchange_rate',
+        args: { from: 'BRL', to: 'USD', rate: 0.2, asOf: new Date().toISOString() },
+      });
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await addExpense(client, {
+        description: 'dc spend',
+        amount: 500,
+        category: categoryName,
+        currency: 'BRL',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-dc-shift-${stamp}`,
+      });
+
+      const withoutConversion = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'spending_shifts', ...REFERENCE },
+      })) as FindCorrelationsResult;
+      const withConversion = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'spending_shifts', ...REFERENCE, displayCurrency: 'USD' },
+      })) as FindCorrelationsResult;
+
+      expect(withConversion.shifts).toEqual(withoutConversion.shifts);
+      ensure(withConversion.converted, 'converted block missing when displayCurrency was supplied');
+      expect(withConversion.converted).toMatchObject({ displayCurrency: 'USD', stale: false, excluded: [] });
+      // Includes every BRL current-period spend created across this suite's own runs (shared DB),
+      // not just this test's own 500 * 0.2 = 100 — assert a floor, not exact.
+      expect(withConversion.converted.total).toBeGreaterThanOrEqual(100);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('spending_shifts: a currency with no rate to displayCurrency is excluded from the total and listed', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Dc-Shift-Btc-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await addExpense(client, {
+        description: 'btc spend, no BTC->USD rate on file anywhere in this suite',
+        amount: 0.1,
+        category: categoryName,
+        currency: 'BTC',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-dc-shift-btc-${stamp}`,
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'spending_shifts', ...REFERENCE, displayCurrency: 'USD' },
+      })) as FindCorrelationsResult;
+      expect(result.converted?.excluded).toContainEqual({ currency: 'BTC', reason: 'no_rate' });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('budget_fit: provided displayCurrency converts committed (effective + pending) spend matched to a ' +
+    'budget — the same measure get_budget_status uses, per-line budgeted/unbudgeted unaffected', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Dc-Budget-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, {
+        name: 'set_exchange_rate',
+        args: { from: 'BRL', to: 'USD', rate: 0.2, asOf: new Date().toISOString() },
+      });
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      const budgetId = await createBudget(client, { category: categoryName, currency: 'BRL', limit: 1000 });
+
+      await addExpense(client, {
+        description: 'effective spend',
+        amount: 300,
+        category: categoryName,
+        currency: 'BRL',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-dc-budget-eff-${stamp}`,
+      });
+      await addExpense(client, {
+        description: 'pending spend — still committed',
+        amount: 100,
+        category: categoryName,
+        currency: 'BRL',
+        status: 'pending',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-dc-budget-pnd-${stamp}`,
+      });
+
+      const withoutConversion = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'budget_fit', ...REFERENCE },
+      })) as FindCorrelationsResult;
+      const withConversion = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'budget_fit', ...REFERENCE, displayCurrency: 'USD' },
+      })) as FindCorrelationsResult;
+
+      expect(withConversion.budgeted).toEqual(withoutConversion.budgeted);
+      expect(withConversion.unbudgeted).toEqual(withoutConversion.unbudgeted);
+      ensure(withConversion.converted, 'converted block missing when displayCurrency was supplied');
+      // budget_fit's own `current` is effective-only (300), so this asserts committed (300 + 100 = 400)
+      // was used, not `current` — (300 + 100) * 0.2 = 80.
+      expect(withConversion.converted.total).toBeGreaterThanOrEqual(80);
+      ensure(budgetId, 'budget id missing');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('budget_fit: a currency with no rate to displayCurrency is excluded from the total and listed', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Dc-Budget-Btc-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await createBudget(client, { category: categoryName, currency: 'BTC', limit: 1 });
+      await addExpense(client, {
+        description: 'btc budget spend, no BTC->USD rate on file anywhere in this suite',
+        amount: 0.1,
+        category: categoryName,
+        currency: 'BTC',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-dc-budget-btc-${stamp}`,
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'budget_fit', ...REFERENCE, displayCurrency: 'USD' },
+      })) as FindCorrelationsResult;
+      expect(result.converted?.excluded).toContainEqual({ currency: 'BTC', reason: 'no_rate' });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('merchant_concentration: provided displayCurrency converts the per-currency total the concentration ' +
+    'is computed over, per-line categories unaffected', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Dc-Merchant-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, {
+        name: 'set_exchange_rate',
+        args: { from: 'BRL', to: 'USD', rate: 0.2, asOf: new Date().toISOString() },
+      });
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await addExpense(client, {
+        description: 'Uber',
+        amount: 300,
+        category: categoryName,
+        currency: 'BRL',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-dc-merchant-${stamp}`,
+      });
+
+      const withoutConversion = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'merchant_concentration', ...REFERENCE },
+      })) as FindCorrelationsResult;
+      const withConversion = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'merchant_concentration', ...REFERENCE, displayCurrency: 'USD' },
+      })) as FindCorrelationsResult;
+
+      expect(withConversion.categories).toEqual(withoutConversion.categories);
+      ensure(withConversion.converted, 'converted block missing when displayCurrency was supplied');
+      expect(withConversion.converted).toMatchObject({ displayCurrency: 'USD', stale: false, excluded: [] });
+      // 300 * 0.2 = 60, plus whatever other BRL spend exists for this shared-DB reference period.
+      expect(withConversion.converted.total).toBeGreaterThanOrEqual(60);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('merchant_concentration: a currency with no rate to displayCurrency is excluded and listed', async () => {
+    const stamp = Date.now();
+    const categoryName = `Corr-Dc-Merchant-Btc-${stamp}`;
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await callTool(client, { name: 'create_category', args: { name: categoryName } });
+      await addExpense(client, {
+        description: 'btc spend, no BTC->USD rate on file anywhere in this suite',
+        amount: 0.1,
+        category: categoryName,
+        currency: 'BTC',
+        date: CURRENT_DATE,
+        idempotencyKey: `corr-dc-merchant-btc-${stamp}`,
+      });
+
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'merchant_concentration', ...REFERENCE, displayCurrency: 'USD' },
+      })) as FindCorrelationsResult;
+      expect(result.converted?.excluded).toContainEqual({ currency: 'BTC', reason: 'no_rate' });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('recurring_candidates: displayCurrency is a no-op — no converted block even when supplied', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const result = (await callTool(client, {
+        name: 'find_correlations',
+        args: { analysis: 'recurring_candidates', displayCurrency: 'USD' },
+      })) as FindCorrelationsResult;
+      expect(result).not.toHaveProperty('converted');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('rejects an unknown displayCurrency at the protocol level (not a valid CurrencyCode enum member)', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      await expect(
+        callTool(client, {
+          name: 'find_correlations',
+          args: { analysis: 'spending_shifts', ...REFERENCE, displayCurrency: 'EUR' },
+        }),
+      ).rejects.toThrow();
     } finally {
       await transport.close();
     }

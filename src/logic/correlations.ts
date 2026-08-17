@@ -2,6 +2,7 @@ import * as R from 'remeda';
 import { unknownLabels } from './aggregate.js';
 import { localizeCategoryName } from './category.js';
 import { isSubCategoryRow, matchesTarget, resolveTargetNames } from './budget.js';
+import type { CurrencyAmount } from './currencyRate.js';
 import { roundMoney, roundToDecimals, type DecimalsFor } from './money.js';
 import { daysBetween } from './period.js';
 import { nextDue } from './recurring.js';
@@ -71,6 +72,20 @@ export const shapeSpendingShifts = (
     R.map((row) => toSpendingShift(row, baselineMonths, locale, decimalsFor)),
     R.filter((shift) => passesThreshold(shift.deltaPct, minDeltaPct)),
     R.sortBy([(shift) => shiftMagnitude(shift.deltaPct), 'desc']),
+  );
+
+/** The reference month's effective, expense-only spend per currency — every row's `current`,
+ *  unfiltered by `minDeltaPct` (a display filter must not shrink the total), grouped and summed
+ *  by currency. */
+export const currentSpendByCurrency = (rows: readonly SpendingShiftInput[]): CurrencyAmount[] =>
+  R.pipe(
+    rows,
+    R.groupBy((row) => row.currency),
+    R.entries(),
+    R.map(([currency, group]): CurrencyAmount => ({
+      currency: currency as CurrencyCode,
+      amount: R.sumBy(group, (row) => row.current),
+    })),
   );
 
 const suggestedLimitFor = (baseline: number, decimals: number): number =>
@@ -239,6 +254,25 @@ export const shapeMerchantConcentration = (
     R.values(),
     R.map((groupRows) => toCategoryConcentration(groupRows, topN, locale, decimalsFor)),
     R.sortBy([(entry) => entry.category, 'asc'], [(entry) => entry.currency, 'asc']),
+  );
+
+/** The per-currency total spend the concentration is computed over — each category-currency
+ *  group's own `categoryTotal` (already rounded to the currency's decimals by
+ *  `shapeMerchantConcentration`), summed once per currency across every category. Sums the
+ *  *shaped* totals rather than re-deriving from the raw rows: `Money` carries no decimal-precision
+ *  constraint, so raw `spent` values can hold more precision than the currency displays, and
+ *  summing them directly could drift from the sum of the `categoryTotal` lines actually returned. */
+export const merchantSpendByCurrency = (
+  groups: readonly Pick<CategoryConcentration, 'currency' | 'categoryTotal'>[],
+): CurrencyAmount[] =>
+  R.pipe(
+    groups,
+    R.groupBy((group) => group.currency),
+    R.entries(),
+    R.map(([currency, group]): CurrencyAmount => ({
+      currency: currency as CurrencyCode,
+      amount: R.sumBy(group, (g) => g.categoryTotal),
+    })),
   );
 
 /** Composite grouping key for a (merchant, currency) pair — same JSON-encoding rationale as
