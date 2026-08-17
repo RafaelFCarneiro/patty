@@ -490,20 +490,35 @@ parent category name is still the raw, unlocalized one (tracked in #169).
   subCategory?, currency, limit, period }`.
 - `get_budget_status`: `month` (1–12), `year` — spend-vs-limit for every budget in that month, on two measures
   (Feature Design 020, revises Feature Design 015 phase 2's effective-only measurement): `effective` (cleared
-  spend, `status = 'effective'`) and `committed` (effective + pending, `status IN ('effective', 'pending')` —
-  the earmark-aware view of what's already spoken for against the cap). Both are `expense`-typed (never
+  spend, `status = 'effective'`) and `committed` (effective + pending, `status IN ('effective', 'pending')`) —
+  the earmark-aware view of what's already spoken for against the cap. Both are `expense`-typed (never
   `income` or `transfer` — a `both`-kind category is budgetable, so income booked to one is excluded rather than
   inflating the cap), same-currency. Returns `{ period: { month, year }, categories: [{ category, lines: [{ id,
   subCategory?, currency, limit, period, effective: { amount, pct }, committed: { amount, pct },
   pending: { amount, pct }, remaining }] }] }` — grouped by top-level category name, so a category's own budget
   and each of its sub-categories' own budgets read as one coherent unit; per-currency lines are never combined
-  (no cross-currency total — that needs FX, the deferred PLAN open question). `pending` (committed.amount −
-  effective.amount) is derived for convenience; `remaining` (limit − committed.amount) is the single top-level
-  headroom figure, reported against `committed`; each measure's `pct` is `amount / limit`. Any of these can go
-  negative / exceed 1 when over budget — over-budget is reported, never an error. A month with no matching
-  transactions reports `amount: 0` for every measure of every budget.
+  (no cross-currency total on the lines themselves — that needs FX, the deferred PLAN open question). `pending`
+  (committed.amount − effective.amount) is derived for convenience; `remaining` (limit − committed.amount) is
+  the single top-level headroom figure, reported against `committed`; each measure's `pct` is `amount / limit`.
+  Any of these can go negative / exceed 1 when over budget — over-budget is reported, never an error. A month
+  with no matching transactions reports `amount: 0` for every measure of every budget.
 
-REST mirror: `GET /api/budgets` (`list_budgets`), `GET /api/budgets/status?month&year` (`get_budget_status`). `create_budget`/`update_budget`/`delete_budget` have no REST mirror yet (MCP-only).
+**Optional `displayCurrency` (Feature Design 021 phase 2, ADR-028 controller-orchestrated):** a `CurrencyCode`
+that adds a top-level `converted` block — `{ displayCurrency, total, stale, asOf, excluded }` — a read-time
+grand total of **committed** (effective + pending) spend across every budgeted category's currency, converted
+against `currency_rates` via the same `logic/currencyRate.ts`'s `consolidateInCurrency` `get_spending_summary`
+uses. `total` sums each currency's budgeted committed spend once — computed directly from the underlying
+per-currency spend matched by at least one budget, not by summing per-line `committed.amount`, so a spend row
+counted toward both a sub-category budget and its rolled-up parent budget (the envelope behavior) contributes
+to the total only once, never twice. A currency with no rate to `displayCurrency` is listed in `excluded`
+(`{ currency, reason: "no_rate" }`) and left out of `total`, never fabricated; `stale` is true if any
+contributing rate is stale (fiat 24h / crypto 1h); `asOf` is the oldest contributing rate's timestamp, or
+`null` when nothing converted. Omitting `displayCurrency` leaves the response byte-identical to before this
+option existed — `categories[]` is unaffected either way. Invalid `displayCurrency` is rejected at the schema
+boundary (422 over REST).
+
+REST mirror: `GET /api/budgets` (`list_budgets`), `GET /api/budgets/status?month&year&displayCurrency=USD`
+(`get_budget_status`). `create_budget`/`update_budget`/`delete_budget` have no REST mirror yet (MCP-only).
 
 ## save_dashboard / list_dashboards / delete_dashboard / rename_dashboard
 

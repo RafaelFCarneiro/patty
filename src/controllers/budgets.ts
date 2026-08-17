@@ -4,6 +4,7 @@ import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
 import { localizeCategoryName } from '../logic/category.js';
 import {
+  budgetedCommittedByCurrency,
   groupStatusByCategory,
   hasCategory,
   hasExactlyOneTarget,
@@ -12,6 +13,8 @@ import {
   rowsToViews,
   toView,
 } from '../logic/budget.js';
+import { consolidateInCurrency } from '../logic/currencyRate.js';
+import { decimalsLookup } from '../logic/money.js';
 import { periodRange } from '../logic/period.js';
 import * as persistence from '../logic/persistence.js';
 import type { Period } from '../models/date.js';
@@ -27,6 +30,7 @@ import {
 } from '../models/budget.js';
 import { notFound } from '../models/error.js';
 import type { Locale } from '../models/locale.js';
+import type { CurrencyCode } from '../models/money.js';
 import type { FlowOutcome } from '../models/persistable.js';
 import type { BudgetStatusOut } from '../wire/out/budgets.js';
 import type { Deps } from './deps.js';
@@ -144,11 +148,37 @@ export const listBudgets = async (deps: Deps): Promise<BudgetView[]> =>
 
 /** No write, so a plain async function rather than `ResultAsync`, mirroring `getSpendingSummary`
  *  (`controllers/summary.ts`). Correlates `budgets`/`transactions`' own reads in `logic/budget.ts`
- *  rather than a repo join (ADR-028). */
-export const getBudgetStatus = async (deps: Deps, period: Period): Promise<BudgetStatusOut> => {
+ *  rather than a repo join. Converting to `displayCurrency` correlates a second aggregate
+ *  (`currency_rates`), so it's orchestrated here too — omitting it keeps the response byte-identical
+ *  to before this option existed. */
+export const getBudgetStatus = async (
+  deps: Deps,
+  periodInput: Period,
+  displayCurrency?: CurrencyCode,
+): Promise<BudgetStatusOut> => {
+  // Both diplomat callers pass their whole parsed query/args object as `periodInput`, which also
+  // carries `displayCurrency` when supplied — rebuild `period` from its two declared fields so
+  // that extra field never leaks into the response, mirroring `getSpendingSummary`.
+  const period: Period = { month: periodInput.month, year: periodInput.year };
   const { from, to } = periodRange(period);
-  return R.pipe(
-    await Promise.all([deps.budgets.list(), deps.transactions.spendByCategory(from, to), deps.locale()] as const),
-    ([budgets, spend, locale]) => ({ period, categories: groupStatusByCategory(budgets, spend, locale) }),
+  const [budgets, spend, locale] = await Promise.all([
+    deps.budgets.list(),
+    deps.transactions.spendByCategory(from, to),
+    deps.locale(),
+  ] as const);
+  const categories = groupStatusByCategory(budgets, spend, locale);
+  if (!displayCurrency) return { period, categories };
+
+  const [rates, currencies] = await Promise.all([deps.currencyRates.list(), deps.currencies.list()]);
+  const decimalsFor = decimalsLookup(currencies);
+  const amounts = budgetedCommittedByCurrency(budgets, spend);
+  const converted = consolidateInCurrency(
+    amounts,
+    displayCurrency,
+    rates,
+    deps.clock(),
+    deps.rateStaleness,
+    decimalsFor(displayCurrency),
   );
+  return { period, categories, converted: { displayCurrency, ...converted } };
 };

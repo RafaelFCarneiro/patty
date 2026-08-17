@@ -16,8 +16,9 @@ import {
 } from '../../../src/models/budget.js';
 import type { Category, SubCategory } from '../../../src/models/category.js';
 import { CategoryKind } from '../../../src/models/category.js';
+import type { CurrencyRateEntity } from '../../../src/models/currencyRate.js';
 import { Locale } from '../../../src/models/locale.js';
-import { CurrencyCode } from '../../../src/models/money.js';
+import { CurrencyCode, type Currency } from '../../../src/models/money.js';
 import { PersistOp } from '../../../src/models/persistable.js';
 import type { CategorySpend } from '../../../src/models/transaction.js';
 
@@ -412,5 +413,169 @@ describe('getBudgetStatus', () => {
     });
     const result = await getBudgetStatus(deps, { month: 1, year: 2026 });
     expect(result).toEqual({ period: { month: 1, year: 2026 }, categories: [] });
+  });
+});
+
+describe('getBudgetStatus — displayCurrency', () => {
+  const { BRL, USD, BTC } = CurrencyCode.enum;
+  const NOW = new Date('2026-08-10T12:00:00.000Z');
+  const PERIOD = { month: 7, year: 2026 };
+
+  const CURRENCIES: Currency[] = [
+    { code: BRL, symbol: 'R$', name: 'Real', decimals: 2 },
+    { code: USD, symbol: '$', name: 'Dollar', decimals: 2 },
+    { code: BTC, symbol: '₿', name: 'Bitcoin', decimals: 8 },
+  ];
+
+  const rate = (overrides: Partial<CurrencyRateEntity> = {}): CurrencyRateEntity => ({
+    id: 'rate-1',
+    fromCode: BRL,
+    toCode: USD,
+    rate: 0.2,
+    asOf: NOW.toISOString(),
+    source: null,
+    version: 0,
+    ...overrides,
+  });
+
+  const withRatesDeps = (overrides: Partial<Deps> = {}): Deps =>
+    makeDeps({
+      currencies: { list: async () => CURRENCIES } as unknown as Deps['currencies'],
+      currencyRates: { list: async () => [] } as unknown as Deps['currencyRates'],
+      clock: () => NOW,
+      ...overrides,
+    });
+
+  it('omitting displayCurrency returns a response with no converted block (regression pin)', async () => {
+    const row = budgetViewRow({ currency: USD });
+    const spend: CategorySpend = {
+      currency: USD,
+      categoryId: 'cat-food',
+      subCategoryId: null,
+      effective: 50,
+      pending: 0,
+    };
+    const deps = withRatesDeps({
+      budgets: { list: async () => [row] } as unknown as Deps['budgets'],
+      transactions: { spendByCategory: async () => [spend] } as unknown as Deps['transactions'],
+    });
+
+    const result = await getBudgetStatus(deps, PERIOD);
+
+    expect(result).not.toHaveProperty('converted');
+  });
+
+  it('displayCurrency provided: converts and sums committed spend across budgeted categories', async () => {
+    const usdRow = budgetViewRow({ id: 'budget-usd', currency: USD, targetId: 'cat-food' });
+    const brlRow = budgetViewRow({
+      id: 'budget-brl',
+      currency: BRL,
+      targetId: 'cat-transport',
+      nodeName: 'Transport',
+    });
+    const spend: CategorySpend[] = [
+      { currency: USD, categoryId: 'cat-food', subCategoryId: null, effective: 80, pending: 20 },
+      { currency: BRL, categoryId: 'cat-transport', subCategoryId: null, effective: 500, pending: 0 },
+    ];
+    const deps = withRatesDeps({
+      budgets: { list: async () => [usdRow, brlRow] } as unknown as Deps['budgets'],
+      transactions: { spendByCategory: async () => spend } as unknown as Deps['transactions'],
+      currencyRates: {
+        list: async () => [rate({ fromCode: BRL, toCode: USD, rate: 0.2 })],
+      } as unknown as Deps['currencyRates'],
+    });
+
+    const result = await getBudgetStatus(deps, PERIOD, USD);
+
+    // USD committed 80+20=100 identity + BRL committed 500 * 0.2 = 100 -> 200
+    expect(result.converted).toEqual({
+      displayCurrency: USD,
+      total: 200,
+      stale: false,
+      asOf: NOW.toISOString(),
+      excluded: [],
+    });
+  });
+
+  it('does not double-count a spend row matched by both a sub-category and its rolled-up parent budget', async () => {
+    const parentRow = budgetViewRow({ id: 'budget-food', currency: USD, targetId: 'cat-food' });
+    const subRow = budgetViewRow({
+      id: 'budget-restaurants',
+      currency: USD,
+      targetId: 'sub-restaurants',
+      nodeName: 'Restaurants',
+      nodeParentId: 'cat-food',
+      parentName: 'Food',
+    });
+    const spend: CategorySpend[] = [
+      { currency: USD, categoryId: 'cat-food', subCategoryId: 'sub-restaurants', effective: 100, pending: 0 },
+    ];
+    const deps = withRatesDeps({
+      budgets: { list: async () => [parentRow, subRow] } as unknown as Deps['budgets'],
+      transactions: { spendByCategory: async () => spend } as unknown as Deps['transactions'],
+    });
+
+    const result = await getBudgetStatus(deps, PERIOD, USD);
+
+    expect(result.converted).toMatchObject({ total: 100 });
+  });
+
+  it('displayCurrency provided leaves per-category lines unchanged', async () => {
+    const row = budgetViewRow({ currency: USD });
+    const spend: CategorySpend = {
+      currency: USD,
+      categoryId: 'cat-food',
+      subCategoryId: null,
+      effective: 50,
+      pending: 0,
+    };
+    const deps = withRatesDeps({
+      budgets: { list: async () => [row] } as unknown as Deps['budgets'],
+      transactions: { spendByCategory: async () => [spend] } as unknown as Deps['transactions'],
+    });
+
+    const omitted = await getBudgetStatus(deps, PERIOD);
+    const provided = await getBudgetStatus(deps, PERIOD, USD);
+
+    expect(provided.categories).toEqual(omitted.categories);
+  });
+
+  it('a currency with no rate to displayCurrency is excluded from the total and listed', async () => {
+    const row = budgetViewRow({ currency: BTC });
+    const spend: CategorySpend = {
+      currency: BTC,
+      categoryId: 'cat-food',
+      subCategoryId: null,
+      effective: 1,
+      pending: 0,
+    };
+    const deps = withRatesDeps({
+      budgets: { list: async () => [row] } as unknown as Deps['budgets'],
+      transactions: { spendByCategory: async () => [spend] } as unknown as Deps['transactions'],
+    });
+
+    const result = await getBudgetStatus(deps, PERIOD, USD);
+
+    expect(result.converted).toEqual({
+      displayCurrency: USD,
+      total: 0,
+      stale: false,
+      asOf: null,
+      excluded: [{ currency: BTC, reason: 'no_rate' }],
+    });
+  });
+
+  it('rebuilds period from its declared fields — both diplomat callers pass their whole args object, ' +
+    'which also carries displayCurrency', async () => {
+    const deps = withRatesDeps({
+      budgets: { list: async () => [] } as unknown as Deps['budgets'],
+      transactions: { spendByCategory: async () => [] } as unknown as Deps['transactions'],
+    });
+    const periodWithExtraField = { ...PERIOD, displayCurrency: USD } as unknown as typeof PERIOD;
+
+    const result = await getBudgetStatus(deps, periodWithExtraField, USD);
+
+    expect(result.period).toEqual(PERIOD);
+    expect(result.period).not.toHaveProperty('displayCurrency');
   });
 });

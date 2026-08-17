@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  budgetedCommittedByCurrency,
   groupStatusByCategory,
   hasExactlyOneTarget,
   isExpenseEligible,
@@ -442,5 +443,93 @@ describe('groupStatusByCategory', () => {
       );
       expect(group?.lines.map((l) => l.currency)).toEqual([CurrencyCode.enum.BRL, CurrencyCode.enum.USD]);
     });
+  });
+});
+
+describe('budgetedCommittedByCurrency', () => {
+  const budgetRow = (overrides: Partial<BudgetViewInput> = {}): BudgetViewInput => ({
+    id: 'budget-1',
+    currency: CurrencyCode.enum.BRL,
+    limit: 500,
+    period: BudgetPeriod.enum.monthly,
+    targetId: 'cat-food',
+    nodeName: 'Food',
+    nodeNames: null,
+    nodeParentId: null,
+    parentName: null,
+    parentNames: null,
+    ...overrides,
+  });
+
+  const spendRow = (overrides: Partial<CategorySpend> = {}): CategorySpend => ({
+    currency: CurrencyCode.enum.BRL,
+    categoryId: 'cat-food',
+    subCategoryId: null,
+    effective: 0,
+    pending: 0,
+    ...overrides,
+  });
+
+  it('sums effective + pending for a matched row', () => {
+    const result = budgetedCommittedByCurrency([budgetRow()], [spendRow({ effective: 150, pending: 50 })]);
+    expect(result).toEqual([{ currency: CurrencyCode.enum.BRL, amount: 200 }]);
+  });
+
+  it('excludes spend under a category with no budget at all', () => {
+    const result = budgetedCommittedByCurrency(
+      [budgetRow({ targetId: 'cat-food' })],
+      [spendRow({ categoryId: 'cat-transport', effective: 999 })],
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('excludes spend in a currency the budget does not cover', () => {
+    const result = budgetedCommittedByCurrency(
+      [budgetRow({ currency: CurrencyCode.enum.BRL })],
+      [spendRow({ currency: CurrencyCode.enum.USD, effective: 999 })],
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('groups distinct currencies separately, never combined', () => {
+    const result = budgetedCommittedByCurrency(
+      [
+        budgetRow({ id: 'budget-brl', currency: CurrencyCode.enum.BRL }),
+        budgetRow({ id: 'budget-usd', currency: CurrencyCode.enum.USD, targetId: 'cat-transport' }),
+      ],
+      [
+        spendRow({ currency: CurrencyCode.enum.BRL, categoryId: 'cat-food', effective: 100 }),
+        spendRow({ currency: CurrencyCode.enum.USD, categoryId: 'cat-transport', effective: 40 }),
+      ],
+    );
+    expect(result).toEqual(
+      expect.arrayContaining([
+        { currency: CurrencyCode.enum.BRL, amount: 100 },
+        { currency: CurrencyCode.enum.USD, amount: 40 },
+      ]),
+    );
+  });
+
+  it('counts a spend row matched by both a sub-category budget and its rolled-up parent budget once, not twice', () => {
+    const result = budgetedCommittedByCurrency(
+      [
+        budgetRow({ id: 'budget-food', targetId: 'cat-food' }),
+        budgetRow({
+          id: 'budget-restaurants',
+          targetId: 'sub-restaurants',
+          nodeName: 'Restaurants',
+          nodeParentId: 'cat-food',
+          parentName: 'Food',
+        }),
+      ],
+      [spendRow({ categoryId: 'cat-food', subCategoryId: 'sub-restaurants', effective: 100 })],
+    );
+    // Both budget lines' own `committed.amount` would separately report 100 (the rollup rule), but
+    // the underlying spend row is a single 100 — the grand total must not double it to 200.
+    expect(result).toEqual([{ currency: CurrencyCode.enum.BRL, amount: 100 }]);
+  });
+
+  it('returns an empty array when there is no spend', () => {
+    expect(budgetedCommittedByCurrency([budgetRow()], [])).toEqual([]);
   });
 });
