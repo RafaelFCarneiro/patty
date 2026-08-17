@@ -74,9 +74,9 @@ export const shapeSpendingShifts = (
     R.sortBy([(shift) => shiftMagnitude(shift.deltaPct), 'desc']),
   );
 
-/** The reference month's effective, expense-only spend per currency — every row's `current`
- *  (unfiltered by `minDeltaPct`, since a displayed-total shouldn't shrink with a display filter),
- *  grouped and summed by currency. Feeds `displayCurrency`'s converted grand total. */
+/** The reference month's effective, expense-only spend per currency — every row's `current`,
+ *  unfiltered by `minDeltaPct` (a display filter must not shrink the total), grouped and summed
+ *  by currency. */
 export const currentSpendByCurrency = (rows: readonly SpendingShiftInput[]): CurrencyAmount[] =>
   R.pipe(
     rows,

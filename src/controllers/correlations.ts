@@ -40,7 +40,7 @@ const resolveWindows = (
 };
 
 /** Converts a mode's own per-currency amounts to `displayCurrency` — correlates a second aggregate
- *  (`currency_rates`), so it's orchestrated here rather than in a repo (ADR-028), mirroring
+ *  (`currency_rates`), so it's orchestrated here rather than in a repo, mirroring
  *  `getSpendingSummary`/`getBudgetStatus`. */
 const convertedTotal = async (
   deps: Deps,
@@ -122,9 +122,8 @@ const budgetFit: AnalysisHandler = (deps, input, locale, decimalsFor) =>
         unbudgeted,
       });
     }
-    // Same measure get_budget_status's `converted` uses (committed = effective + pending, matched to a
-    // budget once even when a spend row rolls up into both a sub-category budget and its parent) — not
-    // `windowedSpend` (current-vs-baseline only), so the two surfaces agree on the grand total.
+    // A fresh committed-spend read (get_budget_status's own measure), not windowedSpend above
+    // (current-vs-baseline only) — so the two surfaces' converted totals agree.
     const committedSpend = await deps.transactions.spendByCategory(currentFrom, currentTo);
     const converted = await convertedTotal(
       deps,

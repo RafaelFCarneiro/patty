@@ -211,7 +211,6 @@ describe('currentSpendByCurrency', () => {
   });
 
   it('is not affected by minDeltaPct filtering — it sums every row, not just shaped shifts', () => {
-    // A row that shapeSpendingShifts would drop below its threshold still contributes here.
     const result = currentSpendByCurrency([row({ current: 105, baselineTotal: 100 })]);
     expect(result).toEqual([{ currency: 'BRL', amount: 105 }]);
   });
