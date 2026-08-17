@@ -10,7 +10,11 @@ import {
   shapeUnbudgetedSpend,
 } from '../../../src/logic/correlations.js';
 import { BudgetPeriod, type BudgetViewInput } from '../../../src/models/budget.js';
-import type { BudgetFitLine, RecurringCandidateInput } from '../../../src/models/correlations.js';
+import type {
+  BudgetFitLine,
+  CategoryConcentration,
+  RecurringCandidateInput,
+} from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
 import { decimalsLookup, type DecimalsFor } from '../../../src/logic/money.js';
 import { CurrencyCode } from '../../../src/models/money.js';
@@ -624,15 +628,24 @@ describe('shapeMerchantConcentration', () => {
 });
 
 describe('merchantSpendByCurrency', () => {
-  it('sums spent per currency across every merchant/category row', () => {
+  const group = (overrides: Partial<CategoryConcentration> = {}): CategoryConcentration => ({
+    category: 'Food',
+    currency: CurrencyCode.enum.BRL,
+    categoryTotal: 100,
+    merchants: [],
+    othersSpent: 0,
+    ...overrides,
+  });
+
+  it('sums categoryTotal per currency across every category group', () => {
     const result = merchantSpendByCurrency([
-      merchantRow({ category: 'Food', merchantKey: 'a', spent: 100 }),
-      merchantRow({ category: 'Transport', merchantKey: 'b', spent: 50 }),
+      group({ category: 'Food', categoryTotal: 100 }),
+      group({ category: 'Transport', categoryTotal: 50 }),
     ]);
     expect(result).toEqual([{ currency: 'BRL', amount: 150 }]);
   });
 
-  it('equals the sum of every category group\'s categoryTotal, not a double count of merchant lines', () => {
+  it('equals the sum of every category group\'s categoryTotal from the actual shaped response', () => {
     const rows = [
       merchantRow({ category: 'Food', merchantKey: 'a', spent: 60 }),
       merchantRow({ category: 'Food', merchantKey: 'b', spent: 40 }),
@@ -640,13 +653,26 @@ describe('merchantSpendByCurrency', () => {
     ];
     const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en, fiatDecimals);
     const totalFromGroups = groups.reduce((sum, g) => sum + g.categoryTotal, 0);
-    expect(merchantSpendByCurrency(rows)).toEqual([{ currency: 'BRL', amount: totalFromGroups }]);
+    expect(merchantSpendByCurrency(groups)).toEqual([{ currency: 'BRL', amount: totalFromGroups }]);
+  });
+
+  it('sums the already-rounded categoryTotal, not raw sub-cent spend — reconciles with the displayed lines', () => {
+    // Money carries no decimal-precision constraint, so a category can carry a raw spend below the
+    // currency's own smallest unit; shapeMerchantConcentration rounds each categoryTotal to 0.00 —
+    // the converted grand total must sum those displayed zeros, not the raw 0.004 + 0.004 = 0.008.
+    const rows = [
+      merchantRow({ category: 'Food', merchantKey: 'a', spent: 0.004 }),
+      merchantRow({ category: 'Transport', merchantKey: 'b', spent: 0.004 }),
+    ];
+    const groups = shapeMerchantConcentration(rows, 5, Locale.enum.en, fiatDecimals);
+    expect(groups.map((g) => g.categoryTotal)).toEqual([0, 0]);
+    expect(merchantSpendByCurrency(groups)).toEqual([{ currency: 'BRL', amount: 0 }]);
   });
 
   it('keeps distinct currencies separate', () => {
     const result = merchantSpendByCurrency([
-      merchantRow({ currency: CurrencyCode.enum.BRL, spent: 100 }),
-      merchantRow({ currency: CurrencyCode.enum.USD, spent: 40 }),
+      group({ currency: CurrencyCode.enum.BRL, categoryTotal: 100 }),
+      group({ currency: CurrencyCode.enum.USD, categoryTotal: 40 }),
     ]);
     expect(result).toEqual(
       expect.arrayContaining([
@@ -656,7 +682,7 @@ describe('merchantSpendByCurrency', () => {
     );
   });
 
-  it('returns an empty array for no rows', () => {
+  it('returns an empty array for no groups', () => {
     expect(merchantSpendByCurrency([])).toEqual([]);
   });
 });

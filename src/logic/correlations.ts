@@ -256,18 +256,22 @@ export const shapeMerchantConcentration = (
     R.sortBy([(entry) => entry.category, 'asc'], [(entry) => entry.currency, 'asc']),
   );
 
-/** The per-currency total spend the concentration is computed over — every row's `spent` (the same
- *  rows each category's `categoryTotal` sums), grouped and summed by currency rather than by
- *  category, so a currency spanning several categories isn't double-counted. Feeds
- *  `displayCurrency`'s converted grand total. */
-export const merchantSpendByCurrency = (rows: readonly MerchantConcentrationInput[]): CurrencyAmount[] =>
+/** The per-currency total spend the concentration is computed over — each category-currency
+ *  group's own `categoryTotal` (already rounded to the currency's decimals by
+ *  `shapeMerchantConcentration`), summed once per currency across every category. Sums the
+ *  *shaped* totals rather than re-deriving from the raw rows: `Money` carries no decimal-precision
+ *  constraint, so raw `spent` values can hold more precision than the currency displays, and
+ *  summing them directly could drift from the sum of the `categoryTotal` lines actually returned. */
+export const merchantSpendByCurrency = (
+  groups: readonly Pick<CategoryConcentration, 'currency' | 'categoryTotal'>[],
+): CurrencyAmount[] =>
   R.pipe(
-    rows,
-    R.groupBy((row) => row.currency),
+    groups,
+    R.groupBy((group) => group.currency),
     R.entries(),
     R.map(([currency, group]): CurrencyAmount => ({
       currency: currency as CurrencyCode,
-      amount: R.sumBy(group, (row) => row.spent),
+      amount: R.sumBy(group, (g) => g.categoryTotal),
     })),
   );
 

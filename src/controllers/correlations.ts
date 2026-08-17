@@ -158,7 +158,12 @@ const merchantConcentration: AnalysisHandler = (deps, input, locale, decimalsFor
         categories,
       });
     }
-    const converted = await convertedTotal(deps, merchantSpendByCurrency(rows), input.displayCurrency, decimalsFor);
+    const converted = await convertedTotal(
+      deps,
+      merchantSpendByCurrency(categories),
+      input.displayCurrency,
+      decimalsFor,
+    );
     return ok({
       analysis: FindCorrelationsAnalysis.enum.merchant_concentration,
       month: period.month,
