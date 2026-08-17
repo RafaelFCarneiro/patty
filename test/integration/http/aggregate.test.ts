@@ -349,7 +349,7 @@ describe('GET /api/aggregate', () => {
 
       expect(withBody.currencies).toEqual(withoutBody.currencies);
       // Sums every USD/BRL block total across this suite's own runs (shared DB) — assert a floor,
-      // not an exact total: 100 + 500*0.2 = 100 from this test's own fixtures alone.
+      // not an exact total: 100 + 500*0.2 = 200 from this test's own fixtures alone.
       expect(withBody.converted?.displayCurrency).toBe('USD');
       expect(withBody.converted?.excluded).toEqual([]);
       expect(withBody.converted?.total).toBeGreaterThanOrEqual(200);
@@ -426,18 +426,51 @@ describe('GET /api/aggregate', () => {
     });
 
     it('metric=count: displayCurrency is a no-op — no converted block even when supplied', async () => {
+      await inject({
+        method: 'POST',
+        url: '/api/accounts',
+        payload: { name: 'AggDcCountAcct', type: 'checking', currency: 'USD', initialBalance: 0 },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts/expenses',
+        payload: {
+          description: 'Agg dc count',
+          amount: 20,
+          date: '2025-03-15',
+          account: 'AggDcCountAcct',
+          idempotencyKey: 'agg-dc-count',
+        },
+      });
       const res = await inject({
         method: 'GET',
-        url: '/api/aggregate?groupBy=category&metric=count&month=3&year=2025&account=AggDcOmitAcct&displayCurrency=USD',
+        url:
+          '/api/aggregate?groupBy=category&metric=count&month=3&year=2025&account=AggDcCountAcct&displayCurrency=USD',
       });
       expect(res.statusCode).toBe(200);
       expect(res.json()).not.toHaveProperty('converted');
     });
 
     it('metric=avg: displayCurrency is a no-op — no converted block even when supplied', async () => {
+      await inject({
+        method: 'POST',
+        url: '/api/accounts',
+        payload: { name: 'AggDcAvgAcct', type: 'checking', currency: 'USD', initialBalance: 0 },
+      });
+      await inject({
+        method: 'POST',
+        url: '/api/accounts/expenses',
+        payload: {
+          description: 'Agg dc avg',
+          amount: 20,
+          date: '2025-03-15',
+          account: 'AggDcAvgAcct',
+          idempotencyKey: 'agg-dc-avg',
+        },
+      });
       const res = await inject({
         method: 'GET',
-        url: '/api/aggregate?groupBy=category&metric=avg&month=3&year=2025&account=AggDcOmitAcct&displayCurrency=USD',
+        url: '/api/aggregate?groupBy=category&metric=avg&month=3&year=2025&account=AggDcAvgAcct&displayCurrency=USD',
       });
       expect(res.statusCode).toBe(200);
       expect(res.json()).not.toHaveProperty('converted');

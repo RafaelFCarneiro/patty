@@ -300,7 +300,7 @@ describe('MCP integration > aggregate_spending displayCurrency', () => {
       ensure(withConversion.converted, 'converted block missing when displayCurrency was supplied');
       expect(withConversion.converted).toMatchObject({ displayCurrency: 'USD', stale: false, excluded: [] });
       // Sums every USD/BRL block total across this suite's own runs (shared DB) — assert a floor,
-      // not an exact total: 100 + 500*0.2 = 100 from this test's own fixtures alone.
+      // not an exact total: 100 + 500*0.2 = 200 from this test's own fixtures alone.
       expect(withConversion.converted.total).toBeGreaterThanOrEqual(200);
     } finally {
       await transport.close();
