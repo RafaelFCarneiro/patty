@@ -375,6 +375,32 @@ Sorted by `occurrences` descending, then merchant name. Pass `merchant`/`typical
 
 No REST mirror yet (MCP-only).
 
+### displayCurrency (opt-in, Feature Design 021 phase 3, ADR-028 controller-orchestrated)
+
+A `CurrencyCode` accepted alongside any `analysis`, adding a top-level `converted` block —
+`{ displayCurrency, total, stale, asOf, excluded }` — a read-time grand total converted against `currency_rates`
+via the same `logic/currencyRate.ts`'s `consolidateInCurrency` `get_spending_summary`/`get_budget_status` use. A
+currency with no rate to `displayCurrency` is listed in `excluded` (`{ currency, reason: "no_rate" }`) and left
+out of `total`, never fabricated; `stale` is true if any contributing rate is stale (fiat 24h / crypto 1h);
+`asOf` is the oldest contributing rate's timestamp, or `null` when nothing converted. Omitting `displayCurrency`
+leaves every mode's response byte-identical to before this option existed. Invalid `displayCurrency` is rejected
+at the schema boundary (no REST mirror, so no HTTP status — the MCP tool call itself fails validation).
+
+Applies per mode, only where that mode reports per-currency money:
+- `spending_shifts`: converts the reference month's effective, expense-only spend total per currency — summed
+  across **every** `(category, currency)` row, regardless of `minDeltaPct` filtering (a display filter must not
+  shrink the total).
+- `budget_fit`: converts **committed** (effective + pending) spend matched to a budget, per currency — the same
+  measure `get_budget_status`'s `converted` uses (computed once per currency from a fresh spend read for the
+  reference period, not by summing `budgeted[].current`, and not the mode's own `spendByCategoryWindowed`
+  current/baseline pair), so the two surfaces agree.
+- `merchant_concentration`: converts each currency's `categoryTotal` — the per-currency total the concentration
+  is computed over, summed once per currency, not each merchant line (avoids double-counting).
+- `recurring_candidates`: **unaffected** — its candidates are proposed rules, not per-currency spend totals, so
+  `displayCurrency` is a no-op (no `converted` block, even when supplied).
+
+Per-currency/per-line results are unaffected either way, in every mode.
+
 ## get_spending_summary
 
 Input: `month`, `year`. Returns per-currency blocks: `income`, `expenses`, `balance`, `byCategory` (sorted by total desc). Currencies are never mixed or converted.

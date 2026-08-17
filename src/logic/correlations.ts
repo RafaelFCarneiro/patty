@@ -2,6 +2,7 @@ import * as R from 'remeda';
 import { unknownLabels } from './aggregate.js';
 import { localizeCategoryName } from './category.js';
 import { isSubCategoryRow, matchesTarget, resolveTargetNames } from './budget.js';
+import type { CurrencyAmount } from './currencyRate.js';
 import { roundMoney, roundToDecimals, type DecimalsFor } from './money.js';
 import { daysBetween } from './period.js';
 import { nextDue } from './recurring.js';
@@ -71,6 +72,20 @@ export const shapeSpendingShifts = (
     R.map((row) => toSpendingShift(row, baselineMonths, locale, decimalsFor)),
     R.filter((shift) => passesThreshold(shift.deltaPct, minDeltaPct)),
     R.sortBy([(shift) => shiftMagnitude(shift.deltaPct), 'desc']),
+  );
+
+/** The reference month's effective, expense-only spend per currency — every row's `current`
+ *  (unfiltered by `minDeltaPct`, since a displayed-total shouldn't shrink with a display filter),
+ *  grouped and summed by currency. Feeds `displayCurrency`'s converted grand total. */
+export const currentSpendByCurrency = (rows: readonly SpendingShiftInput[]): CurrencyAmount[] =>
+  R.pipe(
+    rows,
+    R.groupBy((row) => row.currency),
+    R.entries(),
+    R.map(([currency, group]): CurrencyAmount => ({
+      currency: currency as CurrencyCode,
+      amount: R.sumBy(group, (row) => row.current),
+    })),
   );
 
 const suggestedLimitFor = (baseline: number, decimals: number): number =>
@@ -239,6 +254,21 @@ export const shapeMerchantConcentration = (
     R.values(),
     R.map((groupRows) => toCategoryConcentration(groupRows, topN, locale, decimalsFor)),
     R.sortBy([(entry) => entry.category, 'asc'], [(entry) => entry.currency, 'asc']),
+  );
+
+/** The per-currency total spend the concentration is computed over — every row's `spent` (the same
+ *  rows each category's `categoryTotal` sums), grouped and summed by currency rather than by
+ *  category, so a currency spanning several categories isn't double-counted. Feeds
+ *  `displayCurrency`'s converted grand total. */
+export const merchantSpendByCurrency = (rows: readonly MerchantConcentrationInput[]): CurrencyAmount[] =>
+  R.pipe(
+    rows,
+    R.groupBy((row) => row.currency),
+    R.entries(),
+    R.map(([currency, group]): CurrencyAmount => ({
+      currency: currency as CurrencyCode,
+      amount: R.sumBy(group, (row) => row.spent),
+    })),
   );
 
 /** Composite grouping key for a (merchant, currency) pair — same JSON-encoding rationale as

@@ -55,7 +55,16 @@ export const registerCorrelationsTools = (server: McpServer, ctx: McpContext): v
         'straight through as `merchant`/`amount`/`currency`/`category`/`startDate`. Requires at least ' +
         '`minOccurrences` (default ' +
         `${DEFAULT_MIN_OCCURRENCES}) qualifying transactions at a consistent ~30-day gap and a stable amount ` +
-        '— irregular gaps or amount drift disqualify a merchant.',
+        '— irregular gaps or amount drift disqualify a merchant. ' +
+        'Optional `displayCurrency` adds a top-level `converted` block — `{ displayCurrency, total, stale, ' +
+        'asOf, excluded }` — a read-time grand total converted against currency_rates (as_of-stamped, ' +
+        'stale-flagged; a currency with no rate to `displayCurrency` is listed in `converted.excluded` and ' +
+        'left out of the total, never fabricated). Applies to `spending_shifts` (the reference month\'s ' +
+        'effective expense spend per currency), `budget_fit` (committed — effective + pending — spend matched ' +
+        'to a budget, the same measure get_budget_status converts, so the two surfaces agree), and ' +
+        '`merchant_concentration` (each currency\'s categoryTotal, summed once — not each merchant line). ' +
+        '`recurring_candidates` is unaffected — its candidates are proposed rules, not per-currency spend ' +
+        'totals. Per-currency/per-line results are unaffected either way.',
       inputSchema: {
         ...FindCorrelationsSchema.shape,
         baselineMonths: FindCorrelationsSchema.shape.baselineMonths.default(DEFAULT_BASELINE_MONTHS),
