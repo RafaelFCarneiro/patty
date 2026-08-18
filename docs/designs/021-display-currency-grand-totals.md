@@ -1,7 +1,7 @@
 # Feature Design 021: `displayCurrency` — opt-in converted grand totals on per-currency reads
 
 **Type:** Feature design (a capability + technical assessment) · **Design status:** Accepted ·
-**Implementation status:** Done (Phases 1-3 done) · **Date:** 2026-08-10 · This design implements the
+**Implementation status:** Done (Phases 1-4 done) · **Date:** 2026-08-10 · This design implements the
 follow-on ADR-026 scoped ("an opt-in `displayCurrency`/convert flag can later add a converted grand-total on
 top of budgets' and `find_correlations`' per-currency lines"). Governed by **ADR-028** (the conversion
 correlates two aggregates, so it is controller-orchestrated — no repo joins `currency_rates`). Reuses the
@@ -97,7 +97,13 @@ response gains a **converted grand total** in that currency, computed read-time 
    each merchant line, avoiding a double count). `recurring_candidates` is excluded — its candidates are
    proposed rules, not per-currency spend totals, so `displayCurrency` is a no-op there. `logic/correlations.ts`
    also gained `currentSpendByCurrency` for `spending_shifts`.
-4. **(Optional) `aggregate_spending`** — same param + helper, if wanted.
+4. **`aggregate_spending`** (`feat/display-currency-aggregate`, **done**): `displayCurrency?` added to the MCP
+   tool and `GET /api/aggregate`; controller-orchestrated conversion of each currency block's own `total` (one
+   value per block, not per row — rows already sum to the block total, and blocks are independent, so summing
+   per-row would double count). Attached only for `metric: 'sum'` — a block total is then a genuine money
+   quantity meaningful to convert and cross-sum; `count` (a transaction count) and `avg` (a sum of per-group
+   averages, not a coherent cross-currency money total) leave `displayCurrency` a no-op (omitted, not an error,
+   consistent with `find_correlations`' `recurring_candidates` degradation).
 
 Optionally, the overview/budget dashboards can surface the converted grand total (using `window.formatMoney` in
 the display currency) — a UI follow-on, not required by the tools.

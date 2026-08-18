@@ -194,6 +194,7 @@ read-time, and always stamped with its `as_of`.* Per-currency remains the defaul
    - [x] Phase 1 — `get_spending_summary` (the exemplar + the shared helper).
    - [x] Phase 2 — `get_budget_status`.
    - [x] Phase 3 — `find_correlations`.
+   - [x] Phase 4 — `aggregate_spending` (optional extension).
 
 Each phase touches the schema and/or a new write flow → feature-sized → independent verification subagent per
 diff.

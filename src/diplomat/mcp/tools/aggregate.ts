@@ -14,7 +14,12 @@ export const registerAggregateTools = (server: McpServer, ctx: McpContext): void
       description:
         'Flexible spending aggregation: group transactions by category, account, tag, month, or merchant, ' +
         'measured as sum, count, or avg. Results are per-currency blocks with totals and percentages. ' +
-        'Only effective, non-transfer transactions are counted. Provide a period via month+year or from/to date range.',
+        'Only effective, non-transfer transactions are counted. Provide a period via month+year or from/to date range. ' +
+        'Optional displayCurrency adds a top-level converted block: a read-time grand total of the per-currency ' +
+        'block totals, converted against currency_rates (as_of-stamped, stale-flagged; a currency with no rate to ' +
+        'displayCurrency is listed in converted.excluded and left out of the total, never fabricated). Only attached ' +
+        'when metric is sum — count/avg are not coherent cross-currency money totals. Per-currency lines are ' +
+        'unaffected either way.',
       inputSchema: {
         ...AggregateSpendingSchema.shape,
         metric: AggregateSpendingSchema.shape.metric.default(AggregateMetric.enum.sum),

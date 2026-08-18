@@ -199,6 +199,11 @@ Flexible spending aggregation: group transactions by a chosen dimension, measure
 - Filters (all optional): `account` (name), `category` (name), `type` (`expense | income`), `tags` (names)
 - `limit` (default 50, max 100): top-N rows per currency
 - `sort` (default `desc`): `asc | desc` by metric value
+- `displayCurrency` (optional, Feature Design 021 Phase 4): also return a converted grand total of the
+  per-currency block totals in this currency. Only attached when `metric` is `sum` — a block total is then a
+  genuine money quantity to convert and cross-sum; `count` (a transaction count) and `avg` (a sum of per-group
+  averages) are not coherent cross-currency amounts, so `displayCurrency` is a no-op for them (omitted, no
+  error). Omitting `displayCurrency` entirely leaves the response byte-identical to before this option existed.
 
 **Output:**
 ```jsonc
@@ -208,10 +213,13 @@ Flexible spending aggregation: group transactions by a chosen dimension, measure
       "rows": [
         { "key": "cat-food", "label": "Alimentação", "value": 1200.0, "count": 18, "pct": 64.9 },
         { "key": "cat-transport", "label": "Transporte", "value": 650.0, "count": 9, "pct": 35.1 }
-      ] } ] }
+      ] } ],
+  // present only when displayCurrency was supplied and metric is sum
+  "converted": { "displayCurrency": "USD", "total": 370.0, "stale": false, "asOf": "2026-08-10T10:00:00Z",
+    "excluded": [] } }
 ```
 
-**Errors:** `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `validation` (missing period).
+**Errors:** `unknown_account`, `ambiguous_account`, `unknown_category`, `ambiguous_category`, `validation` (missing period, or unknown `displayCurrency`).
 
 **Safety (ADR-011):** dynamic query structure comes only from whitelisted enum-keyed SQL fragments; all filter values are parameter-bound; caller text never reaches SQL.
 
