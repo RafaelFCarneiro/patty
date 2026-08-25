@@ -1806,9 +1806,15 @@ function initCustomSelects() {
             // data-i18n elements translatePage() fixes up later, that dynamically-built badge is
             // never revisited once /api/status resolves, so a fire-and-forget checkLocale() would
             // race it and could leave non-English users with an English label (mirrors budget.html's
-            // await-then-load init sequencing).
+            // await-then-load init sequencing). The live-update hook is registered only after
+            // checkLocale() resolves too — the shell connects its SSE feed as soon as this fragment's
+            // script finishes executing (synchronously, before any awaited promise here settles), so
+            // registering the hook any earlier would let an early-arriving event call
+            // loadDashboardData() while currentLocale is still unresolved, reintroducing the same race
+            // through a second, concurrent path.
             (async function initOverview() {
                 await checkLocale();
+                window.fintrackOnDataChanged = handleFintrackDataChanged;
                 loadDashboardData();
             })();
 
@@ -2355,8 +2361,9 @@ function initCustomSelects() {
             });
         }
 
-// ADR-027 Live-update listener
-window.fintrackOnDataChanged = function(entities) {
+// ADR-027 Live-update listener. Declared here (hoisted) but only wired to window.fintrackOnDataChanged
+// once locale detection resolves — see the initOverview IIFE above.
+function handleFintrackDataChanged(entities) {
     var affected = entities.some(function(tag) {
         return ['transaction', 'account', 'category', 'recurring'].indexOf(tag) !== -1;
     });
@@ -2364,6 +2371,6 @@ window.fintrackOnDataChanged = function(entities) {
         console.log("overview refetching due to entity change:", entities);
         loadDashboardData();
     }
-};
+}
 
 </script>
