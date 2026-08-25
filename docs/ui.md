@@ -101,8 +101,8 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
 `ui/app.css` owns the base rule for nine component classes independently reused across the nine default
 fragments (`.spinner`, `.loading-overlay`, `.toast-container`/`.toast`, `.modal-overlay`/`.modal-box`/
 `.modal-title`, `.panel`, `.form-group label`/`.form-control`/`.form-control:focus`, `.kpi-card`,
-`.btn-action-primary`) instead of each fragment defining its own full copy. What each fragment kept locally,
-and why, follows one rule:
+`.btn-action-primary`, `.net-worth-summary`/`.nw-label`/`.nw-total`/`.nw-excluded`) instead of each fragment
+defining its own full copy. What each fragment kept locally, and why, follows one rule:
 
 **A property is only moved into the shared base if every fragment that uses the class declares that
 property at all** — either with the identical value everywhere (safe outright), or with the most common
@@ -135,6 +135,12 @@ self-contained for this one property" over chasing the base-vs-override split fo
 declaration. State-modifier rules the original issue also named as candidates (`:hover`/`:disabled` on
 `.btn-action-primary`, and `pending.html`'s richer `.kpi-card` variants — `:hover`, `.income`/`.expense`/
 `.net`) never shared enough structure across fragments to lift safely either, and stay fragment-local.
+
+`.net-worth-summary`/`.nw-*` joined the shared base later, once `overview.html` reused `accounts.html`'s
+net-worth badge (see the `ui/dashboards/*.html` bullet above): `.net-worth-summary`, `.nw-label`, `.nw-total`,
+and `.nw-excluded` are identical in both, so they moved to `ui/app.css`; `.nw-total.na` (the "n.a." fallback for
+a missing `consolidatedNetWorth`) is declared only by `overview.html` — `accounts.html` hides the block
+outright instead — so it's never centralized and stays local to `overview.html`'s own `<style>` block.
 
 Verified with zero visual regression: for every fragment, `getComputedStyle` was captured (as a single hash
 over the full property set of every one of these selectors) before and after the refactor and confirmed

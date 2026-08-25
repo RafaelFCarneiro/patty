@@ -443,3 +443,30 @@ header, .dashboard-header {
     gap: 0.5rem;
     padding: 0.6rem 1.25rem;
 }
+
+/* Consolidated net worth badge (ADR-026 Phase 3) — accounts.html and overview.html declare
+   identical values for every property below; overview.html's own "n.a." fallback modifier
+   (.nw-total.na) is a property accounts.html never declared, so it stays local there. */
+.net-worth-summary {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+}
+.net-worth-summary .nw-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.net-worth-summary .nw-total {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #fff;
+}
+.net-worth-summary .nw-excluded {
+    font-size: 0.65rem;
+    color: var(--warning-color);
+    margin-top: 0.15rem;
+}
