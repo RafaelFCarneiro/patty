@@ -83,6 +83,18 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   {style:'currency', ...})`.
 - **`ui/dashboards/*.html`** (ADR-027 Phase 2) — the default dashboard fragments, one file per default,
   git-versioned and read-only at the install location; bootstrap reconciles them into `source: 'file'` rows.
+  `accounts.html` and `budget.html` render an opt-in converted grand total where the backend already exposes
+  one — `accounts.html` reads `get_account_balances`'s `consolidatedNetWorth` (`{ baseCurrency, total,
+  excluded }`) as-is, no `displayCurrency` param needed; `budget.html` requests `get_budget_status` with
+  `?displayCurrency=<baseCurrency>` and reads its `converted` block (`{ displayCurrency, total, stale, asOf,
+  excluded }`, Feature Design 021). `overview.html` follows `accounts.html`'s pattern: its own
+  `/api/accounts/balances` call already returns `consolidatedNetWorth`, so the "Net worth (home currency)"
+  badge on the Bank Accounts widget needs no extra fetch — same `window.formatMoney(total, baseCurrency)` +
+  excluded-count note rendering, with an "n.a." fallback when the field is absent (e.g. the balances fetch
+  failed) rather than showing a fabricated number. `comparative.html`/`projections.html` compute their KPI
+  totals client-side from raw `/api/transactions` (a pre-existing single-currency blend, issue #174) instead
+  of `/api/summary`/`/api/aggregate`, so neither has an existing per-currency grand total to layer a
+  converted one onto without first fixing that gap.
 
 ## Shared component classes across fragments (issue #164)
 

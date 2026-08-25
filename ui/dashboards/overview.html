@@ -327,6 +327,36 @@
             color: #a78bfa;
         }
 
+        /* Consolidated net worth badge (ADR-026 Phase 3), reused from accounts.html */
+        .net-worth-summary {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+        }
+        .net-worth-summary .nw-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .net-worth-summary .nw-total {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #fff;
+        }
+        .net-worth-summary .nw-total.na {
+            font-style: italic;
+            opacity: 0.7;
+            color: var(--text-muted);
+        }
+        .net-worth-summary .nw-excluded {
+            font-size: 0.65rem;
+            color: var(--warning-color);
+            margin-top: 0.15rem;
+        }
+
         .widget-body {
             display: flex;
             flex-direction: column;
@@ -780,6 +810,7 @@
                         <h3><i class="fa-solid fa-building-columns"></i> Contas Bancárias</h3>
                         <a href="/ui/accounts" class="widget-link">Ver todas <i class="fa-solid fa-arrow-right"></i></a>
                     </div>
+                    <div class="net-worth-summary" id="net-worth-summary" style="display:none;"></div>
                     <div class="widget-body" id="widget-accounts-body">
                         <!-- Populated dynamically -->
                     </div>
@@ -838,6 +869,7 @@
         var accounts = [];
         var creditCards = [];
         var categories = [];
+        var consolidatedNetWorth = null; // { baseCurrency, total, excluded } from get_account_balances (ADR-026)
         var expensePieChartInstance = null;
 
         // Number utilities. NOTE: this dashboard blends every transaction's amount into one total
@@ -1018,6 +1050,9 @@ var TRANSLATIONS = {
         income: "Income",
         expense: "Expense",
         paid_reconciled: "Paid / Reconciled",
+        net_worth_label: "Net worth (home currency)",
+        net_worth_excluded: "{n} account(s) excluded (no rate)",
+        net_worth_unavailable: "—",
         
         // Projections / Heatmap Dashboard
         projections_title: "Recurring & Installment Projections",
@@ -1206,6 +1241,9 @@ var TRANSLATIONS = {
         income: "Receita",
         expense: "Despesa",
         paid_reconciled: "Pago / Conciliado",
+        net_worth_label: "Patrimônio Líquido (moeda base)",
+        net_worth_excluded: "{n} conta(s) excluída(s) (sem cotação)",
+        net_worth_unavailable: "—",
         
         // Projections / Heatmap Dashboard
         projections_title: "Projeção de Recorrências e Parcelas",
@@ -1394,6 +1432,9 @@ var TRANSLATIONS = {
         income: "Ingreso",
         expense: "Gasto",
         paid_reconciled: "Pagado / Conciliado",
+        net_worth_label: "Patrimonio Neto (moneda base)",
+        net_worth_excluded: "{n} cuenta(s) excluida(s) (sin cotización)",
+        net_worth_unavailable: "—",
         
         // Projections / Heatmap Dashboard
         projections_title: "Proyección de Recurrencias y Cuotas",
@@ -1796,9 +1837,9 @@ function initCustomSelects() {
                 // 1. Fetch metadata (accounts, balances, cards, categories) in parallel
                 const [accountsData, balancesData, cardsData, categoriesData] = await Promise.all([
                     fetch('/api/accounts').then(r => r.json()),
-                    fetch(`/api/accounts/balances?projectedAsOf=${projectedAsOfStr}`).then(r => r.json()).then(data => data.balances).catch(err => {
+                    fetch(`/api/accounts/balances?projectedAsOf=${projectedAsOfStr}`).then(r => r.json()).catch(err => {
                         console.error("Failed to load balances", err);
-                        return [];
+                        return { balances: [], consolidatedNetWorth: null };
                     }),
                     fetch('/api/credit-cards').then(r => r.json()),
                     fetch('/api/categories').then(r => r.json())
@@ -1806,12 +1847,13 @@ function initCustomSelects() {
 
                 // Map balances to accounts
                 accounts = accountsData.map(acc => {
-                    const balInfo = balancesData.find(b => b.name === acc.name) || { balance: acc.initialBalance || 0 };
+                    const balInfo = (balancesData.balances || []).find(b => b.name === acc.name) || { balance: acc.initialBalance || 0 };
                     return {
                         ...acc,
                         balance: typeof balInfo.balance !== 'undefined' ? balInfo.balance : acc.initialBalance
                     };
                 });
+                consolidatedNetWorth = balancesData.consolidatedNetWorth || null;
 
                 creditCards = cardsData;
                 categories = categoriesData;
@@ -1853,6 +1895,7 @@ function initCustomSelects() {
                 renderKPIs(cardBills);
                 renderCalendar();
                 renderAccountsWidget();
+                renderNetWorth();
                 renderCardsWidget(cardBills);
                 renderPendingWidget();
                 renderCategoryChart();
@@ -2125,6 +2168,34 @@ function initCustomSelects() {
                 `;
                 body.appendChild(item);
             });
+        }
+
+        // Render consolidated net worth (home currency) badge inside the accounts widget (ADR-026),
+        // mirroring accounts.html's rendering — never a fabricated number: an "n.a." state when the
+        // balances fetch didn't come back with a consolidatedNetWorth block at all.
+        function renderNetWorth() {
+            const el = document.getElementById('net-worth-summary');
+            if (!el) return;
+
+            if (!consolidatedNetWorth) {
+                el.innerHTML = `
+                    <div class="nw-label">${t('net_worth_label')}</div>
+                    <div class="nw-total na">${t('net_worth_unavailable')}</div>
+                `;
+                el.style.display = 'block';
+                return;
+            }
+
+            const totalText = window.formatMoney(consolidatedNetWorth.total, consolidatedNetWorth.baseCurrency);
+            const excludedCount = consolidatedNetWorth.excluded.length;
+            el.innerHTML = `
+                <div class="nw-label">${t('net_worth_label')}</div>
+                <div class="nw-total">${totalText}</div>
+                ${excludedCount > 0
+                    ? `<div class="nw-excluded"><i class="fa-solid fa-triangle-exclamation"></i> ${t('net_worth_excluded').replace('{n}', String(excludedCount))}</div>`
+                    : ''}
+            `;
+            el.style.display = 'block';
         }
 
         // Widget 2: Render Credit Card bills
