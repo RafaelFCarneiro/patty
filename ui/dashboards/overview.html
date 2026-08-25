@@ -1793,7 +1793,6 @@ function initCustomSelects() {
 }
 
         
-            checkLocale();
             var monthSelect = document.getElementById('month-select');
             var yearSelect = document.getElementById('year-select');
 
@@ -1813,18 +1812,27 @@ function initCustomSelects() {
             var handleFilterChange = () => {
                 selectedMonth = parseInt(monthSelect.value);
                 selectedYear = parseInt(yearSelect.value);
-                
+
                 // Update URL params quietly (without page reload)
                 const newUrl = `${window.location.pathname}?month=${selectedMonth}&year=${selectedYear}`;
                 window.history.pushState({ path: newUrl }, '', newUrl);
-                
+
                 loadDashboardData();
             };
 
             if (monthSelect) monthSelect.addEventListener('change', handleFilterChange);
             if (yearSelect) yearSelect.addEventListener('change', handleFilterChange);
 
-            loadDashboardData();
+            // Locale must resolve before the first render: loadDashboardData's render chain now
+            // includes renderNetWorth(), which reads currentLocale via t() — unlike the static
+            // data-i18n elements translatePage() fixes up later, that dynamically-built badge is
+            // never revisited once /api/status resolves, so a fire-and-forget checkLocale() would
+            // race it and could leave non-English users with an English label (mirrors budget.html's
+            // await-then-load init sequencing).
+            (async function initOverview() {
+                await checkLocale();
+                loadDashboardData();
+            })();
 
         // Main data loading orchestrator
         async function loadDashboardData() {
