@@ -1818,12 +1818,15 @@ function initCustomSelects() {
             // continuation can detect it's no longer live (app.js's renderFragment() removes this
             // fragment's DOM on navigation) and bail out — otherwise it would overwrite the new
             // fragment's own window.fintrackOnDataChanged with overview's, misrouting later SSE events.
+            // The initial load is kicked off before the hook is registered (not after), matching every
+            // other default dashboard's convention: a stray SSE message must never reach a handler
+            // whose own first render hasn't been kicked off yet.
             (async function initOverview() {
                 const ownFragmentMarker = document.getElementById('dashboard-loading');
                 await checkLocale();
                 if (!ownFragmentMarker || !ownFragmentMarker.isConnected) return;
-                window.fintrackOnDataChanged = handleFintrackDataChanged;
                 loadDashboardData();
+                window.fintrackOnDataChanged = handleFintrackDataChanged;
             })();
 
         // Main data loading orchestrator
