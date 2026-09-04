@@ -134,10 +134,18 @@ describe('default dashboard fragments are data-less (ADR-013 Phase B, converted 
     const res = await inject({ method: 'GET', url: '/api/dashboards/overview' });
     const { html } = res.json() as { html: string };
 
+    // Anchored to the boot initializer itself (`initOverview`), not just the first occurrence of
+    // either literal anywhere in the fragment — the file also contains an unrelated
+    // `loadDashboardData();` call inside the month/year filter's change handler, textually earlier
+    // than the initializer, which an unanchored search would match instead of the real init call.
+    const initializerStart = html.indexOf('initOverview');
+    expect(initializerStart).toBeGreaterThan(-1);
+
     // A stray SSE message arriving mid-init must never call a handler whose sections haven't
-    // rendered yet, so the hook must be registered after the script's own initial load call.
-    expect(html.indexOf('loadDashboardData();')).toBeGreaterThan(-1);
-    expect(html.indexOf('loadDashboardData();')).toBeLessThan(html.indexOf('window.fintrackOnDataChanged ='));
+    // rendered yet, so within the initializer the hook must be registered after the initial load call.
+    const initialLoadCallIndex = html.indexOf('loadDashboardData();', initializerStart);
+    expect(initialLoadCallIndex).toBeGreaterThan(-1);
+    expect(initialLoadCallIndex).toBeLessThan(html.indexOf('window.fintrackOnDataChanged =', initializerStart));
   });
 
   it('covers every file-backed default with no drift', async () => {

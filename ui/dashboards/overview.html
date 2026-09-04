@@ -327,6 +327,14 @@
             color: #a78bfa;
         }
 
+        /* .net-worth-summary/.nw-* base: ui/app.css (shared with accounts.html). The "n.a." fallback
+           state is unique to overview.html (accounts.html hides the block instead), so it stays local. */
+        .net-worth-summary .nw-total.na {
+            font-style: italic;
+            opacity: 0.7;
+            color: var(--text-muted);
+        }
+
         .widget-body {
             display: flex;
             flex-direction: column;
@@ -780,6 +788,7 @@
                         <h3><i class="fa-solid fa-building-columns"></i> Contas Bancárias</h3>
                         <a href="/ui/accounts" class="widget-link">Ver todas <i class="fa-solid fa-arrow-right"></i></a>
                     </div>
+                    <div class="net-worth-summary" id="net-worth-summary" style="display:none;"></div>
                     <div class="widget-body" id="widget-accounts-body">
                         <!-- Populated dynamically -->
                     </div>
@@ -838,6 +847,7 @@
         var accounts = [];
         var creditCards = [];
         var categories = [];
+        var consolidatedNetWorth = null; // { baseCurrency, total, excluded } from get_account_balances (ADR-026)
         var expensePieChartInstance = null;
 
         // Number utilities. NOTE: this dashboard blends every transaction's amount into one total
@@ -1018,6 +1028,9 @@ var TRANSLATIONS = {
         income: "Income",
         expense: "Expense",
         paid_reconciled: "Paid / Reconciled",
+        net_worth_label: "Net worth (home currency)",
+        net_worth_excluded: "{n} account(s) excluded (no rate)",
+        net_worth_unavailable: "—",
         
         // Projections / Heatmap Dashboard
         projections_title: "Recurring & Installment Projections",
@@ -1206,6 +1219,9 @@ var TRANSLATIONS = {
         income: "Receita",
         expense: "Despesa",
         paid_reconciled: "Pago / Conciliado",
+        net_worth_label: "Patrimônio Líquido (moeda base)",
+        net_worth_excluded: "{n} conta(s) excluída(s) (sem cotação)",
+        net_worth_unavailable: "—",
         
         // Projections / Heatmap Dashboard
         projections_title: "Projeção de Recorrências e Parcelas",
@@ -1394,6 +1410,9 @@ var TRANSLATIONS = {
         income: "Ingreso",
         expense: "Gasto",
         paid_reconciled: "Pagado / Conciliado",
+        net_worth_label: "Patrimonio Neto (moneda base)",
+        net_worth_excluded: "{n} cuenta(s) excluida(s) (sin cotización)",
+        net_worth_unavailable: "—",
         
         // Projections / Heatmap Dashboard
         projections_title: "Proyección de Recurrencias y Cuotas",
@@ -1752,7 +1771,6 @@ function initCustomSelects() {
 }
 
         
-            checkLocale();
             var monthSelect = document.getElementById('month-select');
             var yearSelect = document.getElementById('year-select');
 
@@ -1772,18 +1790,48 @@ function initCustomSelects() {
             var handleFilterChange = () => {
                 selectedMonth = parseInt(monthSelect.value);
                 selectedYear = parseInt(yearSelect.value);
-                
+
                 // Update URL params quietly (without page reload)
                 const newUrl = `${window.location.pathname}?month=${selectedMonth}&year=${selectedYear}`;
                 window.history.pushState({ path: newUrl }, '', newUrl);
-                
+
                 loadDashboardData();
             };
 
-            if (monthSelect) monthSelect.addEventListener('change', handleFilterChange);
-            if (yearSelect) yearSelect.addEventListener('change', handleFilterChange);
-
-            loadDashboardData();
+            // Locale must resolve before the first render: loadDashboardData's render chain now
+            // includes renderNetWorth(), which reads currentLocale via t() — unlike the static
+            // data-i18n elements translatePage() fixes up later, that dynamically-built badge is
+            // never revisited once /api/status resolves, so a fire-and-forget checkLocale() would
+            // race it and could leave non-English users with an English label (mirrors budget.html's
+            // await-then-load init sequencing). The live-update hook is registered only after
+            // checkLocale() resolves too — the shell connects its SSE feed as soon as this fragment's
+            // script finishes executing (synchronously, before any awaited promise here settles), so
+            // registering the hook any earlier would let an early-arriving event call
+            // loadDashboardData() while currentLocale is still unresolved, reintroducing the same race
+            // through a second, concurrent path. The month/year filter listeners are gated the same
+            // way and for the same reason: attached here rather than above, so a user who changes
+            // either select before locale resolves can't trigger a loadDashboardData() call that
+            // renders renderNetWorth() (or anything else locale-dependent) in English regardless of
+            // their actual locale.
+            //
+            // ownFragmentMarker is captured before the await so that, if the user navigates to a
+            // different dashboard while checkLocale()'s request is still in flight, this stale
+            // continuation can detect it's no longer live (app.js's renderFragment() removes this
+            // fragment's DOM on navigation) and bail out — otherwise it would overwrite the new
+            // fragment's own window.fintrackOnDataChanged with overview's, misrouting later SSE events,
+            // and wire up filter listeners against a torn-down fragment.
+            // The initial load is kicked off before the hook is registered (not after), matching every
+            // other default dashboard's convention: a stray SSE message must never reach a handler
+            // whose own first render hasn't been kicked off yet.
+            (async function initOverview() {
+                const ownFragmentMarker = document.getElementById('dashboard-loading');
+                await checkLocale();
+                if (!ownFragmentMarker || !ownFragmentMarker.isConnected) return;
+                if (monthSelect) monthSelect.addEventListener('change', handleFilterChange);
+                if (yearSelect) yearSelect.addEventListener('change', handleFilterChange);
+                loadDashboardData();
+                window.fintrackOnDataChanged = handleFintrackDataChanged;
+            })();
 
         // Main data loading orchestrator
         async function loadDashboardData() {
@@ -1796,9 +1844,9 @@ function initCustomSelects() {
                 // 1. Fetch metadata (accounts, balances, cards, categories) in parallel
                 const [accountsData, balancesData, cardsData, categoriesData] = await Promise.all([
                     fetch('/api/accounts').then(r => r.json()),
-                    fetch(`/api/accounts/balances?projectedAsOf=${projectedAsOfStr}`).then(r => r.json()).then(data => data.balances).catch(err => {
+                    fetch(`/api/accounts/balances?projectedAsOf=${projectedAsOfStr}`).then(r => r.json()).catch(err => {
                         console.error("Failed to load balances", err);
-                        return [];
+                        return { balances: [], consolidatedNetWorth: null };
                     }),
                     fetch('/api/credit-cards').then(r => r.json()),
                     fetch('/api/categories').then(r => r.json())
@@ -1806,12 +1854,13 @@ function initCustomSelects() {
 
                 // Map balances to accounts
                 accounts = accountsData.map(acc => {
-                    const balInfo = balancesData.find(b => b.name === acc.name) || { balance: acc.initialBalance || 0 };
+                    const balInfo = (balancesData.balances || []).find(b => b.name === acc.name) || { balance: acc.initialBalance || 0 };
                     return {
                         ...acc,
                         balance: typeof balInfo.balance !== 'undefined' ? balInfo.balance : acc.initialBalance
                     };
                 });
+                consolidatedNetWorth = balancesData.consolidatedNetWorth || null;
 
                 creditCards = cardsData;
                 categories = categoriesData;
@@ -1853,6 +1902,7 @@ function initCustomSelects() {
                 renderKPIs(cardBills);
                 renderCalendar();
                 renderAccountsWidget();
+                renderNetWorth();
                 renderCardsWidget(cardBills);
                 renderPendingWidget();
                 renderCategoryChart();
@@ -2127,6 +2177,34 @@ function initCustomSelects() {
             });
         }
 
+        // Render consolidated net worth (home currency) badge inside the accounts widget (ADR-026),
+        // mirroring accounts.html's rendering — never a fabricated number: an "n.a." state when the
+        // balances fetch didn't come back with a consolidatedNetWorth block at all.
+        function renderNetWorth() {
+            const el = document.getElementById('net-worth-summary');
+            if (!el) return;
+
+            if (!consolidatedNetWorth) {
+                el.innerHTML = `
+                    <div class="nw-label">${t('net_worth_label')}</div>
+                    <div class="nw-total na">${t('net_worth_unavailable')}</div>
+                `;
+                el.style.display = 'block';
+                return;
+            }
+
+            const totalText = window.formatMoney(consolidatedNetWorth.total, consolidatedNetWorth.baseCurrency);
+            const excludedCount = consolidatedNetWorth.excluded.length;
+            el.innerHTML = `
+                <div class="nw-label">${t('net_worth_label')}</div>
+                <div class="nw-total">${totalText}</div>
+                ${excludedCount > 0
+                    ? `<div class="nw-excluded"><i class="fa-solid fa-triangle-exclamation"></i> ${t('net_worth_excluded').replace('{n}', String(excludedCount))}</div>`
+                    : ''}
+            `;
+            el.style.display = 'block';
+        }
+
         // Widget 2: Render Credit Card bills
         function renderCardsWidget(cardBills) {
             const body = document.getElementById('widget-cards-body');
@@ -2298,15 +2376,20 @@ function initCustomSelects() {
             });
         }
 
-// ADR-027 Live-update listener
-window.fintrackOnDataChanged = function(entities) {
+// ADR-027 Live-update listener. Declared here (hoisted) but only wired to window.fintrackOnDataChanged
+// once locale detection resolves — see the initOverview IIFE above.
+function handleFintrackDataChanged(entities) {
+    // currency_rate/settings included because the net-worth badge's consolidatedNetWorth is
+    // computed from the base currency (settings.base_currency) and every stored exchange rate
+    // (ADR-026) — omitting them would leave the badge stale after a rate or home-currency update
+    // until some unrelated entity change happened to trigger a refetch.
     var affected = entities.some(function(tag) {
-        return ['transaction', 'account', 'category', 'recurring'].indexOf(tag) !== -1;
+        return ['transaction', 'account', 'category', 'recurring', 'currency_rate', 'settings'].indexOf(tag) !== -1;
     });
     if (affected) {
         console.log("overview refetching due to entity change:", entities);
         loadDashboardData();
     }
-};
+}
 
 </script>
