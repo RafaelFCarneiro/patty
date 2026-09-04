@@ -1798,9 +1798,6 @@ function initCustomSelects() {
                 loadDashboardData();
             };
 
-            if (monthSelect) monthSelect.addEventListener('change', handleFilterChange);
-            if (yearSelect) yearSelect.addEventListener('change', handleFilterChange);
-
             // Locale must resolve before the first render: loadDashboardData's render chain now
             // includes renderNetWorth(), which reads currentLocale via t() — unlike the static
             // data-i18n elements translatePage() fixes up later, that dynamically-built badge is
@@ -1811,13 +1808,18 @@ function initCustomSelects() {
             // script finishes executing (synchronously, before any awaited promise here settles), so
             // registering the hook any earlier would let an early-arriving event call
             // loadDashboardData() while currentLocale is still unresolved, reintroducing the same race
-            // through a second, concurrent path.
+            // through a second, concurrent path. The month/year filter listeners are gated the same
+            // way and for the same reason: attached here rather than above, so a user who changes
+            // either select before locale resolves can't trigger a loadDashboardData() call that
+            // renders renderNetWorth() (or anything else locale-dependent) in English regardless of
+            // their actual locale.
             //
             // ownFragmentMarker is captured before the await so that, if the user navigates to a
             // different dashboard while checkLocale()'s request is still in flight, this stale
             // continuation can detect it's no longer live (app.js's renderFragment() removes this
             // fragment's DOM on navigation) and bail out — otherwise it would overwrite the new
-            // fragment's own window.fintrackOnDataChanged with overview's, misrouting later SSE events.
+            // fragment's own window.fintrackOnDataChanged with overview's, misrouting later SSE events,
+            // and wire up filter listeners against a torn-down fragment.
             // The initial load is kicked off before the hook is registered (not after), matching every
             // other default dashboard's convention: a stray SSE message must never reach a handler
             // whose own first render hasn't been kicked off yet.
@@ -1825,6 +1827,8 @@ function initCustomSelects() {
                 const ownFragmentMarker = document.getElementById('dashboard-loading');
                 await checkLocale();
                 if (!ownFragmentMarker || !ownFragmentMarker.isConnected) return;
+                if (monthSelect) monthSelect.addEventListener('change', handleFilterChange);
+                if (yearSelect) yearSelect.addEventListener('change', handleFilterChange);
                 loadDashboardData();
                 window.fintrackOnDataChanged = handleFintrackDataChanged;
             })();

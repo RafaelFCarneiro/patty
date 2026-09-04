@@ -19,7 +19,7 @@ type StubElement = {
   value: string;
   style: { display: string };
   classList: { add: () => void; remove: () => void; toggle: () => void; contains: () => boolean };
-  addEventListener: () => void;
+  addEventListener: (type: string, handler: () => void) => void;
   querySelector: () => null;
   querySelectorAll: () => never[];
   setAttribute: () => void;
@@ -32,23 +32,35 @@ type StubElement = {
   // translatePage()'s month-select translation loop does Array.from(select.options) unconditionally
   // once a <select> is found — an empty array here just yields zero options to translate.
   options: never[];
+  // Test-only helper (not part of the DOM API) — synchronously invokes every handler registered via
+  // addEventListener() for the given event type, so a test can simulate a user interaction such as
+  // changing the month/year <select>.
+  fireEvent: (type: string) => void;
 };
 
-const makeStubElement = (): StubElement => ({
-  innerHTML: '',
-  textContent: '',
-  value: '',
-  style: { display: '' },
-  classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
-  addEventListener() {},
-  querySelector: () => null,
-  querySelectorAll: () => [],
-  setAttribute() {},
-  getAttribute: () => null,
-  appendChild() {},
-  isConnected: true,
-  options: [],
-});
+const makeStubElement = (): StubElement => {
+  const listeners: Record<string, Array<() => void>> = {};
+  return {
+    innerHTML: '',
+    textContent: '',
+    value: '',
+    style: { display: '' },
+    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    addEventListener(type, handler) {
+      (listeners[type] ??= []).push(handler);
+    },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    setAttribute() {},
+    getAttribute: () => null,
+    appendChild() {},
+    isConnected: true,
+    options: [],
+    fireEvent(type) {
+      (listeners[type] ?? []).forEach((handler) => handler());
+    },
+  };
+};
 
 const makeStubDocument = () => {
   const elements = new Map<string, StubElement>();
@@ -128,6 +140,31 @@ const loadOverviewSandbox = () => {
   return { sandbox, documentStub };
 };
 
+const jsonResponse = (body: unknown) => Promise.resolve({ ok: true, json: async () => body });
+
+// Routes every fetch() target loadDashboardData() itself issues (not checkLocale()'s /api/status,
+// which stays dormant — this loader is for calling loadDashboardData() directly, bypassing
+// initOverview entirely) to an empty-but-valid response, except /api/accounts/balances, which
+// rejects — simulating a real network failure on that one request rather than directly assigning
+// consolidatedNetWorth = null the way the renderNetWorth-only tests above do. Checked before the
+// plain /api/accounts prefix, which it's otherwise a substring of.
+const balancesFailureFetch = (url: string): Promise<unknown> => {
+  if (typeof url !== 'string') return new Promise(() => {});
+  if (url.indexOf('/api/accounts/balances') !== -1) return Promise.reject(new Error('simulated network failure'));
+  if (url.indexOf('/api/accounts') !== -1) return jsonResponse([]);
+  if (url.indexOf('/api/credit-cards') !== -1) return jsonResponse([]);
+  if (url.indexOf('/api/categories') !== -1) return jsonResponse([]);
+  if (url.indexOf('/api/transactions') !== -1) return jsonResponse([]);
+  return new Promise(() => {}); // /api/status and anything else: not needed, stays dormant
+};
+
+const loadOverviewSandboxWithBalancesFailure = () => {
+  const documentStub = makeStubDocument();
+  const sandbox = makeSandboxBase(documentStub, balancesFailureFetch);
+  runFragmentScript(sandbox);
+  return { sandbox, documentStub };
+};
+
 type Deferred<T> = { promise: Promise<T>; resolve: (value: T) => void };
 
 const makeDeferred = <T>(): Deferred<T> => {
@@ -183,6 +220,29 @@ describe("initOverview's boot sequencing (ui/dashboards/overview.html)", () => {
     await flushMicrotasks();
 
     expect((sandbox.window as Record<string, unknown>).fintrackOnDataChanged).toBeUndefined();
+  });
+
+  it('does not wire up the month/year filter until locale resolves, so a premature change is a no-op', async () => {
+    // A change fired before locale resolves must not be able to call loadDashboardData() (and
+    // therefore renderNetWorth()) with currentLocale still at its English default — the same
+    // hazard the hook-registration guard above exists for, through a second entry point.
+    const { sandbox, documentStub, resolveStatus } = loadOverviewSandboxWithControllableStatus();
+    let callCount = 0;
+    sandbox.loadDashboardData = () => {
+      callCount += 1;
+    };
+    const monthSelect = documentStub.getElementById('month-select');
+
+    monthSelect.fireEvent('change');
+    expect(callCount).toBe(0);
+
+    resolveStatus({ ok: true, json: async () => ({ locale: 'en' }) });
+    await flushMicrotasks();
+    await flushMicrotasks();
+    const callsFromBootItself = callCount; // initOverview's own initial loadDashboardData() call
+
+    monthSelect.fireEvent('change');
+    expect(callCount).toBe(callsFromBootItself + 1);
   });
 });
 
@@ -260,5 +320,21 @@ describe('renderNetWorth (ui/dashboards/overview.html)', () => {
     const el = documentStub.getElementById('net-worth-summary');
     expect(el.innerHTML).toContain('Patrimônio Líquido (moeda base)');
     expect(el.innerHTML).toContain('1 conta(s) excluída(s) (sem cotação)');
+  });
+
+  it('reaches the "n.a." fallback through a real balances-fetch failure, not just a directly-set null', async () => {
+    // Unlike the case above (which sets consolidatedNetWorth = null and calls renderNetWorth()
+    // directly), this drives loadDashboardData() itself with /api/accounts/balances rejecting —
+    // exercising the actual catch(err => ({ balances: [], consolidatedNetWorth: null })) fallback
+    // in the fetch chain, so a regression there (wrong shape, a total left over from a previous
+    // successful load, ...) would be caught even though renderNetWorth()'s own rendering is unchanged.
+    const { sandbox, documentStub } = loadOverviewSandboxWithBalancesFailure();
+
+    await (sandbox.loadDashboardData as () => Promise<void>)();
+
+    const el = documentStub.getElementById('net-worth-summary');
+    expect(el.style.display).toBe('block');
+    expect(el.innerHTML).toContain('nw-total na');
+    expect(el.innerHTML).toContain('—');
   });
 });
