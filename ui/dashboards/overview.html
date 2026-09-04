@@ -2375,8 +2375,12 @@ function initCustomSelects() {
 // ADR-027 Live-update listener. Declared here (hoisted) but only wired to window.fintrackOnDataChanged
 // once locale detection resolves — see the initOverview IIFE above.
 function handleFintrackDataChanged(entities) {
+    // currency_rate/settings included because the net-worth badge's consolidatedNetWorth is
+    // computed from the base currency (settings.base_currency) and every stored exchange rate
+    // (ADR-026) — omitting them would leave the badge stale after a rate or home-currency update
+    // until some unrelated entity change happened to trigger a refetch.
     var affected = entities.some(function(tag) {
-        return ['transaction', 'account', 'category', 'recurring'].indexOf(tag) !== -1;
+        return ['transaction', 'account', 'category', 'recurring', 'currency_rate', 'settings'].indexOf(tag) !== -1;
     });
     if (affected) {
         console.log("overview refetching due to entity change:", entities);
