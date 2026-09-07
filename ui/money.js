@@ -56,4 +56,52 @@
     }).format(amount);
     return symbol + ' ' + numStr;
   };
+
+  // Currency-map arithmetic shared across dashboard fragments (issue #174) — every fragment that
+  // aggregates transactions keeps its own accumulator as a {currency: amount} map instead of a
+  // single blended scalar (docs/architecture.md: aggregations group per currency, never convert
+  // implicitly). These are pure, locale-independent map operations, so they live here instead of
+  // being copy-pasted into every fragment; each fragment still owns its own thin
+  // formatCurrency/formatMultiCurrency wrapper locally because those need the fragment's own
+  // resolved UI locale (e.g. budget.html's currentLocale), which this shell-loaded, load-once
+  // module has no access to.
+  window.DEFAULT_CURRENCY = 'BRL';
+
+  window.addMultiCurrency = function (map, currency, amount) {
+    var c = currency || window.DEFAULT_CURRENCY;
+    map[c] = (map[c] || 0) + (Number(amount) || 0);
+  };
+
+  window.valueIn = function (map, currency) {
+    return (map && map[currency]) || 0;
+  };
+
+  // Multi-currency amounts are never converted or summed together — a single number (a KPI, a
+  // percentage, a chart value) can only ever read ONE real currency's own amount, never a
+  // blended/converted total. This picks which currency represents a row/cell for such comparisons.
+  window.primaryCurrencyOf = function (map) {
+    var keys = Object.keys(map || {}).filter(function (c) { return map[c]; });
+    if (keys.length === 0) keys = Object.keys(map || {});
+    if (keys.indexOf(window.DEFAULT_CURRENCY) !== -1) return window.DEFAULT_CURRENCY;
+    keys.sort();
+    return keys[0] || window.DEFAULT_CURRENCY;
+  };
+
+  // Row/category sort order or "any activity" flag only, never a number shown to the user — a
+  // plain sum of raw units across currencies (deliberately not a currency conversion).
+  window.magnitudeOf = function (map) {
+    return Object.keys(map || {}).reduce(function (sum, c) { return sum + (Number(map[c]) || 0); }, 0);
+  };
+
+  // Additively merges any number of currency maps — Object.assign/spread would silently overwrite
+  // a currency present in more than one map instead of summing it (e.g. a category with both BRL
+  // effective and BRL pending amounts would lose one of the two).
+  window.mergeCurrencyMaps = function () {
+    var maps = Array.prototype.slice.call(arguments);
+    var result = {};
+    maps.forEach(function (map) {
+      Object.keys(map || {}).forEach(function (c) { window.addMultiCurrency(result, c, map[c]); });
+    });
+    return result;
+  };
 })();

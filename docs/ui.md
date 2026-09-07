@@ -80,7 +80,14 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   `window.__fintrackCurrencies`, populated once at shell boot from `GET /api/currencies`
   (`app.js`'s `bootPromise`, sequenced before the first `loadDashboard()` call so the metadata is never missing
   on first paint). Every fragment that formats money calls this instead of its own `Intl.NumberFormat(...,
-  {style:'currency', ...})`.
+  {style:'currency', ...})`. It also exports `window.DEFAULT_CURRENCY` ('BRL') and the currency-map arithmetic
+  every dashboard's per-currency aggregation depends on (issue #174) — `addMultiCurrency(map, currency,
+  amount)`, `valueIn(map, currency)`, `primaryCurrencyOf(map)`, `magnitudeOf(map)`, `mergeCurrencyMaps(...maps)`
+  (additive; `Object.assign`/spread would silently drop a currency present in more than one input map instead
+  of summing it). These are pure, locale-independent map operations, so they're defined once here instead of
+  copy-pasted into every fragment; each fragment still owns its own thin `formatCurrency`/`formatMultiCurrency`
+  wrapper locally (calling `window.formatMoney`) because those need the fragment's own resolved UI locale
+  (`currentLocale`), which this shell-loaded, load-once module has no access to.
 - **`ui/dashboards/*.html`** (ADR-027 Phase 2) — the default dashboard fragments, one file per default,
   git-versioned and read-only at the install location; bootstrap reconciles them into `source: 'file'` rows.
   `accounts.html` and `budget.html` render an opt-in converted grand total where the backend already exposes
@@ -91,20 +98,29 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   `/api/accounts/balances` call already returns `consolidatedNetWorth`, so the "Net worth (home currency)"
   badge on the Bank Accounts widget needs no extra fetch — same `window.formatMoney(total, baseCurrency)` +
   excluded-count note rendering, with an "n.a." fallback when the field is absent (e.g. the balances fetch
-  failed) rather than showing a fabricated number — unaffected by the issue #174 fix below. `overview.html`,
-  `comparative.html`, and `projections.html` compute their other KPI, calendar/day, category, and
-  heat-map totals client-side from raw `/api/transactions`, bucketed per currency (issue #174 fix) via the
-  same `addMultiCurrency`/`valueIn`/`primaryCurrencyOf`/`formatMultiCurrency` helpers `budget.html`
-  established: every accumulator is a `{currency: amount}` map rendered with `formatMultiCurrency` (never a
-  single blended number), a row/cell's own percentage or bar width compares same-currency amounts only
+  failed) rather than showing a fabricated number — unaffected by the issue #174 fix below. `budget.html`,
+  `overview.html`, `comparative.html`, and `projections.html` compute their other KPI, calendar/day,
+  category, and heat-map totals client-side from raw `/api/transactions`, bucketed per currency (issue #174
+  fix) via `ui/money.js`'s shared `addMultiCurrency`/`valueIn`/`primaryCurrencyOf`/`magnitudeOf`/
+  `mergeCurrencyMaps` (originally defined once per fragment — `budget.html` first — then consolidated into
+  `money.js` so the four fragments share one implementation instead of four copies): every accumulator is a
+  `{currency: amount}` map rendered with each fragment's own local `formatMultiCurrency` (never a single
+  blended number), a row/cell's own percentage or bar width compares same-currency amounts only
   (`primaryCurrencyOf` picks that row's representative currency), and Chart.js series (needing one numeric
   series) render the primary currency only — the KPI/table text above them already shows every currency
   correctly. `overview.html`'s compact calendar day cells (no room for multiple currency lines) resolve
   income/expense/transfer as three independent `primaryCurrencyOf` picks — never one shared currency for
   the whole day, which would silently zero out (and hide) a real flow whenever it happened to be in a
   different currency than whichever flow dominated that day — and render each via `formatCurrencyNoSymbol`;
-  the full per-transaction, per-currency breakdown is one click away in the day-details drawer. None of the
-  three fragments convert across currencies
+  the full per-transaction, per-currency breakdown is one click away in the day-details drawer.
+  `comparative.html`'s category sort order and `projections.html`'s heat-map cell/row/column totals combine
+  a category's effective + pending (or a cell's own transactions) with `mergeCurrencyMaps` rather than
+  `Object.assign`/spread, which would silently let one currency's pending amount overwrite that same
+  currency's effective amount instead of summing them. The heat map's color-intensity scale (opacity) also
+  tracks its running max **per currency** rather than one shared max across the whole matrix — comparing a
+  0.05 BTC cell's raw units directly against a 10,000 BRL cell's would always crush BTC toward the opacity
+  floor regardless of its own relative size, so each currency's cells are only ever compared against that
+  same currency's own max. None of the three fragments convert across currencies
   client-side (that would duplicate the backend's `consolidateInCurrency` rate/staleness logic in JS); a
   converted grand total for `comparative.html`/`projections.html`, matching `budget.html`'s
   `displayCurrency` pattern, would require moving their aggregation to a server endpoint first and is

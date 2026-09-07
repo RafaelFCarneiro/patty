@@ -822,38 +822,15 @@
 
         // Money formatting — per currency, never blended (issue #174 fix). Every accumulator below
         // is keyed by currency; formatMultiCurrency renders each currency's own amount side by side
-        // instead of collapsing them into a single mislabeled total.
-        const DEFAULT_CURRENCY = 'BRL';
-
+        // instead of collapsing them into a single mislabeled total. addMultiCurrency/valueIn/
+        // primaryCurrencyOf/magnitudeOf/mergeCurrencyMaps/DEFAULT_CURRENCY are shared globals from
+        // ui/money.js (loaded before this fragment's script — see docs/ui.md) rather than defined
+        // here, since they're pure map arithmetic with no fragment-local dependency. formatCurrency
+        // and formatMultiCurrency stay local because they need this fragment's own resolved
+        // currentLocale, which the shell-loaded, load-once money.js has no access to.
         function formatCurrency(val, currency) {
             const loc = currentLocale === 'pt' ? 'pt-BR' : (currentLocale === 'es' ? 'es-ES' : 'en-US');
             return window.formatMoney(val || 0, currency || DEFAULT_CURRENCY, { locale: loc });
-        }
-
-        function addMultiCurrency(map, currency, amount) {
-            const c = currency || DEFAULT_CURRENCY;
-            map[c] = (map[c] || 0) + (Number(amount) || 0);
-        }
-
-        function valueIn(map, currency) {
-            return (map && map[currency]) || 0;
-        }
-
-        // Never a number shown to the user — picks which currency represents a row for
-        // percentage/bar-width/color computations that can only compare like with like.
-        function primaryCurrencyOf(map) {
-            let keys = Object.keys(map || {}).filter(c => map[c]);
-            if (keys.length === 0) keys = Object.keys(map || {});
-            if (keys.indexOf(DEFAULT_CURRENCY) !== -1) return DEFAULT_CURRENCY;
-            keys.sort();
-            return keys[0] || DEFAULT_CURRENCY;
-        }
-
-        // Row sort order only, never a number shown to the user — a plain sum of raw units across
-        // currencies (deliberately not a currency conversion) so rows with more overall activity
-        // sort first regardless of currency mix.
-        function magnitudeOf(map) {
-            return Object.keys(map || {}).reduce((sum, c) => sum + (Number(map[c]) || 0), 0);
         }
 
         function formatMultiCurrency(map, delimiter) {
@@ -1244,15 +1221,13 @@
 
             // Sort lists by total value descending (raw cross-currency magnitude — display order
             // only, see magnitudeOf)
-            listCats.sort((a, b) => magnitudeOf(Object.assign({}, b.effective, b.pending)) - magnitudeOf(Object.assign({}, a.effective, a.pending)));
+            listCats.sort((a, b) => magnitudeOf(mergeCurrencyMaps(b.effective, b.pending)) - magnitudeOf(mergeCurrencyMaps(a.effective, a.pending)));
 
             const incTotalSum = {};
             const expTotalSum = {};
 
             listCats.forEach(cat => {
-                const totalByCurrency = {};
-                Object.keys(cat.effective).forEach(c => addMultiCurrency(totalByCurrency, c, cat.effective[c]));
-                Object.keys(cat.pending).forEach(c => addMultiCurrency(totalByCurrency, c, cat.pending[c]));
+                const totalByCurrency = mergeCurrencyMaps(cat.effective, cat.pending);
 
                 if (cat.kind === 'income') {
                     Object.keys(totalByCurrency).forEach(c => addMultiCurrency(incTotalSum, c, totalByCurrency[c]));

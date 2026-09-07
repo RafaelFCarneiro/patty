@@ -836,38 +836,15 @@
 
         // Money formatting — per currency, never blended (issue #174 fix). Every accumulator below
         // is keyed by currency; formatMultiCurrency renders each currency's own amount side by side
-        // instead of collapsing them into a single mislabeled total.
-        const DEFAULT_CURRENCY = 'BRL';
-
+        // instead of collapsing them into a single mislabeled total. addMultiCurrency/valueIn/
+        // primaryCurrencyOf/magnitudeOf/mergeCurrencyMaps/DEFAULT_CURRENCY are shared globals from
+        // ui/money.js (loaded before this fragment's script — see docs/ui.md) rather than defined
+        // here, since they're pure map arithmetic with no fragment-local dependency. formatCurrency
+        // and formatMultiCurrency stay local because they need this fragment's own resolved
+        // currentLocale, which the shell-loaded, load-once money.js has no access to.
         function formatCurrency(val, currency) {
             const loc = currentLocale === 'pt' ? 'pt-BR' : (currentLocale === 'es' ? 'es-ES' : 'en-US');
             return window.formatMoney(val || 0, currency || DEFAULT_CURRENCY, { locale: loc });
-        }
-
-        function addMultiCurrency(map, currency, amount) {
-            const c = currency || DEFAULT_CURRENCY;
-            map[c] = (map[c] || 0) + (Number(amount) || 0);
-        }
-
-        function valueIn(map, currency) {
-            return (map && map[currency]) || 0;
-        }
-
-        // Never a number shown to the user — picks which currency represents a row for
-        // percentage/bar-width/color computations that can only compare like with like.
-        function primaryCurrencyOf(map) {
-            let keys = Object.keys(map || {}).filter(c => map[c]);
-            if (keys.length === 0) keys = Object.keys(map || {});
-            if (keys.indexOf(DEFAULT_CURRENCY) !== -1) return DEFAULT_CURRENCY;
-            keys.sort();
-            return keys[0] || DEFAULT_CURRENCY;
-        }
-
-        // Row sort order only, never a number shown to the user — a plain sum of raw units across
-        // currencies (deliberately not a currency conversion) so rows with more overall activity
-        // sort first regardless of currency mix.
-        function magnitudeOf(map) {
-            return Object.keys(map || {}).reduce((sum, c) => sum + (Number(map[c]) || 0), 0);
         }
 
         function formatMultiCurrency(map, delimiter) {
@@ -1390,20 +1367,25 @@
                 heatMatrix[catId].months[key].push(t);
             });
 
-            // Determine max cell magnitude to calculate color opacity relative range (heat map
-            // effect) — a plain cross-currency sum (magnitudeOf), never a displayed number, so a
-            // BTC row's opacity scale isn't skewed by a handful of BRL cents in the same matrix.
-            let maxIncomeCellValue = 100;
-            let maxExpenseCellValue = 100;
+            // Determine, PER CURRENCY, the max cell value to calculate color opacity relative
+            // range (heat map effect) — a 0.05 BTC cell and a 10,000 BRL cell aren't comparable in
+            // raw units, so blending them into one cross-currency max would skew the intensity
+            // scale toward whichever currency happens to use larger raw numbers. Each currency
+            // gets its own max, and each cell's opacity is computed against its own currency's max.
+            // No artificial minimum floor here (the old single-scale code used 100, calibrated for
+            // BRL/USD magnitudes) — a currency this seeds is only ever compared against its own
+            // real cell values below, so a fixed floor would just crush a naturally small-scale
+            // currency like BTC toward the opacity floor regardless of its own relative intensity.
+            const maxIncomeCellByCurrency = {};
+            const maxExpenseCellByCurrency = {};
             Object.values(heatMatrix).forEach(row => {
+                const store = row.kind === 'income' ? maxIncomeCellByCurrency : maxExpenseCellByCurrency;
                 projectionMonths.forEach(p => {
                     const key = `${p.year}-${p.month}`;
-                    const sum = magnitudeOf(sumByCurrency(row.months[key]));
-                    if (row.kind === 'income') {
-                        if (sum > maxIncomeCellValue) maxIncomeCellValue = sum;
-                    } else {
-                        if (sum > maxExpenseCellValue) maxExpenseCellValue = sum;
-                    }
+                    const cellSums = sumByCurrency(row.months[key]);
+                    Object.keys(cellSums).forEach(c => {
+                        store[c] = Math.max(cellSums[c], store[c] || 0);
+                    });
                 });
             });
 
@@ -1459,14 +1441,21 @@
                 projectionMonths.forEach(p => {
                     const key = `${p.year}-${p.month}`;
                     const cellSums = sumByCurrency(row.months[key]);
-                    const sum = magnitudeOf(cellSums);
 
-                    if (sum === 0) {
+                    if (magnitudeOf(cellSums) === 0) {
                         cellsHtml += `<td class="heatmap-empty">-</td>`;
                     } else {
-                        // Calculate opacity relative to max value in its category type (using power scale to increase sensitivity)
-                        const maxVal = row.kind === 'income' ? maxIncomeCellValue : maxExpenseCellValue;
-                        const ratio = Math.pow(sum / maxVal, 0.4);
+                        // Calculate opacity relative to the max value THIS cell's own currency
+                        // reaches anywhere in the matrix (using power scale to increase
+                        // sensitivity) — never against another currency's max, see above.
+                        const cellCurrency = primaryCurrencyOf(cellSums);
+                        const cellVal = valueIn(cellSums, cellCurrency);
+                        const maxByCurrency = row.kind === 'income' ? maxIncomeCellByCurrency : maxExpenseCellByCurrency;
+                        // Falls back to this cell's own value (never a fixed constant) in the
+                        // unreachable case where the tracking pass above somehow missed this
+                        // currency — guarantees a 1.0 ratio rather than a division by zero.
+                        const maxVal = valueIn(maxByCurrency, cellCurrency) || cellVal;
+                        const ratio = Math.pow(cellVal / maxVal, 0.4);
                         const opacity = Math.min(1, Math.max(0.12, ratio));
                         const bgColor = row.kind === 'income'
                             ? `rgba(16, 185, 129, ${opacity})`

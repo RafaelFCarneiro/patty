@@ -874,45 +874,18 @@ async function initCurrencySelector() {
     currentDisplayCurrency = select.value;
 }
 
-function addMultiCurrency(map, currency, amount) {
-    var c = currency || 'BRL';
-    var a = Number(amount) || 0;
-    map[c] = (map[c] || 0) + a;
-}
-
-// Multi-currency amounts are never converted or summed together (docs/architecture.md: summaries
-// group per currency, never convert implicitly) — a single number (a KPI, a percentage, a chart
-// value) can only ever read ONE real currency's own amount, never a blended/converted total.
-function primaryCurrencyOf(map) {
-    var keys = Object.keys(map || {}).filter(function(c) { return map[c]; });
-    if (keys.length === 0) keys = Object.keys(map || {});
-    if (keys.indexOf('BRL') !== -1) return 'BRL';
-    keys.sort();
-    return keys[0] || 'BRL';
-}
-
-function valueIn(map, currency) {
-    return (map && map[currency]) || 0;
-}
-
-// Row/category display ORDER only, never a number shown to the user — a plain sum of raw units
-// across currencies (deliberately not a currency conversion) so rows with more overall activity
-// sort first regardless of currency mix. See primaryCurrencyOf/valueIn for anything displayed.
-function magnitudeOf(map) {
-    var sum = 0;
-    for (var c in map) {
-        sum += Number(map[c]) || 0;
-    }
-    return sum;
-}
-
+// addMultiCurrency/valueIn/primaryCurrencyOf/magnitudeOf/mergeCurrencyMaps/DEFAULT_CURRENCY are
+// shared globals from ui/money.js (loaded before this fragment's script — see docs/ui.md) rather
+// than defined here, since they're pure map arithmetic with no fragment-local dependency.
+// formatCurrency/formatMultiCurrency stay local because they need this fragment's own resolved
+// currentLocale, which the shell-loaded, load-once money.js has no access to.
 function formatMultiCurrency(map, delimiter) {
     if (!delimiter) delimiter = ' / ';
-    if (!map) return formatCurrency(0, 'BRL');
+    if (!map) return formatCurrency(0, DEFAULT_CURRENCY);
     var parts = [];
     var keys = Object.keys(map).sort(function(a, b) {
-        if (a === 'BRL') return -1;
-        if (b === 'BRL') return 1;
+        if (a === DEFAULT_CURRENCY) return -1;
+        if (b === DEFAULT_CURRENCY) return 1;
         return a.localeCompare(b);
     });
     keys.forEach(function(c) {
@@ -921,12 +894,12 @@ function formatMultiCurrency(map, delimiter) {
             parts.push(formatCurrency(val, c));
         }
     });
-    if (parts.length === 0) return formatCurrency(0, 'BRL');
+    if (parts.length === 0) return formatCurrency(0, DEFAULT_CURRENCY);
     return parts.join(delimiter);
 }
 
-function formatCurrency(val, currency = 'BRL') {
-    const code = currency || 'BRL';
+function formatCurrency(val, currency = DEFAULT_CURRENCY) {
+    const code = currency || DEFAULT_CURRENCY;
     const loc = currentLocale === 'pt' ? 'pt-BR' : (currentLocale === 'es' ? 'es-ES' : 'en-US');
     return window.formatMoney(val || 0, code, { locale: loc });
 }
@@ -1029,7 +1002,7 @@ async function loadDashboardData() {
         txItems.forEach(tx => {
             if (tx.type === 'income') {
                 const amt = Number(tx.amount) || 0;
-                const curr = tx.currency || 'BRL';
+                const curr = tx.currency || DEFAULT_CURRENCY;
                 const catName = tx.categoryName || 'Uncategorized';
                 
                 if (!incomeCats[catName]) {
@@ -1072,7 +1045,7 @@ async function loadDashboardData() {
                 const lines = catGroup.lines || [];
 
                 lines.forEach(line => {
-                    const curr = line.currency || 'BRL';
+                    const curr = line.currency || DEFAULT_CURRENCY;
                     const limit = Number(line.limit) || 0;
                     const committed = Number(line.committed?.amount) || 0;
                     const effective = Number(line.effective?.amount) || 0;
@@ -1108,7 +1081,7 @@ async function loadDashboardData() {
         txItems.forEach(tx => {
             if (tx.type === 'expense') {
                 const catName = tx.categoryName || 'Other';
-                const curr = tx.currency || 'BRL';
+                const curr = tx.currency || DEFAULT_CURRENCY;
                 const amt = Number(tx.amount) || 0;
 
                 if (!budgetCategoryMap[catName]) {
@@ -1393,7 +1366,7 @@ function renderTransactionsTable(txs) {
     txs.forEach(tx => {
         const isEff = tx.status === 'effective';
         const dateStr = tx.date ? tx.date.split('-').reverse().join('/') : '-';
-        const valStr = formatCurrency(tx.amount, tx.currency || 'BRL');
+        const valStr = formatCurrency(tx.amount, tx.currency || DEFAULT_CURRENCY);
 
         rows += `
             <tr>
@@ -1638,7 +1611,7 @@ async function renderTrendChart(selectedYear, selectedMonth) {
         // Filter transactions for this week, restricted to the chart's single currency
         const weekTxs = txs.filter(tx => {
             if (!tx.date) return false;
-            if ((tx.currency || 'BRL') !== trendCurrency) return false;
+            if ((tx.currency || DEFAULT_CURRENCY) !== trendCurrency) return false;
             const parts = tx.date.split('T')[0].split('-');
             const day = parseInt(parts[2], 10);
             return day >= startDay && day <= endDay;

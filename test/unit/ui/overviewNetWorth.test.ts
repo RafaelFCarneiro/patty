@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 // loadDashboardData, ...) stays dormant — the test drives renderNetWorth() directly by setting the
 // module-scope `consolidatedNetWorth`/`currentLocale` vars it reads.
 const OVERVIEW_HTML_PATH = fileURLToPath(new URL('../../../ui/dashboards/overview.html', import.meta.url));
+const MONEY_JS_PATH = fileURLToPath(new URL('../../../ui/money.js', import.meta.url));
 
 type StubElement = {
   innerHTML: string;
@@ -119,6 +120,16 @@ const makeSandboxBase = (
   sandbox.window = sandbox;
   (sandbox.window as Record<string, unknown>).location = { pathname: '/ui/overview', search: '' };
   (sandbox.window as Record<string, unknown>).history = { pushState() {} };
+
+  // The real shell (ui/shell.html) always loads ui/money.js before any fragment script runs, and
+  // overview.html now depends on its DEFAULT_CURRENCY/addMultiCurrency/valueIn/primaryCurrencyOf/
+  // magnitudeOf/mergeCurrencyMaps globals (issue #174) rather than defining local copies — so this
+  // sandbox mirrors that load order instead of leaving those globals undefined.
+  vm.createContext(sandbox);
+  vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });
+
+  // Deterministic stub, overriding the real formatMoney money.js just installed — assertions below
+  // match literal strings and shouldn't depend on Intl locale data.
   (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) =>
     `${currency} ${value}`;
   return sandbox;
@@ -126,7 +137,6 @@ const makeSandboxBase = (
 
 const runFragmentScript = (sandbox: Record<string, unknown>) => {
   const script = extractFragmentScript(readFileSync(OVERVIEW_HTML_PATH, 'utf-8'));
-  vm.createContext(sandbox);
   vm.runInContext(script, sandbox, { filename: OVERVIEW_HTML_PATH });
 };
 
