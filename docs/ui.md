@@ -91,10 +91,24 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   `/api/accounts/balances` call already returns `consolidatedNetWorth`, so the "Net worth (home currency)"
   badge on the Bank Accounts widget needs no extra fetch — same `window.formatMoney(total, baseCurrency)` +
   excluded-count note rendering, with an "n.a." fallback when the field is absent (e.g. the balances fetch
-  failed) rather than showing a fabricated number. `comparative.html`/`projections.html` compute their KPI
-  totals client-side from raw `/api/transactions` (a pre-existing single-currency blend, issue #174) instead
-  of `/api/summary`/`/api/aggregate`, so neither has an existing per-currency grand total to layer a
-  converted one onto without first fixing that gap.
+  failed) rather than showing a fabricated number — unaffected by the issue #174 fix below. `overview.html`,
+  `comparative.html`, and `projections.html` compute their other KPI, calendar/day, category, and
+  heat-map totals client-side from raw `/api/transactions`, bucketed per currency (issue #174 fix) via the
+  same `addMultiCurrency`/`valueIn`/`primaryCurrencyOf`/`formatMultiCurrency` helpers `budget.html`
+  established: every accumulator is a `{currency: amount}` map rendered with `formatMultiCurrency` (never a
+  single blended number), a row/cell's own percentage or bar width compares same-currency amounts only
+  (`primaryCurrencyOf` picks that row's representative currency), and Chart.js series (needing one numeric
+  series) render the primary currency only — the KPI/table text above them already shows every currency
+  correctly. `overview.html`'s compact calendar day cells (no room for multiple currency lines) resolve
+  income/expense/transfer as three independent `primaryCurrencyOf` picks — never one shared currency for
+  the whole day, which would silently zero out (and hide) a real flow whenever it happened to be in a
+  different currency than whichever flow dominated that day — and render each via `formatCurrencyNoSymbol`;
+  the full per-transaction, per-currency breakdown is one click away in the day-details drawer. None of the
+  three fragments convert across currencies
+  client-side (that would duplicate the backend's `consolidateInCurrency` rate/staleness logic in JS); a
+  converted grand total for `comparative.html`/`projections.html`, matching `budget.html`'s
+  `displayCurrency` pattern, would require moving their aggregation to a server endpoint first and is
+  deferred as a follow-up (issue #193).
 
 ## Shared component classes across fragments (issue #164)
 

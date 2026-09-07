@@ -834,12 +834,52 @@
         var panelsLoading = document.getElementById('panels-loading');
         var heatmapLoading = document.getElementById('heatmap-loading');
 
-        // Helpers. NOTE: this dashboard blends every transaction's amount into one total regardless
-        // of its actual currency, always labeled BRL — a pre-existing gap (#174) unrelated to this
-        // formatter swap; formatBRL still always formats as BRL, byte-for-byte the same as before,
-        // just routed through the shared crypto-aware helper.
-        function formatBRL(val) {
-            return window.formatMoney(val, 'BRL');
+        // Money formatting — per currency, never blended (issue #174 fix). Every accumulator below
+        // is keyed by currency; formatMultiCurrency renders each currency's own amount side by side
+        // instead of collapsing them into a single mislabeled total.
+        const DEFAULT_CURRENCY = 'BRL';
+
+        function formatCurrency(val, currency) {
+            const loc = currentLocale === 'pt' ? 'pt-BR' : (currentLocale === 'es' ? 'es-ES' : 'en-US');
+            return window.formatMoney(val || 0, currency || DEFAULT_CURRENCY, { locale: loc });
+        }
+
+        function addMultiCurrency(map, currency, amount) {
+            const c = currency || DEFAULT_CURRENCY;
+            map[c] = (map[c] || 0) + (Number(amount) || 0);
+        }
+
+        function valueIn(map, currency) {
+            return (map && map[currency]) || 0;
+        }
+
+        // Never a number shown to the user — picks which currency represents a row for
+        // percentage/bar-width/color computations that can only compare like with like.
+        function primaryCurrencyOf(map) {
+            let keys = Object.keys(map || {}).filter(c => map[c]);
+            if (keys.length === 0) keys = Object.keys(map || {});
+            if (keys.indexOf(DEFAULT_CURRENCY) !== -1) return DEFAULT_CURRENCY;
+            keys.sort();
+            return keys[0] || DEFAULT_CURRENCY;
+        }
+
+        // Row sort order only, never a number shown to the user — a plain sum of raw units across
+        // currencies (deliberately not a currency conversion) so rows with more overall activity
+        // sort first regardless of currency mix.
+        function magnitudeOf(map) {
+            return Object.keys(map || {}).reduce((sum, c) => sum + (Number(map[c]) || 0), 0);
+        }
+
+        function formatMultiCurrency(map, delimiter) {
+            if (!delimiter) delimiter = ' / ';
+            if (!map) return formatCurrency(0, DEFAULT_CURRENCY);
+            const keys = Object.keys(map).sort((a, b) => {
+                if (a === DEFAULT_CURRENCY) return -1;
+                if (b === DEFAULT_CURRENCY) return 1;
+                return a.localeCompare(b);
+            });
+            const parts = keys.filter(c => map[c]).map(c => formatCurrency(map[c], c));
+            return parts.length ? parts.join(delimiter) : formatCurrency(0, DEFAULT_CURRENCY);
         }
 
         function escapeHtml(str) {
@@ -1199,7 +1239,7 @@
                                 ${escapeHtml(cat.name)}
                             </div>
                             <div class="cat-val-label">
-                                ${formatBRL(total)}
+                                ${formatCurrency(total, DEFAULT_CURRENCY)}
                                 <span class="cat-pct-label">${(pctEff + pctPend).toFixed(1)}%</span>
                             </div>
                         </div>
@@ -1210,8 +1250,8 @@
                         </div>
 
                         <div class="cat-breakdown-text">
-                            <span>Efetivado: <strong>${formatBRL(cat.effective)}</strong></span>
-                            <span>Pendente: <strong>${formatBRL(cat.pending)}</strong></span>
+                            <span>Efetivado: <strong>${formatCurrency(cat.effective, DEFAULT_CURRENCY)}</strong></span>
+                            <span>Pendente: <strong>${formatCurrency(cat.pending, DEFAULT_CURRENCY)}</strong></span>
                         </div>
                     </div>
 
@@ -1242,7 +1282,7 @@
                                                     </span>
                                                 </td>
                                                 <td style="text-align:right; font-weight:700; color:${t.type === 'income' ? 'var(--income-color)' : 'var(--text-main)'}">
-                                                    ${t.type === 'income' ? '+' : '-'} ${formatBRL(t.amount)}
+                                                    ${t.type === 'income' ? '+' : '-'} ${formatCurrency(t.amount, DEFAULT_CURRENCY)}
                                                 </td>
                                             </tr>
                                         `;
@@ -1260,8 +1300,16 @@
                 }
             });
 
-            document.getElementById('income-categories-total').textContent = formatBRL(incTotalSum);
-            document.getElementById('expense-categories-total').textContent = formatBRL(expTotalSum);
+            document.getElementById('income-categories-total').textContent = formatCurrency(incTotalSum, DEFAULT_CURRENCY);
+            document.getElementById('expense-categories-total').textContent = formatCurrency(expTotalSum, DEFAULT_CURRENCY);
+        }
+
+        // Sums a list of transactions into a currency -> amount map — never a blended scalar, so a
+        // cell/row/column mixing BRL/USD/BTC recurrences keeps each currency's own total.
+        function sumByCurrency(txs) {
+            const map = {};
+            txs.forEach(tx => addMultiCurrency(map, tx.currency || DEFAULT_CURRENCY, tx.amount));
+            return map;
         }
 
         // Render Recurring & Installment Heat Map
@@ -1342,13 +1390,15 @@
                 heatMatrix[catId].months[key].push(t);
             });
 
-            // Determine max cell value to calculate color opacity relative range (heat map effect)
+            // Determine max cell magnitude to calculate color opacity relative range (heat map
+            // effect) — a plain cross-currency sum (magnitudeOf), never a displayed number, so a
+            // BTC row's opacity scale isn't skewed by a handful of BRL cents in the same matrix.
             let maxIncomeCellValue = 100;
             let maxExpenseCellValue = 100;
             Object.values(heatMatrix).forEach(row => {
                 projectionMonths.forEach(p => {
                     const key = `${p.year}-${p.month}`;
-                    const sum = row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                    const sum = magnitudeOf(sumByCurrency(row.months[key]));
                     if (row.kind === 'income') {
                         if (sum > maxIncomeCellValue) maxIncomeCellValue = sum;
                     } else {
@@ -1357,56 +1407,59 @@
                 });
             });
 
-            // Accumulators for column totals
+            // Accumulators for column totals — currency -> amount maps, never blended scalars.
             const colSums = {};
             projectionMonths.forEach(p => {
                 const key = `${p.year}-${p.month}`;
-                colSums[key] = { income: 0, expense: 0 };
+                colSums[key] = { income: {}, expense: {} };
             });
-            let totalIncomeSum = 0;
-            let totalExpenseSum = 0;
+            const totalIncomeSum = {};
+            const totalExpenseSum = {};
             let hasIncomeData = false;
             let hasExpenseData = false;
 
             // Render Rows
             Object.values(heatMatrix).forEach(row => {
-                // Calculate row total sum
-                let rowTotal = 0;
+                // Calculate row total sum, per currency
+                const rowTotal = {};
                 projectionMonths.forEach(p => {
                     const key = `${p.year}-${p.month}`;
-                    rowTotal += row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                    const cellSums = sumByCurrency(row.months[key]);
+                    Object.keys(cellSums).forEach(c => addMultiCurrency(rowTotal, c, cellSums[c]));
                 });
 
                 // Skip category row if it has no recurrings/installments in these months
-                if (rowTotal === 0) return;
+                if (magnitudeOf(rowTotal) === 0) return;
 
                 // Update column sums
                 if (row.kind === 'income') {
                     hasIncomeData = true;
-                    totalIncomeSum += rowTotal;
+                    Object.keys(rowTotal).forEach(c => addMultiCurrency(totalIncomeSum, c, rowTotal[c]));
                     projectionMonths.forEach(p => {
                         const key = `${p.year}-${p.month}`;
-                        colSums[key].income += row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                        const cellSums = sumByCurrency(row.months[key]);
+                        Object.keys(cellSums).forEach(c => addMultiCurrency(colSums[key].income, c, cellSums[c]));
                     });
                 } else {
                     hasExpenseData = true;
-                    totalExpenseSum += rowTotal;
+                    Object.keys(rowTotal).forEach(c => addMultiCurrency(totalExpenseSum, c, rowTotal[c]));
                     projectionMonths.forEach(p => {
                         const key = `${p.year}-${p.month}`;
-                        colSums[key].expense += row.months[key].reduce((acc, t) => acc + t.amount, 0);
+                        const cellSums = sumByCurrency(row.months[key]);
+                        Object.keys(cellSums).forEach(c => addMultiCurrency(colSums[key].expense, c, cellSums[c]));
                     });
                 }
 
                 const tr = document.createElement('tr');
-                
+
                 // Column 1: Category Name
                 let cellsHtml = `<td>${escapeHtml(row.categoryName)}</td>`;
 
                 // Columns: Months
                 projectionMonths.forEach(p => {
                     const key = `${p.year}-${p.month}`;
-                    const monthTxs = row.months[key];
-                    const sum = monthTxs.reduce((acc, t) => acc + t.amount, 0);
+                    const cellSums = sumByCurrency(row.months[key]);
+                    const sum = magnitudeOf(cellSums);
 
                     if (sum === 0) {
                         cellsHtml += `<td class="heatmap-empty">-</td>`;
@@ -1415,20 +1468,20 @@
                         const maxVal = row.kind === 'income' ? maxIncomeCellValue : maxExpenseCellValue;
                         const ratio = Math.pow(sum / maxVal, 0.4);
                         const opacity = Math.min(1, Math.max(0.12, ratio));
-                        const bgColor = row.kind === 'income' 
-                            ? `rgba(16, 185, 129, ${opacity})` 
+                        const bgColor = row.kind === 'income'
+                            ? `rgba(16, 185, 129, ${opacity})`
                             : `rgba(244, 63, 94, ${opacity})`;
-                        
+
                         const textColor = opacity > 0.65 ? '#fff' : 'var(--text-main)';
-                        
+
                         const cellId = `hc-${row.categoryId}-${key}`;
-                        
+
                         cellsHtml += `
                             <td style="padding:0.4rem;">
-                                <span class="heatmap-cell-value" id="${cellId}" 
-                                      style="background:${bgColor}; color:${textColor};" 
+                                <span class="heatmap-cell-value" id="${cellId}"
+                                      style="background:${bgColor}; color:${textColor};"
                                       onclick="showHeatmapCellDetails('${row.categoryId}', ${p.month}, ${p.year}, '${escapeJsAttr(row.categoryName)}')">
-                                    ${formatBRL(sum)}
+                                    ${formatMultiCurrency(cellSums)}
                                 </span>
                             </td>
                         `;
@@ -1436,7 +1489,7 @@
                 });
 
                 // Row Total
-                cellsHtml += `<td>${formatBRL(rowTotal)}</td>`;
+                cellsHtml += `<td>${formatMultiCurrency(rowTotal)}</td>`;
                 tr.innerHTML = cellsHtml;
 
                 if (row.kind === 'income') {
@@ -1464,9 +1517,9 @@
                     let cellsHtml = `<td style="text-align:left; font-weight:700;">TOTAL</td>`;
                     projectionMonths.forEach(p => {
                         const key = `${p.year}-${p.month}`;
-                        cellsHtml += `<td style="font-weight:700; color:var(--income-color);">${formatBRL(colSums[key].income)}</td>`;
+                        cellsHtml += `<td style="font-weight:700; color:var(--income-color);">${formatMultiCurrency(colSums[key].income)}</td>`;
                     });
-                    cellsHtml += `<td style="font-weight:700; color:var(--income-color);">${formatBRL(totalIncomeSum)}</td>`;
+                    cellsHtml += `<td style="font-weight:700; color:var(--income-color);">${formatMultiCurrency(totalIncomeSum)}</td>`;
                     incFoot.innerHTML = `<tr>${cellsHtml}</tr>`;
                 }
             }
@@ -1479,9 +1532,9 @@
                     let cellsHtml = `<td style="text-align:left; font-weight:700;">TOTAL</td>`;
                     projectionMonths.forEach(p => {
                         const key = `${p.year}-${p.month}`;
-                        cellsHtml += `<td style="font-weight:700; color:var(--expense-color);">${formatBRL(colSums[key].expense)}</td>`;
+                        cellsHtml += `<td style="font-weight:700; color:var(--expense-color);">${formatMultiCurrency(colSums[key].expense)}</td>`;
                     });
-                    cellsHtml += `<td style="font-weight:700; color:var(--expense-color);">${formatBRL(totalExpenseSum)}</td>`;
+                    cellsHtml += `<td style="font-weight:700; color:var(--expense-color);">${formatMultiCurrency(totalExpenseSum)}</td>`;
                     expFoot.innerHTML = `<tr>${cellsHtml}</tr>`;
                 }
             }
@@ -1534,7 +1587,7 @@
                     <td style="padding:0.5rem 0.75rem; font-weight:500;">${escapeHtml(t.description)}</td>
                     <td style="padding:0.5rem 0.75rem;">${escapeHtml(t.accountName)}</td>
                     <td style="padding:0.5rem 0.75rem; text-align:right; font-weight:700; white-space:nowrap; color:${t.type === 'income' ? 'var(--income-color)' : 'var(--expense-color)'}">
-                        ${t.type === 'income' ? '+' : '-'} ${formatBRL(Math.abs(t.amount))}
+                        ${t.type === 'income' ? '+' : '-'} ${formatCurrency(Math.abs(t.amount), t.currency || DEFAULT_CURRENCY)}
                     </td>
                 `;
                 body.appendChild(tr);
@@ -1556,12 +1609,14 @@
         }
 
 
-        // Render projected cash flow trend line chart using Chart.js
+        // Render projected cash flow trend line chart using Chart.js. Chart.js needs a single
+        // numeric series, so the chart shows ONE real currency (never a blended/converted total)
+        // — the heat map tables above already show every currency correctly.
         function renderProjectionLineChart(months, colSums) {
             if (projectionChartInstance) {
                 projectionChartInstance.destroy();
             }
-            
+
             const labels = months.map(p => {
                 const monthsNamesShort = {
                     1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
@@ -1570,14 +1625,18 @@
                 return `${monthsNamesShort[p.month]} ${String(p.year).substring(2)}`;
             });
 
+            const chartCurrency = primaryCurrencyOf(
+                Object.assign({}, ...months.map(p => colSums[`${p.year}-${p.month}`]?.income), ...months.map(p => colSums[`${p.year}-${p.month}`]?.expense))
+            );
+
             const incomeData = [];
             const expenseData = [];
             const netData = [];
 
             months.forEach(p => {
                 const key = `${p.year}-${p.month}`;
-                const inc = colSums[key]?.income || 0;
-                const exp = colSums[key]?.expense || 0;
+                const inc = valueIn(colSums[key]?.income, chartCurrency);
+                const exp = valueIn(colSums[key]?.expense, chartCurrency);
                 incomeData.push(inc);
                 expenseData.push(exp);
                 netData.push(inc - exp);
@@ -1641,7 +1700,7 @@
                                 color: '#9ca3af',
                                 font: { family: 'Plus Jakarta Sans' },
                                 callback: function(value) {
-                                    return 'R$ ' + value.toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                                    return formatCurrency(value, chartCurrency);
                                 }
                             }
                         }
