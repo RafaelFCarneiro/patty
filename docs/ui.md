@@ -130,11 +130,16 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   tracks its running max **per currency** rather than one shared max across the whole matrix — comparing a
   0.05 BTC cell's raw units directly against a 10,000 BRL cell's would always crush BTC toward the opacity
   floor regardless of its own relative size, so each currency's cells are only ever compared against that
-  same currency's own max. None of the three fragments convert across currencies
-  client-side (that would duplicate the backend's `consolidateInCurrency` rate/staleness logic in JS); a
-  converted grand total for `comparative.html`/`projections.html`, matching `budget.html`'s
-  `displayCurrency` pattern, would require moving their aggregation to a server endpoint first and is
-  deferred as a follow-up (issue #193).
+  same currency's own max. Because `formatCurrency` now reads `currentLocale`, `comparative.html`'s and
+  `projections.html`'s bootstrap sequencing was fixed to `await checkLocale()` before `initDashboard()`
+  runs (their `runInit()` — matching `budget.html`'s/`overview.html`'s existing pattern) — `checkLocale()`
+  only re-translates static `data-i18n` text afterward, it never re-renders the dynamic money values
+  `initDashboard()` already painted, so a locale fetch that lost the race would otherwise leave every KPI/
+  category/heat-map number stuck in the default `en` formatting for a pt/es user. None of the three
+  fragments convert across currencies client-side (that would duplicate the backend's
+  `consolidateInCurrency` rate/staleness logic in JS); a converted grand total for
+  `comparative.html`/`projections.html`, matching `budget.html`'s `displayCurrency` pattern, would require
+  moving their aggregation to a server endpoint first and is deferred as a follow-up (issue #193).
 
 ## Shared component classes across fragments (issue #164)
 

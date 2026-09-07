@@ -1706,11 +1706,16 @@
         if (ySel) ySel.addEventListener('change', loadTransactionsData);
         if (hmSel) hmSel.addEventListener('change', loadTransactionsData);
 
-        // Load bootstrap - try direct execution first, and bind to onload as fallback
+        // Load bootstrap - try direct execution first, and bind to onload as fallback.
+        // Locale must resolve before the first render: formatCurrency reads currentLocale, and
+        // checkLocale() only re-translates static data-i18n text afterward — it never re-renders
+        // the heat-map/chart money values initDashboard() already painted, so those would be stuck
+        // showing en-US formatting for a pt/es user if initDashboard() won the race.
         var hasInitialized = false;
         async function runInit() {
             if (hasInitialized) return;
             hasInitialized = true;
+            await checkLocale();
             await initDashboard();
         }
 
@@ -2499,7 +2504,6 @@ function initCustomSelects() {
 }
 
         runInit();
-            checkLocale();
 
 // ADR-027 Live-update listener
 window.fintrackOnDataChanged = function(entities) {

@@ -23,6 +23,7 @@ type StubElement = {
   classList: { add: () => void; remove: () => void };
   appendChild: (child: { innerHTML: string }) => void;
   addEventListener: () => void;
+  getContext: () => Record<string, unknown>;
 };
 
 const makeStubElement = (): StubElement => {
@@ -34,9 +35,28 @@ const makeStubElement = (): StubElement => {
       el.innerHTML += child.innerHTML;
     },
     addEventListener() {},
+    getContext: () => ({}),
   };
   return el;
 };
+
+// Captures every `new Chart(ctx, config)` call's config so tests can assert on the series data and
+// tooltip/axis callbacks without a real canvas or rendering engine.
+class StubChart {
+  static instances: StubChart[] = [];
+  config: {
+    data: { labels: string[]; datasets: Array<{ label: string; data: number[] }> };
+    options: {
+      plugins: { tooltip: { callbacks: { label: (ctx: unknown) => string } } };
+      scales: { y: { ticks: { callback: (value: number) => string } } };
+    };
+  };
+  constructor(_ctx: unknown, config: StubChart['config']) {
+    this.config = config;
+    StubChart.instances.push(this);
+  }
+  destroy() {}
+}
 
 const makeStubDocument = () => {
   const elements = new Map<string, StubElement>();
@@ -50,6 +70,12 @@ const makeStubDocument = () => {
   };
 };
 
+const firstChart = (): StubChart => {
+  const chart = StubChart.instances[0];
+  if (!chart) throw new Error('no Chart instance was created');
+  return chart;
+};
+
 const extractFragmentScript = (html: string): string => {
   const match = html.match(/<script>([\s\S]*?)<\/script>/);
   if (!match) throw new Error('projections.html: no <script> tag found');
@@ -61,6 +87,7 @@ const extractFragmentScript = (html: string): string => {
 // DEFAULT_CURRENCY/addMultiCurrency/valueIn/primaryCurrencyOf/magnitudeOf/mergeCurrencyMaps/
 // formatMultiCurrencyWith globals this fragment depends on (issue #174) instead of local copies.
 const loadProjectionsSandbox = () => {
+  StubChart.instances = [];
   const documentStub = makeStubDocument();
   const sandbox: Record<string, unknown> = {
     document: documentStub,
@@ -83,6 +110,7 @@ const loadProjectionsSandbox = () => {
     setTimeout,
     clearTimeout,
     fetch: () => new Promise(() => {}),
+    Chart: StubChart,
   };
   sandbox.window = sandbox;
   (sandbox.window as Record<string, unknown>).location = { pathname: '/ui/projections', search: '' };
@@ -234,5 +262,42 @@ describe('renderHeatMap (ui/dashboards/projections.html)', () => {
     // shared-max code (comparing 0.0001 raw BTC units against a 50000 BRL max) would instead land
     // on the 0.12 opacity floor here.
     expect(btcCellMatch?.[1]).toBe('rgba(244, 63, 94, 1)');
+  });
+});
+
+describe('renderProjectionLineChart (ui/dashboards/projections.html, via renderHeatMap)', () => {
+  const rentTx = (overrides: Partial<Tx>): Tx =>
+    tx({ categoryId: 'cat-rent', categoryName: 'Aluguel', type: 'income', ...overrides });
+
+  it('renders only the representative currency\'s monthly totals, excluding every other currency', () => {
+    const { sandbox } = loadProjectionsSandbox();
+    sandbox.categories = [{ id: 'cat-rent', name: 'Aluguel', kind: 'income' }];
+    sandbox.projectionMonths = [SEPT_2026, OCT_2026];
+    sandbox.allTransactions = [
+      rentTx({ date: '2026-09-05', amount: 1000, currency: 'BRL' }),
+      rentTx({ date: '2026-09-06', amount: 50, currency: 'USD' }),
+      rentTx({ date: '2026-10-05', amount: 2000, currency: 'BRL' }),
+    ];
+
+    (sandbox.renderHeatMap as () => void)();
+
+    const chart = firstChart();
+    expect(chart.config.data.datasets[0]!.label).toBe('Receitas Projetadas');
+    expect(chart.config.data.datasets[0]!.data).toEqual([1000, 2000]); // BRL only — USD's 50 excluded
+  });
+
+  it('labels tooltip and y-axis values with the selected currency, not a bare number', () => {
+    const { sandbox } = loadProjectionsSandbox();
+    sandbox.categories = [{ id: 'cat-rent', name: 'Aluguel', kind: 'income' }];
+    sandbox.projectionMonths = [SEPT_2026];
+    sandbox.allTransactions = [rentTx({ amount: 1000, currency: 'BRL' })];
+
+    (sandbox.renderHeatMap as () => void)();
+
+    const chart = firstChart();
+    const tooltipCtx = { dataset: { label: 'Receitas Projetadas' }, raw: 1000 };
+    const label = chart.config.options.plugins.tooltip.callbacks.label(tooltipCtx);
+    expect(label).toBe('Receitas Projetadas: BRL 1000');
+    expect(chart.config.options.scales.y.ticks.callback(500)).toBe('BRL 500');
   });
 });
