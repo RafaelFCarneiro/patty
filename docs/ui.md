@@ -84,10 +84,17 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   every dashboard's per-currency aggregation depends on (issue #174) — `addMultiCurrency(map, currency,
   amount)`, `valueIn(map, currency)`, `primaryCurrencyOf(map)`, `magnitudeOf(map)`, `mergeCurrencyMaps(...maps)`
   (additive; `Object.assign`/spread would silently drop a currency present in more than one input map instead
-  of summing it). These are pure, locale-independent map operations, so they're defined once here instead of
-  copy-pasted into every fragment; each fragment still owns its own thin `formatCurrency`/`formatMultiCurrency`
-  wrapper locally (calling `window.formatMoney`) because those need the fragment's own resolved UI locale
-  (`currentLocale`), which this shell-loaded, load-once module has no access to.
+  of summing it), and `formatMultiCurrencyWith(map, formatFn, delimiter?)` (renders every currency in a map
+  side by side via the caller's own `formatFn`; skips a zeroed-out currency only when a non-zero one is ALSO
+  present — an all-zero map, e.g. a USD-only month whose income and expense net to exactly zero, still names
+  its real currencies instead of silently falling back to a DEFAULT_CURRENCY-labeled zero, which would
+  mislabel that USD zero as BRL). These are pure, locale-independent operations, so they're defined once here
+  instead of copy-pasted into every fragment; each fragment still owns its own thin `formatCurrency` wrapper
+  locally (calling `window.formatMoney`) plus a one-line `formatMultiCurrency(map, delimiter)` that just
+  delegates to `formatMultiCurrencyWith(map, formatCurrency, delimiter)` — `formatCurrency` needs the
+  fragment's own resolved UI locale (`currentLocale`), which this shell-loaded, load-once module has no
+  access to, so the delegation is the only way to reuse the shared sort/fallback logic without also sharing
+  that locale dependency.
 - **`ui/dashboards/*.html`** (ADR-027 Phase 2) — the default dashboard fragments, one file per default,
   git-versioned and read-only at the install location; bootstrap reconciles them into `source: 'file'` rows.
   `accounts.html` and `budget.html` render an opt-in converted grand total where the backend already exposes
@@ -102,12 +109,15 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   `overview.html`, `comparative.html`, and `projections.html` compute their other KPI, calendar/day,
   category, and heat-map totals client-side from raw `/api/transactions`, bucketed per currency (issue #174
   fix) via `ui/money.js`'s shared `addMultiCurrency`/`valueIn`/`primaryCurrencyOf`/`magnitudeOf`/
-  `mergeCurrencyMaps` (originally defined once per fragment — `budget.html` first — then consolidated into
-  `money.js` so the four fragments share one implementation instead of four copies): every accumulator is a
-  `{currency: amount}` map rendered with each fragment's own local `formatMultiCurrency` (never a single
-  blended number), a row/cell's own percentage or bar width compares same-currency amounts only
-  (`primaryCurrencyOf` picks that row's representative currency), and Chart.js series (needing one numeric
-  series) render the primary currency only — the KPI/table text above them already shows every currency
+  `mergeCurrencyMaps`/`formatMultiCurrencyWith` (originally defined once per fragment — `budget.html` first —
+  then consolidated into `money.js` so the four fragments share one implementation instead of four copies):
+  every accumulator is a `{currency: amount}` map rendered with each fragment's own local
+  `formatMultiCurrency` (a thin delegate to the shared `formatMultiCurrencyWith`, never a single blended
+  number), a row/cell's own percentage or bar width compares same-currency amounts only (`primaryCurrencyOf`
+  picks that row's representative currency), and Chart.js series (needing one numeric series) render the
+  primary currency only, labeled via a tooltip/axis-tick callback calling `formatCurrency(value, currency)`
+  (matching `budget.html`'s existing chart-formatting pattern) so a USD/BTC-only chart isn't shown as bare
+  unitless numbers — the KPI/table text above them already shows every currency
   correctly. `overview.html`'s compact calendar day cells (no room for multiple currency lines) resolve
   income/expense/transfer as three independent `primaryCurrencyOf` picks — never one shared currency for
   the whole day, which would silently zero out (and hide) a real flow whenever it happened to be in a

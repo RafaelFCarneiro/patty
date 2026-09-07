@@ -86,6 +86,11 @@ type CurrencyHelpers = {
   primaryCurrencyOf: (map: CurrencyMap | undefined) => string;
   magnitudeOf: (map: CurrencyMap | undefined) => number;
   mergeCurrencyMaps: (...maps: Array<CurrencyMap | undefined>) => CurrencyMap;
+  formatMultiCurrencyWith: (
+    map: CurrencyMap | undefined,
+    formatFn: (value: number, currency: string) => string,
+    delimiter?: string,
+  ) => string;
 };
 
 const loadCurrencyHelpers = (): CurrencyHelpers => {
@@ -194,5 +199,44 @@ describe('window.mergeCurrencyMaps (ui/money.js)', () => {
   it('treats a missing map as empty rather than throwing', () => {
     const { mergeCurrencyMaps } = loadCurrencyHelpers();
     expect(mergeCurrencyMaps(undefined, { BRL: 10 })).toEqual({ BRL: 10 });
+  });
+});
+
+describe('window.formatMultiCurrencyWith (ui/money.js)', () => {
+  const stubFormat = (value: number, currency: string) => `${currency} ${value}`;
+
+  it('formats every non-zero currency, BRL first, joined by the delimiter', () => {
+    const { formatMultiCurrencyWith } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({ USD: 50, BRL: 100 }, stubFormat)).toBe('BRL 100 / USD 50');
+  });
+
+  it('accepts a custom delimiter', () => {
+    const { formatMultiCurrencyWith } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({ BRL: 100, USD: 50 }, stubFormat, ' | ')).toBe('BRL 100 | USD 50');
+  });
+
+  it('skips a zeroed-out currency when a real one is present', () => {
+    const { formatMultiCurrencyWith } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({ BRL: 100, USD: 0 }, stubFormat)).toBe('BRL 100');
+  });
+
+  it('falls back to DEFAULT_CURRENCY zero only for a genuinely empty (or undefined) map', () => {
+    const { formatMultiCurrencyWith, DEFAULT_CURRENCY } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({}, stubFormat)).toBe(`${DEFAULT_CURRENCY} 0`);
+    expect(formatMultiCurrencyWith(undefined, stubFormat)).toBe(`${DEFAULT_CURRENCY} 0`);
+  });
+
+  it('names its real currency at zero instead of silently relabeling it as DEFAULT_CURRENCY', () => {
+    // Regression test: a USD-only month whose income and expense net to exactly zero produces
+    // netBalance = { USD: 0 } — filtering out every zero entry before falling back to
+    // formatFn(0, DEFAULT_CURRENCY) would render that as a BRL zero, exactly the kind of
+    // currency mislabeling issue #174 exists to eliminate.
+    const { formatMultiCurrencyWith } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({ USD: 0 }, stubFormat)).toBe('USD 0');
+  });
+
+  it('shows every currency present when all of them are zero, rather than picking one', () => {
+    const { formatMultiCurrencyWith } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({ BRL: 0, USD: 0 }, stubFormat)).toBe('BRL 0 / USD 0');
   });
 });

@@ -104,4 +104,24 @@
     });
     return result;
   };
+
+  // Renders every currency in a map side by side — never a single blended number — via the
+  // caller-supplied formatFn (each fragment passes its own locale-aware formatCurrency, which this
+  // shell-loaded, load-once module has no access to itself). A currency is skipped only when a
+  // real (non-zero) currency is ALSO present in the map: an all-zero map (e.g. a USD-only month
+  // whose income and expense net to exactly zero) still names its real currencies rather than
+  // falling through to the DEFAULT_CURRENCY zero fallback, which would silently relabel that USD
+  // zero as BRL — only a genuinely empty map (no keys at all) uses the DEFAULT_CURRENCY fallback.
+  window.formatMultiCurrencyWith = function (map, formatFn, delimiter) {
+    delimiter = delimiter || ' / ';
+    if (!map || Object.keys(map).length === 0) return formatFn(0, window.DEFAULT_CURRENCY);
+    var keys = Object.keys(map).sort(function (a, b) {
+      if (a === window.DEFAULT_CURRENCY) return -1;
+      if (b === window.DEFAULT_CURRENCY) return 1;
+      return a.localeCompare(b);
+    });
+    var nonZeroKeys = keys.filter(function (c) { return map[c]; });
+    var keysToShow = nonZeroKeys.length > 0 ? nonZeroKeys : keys;
+    return keysToShow.map(function (c) { return formatFn(map[c], c); }).join(delimiter);
+  };
 })();

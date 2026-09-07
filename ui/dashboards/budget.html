@@ -874,28 +874,13 @@ async function initCurrencySelector() {
     currentDisplayCurrency = select.value;
 }
 
-// addMultiCurrency/valueIn/primaryCurrencyOf/magnitudeOf/mergeCurrencyMaps/DEFAULT_CURRENCY are
-// shared globals from ui/money.js (loaded before this fragment's script — see docs/ui.md) rather
-// than defined here, since they're pure map arithmetic with no fragment-local dependency.
-// formatCurrency/formatMultiCurrency stay local because they need this fragment's own resolved
-// currentLocale, which the shell-loaded, load-once money.js has no access to.
+// addMultiCurrency/valueIn/primaryCurrencyOf/magnitudeOf/mergeCurrencyMaps/formatMultiCurrencyWith/
+// DEFAULT_CURRENCY are shared globals from ui/money.js (loaded before this fragment's script — see
+// docs/ui.md) rather than defined here. formatCurrency stays local — and formatMultiCurrency is
+// just a 1-line delegate to formatMultiCurrencyWith passing it — because they need this fragment's
+// own resolved currentLocale, which the shell-loaded, load-once money.js has no access to.
 function formatMultiCurrency(map, delimiter) {
-    if (!delimiter) delimiter = ' / ';
-    if (!map) return formatCurrency(0, DEFAULT_CURRENCY);
-    var parts = [];
-    var keys = Object.keys(map).sort(function(a, b) {
-        if (a === DEFAULT_CURRENCY) return -1;
-        if (b === DEFAULT_CURRENCY) return 1;
-        return a.localeCompare(b);
-    });
-    keys.forEach(function(c) {
-        var val = map[c] || 0;
-        if (val !== 0) {
-            parts.push(formatCurrency(val, c));
-        }
-    });
-    if (parts.length === 0) return formatCurrency(0, DEFAULT_CURRENCY);
-    return parts.join(delimiter);
+    return window.formatMultiCurrencyWith(map, formatCurrency, delimiter);
 }
 
 function formatCurrency(val, currency = DEFAULT_CURRENCY) {

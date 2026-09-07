@@ -853,11 +853,12 @@
         // Money formatting — per currency, never blended (issue #174 fix). Every accumulator below
         // is keyed by currency; formatMultiCurrency renders each currency's own amount side by side
         // instead of collapsing them into a single mislabeled total. addMultiCurrency/valueIn/
-        // primaryCurrencyOf/magnitudeOf/mergeCurrencyMaps/DEFAULT_CURRENCY are shared globals from
-        // ui/money.js (loaded before this fragment's script — see docs/ui.md) rather than defined
-        // here, since they're pure map arithmetic with no fragment-local dependency. formatCurrency/
-        // formatCurrencyNoSymbol/formatMultiCurrency stay local because they need this fragment's
-        // own resolved currentLocale, which the shell-loaded, load-once money.js has no access to.
+        // primaryCurrencyOf/magnitudeOf/mergeCurrencyMaps/formatMultiCurrencyWith/DEFAULT_CURRENCY
+        // are shared globals from ui/money.js (loaded before this fragment's script — see
+        // docs/ui.md) rather than defined here. formatCurrency/formatCurrencyNoSymbol stay local —
+        // and formatMultiCurrency is just a 1-line delegate to formatMultiCurrencyWith passing
+        // formatCurrency — because they need this fragment's own resolved currentLocale, which the
+        // shell-loaded, load-once money.js has no access to.
         function formatCurrency(value, currency) {
             const loc = currentLocale === 'pt' ? 'pt-BR' : (currentLocale === 'es' ? 'es-ES' : 'en-US');
             return window.formatMoney(value || 0, currency || DEFAULT_CURRENCY, { locale: loc });
@@ -875,15 +876,7 @@
         }
 
         function formatMultiCurrency(map, delimiter) {
-            if (!delimiter) delimiter = ' / ';
-            if (!map) return formatCurrency(0, DEFAULT_CURRENCY);
-            const keys = Object.keys(map).sort((a, b) => {
-                if (a === DEFAULT_CURRENCY) return -1;
-                if (b === DEFAULT_CURRENCY) return 1;
-                return a.localeCompare(b);
-            });
-            const parts = keys.filter(c => map[c]).map(c => formatCurrency(map[c], c));
-            return parts.length ? parts.join(delimiter) : formatCurrency(0, DEFAULT_CURRENCY);
+            return window.formatMultiCurrencyWith(map, formatCurrency, delimiter);
         }
 
         function escapeHtml(str) {
@@ -2420,7 +2413,14 @@ function initCustomSelects() {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false } // Hide legend for premium look
+                        legend: { display: false }, // Hide legend for premium look
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    return `${ctx.label}: ${formatCurrency(ctx.raw, chartCurrency)}`;
+                                }
+                            }
+                        }
                     },
                     cutout: '70%'
                 }
