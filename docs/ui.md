@@ -88,8 +88,10 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   side by side via the caller's own `formatFn`; skips a zeroed-out currency only when a non-zero one is ALSO
   present — an all-zero map, e.g. a USD-only month whose income and expense net to exactly zero, still names
   its real currencies instead of silently falling back to a DEFAULT_CURRENCY-labeled zero, which would
-  mislabel that USD zero as BRL). These are pure, locale-independent operations, so they're defined once here
-  instead of copy-pasted into every fragment; each fragment still owns its own thin `formatCurrency` wrapper
+  mislabel that USD zero as BRL). These are locale-independent operations (`addMultiCurrency` intentionally
+  mutates its `map` argument in place — an accumulator, not a pure function — the rest don't mutate their
+  inputs), so they're defined once here instead of copy-pasted into every fragment; each fragment still owns
+  its own thin `formatCurrency` wrapper
   locally (calling `window.formatMoney`) plus a one-line `formatMultiCurrency(map, delimiter)` that just
   delegates to `formatMultiCurrencyWith(map, formatCurrency, delimiter)` — `formatCurrency` needs the
   fragment's own resolved UI locale (`currentLocale`), which this shell-loaded, load-once module has no

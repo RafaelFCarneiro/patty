@@ -1658,11 +1658,19 @@
         // checkLocale() only re-translates static data-i18n text afterward — it never re-renders
         // the KPI/category/chart money values initDashboard() already painted, so those would be
         // stuck showing en-US formatting for a pt/es user if initDashboard() won the race.
+        //
+        // panelsLoading (captured above, before this await) doubles as this fragment's own-instance
+        // marker: if the user navigates away while checkLocale()'s /api/status request is still in
+        // flight, app.js's renderFragment() tears this fragment's DOM down for the next one, so
+        // panelsLoading.isConnected goes false — without this guard, the stale continuation would
+        // resume anyway and initDashboard()'s document.getElementById(...) calls could write into
+        // whatever dashboard loaded next (mirrors overview.html's initOverview guard).
         var hasInitialized = false;
         async function runInit() {
             if (hasInitialized) return;
             hasInitialized = true;
             await checkLocale();
+            if (!panelsLoading || !panelsLoading.isConnected) return;
             await initDashboard();
         }
 

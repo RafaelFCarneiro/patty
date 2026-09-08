@@ -60,11 +60,12 @@
   // Currency-map arithmetic shared across dashboard fragments (issue #174) — every fragment that
   // aggregates transactions keeps its own accumulator as a {currency: amount} map instead of a
   // single blended scalar (docs/architecture.md: aggregations group per currency, never convert
-  // implicitly). These are pure, locale-independent map operations, so they live here instead of
-  // being copy-pasted into every fragment; each fragment still owns its own thin
-  // formatCurrency/formatMultiCurrency wrapper locally because those need the fragment's own
-  // resolved UI locale (e.g. budget.html's currentLocale), which this shell-loaded, load-once
-  // module has no access to.
+  // implicitly). These are locale-independent map operations (addMultiCurrency intentionally
+  // mutates its `map` argument in place — an accumulator, not a pure function — the rest don't
+  // mutate their inputs), so they live here instead of being copy-pasted into every fragment; each
+  // fragment still owns its own thin formatCurrency/formatMultiCurrency wrapper locally because
+  // those need the fragment's own resolved UI locale (e.g. budget.html's currentLocale), which this
+  // shell-loaded, load-once module has no access to.
   window.DEFAULT_CURRENCY = 'BRL';
 
   window.addMultiCurrency = function (map, currency, amount) {
