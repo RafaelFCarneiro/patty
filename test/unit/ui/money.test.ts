@@ -74,3 +74,169 @@ describe('window.formatMoney (ui/money.js)', () => {
     );
   });
 });
+
+// Currency-map arithmetic shared across every dashboard fragment (issue #174) — moved here from
+// per-fragment copies (budget.html originally, then comparative/projections/overview.html) so
+// there's one implementation to test instead of four. See ui/money.js's own header comment.
+type CurrencyMap = Record<string, number>;
+type CurrencyHelpers = {
+  DEFAULT_CURRENCY: string;
+  addMultiCurrency: (map: CurrencyMap, currency: string | undefined, amount: number) => void;
+  valueIn: (map: CurrencyMap | undefined, currency: string) => number;
+  primaryCurrencyOf: (map: CurrencyMap | undefined) => string;
+  magnitudeOf: (map: CurrencyMap | undefined) => number;
+  mergeCurrencyMaps: (...maps: Array<CurrencyMap | undefined>) => CurrencyMap;
+  formatMultiCurrencyWith: (
+    map: CurrencyMap | undefined,
+    formatFn: (value: number, currency: string) => string,
+    delimiter?: string,
+  ) => string;
+};
+
+const loadCurrencyHelpers = (): CurrencyHelpers => {
+  const source = readFileSync(MONEY_JS_PATH, 'utf-8');
+  const window: Record<string, unknown> = { formatMoney: () => '' };
+  const sandbox = { window, Intl, Number };
+  vm.createContext(sandbox);
+  vm.runInContext(source, sandbox, { filename: MONEY_JS_PATH });
+  return sandbox.window as unknown as CurrencyHelpers;
+};
+
+describe('window.DEFAULT_CURRENCY / addMultiCurrency (ui/money.js)', () => {
+  it('defaults an unset currency to DEFAULT_CURRENCY and accumulates repeated calls', () => {
+    const { addMultiCurrency, DEFAULT_CURRENCY } = loadCurrencyHelpers();
+    const map: CurrencyMap = {};
+    addMultiCurrency(map, undefined, 10);
+    addMultiCurrency(map, DEFAULT_CURRENCY, 5);
+    addMultiCurrency(map, 'USD', 2);
+    addMultiCurrency(map, 'USD', 3);
+
+    expect(map).toEqual({ [DEFAULT_CURRENCY]: 15, USD: 5 });
+  });
+
+  it('never produces NaN from a non-numeric amount', () => {
+    const { addMultiCurrency } = loadCurrencyHelpers();
+    const map: CurrencyMap = {};
+    addMultiCurrency(map, 'BTC', Number.NaN);
+    addMultiCurrency(map, 'BTC', 0.0015);
+
+    expect(map.BTC).toBe(0.0015);
+  });
+});
+
+describe('window.valueIn (ui/money.js)', () => {
+  it('reads a present currency and falls back to 0 for a missing one or an undefined map', () => {
+    const { valueIn } = loadCurrencyHelpers();
+    expect(valueIn({ BRL: 100 }, 'BRL')).toBe(100);
+    expect(valueIn({ BRL: 100 }, 'USD')).toBe(0);
+    expect(valueIn(undefined, 'BRL')).toBe(0);
+  });
+});
+
+describe('window.primaryCurrencyOf (ui/money.js)', () => {
+  it('picks BRL when present, regardless of magnitude', () => {
+    const { primaryCurrencyOf } = loadCurrencyHelpers();
+    expect(primaryCurrencyOf({ BRL: 1, USD: 100000 })).toBe('BRL');
+  });
+
+  it('picks alphabetically first among non-BRL currencies', () => {
+    const { primaryCurrencyOf } = loadCurrencyHelpers();
+    expect(primaryCurrencyOf({ USD: 50, BTC: 0.01 })).toBe('BTC');
+  });
+
+  it('ignores zero-valued entries when a non-zero currency is also present', () => {
+    const { primaryCurrencyOf } = loadCurrencyHelpers();
+    expect(primaryCurrencyOf({ USD: 0, BTC: 0.01 })).toBe('BTC');
+  });
+
+  it('falls back to DEFAULT_CURRENCY only for a truly empty (or undefined) map', () => {
+    const { primaryCurrencyOf, DEFAULT_CURRENCY } = loadCurrencyHelpers();
+    expect(primaryCurrencyOf({})).toBe(DEFAULT_CURRENCY);
+    expect(primaryCurrencyOf(undefined)).toBe(DEFAULT_CURRENCY);
+  });
+
+  it('still names a currency present with only a zero value, when no other currency exists', () => {
+    // Falling back to DEFAULT_CURRENCY here (instead of the one real key present) would silently
+    // relabel a zeroed-out USD row as BRL — the zero-value filter only exists to prefer a non-zero
+    // currency over a zero one when both are present, not to discard the only currency there is.
+    const { primaryCurrencyOf } = loadCurrencyHelpers();
+    expect(primaryCurrencyOf({ USD: 0 })).toBe('USD');
+  });
+});
+
+describe('window.magnitudeOf (ui/money.js)', () => {
+  it('sums raw units across currencies — a display-order/boolean heuristic, never a shown number', () => {
+    const { magnitudeOf } = loadCurrencyHelpers();
+    expect(magnitudeOf({ BRL: 1000, USD: 50, BTC: 0.05 })).toBeCloseTo(1050.05);
+  });
+
+  it('returns 0 for an empty or undefined map', () => {
+    const { magnitudeOf } = loadCurrencyHelpers();
+    expect(magnitudeOf({})).toBe(0);
+    expect(magnitudeOf(undefined)).toBe(0);
+  });
+});
+
+describe('window.mergeCurrencyMaps (ui/money.js)', () => {
+  it('adds overlapping currencies instead of the last map silently overwriting the others', () => {
+    // Regression test: Object.assign({}, effective, pending) was used at one point to combine a
+    // category's effective + pending amounts before sorting — for a category with BRL 1000
+    // effective AND BRL 1 pending, Object.assign yields {BRL: 1} (pending overwrites effective)
+    // instead of {BRL: 1001}, silently corrupting sort order. mergeCurrencyMaps exists so that
+    // combining maps is always additive.
+    const { mergeCurrencyMaps } = loadCurrencyHelpers();
+    const effective = { BRL: 1000 };
+    const pending = { BRL: 1 };
+
+    expect(mergeCurrencyMaps(effective, pending)).toEqual({ BRL: 1001 });
+  });
+
+  it('unions currencies that appear in only one of the input maps', () => {
+    const { mergeCurrencyMaps } = loadCurrencyHelpers();
+    expect(mergeCurrencyMaps({ BRL: 100 }, { USD: 50 }, { BTC: 0.01 })).toEqual({ BRL: 100, USD: 50, BTC: 0.01 });
+  });
+
+  it('treats a missing map as empty rather than throwing', () => {
+    const { mergeCurrencyMaps } = loadCurrencyHelpers();
+    expect(mergeCurrencyMaps(undefined, { BRL: 10 })).toEqual({ BRL: 10 });
+  });
+});
+
+describe('window.formatMultiCurrencyWith (ui/money.js)', () => {
+  const stubFormat = (value: number, currency: string) => `${currency} ${value}`;
+
+  it('formats every non-zero currency, BRL first, joined by the delimiter', () => {
+    const { formatMultiCurrencyWith } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({ USD: 50, BRL: 100 }, stubFormat)).toBe('BRL 100 / USD 50');
+  });
+
+  it('accepts a custom delimiter', () => {
+    const { formatMultiCurrencyWith } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({ BRL: 100, USD: 50 }, stubFormat, ' | ')).toBe('BRL 100 | USD 50');
+  });
+
+  it('skips a zeroed-out currency when a real one is present', () => {
+    const { formatMultiCurrencyWith } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({ BRL: 100, USD: 0 }, stubFormat)).toBe('BRL 100');
+  });
+
+  it('falls back to DEFAULT_CURRENCY zero only for a genuinely empty (or undefined) map', () => {
+    const { formatMultiCurrencyWith, DEFAULT_CURRENCY } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({}, stubFormat)).toBe(`${DEFAULT_CURRENCY} 0`);
+    expect(formatMultiCurrencyWith(undefined, stubFormat)).toBe(`${DEFAULT_CURRENCY} 0`);
+  });
+
+  it('names its real currency at zero instead of silently relabeling it as DEFAULT_CURRENCY', () => {
+    // Regression test: a USD-only month whose income and expense net to exactly zero produces
+    // netBalance = { USD: 0 } — filtering out every zero entry before falling back to
+    // formatFn(0, DEFAULT_CURRENCY) would render that as a BRL zero, exactly the kind of
+    // currency mislabeling issue #174 exists to eliminate.
+    const { formatMultiCurrencyWith } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({ USD: 0 }, stubFormat)).toBe('USD 0');
+  });
+
+  it('shows every currency present when all of them are zero, rather than picking one', () => {
+    const { formatMultiCurrencyWith } = loadCurrencyHelpers();
+    expect(formatMultiCurrencyWith({ BRL: 0, USD: 0 }, stubFormat)).toBe('BRL 0 / USD 0');
+  });
+});

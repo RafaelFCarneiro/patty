@@ -850,16 +850,33 @@
         var consolidatedNetWorth = null; // { baseCurrency, total, excluded } from get_account_balances (ADR-026)
         var expensePieChartInstance = null;
 
-        // Number utilities. NOTE: this dashboard blends every transaction's amount into one total
-        // regardless of its actual currency, always labeled BRL — a pre-existing gap (#174)
-        // unrelated to this formatter swap; formatBRL still always formats as BRL, byte-for-byte
-        // the same as before, just routed through the shared crypto-aware helper.
-        function formatBRL(value) {
-            return window.formatMoney(value, 'BRL');
+        // Money formatting — per currency, never blended (issue #174 fix). Every accumulator below
+        // is keyed by currency; formatMultiCurrency renders each currency's own amount side by side
+        // instead of collapsing them into a single mislabeled total. addMultiCurrency/valueIn/
+        // primaryCurrencyOf/magnitudeOf/mergeCurrencyMaps/formatMultiCurrencyWith/DEFAULT_CURRENCY
+        // are shared globals from ui/money.js (loaded before this fragment's script — see
+        // docs/ui.md) rather than defined here. formatCurrency/formatCurrencyNoSymbol stay local —
+        // and formatMultiCurrency is just a 1-line delegate to formatMultiCurrencyWith passing
+        // formatCurrency — because they need this fragment's own resolved currentLocale, which the
+        // shell-loaded, load-once money.js has no access to.
+        function formatCurrency(value, currency) {
+            const loc = currentLocale === 'pt' ? 'pt-BR' : (currentLocale === 'es' ? 'es-ES' : 'en-US');
+            return window.formatMoney(value || 0, currency || DEFAULT_CURRENCY, { locale: loc });
         }
 
-        function formatBRLNoSymbol(value) {
-            return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+        // Same rendering as formatCurrency but without the currency symbol, for space-constrained
+        // spots (calendar day cells) — still uses the currency's own decimals (e.g. BTC's 8) rather
+        // than a flat 2, so a crypto amount isn't silently truncated.
+        function formatCurrencyNoSymbol(value, currency) {
+            const code = currency || DEFAULT_CURRENCY;
+            const loc = currentLocale === 'pt' ? 'pt-BR' : (currentLocale === 'es' ? 'es-ES' : 'en-US');
+            const meta = (window.__fintrackCurrencies && window.__fintrackCurrencies[code]) || null;
+            const decimals = meta ? meta.decimals : 2;
+            return new Intl.NumberFormat(loc, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(Number(value) || 0);
+        }
+
+        function formatMultiCurrency(map, delimiter) {
+            return window.formatMultiCurrencyWith(map, formatCurrency, delimiter);
         }
 
         function escapeHtml(str) {
@@ -1915,61 +1932,67 @@ function initCustomSelects() {
             }
         }
 
-        // Render KPI summary cards
+        // Render KPI summary cards — every accumulator is a currency -> amount map (never a
+        // blended scalar), so a month mixing BRL/USD/BTC activity keeps each currency's own total.
         function renderKPIs(cardBills) {
-            let totalIncome = 0;
-            let effIncome = 0;
-            let pendIncome = 0;
+            const totalIncome = {};
+            const effIncome = {};
+            const pendIncome = {};
 
-            let totalExpense = 0;
-            let effExpense = 0;
-            let pendExpense = 0;
+            const totalExpense = {};
+            const effExpense = {};
+            const pendExpense = {};
 
             allTransactions.forEach(t => {
                 // Ignore all transfers (including bill payments)
                 if (t.type === 'transfer') return;
 
                 const amount = parseFloat(t.amount) || 0;
+                const currency = t.currency || DEFAULT_CURRENCY;
                 const isEffective = t.status === 'effective';
 
                 if (t.type === 'income') {
-                    totalIncome += amount;
-                    if (isEffective) effIncome += amount;
-                    else pendIncome += amount;
+                    addMultiCurrency(totalIncome, currency, amount);
+                    addMultiCurrency(isEffective ? effIncome : pendIncome, currency, amount);
                 } else if (t.type === 'expense') {
-                    totalExpense += amount;
-                    if (isEffective) effExpense += amount;
-                    else pendExpense += amount;
+                    addMultiCurrency(totalExpense, currency, amount);
+                    addMultiCurrency(isEffective ? effExpense : pendExpense, currency, amount);
                 }
             });
 
-            // Sum credit card bills in open/pending status for this month
-            let totalBills = 0;
+            // Sum credit card bills in open/pending status for this month, per the card's own
+            // (fixed-at-creation) currency.
+            const totalBills = {};
             cardBills.forEach(cb => {
                 if (cb.data && typeof cb.data.total !== 'undefined') {
-                    totalBills += parseFloat(cb.data.total) || 0;
+                    const cardInfo = creditCards.find(c => c.name === cb.cardName);
+                    addMultiCurrency(totalBills, (cardInfo && cardInfo.currency) || DEFAULT_CURRENCY, parseFloat(cb.data.total) || 0);
                 }
             });
 
             // Update KPI elements
-            document.getElementById('kpi-income-val').textContent = formatBRL(totalIncome);
-            document.getElementById('kpi-income-eff').textContent = formatBRL(effIncome);
-            document.getElementById('kpi-income-pend').textContent = formatBRL(pendIncome);
+            document.getElementById('kpi-income-val').textContent = formatMultiCurrency(totalIncome);
+            document.getElementById('kpi-income-eff').textContent = formatMultiCurrency(effIncome);
+            document.getElementById('kpi-income-pend').textContent = formatMultiCurrency(pendIncome);
 
-            document.getElementById('kpi-expense-val').textContent = formatBRL(totalExpense);
-            document.getElementById('kpi-expense-eff').textContent = formatBRL(effExpense);
-            document.getElementById('kpi-expense-pend').textContent = formatBRL(pendExpense);
+            document.getElementById('kpi-expense-val').textContent = formatMultiCurrency(totalExpense);
+            document.getElementById('kpi-expense-eff').textContent = formatMultiCurrency(effExpense);
+            document.getElementById('kpi-expense-pend').textContent = formatMultiCurrency(pendExpense);
 
-            const netBalance = totalIncome - totalExpense;
+            const netBalance = {};
+            new Set([...Object.keys(totalIncome), ...Object.keys(totalExpense)]).forEach(c => {
+                netBalance[c] = valueIn(totalIncome, c) - valueIn(totalExpense, c);
+            });
             const balElement = document.getElementById('kpi-balance-val');
-            balElement.textContent = formatBRL(netBalance);
-            if (netBalance >= 0) {
+            balElement.textContent = formatMultiCurrency(netBalance);
+            const netBalanceCurrency = primaryCurrencyOf(netBalance);
+            if (valueIn(netBalance, netBalanceCurrency) >= 0) {
                 balElement.style.color = 'var(--income-color)';
             } else {
                 balElement.style.color = 'var(--expense-color)';
             }
 
-            document.getElementById('kpi-cards-val').textContent = formatBRL(totalBills);
+            document.getElementById('kpi-cards-val').textContent = formatMultiCurrency(totalBills);
         }
 
         // Render Monthly Calendar
@@ -1996,19 +2019,33 @@ function initCustomSelects() {
             for (let d = 1; d <= numDays; d++) {
                 const dayStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 
-                // Calculate inflows, outflows and transfers for this day
-                let dayIncome = 0;
-                let dayExpense = 0;
-                let dayTransfer = 0;
+                // Calculate inflows, outflows and transfers for this day — per currency, then
+                // reduced to that day's own primary currency for this compact cell (the day's full
+                // per-transaction breakdown, in each transaction's own currency, is one click away
+                // via updateDayDetails).
+                const dayIncomeByCurrency = {};
+                const dayExpenseByCurrency = {};
+                const dayTransferByCurrency = {};
 
                 allTransactions.forEach(t => {
                     if (t.date === dayStr) {
                         const amount = parseFloat(t.amount) || 0;
-                        if (t.type === 'income') dayIncome += amount;
-                        else if (t.type === 'expense') dayExpense += amount;
-                        else if (t.type === 'transfer') dayTransfer += amount;
+                        const currency = t.currency || DEFAULT_CURRENCY;
+                        if (t.type === 'income') addMultiCurrency(dayIncomeByCurrency, currency, amount);
+                        else if (t.type === 'expense') addMultiCurrency(dayExpenseByCurrency, currency, amount);
+                        else if (t.type === 'transfer') addMultiCurrency(dayTransferByCurrency, currency, amount);
                     }
                 });
+
+                // Each flow picks its OWN primary currency independently — sharing one currency
+                // across all three would silently zero out (and hide) a real flow whenever it
+                // happened to be in a different currency than whichever flow dominated the day.
+                const incomeCurrency = primaryCurrencyOf(dayIncomeByCurrency);
+                const expenseCurrency = primaryCurrencyOf(dayExpenseByCurrency);
+                const transferCurrency = primaryCurrencyOf(dayTransferByCurrency);
+                const dayIncome = valueIn(dayIncomeByCurrency, incomeCurrency);
+                const dayExpense = valueIn(dayExpenseByCurrency, expenseCurrency);
+                const dayTransfer = valueIn(dayTransferByCurrency, transferCurrency);
 
                 const dayCell = document.createElement('div');
                 dayCell.className = 'calendar-day';
@@ -2019,19 +2056,19 @@ function initCustomSelects() {
                 // Header number - Transfer (transflow) is inline in the header
                 let transflowHtml = '';
                 if (dayTransfer > 0) {
-                    transflowHtml = `<div class="day-flow transflow" style="padding: 0px 3px; flex-grow: 1; margin-left: 6px;">⇄ ${formatBRLNoSymbol(dayTransfer)}</div>`;
+                    transflowHtml = `<div class="day-flow transflow" style="padding: 0px 3px; flex-grow: 1; margin-left: 6px;">⇄ ${formatCurrencyNoSymbol(dayTransfer, transferCurrency)}</div>`;
                 }
 
                 let flowsHtml = '';
-                const hasAnyFlow = dayIncome > 0 || dayExpense > 0 || dayTransfer > 0;
+                const hasAnyFlow = magnitudeOf(dayIncomeByCurrency) > 0 || magnitudeOf(dayExpenseByCurrency) > 0 || magnitudeOf(dayTransferByCurrency) > 0;
                 if (hasAnyFlow) {
                     if (dayIncome > 0) {
-                        flowsHtml += `<div class="day-flow inflow">+${formatBRLNoSymbol(dayIncome)}</div>`;
+                        flowsHtml += `<div class="day-flow inflow">+${formatCurrencyNoSymbol(dayIncome, incomeCurrency)}</div>`;
                     } else {
                         flowsHtml += `<div class="day-flow" style="visibility: hidden;">&nbsp;</div>`;
                     }
                     if (dayExpense > 0) {
-                        flowsHtml += `<div class="day-flow outflow">-${formatBRLNoSymbol(dayExpense)}</div>`;
+                        flowsHtml += `<div class="day-flow outflow">-${formatCurrencyNoSymbol(dayExpense, expenseCurrency)}</div>`;
                     } else {
                         flowsHtml += `<div class="day-flow" style="visibility: hidden;">&nbsp;</div>`;
                     }
@@ -2123,7 +2160,7 @@ function initCustomSelects() {
                         </span>
                     </div>
                     <div style="text-align: right; display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
-                        <span style="font-size: 0.88rem; font-weight: 700; color: ${amountColor}">${prefix} ${formatBRL(t.amount)}</span>
+                        <span style="font-size: 0.88rem; font-weight: 700; color: ${amountColor}">${prefix} ${formatCurrency(t.amount, t.currency || DEFAULT_CURRENCY)}</span>
                         <span class="badge-status ${t.status === 'effective' ? 'status-eff' : 'status-pend'}" style="font-size: 0.6rem; padding: 1px 4px;">
                             ${t.status === 'effective' ? 'Efetivado' : 'Pendente'}
                         </span>
@@ -2170,7 +2207,7 @@ function initCustomSelects() {
                         <span class="list-item-subtitle">${typeLabels[acc.type] || acc.type}</span>
                     </div>
                     <span class="list-item-value" style="color: ${(acc.balance || 0) >= 0 ? 'var(--income-color)' : 'var(--expense-color)'}">
-                        ${formatBRL(acc.balance || 0)}
+                        ${formatCurrency(acc.balance || 0, acc.currency || DEFAULT_CURRENCY)}
                     </span>
                 `;
                 body.appendChild(item);
@@ -2232,7 +2269,7 @@ function initCustomSelects() {
                         <span class="list-item-subtitle">Vencimento: Dia ${dueDay}/${String(billMonth).padStart(2, '0')}</span>
                     </div>
                     <div style="text-align:right;">
-                        <div class="list-item-value">${formatBRL(amount)}</div>
+                        <div class="list-item-value">${formatCurrency(amount, cardInfo.currency || DEFAULT_CURRENCY)}</div>
                         <span class="badge-status ${bill.status === 'paid' ? 'status-eff' : 'status-pend'}" style="font-size:0.6rem; padding:1px 4px;">
                             ${bill.status === 'paid' ? 'Paga' : 'Em Aberto'}
                         </span>
@@ -2278,7 +2315,7 @@ function initCustomSelects() {
                     </div>
                     <div class="pending-action-area">
                         <span class="pending-value ${isIncome ? 'income' : ''}">
-                            ${isIncome ? '+' : isTransfer ? '' : '-'} ${formatBRL(t.amount)}
+                            ${isIncome ? '+' : isTransfer ? '' : '-'} ${formatCurrency(t.amount, t.currency || DEFAULT_CURRENCY)}
                         </span>
                         <button class="btn-action-confirm" onclick="confirmPendingTransaction('${t.id}', '${escapeJsAttr(t.description)}')">
                             Efetivar
@@ -2314,22 +2351,29 @@ function initCustomSelects() {
 
         // Widget 4: Render Expense Categories Chart via Chart.js
         function renderCategoryChart() {
-            // Group expenses of selectedMonth by category name (excluding transfers)
-            const expenseSums = {};
-            let totalExpenses = 0;
+            // Group expenses of selectedMonth by category name (excluding transfers), per currency
+            const expenseSums = {}; // catName -> {currency: amount}
+            const totalExpenses = {};
 
             allTransactions.forEach(t => {
                 if (t.type === 'expense') {
                     const amount = parseFloat(t.amount) || 0;
+                    const currency = t.currency || DEFAULT_CURRENCY;
                     const catName = t.categoryName || 'Sem Categoria';
-                    expenseSums[catName] = (expenseSums[catName] || 0) + amount;
-                    totalExpenses += amount;
+                    if (!expenseSums[catName]) expenseSums[catName] = {};
+                    addMultiCurrency(expenseSums[catName], currency, amount);
+                    addMultiCurrency(totalExpenses, currency, amount);
                 }
             });
 
+            // Chart.js needs a single numeric series, so it shows ONE real currency (never a
+            // blended/converted total) — the KPI cards above already show every currency correctly.
+            const chartCurrency = primaryCurrencyOf(totalExpenses);
+
             // Convert to array and sort descending
             const dataList = Object.entries(expenseSums)
-                                    .map(([name, val]) => ({ name, val }))
+                                    .map(([name, sums]) => ({ name, val: valueIn(sums, chartCurrency) }))
+                                    .filter(item => item.val > 0)
                                     .sort((a,b) => b.val - a.val);
 
             // Destroy previous chart instance
@@ -2369,7 +2413,14 @@ function initCustomSelects() {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false } // Hide legend for premium look
+                        legend: { display: false }, // Hide legend for premium look
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    return `${ctx.label}: ${formatCurrency(ctx.raw, chartCurrency)}`;
+                                }
+                            }
+                        }
                     },
                     cutout: '70%'
                 }

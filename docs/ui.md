@@ -80,7 +80,23 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   `window.__fintrackCurrencies`, populated once at shell boot from `GET /api/currencies`
   (`app.js`'s `bootPromise`, sequenced before the first `loadDashboard()` call so the metadata is never missing
   on first paint). Every fragment that formats money calls this instead of its own `Intl.NumberFormat(...,
-  {style:'currency', ...})`.
+  {style:'currency', ...})`. It also exports `window.DEFAULT_CURRENCY` ('BRL') and the currency-map arithmetic
+  every dashboard's per-currency aggregation depends on (issue #174) — `addMultiCurrency(map, currency,
+  amount)`, `valueIn(map, currency)`, `primaryCurrencyOf(map)`, `magnitudeOf(map)`, `mergeCurrencyMaps(...maps)`
+  (additive; `Object.assign`/spread would silently drop a currency present in more than one input map instead
+  of summing it), and `formatMultiCurrencyWith(map, formatFn, delimiter?)` (renders every currency in a map
+  side by side via the caller's own `formatFn`; skips a zeroed-out currency only when a non-zero one is ALSO
+  present — an all-zero map, e.g. a USD-only month whose income and expense net to exactly zero, still names
+  its real currencies instead of silently falling back to a DEFAULT_CURRENCY-labeled zero, which would
+  mislabel that USD zero as BRL). These are locale-independent operations (`addMultiCurrency` intentionally
+  mutates its `map` argument in place — an accumulator, not a pure function — the rest don't mutate their
+  inputs), so they're defined once here instead of copy-pasted into every fragment; each fragment still owns
+  its own thin `formatCurrency` wrapper
+  locally (calling `window.formatMoney`) plus a one-line `formatMultiCurrency(map, delimiter)` that just
+  delegates to `formatMultiCurrencyWith(map, formatCurrency, delimiter)` — `formatCurrency` needs the
+  fragment's own resolved UI locale (`currentLocale`), which this shell-loaded, load-once module has no
+  access to, so the delegation is the only way to reuse the shared sort/fallback logic without also sharing
+  that locale dependency.
 - **`ui/dashboards/*.html`** (ADR-027 Phase 2) — the default dashboard fragments, one file per default,
   git-versioned and read-only at the install location; bootstrap reconciles them into `source: 'file'` rows.
   `accounts.html` and `budget.html` render an opt-in converted grand total where the backend already exposes
@@ -91,10 +107,54 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   `/api/accounts/balances` call already returns `consolidatedNetWorth`, so the "Net worth (home currency)"
   badge on the Bank Accounts widget needs no extra fetch — same `window.formatMoney(total, baseCurrency)` +
   excluded-count note rendering, with an "n.a." fallback when the field is absent (e.g. the balances fetch
-  failed) rather than showing a fabricated number. `comparative.html`/`projections.html` compute their KPI
-  totals client-side from raw `/api/transactions` (a pre-existing single-currency blend, issue #174) instead
-  of `/api/summary`/`/api/aggregate`, so neither has an existing per-currency grand total to layer a
-  converted one onto without first fixing that gap.
+  failed) rather than showing a fabricated number — unaffected by the issue #174 fix below. `budget.html`,
+  `overview.html`, `comparative.html`, and `projections.html` compute their other KPI, calendar/day,
+  category, and heat-map totals client-side from raw `/api/transactions`, bucketed per currency (issue #174
+  fix) via `ui/money.js`'s shared `addMultiCurrency`/`valueIn`/`primaryCurrencyOf`/`magnitudeOf`/
+  `mergeCurrencyMaps`/`formatMultiCurrencyWith` (originally defined once per fragment — `budget.html` first —
+  then consolidated into `money.js` so the four fragments share one implementation instead of four copies):
+  every accumulator is a `{currency: amount}` map rendered with each fragment's own local
+  `formatMultiCurrency` (a thin delegate to the shared `formatMultiCurrencyWith`, never a single blended
+  number), a row/cell's own percentage or bar width compares same-currency amounts only (`primaryCurrencyOf`
+  picks that row's representative currency), and Chart.js series (needing one numeric series) render the
+  primary currency only, labeled via a tooltip/axis-tick callback calling `formatCurrency(value, currency)`
+  (matching `budget.html`'s existing chart-formatting pattern) so a USD/BTC-only chart isn't shown as bare
+  unitless numbers — the KPI/table text above them already shows every currency
+  correctly. `overview.html`'s compact calendar day cells (no room for multiple currency lines) resolve
+  income/expense/transfer as three independent `primaryCurrencyOf` picks — never one shared currency for
+  the whole day, which would silently zero out (and hide) a real flow whenever it happened to be in a
+  different currency than whichever flow dominated that day — and render each via `formatCurrencyNoSymbol`;
+  the full per-transaction, per-currency breakdown is one click away in the day-details drawer.
+  `comparative.html`'s category sort order and `projections.html`'s heat-map cell/row/column totals combine
+  a category's effective + pending (or a cell's own transactions) with `mergeCurrencyMaps` rather than
+  `Object.assign`/spread, which would silently let one currency's pending amount overwrite that same
+  currency's effective amount instead of summing them. The heat map's color-intensity scale (opacity) also
+  tracks its running max **per currency** rather than one shared max across the whole matrix — comparing a
+  0.05 BTC cell's raw units directly against a 10,000 BRL cell's would always crush BTC toward the opacity
+  floor regardless of its own relative size, so each currency's cells are only ever compared against that
+  same currency's own max. Because `formatCurrency` now reads `currentLocale`, `comparative.html`'s and
+  `projections.html`'s bootstrap sequencing was fixed to `await checkLocale()` before `initDashboard()`
+  runs (their `runInit()` — matching `budget.html`'s/`overview.html`'s existing pattern) — `checkLocale()`
+  only re-translates static `data-i18n` text afterward, it never re-renders the dynamic money values
+  `initDashboard()` already painted, so a locale fetch that lost the race would otherwise leave every KPI/
+  category/heat-map number stuck in the default `en` formatting for a pt/es user. That `await` needed its
+  own stale-fragment guard, the way `overview.html`'s `initOverview` IIFE already has: `runInit()` in both
+  files captures a function-local `const ownFragmentMarker` (their existing `panelsLoading`/`heatmapLoading`
+  loading-overlay element) *before* the await and checks `ownFragmentMarker.isConnected` after it, bailing
+  out rather than calling `initDashboard()` if the user navigated away while `checkLocale()`'s
+  `/api/status` request was in flight. The capture has to be into a function-local variable, not read
+  directly off `panelsLoading`/`heatmapLoading` themselves — those are top-level `var`s, so they live on
+  the one `window` every fragment script executes in, and `comparative.html`/`projections.html` even
+  declare the identical two names; a later-loaded fragment's script would otherwise silently overwrite them
+  out from under a still-pending older continuation. The month/year/heatmap-months change listeners are
+  registered inside `runInit()` too, after the same `await`+guard — registering them earlier (as both
+  fragments originally did) would let a user interaction call `loadTransactionsData()` before
+  `checkLocale()` resolves, rendering with the default locale the same way a lost `initDashboard()` race
+  would. None of the three
+  fragments convert across currencies client-side (that would duplicate the backend's
+  `consolidateInCurrency` rate/staleness logic in JS); a converted grand total for
+  `comparative.html`/`projections.html`, matching `budget.html`'s `displayCurrency` pattern, would require
+  moving their aggregation to a server endpoint first and is deferred as a follow-up (issue #193).
 
 ## Shared component classes across fragments (issue #164)
 

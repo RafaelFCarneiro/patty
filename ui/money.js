@@ -9,6 +9,10 @@
 (function () {
   'use strict';
 
+  // The one 'BRL' literal in this file — defaultLocale's comparison and window.DEFAULT_CURRENCY
+  // both read this instead of repeating the literal.
+  var BRL = 'BRL';
+
   var isoCurrencyCache = null;
 
   function isIsoCurrency(code) {
@@ -37,7 +41,7 @@
   // formats in its own market's digit grouping, everything else defaults to en-US unless a call
   // site passes an explicit locale (e.g. budget.html's app-locale-driven formatCurrency).
   function defaultLocale(code) {
-    return code === 'BRL' ? 'pt-BR' : 'en-US';
+    return code === BRL ? 'pt-BR' : 'en-US';
   }
 
   window.formatMoney = function (value, currencyCode, opts) {
@@ -55,5 +59,74 @@
       maximumFractionDigits: decimals,
     }).format(amount);
     return symbol + ' ' + numStr;
+  };
+
+  // Currency-map arithmetic shared across dashboard fragments (issue #174) — every fragment that
+  // aggregates transactions keeps its own accumulator as a {currency: amount} map instead of a
+  // single blended scalar (docs/architecture.md: aggregations group per currency, never convert
+  // implicitly). These are locale-independent map operations (addMultiCurrency intentionally
+  // mutates its `map` argument in place — an accumulator, not a pure function — the rest don't
+  // mutate their inputs), so they live here instead of being copy-pasted into every fragment; each
+  // fragment still owns its own thin formatCurrency/formatMultiCurrency wrapper locally because
+  // those need the fragment's own resolved UI locale (e.g. budget.html's currentLocale), which this
+  // shell-loaded, load-once module has no access to.
+  window.DEFAULT_CURRENCY = BRL;
+
+  window.addMultiCurrency = function (map, currency, amount) {
+    var c = currency || window.DEFAULT_CURRENCY;
+    map[c] = (map[c] || 0) + (Number(amount) || 0);
+  };
+
+  window.valueIn = function (map, currency) {
+    return (map && map[currency]) || 0;
+  };
+
+  // Multi-currency amounts are never converted or summed together — a single number (a KPI, a
+  // percentage, a chart value) can only ever read ONE real currency's own amount, never a
+  // blended/converted total. This picks which currency represents a row/cell for such comparisons.
+  window.primaryCurrencyOf = function (map) {
+    var keys = Object.keys(map || {}).filter(function (c) { return map[c]; });
+    if (keys.length === 0) keys = Object.keys(map || {});
+    if (keys.indexOf(window.DEFAULT_CURRENCY) !== -1) return window.DEFAULT_CURRENCY;
+    keys.sort();
+    return keys[0] || window.DEFAULT_CURRENCY;
+  };
+
+  // Row/category sort order or "any activity" flag only, never a number shown to the user — a
+  // plain sum of raw units across currencies (deliberately not a currency conversion).
+  window.magnitudeOf = function (map) {
+    return Object.keys(map || {}).reduce(function (sum, c) { return sum + (Number(map[c]) || 0); }, 0);
+  };
+
+  // Additively merges any number of currency maps — Object.assign/spread would silently overwrite
+  // a currency present in more than one map instead of summing it (e.g. a category with both BRL
+  // effective and BRL pending amounts would lose one of the two).
+  window.mergeCurrencyMaps = function () {
+    var maps = Array.prototype.slice.call(arguments);
+    var result = {};
+    maps.forEach(function (map) {
+      Object.keys(map || {}).forEach(function (c) { window.addMultiCurrency(result, c, map[c]); });
+    });
+    return result;
+  };
+
+  // Renders every currency in a map side by side — never a single blended number — via the
+  // caller-supplied formatFn (each fragment passes its own locale-aware formatCurrency, which this
+  // shell-loaded, load-once module has no access to itself). A currency is skipped only when a
+  // real (non-zero) currency is ALSO present in the map: an all-zero map (e.g. a USD-only month
+  // whose income and expense net to exactly zero) still names its real currencies rather than
+  // falling through to the DEFAULT_CURRENCY zero fallback, which would silently relabel that USD
+  // zero as BRL — only a genuinely empty map (no keys at all) uses the DEFAULT_CURRENCY fallback.
+  window.formatMultiCurrencyWith = function (map, formatFn, delimiter) {
+    delimiter = delimiter || ' / ';
+    if (!map || Object.keys(map).length === 0) return formatFn(0, window.DEFAULT_CURRENCY);
+    var keys = Object.keys(map).sort(function (a, b) {
+      if (a === window.DEFAULT_CURRENCY) return -1;
+      if (b === window.DEFAULT_CURRENCY) return 1;
+      return a.localeCompare(b);
+    });
+    var nonZeroKeys = keys.filter(function (c) { return map[c]; });
+    var keysToShow = nonZeroKeys.length > 0 ? nonZeroKeys : keys;
+    return keysToShow.map(function (c) { return formatFn(map[c], c); }).join(delimiter);
   };
 })();
