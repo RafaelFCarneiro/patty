@@ -1712,18 +1712,22 @@
         // the heat-map/chart money values initDashboard() already painted, so those would be stuck
         // showing en-US formatting for a pt/es user if initDashboard() won the race.
         //
-        // heatmapLoading (captured above, before this await) doubles as this fragment's own-instance
-        // marker: if the user navigates away while checkLocale()'s /api/status request is still in
-        // flight, app.js's renderFragment() tears this fragment's DOM down for the next one, so
-        // heatmapLoading.isConnected goes false — without this guard, the stale continuation would
-        // resume anyway and initDashboard()'s document.getElementById(...) calls could write into
-        // whatever dashboard loaded next (mirrors overview.html's initOverview guard).
+        // If the user navigates away while checkLocale()'s /api/status request is still in flight,
+        // app.js's renderFragment() tears this fragment's DOM down for the next one — the stale
+        // continuation must not resume into initDashboard() afterward, whose
+        // document.getElementById(...) calls could write into whatever dashboard loaded next
+        // (mirrors overview.html's initOverview guard). heatmapLoading itself can't be the marker:
+        // it's a top-level `var`, so it lives on the shared global `window` every fragment script
+        // executes in, and comparative.html declares the very same name — a later-loaded fragment's
+        // script would silently overwrite it out from under this still-pending continuation. Capture
+        // it into a function-local const instead, which no other script can ever reach or reassign.
         var hasInitialized = false;
         async function runInit() {
             if (hasInitialized) return;
             hasInitialized = true;
+            const ownFragmentMarker = heatmapLoading;
             await checkLocale();
-            if (!heatmapLoading || !heatmapLoading.isConnected) return;
+            if (!ownFragmentMarker || !ownFragmentMarker.isConnected) return;
             await initDashboard();
         }
 

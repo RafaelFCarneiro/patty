@@ -137,7 +137,16 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   runs (their `runInit()` — matching `budget.html`'s/`overview.html`'s existing pattern) — `checkLocale()`
   only re-translates static `data-i18n` text afterward, it never re-renders the dynamic money values
   `initDashboard()` already painted, so a locale fetch that lost the race would otherwise leave every KPI/
-  category/heat-map number stuck in the default `en` formatting for a pt/es user. None of the three
+  category/heat-map number stuck in the default `en` formatting for a pt/es user. That `await` needed its
+  own stale-fragment guard, the way `overview.html`'s `initOverview` IIFE already has: `runInit()` in both
+  files captures a function-local `const ownFragmentMarker` (their existing `panelsLoading`/`heatmapLoading`
+  loading-overlay element) *before* the await and checks `ownFragmentMarker.isConnected` after it, bailing
+  out rather than calling `initDashboard()` if the user navigated away while `checkLocale()`'s
+  `/api/status` request was in flight. The capture has to be into a function-local variable, not read
+  directly off `panelsLoading`/`heatmapLoading` themselves — those are top-level `var`s, so they live on
+  the one `window` every fragment script executes in, and `comparative.html`/`projections.html` even
+  declare the identical two names; a later-loaded fragment's script would otherwise silently overwrite them
+  out from under a still-pending older continuation. None of the three
   fragments convert across currencies client-side (that would duplicate the backend's
   `consolidateInCurrency` rate/staleness logic in JS); a converted grand total for
   `comparative.html`/`projections.html`, matching `budget.html`'s `displayCurrency` pattern, would require
