@@ -1366,7 +1366,7 @@
             // scale toward whichever currency happens to use larger raw numbers. Each currency
             // gets its own max, and each cell's opacity is computed against its own currency's max.
             // No artificial minimum floor here (the old single-scale code used 100, calibrated for
-            // BRL/USD magnitudes) — a currency this seeds is only ever compared against its own
+            // BRL/USD magnitudes) — each currency seen here is only ever compared against its own
             // real cell values below, so a fixed floor would just crush a naturally small-scale
             // currency like BTC toward the opacity floor regardless of its own relative intensity.
             const maxIncomeCellByCurrency = {};

@@ -9,6 +9,10 @@
 (function () {
   'use strict';
 
+  // The one 'BRL' literal in this file — defaultLocale's comparison and window.DEFAULT_CURRENCY
+  // both read this instead of repeating the literal.
+  var BRL = 'BRL';
+
   var isoCurrencyCache = null;
 
   function isIsoCurrency(code) {
@@ -37,7 +41,7 @@
   // formats in its own market's digit grouping, everything else defaults to en-US unless a call
   // site passes an explicit locale (e.g. budget.html's app-locale-driven formatCurrency).
   function defaultLocale(code) {
-    return code === 'BRL' ? 'pt-BR' : 'en-US';
+    return code === BRL ? 'pt-BR' : 'en-US';
   }
 
   window.formatMoney = function (value, currencyCode, opts) {
@@ -66,7 +70,7 @@
   // fragment still owns its own thin formatCurrency/formatMultiCurrency wrapper locally because
   // those need the fragment's own resolved UI locale (e.g. budget.html's currentLocale), which this
   // shell-loaded, load-once module has no access to.
-  window.DEFAULT_CURRENCY = 'BRL';
+  window.DEFAULT_CURRENCY = BRL;
 
   window.addMultiCurrency = function (map, currency, amount) {
     var c = currency || window.DEFAULT_CURRENCY;
