@@ -146,7 +146,11 @@ import.meta.url))`), the same pattern bootstrap uses for `drizzle/`, so it works
   directly off `panelsLoading`/`heatmapLoading` themselves — those are top-level `var`s, so they live on
   the one `window` every fragment script executes in, and `comparative.html`/`projections.html` even
   declare the identical two names; a later-loaded fragment's script would otherwise silently overwrite them
-  out from under a still-pending older continuation. None of the three
+  out from under a still-pending older continuation. The month/year/heatmap-months change listeners are
+  registered inside `runInit()` too, after the same `await`+guard — registering them earlier (as both
+  fragments originally did) would let a user interaction call `loadTransactionsData()` before
+  `checkLocale()` resolves, rendering with the default locale the same way a lost `initDashboard()` race
+  would. None of the three
   fragments convert across currencies client-side (that would duplicate the backend's
   `consolidateInCurrency` rate/staleness logic in JS); a converted grand total for
   `comparative.html`/`projections.html`, matching `budget.html`'s `displayCurrency` pattern, would require
