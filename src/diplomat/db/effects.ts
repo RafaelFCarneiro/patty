@@ -100,12 +100,19 @@ export const versionedTableApplier = <T extends VersionedTable>(
 
   return {
     insert: async (tx, model, idempotencyKey) => {
+      // A registered idempotencyColumn is a promise every insert for this entity keeps: the flow
+      // that mints one must set the envelope's key. Reject a miss right here, loudly and by name,
+      // rather than let it reach the database as an opaque NOT NULL constraint violation.
+      if (idempotencyColumn && idempotencyKey === undefined) {
+        throw new Error(
+          `runEffects: entity registered with idempotencyColumn "${idempotencyColumn}" but the insert carries no idempotencyKey`,
+        );
+      }
       const row = model as Record<string, unknown> & { id: string };
       // The envelope's key (ADR-029 Phase 2) — never read off the model row — is written onto the
       // registered column right here, the applier's own mechanical job (ADR-023: it decides
       // nothing, it just writes what the core handed it).
-      const rowToInsert =
-        idempotencyColumn && idempotencyKey !== undefined ? { ...row, [idempotencyColumn]: idempotencyKey } : row;
+      const rowToInsert = idempotencyColumn ? { ...row, [idempotencyColumn]: idempotencyKey } : row;
       const result = await tx
         .insert(table)
         .values(rowToInsert as never)

@@ -697,6 +697,20 @@ describe('engine idempotency treatment — declared by registration, generic ove
       runEffects(db, keyedRegistry, insertKeyed({ id: original.id, name: `Key ${randomUUID()}`, version: 0 })),
     ).rejects.toThrow();
   });
+
+  it('an insert with no idempotencyKey on a keyed entity rejects loudly, never reaching SQL', async () => {
+    const model = { id: randomUUID(), name: `Key ${randomUUID()}`, version: 0 };
+    const flow = () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: KEYED_TAG, model }] as Persistable[],
+        response: null,
+      });
+
+    await expect(runEffects(db, keyedRegistry, flow)).rejects.toThrow(
+      'runEffects: entity registered with idempotencyColumn "name" but the insert carries no idempotencyKey',
+    );
+    expect(await db.all(sql`SELECT id FROM tags WHERE name = ${model.name}`)).toHaveLength(0);
+  });
 });
 
 // Row-shaped input (as `adapters/transactions.ts`'s `entityToDb` produces it) — the applier

@@ -179,7 +179,10 @@ effect runner, appliers, outcomes, and the per-flow notes.
   that mints one (`add_account_expense`/`add_account_income`/`add_card_purchase`/`create_transfer`, `pay_bill`'s
   bill-payment transfer, `apply_due_recurring`'s per-occurrence inserts, and the bulk-import lines that reuse
   those same single-line flows) set `idempotencyKey` on the `Persistable` itself, alongside `model`, never inside
-  it. Read-first-dedup entities (dashboards, settings) carry no key, same as before.
+  it. Read-first-dedup entities (dashboards, settings) carry no key, same as before. A registered
+  `idempotencyColumn` is a promise every insert for that entity must keep: `versionedTableApplier.insert` rejects
+  immediately, by name, if the column is configured but the envelope carries no key — this is caught here rather
+  than left to surface as an opaque database `NOT NULL` constraint violation once the row reaches SQL.
 - **The `readBack` deviation** (ADR-023 decision 4). An entity may register a post-write projection —
   `transactions` reads the display-joined view via `fetchTx` — landing on `PersistOutcome.read`. This is a
   projection read executed **inside the engine**, **capped at one hook**, and is *not* sanctioned by FC/IS
