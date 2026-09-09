@@ -15,7 +15,7 @@ import {
   type BillPeriod,
 } from '../../logic/bill.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
-import { decimalsLookup, resolveCurrency } from '../../logic/money.js';
+import { resolveCurrency } from '../../logic/money.js';
 import {
   normalizeMerchant,
   resolveMerchantCorrection,
@@ -59,7 +59,7 @@ import {
   type TransactionView,
 } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
-import { resolveCardRef, resolveLegAccounts, resolveTagLinks } from '../resolve.js';
+import { resolveCardRef, resolveDecimals, resolveLegAccounts, resolveTagLinks } from '../resolve.js';
 import type { StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
@@ -169,7 +169,7 @@ const planCardPurchase = (
     // Domain-owned key (ADR-029 Phase 2b): the card itself is the funding source, never the
     // internal liability account it wraps (refs.accountId) — mirrors resolveCurrency's own notion
     // of "funding source" for a card purchase.
-    const decimals = decimalsLookup(await deps.currencies.list())(currency);
+    const decimals = await resolveDecimals(deps, currency);
     const idempotencyKey = deriveIdempotencyKey(
       {
         fundingSourceId: card.id,

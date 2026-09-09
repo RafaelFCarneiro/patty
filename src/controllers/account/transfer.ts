@@ -8,7 +8,6 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../../common/errors.js';
 import { guard } from '../../common/result.js';
 import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
-import { decimalsLookup } from '../../logic/money.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
 import { buildUpsertResult, defaultStatusFor, deriveIdempotencyKey } from '../../logic/transaction.js';
@@ -24,7 +23,7 @@ import {
 } from '../../models/transaction.js';
 import type { TransactionSource } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
-import { resolveAccountRef } from '../resolve.js';
+import { resolveAccountRef, resolveDecimals } from '../resolve.js';
 
 const validateTransferAccounts = (from: Account, to: Account) =>
   safeTry(function* () {
@@ -69,7 +68,7 @@ export const createTransfer = (
 
     // Domain-owned key (ADR-029 Phase 2b): the source account is the funding source for a
     // transfer, mirroring `entity.currency` (also taken from `from`, never `to`).
-    const decimals = decimalsLookup(await deps.currencies.list())(entity.currency);
+    const decimals = await resolveDecimals(deps, entity.currency);
     const idempotencyKey = deriveIdempotencyKey(
       {
         fundingSourceId: from.id,

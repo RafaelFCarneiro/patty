@@ -3,12 +3,14 @@ import * as R from 'remeda';
 import type { AppError } from '../common/errors.js';
 import { okOr } from '../common/result.js';
 import { buildSynonyms, resolveAndSort } from '../logic/category.js';
+import { decimalsLookup } from '../logic/money.js';
 import { resolveByName, resolveByNames, type Named, type Resolution } from '../logic/resolve.js';
 import { resolveTagIds, resolveTagNames, tagSetPersistable } from '../logic/tag.js';
 import type { Account } from '../models/account.js';
 import type { Category, SubCategory } from '../models/category.js';
 import type { CreditCard } from '../models/creditCard.js';
 import { ambiguous, notFound } from '../models/error.js';
+import type { CurrencyCode } from '../models/money.js';
 import type { Persistable } from '../models/persistable.js';
 import type { TransactionView } from '../models/transaction.js';
 import type { Deps } from './deps.js';
@@ -46,6 +48,14 @@ export const resolveCardRef = (deps: Deps, name: string): ResultAsync<CreditCard
   ResultAsync.fromSafePromise(deps.creditCards.list()).andThen((cards) =>
     resolutionToResult(resolveByName(cards, name), 'card'),
   );
+
+/** A currency's own fractional digits, resolved off the live currencies reference list — shared by
+ *  every insert-shaped transaction flow to round its idempotency key's amount component
+ *  (ADR-029 Phase 2b). No `Result`: every `CurrencyCode` is a validated enum member, always present
+ *  in the reference list (`decimalsLookup` itself falls back to fiat decimals for the
+ *  should-never-happen case of a missing code). */
+export const resolveDecimals = async (deps: Deps, currency: CurrencyCode): Promise<number> =>
+  decimalsLookup(await deps.currencies.list())(currency);
 
 /**
  * Resolves the account(s) referenced by a transaction's leg(s) (`accountId`/`toAccountId`) —

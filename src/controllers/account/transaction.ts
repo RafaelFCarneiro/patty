@@ -8,7 +8,7 @@ import type { AppError } from '../../common/errors.js';
 import { guard, okOr } from '../../common/result.js';
 import { assertNonCreditType, guardTransferMutability, isAccountOwnedType } from '../../logic/account.js';
 import { pickClassification, userClassification } from '../../logic/classify.js';
-import { decimalsLookup, resolveCurrency } from '../../logic/money.js';
+import { resolveCurrency } from '../../logic/money.js';
 import {
   normalizeMerchant,
   resolveMerchantCorrection,
@@ -50,7 +50,7 @@ import {
   type TransactionView,
 } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
-import { resolveAccountRef, resolveLegAccounts, resolveTagLinks } from '../resolve.js';
+import { resolveAccountRef, resolveDecimals, resolveLegAccounts, resolveTagLinks } from '../resolve.js';
 import type { StatementImportPlan } from '../transaction/bulk.js';
 import { decideTransactionUpdate, resolveCategorySelection } from '../transaction/core.js';
 
@@ -122,7 +122,7 @@ const planAccountMovement = (
 
     // Domain-owned key (ADR-029 Phase 2b): derived from the full resolved identity, never a
     // caller-supplied whole key — input.discriminator is the only caller-controlled input into it.
-    const decimals = decimalsLookup(await deps.currencies.list())(currency);
+    const decimals = await resolveDecimals(deps, currency);
     const idempotencyKey = deriveIdempotencyKey(
       { fundingSourceId: account?.id, type, currency, date, description: input.description, amount: input.amount },
       decimals,
