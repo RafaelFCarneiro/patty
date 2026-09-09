@@ -16,8 +16,8 @@ describe('withPersistenceMeta', () => {
 });
 
 describe('a pure model', () => {
-  it('has no version key (regression pin against accidental leakage onto the model)', () => {
-    const parsed = TagSchema.parse({ id: 'tag-1', name: 'Groceries' });
+  it('strips a version key even when the input carries one (regression pin against leakage onto the model)', () => {
+    const parsed = TagSchema.parse({ id: 'tag-1', name: 'Groceries', version: 3 });
     expect('version' in parsed).toBe(false);
   });
 });
