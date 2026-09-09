@@ -341,7 +341,6 @@ describe('MCP integration > get_budget_status', () => {
         category: categoryName,
         currency: 'BRL',
         date: STATUS_DATE,
-        idempotencyKey: `status-direct-${stamp}`,
       });
 
       await addExpense(client, {
@@ -350,7 +349,6 @@ describe('MCP integration > get_budget_status', () => {
         subCategory: subCategoryName,
         currency: 'BRL',
         date: STATUS_DATE,
-        idempotencyKey: `status-sub-${stamp}`,
       });
 
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
@@ -389,7 +387,6 @@ describe('MCP integration > get_budget_status', () => {
         category: categoryName,
         currency: 'USD',
         date: STATUS_DATE,
-        idempotencyKey: `status-usd-${stamp}`,
       });
 
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
@@ -428,7 +425,6 @@ describe('MCP integration > get_budget_status', () => {
         currency: 'BRL',
         status: 'pending',
         date: STATUS_DATE,
-        idempotencyKey: `status-pending-${stamp}`,
       });
 
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
@@ -467,7 +463,6 @@ describe('MCP integration > get_budget_status', () => {
         currency: 'BRL',
         status: 'effective',
         date: STATUS_DATE,
-        idempotencyKey: `status-mixed-effective-${stamp}`,
       });
       await addExpense(client, {
         description: 'earmarked, not yet cleared',
@@ -476,7 +471,6 @@ describe('MCP integration > get_budget_status', () => {
         currency: 'BRL',
         status: 'pending',
         date: STATUS_DATE,
-        idempotencyKey: `status-mixed-pending-${stamp}`,
       });
 
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
@@ -517,7 +511,6 @@ describe('MCP integration > get_budget_status', () => {
         category: categoryName,
         currency: 'BRL',
         date: futureDate,
-        idempotencyKey: `status-future-default-${stamp}`,
       });
 
       const status = (await callTool(client, { name: 'get_budget_status', args: futurePeriod })) as BudgetStatus;
@@ -567,7 +560,6 @@ describe('MCP integration > get_budget_status', () => {
           to: toAccount.name,
           amount: 1000,
           date: STATUS_DATE,
-          idempotencyKey: `status-transfer-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(transfer.transaction?.id, 'transfer transaction id missing');
@@ -580,7 +572,6 @@ describe('MCP integration > get_budget_status', () => {
         category: categoryName,
         currency: 'BRL',
         date: STATUS_DATE,
-        idempotencyKey: `status-transfer-spend-${stamp}`,
       });
 
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
@@ -618,7 +609,6 @@ describe('MCP integration > get_budget_status', () => {
         category: 'Investments',
         currency: 'BRL',
         date: STATUS_DATE,
-        idempotencyKey: `status-investment-income-${stamp}`,
       });
       await addIncome(client, {
         description: 'pending dividend, should not count as spend either',
@@ -627,7 +617,6 @@ describe('MCP integration > get_budget_status', () => {
         currency: 'BRL',
         status: 'pending',
         date: STATUS_DATE,
-        idempotencyKey: `status-investment-income-pending-${stamp}`,
       });
 
       await addExpense(client, {
@@ -636,7 +625,6 @@ describe('MCP integration > get_budget_status', () => {
         category: 'Investments',
         currency: 'BRL',
         date: STATUS_DATE,
-        idempotencyKey: `status-investment-expense-${stamp}`,
       });
 
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
@@ -673,7 +661,6 @@ describe('MCP integration > get_budget_status', () => {
         category: categoryName,
         currency: 'BRL',
         date: STATUS_DATE,
-        idempotencyKey: `status-over-${stamp}`,
       });
 
       const status = (await callTool(client, { name: 'get_budget_status', args: STATUS_PERIOD })) as BudgetStatus;
@@ -786,7 +773,6 @@ describe('MCP integration > get_budget_status displayCurrency', () => {
         category: usdCategoryName,
         currency: 'USD',
         date: STATUS_DATE,
-        idempotencyKey: `status-dc-usd-${stamp}`,
       });
       await addExpense(client, {
         description: 'brl budget spend',
@@ -794,7 +780,6 @@ describe('MCP integration > get_budget_status displayCurrency', () => {
         category: brlCategoryName,
         currency: 'BRL',
         date: STATUS_DATE,
-        idempotencyKey: `status-dc-brl-${stamp}`,
       });
 
       const withoutConversion = (await callTool(client, {
@@ -851,7 +836,6 @@ describe('MCP integration > get_budget_status displayCurrency', () => {
         subCategory: subCategoryName,
         currency: 'USD',
         date: STATUS_DATE,
-        idempotencyKey: `status-dc-rollup-${stamp}`,
       });
 
       const before = (await callTool(client, {
@@ -893,7 +877,6 @@ describe('MCP integration > get_budget_status displayCurrency', () => {
         category: categoryName,
         currency: 'BTC',
         date: STATUS_DATE,
-        idempotencyKey: `status-dc-btc-${stamp}`,
       });
 
       const status = (await callTool(client, {

@@ -39,7 +39,6 @@ describe('MCP integration > spending summary locale', () => {
         date,
         account: 'Summary Locale Acct',
         category: 'Food',
-        idempotencyKey: 'summary-locale-1',
       },
     });
     await callTool(client, {
@@ -49,7 +48,6 @@ describe('MCP integration > spending summary locale', () => {
         amount: 15,
         date,
         account: 'Summary Locale Acct',
-        idempotencyKey: 'summary-locale-uncat-1',
       },
     });
   });

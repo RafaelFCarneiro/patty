@@ -48,7 +48,6 @@ describe('GET /api/budgets/status', () => {
         date: '2026-05-01',
         account: 'Budget Status REST Acct',
         category: 'Budget Status REST Cat',
-        idempotencyKey: 'budget-status-rest-exp',
       },
     });
 
@@ -136,7 +135,6 @@ describe('GET /api/budgets/status', () => {
             date: '2026-08-02',
             account: 'Dc Usd Acct',
             category: 'Dc Usd Cat',
-            idempotencyKey: 'dc-budget-usd-1',
           },
         });
         await inject({
@@ -148,7 +146,6 @@ describe('GET /api/budgets/status', () => {
             date: '2026-08-02',
             account: 'Dc Brl Acct',
             category: 'Dc Brl Cat',
-            idempotencyKey: 'dc-budget-brl-1',
           },
         });
 
@@ -195,7 +192,6 @@ describe('GET /api/budgets/status', () => {
           date: '2026-01-03',
           account: 'Dc Btc Budget Acct',
           category: 'Dc Btc Cat',
-          idempotencyKey: 'dc-budget-btc-1',
         },
       });
       const res = await inject({ method: 'GET', url: '/api/budgets/status?month=1&year=2026&displayCurrency=USD' });

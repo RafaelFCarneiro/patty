@@ -58,7 +58,7 @@ describe('account schemas (domain integrity vs. boundary convenience)', () => {
 // minimal transaction core (`.extend`) rather than the core carrying account/card/bill fields for
 // these to `.omit`.
 describe('AddAccountMovementSchema / UpdateAccountTransactionSchema — compose up (ADR-019)', () => {
-  const base = { description: 'Lunch', amount: 10, idempotencyKey: 'k-1' };
+  const base = { description: 'Lunch', amount: 10 };
 
   it('AddAccountMovementSchema accepts an optional account name', () => {
     expect(AddAccountMovementSchema.safeParse({ ...base, account: 'Nubank' }).success).toBe(true);

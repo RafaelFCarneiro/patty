@@ -44,7 +44,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           card: cardName,
           billMonth: nextCycle.month,
           billYear: nextCycle.year,
-          idempotencyKey: `assign-purchase-${stamp}`,
         },
       })) as { transaction?: { billId?: string } };
       ensure(created.transaction?.billId, 'expected the transaction to be attached to a bill');
@@ -89,7 +88,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           date: today,
           card: cardName,
           billMonth: nextCycle.month,
-          idempotencyKey: `pairing-purchase-${stamp}`,
         },
       })) as { error?: { code?: string } };
       expect(err.error?.code).toBe('validation');
@@ -102,7 +100,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `pairing-purchase-ok-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(created.transaction?.id, 'expected a created transaction');
@@ -144,7 +141,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           amount: 10,
           date: today,
           account: bankName,
-          idempotencyKey: `noncard-expense-ok-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(created.transaction?.id, 'expected a created transaction');
@@ -203,7 +199,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
                   date: today,
                   billMonth: month,
                   billYear: year,
-                  idempotencyKey: `bulk-account-billpair-${stamp}`,
                 },
               ],
             },
@@ -239,7 +234,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `reassign-purchase-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(created.transaction?.id, 'expected a created transaction');
@@ -297,7 +291,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `paidguard-purchase-${stamp}`,
         },
       });
       await callTool(client, { name: 'pay_bill', args: { card: cardName, month, year } });
@@ -312,7 +305,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           card: cardName,
           billMonth: month,
           billYear: year,
-          idempotencyKey: `paidguard-late-explicit-${stamp}`,
         },
       })) as { error?: { code?: string; issues?: string[] } };
       expect(explicitErr.error?.code).toBe('validation');
@@ -328,7 +320,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `paidguard-late-auto-${stamp}`,
         },
       })) as { error?: { code?: string } };
       expect(autoErr.error?.code).toBe('validation');
@@ -361,7 +352,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `ontopaid-paid-purchase-${stamp}`,
         },
       });
       await callTool(client, { name: 'pay_bill', args: { card: cardName, month, year } });
@@ -376,7 +366,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           card: cardName,
           billMonth: nextCycle.month,
           billYear: nextCycle.year,
-          idempotencyKey: `ontopaid-open-purchase-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(openPurchase.transaction?.id, 'expected a created transaction');
@@ -416,7 +405,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `offpaid-purchase-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(purchase.transaction?.id, 'expected a created transaction');
@@ -474,7 +462,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `fullflow-purchase-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(purchase.transaction?.id, 'expected a created transaction');
@@ -536,7 +523,6 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `account-reject-purchase-${stamp}`,
         },
       })) as { transaction?: { id?: string; cardId?: string; billId?: string } };
       ensure(purchase.transaction?.id, 'expected a created transaction');

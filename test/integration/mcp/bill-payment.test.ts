@@ -47,7 +47,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `billpay-purchase-${stamp}`,
         },
       });
 
@@ -121,7 +120,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: dateCardName,
-          idempotencyKey: `date-purchase-${stamp}`,
         },
       });
 
@@ -167,7 +165,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: noDefaultCard,
-          idempotencyKey: `nodefault-purchase-${stamp}`,
         },
       });
 
@@ -207,7 +204,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: usdCard,
-          idempotencyKey: `usd-purchase-${stamp}`,
         },
       });
 
@@ -247,7 +243,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: noteCardName,
-          idempotencyKey: `note-bill-${stamp}`,
           note: 'warranty until 2027',
         },
       });
@@ -290,7 +285,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: delCard,
-          idempotencyKey: `del-purchase-${stamp}`,
         },
       });
 
@@ -356,7 +350,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: multiCardName,
-          idempotencyKey: `multi-a-${stamp}`,
         },
       });
       await callTool(client, {
@@ -367,7 +360,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: multiCardName,
-          idempotencyKey: `multi-b-${stamp}`,
         },
       });
       // A refund/credit on the card reduces the total.
@@ -379,7 +371,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'income',
           date: today,
           card: multiCardName,
-          idempotencyKey: `multi-refund-${stamp}`,
         },
       });
 
@@ -417,7 +408,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: revertCardName,
-          idempotencyKey: `revert-purchase-${stamp}`,
         },
       });
 
@@ -486,7 +476,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'income',
           date: today,
           card: creditBillCardName,
-          idempotencyKey: `credit-bill-refund-${stamp}`,
         },
       });
 
@@ -527,7 +516,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: noopCardName,
-          idempotencyKey: `noop-purchase-${stamp}`,
         },
       });
 
@@ -571,7 +559,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: protectedCardName,
-          idempotencyKey: `protected-purchase-${stamp}`,
         },
       });
       await callTool(client, { name: 'pay_bill', args: { card: protectedCardName, month, year } });
@@ -637,7 +624,6 @@ describe('MCP integration > bill payment (Design 003)', () => {
           type: 'expense',
           date: today,
           card: editCardName,
-          idempotencyKey: `editprotected-purchase-${stamp}`,
         },
       });
       await callTool(client, { name: 'pay_bill', args: { card: editCardName, month, year } });
@@ -681,7 +667,7 @@ describe('MCP integration > bill payment (Design 003)', () => {
 
       const transfer = (await callTool(client, {
         name: 'create_transfer',
-        args: { from: fromAcc, to: toAcc, amount: 100, idempotencyKey: `ordinary-transfer-${stamp}` },
+        args: { from: fromAcc, to: toAcc, amount: 100 },
       })) as { transaction?: { id?: string } };
       ensure(transfer.transaction?.id, 'expected a created transfer');
 

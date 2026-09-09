@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto';
 import { purry } from 'remeda';
 import { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
+import type { CurrencyCode } from '../models/money.js';
 import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDirection } from '../models/page.js';
 import type {
   CategoryFields,
@@ -159,28 +161,59 @@ export const entityFromExisting = (existing: RawTransactionView): TransactionEnt
 
 // ─── Bulk ─────────────────────────────────────────────────────────────────────
 
-/** Stable idempotency key derived from statement line: re-importing is a no-op. `decimals` rounds
- *  the amount component to the line's own currency precision — a flat 2 would collide two BTC/USDC
- *  amounts that only differ past the 2nd decimal, silently dropping the second as a duplicate. */
+/** The full deterministic identity a transaction's idempotency key is derived from (ADR-029
+ *  Phase 2b): the funding source (account/card id; `undefined` for an unattached movement) plus
+ *  every field that distinguishes one intended write from another. */
+export type IdempotencyIdentity = {
+  fundingSourceId: string | undefined;
+  type: TransactionType;
+  currency: CurrencyCode;
+  date: string;
+  description: string;
+  amount: number;
+};
+
+/**
+ * Domain-owned idempotency key (ADR-029 Phase 2b, replacing the caller-supplied whole key): a
+ * sha256 hash of the canonical, fixed-field-order composition of the write's full deterministic
+ * identity — funding source, type, currency, date, normalized description, and amount rounded to
+ * the currency's own decimals — plus the caller's optional `discriminator`. Deterministic ⇒ pure:
+ * re-deriving from identical input (a true retry) always yields the same key, which is what makes
+ * dedup work; a caller appends a discriminator only to record a genuinely-distinct-but-identical
+ * transaction (e.g. two identical purchases the same day). `decimals` rounds the amount component
+ * to the currency's own precision — a flat 2 would collide two BTC/USDC amounts that only differ
+ * past the 2nd decimal, silently dropping the second as a duplicate. The single home for both
+ * single-add and bulk import: every insert-shaped flow (`addAccountMovement`, `addCardPurchase`,
+ * `createTransfer`) calls this once it has resolved the entity's real funding source/currency;
+ * bulk import reuses those same flows per line rather than deriving its own key.
+ */
 export const deriveIdempotencyKey = (
-  item: { date: string; description: string; amount: number },
+  identity: IdempotencyIdentity,
   decimals: number,
-): string =>
-  `${item.date}-${normalizeMerchant(item.description).replace(/\s+/g, '-') || 'tx'}-${item.amount.toFixed(decimals)}`;
+  discriminator?: string,
+): string => {
+  // Space-joined, fixed field order: every field is either a closed enum (type/currency), an
+  // id/ISO date with no internal spaces, normalizeMerchant's letters-and-spaces-only output (never
+  // a digit), or a fixed-decimals numeric string — so no two distinct identities can join into the
+  // same canonical string.
+  const canonical = [
+    identity.fundingSourceId ?? '',
+    identity.type,
+    identity.currency,
+    identity.date,
+    normalizeMerchant(identity.description),
+    identity.amount.toFixed(decimals),
+    discriminator ?? '',
+  ].join(' ');
+  return createHash('sha256').update(canonical).digest('hex');
+};
 
 // today is the caller's already-resolved toIsoDate(deps.clock()) — logic never reads the clock.
-// decimals is likewise resolved by the caller, never read here.
 export const defaultStatementLines = <Line extends StatementLine>(
   today: string,
   lines: readonly Line[],
   rawInput: string | undefined,
-  decimals: number,
-): DefaultedStatementLine<Line>[] =>
-  lines.map((line) => {
-    const date = line.date ?? today;
-    const idempotencyKey = line.idempotencyKey ?? deriveIdempotencyKey({ ...line, date }, decimals);
-    return { ...line, date, idempotencyKey, rawInput };
-  });
+): DefaultedStatementLine<Line>[] => lines.map((line) => ({ ...line, date: line.date ?? today, rawInput }));
 
 export const LOW_CONFIDENCE_THRESHOLD = 0.6;
 

@@ -150,6 +150,30 @@ own ADR when it lands. This ADR only ensures nothing in the core reaches into th
    the single-add + bulk-import flows; `effects.ts`/`versionedTableApplier` write it from the envelope onto the
    registered column, `idempotencyColumn` naming that column rather than a model field to read. Behavior-preserving
    dedup; tests for duplicate-still-deduped + read-first entities unaffected. Close #134.
+2b. **`refactor/idempotency-key-derivation`** — refine *how* the key is produced and dedup is wired (Phase 2
+   made the key envelope metadata; 2b makes the domain own its content and fixes the applier convention):
+   - **The domain builds the key; the caller supplies only an optional discriminator.** Remove the caller-supplied
+     *whole* key: `CreateTransactionSchema` drops the required `idempotencyKey` and gains an optional
+     `discriminator?` (the caller appends it when recording genuinely-distinct-but-identical
+     transactions — the load-bearing escape hatch, since domain-derived keys correctly dedup identical input as
+     a retry). `deriveIdempotencyKey` becomes the single home for both single-add and bulk (today single-add
+     takes a caller key, bulk derives — unify).
+   - **Compose over the full deterministic identity, not just `date+desc+amount`.** Include the funding source
+     (account/card id) + type + currency + normalized description + amount-at-currency-decimals (+ the optional
+     suffix). Fixes the latent cross-source false-dedup (two accounts with an identical line collide today,
+     since the key omits the account).
+   - **Hash the canonical composition** (`crypto.createHash('sha256')…digest('hex')`) rather than concatenating
+     readable parts: fixed length, no delimiter ambiguity, clean field+suffix composition. The hash is over a
+     **canonical** serialization (fixed field order, normalized description, decimals-rounded amount) — a
+     deterministic, **pure** function (fine in `logic/`, unlike `randomUUID`). Trade-off accepted: keys are no
+     longer human-readable, and this is a **one-time key-format discontinuity** (a statement re-imported after
+     this lands won't dedup against pre-existing readable-format keys → possible duplicates of previously-imported
+     rows; documented, tolerable at personal scale, no clean backfill since old single-add keys were arbitrary
+     caller strings).
+   - **Fix the dedup column by convention.** Drop the configurable `idempotencyColumn` from
+     `versionedTableApplier` config — the column is always `idempotency_key`; an entity opts into dedup by its
+     insert *carrying* a key (envelope-key presence), not by naming a column. Simpler surface; a fixed contract
+     column is what the future lib wants.
 3. **(Future, separate ADR)** — extract the DB-agnostic core into a package; add a Postgres `EntityApplier`
    adapter. Not in this ADR beyond keeping the core driver-free.
 
@@ -160,7 +184,12 @@ own ADR when it lands. This ADR only ensures nothing in the core reaches into th
 3. [x] Phase 2 — idempotency key onto the `insert` envelope; drop it from the transaction business model; close #134.
 4. [x] Record in `docs/architecture.md` (ADR index + the version/idempotency invariant wording) and
    `docs/write-path.md`; update the `CLAUDE.md` idempotency data-convention line.
-5. [ ] (Deferred, own ADR) extract the core as a lib + Postgres adapter.
+5. [x] Phase 2b — domain-owned hashed key (caller passes only a discriminator) over the full deterministic
+   identity; drop the configurable `idempotencyColumn` (fixed `idempotency_key` by convention). Updated
+   `docs/write-path.md` + `docs/architecture.md` + `CLAUDE.md`/`.github/copilot-instructions.md` idempotency
+   lines + `docs/mcp-tools.md`; noted the key-format discontinuity. Closed #184 (the batch-level decimals
+   fallback it tracked no longer exists — each line resolves its own currency now).
+6. [ ] (Deferred, own ADR) extract the core as a lib + Postgres adapter.
 
 Each phase is feature-sized → independent verification subagent per diff, charged with confirming the core takes
 no Drizzle/domain-model dependency, version stays off wire/out, and idempotency remains optional (read-first

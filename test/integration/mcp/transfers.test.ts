@@ -38,7 +38,6 @@ describe('MCP integration > transfers', () => {
           amount: 200,
           date: today,
           description: `Transfer ${stamp}`,
-          idempotencyKey: `integration-transfer-${stamp}`,
         },
       })) as { transaction?: { id?: string }; created?: boolean };
 

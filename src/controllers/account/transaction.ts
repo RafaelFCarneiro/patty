@@ -25,6 +25,7 @@ import {
   buildUpsertResult,
   defaultStatementLines,
   defaultStatusFor,
+  deriveIdempotencyKey,
 } from '../../logic/transaction.js';
 import {
   accountErrors,
@@ -33,7 +34,6 @@ import {
   type ImportAccountStatementItem,
   type UpdateAccountTransaction,
 } from '../../models/account.js';
-import { CurrencyCode } from '../../models/money.js';
 import { type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import {
   ClassificationMethod,
@@ -66,7 +66,7 @@ const assertAccountOwnedLegs = (
 ): ResultAsync<boolean, AppError> =>
   resolveLegAccounts(deps, tx).map((legs) => legs.every((account) => isAccountOwnedType(account.type)));
 
-type MovementPlan = { entity: TransactionEntity; classification: ClassifyOutcome };
+type MovementPlan = { entity: TransactionEntity; classification: ClassifyOutcome; idempotencyKey: string };
 
 const planAccountMovement = (
   deps: Deps,
@@ -85,6 +85,7 @@ const planAccountMovement = (
     const today = toIsoDate(deps.clock());
     const date = input.date ?? today;
     const status = input.status ?? defaultStatusFor(date, today);
+    const currency = resolveCurrency(account, input);
 
     const categorySelection = yield* resolveCategorySelection(deps, input, type);
     const normalizedMerchant = normalizeMerchant(input.description);
@@ -106,7 +107,7 @@ const planAccountMovement = (
       type,
       status,
       date,
-      currency: resolveCurrency(account, input),
+      currency,
       source,
       classification,
       rawInput: input.rawInput,
@@ -119,7 +120,16 @@ const planAccountMovement = (
       },
     };
 
-    return ok({ entity, classification });
+    // Domain-owned key (ADR-029 Phase 2b): derived from the full resolved identity, never a
+    // caller-supplied whole key — input.discriminator is the only caller-controlled input into it.
+    const decimals = decimalsLookup(await deps.currencies.list())(currency);
+    const idempotencyKey = deriveIdempotencyKey(
+      { fundingSourceId: account?.id, type, currency, date, description: input.description, amount: input.amount },
+      decimals,
+      input.discriminator,
+    );
+
+    return ok({ entity, classification, idempotencyKey });
   });
 
 /** Shared by addAccountExpense/addAccountIncome — everything but the fixed movement type. Returns
@@ -133,13 +143,13 @@ const addAccountMovement = (
   source: TransactionSource,
 ): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> =>
   safeTry(async function* () {
-    const { entity, classification } = yield* planAccountMovement(deps, input, type, source);
+    const { entity, classification, idempotencyKey } = yield* planAccountMovement(deps, input, type, source);
 
     const locale = await deps.locale();
     const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
     const persist = [
       ...withMerchant(
-        [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity, idempotencyKey: input.idempotencyKey })],
+        [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity, idempotencyKey })],
         entity.refs.merchantKey,
       ),
       ...(tagLinks ? [tagLinks.persistable] : []),
@@ -173,22 +183,10 @@ export const importAccountStatement = async (
   input: ImportAccountStatement,
   source: TransactionSource,
 ): Promise<StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult>> => {
-  // A not-found account name, or an unattached statement, falls back to USD decimals here —
-  // affects only the idempotency key's rounding; addAccountExpense/Income re-resolves the real
-  // account, currency, and any notFound error independently per line. An unattached statement's
-  // per-item currency override isn't consulted for this fallback (out of scope).
-  const [accountResult, currencies] = await Promise.all([
-    input.account ? resolveAccountRef(deps, input.account) : null,
-    deps.currencies.list(),
-  ]);
-  const decimalsFor = decimalsLookup(currencies);
-  const decimals = accountResult
-    ? accountResult.match(
-        (account) => decimalsFor(account.currency),
-        () => decimalsFor(CurrencyCode.enum.USD),
-      )
-    : decimalsFor(CurrencyCode.enum.USD);
-  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput, decimals);
+  // Each line's idempotency key is now derived inside addAccountExpense/addAccountIncome itself
+  // (the same flowFor below reuses verbatim), against the real resolved account/currency — no
+  // batch-level account/decimals pre-resolution needed here anymore (ADR-029 Phase 2b).
+  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
   // Resolves locale once for the whole import rather than once per line: every line's flow reads
   // deps.locale() to build its localized response, so overriding it here to the same in-flight
   // promise keeps every item's labels consistent even if the process-level locale cache resets

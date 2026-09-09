@@ -44,6 +44,7 @@ import {
 import {
   MAX_RUN_EFFECTS_ATTEMPTS,
   missingIdempotencyKeyMessage,
+  unexpectedIdempotencyKeyMessage,
   versionedTableApplier,
   runEffects,
   runEffectsSequence,
@@ -644,66 +645,24 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
   });
 });
 
-describe('engine idempotency treatment — declared by registration, generic over any entity (ADR-023 step 3)', () => {
-  const KEYED_TAG = 'keyedEntity';
-
-  // `tags` doubles as an arbitrary keyed table here: registering `name` as the idempotency column
-  // exercises the generic treatment with no transaction-specific machinery in sight. `readBack`
-  // just echoes the id it was handed, so tests can assert WHICH row the engine resolved.
-  const keyedRegistry: ApplierRegistry = {
-    [KEYED_TAG]: versionedTableApplier(tags, { idempotencyColumn: 'name', readBack: async (_tx, id) => id }),
-  };
-
-  const insertKeyed = (model: { id: string; name: string; version: number }, idempotencyKey = model.name) => () =>
-    okAsync({
-      persist: [{ op: PersistOp.enum.insert, entity: KEYED_TAG, model, idempotencyKey }] as Persistable[],
-      response: (outcomes: PersistOutcome[]) => outcomes[0],
-    });
-
-  it('a fresh insert under a new key applies normally, reading back its own minted id', async () => {
-    const model = { id: randomUUID(), name: `Key ${randomUUID()}`, version: 0 };
-
-    const result = await runEffects(db, keyedRegistry, insertKeyed(model));
-
-    expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toMatchObject({ applied: true, read: model.id });
-  });
-
-  it('a duplicate-key insert no-ops with applied:false and reads back the SURVIVING row id', async () => {
-    const original = { id: randomUUID(), name: `Key ${randomUUID()}`, version: 0 };
-    await runEffects(db, keyedRegistry, insertKeyed(original));
-
-    // Same key, fresh id — the existing row is the outcome, never a conflict or a second row.
-    const replay = { id: randomUUID(), name: original.name, version: 0 };
-    const result = await runEffects(db, keyedRegistry, insertKeyed(replay));
-
-    expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toMatchObject({ applied: false, read: original.id });
-    expect(await db.all(sql`SELECT id FROM tags WHERE name = ${original.name}`)).toEqual([{ id: original.id }]);
-  });
-
-  it('the id guard stays separate: a same-id insert under a DIFFERENT key still raises', async () => {
-    const original = { id: randomUUID(), name: `Key ${randomUUID()}`, version: 0 };
-    await runEffects(db, keyedRegistry, insertKeyed(original));
-
-    // With a key present the conflict target is the idempotency column, so an id collision is NOT
-    // absorbed as a structural same-id retry — the two guards never merge. (The reverse — an
-    // entity with no idempotency config no-oping a same-id retry — is asserted independently in
-    // the runEffects suite above.)
-    await expect(
-      runEffects(db, keyedRegistry, insertKeyed({ id: original.id, name: `Key ${randomUUID()}`, version: 0 })),
-    ).rejects.toThrow();
-  });
-
-  it('an insert with no idempotencyKey on a keyed entity rejects loudly, never reaching SQL', async () => {
-    const model = { id: randomUUID(), name: `Key ${randomUUID()}`, version: 0 };
+describe('engine idempotency treatment — fixed column, opt-in by envelope-key presence (ADR-029 Phase 2b)', () => {
+  // The dedup column is no longer a per-registration name — it's `transactions.idempotencyKey` by
+  // fixed convention, so the generic treatment itself (fresh insert / duplicate-key no-op /
+  // id-guard separation / missing-key rejection) is exercised against the real transactions table
+  // in the `transactionApplier` suite above, not an arbitrary stand-in table. This block covers the
+  // remaining case: a table with NO idempotencyKey column at all.
+  it('an insert carrying a key for a table with no idempotencyKey column rejects loudly, never hits SQL', async () => {
+    const tagRegistry: ApplierRegistry = { tag: versionedTableApplier(tags) };
+    const model = { id: randomUUID(), name: `Tag ${randomUUID()}`, version: 0 };
     const flow = () =>
       okAsync({
-        persist: [{ op: PersistOp.enum.insert, entity: KEYED_TAG, model }] as Persistable[],
+        persist: [
+          { op: PersistOp.enum.insert, entity: 'tag', model, idempotencyKey: `idem-${randomUUID()}` },
+        ] as Persistable[],
         response: null,
       });
 
-    await expect(runEffects(db, keyedRegistry, flow)).rejects.toThrow(missingIdempotencyKeyMessage('name'));
+    await expect(runEffects(db, tagRegistry, flow)).rejects.toThrow(unexpectedIdempotencyKeyMessage());
     expect(await db.all(sql`SELECT id FROM tags WHERE name = ${model.name}`)).toHaveLength(0);
   });
 });
@@ -735,11 +694,13 @@ const newTransactionRow = (overrides: Partial<TransactionRowEntity> = {}): Trans
   ...overrides,
 });
 
-const insertRow = (model: TransactionRowEntity, idempotencyKey: string = `idem-${randomUUID()}`) => () =>
-  okAsync({
-    persist: [{ op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model, idempotencyKey }] as Persistable[],
-    response: (outcomes: PersistOutcome[]) => outcomes[0],
-  });
+const insertRow =
+  (model: TransactionRowEntity, idempotencyKey: string = `idem-${randomUUID()}`) =>
+  () =>
+    okAsync({
+      persist: [{ op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model, idempotencyKey }] as Persistable[],
+      response: (outcomes: PersistOutcome[]) => outcomes[0],
+    });
 
 describe('transactionApplier — collapsed to a versionedTableApplier registration (ADR-023 step 3)', () => {
   const transactionRegistry: ApplierRegistry = { [TRANSACTION_ENTITY_TAG]: transactionApplier };
@@ -771,6 +732,29 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
     const read = outcome?.read as { id: string; description: string };
     expect(read.id).toBe(original.id);
     expect(read.description).toBe('Original');
+  });
+
+  it('the id guard stays separate: a same-id insert under a DIFFERENT key still raises', async () => {
+    const original = newTransactionRow();
+    await runEffects(db, transactionRegistry, insertRow(original, `idem-${randomUUID()}`));
+
+    // With a key present the conflict target is the fixed idempotencyKey column, so an id
+    // collision is NOT absorbed as a structural same-id retry — the two guards never merge.
+    await expect(
+      runEffects(db, transactionRegistry, insertRow({ ...original, description: 'Collides on id' })),
+    ).rejects.toThrow();
+  });
+
+  it('an insert with no idempotencyKey on a table that has the column rejects loudly, never reaching SQL', async () => {
+    const row = newTransactionRow();
+    const flow = () =>
+      okAsync({
+        persist: [{ op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model: row }] as Persistable[],
+        response: null,
+      });
+
+    await expect(runEffects(db, transactionRegistry, flow)).rejects.toThrow(missingIdempotencyKeyMessage());
+    expect(await db.all(sql`SELECT id FROM transactions WHERE id = ${row.id}`)).toHaveLength(0);
   });
 
   it('insert applies the given merchantKey but no longer creates the merchants row itself (ADR-023)', async () => {
@@ -1288,7 +1272,12 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
     await runEffects(db, merchantRegistry, () =>
       okAsync({
         persist: [
-          { op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model: row, idempotencyKey: `idem-${randomUUID()}` },
+          {
+            op: PersistOp.enum.insert,
+            entity: TRANSACTION_ENTITY_TAG,
+            model: row,
+            idempotencyKey: `idem-${randomUUID()}`,
+          },
         ] as Persistable[],
         response: null,
       }),

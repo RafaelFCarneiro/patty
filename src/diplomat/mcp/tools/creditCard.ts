@@ -72,9 +72,10 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
         "Record a credit-card purchase, joining the cycle bill (fatura) — the credit-card aggregate's " +
         'purchase entry point (ADR-016). Resolves the card and category by ' +
         'name; when category is omitted, classifies via learned merchant→category associations and returns ' +
-        'method + confidence (confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — ' +
-        'generate a stable key like "<date>-<description>-<amount>". Currency always comes from the card ' +
-        "(a card's currency is fixed at creation) — the currency field is accepted for schema symmetry " +
+        'method + confidence (confirm with the user when confidence < 0.6). Idempotent automatically — a ' +
+        'repeat call with the same card/description/date/amount is deduped; pass discriminator to record a ' +
+        'genuinely separate transaction that would otherwise look identical. Currency always comes from the ' +
+        "card (a card's currency is fixed at creation) — the currency field is accepted for schema symmetry " +
         'with add_account_expense/add_account_income but has no effect here.',
       inputSchema: AddCardPurchaseSchema.shape,
     },

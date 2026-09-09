@@ -8,9 +8,10 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../../common/errors.js';
 import { guard } from '../../common/result.js';
 import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
+import { decimalsLookup } from '../../logic/money.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
-import { buildUpsertResult, defaultStatusFor } from '../../logic/transaction.js';
+import { buildUpsertResult, defaultStatusFor, deriveIdempotencyKey } from '../../logic/transaction.js';
 import { accountErrors } from '../../models/account.js';
 import type { Account, CreateTransfer } from '../../models/account.js';
 import type { FlowOutcome } from '../../models/persistable.js';
@@ -66,10 +67,24 @@ export const createTransfer = (
       refs: { accountId: from.id, toAccountId: to.id },
     };
 
+    // Domain-owned key (ADR-029 Phase 2b): the source account is the funding source for a
+    // transfer, mirroring `entity.currency` (also taken from `from`, never `to`).
+    const decimals = decimalsLookup(await deps.currencies.list())(entity.currency);
+    const idempotencyKey = deriveIdempotencyKey(
+      {
+        fundingSourceId: from.id,
+        type: entity.type,
+        currency: entity.currency,
+        date: entity.date,
+        description: entity.description,
+        amount: entity.amount,
+      },
+      decimals,
+      input.discriminator,
+    );
+
     const locale = await deps.locale();
-    const persist = [
-      persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity, idempotencyKey: input.idempotencyKey }),
-    ];
+    const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity, idempotencyKey })];
     // Transfers are never classified — explicit `undefined` (purry needs the arity to match
     // `buildUpsertResult`'s 2-arg curry: `classification`, `locale`).
     const response = buildUpsertResult(undefined, locale);

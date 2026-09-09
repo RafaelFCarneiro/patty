@@ -63,10 +63,14 @@ export const NOTE_MAX_LENGTH = 1000;
 // (models/creditCard.ts) and ImportAccountStatementItemSchema/ImportCardStatementSchema/
 // ImportAccountStatementSchema reuse these verbatim; named once here so the two aggregate schemas
 // never copy-paste the same describe() text (code-quality.md "constants over literals").
-export const STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION =
-  'Stable dedup key; derived from date+description+amount when absent';
 export const STATEMENT_ITEMS_DESCRIPTION = 'Statement lines to import';
 export const STATEMENT_RAW_INPUT_DESCRIPTION = 'The original pasted statement text';
+
+// Shared by CreateTransactionSchema (below) and CreateTransferSchema (models/account.ts) — named
+// once so the two never copy-paste the same describe() text (code-quality.md "constants over
+// literals").
+export const DISCRIMINATOR_DESCRIPTION =
+  'Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)';
 
 // `.describe()` is domain information — it states what each field is and represents.
 // Defaults split by intent: integrity defaults (a value that must exist for the entity to be
@@ -193,7 +197,7 @@ export const CreateTransactionSchema = z.object({
     'Sub-category name (implies its parent — do not set both)',
   ),
   currency: CurrencyCode.optional().describe('Transaction currency; resolved from account/card when omitted'),
-  idempotencyKey: z.string().min(1).describe('Stable dedup key, e.g. "<date>-<description>-<amount>"'),
+  discriminator: z.string().min(1).optional().describe(DISCRIMINATOR_DESCRIPTION),
   rawInput: z.string().optional().describe('Original user phrasing, for audit'),
   note: z.string().min(1).max(NOTE_MAX_LENGTH).optional().describe('Free-form memo (observação)'),
   tags: z.array(z.string().min(1)).optional().describe('Labels to attach, e.g. ["work", "travel"]'),
@@ -203,11 +207,10 @@ export type CreateTransaction = z.infer<typeof CreateTransactionSchema>;
 // Not a schema of its own: every real statement line is already a decoded
 // ImportAccountStatementItem/ImportCardStatementItem; this is a structural subset of
 // CreateTransaction, generic over both.
-export type StatementLine = Pick<CreateTransaction, 'date' | 'description' | 'amount'> & { idempotencyKey?: string };
+export type StatementLine = Pick<CreateTransaction, 'date' | 'description' | 'amount'>;
 
 export type DefaultedStatementLine<Line extends StatementLine> = Line & {
   date: string;
-  idempotencyKey: string;
   rawInput?: string;
 };
 

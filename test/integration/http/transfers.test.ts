@@ -18,7 +18,7 @@ describe('POST /api/transfers', () => {
     const res = await inject({
       method: 'POST',
       url: '/api/transfers',
-      payload: { from: 'TransferFrom', to: 'TransferTo', amount: 200, date: '2026-06-01', idempotencyKey: 'xfer-1' },
+      payload: { from: 'TransferFrom', to: 'TransferTo', amount: 200, date: '2026-06-01' },
     });
     expect(res.statusCode).toBe(201);
     expect(res.json()).toHaveProperty('created', true);
@@ -47,7 +47,6 @@ describe('POST /api/transfers', () => {
         to: 'XferSearchDst',
         amount: 100,
         date: '2026-06-01',
-        idempotencyKey: 'xfer-search-1',
       },
     });
     const all = await inject({
@@ -84,7 +83,6 @@ describe('POST /api/transfers', () => {
         to: 'Xfer Dup To',
         amount: 50,
         date: '2026-06-01',
-        idempotencyKey: 'xfer-dup-1',
       },
     });
     const res = await inject({
@@ -95,7 +93,6 @@ describe('POST /api/transfers', () => {
         to: 'Xfer Dup To',
         amount: 50,
         date: '2026-06-01',
-        idempotencyKey: 'xfer-dup-1',
       },
     });
     expect(res.statusCode).toBe(200);
@@ -116,7 +113,6 @@ describe('POST /api/transfers', () => {
         to: 'XferSameAcct',
         amount: 10,
         date: '2026-06-01',
-        idempotencyKey: 'xfer-same',
       },
     });
     expect(res.statusCode).toBe(422);
@@ -140,7 +136,6 @@ describe('POST /api/transfers', () => {
         from: 'Card: Xfer Credit Card',
         to: 'Xfer Credit Bank',
         amount: 100,
-        idempotencyKey: 'xfer-from-credit',
       },
     });
     expect(res.statusCode).toBe(422);
@@ -164,7 +159,6 @@ describe('POST /api/transfers', () => {
         from: 'XferCreditDstBank',
         to: 'Card: XferCreditDstCard',
         amount: 100,
-        idempotencyKey: 'xfer-to-credit',
       },
     });
     expect(res.statusCode).toBe(422);

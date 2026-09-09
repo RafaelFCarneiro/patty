@@ -36,7 +36,6 @@ describe('MCP integration > pending transactions', () => {
           amount: 1000,
           date: '2026-01-15',
           account: accountName,
-          idempotencyKey: `ptest-eff-${stamp}`,
         },
       })) as { transaction?: { id?: string; status?: string } };
       const effId = effective.transaction?.id;
@@ -53,7 +52,6 @@ describe('MCP integration > pending transactions', () => {
           date: '2026-01-20',
           account: accountName,
           status: 'pending',
-          idempotencyKey: `ptest-pend-${stamp}`,
         },
       })) as { transaction?: { id?: string; status?: string } };
       const pendId = pending.transaction?.id;
@@ -136,7 +134,6 @@ describe('MCP integration > pending transactions', () => {
           amount: 500,
           date: '2099-01-01',
           account: accountName,
-          idempotencyKey: `ptest-future-${stamp}`,
         },
       })) as { transaction?: { id?: string; status?: string } };
       const futureId = futureTx.transaction?.id;
@@ -152,7 +149,6 @@ describe('MCP integration > pending transactions', () => {
           amount: 200,
           date: '2020-01-01',
           account: accountName,
-          idempotencyKey: `ptest-past-${stamp}`,
         },
       })) as { transaction?: { id?: string; status?: string } };
       const pastId = pastTx.transaction?.id;
@@ -180,7 +176,6 @@ describe('MCP integration > pending transactions', () => {
           date: '2026-01-10',
           account: accountName,
           status: 'pending',
-          idempotencyKey: `ptest-edit-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       const id = pending.transaction?.id;
@@ -216,7 +211,6 @@ describe('MCP integration > pending transactions', () => {
           amount: 50,
           date: '2026-01-10',
           status: 'pending',
-          idempotencyKey: `ptest-transfer-edit-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       const id = transfer.transaction?.id;
@@ -257,7 +251,6 @@ describe('MCP integration > pending transactions', () => {
           date: '2026-01-10',
           account: accountName,
           status: 'pending',
-          idempotencyKey: `ptest-future-edit-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       const pastPendingId = pastPending.transaction?.id;
@@ -277,7 +270,6 @@ describe('MCP integration > pending transactions', () => {
           amount: 10,
           date: '2099-01-01',
           account: accountName,
-          idempotencyKey: `ptest-future-existing-${stamp}`,
         },
       })) as { transaction?: { id?: string; status?: string } };
       const futurePendingId = futurePending.transaction?.id;

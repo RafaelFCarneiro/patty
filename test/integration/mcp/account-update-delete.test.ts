@@ -55,7 +55,6 @@ describe('MCP integration > account update + delete', () => {
         amount: 10,
         date: '2026-01-15',
         account: name,
-        idempotencyKey: `del-acct-tx-${stamp}`,
       },
     })) as { transaction: { id: string } };
     createdTxIds.push(txResult.transaction.id);
@@ -151,7 +150,6 @@ describe('MCP integration > account update + delete', () => {
         amount: 10,
         date: '2026-01-15',
         account: name,
-        idempotencyKey: `upd-acct-tx-${stamp}`,
       },
     })) as { transaction: { id: string } };
     createdTxIds.push(txResult.transaction.id);
@@ -176,7 +174,6 @@ describe('MCP integration > account update + delete', () => {
         amount: 5,
         date: '2026-01-15',
         account: name,
-        idempotencyKey: `upd-type-tx-${stamp}`,
       },
     })) as { transaction: { id: string } };
     createdTxIds.push(txResult.transaction.id);

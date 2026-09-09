@@ -39,7 +39,9 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   subCategories: {} as Deps['subCategories'],
   correlations: {} as Deps['correlations'],
   creditCards: {} as Deps['creditCards'],
-  currencies: {} as Deps['currencies'],
+  // deriveIdempotencyKey needs the resolved currency's decimals (ADR-029 Phase 2b) — every
+  // insert-shaped flow now calls deps.currencies.list(), not just bulk import.
+  currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
   currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
@@ -101,7 +103,6 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
         type: 'expense',
         date: '2026-06-15',
         card: 'Test Card',
-        idempotencyKey: 'k1',
       },
       TransactionSource.enum.mcp,
     );
@@ -135,7 +136,6 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
         type: 'expense',
         date: '2026-06-15',
         card: 'Test Card',
-        idempotencyKey: 'k2',
       },
       TransactionSource.enum.mcp,
     );
@@ -166,7 +166,6 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
         type: 'expense',
         date: '2026-06-15',
         card: 'Test Card',
-        idempotencyKey: 'k3',
       },
       TransactionSource.enum.mcp,
     );
@@ -197,7 +196,6 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
         type: 'expense',
         date: '2026-06-15',
         card: 'Test Card',
-        idempotencyKey: 'k-merchant',
       },
       TransactionSource.enum.mcp,
     );
@@ -227,7 +225,6 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
         type: 'expense',
         date: '2026-06-15',
         card: 'Test Card',
-        idempotencyKey: 'k4',
       },
       TransactionSource.enum.mcp,
     );
@@ -284,7 +281,6 @@ describe('addCardPurchase — tag-set resolution (ADR-023 step 2)', () => {
         type: 'expense',
         date: '2026-06-15',
         card: 'Test Card',
-        idempotencyKey: 'k-tags',
         tags: ['work'],
       },
       TransactionSource.enum.mcp,
@@ -315,7 +311,6 @@ describe('addCardPurchase — tag-set resolution (ADR-023 step 2)', () => {
         type: 'expense',
         date: '2026-06-15',
         card: 'Test Card',
-        idempotencyKey: 'k-replay-tags',
         tags: ['work'],
       },
       TransactionSource.enum.mcp,
@@ -366,7 +361,6 @@ describe('addCardPurchase — tag-set resolution (ADR-023 step 2)', () => {
         type: 'expense',
         date: '2026-06-15',
         card: 'Test Card',
-        idempotencyKey: 'k-no-tags',
       },
       TransactionSource.enum.mcp,
     );
@@ -376,13 +370,18 @@ describe('addCardPurchase — tag-set resolution (ADR-023 step 2)', () => {
   });
 });
 
+/** The derived idempotencyKey off the transaction Persistable a flow's outcome carries — every
+ *  bulk-import test below runs the real per-line flow (ADR-029 Phase 2b: the key is derived
+ *  inside addCardPurchase itself now, never present on `plan.lines` itself). */
+const idempotencyKeyOfPurchase = (persist: readonly { entity: string; idempotencyKey?: string }[]): string =>
+  (persist.find((p) => p.entity === 'transaction') as { idempotencyKey: string }).idempotencyKey;
+
 describe('importCardStatement — pure per-line plan for the shell', () => {
-  it("defaults date/idempotencyKey per line and stamps the whole import's rawInput onto each", async () => {
+  it("defaults every line's date, stamps rawInput onto each, and carries discriminator through", async () => {
     const clock = new Date('2026-06-10');
     const deps = makeDeps({
       clock: () => clock,
       creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
-      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
     });
 
     const plan = await importCardStatement(
@@ -391,7 +390,7 @@ describe('importCardStatement — pure per-line plan for the shell', () => {
         card: 'Test Card',
         items: [
           { description: 'Coffee', amount: 5, type: 'expense' },
-          { description: 'Taxi', amount: 12, type: 'expense', date: '2026-06-01', idempotencyKey: 'explicit-key' },
+          { description: 'Taxi', amount: 12, type: 'expense', date: '2026-06-01', discriminator: 'explicit' },
         ],
         rawInput: 'pasted statement text',
       },
@@ -400,14 +399,12 @@ describe('importCardStatement — pure per-line plan for the shell', () => {
 
     expect(plan.lines).toHaveLength(2);
     expect(plan.lines[0]).toMatchObject({ date: toIsoDate(clock), rawInput: 'pasted statement text' });
-    expect(plan.lines[0]!.idempotencyKey).toBeTruthy();
-    expect(plan.lines[1]).toMatchObject({ date: '2026-06-01', idempotencyKey: 'explicit-key' });
+    expect(plan.lines[1]).toMatchObject({ date: '2026-06-01', discriminator: 'explicit' });
   });
 
   it("flowFor binds a defaulted line to addCardPurchase's own single-line flow, with the fixed card", async () => {
     const deps = makeDeps({
       creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
-      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
       bills: { findByCycle: async () => null } as unknown as Deps['bills'],
       newId: sequentialNewId(),
     });
@@ -416,7 +413,7 @@ describe('importCardStatement — pure per-line plan for the shell', () => {
       deps,
       {
         card: 'Test Card',
-        items: [{ description: 'Plan line', amount: 20, type: 'expense', date: '2026-06-15', idempotencyKey: 'k1' }],
+        items: [{ description: 'Plan line', amount: 20, type: 'expense', date: '2026-06-15' }],
       },
       TransactionSource.enum.import,
     );
@@ -435,7 +432,7 @@ describe('importCardStatement — pure per-line plan for the shell', () => {
   it("resolves the card's currency decimals for the idempotency key, keeping BTC lines distinct", async () => {
     const deps = makeDeps({
       creditCards: { list: async () => [card({ currency: CurrencyCode.enum.BTC })] } as unknown as Deps['creditCards'],
-      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
+      bills: { findByCycle: async () => null } as unknown as Deps['bills'],
     });
 
     const plan = await importCardStatement(
@@ -450,13 +447,15 @@ describe('importCardStatement — pure per-line plan for the shell', () => {
       TransactionSource.enum.import,
     );
 
-    expect(plan.lines[0]!.idempotencyKey).not.toBe(plan.lines[1]!.idempotencyKey);
+    const [first, second] = await Promise.all(plan.lines.map((line) => plan.flowFor(line)()));
+    expect(idempotencyKeyOfPurchase(first!._unsafeUnwrap().persist)).not.toBe(
+      idempotencyKeyOfPurchase(second!._unsafeUnwrap().persist),
+    );
   });
 
-  it('falls back to a valid plan (no throw) when the card name does not resolve', async () => {
+  it('builds a valid plan when the card name does not resolve — the line reports notFound independently', async () => {
     const deps = makeDeps({
       creditCards: { list: async () => [] } as unknown as Deps['creditCards'],
-      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
     });
 
     const plan = await importCardStatement(
@@ -466,7 +465,8 @@ describe('importCardStatement — pure per-line plan for the shell', () => {
     );
 
     expect(plan.lines).toHaveLength(1);
-    expect(plan.lines[0]!.idempotencyKey).toBeTruthy();
+    const result = await plan.flowFor(plan.lines[0]!)();
+    expect(result.isErr()).toBe(true);
   });
 });
 

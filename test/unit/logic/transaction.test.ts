@@ -32,53 +32,91 @@ import {
 } from '../../../src/logic/transaction.js';
 
 describe('deriveIdempotencyKey', () => {
-  it('is stable for the same statement line', () => {
-    const item = { date: '2026-06-09', description: 'PAG*UberTrip 99-SP', amount: 32.5 };
-    expect(deriveIdempotencyKey(item, 2)).toBe('2026-06-09-ubertrip-sp-32.50');
-    expect(deriveIdempotencyKey(item, 2)).toBe(deriveIdempotencyKey({ ...item }, 2));
+  const identity = (overrides: Partial<Parameters<typeof deriveIdempotencyKey>[0]> = {}) => ({
+    fundingSourceId: 'acct-1',
+    type: TransactionType.enum.expense,
+    currency: CurrencyCode.enum.BRL,
+    date: '2026-06-09',
+    description: 'PAG*UberTrip 99-SP',
+    amount: 32.5,
+    ...overrides,
+  });
+
+  it('is a 64-char hex sha256 digest, stable for the same identity', () => {
+    expect(deriveIdempotencyKey(identity(), 2)).toMatch(/^[0-9a-f]{64}$/);
+    expect(deriveIdempotencyKey(identity(), 2)).toBe(deriveIdempotencyKey(identity(), 2));
   });
 
   it('differs when amount differs', () => {
-    const a = { date: '2026-06-09', description: 'IFOOD', amount: 30 };
-    expect(deriveIdempotencyKey(a, 2)).not.toBe(deriveIdempotencyKey({ ...a, amount: 31 }, 2));
+    expect(deriveIdempotencyKey(identity({ amount: 30 }), 2)).not.toBe(
+      deriveIdempotencyKey(identity({ amount: 31 }), 2),
+    );
   });
 
-  it('rounds the amount component to 2 decimals for fiat, unchanged from the flat-2 behavior (regression)', () => {
-    const item = { date: '2026-06-09', description: 'Coffee', amount: 5.999 };
-    expect(deriveIdempotencyKey(item, 2)).toBe('2026-06-09-coffee-6.00');
+  it('rounds the amount to the given decimals, colliding values differing only past it (regression)', () => {
+    expect(deriveIdempotencyKey(identity({ amount: 5.999 }), 2)).toBe(deriveIdempotencyKey(identity({ amount: 6 }), 2));
   });
 
   it('gives DISTINCT keys for two amounts differing only past the 2nd decimal when decimals is 8 (BTC)', () => {
-    const a = { date: '2026-06-09', description: 'BTC buy', amount: 0.12345671 };
-    const b = { date: '2026-06-09', description: 'BTC buy', amount: 0.12345679 };
+    const a = identity({ amount: 0.12345671, currency: CurrencyCode.enum.BTC });
+    const b = identity({ amount: 0.12345679, currency: CurrencyCode.enum.BTC });
     expect(deriveIdempotencyKey(a, 8)).not.toBe(deriveIdempotencyKey(b, 8));
   });
 
   it('gives IDENTICAL keys for identical amounts at 8 decimals (BTC)', () => {
-    const item = { date: '2026-06-09', description: 'BTC buy', amount: 0.12345678 };
+    const item = identity({ amount: 0.12345678, currency: CurrencyCode.enum.BTC });
     expect(deriveIdempotencyKey(item, 8)).toBe(deriveIdempotencyKey({ ...item }, 8));
+  });
+
+  it('differs across funding source — two accounts with an otherwise-identical line no longer collide', () => {
+    expect(deriveIdempotencyKey(identity({ fundingSourceId: 'acct-1' }), 2)).not.toBe(
+      deriveIdempotencyKey(identity({ fundingSourceId: 'acct-2' }), 2),
+    );
+  });
+
+  it('treats an unattached (undefined fundingSourceId) movement as its own distinct group', () => {
+    expect(deriveIdempotencyKey(identity({ fundingSourceId: undefined }), 2)).not.toBe(
+      deriveIdempotencyKey(identity({ fundingSourceId: 'acct-1' }), 2),
+    );
+  });
+
+  it('differs across type', () => {
+    expect(deriveIdempotencyKey(identity({ type: TransactionType.enum.expense }), 2)).not.toBe(
+      deriveIdempotencyKey(identity({ type: TransactionType.enum.income }), 2),
+    );
+  });
+
+  it('differs across currency', () => {
+    expect(deriveIdempotencyKey(identity({ currency: CurrencyCode.enum.BRL }), 2)).not.toBe(
+      deriveIdempotencyKey(identity({ currency: CurrencyCode.enum.USD }), 2),
+    );
+  });
+
+  it('differs when a discriminator is supplied — the escape hatch for a genuinely-distinct transaction', () => {
+    expect(deriveIdempotencyKey(identity(), 2)).not.toBe(deriveIdempotencyKey(identity(), 2, 'second'));
+  });
+
+  it('is stable for the same discriminator', () => {
+    expect(deriveIdempotencyKey(identity(), 2, 'second')).toBe(deriveIdempotencyKey(identity(), 2, 'second'));
   });
 });
 
 describe('defaultStatementLines — pure per-line defaulting', () => {
-  it('defaults date to the caller-resolved today and derives an idempotencyKey when both are absent', () => {
-    const line = defaultStatementLines('2026-06-10', [{ description: 'Coffee', amount: 5 }], undefined, 2)[0]!;
+  it('defaults date to the caller-resolved today when absent', () => {
+    const line = defaultStatementLines('2026-06-10', [{ description: 'Coffee', amount: 5 }], undefined)[0]!;
 
     expect(line.date).toBe('2026-06-10');
-    expect(line.idempotencyKey).toBeTruthy();
     expect(line.rawInput).toBeUndefined();
   });
 
-  it('never overrides an explicit date/idempotencyKey', () => {
+  it('never overrides an explicit date', () => {
     const line = defaultStatementLines(
       '2026-06-10',
-      [{ description: 'Coffee', amount: 5, date: '2026-01-01', idempotencyKey: 'explicit' }],
+      [{ description: 'Coffee', amount: 5, date: '2026-01-01' }],
       undefined,
-      2,
     )[0]!;
 
     expect(line.date).toBe('2026-01-01');
-    expect(line.idempotencyKey).toBe('explicit');
   });
 
   it("stamps the whole import's rawInput onto every line", () => {
@@ -89,24 +127,9 @@ describe('defaultStatementLines — pure per-line defaulting', () => {
         { description: 'Taxi', amount: 12 },
       ],
       'pasted statement text',
-      2,
     );
 
     expect(lines.map((l) => l.rawInput)).toEqual(['pasted statement text', 'pasted statement text']);
-  });
-
-  it('threads decimals through to the derived idempotencyKey, keeping two near-duplicate BTC lines distinct', () => {
-    const lines = defaultStatementLines(
-      '2026-06-10',
-      [
-        { description: 'BTC buy', amount: 0.12345671 },
-        { description: 'BTC buy', amount: 0.12345679 },
-      ],
-      undefined,
-      8,
-    );
-
-    expect(lines[0]!.idempotencyKey).not.toBe(lines[1]!.idempotencyKey);
   });
 });
 

@@ -49,7 +49,6 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `liability-purchase-${stamp}`,
         },
       });
 
@@ -88,7 +87,6 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
           from: `Card: ${localCard}`,
           to: localBank,
           amount: 100,
-          idempotencyKey: `transfer-from-credit-${stamp}`,
         },
       })) as { error?: { code?: string } };
       expect(errFrom.error?.code).toBe('validation');
@@ -99,7 +97,6 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
           from: localBank,
           to: `Card: ${localCard}`,
           amount: 100,
-          idempotencyKey: `transfer-to-credit-${stamp}`,
         },
       })) as { error?: { code?: string } };
       expect(errTo.error?.code).toBe('validation');
@@ -143,7 +140,6 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
           amount: 50,
           date: today,
           account: `Card: ${localCard}`,
-          idempotencyKey: `direct-credit-post-${stamp}`,
         },
       })) as { error?: { code?: string } };
       expect(err.error?.code).toBe('validation');
@@ -185,7 +181,6 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
           type: 'expense',
           date: today,
           card: guardCard,
-          idempotencyKey: `guard-purchase-${stamp}`,
         },
       });
 
@@ -228,7 +223,6 @@ describe('MCP integration > credit cards as liability accounts (ADR-010)', () =>
           type: 'expense',
           date: today,
           card: localCard,
-          idempotencyKey: `summary-purchase-${stamp}`,
         },
       });
 

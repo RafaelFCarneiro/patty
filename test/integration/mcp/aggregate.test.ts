@@ -43,7 +43,6 @@ describe('MCP integration > aggregate_spending', () => {
         date,
         account: 'AggAcctBRL',
         category: 'Food',
-        idempotencyKey: 'agg-1',
       },
     });
     await callTool(client, {
@@ -54,7 +53,6 @@ describe('MCP integration > aggregate_spending', () => {
         date,
         account: 'AggAcctBRL',
         category: 'Transport',
-        idempotencyKey: 'agg-2',
       },
     });
     await callTool(client, {
@@ -65,7 +63,6 @@ describe('MCP integration > aggregate_spending', () => {
         date,
         account: 'AggAcctUSD',
         category: 'Subscriptions',
-        idempotencyKey: 'agg-3',
       },
     });
 
@@ -77,7 +74,6 @@ describe('MCP integration > aggregate_spending', () => {
         to: 'AggAcctBRL2',
         amount: 100,
         date,
-        idempotencyKey: 'agg-transfer-1',
       },
     });
 
@@ -91,7 +87,6 @@ describe('MCP integration > aggregate_spending', () => {
         account: 'AggAcctBRL',
         category: 'Food',
         status: 'pending',
-        idempotencyKey: 'agg-pending-1',
       },
     });
 
@@ -105,7 +100,6 @@ describe('MCP integration > aggregate_spending', () => {
         account: 'AggAcctBRL',
         category: 'Transport',
         tags: ['agg-work', 'agg-travel'],
-        idempotencyKey: 'agg-tag-1',
       },
     });
 
@@ -118,7 +112,6 @@ describe('MCP integration > aggregate_spending', () => {
         date: prevMonth,
         account: 'AggAcctBRL',
         category: 'Food',
-        idempotencyKey: 'agg-prev-1',
       },
     });
   });
@@ -251,7 +244,7 @@ describe('MCP integration > aggregate_spending displayCurrency', () => {
       await callTool(client, { name: 'create_account', args: { name: accountName, currency: 'USD' } });
       await callTool(client, {
         name: 'add_account_expense',
-        args: { description: 'Dc omit', amount: 20, date, account: accountName, idempotencyKey: `agg-dc-omit-${stamp}` },
+        args: { description: 'Dc omit', amount: 20, date, account: accountName },
       });
 
       const result = (await callTool(client, {
@@ -280,11 +273,11 @@ describe('MCP integration > aggregate_spending displayCurrency', () => {
       await callTool(client, { name: 'create_account', args: { name: brlName, currency: 'BRL' } });
       await callTool(client, {
         name: 'add_account_expense',
-        args: { description: 'Dc usd', amount: 100, date, account: usdName, idempotencyKey: `agg-dc-usd-${stamp}` },
+        args: { description: 'Dc usd', amount: 100, date, account: usdName },
       });
       await callTool(client, {
         name: 'add_account_expense',
-        args: { description: 'Dc brl', amount: 500, date, account: brlName, idempotencyKey: `agg-dc-brl-${stamp}` },
+        args: { description: 'Dc brl', amount: 500, date, account: brlName },
       });
 
       const withoutConversion = (await callTool(client, {
@@ -316,7 +309,7 @@ describe('MCP integration > aggregate_spending displayCurrency', () => {
       await callTool(client, { name: 'create_account', args: { name: btcName, currency: 'BTC' } });
       await callTool(client, {
         name: 'add_account_expense',
-        args: { description: 'Dc btc', amount: 1, date, account: btcName, idempotencyKey: `agg-dc-btc-${stamp}` },
+        args: { description: 'Dc btc', amount: 1, date, account: btcName },
       });
 
       const result = (await callTool(client, {
@@ -346,7 +339,6 @@ describe('MCP integration > aggregate_spending displayCurrency', () => {
           date,
           account: accountName,
           category: 'Food',
-          idempotencyKey: `agg-dc-limit-food-${stamp}`,
         },
       });
       await callTool(client, {
@@ -357,7 +349,6 @@ describe('MCP integration > aggregate_spending displayCurrency', () => {
           date,
           account: accountName,
           category: 'Transport',
-          idempotencyKey: `agg-dc-limit-transport-${stamp}`,
         },
       });
 
@@ -384,7 +375,7 @@ describe('MCP integration > aggregate_spending displayCurrency', () => {
       await callTool(client, { name: 'create_account', args: { name: accountName, currency: 'USD' } });
       await callTool(client, {
         name: 'add_account_expense',
-        args: { description: 'Dc count', amount: 20, date, account: accountName, idempotencyKey: `agg-dc-count-${stamp}` },
+        args: { description: 'Dc count', amount: 20, date, account: accountName },
       });
 
       const result = (await callTool(client, {
@@ -406,7 +397,7 @@ describe('MCP integration > aggregate_spending displayCurrency', () => {
       await callTool(client, { name: 'create_account', args: { name: accountName, currency: 'USD' } });
       await callTool(client, {
         name: 'add_account_expense',
-        args: { description: 'Dc avg', amount: 20, date, account: accountName, idempotencyKey: `agg-dc-avg-${stamp}` },
+        args: { description: 'Dc avg', amount: 20, date, account: accountName },
       });
 
       const result = (await callTool(client, {

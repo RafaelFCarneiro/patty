@@ -117,7 +117,6 @@ describe('DELETE /api/sub-categories/:name', () => {
         amount: 5,
         date: '2026-06-01',
         subCategory: 'DelSubBlock',
-        idempotencyKey: 'sub-ref-tx',
       },
     });
     const res = await inject({ method: 'DELETE', url: '/api/sub-categories/DelSubBlock' });

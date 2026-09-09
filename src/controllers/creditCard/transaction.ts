@@ -30,6 +30,7 @@ import {
   assertExclusiveCategorySubCategory,
   defaultStatementLines,
   defaultStatusFor,
+  deriveIdempotencyKey,
   viewFromOutcome,
 } from '../../logic/transaction.js';
 import { AccountType } from '../../models/account.js';
@@ -42,7 +43,6 @@ import {
   type UpdateCardTransaction,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
-import { CurrencyCode } from '../../models/money.js';
 import { type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
 import {
   ClassificationMethod,
@@ -115,6 +115,7 @@ type CardPurchasePlan = {
   billPeriod: BillPeriod;
   existingBill: RawBill | null;
   cardId: string;
+  idempotencyKey: string;
 };
 
 // billId is left unset — addCardPurchase (below) resolves it against existingBill.
@@ -132,6 +133,7 @@ const planCardPurchase = (
     const today = toIsoDate(deps.clock());
     const date = input.date ?? today;
     const status = input.status ?? defaultStatusFor(date, today);
+    const currency = resolveCurrency(card, input);
 
     const billPeriod = resolveBillPeriod(input.billMonth, input.billYear, date, card.closingDay, card.dueDay);
     const existingBill = await deps.bills.findByCycle(card.id, billPeriod.month, billPeriod.year);
@@ -150,7 +152,7 @@ const planCardPurchase = (
       type: input.type,
       status,
       date,
-      currency: resolveCurrency(card, input),
+      currency,
       source,
       classification,
       rawInput: input.rawInput,
@@ -164,7 +166,24 @@ const planCardPurchase = (
       },
     };
 
-    return ok({ entity, classification, billPeriod, existingBill, cardId: card.id });
+    // Domain-owned key (ADR-029 Phase 2b): the card itself is the funding source, never the
+    // internal liability account it wraps (refs.accountId) — mirrors resolveCurrency's own notion
+    // of "funding source" for a card purchase.
+    const decimals = decimalsLookup(await deps.currencies.list())(currency);
+    const idempotencyKey = deriveIdempotencyKey(
+      {
+        fundingSourceId: card.id,
+        type: input.type,
+        currency,
+        date,
+        description: input.description,
+        amount: input.amount,
+      },
+      decimals,
+      input.discriminator,
+    );
+
+    return ok({ entity, classification, billPeriod, existingBill, cardId: card.id, idempotencyKey });
   });
 
 export const addCardPurchase = (
@@ -173,7 +192,11 @@ export const addCardPurchase = (
   source: TransactionSource,
 ): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> =>
   safeTry(async function* () {
-    const { entity, classification, billPeriod, existingBill, cardId } = yield* planCardPurchase(deps, input, source);
+    const { entity, classification, billPeriod, existingBill, cardId, idempotencyKey } = yield* planCardPurchase(
+      deps,
+      input,
+      source,
+    );
     const { billId, billPersistable } = resolveBillWrite(deps.newId, cardId, billPeriod, existingBill);
     const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
 
@@ -185,7 +208,7 @@ export const addCardPurchase = (
           persistence.insert({
             entity: TRANSACTION_ENTITY_TAG,
             model: { ...entity, refs: { ...entity.refs, billId } },
-            idempotencyKey: input.idempotencyKey,
+            idempotencyKey,
           }),
         ],
         entity.refs.merchantKey,
@@ -214,15 +237,10 @@ export const importCardStatement = async (
   input: ImportCardStatement,
   source: TransactionSource,
 ): Promise<StatementImportPlan<ImportCardStatementItem, ClassifiedUpsertResult>> => {
-  // A not-found card name falls back to USD decimals here, affecting only the idempotency key's
-  // rounding — addCardPurchase re-resolves the real card and notFound error independently per line.
-  const [cardResult, currencies] = await Promise.all([resolveCardRef(deps, input.card), deps.currencies.list()]);
-  const decimalsFor = decimalsLookup(currencies);
-  const decimals = cardResult.match(
-    (card) => decimalsFor(card.currency),
-    () => decimalsFor(CurrencyCode.enum.USD),
-  );
-  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput, decimals);
+  // Each line's idempotency key is now derived inside addCardPurchase itself (the same flowFor
+  // below reuses verbatim), against the real resolved card/currency — no batch-level card/decimals
+  // pre-resolution needed here anymore (ADR-029 Phase 2b).
+  const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
   // Resolves locale once for the whole import rather than once per line: every line's flow reads
   // deps.locale() to build its localized response, so overriding it here to the same in-flight
   // promise keeps every item's labels consistent even if the process-level locale cache resets

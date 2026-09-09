@@ -19,7 +19,6 @@ describe('GET /api/aggregate', () => {
         date: '2025-03-15',
         account: 'AggCatAcct',
         category: 'Food',
-        idempotencyKey: 'agg-cat-food',
       },
     });
     await inject({
@@ -31,7 +30,6 @@ describe('GET /api/aggregate', () => {
         date: '2025-03-15',
         account: 'AggCatAcct',
         category: 'Transport',
-        idempotencyKey: 'agg-cat-transport',
       },
     });
     const res = await inject({
@@ -65,7 +63,6 @@ describe('GET /api/aggregate', () => {
         date: '2025-03-15',
         account: 'AggExclAcct',
         category: 'Food',
-        idempotencyKey: 'agg-excl-food',
       },
     });
     await inject({
@@ -77,7 +74,6 @@ describe('GET /api/aggregate', () => {
         date: '2025-03-15',
         account: 'AggExclAcct',
         category: 'Transport',
-        idempotencyKey: 'agg-excl-transport',
       },
     });
     await inject({
@@ -88,7 +84,6 @@ describe('GET /api/aggregate', () => {
         to: 'AggExclAcct2',
         amount: 100,
         date: '2025-03-15',
-        idempotencyKey: 'agg-excl-xfer',
       },
     });
     await inject({
@@ -101,7 +96,6 @@ describe('GET /api/aggregate', () => {
         account: 'AggExclAcct',
         category: 'Food',
         status: 'pending',
-        idempotencyKey: 'agg-excl-pending',
       },
     });
     const res = await inject({
@@ -130,7 +124,6 @@ describe('GET /api/aggregate', () => {
         date: '2025-03-15',
         account: 'AggTagAcct',
         tags: ['agg-work', 'agg-travel'],
-        idempotencyKey: 'agg-multi-tag',
       },
     });
     const res = await inject({ method: 'GET', url: '/api/aggregate?groupBy=tag&month=3&year=2025&account=AggTagAcct' });
@@ -159,7 +152,6 @@ describe('GET /api/aggregate', () => {
         date: '2025-03-15',
         account: 'AggLimitUSD',
         category: 'Food',
-        idempotencyKey: 'agg-limit-usd1',
       },
     });
     await inject({
@@ -171,7 +163,6 @@ describe('GET /api/aggregate', () => {
         date: '2025-03-15',
         account: 'AggLimitUSD',
         category: 'Transport',
-        idempotencyKey: 'agg-limit-usd2',
       },
     });
     await inject({
@@ -183,7 +174,6 @@ describe('GET /api/aggregate', () => {
         date: '2025-03-15',
         account: 'AggLimitBRL',
         category: 'Food',
-        idempotencyKey: 'agg-limit-brl1',
       },
     });
     await inject({
@@ -195,7 +185,6 @@ describe('GET /api/aggregate', () => {
         date: '2025-03-15',
         account: 'AggLimitBRL',
         category: 'Transport',
-        idempotencyKey: 'agg-limit-brl2',
       },
     });
     const res = await inject({ method: 'GET', url: '/api/aggregate?groupBy=category&month=3&year=2025&limit=1' });
@@ -222,7 +211,6 @@ describe('GET /api/aggregate', () => {
         date: '2025-02-15',
         account: 'AggMonthAcct',
         category: 'Food',
-        idempotencyKey: 'agg-month-feb',
       },
     });
     await inject({
@@ -234,7 +222,6 @@ describe('GET /api/aggregate', () => {
         date: '2025-03-15',
         account: 'AggMonthAcct',
         category: 'Food',
-        idempotencyKey: 'agg-month-mar',
       },
     });
     const res = await inject({
@@ -285,7 +272,6 @@ describe('GET /api/aggregate', () => {
           amount: 40,
           date: '2025-03-15',
           account: 'AggDcOmitAcct',
-          idempotencyKey: 'agg-dc-omit',
         },
       });
       const res = await inject({
@@ -320,7 +306,6 @@ describe('GET /api/aggregate', () => {
           amount: 100,
           date: '2025-03-15',
           account: 'AggDcUsdAcct',
-          idempotencyKey: 'agg-dc-usd',
         },
       });
       await inject({
@@ -331,7 +316,6 @@ describe('GET /api/aggregate', () => {
           amount: 500,
           date: '2025-03-15',
           account: 'AggDcBrlAcct',
-          idempotencyKey: 'agg-dc-brl',
         },
       });
 
@@ -369,7 +353,6 @@ describe('GET /api/aggregate', () => {
           amount: 1,
           date: '2025-03-15',
           account: 'AggDcBtcAcct',
-          idempotencyKey: 'agg-dc-btc',
         },
       });
       const res = await inject({
@@ -398,7 +381,6 @@ describe('GET /api/aggregate', () => {
           date: '2025-03-15',
           account: 'AggDcLimitAcct',
           category: 'Food',
-          idempotencyKey: 'agg-dc-limit-food',
         },
       });
       await inject({
@@ -410,7 +392,6 @@ describe('GET /api/aggregate', () => {
           date: '2025-03-15',
           account: 'AggDcLimitAcct',
           category: 'Transport',
-          idempotencyKey: 'agg-dc-limit-transport',
         },
       });
       const res = await inject({
@@ -439,7 +420,6 @@ describe('GET /api/aggregate', () => {
           amount: 20,
           date: '2025-03-15',
           account: 'AggDcCountAcct',
-          idempotencyKey: 'agg-dc-count',
         },
       });
       const res = await inject({
@@ -465,7 +445,6 @@ describe('GET /api/aggregate', () => {
           amount: 20,
           date: '2025-03-15',
           account: 'AggDcAvgAcct',
-          idempotencyKey: 'agg-dc-avg',
         },
       });
       const res = await inject({

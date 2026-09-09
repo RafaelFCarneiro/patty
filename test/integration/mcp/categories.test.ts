@@ -73,7 +73,6 @@ describe('MCP integration > categories', () => {
         date: '2026-01-15',
         account: accountName,
         category: cat.name,
-        idempotencyKey: `del-cat-tx-${stamp}`,
       },
     })) as { transaction: { id: string } };
     createdTxIds.push(txResult.transaction.id);
@@ -123,7 +122,6 @@ describe('MCP integration > categories', () => {
         amount: 25,
         date: '2026-01-20',
         account: accountName,
-        idempotencyKey: `merchant-learn-${stamp}`,
       },
     })) as { transaction: { id: string } };
     createdTxIds.push(txResult.transaction.id);

@@ -41,9 +41,10 @@ const addAccountMovementDescription = (movement: 'expense' | 'income'): string =
   `Record ${movement === 'expense' ? 'an expense from' : 'income into'} a bank account / wallet — the ` +
   "account aggregate's movement entry point (ADR-016). Resolves the account and category by name; " +
   'when category is omitted, classifies via learned merchant→category associations and returns method + ' +
-  'confidence (confirm with the user when confidence < 0.6). Idempotent via idempotencyKey — generate a ' +
-  'stable key like "<date>-<description>-<amount>". Currency comes from the account, or the currency field ' +
-  `(default USD). Omitting account records an unattached ${movement === 'expense' ? '(e.g. cash) expense' : 'income'}.`;
+  'confidence (confirm with the user when confidence < 0.6). Idempotent automatically — a repeat call with ' +
+  'the same account/description/date/amount/currency is deduped; pass discriminator to record a genuinely ' +
+  'separate transaction that would otherwise look identical. Currency comes from the account, or the ' +
+  `currency field (default USD). Omitting account records an unattached ${movement === 'expense' ? '(e.g. cash) expense' : 'income'}.`;
 
 export const registerAccountTools = (server: McpServer, ctx: McpContext): void => {
   const { deps, runEffects, runEffectsSequence } = ctx;

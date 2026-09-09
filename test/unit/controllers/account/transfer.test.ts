@@ -7,6 +7,7 @@ import type { FlowOutcome, PersistOutcome } from '../../../../src/models/persist
 import { PersistOp } from '../../../../src/models/persistable.js';
 import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
 import { Locale } from '../../../../src/models/locale.js';
+import { SEEDED_CURRENCIES } from '../../fixtures/currencies.js';
 
 const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   accounts: { list: async () => [] } as unknown as Deps['accounts'],
@@ -16,7 +17,8 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   subCategories: {} as Deps['subCategories'],
   correlations: {} as Deps['correlations'],
   creditCards: {} as Deps['creditCards'],
-  currencies: {} as Deps['currencies'],
+  // deriveIdempotencyKey needs the resolved currency's decimals (ADR-029 Phase 2b).
+  currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
   currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
@@ -77,7 +79,7 @@ describe('createTransfer — validation', () => {
 
     const result = await createTransfer(
       deps,
-      { from: from.name, to: to.name, amount: 10, idempotencyKey: 'credit-from' },
+      { from: from.name, to: to.name, amount: 10 },
       TransactionSource.enum.mcp,
     );
 
@@ -94,7 +96,7 @@ describe('createTransfer — validation', () => {
 
     const result = await createTransfer(
       deps,
-      { from: from.name, to: to.name, amount: 10, idempotencyKey: 'cross-currency' },
+      { from: from.name, to: to.name, amount: 10 },
       TransactionSource.enum.mcp,
     );
 
@@ -109,7 +111,7 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
 
     const result = await createTransfer(
       deps,
-      { from: from.name, to: to.name, amount: 25, idempotencyKey: 'transfer-1' },
+      { from: from.name, to: to.name, amount: 25 },
       TransactionSource.enum.mcp,
     );
 
@@ -122,7 +124,8 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
       model: { type: string; amount: number; currency: string; refs: { accountId: string; toAccountId: string } };
     };
     expect(persisted.op).toBe(PersistOp.enum.insert);
-    expect(persisted.idempotencyKey).toBe('transfer-1');
+    // Domain-derived (ADR-029 Phase 2b) — a sha256 hex digest, never a caller-supplied value.
+    expect(persisted.idempotencyKey).toMatch(/^[0-9a-f]{64}$/);
     expect(persisted.model).not.toHaveProperty('idempotencyKey');
     expect(persisted.model).toMatchObject({
       type: 'transfer',
@@ -132,12 +135,29 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
     });
   });
 
+  it('derives a stable key for an identical repeat, and a different one when discriminator is supplied', async () => {
+    const deps = makeDeps({ accounts: { list: async () => [from, to] } as unknown as Deps['accounts'] });
+    const input = { from: from.name, to: to.name, amount: 25, date: '2026-06-01', description: 'aporte mensal' };
+
+    const first = await createTransfer(deps, input, TransactionSource.enum.mcp);
+    const second = await createTransfer(deps, input, TransactionSource.enum.mcp);
+    const third = await createTransfer(
+      deps,
+      { ...input, discriminator: 'second-one' },
+      TransactionSource.enum.mcp,
+    );
+    const keyOf = (r: typeof first) => (r._unsafeUnwrap().persist[0] as { idempotencyKey: string }).idempotencyKey;
+
+    expect(keyOf(first)).toBe(keyOf(second));
+    expect(keyOf(first)).not.toBe(keyOf(third));
+  });
+
   it('response() reports created:true when the shell actually inserted the transfer', async () => {
     const deps = makeDeps({ accounts: { list: async () => [from, to] } as unknown as Deps['accounts'] });
 
     const result = await createTransfer(
       deps,
-      { from: from.name, to: to.name, amount: 25, idempotencyKey: 'transfer-created' },
+      { from: from.name, to: to.name, amount: 25 },
       TransactionSource.enum.mcp,
     );
     const outcome = result._unsafeUnwrap();
@@ -153,7 +173,7 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
 
     const result = await createTransfer(
       deps,
-      { from: from.name, to: to.name, amount: 25, idempotencyKey: 'transfer-duplicate' },
+      { from: from.name, to: to.name, amount: 25 },
       TransactionSource.enum.mcp,
     );
     const outcome = result._unsafeUnwrap();

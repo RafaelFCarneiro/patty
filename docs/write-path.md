@@ -39,9 +39,31 @@ effect runner, appliers, outcomes, and the per-flow notes.
   Phase 2). `insert: { op: 'insert'; entity: Tag; model: Model; idempotencyKey?: string }` — a flow that opts an
   entity into the engine's generic idempotency treatment (below) sets this field alongside `model`, never inside
   it. `logic/persistence.ts`'s `insert` builder accepts and carries it through unchanged; `TransactionSchema`
-  itself carries no such field — only the wire/in create input (still supplied by the caller or derived by bulk
-  import) and the wire/out read view do, since the key is engine bookkeeping, not a transaction business
-  property. An entity with no idempotency config (dashboards, settings) simply never sets this field.
+  itself carries no such field — only the wire/out read view does, since the key is engine bookkeeping, not a
+  transaction business property. An entity with no idempotency config (dashboards, settings) simply never sets
+  this field.
+- **The key is domain-derived, never caller-supplied** (ADR-029 Phase 2b). `logic/transaction.ts`'s
+  `deriveIdempotencyKey(identity, decimals, discriminator?)` is the single derivation for every transaction
+  insert — single-add (`addAccountExpense`/`addAccountIncome`/`addCardPurchase`/`createTransfer`) and bulk import
+  alike, since bulk import's `flowFor` reuses those same single-line flows verbatim rather than deriving its own
+  key. It hashes (`crypto.createHash('sha256')…digest('hex')`) a canonical, fixed-field-order, space-joined
+  composition of the write's full deterministic identity — funding source id (account or card id; `undefined`
+  for an unattached movement), `type`, `currency`, `date`, `normalizeMerchant`-normalized description, and the
+  amount rounded to the currency's own `decimals` (`decimalsLookup`/`roundToDecimals`-style, ADR-026) — plus the
+  caller's optional `discriminator`. Deterministic composition ⇒ pure ⇒ stays in `logic/` (no `randomUUID`, no
+  clock read); a sha256 hash of a string is a pure computation like any other, unlike the id/clock reads that
+  are barred from `logic/`. `CreateTransactionSchema`/`CreateTransferSchema` (wire/in) carry no whole-key field
+  at all — only an optional `discriminator?: string`, the load-bearing escape hatch for recording a
+  genuinely-distinct transaction that would otherwise derive an identical key (e.g. two identical purchases the
+  same day). Each insert-shaped flow calls `deps.currencies.list()` itself to resolve `decimals` for the
+  entity's own resolved currency, once it has the funding source and currency in hand — bulk import no longer
+  pre-resolves an account/card and decimals for the whole batch the way it used to, since each line's own flow
+  does that resolution now. `recurringIdempotencyKey` (`rec-<ruleId>-<date>`, `controllers/recurring.ts`) and the
+  bill-payment transfer's `billpay-<billId>` (`controllers/creditCard/bill.ts`) are unrelated, hand-built keys
+  for internally-generated writes that never go through `CreateTransactionSchema` — outside this derivation.
+  **One-time key-format discontinuity**: a statement re-imported after this landed won't dedup against
+  pre-existing readable-format keys (possible duplicates of previously-imported rows) — accepted at personal
+  scale, no backfill (old single-add keys were arbitrary caller strings with no canonical mapping to a hash).
 
 ### From model to row — the boundary adaptation
 
@@ -93,11 +115,14 @@ effect runner, appliers, outcomes, and the per-flow notes.
   was chosen by the core; every entity it touches was named by the core. Grep-able proxy: **an applier writes
   exactly one table** (the proxy is not the rule — a single-table applier could still smuggle in a decision or a
   read). All registered appliers satisfy it.
-- **`versionedTableApplier(table, { idempotencyColumn?, readBack? })`** (`diplomat/db/effects.ts`) builds a
-  complete `EntityApplier` from a drizzle table for any `id`+`version` table — `accountApplier` is
-  `versionedTableApplier(accounts)`; `transactionApplier` is
-  `versionedTableApplier(transactions, { idempotencyColumn: 'idempotencyKey', readBack })` (ADR-023: the
-  once-bespoke applier collapsed to a registration). Tables outside the `id`/`version` convention hand-write
+- **`versionedTableApplier(table, { readBack? })`** (`diplomat/db/effects.ts`) builds a complete `EntityApplier`
+  from a drizzle table for any `id`+`version` table — `accountApplier` is `versionedTableApplier(accounts)`;
+  `transactionApplier` is `versionedTableApplier(transactions, { readBack })` (ADR-023: the once-bespoke applier
+  collapsed to a registration). The dedup column is no longer a registration option — it's the fixed
+  `idempotencyKey` column by convention (ADR-029 Phase 2b): the applier looks up `table.idempotencyKey` itself
+  (present only on `transactions` today) and opts a table into dedup purely by whether that column exists AND
+  the insert's own `Persistable.idempotencyKey` is set — never by a per-registration name. Tables outside the
+  `id`/`version` convention hand-write
   their own `EntityApplier` against the same interface: the `id`/`version`-less `merchants`, `merchant_category`,
   `transaction_tags`. `dashboards` used to key on `name` itself and hand-write its applier this way too; Feature
   Design 013 Phase 1 normalized it to `id`/`version` with `name UNIQUE`, moving it into the
@@ -166,23 +191,25 @@ effect runner, appliers, outcomes, and the per-flow notes.
   match) finds a flow's own outcome regardless of batch position — needed because a merchant insert is
   *prepended* ahead of the transaction that FKs it. Exception: `applyDueRecurring` slices `outcomes`
   positionally (`R.zip`), safe because nothing is ever prepended ahead of its transaction inserts.
-- **The generic idempotency treatment** (ADR-023 decision 4, key placement per ADR-029 Phase 2). The key rides the
-  `insert` `Persistable`'s own optional `idempotencyKey` field — engine metadata on the write envelope, never a
-  field of the domain model (`TransactionSchema` doesn't carry it; only the wire/in create input and the wire/out
-  read view do). Registration-declared (`idempotencyColumn`), never per-applier code: `idempotencyColumn` now
-  names the physical column the applier **writes** the envelope's key into, rather than a column it reads the
-  key off of. When an insert carries a key, `versionedTableApplier` merges it onto the row under that column
-  name before inserting, conflict-targets the column, a duplicate no-ops with `applied: false`, and the engine
-  resolves which row survived (one generic `SELECT id … WHERE <column> = ?`) so `readBack` reads the persisted
-  row. Distinct from the id-scoped `onConflictDoNothing({ target: table.id })` a key-less insert falls back to (a
+- **The generic idempotency treatment** (ADR-023 decision 4, key placement per ADR-029 Phase 2, content and
+  column convention per Phase 2b). The key rides the `insert` `Persistable`'s own optional `idempotencyKey`
+  field — engine metadata on the write envelope, never a field of the domain model (`TransactionSchema` doesn't
+  carry it; only the wire/out read view does). The physical column is fixed by convention, never a per-entity
+  registration: `versionedTableApplier` looks up `table.idempotencyKey` itself. When an insert carries a key AND
+  the table has that column, `versionedTableApplier` merges it onto the row under the fixed column name before
+  inserting, conflict-targets the column, a duplicate no-ops with `applied: false`, and the engine resolves
+  which row survived (one generic `SELECT id … WHERE idempotencyKey = ?`) so `readBack` reads the persisted row.
+  Distinct from the id-scoped `onConflictDoNothing({ target: table.id })` a key-less insert falls back to (a
   structural same-id guard, not idempotency). `logic/persistence.ts`'s `insert` builder and every entity flow
   that mints one (`add_account_expense`/`add_account_income`/`add_card_purchase`/`create_transfer`, `pay_bill`'s
   bill-payment transfer, `apply_due_recurring`'s per-occurrence inserts, and the bulk-import lines that reuse
   those same single-line flows) set `idempotencyKey` on the `Persistable` itself, alongside `model`, never inside
-  it. Read-first-dedup entities (dashboards, settings) carry no key, same as before. A registered
-  `idempotencyColumn` is a promise every insert for that entity must keep: `versionedTableApplier.insert` rejects
-  immediately, by name, if the column is configured but the envelope carries no key — this is caught here rather
-  than left to surface as an opaque database `NOT NULL` constraint violation once the row reaches SQL.
+  it. Read-first-dedup entities (dashboards, settings) carry no key, same as before. An entity opts into dedup
+  purely by its insert *carrying* a key — not by naming a column — but a table that physically has the
+  `idempotencyKey` column is still a promise every insert into it must keep: `versionedTableApplier.insert`
+  rejects immediately if the column exists but the envelope carries no key (and, symmetrically, if the envelope
+  carries a key but the table has no such column) — caught here rather than left to surface as an opaque
+  database `NOT NULL` constraint violation once the row reaches SQL.
 - **The `readBack` deviation** (ADR-023 decision 4). An entity may register a post-write projection —
   `transactions` reads the display-joined view via `fetchTx` — landing on `PersistOutcome.read`. This is a
   projection read executed **inside the engine**, **capped at one hook**, and is *not* sanctioned by FC/IS
@@ -273,16 +300,14 @@ effect runner, appliers, outcomes, and the per-flow notes.
   handler runs it through `runEffectsSequence` and shapes the `SequenceOutcome[]` into `BulkResult` (`bulk.ts`'s
   `buildBulkResult`; `needs_review` from each line's own classification confidence). No within-batch cycle dedup —
   line *i+1* reads the bill line *i* just committed.
-- **Bulk import pre-plan currency resolution** (ADR-026 Phase 1b) — before building lines, `importCardStatement`/
-  `importAccountStatement` resolve the account/card ref and `deps.currencies.list()` in parallel, then look up
-  that currency's `decimals` (`decimalsLookup`, `logic/money.ts`) once for the whole batch and pass it into
-  `defaultStatementLines` so every line's idempotency key rounds its amount to the right precision (fiat 2, USDC
-  6, BTC 8) instead of a flat 2 — otherwise two crypto lines differing only past the 2nd decimal collide on the
-  same key. A not-found ref, or an unattached (no-account) statement, falls back to `CurrencyCode.enum.USD`
-  decimals for this lookup only; it doesn't affect the line's real currency or the per-line `notFound` error,
-  which `addCardPurchase`/`addAccountExpense`/`addAccountIncome` re-resolve independently downstream. An
-  unattached statement's per-item currency override isn't consulted for this fallback — same-batch USD decimals
-  are used regardless of what an individual line names (known gap, `docs/architecture.md` § Invariants).
+- **No more batch-level currency pre-resolution** (superseded by ADR-029 Phase 2b — was ADR-026 Phase 1b).
+  `importCardStatement`/`importAccountStatement` used to resolve the account/card ref and `deps.currencies.list()`
+  once for the whole batch purely to round each line's idempotency key to the right precision. Now that the key
+  is derived inside `addCardPurchase`/`addAccountExpense`/`addAccountIncome` themselves (each `flowFor` line just
+  calls those same single-line flows), each line resolves its own real card/account, currency, and decimals
+  independently — no pre-plan step, and the batch-level `CurrencyCode.enum.USD` fallback (and the known gap it
+  had: an unattached statement's per-item currency override wasn't consulted for it) is gone along with it. An
+  unattached statement's per-item `currency` now correctly drives that line's own decimals rounding.
 - **Merchant key is always stored, matched or not** (`planAccountMovement`): when classification found no
   merchant, it falls back to `normalizeMerchant(description)` (empty-string guarded) so a later category
   correction (`resolveMerchantCorrection`) has a merchant to attach to. `add_card_purchase` still lacks this

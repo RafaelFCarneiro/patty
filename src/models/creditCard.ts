@@ -5,7 +5,6 @@ import { CurrencyCode } from './money.js';
 import { withPersistenceMeta } from './persistable.js';
 import {
   CreateTransactionSchema,
-  STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION,
   STATEMENT_ITEMS_DESCRIPTION,
   STATEMENT_RAW_INPUT_DESCRIPTION,
   UpdateTransactionSchema,
@@ -99,23 +98,17 @@ export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
 
 /** A single line of an `import_card_statement` request (ADR-017 step 2): same shape as
  *  `AddCardPurchaseSchema` minus `card` (fixed once, at the statement's top level — single-source,
- *  no per-line card) and minus `idempotencyKey`/`rawInput`/`subCategory`/`tags` (statement-level
- *  concerns: a dedup key is derived from date+description+amount when absent, `rawInput` belongs to
- *  the whole pasted statement, and bulk import classifies automatically rather than taking a
- *  sub-category or tags per line — the same reduced shape the retired god bulk item carried). */
+ *  no per-line card) and minus `rawInput`/`subCategory`/`tags` (statement-level concerns: `rawInput`
+ *  belongs to the whole pasted statement, and bulk import classifies automatically rather than
+ *  taking a sub-category or tags per line — the same reduced shape the retired god bulk item
+ *  carried). `discriminator` carries through unchanged (already optional on the core schema),
+ *  letting a line force a distinct dedup key the same way a single add can. */
 export const ImportCardStatementItemSchema = AddCardPurchaseSchema.omit({
   card: true,
-  idempotencyKey: true,
   rawInput: true,
   subCategory: true,
   tags: true,
-})
-  .extend({
-    idempotencyKey: AddCardPurchaseSchema.shape.idempotencyKey
-      .optional()
-      .describe(STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION),
-  })
-  .strict();
+}).strict();
 export type ImportCardStatementItem = z.infer<typeof ImportCardStatementItemSchema>;
 
 /** Credit-card statement import (ADR-017 step 2): single-source — every item is a purchase on the

@@ -18,7 +18,6 @@ describe('GET /api/summary', () => {
         amount: 100,
         date: '2026-05-01',
         account: 'SumAcct',
-        idempotencyKey: 'sum-exp',
       },
     });
     await inject({
@@ -30,7 +29,6 @@ describe('GET /api/summary', () => {
         date: '2026-05-01',
         account: 'SumAcct',
         status: 'pending',
-        idempotencyKey: 'sum-pend',
       },
     });
     const res = await inject({ method: 'GET', url: '/api/summary?month=5&year=2026' });
@@ -90,7 +88,6 @@ describe('GET /api/summary', () => {
           amount: 40,
           date: '2026-07-01',
           account: 'DcOmitAcct',
-          idempotencyKey: 'dc-omit-1',
         },
       });
       const res = await inject({ method: 'GET', url: '/api/summary?month=7&year=2026' });
@@ -131,7 +128,6 @@ describe('GET /api/summary', () => {
             amount: 100,
             date: '2026-08-02',
             account: 'DcUsdAcct',
-            idempotencyKey: 'dc-usd-1',
           },
         });
         await inject({
@@ -142,7 +138,6 @@ describe('GET /api/summary', () => {
             amount: 500,
             date: '2026-08-02',
             account: 'DcBrlAcct',
-            idempotencyKey: 'dc-brl-1',
           },
         });
 
@@ -185,7 +180,6 @@ describe('GET /api/summary', () => {
           amount: 1,
           date: '2026-01-03',
           account: 'DcBtcAcct',
-          idempotencyKey: 'dc-btc-1',
         },
       });
       const res = await inject({ method: 'GET', url: '/api/summary?month=1&year=2026&displayCurrency=USD' });
@@ -208,7 +202,6 @@ describe('GET /api/summary', () => {
           amount: 1,
           date: '2026-02-03',
           account: 'DcBtcIncomeAcct',
-          idempotencyKey: 'dc-btc-income-1',
         },
       });
       const res = await inject({ method: 'GET', url: '/api/summary?month=2&year=2026&displayCurrency=USD' });

@@ -83,7 +83,6 @@ describe('MCP integration > transactions', () => {
           date: today,
           account: accountName,
           category: 'Other',
-          idempotencyKey: txKey,
         },
       })) as { transaction?: { id?: string }; created?: boolean };
 
@@ -136,7 +135,6 @@ describe('MCP integration > transactions', () => {
           description: `Whitespace search ${stamp}`,
           amount: 1,
           category: 'Other',
-          idempotencyKey: `test-ws-search-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       const txId = created.transaction?.id;
@@ -206,7 +204,6 @@ describe('MCP integration > transactions', () => {
           description: `Update empty category ${stamp}`,
           amount: 10,
           category: 'Other',
-          idempotencyKey: `update-empty-category-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       const txId = created.transaction?.id;
@@ -243,7 +240,6 @@ describe('MCP integration > transactions', () => {
           description: `Update empty subCategory ${stamp}`,
           amount: 10,
           category: 'Other',
-          idempotencyKey: `update-empty-subcategory-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       const txId = created.transaction?.id;
@@ -279,7 +275,6 @@ describe('MCP integration > transactions', () => {
         args: {
           description: `Update empty account ${stamp}`,
           amount: 10,
-          idempotencyKey: `update-empty-account-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       const txId = created.transaction?.id;
@@ -336,7 +331,6 @@ describe('MCP integration > transactions', () => {
                   description: `Bulk empty account ${stamp}`,
                   amount: 10,
                   type: 'expense',
-                  idempotencyKey: `bulk-empty-account-${stamp}`,
                 },
               ],
             },
@@ -377,21 +371,18 @@ describe('MCP integration > transactions', () => {
               amount: 45,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-${stamp}-1`,
             },
             {
               description: 'Salário empresa',
               amount: 5000,
               type: 'income',
               date: today,
-              idempotencyKey: `bulk-${stamp}-2`,
             },
             {
               description: 'Uber corrida',
               amount: 22.5,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-${stamp}-3`,
             },
           ],
         },
@@ -419,7 +410,6 @@ describe('MCP integration > transactions', () => {
               amount: 45,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-${stamp}-1`,
             },
           ],
         },
@@ -454,7 +444,6 @@ describe('MCP integration > transactions', () => {
               amount: 10,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-note-${stamp}-1`,
               note: 'reembolsável',
             },
             {
@@ -462,7 +451,6 @@ describe('MCP integration > transactions', () => {
               amount: 20,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-note-${stamp}-2`,
             },
           ],
         },
@@ -595,7 +583,6 @@ describe('MCP integration > transactions', () => {
           amount: 10,
           account,
           category: 'Other',
-          idempotencyKey: `tagged-${stamp}`,
           tags: [`work-${stamp}`, `travel-${stamp}`],
         },
       })) as { transaction?: { id?: string; tags?: string[] } };
@@ -640,7 +627,6 @@ describe('MCP integration > transactions', () => {
           amount: 5,
           account,
           category: 'Other',
-          idempotencyKey: `update-tags-${stamp}`,
           tags: [`tag-a-${stamp}`],
         },
       })) as { transaction?: { id?: string } };
@@ -686,7 +672,6 @@ describe('MCP integration > transactions', () => {
           amount: 3,
           account,
           category: 'Other',
-          idempotencyKey: `clear-tags-${stamp}`,
           tags: [`clear-tag-${stamp}`],
         },
       })) as { transaction?: { id?: string } };
@@ -733,7 +718,6 @@ describe('MCP integration > transactions', () => {
           date: today,
           account,
           category: 'Other',
-          idempotencyKey: `tagged-search-${stamp}`,
           tags: [`search-tag-${stamp}`],
         },
       })) as { transaction?: { id?: string } };
@@ -749,7 +733,6 @@ describe('MCP integration > transactions', () => {
           date: today,
           account,
           category: 'Other',
-          idempotencyKey: `untagged-search-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       const untaggedTxId = untaggedTx.transaction?.id;
@@ -800,7 +783,6 @@ describe('MCP integration > transactions', () => {
           amount: 11,
           account,
           category: 'Other',
-          idempotencyKey: `full-tagset-${stamp}`,
           tags: [`full-a-${stamp}`, `full-b-${stamp}`],
         },
       })) as { transaction?: { id?: string; tags?: string[] } };
@@ -844,7 +826,6 @@ describe('MCP integration > transactions', () => {
           amount: 1,
           account,
           category: 'Other',
-          idempotencyKey: `ghost-tag-${stamp}`,
           tags: [`nonexistent-tag-${stamp}`],
         },
       })) as { transaction?: { id?: string; tags?: string[] } };
@@ -890,7 +871,6 @@ describe('MCP integration > transactions', () => {
           amount: 1,
           account,
           category: 'Other',
-          idempotencyKey: `dup-tag-${stamp}`,
           tags: [`dup-tag-${stamp}`, `dup-tag-${stamp}`],
         },
       })) as { transaction?: { id?: string; tags?: string[] } };
@@ -928,7 +908,6 @@ describe('MCP integration > transactions', () => {
           amount: 5,
           account,
           category: 'Other',
-          idempotencyKey: `no-tags-${stamp}`,
         },
       })) as { transaction?: { id?: string; tags?: string[] } };
 
@@ -974,7 +953,6 @@ describe('MCP integration > transactions', () => {
           amount: 10,
           account,
           category: 'Other',
-          idempotencyKey: `note-rt-${stamp}`,
           note: 'split com João',
         },
       })) as { transaction?: { id?: string; note?: string } };
@@ -1017,7 +995,6 @@ describe('MCP integration > transactions', () => {
           amount: 20,
           account,
           category: 'Other',
-          idempotencyKey: `note-update-${stamp}`,
         },
       })) as { transaction?: { id?: string; note?: string } };
 
@@ -1085,7 +1062,6 @@ describe('MCP integration > transactions', () => {
           description: merchantDescription(1),
           amount: 10,
           account,
-          idempotencyKey: `merchant-learn-1-${stamp}`,
         },
       })) as { transaction?: { id?: string }; classification?: { method?: string } };
       const firstId = first.transaction?.id;
@@ -1107,7 +1083,6 @@ describe('MCP integration > transactions', () => {
           description: merchantDescription(2),
           amount: 12,
           account,
-          idempotencyKey: `merchant-learn-2-${stamp}`,
         },
       })) as { transaction?: { id?: string; categoryName?: string }; classification?: { method?: string } };
       const secondId = second.transaction?.id;
@@ -1151,7 +1126,6 @@ describe('MCP integration > transactions', () => {
           amount: 4,
           account,
           category: 'Other',
-          idempotencyKey: `case-tag-${stamp}`,
           tags: [`CASE-TAG-${stamp}`],
         },
       })) as { transaction?: { id?: string; tags?: string[] } };

@@ -137,7 +137,6 @@ describe('MCP integration > sub-categories', () => {
           description: 'Almoço no restaurante',
           amount: 45,
           subCategory: `Almoço-${stamp}`,
-          idempotencyKey: `test-subcat-create-${stamp}`,
         },
       })) as { transaction?: TransactionView };
 
@@ -166,7 +165,6 @@ describe('MCP integration > sub-categories', () => {
             description: 'Pagamento errado',
             amount: 100,
             category: 'Salary',
-            idempotencyKey: `test-kind-mismatch-${stamp}`,
           },
         }),
       ).rejects.toThrow();
@@ -187,7 +185,6 @@ describe('MCP integration > sub-categories', () => {
             description: 'Salário errado',
             amount: 5000,
             category: 'Food',
-            idempotencyKey: `test-income-mismatch-${stamp}`,
           },
         }),
       ).rejects.toThrow();
@@ -209,7 +206,6 @@ describe('MCP integration > sub-categories', () => {
             amount: 10,
             category: 'Food',
             subCategory: 'something',
-            idempotencyKey: `test-both-${stamp}`,
           },
         }),
       ).rejects.toThrow();
@@ -241,7 +237,6 @@ describe('MCP integration > sub-categories', () => {
           description: 'Refeição',
           amount: 30,
           subCategory: `SubA-${stamp}`,
-          idempotencyKey: `test-update-subcat-${stamp}`,
         },
       })) as { transaction?: TransactionView };
       const tx = created.transaction ?? (created as TransactionView);
@@ -279,7 +274,6 @@ describe('MCP integration > sub-categories', () => {
           description: 'Com subcategoria',
           amount: 20,
           subCategory: `Filter-${stamp}`,
-          idempotencyKey: `test-search-sub-match-${stamp}`,
         },
       })) as { transaction?: TransactionView };
       const tx2 = (await callTool(client, {
@@ -288,7 +282,6 @@ describe('MCP integration > sub-categories', () => {
           description: 'Sem subcategoria',
           amount: 20,
           category: 'Food',
-          idempotencyKey: `test-search-sub-no-match-${stamp}`,
         },
       })) as { transaction?: TransactionView };
 
@@ -318,7 +311,6 @@ describe('MCP integration > sub-categories', () => {
           description: 'Teste hint',
           amount: 100,
           category: 'Salary',
-          idempotencyKey: `test-hint-${stamp}`,
         },
       })) as { error?: { code?: string; hint?: string } };
 
@@ -347,7 +339,6 @@ describe('MCP integration > sub-categories', () => {
           description: 'Lanche',
           amount: 15,
           subCategory: `ClearMe-${stamp}`,
-          idempotencyKey: `test-clear-subcat-${stamp}`,
         },
       })) as { transaction?: TransactionView };
       const tx = created.transaction ?? (created as TransactionView);
@@ -385,7 +376,6 @@ describe('MCP integration > sub-categories', () => {
           description: 'Lanche',
           amount: 15,
           subCategory: `KeepMe-${stamp}`,
-          idempotencyKey: `test-keep-subcat-${stamp}`,
         },
       })) as { transaction?: TransactionView };
       const tx = created.transaction ?? (created as TransactionView);
@@ -461,7 +451,7 @@ describe('MCP integration > sub-categories', () => {
 
       const transfer = (await callTool(client, {
         name: 'create_transfer',
-        args: { from: srcName, to: dstName, amount: 100, idempotencyKey: `test-transfer-cat-${stamp}` },
+        args: { from: srcName, to: dstName, amount: 100 },
       })) as { transaction?: TransactionView };
       const tx = transfer.transaction ?? (transfer as TransactionView);
       ensure(tx.id, 'transfer id missing');
@@ -489,7 +479,6 @@ describe('MCP integration > sub-categories', () => {
         args: {
           description: 'Despesa genérica',
           amount: 50,
-          idempotencyKey: `test-kind-update-${stamp}`,
         },
       })) as { transaction?: TransactionView };
       const tx = created.transaction ?? (created as TransactionView);
@@ -526,7 +515,7 @@ describe('MCP integration > sub-categories', () => {
 
       const transfer = (await callTool(client, {
         name: 'create_transfer',
-        args: { from: srcName, to: dstName, amount: 50, idempotencyKey: `test-retype-transfer-${stamp}` },
+        args: { from: srcName, to: dstName, amount: 50 },
       })) as { transaction?: TransactionView };
       const tx = transfer.transaction ?? (transfer as TransactionView);
       ensure(tx.id, 'transfer id missing');
@@ -573,7 +562,6 @@ describe('MCP integration > sub-categories', () => {
           date: '2026-01-16',
           account: accountName,
           subCategory: sub.name!,
-          idempotencyKey: `del-sub-tx-${stamp}`,
         },
       })) as { transaction: { id: string } };
       createdTxIds.push(txResult.transaction.id);
@@ -627,7 +615,6 @@ describe('MCP integration > sub-categories', () => {
           description: 'Despesa qualquer',
           amount: 20,
           category: 'Food',
-          idempotencyKey: `test-type-transfer-${stamp}`,
         },
       })) as { transaction?: TransactionView };
       const tx = created.transaction ?? (created as TransactionView);

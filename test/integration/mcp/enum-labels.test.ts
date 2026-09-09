@@ -34,7 +34,6 @@ describe('MCP integration > localized enum labels', () => {
         description: `Label seed ${stamp}`,
         amount: 10,
         account: accountName,
-        idempotencyKey: `label-seed-${stamp}`,
       },
     });
   });
@@ -136,7 +135,6 @@ describe('MCP integration > localized enum labels', () => {
         type: 'expense',
         date: today,
         card: cardName,
-        idempotencyKey: `label-bill-${stamp}`,
       },
     });
 

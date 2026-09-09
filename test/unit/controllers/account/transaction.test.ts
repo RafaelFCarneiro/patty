@@ -26,7 +26,9 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   subCategories: {} as Deps['subCategories'],
   correlations: {} as Deps['correlations'],
   creditCards: {} as Deps['creditCards'],
-  currencies: {} as Deps['currencies'],
+  // deriveIdempotencyKey needs the resolved currency's decimals (ADR-029 Phase 2b) — every
+  // insert-shaped flow now calls deps.currencies.list(), not just bulk import.
+  currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
   currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],
   health: {} as Deps['health'],
@@ -96,7 +98,7 @@ describe('addAccountExpense — account resolution is value-based, not truthy', 
 
     const result = await addAccountExpense(
       deps,
-      { description: 'Test', amount: 10, account: '', idempotencyKey: 'account-empty-account' },
+      { description: 'Test', amount: 10, account: '' },
       TransactionSource.enum.mcp,
     );
 
@@ -113,7 +115,7 @@ describe('addAccountExpense / addAccountIncome — credit account rejection', ()
 
     const result = await addAccountExpense(
       deps,
-      { description: 'Card fee', amount: 5, account: 'Nubank', idempotencyKey: 'credit-post-rejected' },
+      { description: 'Card fee', amount: 5, account: 'Nubank' },
       TransactionSource.enum.mcp,
     );
 
@@ -133,7 +135,6 @@ describe('addAccountExpense / addAccountIncome — category/sub-category exclusi
         amount: 100,
         category: 'Income',
         subCategory: 'Salary',
-        idempotencyKey: 'exclusive-category',
       },
       TransactionSource.enum.mcp,
     );
@@ -154,7 +155,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
 
     const result = await addAccountExpense(
       deps,
-      { description: 'Lunch', amount: 20, account: 'Nubank', currency: 'USD', idempotencyKey: 'currency-account' },
+      { description: 'Lunch', amount: 20, account: 'Nubank', currency: 'USD' },
       TransactionSource.enum.mcp,
     );
 
@@ -170,11 +171,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
   it('falls back to the input currency (default USD) when no account is given', async () => {
     const deps = makeDeps();
 
-    const result = await addAccountExpense(
-      deps,
-      { description: 'Cash lunch', amount: 20, idempotencyKey: 'currency-no-account' },
-      TransactionSource.enum.mcp,
-    );
+    const result = await addAccountExpense(deps, { description: 'Cash lunch', amount: 20 }, TransactionSource.enum.mcp);
 
     expect(result.isOk()).toBe(true);
     const { model } = findTransactionPersistable(result._unsafeUnwrap().persist) as { model: { currency: string } };
@@ -190,11 +187,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
       } as unknown as Deps['merchants'],
     });
 
-    const result = await addAccountExpense(
-      deps,
-      { description: 'Uber ride', amount: 15, idempotencyKey: 'classify-auto' },
-      TransactionSource.enum.mcp,
-    );
+    const result = await addAccountExpense(deps, { description: 'Uber ride', amount: 15 }, TransactionSource.enum.mcp);
 
     expect(result.isOk()).toBe(true);
     const { model } = findTransactionPersistable(result._unsafeUnwrap().persist) as {
@@ -214,7 +207,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
 
     const result = await addAccountExpense(
       deps,
-      { description: 'Uber ride 42', amount: 15, idempotencyKey: 'classify-merchant-key-matched' },
+      { description: 'Uber ride 42', amount: 15 },
       TransactionSource.enum.mcp,
     );
 
@@ -229,7 +222,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
 
     const result = await addAccountExpense(
       deps,
-      { description: 'Ze Padaria #123', amount: 15, idempotencyKey: 'classify-merchant-key-unmatched' },
+      { description: 'Ze Padaria #123', amount: 15 },
       TransactionSource.enum.mcp,
     );
 
@@ -243,7 +236,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
 
     const result = await addAccountExpense(
       deps,
-      { description: 'Ze Padaria #123', amount: 15, idempotencyKey: 'classify-merchant-persistable' },
+      { description: 'Ze Padaria #123', amount: 15 },
       TransactionSource.enum.mcp,
     );
 
@@ -257,11 +250,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
   it('on a description that normalizes to nothing, emits no merchant Persistable', async () => {
     const deps = makeDeps();
 
-    const result = await addAccountExpense(
-      deps,
-      { description: '#123456', amount: 15, idempotencyKey: 'classify-merchant-key-empty' },
-      TransactionSource.enum.mcp,
-    );
+    const result = await addAccountExpense(deps, { description: '#123456', amount: 15 }, TransactionSource.enum.mcp);
 
     const outcome = result._unsafeUnwrap();
     expect(outcome.persist).toHaveLength(1);
@@ -274,12 +263,12 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
 
     const expenseResult = await addAccountExpense(
       deps,
-      { description: 'Groceries', amount: 30, idempotencyKey: 'type-expense' },
+      { description: 'Groceries', amount: 30 },
       TransactionSource.enum.mcp,
     );
     const incomeResult = await addAccountIncome(
       deps,
-      { description: 'Salary', amount: 3000, idempotencyKey: 'type-income' },
+      { description: 'Salary', amount: 3000 },
       TransactionSource.enum.mcp,
     );
 
@@ -296,11 +285,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
   it('response() reports created:true and the persisted view when the shell actually inserted the row', async () => {
     const deps = makeDeps();
 
-    const result = await addAccountExpense(
-      deps,
-      { description: 'Groceries', amount: 30, idempotencyKey: 'created-true' },
-      TransactionSource.enum.mcp,
-    );
+    const result = await addAccountExpense(deps, { description: 'Groceries', amount: 30 }, TransactionSource.enum.mcp);
     const outcome = result._unsafeUnwrap();
     const { model: entity } = findTransactionPersistable(outcome.persist) as { model: MinimalEntity };
 
@@ -312,11 +297,7 @@ describe('addAccountExpense — the write is returned as data, not performed (AD
   it("response() reports created:false and the EXISTING row's data on an idempotent duplicate replay", async () => {
     const deps = makeDeps();
 
-    const result = await addAccountExpense(
-      deps,
-      { description: 'Groceries', amount: 30, idempotencyKey: 'created-false' },
-      TransactionSource.enum.mcp,
-    );
+    const result = await addAccountExpense(deps, { description: 'Groceries', amount: 30 }, TransactionSource.enum.mcp);
     const outcome = result._unsafeUnwrap();
     const existing = rawViewFor({
       id: 'existing-id',
@@ -348,7 +329,6 @@ describe('addAccountExpense — tag-set resolution (ADR-023 step 2)', () => {
       {
         description: 'Cash lunch',
         amount: 20,
-        idempotencyKey: 'tags-resolve',
         tags: ['work', 'does-not-exist'],
       },
       TransactionSource.enum.mcp,
@@ -373,11 +353,7 @@ describe('addAccountExpense — tag-set resolution (ADR-023 step 2)', () => {
       } as unknown as Deps['tags'],
     });
 
-    const result = await addAccountExpense(
-      deps,
-      { description: 'Cash lunch', amount: 20, idempotencyKey: 'no-tags-given' },
-      TransactionSource.enum.mcp,
-    );
+    const result = await addAccountExpense(deps, { description: 'Cash lunch', amount: 20 }, TransactionSource.enum.mcp);
 
     const outcome = result._unsafeUnwrap();
     expect(outcome.persist.some((p) => p.entity === TRANSACTION_TAG_ENTITY_TAG)).toBe(false);
@@ -390,7 +366,7 @@ describe('addAccountExpense — tag-set resolution (ADR-023 step 2)', () => {
 
     const result = await addAccountExpense(
       deps,
-      { description: 'Groceries', amount: 30, idempotencyKey: 'fresh-tags', tags: ['travel'] },
+      { description: 'Groceries', amount: 30, tags: ['travel'] },
       TransactionSource.enum.mcp,
     );
     const outcome = result._unsafeUnwrap();
@@ -413,7 +389,7 @@ describe('addAccountExpense — tag-set resolution (ADR-023 step 2)', () => {
 
     const result = await addAccountExpense(
       deps,
-      { description: 'Groceries', amount: 30, idempotencyKey: 'replay-tags', tags: ['travel'] },
+      { description: 'Groceries', amount: 30, tags: ['travel'] },
       TransactionSource.enum.mcp,
     );
     const outcome = result._unsafeUnwrap();
@@ -714,13 +690,18 @@ describe('updateAccountTransaction — transfer mutability (ADR-020 §4, moved f
   });
 });
 
+/** The derived idempotencyKey off the transaction Persistable a flow's outcome carries — every
+ *  bulk-import test below runs the real per-line flow (ADR-029 Phase 2b: the key is derived
+ *  inside addAccountExpense/addAccountIncome now, never present on `plan.lines` itself). */
+const idempotencyKeyOf = (outcome: FlowOutcome<unknown>): string =>
+  (findTransactionPersistable(outcome.persist) as { idempotencyKey: string }).idempotencyKey;
+
 describe('importAccountStatement — pure per-line plan for the shell', () => {
-  it("defaults every line and stamps the whole import's rawInput onto each", async () => {
+  it("defaults every line's date, stamps rawInput onto each, and carries discriminator through", async () => {
     const clock = new Date('2026-06-01');
     const deps = makeDeps({
       clock: () => clock,
       accounts: { list: async () => [account()] } as unknown as Deps['accounts'],
-      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
     });
 
     const plan = await importAccountStatement(
@@ -729,7 +710,7 @@ describe('importAccountStatement — pure per-line plan for the shell', () => {
         account: 'Nubank',
         items: [
           { description: 'iFood', amount: 45, type: 'expense' },
-          { description: 'Salary', amount: 5000, type: 'income', date: '2026-05-01', idempotencyKey: 'explicit' },
+          { description: 'Salary', amount: 5000, type: 'income', date: '2026-05-01', discriminator: 'explicit' },
         ],
         rawInput: 'pasted statement text',
       },
@@ -738,14 +719,12 @@ describe('importAccountStatement — pure per-line plan for the shell', () => {
 
     expect(plan.lines).toHaveLength(2);
     expect(plan.lines[0]).toMatchObject({ date: toIsoDate(clock), rawInput: 'pasted statement text' });
-    expect(plan.lines[0]!.idempotencyKey).toBeTruthy();
-    expect(plan.lines[1]).toMatchObject({ date: '2026-05-01', idempotencyKey: 'explicit' });
+    expect(plan.lines[1]).toMatchObject({ date: '2026-05-01', discriminator: 'explicit' });
   });
 
   it("routes an 'expense' line through addAccountExpense, an 'income' one through addAccountIncome", async () => {
     const deps = makeDeps({
       accounts: { list: async () => [account()] } as unknown as Deps['accounts'],
-      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
     });
 
     const plan = await importAccountStatement(
@@ -753,8 +732,8 @@ describe('importAccountStatement — pure per-line plan for the shell', () => {
       {
         account: 'Nubank',
         items: [
-          { description: 'iFood', amount: 45, type: 'expense', date: '2026-06-01', idempotencyKey: 'k1' },
-          { description: 'Salary', amount: 5000, type: 'income', date: '2026-06-01', idempotencyKey: 'k2' },
+          { description: 'iFood', amount: 45, type: 'expense', date: '2026-06-01' },
+          { description: 'Salary', amount: 5000, type: 'income', date: '2026-06-01' },
         ],
       },
       TransactionSource.enum.import,
@@ -782,14 +761,13 @@ describe('importAccountStatement — pure per-line plan for the shell', () => {
   it("binds every line to the statement's fixed account, not a per-line one", async () => {
     const deps = makeDeps({
       accounts: { list: async () => [account({ name: 'Nubank' })] } as unknown as Deps['accounts'],
-      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
     });
 
     const plan = await importAccountStatement(
       deps,
       {
         account: 'Nubank',
-        items: [{ description: 'iFood', amount: 45, type: 'expense', date: '2026-06-01', idempotencyKey: 'k1' }],
+        items: [{ description: 'iFood', amount: 45, type: 'expense', date: '2026-06-01' }],
       },
       TransactionSource.enum.import,
     );
@@ -808,7 +786,6 @@ describe('importAccountStatement — pure per-line plan for the shell', () => {
   it("resolves the account's currency decimals for the idempotency key, keeping BTC lines distinct", async () => {
     const deps = makeDeps({
       accounts: { list: async () => [account({ currency: CurrencyCode.enum.BTC })] } as unknown as Deps['accounts'],
-      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
     });
 
     const plan = await importAccountStatement(
@@ -823,13 +800,13 @@ describe('importAccountStatement — pure per-line plan for the shell', () => {
       TransactionSource.enum.import,
     );
 
-    expect(plan.lines[0]!.idempotencyKey).not.toBe(plan.lines[1]!.idempotencyKey);
+    const [first, second] = await Promise.all(plan.lines.map((line) => plan.flowFor(line)()));
+    expect(idempotencyKeyOf(first!._unsafeUnwrap())).not.toBe(idempotencyKeyOf(second!._unsafeUnwrap()));
   });
 
-  it('falls back to a valid plan (no throw) when the account name does not resolve', async () => {
+  it('builds a valid plan when the account name does not resolve — the line reports notFound on its own', async () => {
     const deps = makeDeps({
       accounts: { list: async () => [] } as unknown as Deps['accounts'],
-      currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
     });
 
     const plan = await importAccountStatement(
@@ -839,18 +816,30 @@ describe('importAccountStatement — pure per-line plan for the shell', () => {
     );
 
     expect(plan.lines).toHaveLength(1);
-    expect(plan.lines[0]!.idempotencyKey).toBeTruthy();
+    const result = await plan.flowFor(plan.lines[0]!)();
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('unknown_account');
   });
 
-  it('defaults to USD decimals for an unattached (no-account) statement', async () => {
-    const deps = makeDeps({ currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'] });
+  it(
+    'defaults to USD (2-decimal) rounding for an unattached (no-account) statement — two amounts ' +
+      'differing only past 2 decimals collide',
+    async () => {
+      const deps = makeDeps();
 
-    const plan = await importAccountStatement(
-      deps,
-      { items: [{ description: 'Cash spend', amount: 5.999, type: 'expense' }] },
-      TransactionSource.enum.import,
-    );
+      const plan = await importAccountStatement(
+        deps,
+        {
+          items: [
+            { description: 'Cash spend', amount: 5.991, type: 'expense' },
+            { description: 'Cash spend', amount: 5.994, type: 'expense' },
+          ],
+        },
+        TransactionSource.enum.import,
+      );
 
-    expect(plan.lines[0]!.idempotencyKey).toMatch(/-6\.00$/);
-  });
+      const [first, second] = await Promise.all(plan.lines.map((line) => plan.flowFor(line)()));
+      expect(idempotencyKeyOf(first!._unsafeUnwrap())).toBe(idempotencyKeyOf(second!._unsafeUnwrap()));
+    },
+  );
 });
