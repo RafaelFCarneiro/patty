@@ -17,8 +17,10 @@ describe('TransactionSchema — idempotencyKey lives on the envelope, not the do
     expect(Object.keys(TransactionSchema.shape)).not.toContain('idempotencyKey');
   });
 
-  it('CreateTransactionSchema (wire/in) still requires idempotencyKey — callers/derivation still supply it', () => {
+  it('CreateTransactionSchema (wire/in) still REQUIRES idempotencyKey — callers/derivation still supply it', () => {
     expect(Object.keys(CreateTransactionSchema.shape)).toContain('idempotencyKey');
+    // Presence alone would still pass if the field silently became optional — pin the requiredness.
+    expect(CreateTransactionSchema.shape.idempotencyKey.isOptional()).toBe(false);
   });
 
   it('TransactionViewSchema (wire/out) still carries idempotencyKey — reflects the stored column, out of scope', () => {

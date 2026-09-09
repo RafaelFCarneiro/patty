@@ -113,8 +113,10 @@ own ADR when it lands. This ADR only ensures nothing in the core reaches into th
 - **Status quo (rejected).** Leaves the version `describe` duplicated per entity and idempotency half-in-model,
   half-in-registration; #134 stays open.
 - **Idempotency on the envelope (chosen) vs a business-model field (status quo).** The key is a property of the
-  write intent, not the entity; the envelope is its honest home (#134), and it keeps the domain model free of a
-  concern that never belongs on `Create*`/`wire/out`.
+  write intent, not the entity; the envelope is its honest home (#134). It keeps the *domain entity* free of a
+  concern that isn't a business field — `Create*` (wire/in) and `wire/out` legitimately keep it, since a caller
+  still supplies/derives the key and the read view still reflects the stored column; only `TransactionSchema`
+  itself sheds it.
 
 ## Consequences
 

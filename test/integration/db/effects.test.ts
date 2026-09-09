@@ -43,6 +43,7 @@ import {
 } from '../../../src/diplomat/db/schema.js';
 import {
   MAX_RUN_EFFECTS_ATTEMPTS,
+  missingIdempotencyKeyMessage,
   versionedTableApplier,
   runEffects,
   runEffectsSequence,
@@ -706,9 +707,7 @@ describe('engine idempotency treatment — declared by registration, generic ove
         response: null,
       });
 
-    await expect(runEffects(db, keyedRegistry, flow)).rejects.toThrow(
-      'runEffects: entity registered with idempotencyColumn "name" but the insert carries no idempotencyKey',
-    );
+    await expect(runEffects(db, keyedRegistry, flow)).rejects.toThrow(missingIdempotencyKeyMessage('name'));
     expect(await db.all(sql`SELECT id FROM tags WHERE name = ${model.name}`)).toHaveLength(0);
   });
 });
