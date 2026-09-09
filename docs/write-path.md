@@ -28,6 +28,13 @@ effect runner, appliers, outcomes, and the per-flow notes.
   `Persistable`'s model omits it (a new row is always `INITIAL_VERSION`, `models/persistable.ts`); only
   `update`/`delete` carry the real read `version`, via the persistence-side type (`AccountEntity` = `Account`
   + `version`).
+- **The managed-entity base — one declaration home for the version token.** `models/persistable.ts`'s
+  `PersistenceMeta`/`withPersistenceMeta` is where every entity's persistence-side type is built:
+  `XxxEntitySchema = withPersistenceMeta(XxxSchema)` extends the pure model with `PersistenceMeta`'s `version`
+  field, so the token's shape (`z.number().int().nonnegative()`, its `describe`) is declared exactly once instead
+  of per entity. `withPersistenceMeta` takes no specific entity model and no Drizzle import — it's the nucleus a
+  future DB-agnostic effect-engine extraction would cut along (`models/persistable.ts` + `effects.ts`'s
+  `runEffects`/registry, minus `versionedTableApplier`).
 
 ### From model to row — the boundary adaptation
 

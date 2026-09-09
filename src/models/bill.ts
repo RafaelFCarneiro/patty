@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
+import { withPersistenceMeta } from './persistable.js';
 import type { ValidationError } from './error.js';
 import type { LabelMap } from './locale.js';
 import type { TransactionView } from './transaction.js';
@@ -34,9 +35,8 @@ export type BillView = { bill: Bill; cardName: string; transactions: Transaction
 
 // Internal persistence-side entity: `Bill` plus `version` and the credit-card FK (neither on the
 // wire — mirrors `models/account.ts`'s `AccountEntitySchema` split).
-export const RawBillSchema = BillSchema.extend({
+export const RawBillSchema = withPersistenceMeta(BillSchema).extend({
   creditCardId: Id.describe('Owning credit card id; internal, never on wire/out'),
-  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
 });
 export type RawBill = z.infer<typeof RawBillSchema>;
 

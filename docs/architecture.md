@@ -123,7 +123,11 @@ the database as a set with them, or checkpoint (`PRAGMA wal_checkpoint`) first.
 
 Every mutable entity table below also carries `version INTEGER NOT NULL DEFAULT 0` (not shown per-line) —
 the optimistic-concurrency token `runEffects` uses in its versioned unit-of-work mode (ADR-021 / `docs/write-path.md`;
-ADR-022).
+ADR-022). On the zod side this token has a single declaration home: `models/persistable.ts`'s `PersistenceMeta`/
+`withPersistenceMeta` — every `XxxEntitySchema`/`Raw*ViewSchema` is `withPersistenceMeta(XxxSchema)` rather than a
+per-entity hand-written `.extend({ version: ... })`. **`version` never appears on a public model/wire shape** —
+that invariant's single source is `PersistenceMeta`: the pure domain model (`XxxSchema`) stays unchanged, so
+`Create*`/wire/out/tool-input shapes derive from it with no `.omit`s.
 `currencies`, `merchants`, `merchant_category`, and `transaction_tags` do not — they are reference/join tables,
 not aggregates a flow returns as a `Persistable`.
 
@@ -391,3 +395,4 @@ shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-0
 - ADR-026: multi-currency valuation — crypto (USDC, BTC) first-class, agent-refreshed `currency_rates` table, `settings.base_currency`, read-time conversion on `get_account_balances`; relaxes no-implicit-conversion for **valuation** only (**accepted, complete**; Phase 1 — crypto currencies — complete, Phase 2 — `currency_rates`/`base_currency`/the pure conversion helper — complete, Phase 3 — `get_account_balances` valuation, controller-orchestrated per ADR-028 — complete). Follow-on Feature Design 021 (opt-in `displayCurrency` grand totals on the other per-currency reads) — Phase 1 (`get_spending_summary`), Phase 2 (`get_budget_status`), and Phase 3 (`find_correlations`) all complete.
 - ADR-027: UI app shell — shared shell hosting dashboard **content fragments**; `source: inline|file` discriminator (defaults are git-versioned files, customs stay inline, `save_dashboard` always inline); entity-tagged **SSE** live-update; same Fastify, no build (extends/revises ADR-013; see `docs/ui.md`)
 - ADR-028: read-side cross-aggregate correlation lives in controllers, not repos — refines ADR-011 (aggregation stays in the repo; correlating two aggregates does not); transaction "what counts" predicates single-sourced (`txPredicates`); applied to `get_budget_status` (phase 2) and `find_correlations`' `budget_fit` (phase 3, complete) — `budgetTargetMatch` fully retired
+- ADR-029: managed-entity persistence contract — an engine-owned base for id/version/idempotency, and the seam for a future DB-agnostic effect engine; refines ADR-021/022/023, realizes #134 (accepted; Phase 1 — `PersistenceMeta`/`withPersistenceMeta`, one declaration home for the version token — complete; Phase 2 — idempotency key onto the `insert` envelope — pending)

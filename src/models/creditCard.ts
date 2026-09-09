@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { BillQuerySchema } from './bill.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
+import { withPersistenceMeta } from './persistable.js';
 import {
   CreateTransactionSchema,
   STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION,
@@ -36,9 +37,7 @@ export type CreditCard = z.infer<typeof CreditCardSchema>;
 export const CREDIT_CARD_ENTITY_TAG = 'creditCard';
 
 // `CreditCard` plus the optimistic-concurrency `version` token. Never sent over the wire.
-export const CreditCardEntitySchema = CreditCardSchema.extend({
-  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
-});
+export const CreditCardEntitySchema = withPersistenceMeta(CreditCardSchema);
 export type CreditCardEntity = z.infer<typeof CreditCardEntitySchema>;
 
 export const CreateCreditCardSchema = CreditCardSchema.omit({

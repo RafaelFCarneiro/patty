@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { CategoryKind } from './category.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
+import { withPersistenceMeta } from './persistable.js';
 import type { NotFound, ValidationError } from './error.js';
 
 export const BudgetPeriod = z.enum(['monthly']);
@@ -24,9 +25,7 @@ export const BudgetSchema = z.object({
 export type Budget = z.infer<typeof BudgetSchema>;
 
 // `Budget` plus the optimistic-concurrency `version` token. Never sent over the wire.
-export const BudgetEntitySchema = BudgetSchema.extend({
-  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
-});
+export const BudgetEntitySchema = withPersistenceMeta(BudgetSchema);
 export type BudgetEntity = z.infer<typeof BudgetEntitySchema>;
 
 /** Read projection actually returned to callers — `category`/`subCategory` display names instead

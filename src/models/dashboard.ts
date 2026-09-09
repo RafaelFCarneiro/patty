@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Id } from './id.js';
+import { withPersistenceMeta } from './persistable.js';
 import { validation, type DuplicateName, type NotFound, type ValidationError } from './error.js';
 
 // A generous ceiling for a data-less dashboard fragment (the baseline template is ~20KB, down from
@@ -47,9 +48,8 @@ export type RenameDashboard = z.infer<typeof RenameDashboardSchema>;
 
 export const DASHBOARD_ENTITY_TAG = 'dashboard';
 
-export const DashboardEntitySchema = DashboardSchema.extend({
+export const DashboardEntitySchema = withPersistenceMeta(DashboardSchema).extend({
   id: Id.describe('internal; never on wire/out'),
-  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
   path: z
     .string()
     .nullable()

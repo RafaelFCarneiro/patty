@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
+import { withPersistenceMeta } from './persistable.js';
 import type { LabelMap } from './locale.js';
 import { MovementType } from './transaction.js';
 
@@ -36,9 +37,7 @@ export const RECURRING_ENTITY_TAG = 'recurring';
 
 // Never sent over the wire — kept off `RecurringRuleSchema`/`RecurringRuleViewSchema` the same way
 // `AccountEntitySchema` stays off `AccountSchema`.
-export const RecurringRuleEntitySchema = RecurringRuleSchema.extend({
-  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
-});
+export const RecurringRuleEntitySchema = withPersistenceMeta(RecurringRuleSchema);
 export type RecurringRuleEntity = z.infer<typeof RecurringRuleEntitySchema>;
 
 export const RecurringRuleViewSchema = RecurringRuleSchema.extend({

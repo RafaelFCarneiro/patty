@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
+import { withPersistenceMeta } from './persistable.js';
 import type { ValidationError } from './error.js';
 
 // Entity tag for this aggregate's `Persistable`s.
@@ -37,9 +38,7 @@ export const CurrencyRateSchema = z.object({
 export type CurrencyRate = z.infer<typeof CurrencyRateSchema>;
 
 // `CurrencyRate` plus the optimistic-concurrency `version` token. Never sent over the wire.
-export const CurrencyRateEntitySchema = CurrencyRateSchema.extend({
-  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
-});
+export const CurrencyRateEntitySchema = withPersistenceMeta(CurrencyRateSchema);
 export type CurrencyRateEntity = z.infer<typeof CurrencyRateEntitySchema>;
 
 /** Read projection actually returned to callers — `from`/`to` instead of the internal
