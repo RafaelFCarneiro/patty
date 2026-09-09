@@ -8,10 +8,6 @@ import {
   UpdateTransactionSchema,
 } from '../../../src/models/transaction.js';
 
-// ADR-029 Phase 2 (realizes #134): idempotencyKey is engine metadata on the insert Persistable
-// envelope, not a TransactionSchema business field — but it stays on the wire/in create input
-// (callers/derivation still supply it) and on the wire/out read view (reflects the stored column;
-// out of scope for this change).
 describe('TransactionSchema — idempotencyKey lives on the envelope, not the domain entity (ADR-029 phase 2)', () => {
   it('TransactionSchema (the domain entity) no longer carries idempotencyKey', () => {
     expect(Object.keys(TransactionSchema.shape)).not.toContain('idempotencyKey');

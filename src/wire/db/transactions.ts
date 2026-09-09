@@ -44,8 +44,7 @@ export const TransactionRowSchema = z.object({
 
 // Flat node properties handed to the INSERT. `type` is derived from the Drizzle schema
 // so the repo never casts the string into the column's enum union. `idempotencyKey` is
-// deliberately absent — it's engine metadata riding the insert `Persistable` envelope (ADR-029
-// Phase 2), written onto the row by the applier, never sourced from the domain model.
+// deliberately absent — it's written onto the row by the applier, not sourced from the model.
 export type TransactionDbProps = {
   id: string;
   description: string;

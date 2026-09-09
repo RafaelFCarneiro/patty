@@ -266,10 +266,7 @@ const readBack = async (tx: Tx, id: string): Promise<RawTransactionView> =>
   expectPresent(await fetchTx(tx, id), rowNotFoundAfterWrite('transactions', 'write'));
 
 /** Collapsed to a registration (ADR-023 decision 5): the idempotency column and post-write
- *  projection are declared config; nothing entity-specific decides anything here. `idempotencyColumn`
- *  names the physical `idempotency_key` column the applier writes the insert `Persistable`'s own
- *  `idempotencyKey` into (ADR-029 Phase 2) — the key is engine metadata on the write envelope, not a
- *  field of the `Transaction` domain model. */
+ *  projection are declared config; nothing entity-specific decides anything here. */
 export const transactionApplier: EntityApplier = versionedTableApplier(transactions, {
   idempotencyColumn: 'idempotencyKey',
   readBack,

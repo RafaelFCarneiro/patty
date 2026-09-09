@@ -327,8 +327,6 @@ describe('entityFromExisting — RawTransactionView → TransactionEntity (Desig
     const entity = entityFromExisting(baseTx);
     expect(entity).not.toHaveProperty('version');
     expect(entity).not.toHaveProperty('tags');
-    // idempotencyKey is engine metadata on the insert Persistable envelope (ADR-029 Phase 2), never
-    // a TransactionEntity field — an update flow like confirmTransaction never re-sets it anyway.
     expect(entity).not.toHaveProperty('idempotencyKey');
   });
 });

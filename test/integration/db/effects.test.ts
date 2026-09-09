@@ -169,9 +169,7 @@ const insertOpenBill = async (
 };
 
 /** Inserts a transaction row directly (raw drizzle) — test fixture setup only. No tags in any
- *  fixture using this, so unlike the real applier this never attaches any. `idempotencyKey` is a
- *  separate argument (ADR-029 Phase 2): it's engine metadata on the write envelope, never a field
- *  of the `Transaction` domain model `modelToDb` adapts. */
+ *  fixture using this, so unlike the real applier this never attaches any. */
 const insertTransaction = async (entity: Transaction, idempotencyKey: string): Promise<void> => {
   const { props, refs } = transactionAdapters.modelToDb(entity);
   await db.insert(transactions).values({
@@ -656,8 +654,6 @@ describe('engine idempotency treatment — declared by registration, generic ove
     [KEYED_TAG]: versionedTableApplier(tags, { idempotencyColumn: 'name', readBack: async (_tx, id) => id }),
   };
 
-  // The envelope's idempotencyKey (ADR-029 Phase 2) drives dedup — `model.name` is just an ordinary
-  // row field here, no longer read off the model by the engine.
   const insertKeyed = (model: { id: string; name: string; version: number }, idempotencyKey = model.name) => () =>
     okAsync({
       persist: [{ op: PersistOp.enum.insert, entity: KEYED_TAG, model, idempotencyKey }] as Persistable[],
@@ -714,8 +710,7 @@ describe('engine idempotency treatment — declared by registration, generic ove
 
 // Row-shaped input (as `adapters/transactions.ts`'s `entityToDb` produces it) — the applier
 // trusts it as-is, same reasoning as `newAccount` above. Module-scope: shared by every suite below.
-// No `idempotencyKey` field: it's engine metadata on the insert `Persistable` envelope (ADR-029
-// Phase 2), never part of the row-shaped model — `insertRow` below carries it separately.
+// No `idempotencyKey` field — `insertRow` below carries it separately.
 const newTransactionRow = (overrides: Partial<TransactionRowEntity> = {}): TransactionRowEntity => ({
   id: randomUUID(),
   description: 'Test transaction',

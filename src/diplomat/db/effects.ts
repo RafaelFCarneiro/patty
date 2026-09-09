@@ -82,9 +82,6 @@ type VersionedTableConfig<T extends VersionedTable> = {
  * swallowed as a same-id retry; and the next `version` is computed here in application code from
  * the row's own field, never a SQL-side `version + 1` the database evaluates on its own.
  */
-/** The message `versionedTableApplier.insert` throws when a registered `idempotencyColumn` finds no
- *  envelope key — named so the test asserting this rejection imports it instead of duplicating the
- *  literal (`docs/code-quality.md` constants over literals). */
 export const missingIdempotencyKeyMessage = (idempotencyColumn: string): string =>
   `runEffects: entity registered with idempotencyColumn "${idempotencyColumn}" but the insert carries no idempotencyKey`;
 
@@ -106,16 +103,12 @@ export const versionedTableApplier = <T extends VersionedTable>(
 
   return {
     insert: async (tx, model, idempotencyKey) => {
-      // A registered idempotencyColumn is a promise every insert for this entity keeps: the flow
-      // that mints one must set the envelope's key. Reject a miss right here, loudly and by name,
-      // rather than let it reach the database as an opaque NOT NULL constraint violation.
+      // Reject a missing key here, loudly, rather than let it reach the database as an opaque
+      // NOT NULL constraint violation.
       if (idempotencyColumn && idempotencyKey === undefined) {
         throw new Error(missingIdempotencyKeyMessage(idempotencyColumn));
       }
       const row = model as Record<string, unknown> & { id: string };
-      // The envelope's key (ADR-029 Phase 2) — never read off the model row — is written onto the
-      // registered column right here, the applier's own mechanical job (ADR-023: it decides
-      // nothing, it just writes what the core handed it).
       const rowToInsert = idempotencyColumn ? { ...row, [idempotencyColumn]: idempotencyKey } : row;
       const result = await tx
         .insert(table)
@@ -178,8 +171,6 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
       case PersistOp.enum.insert:
         // An idempotent-duplicate no-op reports `applied: false` — inserts never retry here; the
         // duplicate treatment itself is the engine's, declared per entity (`idempotencyColumn`).
-        // `p.idempotencyKey` is the envelope's own dedup metadata (ADR-029 Phase 2) — never read
-        // off `p.model`.
         return applier.insert(tx, p.model, p.idempotencyKey);
       case PersistOp.enum.update: {
         const updateOutcome = await applier.update(tx, p.model);

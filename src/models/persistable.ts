@@ -32,14 +32,13 @@ export const withPersistenceMeta = <T extends z.ZodRawShape>(model: z.ZodObject<
  *
  * `insert` carries the plain domain model, no `version` — a brand-new row always starts at
  * `INITIAL_VERSION`, which isn't something the core decides. It also carries an optional
- * `idempotencyKey` — the write intent's own dedup metadata (ADR-029 Phase 2, realizes #134), never a
- * business-model field: an insert whose entity opts into the engine's generic idempotency treatment
- * (`diplomat/db/effects.ts`'s `versionedTableApplier` `idempotencyColumn` config) sets it here; an
- * entity that decides insert-vs-update by a core read-first (dashboards, settings) omits it, same as
- * today. `update` carries the full desired end-state as the versioned entity — `model.version` is the
- * version the core read; the entity's `EntityApplier` computes the persisted version from it
- * (`model.version + 1`) and applies `... SET ..., version = ? WHERE id = ? AND version = ?`. `delete`
- * carries just the id + the version read, for the same versioned guard.
+ * `idempotencyKey` — dedup metadata for the write intent, never a business-model field: an entity
+ * opts in via `versionedTableApplier`'s `idempotencyColumn` config (`diplomat/db/effects.ts`); a
+ * read-first entity (dashboards, settings) leaves it unset. `update` carries the full desired
+ * end-state as the versioned entity — `model.version` is the version the core read; the entity's
+ * `EntityApplier` computes the persisted version from it (`model.version + 1`) and applies
+ * `... SET ..., version = ? WHERE id = ? AND version = ?`. `delete` carries just the id + the
+ * version read, for the same versioned guard.
  */
 export type Persistable<Tag extends string = string, Model = unknown> =
   | { op: typeof PersistOp.enum.insert; entity: Tag; model: Model; idempotencyKey?: string }

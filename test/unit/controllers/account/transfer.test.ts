@@ -122,8 +122,6 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
       model: { type: string; amount: number; currency: string; refs: { accountId: string; toAccountId: string } };
     };
     expect(persisted.op).toBe(PersistOp.enum.insert);
-    // The idempotencyKey rides the envelope, not the model (ADR-029 phase 2) — a regression that
-    // put it back on the model, or dropped/substituted it, would still pass a looser assertion.
     expect(persisted.idempotencyKey).toBe('transfer-1');
     expect(persisted.model).not.toHaveProperty('idempotencyKey');
     expect(persisted.model).toMatchObject({
