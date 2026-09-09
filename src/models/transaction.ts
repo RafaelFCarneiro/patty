@@ -83,7 +83,6 @@ export const TransactionSchema = z.object({
   date: IsoDate.describe('Transaction date (YYYY-MM-DD)'),
   currency: CurrencyCode.describe('Transaction currency (ISO code)'),
   source: TransactionSource,
-  idempotencyKey: z.string().min(1),
   classification: ClassificationSchema,
   rawInput: z.string().optional().describe('Original user phrasing, for audit'),
   note: z

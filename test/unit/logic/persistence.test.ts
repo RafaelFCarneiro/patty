@@ -23,6 +23,20 @@ describe('logic/persistence — Persistable builders', () => {
     });
   });
 
+  it('insert carries an optional idempotencyKey on the envelope, alongside (never inside) the model', () => {
+    expect(insert({ entity: ACCOUNT_ENTITY_TAG, model: account, idempotencyKey: 'k1' })).toEqual({
+      op: PersistOp.enum.insert,
+      entity: ACCOUNT_ENTITY_TAG,
+      model: account,
+      idempotencyKey: 'k1',
+    });
+  });
+
+  it('insert omits idempotencyKey entirely when not given — read-first-dedup entities carry none', () => {
+    const built = insert({ entity: ACCOUNT_ENTITY_TAG, model: account });
+    expect(built).not.toHaveProperty('idempotencyKey');
+  });
+
   it('update tags op:update and carries the versioned model', () => {
     expect(update({ entity: ACCOUNT_ENTITY_TAG, model: accountEntity })).toEqual({
       op: PersistOp.enum.update,

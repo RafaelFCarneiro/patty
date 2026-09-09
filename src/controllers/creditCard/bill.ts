@@ -109,7 +109,6 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
       date,
       currency: card.currency,
       source: input.source,
-      idempotencyKey: `billpay-${rawBill.id}`,
       classification: { method: ClassificationMethod.enum.none, confidence: 0 },
       refs: { accountId: payer.id, toAccountId: card.accountId, billId: rawBill.id },
     };
@@ -117,7 +116,11 @@ export const payBill = (deps: Deps, input: PayBillInput): ResultAsync<FlowOutcom
     // Transfer must be inserted before the bill update that points paymentTransactionId at its id.
     const { persistable: billUpdate, response } = buildPaidBillWrite(rawBill, txId);
     const persist: Persistable[] = [
-      persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: transferEntity }),
+      persistence.insert({
+        entity: TRANSACTION_ENTITY_TAG,
+        model: transferEntity,
+        idempotencyKey: `billpay-${rawBill.id}`,
+      }),
       billUpdate,
     ];
     return ok({ persist, response });

@@ -143,7 +143,6 @@ export const entityFromExisting = (existing: RawTransactionView): TransactionEnt
   date: existing.date,
   currency: existing.currency,
   source: existing.source,
-  idempotencyKey: existing.idempotencyKey,
   classification: existing.classification,
   rawInput: existing.rawInput,
   note: existing.note,

@@ -108,7 +108,6 @@ const planAccountMovement = (
       date,
       currency: resolveCurrency(account, input),
       source,
-      idempotencyKey: input.idempotencyKey,
       classification,
       rawInput: input.rawInput,
       note: input.note,
@@ -139,7 +138,10 @@ const addAccountMovement = (
     const locale = await deps.locale();
     const tagLinks = await resolveTagLinks(deps, entity.id, input.tags);
     const persist = [
-      ...withMerchant([persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })], entity.refs.merchantKey),
+      ...withMerchant(
+        [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity, idempotencyKey: input.idempotencyKey })],
+        entity.refs.merchantKey,
+      ),
       ...(tagLinks ? [tagLinks.persistable] : []),
     ];
     const response = (outcomes: PersistOutcome[]): ClassifiedUpsertResult => {
@@ -236,7 +238,6 @@ export const updateAccountTransaction = (
       date: input.date ?? existing.date,
       currency: account?.currency ?? existing.currency,
       source: existing.source,
-      idempotencyKey: existing.idempotencyKey,
       classification: isUserCorrection
         ? { method: ClassificationMethod.enum.user, confidence: 1 }
         : existing.classification,

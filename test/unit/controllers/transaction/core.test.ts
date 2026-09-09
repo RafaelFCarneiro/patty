@@ -102,7 +102,6 @@ describe('confirmTransaction — flips pending to effective as a functional-core
           date: pendingTx.date,
           currency: pendingTx.currency,
           source: pendingTx.source,
-          idempotencyKey: pendingTx.idempotencyKey,
           classification: pendingTx.classification,
           refs: {},
           version: pendingTx.version,

@@ -22,7 +22,6 @@ const draft: Transaction = {
   date: '2026-06-09',
   currency: CurrencyCode.enum.BRL,
   source: TransactionSource.enum.mcp,
-  idempotencyKey: '2026-06-09-uber-32.50',
   classification: { method: 'rule', confidence: 0.8 },
   rawInput: 'paguei 32,50 de uber',
   refs: { accountId: 'acc-1', categoryId: 'cat-transporte', merchantKey: 'uber' },

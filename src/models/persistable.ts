@@ -31,14 +31,18 @@ export const withPersistenceMeta = <T extends z.ZodRawShape>(model: z.ZodObject<
  * imports a specific entity's model.
  *
  * `insert` carries the plain domain model, no `version` — a brand-new row always starts at
- * `INITIAL_VERSION`, which isn't something the core decides. `update` carries the full desired
- * end-state as the versioned entity — `model.version` is the version the core read; the entity's
- * `EntityApplier` computes the persisted version from it (`model.version + 1`) and applies
- * `... SET ..., version = ? WHERE id = ? AND version = ?`. `delete` carries just the id + the
- * version read, for the same versioned guard.
+ * `INITIAL_VERSION`, which isn't something the core decides. It also carries an optional
+ * `idempotencyKey` — the write intent's own dedup metadata (ADR-029 Phase 2, realizes #134), never a
+ * business-model field: an insert whose entity opts into the engine's generic idempotency treatment
+ * (`diplomat/db/effects.ts`'s `versionedTableApplier` `idempotencyColumn` config) sets it here; an
+ * entity that decides insert-vs-update by a core read-first (dashboards, settings) omits it, same as
+ * today. `update` carries the full desired end-state as the versioned entity — `model.version` is the
+ * version the core read; the entity's `EntityApplier` computes the persisted version from it
+ * (`model.version + 1`) and applies `... SET ..., version = ? WHERE id = ? AND version = ?`. `delete`
+ * carries just the id + the version read, for the same versioned guard.
  */
 export type Persistable<Tag extends string = string, Model = unknown> =
-  | { op: typeof PersistOp.enum.insert; entity: Tag; model: Model }
+  | { op: typeof PersistOp.enum.insert; entity: Tag; model: Model; idempotencyKey?: string }
   | { op: typeof PersistOp.enum.update; entity: Tag; model: Model & { version: number } }
   | { op: typeof PersistOp.enum.delete; entity: Tag; id: string; version: number };
 

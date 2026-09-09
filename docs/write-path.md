@@ -35,6 +35,13 @@ effect runner, appliers, outcomes, and the per-flow notes.
   of per entity. `withPersistenceMeta` takes no specific entity model and no Drizzle import — it's the nucleus a
   future DB-agnostic effect-engine extraction would cut along (`models/persistable.ts` + `effects.ts`'s
   `runEffects`/registry, minus `versionedTableApplier`).
+- **`idempotencyKey` — optional dedup metadata on the `insert` `Persistable` itself, not the model** (ADR-029
+  Phase 2). `insert: { op: 'insert'; entity: Tag; model: Model; idempotencyKey?: string }` — a flow that opts an
+  entity into the engine's generic idempotency treatment (below) sets this field alongside `model`, never inside
+  it. `logic/persistence.ts`'s `insert` builder accepts and carries it through unchanged; `TransactionSchema`
+  itself carries no such field — only the wire/in create input (still supplied by the caller or derived by bulk
+  import) and the wire/out read view do, since the key is engine bookkeeping, not a transaction business
+  property. An entity with no idempotency config (dashboards, settings) simply never sets this field.
 
 ### From model to row — the boundary adaptation
 
@@ -159,13 +166,20 @@ effect runner, appliers, outcomes, and the per-flow notes.
   match) finds a flow's own outcome regardless of batch position — needed because a merchant insert is
   *prepended* ahead of the transaction that FKs it. Exception: `applyDueRecurring` slices `outcomes`
   positionally (`R.zip`), safe because nothing is ever prepended ahead of its transaction inserts.
-- **The generic idempotency treatment** (ADR-023 decision 4). Registration-declared (`idempotencyColumn`), never
-  per-applier code: when a row carries a value there, `insert` conflict-targets that column, a duplicate no-ops
-  with `applied: false`, and the engine resolves which row survived (one generic `SELECT id … WHERE <column> = ?`)
-  so `readBack` reads the persisted row. Distinct from the id-scoped `onConflictDoNothing({ target: table.id })`
-  a key-less insert falls back to (a structural same-id guard, not idempotency). The key rides on entity models
-  as an ordinary column today; its honest home is the `Persistable` envelope
-  ([#134](https://github.com/RafaelFCarneiro/fintrack/issues/134)).
+- **The generic idempotency treatment** (ADR-023 decision 4, key placement per ADR-029 Phase 2). The key rides the
+  `insert` `Persistable`'s own optional `idempotencyKey` field — engine metadata on the write envelope, never a
+  field of the domain model (`TransactionSchema` doesn't carry it; only the wire/in create input and the wire/out
+  read view do). Registration-declared (`idempotencyColumn`), never per-applier code: `idempotencyColumn` now
+  names the physical column the applier **writes** the envelope's key into, rather than a column it reads the
+  key off of. When an insert carries a key, `versionedTableApplier` merges it onto the row under that column
+  name before inserting, conflict-targets the column, a duplicate no-ops with `applied: false`, and the engine
+  resolves which row survived (one generic `SELECT id … WHERE <column> = ?`) so `readBack` reads the persisted
+  row. Distinct from the id-scoped `onConflictDoNothing({ target: table.id })` a key-less insert falls back to (a
+  structural same-id guard, not idempotency). `logic/persistence.ts`'s `insert` builder and every entity flow
+  that mints one (`add_account_expense`/`add_account_income`/`add_card_purchase`/`create_transfer`, `pay_bill`'s
+  bill-payment transfer, `apply_due_recurring`'s per-occurrence inserts, and the bulk-import lines that reuse
+  those same single-line flows) set `idempotencyKey` on the `Persistable` itself, alongside `model`, never inside
+  it. Read-first-dedup entities (dashboards, settings) carry no key, same as before.
 - **The `readBack` deviation** (ADR-023 decision 4). An entity may register a post-write projection —
   `transactions` reads the display-joined view via `fetchTx` — landing on `PersistOutcome.read`. This is a
   projection read executed **inside the engine**, **capped at one hook**, and is *not* sanctioned by FC/IS

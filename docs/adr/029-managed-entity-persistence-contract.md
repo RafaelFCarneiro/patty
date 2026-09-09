@@ -74,11 +74,13 @@ The caller-supplied idempotency key stops being a business-model field and becom
 | { op: 'insert'; entity: Tag; model: Model; idempotencyKey?: string }
 ```
 
-- `TransactionSchema`/`CreateTransactionSchema` **drop** `idempotencyKey` as a business field; the flows that
-  build the insert (single add + bulk import) set it on the envelope instead (the same derived
-  `date+description+amount` key, currency-decimals-aware per #176 — unchanged).
-- The engine dedups on the envelope key; the **adapter** (`versionedTableApplier`) still maps it to the
-  physical column via registration (`idempotencyColumn`) — that mapping is an adapter concern, correct to keep.
+- `TransactionSchema` (the domain entity) **drops** `idempotencyKey` as a business field; `CreateTransactionSchema`
+  (wire/in) and `TransactionViewSchema` (wire/out) keep it unchanged — a boundary input a caller/derivation still
+  supplies, not a domain field. The flows that build the insert (single add + bulk import) set it on the envelope
+  instead (the same derived `date+description+amount` key, currency-decimals-aware per #176 — unchanged).
+- The engine dedups on the envelope key; the **applier** (`versionedTableApplier`) now **writes** it to the
+  physical column via registration (`idempotencyColumn` names the column, not a model field to read) — that
+  mapping is an adapter concern, correct to keep.
 - **Idempotency stays OPTIONAL and distinct.** Entities that decide insert-vs-update by a **core read-first**
   (dashboards, settings) carry no key and are untouched. This is the guardrail on the ground rule: id, version,
   and idempotency remain three separate, independently-present fields — one *declaration discipline*, never one
@@ -117,11 +119,14 @@ own ADR when it lands. This ADR only ensures nothing in the core reaches into th
 ## Consequences
 
 - **`models/`:** every `XxxEntitySchema` becomes `withPersistenceMeta(XxxSchema)`; the duplicated `version`
-  declaration is gone. `TransactionSchema`/`CreateTransactionSchema` lose `idempotencyKey` (it moves to the
-  envelope); `StatementLine`/bulk plumbing set it on the insert `Persistable`.
+  declaration is gone. `TransactionSchema` (the domain entity) loses `idempotencyKey` — it moves to the envelope;
+  `CreateTransactionSchema` (wire/in) and `TransactionViewSchema` (wire/out) are unaffected, since a caller still
+  supplies/derives the key and the read view still reflects the stored column. `StatementLine`/bulk plumbing set
+  it on the insert `Persistable`.
 - **`Persistable`:** the `insert` variant gains optional `idempotencyKey`; `logic/persistence.ts`'s `insert`
-  builder accepts it. `effects.ts`/`versionedTableApplier` read the key from the envelope (adapter still maps to
-  the physical column). Behavior-preserving — same dedup outcome, same `created: false` on duplicate.
+  builder accepts it. `effects.ts`/`versionedTableApplier` write the key from the envelope onto the registered
+  column (adapter no longer reads it off the model). Behavior-preserving — same dedup outcome, same
+  `created: false` on duplicate.
 - **Invariants preserved:** version stays off wire/out; id/version/idempotency stay three distinct concepts;
   read-first-dedup entities are untouched.
 - **Core stays Drizzle-free** — a prerequisite for the future extraction; a Drizzle import creeping into the
@@ -137,10 +142,12 @@ own ADR when it lands. This ADR only ensures nothing in the core reaches into th
    `XxxEntitySchema`/`Raw*ViewSchema` version-extend to use it. Purely behavior-preserving (the emitted schemas
    are identical); the win is one declaration home. Existing tests are the proof.
 2. **`refactor/idempotency-on-envelope`** (realizes #134) — add optional `idempotencyKey` to the `insert`
-   `Persistable` + `logic/persistence.ts`'s `insert`; move the key off `TransactionSchema`/`CreateTransactionSchema`
-   and set it on the envelope in the single-add + bulk-import flows; `effects.ts`/`versionedTableApplier` read it
-   from the envelope, registration `idempotencyColumn` maps envelope→column. Behavior-preserving dedup; tests for
-   duplicate-still-deduped + read-first entities unaffected. Close #134.
+   `Persistable` + `logic/persistence.ts`'s `insert`; move the key off `TransactionSchema` (the domain entity) —
+   `CreateTransactionSchema` (wire/in) and `TransactionViewSchema` (wire/out) keep it unchanged, since a caller
+   still supplies/derives it and the read view still reflects the stored column — and set it on the envelope in
+   the single-add + bulk-import flows; `effects.ts`/`versionedTableApplier` write it from the envelope onto the
+   registered column, `idempotencyColumn` naming that column rather than a model field to read. Behavior-preserving
+   dedup; tests for duplicate-still-deduped + read-first entities unaffected. Close #134.
 3. **(Future, separate ADR)** — extract the DB-agnostic core into a package; add a Postgres `EntityApplier`
    adapter. Not in this ADR beyond keeping the core driver-free.
 
@@ -148,8 +155,8 @@ own ADR when it lands. This ADR only ensures nothing in the core reaches into th
 
 1. [x] Review/accept this ADR (accepted 2026-09-08; contract lives in `models/persistable.ts`).
 2. [x] Phase 1 — `PersistenceMeta`/`withPersistenceMeta`; convert the per-entity version-extends.
-3. [ ] Phase 2 — idempotency key onto the `insert` envelope; drop it from the transaction business model; close #134.
-4. [ ] Record in `docs/architecture.md` (ADR index + the version/idempotency invariant wording) and
+3. [x] Phase 2 — idempotency key onto the `insert` envelope; drop it from the transaction business model; close #134.
+4. [x] Record in `docs/architecture.md` (ADR index + the version/idempotency invariant wording) and
    `docs/write-path.md`; update the `CLAUDE.md` idempotency data-convention line.
 5. [ ] (Deferred, own ADR) extract the core as a lib + Postgres adapter.
 

@@ -168,8 +168,10 @@ const insertOpenBill = async (
 };
 
 /** Inserts a transaction row directly (raw drizzle) — test fixture setup only. No tags in any
- *  fixture using this, so unlike the real applier this never attaches any. */
-const insertTransaction = async (entity: Transaction): Promise<void> => {
+ *  fixture using this, so unlike the real applier this never attaches any. `idempotencyKey` is a
+ *  separate argument (ADR-029 Phase 2): it's engine metadata on the write envelope, never a field
+ *  of the `Transaction` domain model `modelToDb` adapts. */
+const insertTransaction = async (entity: Transaction, idempotencyKey: string): Promise<void> => {
   const { props, refs } = transactionAdapters.modelToDb(entity);
   await db.insert(transactions).values({
     id: props.id,
@@ -180,7 +182,7 @@ const insertTransaction = async (entity: Transaction): Promise<void> => {
     date: props.date,
     currency: props.currency,
     source: props.source,
-    idempotencyKey: props.idempotencyKey,
+    idempotencyKey,
     classificationMethod: props.classificationMethod,
     confidence: props.confidence,
     rawInput: props.rawInput ?? null,
@@ -653,9 +655,11 @@ describe('engine idempotency treatment — declared by registration, generic ove
     [KEYED_TAG]: versionedTableApplier(tags, { idempotencyColumn: 'name', readBack: async (_tx, id) => id }),
   };
 
-  const insertKeyed = (model: { id: string; name: string; version: number }) => () =>
+  // The envelope's idempotencyKey (ADR-029 Phase 2) drives dedup — `model.name` is just an ordinary
+  // row field here, no longer read off the model by the engine.
+  const insertKeyed = (model: { id: string; name: string; version: number }, idempotencyKey = model.name) => () =>
     okAsync({
-      persist: [{ op: PersistOp.enum.insert, entity: KEYED_TAG, model }] as Persistable[],
+      persist: [{ op: PersistOp.enum.insert, entity: KEYED_TAG, model, idempotencyKey }] as Persistable[],
       response: (outcomes: PersistOutcome[]) => outcomes[0],
     });
 
@@ -697,6 +701,8 @@ describe('engine idempotency treatment — declared by registration, generic ove
 
 // Row-shaped input (as `adapters/transactions.ts`'s `entityToDb` produces it) — the applier
 // trusts it as-is, same reasoning as `newAccount` above. Module-scope: shared by every suite below.
+// No `idempotencyKey` field: it's engine metadata on the insert `Persistable` envelope (ADR-029
+// Phase 2), never part of the row-shaped model — `insertRow` below carries it separately.
 const newTransactionRow = (overrides: Partial<TransactionRowEntity> = {}): TransactionRowEntity => ({
   id: randomUUID(),
   description: 'Test transaction',
@@ -706,7 +712,6 @@ const newTransactionRow = (overrides: Partial<TransactionRowEntity> = {}): Trans
   date: '2026-06-01',
   currency: CurrencyCode.enum.BRL,
   source: TransactionSource.enum.mcp,
-  idempotencyKey: `idem-${randomUUID()}`,
   classificationMethod: ClassificationMethod.enum.none,
   confidence: 0,
   rawInput: null,
@@ -722,9 +727,9 @@ const newTransactionRow = (overrides: Partial<TransactionRowEntity> = {}): Trans
   ...overrides,
 });
 
-const insertRow = (model: TransactionRowEntity) => () =>
+const insertRow = (model: TransactionRowEntity, idempotencyKey: string = `idem-${randomUUID()}`) => () =>
   okAsync({
-    persist: [{ op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model }] as Persistable[],
+    persist: [{ op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model, idempotencyKey }] as Persistable[],
     response: (outcomes: PersistOutcome[]) => outcomes[0],
   });
 
@@ -743,13 +748,14 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
   });
 
   it('insert reports applied:false and reads back the EXISTING row on an idempotency-key duplicate', async () => {
+    const key = `idem-${randomUUID()}`;
     const original = newTransactionRow({ description: 'Original' });
-    await runEffects(db, transactionRegistry, insertRow(original));
+    await runEffects(db, transactionRegistry, insertRow(original, key));
 
     // Same idempotency key, different id and description — a replay with drifted content; the
     // existing (first-write-wins) row is what must come back, not this attempt's own values.
-    const replay = newTransactionRow({ idempotencyKey: original.idempotencyKey, description: 'Replay attempt' });
-    const result = await runEffects(db, transactionRegistry, insertRow(replay));
+    const replay = newTransactionRow({ description: 'Replay attempt' });
+    const result = await runEffects(db, transactionRegistry, insertRow(replay, key));
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
@@ -1042,10 +1048,10 @@ describe('transactionApplier + transactionTagApplier — duplicate-insert tag se
 
   // The real flow shape: the tag set addresses the flow's own minted `entity.id` and trails the
   // transaction insert in the batch.
-  const insertWithTags = (row: TransactionRowEntity, tagIds: string[]) => () =>
+  const insertWithTags = (row: TransactionRowEntity, tagIds: string[], idempotencyKey: string) => () =>
     okAsync({
       persist: [
-        { op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model: row },
+        { op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model: row, idempotencyKey },
         {
           op: PersistOp.enum.insert,
           entity: TRANSACTION_TAG_ENTITY_TAG,
@@ -1056,20 +1062,21 @@ describe('transactionApplier + transactionTagApplier — duplicate-insert tag se
     });
 
   it("a duplicate idempotency-key replay leaves the surviving row's tags untouched", async () => {
+    const key = `idem-${randomUUID()}`;
     const firstTagName = `Tag ${randomUUID()}`;
     const firstTagId = await seedTag(firstTagName);
     const secondTagId = await seedTag(`Tag ${randomUUID()}`);
 
     const original = newTransactionRow({ description: 'Original' });
-    const firstResult = await runEffects(db, combinedRegistry, insertWithTags(original, [firstTagId]));
+    const firstResult = await runEffects(db, combinedRegistry, insertWithTags(original, [firstTagId], key));
     expect(firstResult.isOk()).toBe(true);
     expect(await readLinkedTagNames(original.id)).toEqual([firstTagName]);
 
     // Same idempotency key, but a fresh id — exactly what a real replay sends. The transaction
     // insert no-ops, the replay's minted id is never inserted, and the tag set addressing it
     // no-ops on the FK miss: first-write-wins, same as the rest of the row.
-    const replay = newTransactionRow({ idempotencyKey: original.idempotencyKey, description: 'Replay attempt' });
-    const replayResult = await runEffects(db, combinedRegistry, insertWithTags(replay, [secondTagId]));
+    const replay = newTransactionRow({ description: 'Replay attempt' });
+    const replayResult = await runEffects(db, combinedRegistry, insertWithTags(replay, [secondTagId], key));
 
     expect(replayResult.isOk()).toBe(true);
     expect(await readLinkedTagNames(original.id)).toEqual([firstTagName]);
@@ -1269,32 +1276,12 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
     const categoryId = await seedCategory();
     const merchantKey = `merchant-${randomUUID()}`;
     await seedMerchant(merchantKey);
-    const row: TransactionRowEntity = {
-      id: randomUUID(),
-      description: 'Coffee',
-      amount: 5,
-      type: TransactionType.enum.expense,
-      status: TransactionStatus.enum.effective,
-      date: '2026-06-01',
-      currency: CurrencyCode.enum.BRL,
-      source: TransactionSource.enum.mcp,
-      idempotencyKey: `idem-${randomUUID()}`,
-      classificationMethod: ClassificationMethod.enum.none,
-      confidence: 0,
-      rawInput: null,
-      note: null,
-      fromAccountId: null,
-      toAccountId: null,
-      creditCardId: null,
-      billId: null,
-      categoryId: null,
-      subcategoryId: null,
-      merchantKey,
-      version: 0,
-    };
+    const row = newTransactionRow({ description: 'Coffee', amount: 5, merchantKey });
     await runEffects(db, merchantRegistry, () =>
       okAsync({
-        persist: [{ op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model: row }] as Persistable[],
+        persist: [
+          { op: PersistOp.enum.insert, entity: TRANSACTION_ENTITY_TAG, model: row, idempotencyKey: `idem-${randomUUID()}` },
+        ] as Persistable[],
         response: null,
       }),
     );
@@ -1520,19 +1507,21 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
 
     const bill = await insertOpenBill(cardId, { month: 6, year: 2026, closeDate: '2026-06-28', dueDate: '2026-07-05' });
 
-    await insertTransaction({
-      id: randomUUID(),
-      description: 'Purchase',
-      amount: 100,
-      type: TransactionType.enum.expense,
-      status: TransactionStatus.enum.effective,
-      date: '2026-06-01',
-      currency: CurrencyCode.enum.BRL,
-      source: TransactionSource.enum.mcp,
-      idempotencyKey: `idem-${randomUUID()}`,
-      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-      refs: { accountId: cardAccountId, cardId, billId: bill.id },
-    });
+    await insertTransaction(
+      {
+        id: randomUUID(),
+        description: 'Purchase',
+        amount: 100,
+        type: TransactionType.enum.expense,
+        status: TransactionStatus.enum.effective,
+        date: '2026-06-01',
+        currency: CurrencyCode.enum.BRL,
+        source: TransactionSource.enum.mcp,
+        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+        refs: { accountId: cardAccountId, cardId, billId: bill.id },
+      },
+      `idem-${randomUUID()}`,
+    );
 
     const deps: Deps = {
       accounts: accountsR,
@@ -2196,19 +2185,21 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       dueDate: '2026-06-05',
     });
     const purchaseId = randomUUID();
-    await insertTransaction({
-      id: purchaseId,
-      description: 'Purchase',
-      amount: 40,
-      type: TransactionType.enum.expense,
-      status: TransactionStatus.enum.effective,
-      date: '2026-05-10',
-      currency: CurrencyCode.enum.BRL,
-      source: TransactionSource.enum.mcp,
-      idempotencyKey: `idem-${randomUUID()}`,
-      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-      refs: { accountId: cardAccountId, cardId, billId: openBill.id },
-    });
+    await insertTransaction(
+      {
+        id: purchaseId,
+        description: 'Purchase',
+        amount: 40,
+        type: TransactionType.enum.expense,
+        status: TransactionStatus.enum.effective,
+        date: '2026-05-10',
+        currency: CurrencyCode.enum.BRL,
+        source: TransactionSource.enum.mcp,
+        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+        refs: { accountId: cardAccountId, cardId, billId: openBill.id },
+      },
+      `idem-${randomUUID()}`,
+    );
     const tagId = randomUUID();
     await db.insert(tags).values({ id: tagId, name: `Tag ${tagId}`, version: 0 });
     await db.insert(transactionTags).values({ transactionId: purchaseId, tagId });
@@ -2227,33 +2218,37 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       version: 0,
     });
     const paidPurchaseId = randomUUID();
-    await insertTransaction({
-      id: paidPurchaseId,
-      description: 'Old purchase',
-      amount: 60,
-      type: TransactionType.enum.expense,
-      status: TransactionStatus.enum.effective,
-      date: '2026-04-10',
-      currency: CurrencyCode.enum.BRL,
-      source: TransactionSource.enum.mcp,
-      idempotencyKey: `idem-${randomUUID()}`,
-      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-      refs: { accountId: cardAccountId, cardId, billId: paidBillId },
-    });
+    await insertTransaction(
+      {
+        id: paidPurchaseId,
+        description: 'Old purchase',
+        amount: 60,
+        type: TransactionType.enum.expense,
+        status: TransactionStatus.enum.effective,
+        date: '2026-04-10',
+        currency: CurrencyCode.enum.BRL,
+        source: TransactionSource.enum.mcp,
+        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+        refs: { accountId: cardAccountId, cardId, billId: paidBillId },
+      },
+      `idem-${randomUUID()}`,
+    );
     const transferId = randomUUID();
-    await insertTransaction({
-      id: transferId,
-      description: 'Bill payment',
-      amount: 60,
-      type: TransactionType.enum.transfer,
-      status: TransactionStatus.enum.effective,
-      date: '2026-05-01',
-      currency: CurrencyCode.enum.BRL,
-      source: TransactionSource.enum.mcp,
-      idempotencyKey: `idem-${randomUUID()}`,
-      classification: { method: ClassificationMethod.enum.none, confidence: 0 },
-      refs: { accountId: payerId, toAccountId: cardAccountId, billId: paidBillId },
-    });
+    await insertTransaction(
+      {
+        id: transferId,
+        description: 'Bill payment',
+        amount: 60,
+        type: TransactionType.enum.transfer,
+        status: TransactionStatus.enum.effective,
+        date: '2026-05-01',
+        currency: CurrencyCode.enum.BRL,
+        source: TransactionSource.enum.mcp,
+        classification: { method: ClassificationMethod.enum.none, confidence: 0 },
+        refs: { accountId: payerId, toAccountId: cardAccountId, billId: paidBillId },
+      },
+      `idem-${randomUUID()}`,
+    );
     await db
       .update(bills)
       .set({ paymentTransactionId: transferId })

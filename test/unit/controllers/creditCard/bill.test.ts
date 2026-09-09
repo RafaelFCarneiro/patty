@@ -109,18 +109,17 @@ describe('payBill — the write is returned as data, not performed (ADR-021 phas
     expect(result.isOk()).toBe(true);
     const { persist, response } = result._unsafeUnwrap();
     expect(persist).toHaveLength(2);
-    expect(persist[0]).toMatchObject({ op: PersistOp.enum.insert, entity: 'transaction' });
+    expect(persist[0]).toMatchObject({
+      op: PersistOp.enum.insert,
+      entity: 'transaction',
+      idempotencyKey: 'billpay-bill-1',
+    });
     const txModel = (
       persist[0] as {
-        model: {
-          amount: number;
-          refs: { accountId?: string; toAccountId?: string; billId?: string };
-          idempotencyKey: string;
-        };
+        model: { amount: number; refs: { accountId?: string; toAccountId?: string; billId?: string } };
       }
     ).model;
     expect(txModel.amount).toBe(100);
-    expect(txModel.idempotencyKey).toBe('billpay-bill-1');
     expect(txModel.refs).toMatchObject({
       accountId: 'acc-checking',
       toAccountId: 'acc-card-internal',

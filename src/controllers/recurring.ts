@@ -105,7 +105,6 @@ const buildOccurrenceEntity = (
   date: due,
   currency: rule.currency,
   source: TransactionSource.enum.mcp,
-  idempotencyKey: recurringIdempotencyKey(rule.id, due),
   classification: { method: ClassificationMethod.enum.user, confidence: 1 },
   refs: { accountId: rule.accountId, categoryId: rule.categoryId, merchantKey: rule.merchantKey },
 });
@@ -123,6 +122,7 @@ const planRule = (deps: Deps, rule: RecurringRuleEntity, through: string, today:
       persistable: persistence.insert({
         entity: TRANSACTION_ENTITY_TAG,
         model: buildOccurrenceEntity(deps, rule, due, today),
+        idempotencyKey: recurringIdempotencyKey(rule.id, due),
       }),
     });
     due = nextDue(due, rule.period);
