@@ -286,11 +286,11 @@ describe('applyDueRecurring — functional core (ADR-021 phase 3b)', () => {
     expect(insertTx).toMatchObject({
       op: PersistOp.enum.insert,
       entity: TRANSACTION_ENTITY_TAG,
+      idempotencyKey: 'rec-rec-1-2026-05-01',
       model: {
         description: 'Rent',
         amount: 1000,
         date: '2026-05-01',
-        idempotencyKey: 'rec-rec-1-2026-05-01',
         refs: { accountId: 'acc-1', categoryId: 'cat-1', merchantKey: 'landlord' },
       },
     });

@@ -43,7 +43,8 @@ export const TransactionRowSchema = z.object({
 });
 
 // Flat node properties handed to the INSERT. `type` is derived from the Drizzle schema
-// so the repo never casts the string into the column's enum union.
+// so the repo never casts the string into the column's enum union. `idempotencyKey` is
+// deliberately absent — it's written onto the row by the applier, not sourced from the model.
 export type TransactionDbProps = {
   id: string;
   description: string;
@@ -53,7 +54,6 @@ export type TransactionDbProps = {
   date: string;
   currency: string;
   source: TransactionRow['source'];
-  idempotencyKey: string;
   classificationMethod: TransactionRow['classificationMethod'];
   confidence: number;
   rawInput: string | null;

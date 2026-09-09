@@ -2,9 +2,27 @@ import { describe, expect, it } from 'vitest';
 import {
   ConfirmTransactionSchema,
   CreateTransactionSchema,
+  TransactionSchema,
+  TransactionViewSchema,
   transactionErrors,
   UpdateTransactionSchema,
 } from '../../../src/models/transaction.js';
+
+describe('TransactionSchema — idempotencyKey lives on the envelope, not the domain entity (ADR-029 phase 2)', () => {
+  it('TransactionSchema (the domain entity) no longer carries idempotencyKey', () => {
+    expect(Object.keys(TransactionSchema.shape)).not.toContain('idempotencyKey');
+  });
+
+  it('CreateTransactionSchema (wire/in) still REQUIRES idempotencyKey — callers/derivation still supply it', () => {
+    expect(Object.keys(CreateTransactionSchema.shape)).toContain('idempotencyKey');
+    // Presence alone would still pass if the field silently became optional — pin the requiredness.
+    expect(CreateTransactionSchema.shape.idempotencyKey.isOptional()).toBe(false);
+  });
+
+  it('TransactionViewSchema (wire/out) still carries idempotencyKey — reflects the stored column, out of scope', () => {
+    expect(Object.keys(TransactionViewSchema.shape)).toContain('idempotencyKey');
+  });
+});
 
 // ADR-019 step 1: the transaction core's movement schemas are minimal — they carry only shared
 // ledger vocabulary and name no sibling context's field (account/card/billMonth/billYear).

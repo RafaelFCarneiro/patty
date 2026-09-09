@@ -152,7 +152,6 @@ const planCardPurchase = (
       date,
       currency: resolveCurrency(card, input),
       source,
-      idempotencyKey: input.idempotencyKey,
       classification,
       rawInput: input.rawInput,
       note: input.note,
@@ -186,6 +185,7 @@ export const addCardPurchase = (
           persistence.insert({
             entity: TRANSACTION_ENTITY_TAG,
             model: { ...entity, refs: { ...entity.refs, billId } },
+            idempotencyKey: input.idempotencyKey,
           }),
         ],
         entity.refs.merchantKey,
@@ -305,7 +305,6 @@ export const updateCardTransaction = (
       date: input.date ?? existing.date,
       currency: existing.currency,
       source: existing.source,
-      idempotencyKey: existing.idempotencyKey,
       classification: isUserCorrection
         ? { method: ClassificationMethod.enum.user, confidence: 1 }
         : existing.classification,

@@ -228,8 +228,6 @@ correlation moved to controllers (repos strictly per-aggregate — ADR-028).
 - **Future-dated confirm via create/import** — `confirm_transaction` / `pay_bill` enforce "an effective
   transaction's date is never in the future"; a create/import tool that passes `status: effective` with a future
   date is not yet guarded (architecture.md invariant note).
-- **Idempotency key → `Persistable` envelope** (#134) — the key rides on entity models as an ordinary column
-  today; its honest home is the persistence envelope.
 
 ### Phase 4 — Surfaces & hardening (next)
 The **web frontend is substantially delivered by ADR-027** (the `/ui` app shell: a shared shell hosting

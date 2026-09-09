@@ -79,7 +79,6 @@ export const modelToDb = (entity: Transaction): { props: TransactionDbProps; ref
     date: entity.date,
     currency: entity.currency,
     source: entity.source,
-    idempotencyKey: entity.idempotencyKey,
     classificationMethod: entity.classification.method,
     confidence: entity.classification.confidence,
     rawInput: entity.rawInput ?? null,

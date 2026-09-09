@@ -39,7 +39,7 @@ type ApplierOutcome = Omit<PersistOutcome, 'entity'>;
  * retry/conflict decision (rule 4).
  */
 export type EntityApplier = {
-  insert: (tx: Tx, model: unknown) => Promise<ApplierOutcome>;
+  insert: (tx: Tx, model: unknown, idempotencyKey?: string) => Promise<ApplierOutcome>;
   update: (tx: Tx, model: unknown) => Promise<ApplierOutcome>;
   delete: (tx: Tx, id: string, version: number) => Promise<ApplierOutcome>;
 };
@@ -63,12 +63,13 @@ type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteCol
 export type ReadBack = (tx: Tx, id: string) => Promise<unknown>;
 
 type VersionedTableConfig<T extends VersionedTable> = {
-  /** The row field (drizzle column property name) carrying the entity's caller-supplied
-   *  idempotency key, opting it into the engine's generic idempotency treatment: when a row
-   *  carries a value here, `insert` conflict-targets this column — the dedup contract "a row with
-   *  this key already exists" makes the existing row the outcome. Distinct from, and never merged
-   *  with, the id-scoped conflict target: that one is a structural retry guard, not idempotency
-   *  (ADR-023). */
+  /** The row field (drizzle column property name) the applier WRITES the `Persistable`'s own
+   *  `idempotencyKey` into, opting the entity into the engine's generic idempotency treatment
+   *  (ADR-029 Phase 2: the key rides the insert envelope, not the model) — when an insert carries
+   *  a key, it's written to this column and `insert` conflict-targets it — the dedup contract "a
+   *  row with this key already exists" makes the existing row the outcome. Distinct from, and
+   *  never merged with, the id-scoped conflict target: that one is a structural retry guard, not
+   *  idempotency (ADR-023). */
   idempotencyColumn?: Extract<keyof T, string>;
   readBack?: ReadBack;
 };
@@ -81,20 +82,15 @@ type VersionedTableConfig<T extends VersionedTable> = {
  * swallowed as a same-id retry; and the next `version` is computed here in application code from
  * the row's own field, never a SQL-side `version + 1` the database evaluates on its own.
  */
+export const missingIdempotencyKeyMessage = (idempotencyColumn: string): string =>
+  `runEffects: entity registered with idempotencyColumn "${idempotencyColumn}" but the insert carries no idempotencyKey`;
+
 export const versionedTableApplier = <T extends VersionedTable>(
   table: T,
   config: VersionedTableConfig<T> = {},
 ): EntityApplier => {
   const { idempotencyColumn, readBack } = config;
   const keyColumn = idempotencyColumn ? (table[idempotencyColumn] as AnySQLiteColumn) : undefined;
-
-  const keyOf = (row: Record<string, unknown>): string | undefined => {
-    if (!idempotencyColumn) return undefined;
-    const value = row[idempotencyColumn];
-    // A nullish key means "no idempotency for this row" — never a conflict target (SQL NULLs
-    // don't conflict, which would silently disable the id guard too).
-    return typeof value === 'string' ? value : undefined;
-  };
 
   // The engine's one idempotency read: which row already holds the key a just-conflicted insert
   // carried. Runs inside the same transaction as the no-op'd insert, so absence is an invariant
@@ -106,20 +102,27 @@ export const versionedTableApplier = <T extends VersionedTable>(
   };
 
   return {
-    insert: async (tx, model) => {
+    insert: async (tx, model, idempotencyKey) => {
+      // Reject a missing key here, loudly, rather than let it reach the database as an opaque
+      // NOT NULL constraint violation.
+      if (idempotencyColumn && idempotencyKey === undefined) {
+        throw new Error(missingIdempotencyKeyMessage(idempotencyColumn));
+      }
       const row = model as Record<string, unknown> & { id: string };
-      const key = keyOf(row);
+      const rowToInsert = idempotencyColumn ? { ...row, [idempotencyColumn]: idempotencyKey } : row;
       const result = await tx
         .insert(table)
-        .values(row as never)
-        .onConflictDoNothing({ target: key !== undefined && keyColumn ? keyColumn : table.id });
+        .values(rowToInsert as never)
+        .onConflictDoNothing({ target: idempotencyKey !== undefined && keyColumn ? keyColumn : table.id });
       const applied = (result.rowsAffected ?? 0) > 0;
       if (!readBack) return { applied };
 
       // On an idempotent duplicate the persisted row is the one already holding the key — the
       // minted `row.id` was never inserted, so the projection must read the survivor instead.
       const persistedId =
-        applied || key === undefined || !keyColumn ? row.id : await findSurvivingRowId(tx, keyColumn, key);
+        applied || idempotencyKey === undefined || !keyColumn
+          ? row.id
+          : await findSurvivingRowId(tx, keyColumn, idempotencyKey);
       return { applied, read: await readBack(tx, persistedId) };
     },
 
@@ -168,7 +171,7 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
       case PersistOp.enum.insert:
         // An idempotent-duplicate no-op reports `applied: false` — inserts never retry here; the
         // duplicate treatment itself is the engine's, declared per entity (`idempotencyColumn`).
-        return applier.insert(tx, p.model);
+        return applier.insert(tx, p.model, p.idempotencyKey);
       case PersistOp.enum.update: {
         const updateOutcome = await applier.update(tx, p.model);
         if (!updateOutcome.applied) throw new VersionConflict();

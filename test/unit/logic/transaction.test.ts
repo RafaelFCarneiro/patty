@@ -308,7 +308,6 @@ describe('entityFromExisting — RawTransactionView → TransactionEntity (Desig
       date: tx.date,
       currency: tx.currency,
       source: tx.source,
-      idempotencyKey: tx.idempotencyKey,
       classification: tx.classification,
       rawInput: tx.rawInput,
       note: tx.note,
@@ -324,10 +323,11 @@ describe('entityFromExisting — RawTransactionView → TransactionEntity (Desig
     });
   });
 
-  it('drops version, tags, and localized-label/name fields — not part of TransactionEntity', () => {
+  it('drops version, tags, idempotencyKey, and localized-label/name fields — not part of TransactionEntity', () => {
     const entity = entityFromExisting(baseTx);
     expect(entity).not.toHaveProperty('version');
     expect(entity).not.toHaveProperty('tags');
+    expect(entity).not.toHaveProperty('idempotencyKey');
   });
 });
 

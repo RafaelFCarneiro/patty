@@ -62,13 +62,14 @@ export const createTransfer = (
       date,
       currency: from.currency,
       source,
-      idempotencyKey: input.idempotencyKey,
       classification: { method: ClassificationMethod.enum.none, confidence: 0 },
       refs: { accountId: from.id, toAccountId: to.id },
     };
 
     const locale = await deps.locale();
-    const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity })];
+    const persist = [
+      persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity, idempotencyKey: input.idempotencyKey }),
+    ];
     // Transfers are never classified — explicit `undefined` (purry needs the arity to match
     // `buildUpsertResult`'s 2-arg curry: `classification`, `locale`).
     const response = buildUpsertResult(undefined, locale);

@@ -118,9 +118,12 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
     expect(outcome.persist).toHaveLength(1);
     const persisted = outcome.persist[0] as {
       op: string;
+      idempotencyKey?: string;
       model: { type: string; amount: number; currency: string; refs: { accountId: string; toAccountId: string } };
     };
     expect(persisted.op).toBe(PersistOp.enum.insert);
+    expect(persisted.idempotencyKey).toBe('transfer-1');
+    expect(persisted.model).not.toHaveProperty('idempotencyKey');
     expect(persisted.model).toMatchObject({
       type: 'transfer',
       amount: 25,

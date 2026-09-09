@@ -13,7 +13,11 @@ import {
  * `{ op, entity, model }` literal at each call site. Generic over the entity's own tag + model, so
  * this file never needs a new case as more entities convert. Pure (no I/O).
  */
-export const insert = <Tag extends string, Model>(fields: { entity: Tag; model: Model }): Persistable<Tag, Model> => ({
+export const insert = <Tag extends string, Model>(fields: {
+  entity: Tag;
+  model: Model;
+  idempotencyKey?: string;
+}): Persistable<Tag, Model> => ({
   op: PersistOp.enum.insert,
   ...fields,
 });
