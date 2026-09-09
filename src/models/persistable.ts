@@ -11,6 +11,19 @@ export type PersistOp = z.infer<typeof PersistOp>;
  *  never `diplomat/db`. */
 export const INITIAL_VERSION = 0;
 
+/** The optimistic-concurrency version token, declared once instead of per entity. Applied to a
+ *  pure domain model via `withPersistenceMeta` — never baked into the model itself, so
+ *  `Create*`/wire/out/tool-input shapes stay derived from the unmodified model with no `.omit`s. */
+export const PersistenceMeta = z.object({
+  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
+});
+
+/** `XxxSchema` → `XxxEntitySchema`: the pure model plus `PersistenceMeta`'s `version` field. The
+ *  one place every entity's persistence shape is built, so the duplicated version declaration
+ *  collapses to this single home. */
+export const withPersistenceMeta = <T extends z.ZodRawShape>(model: z.ZodObject<T>) =>
+  model.extend(PersistenceMeta.shape);
+
 /**
  * A write intent the functional core hands to the imperative shell (docs/functional-core-imperative-shell.md).
  * Generic over the entity's own tag + model, never a closed union enumerating every entity — each entity

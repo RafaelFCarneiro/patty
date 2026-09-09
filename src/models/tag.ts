@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Id } from './id.js';
+import { withPersistenceMeta } from './persistable.js';
 import type { DuplicateName } from './error.js';
 
 export const TagSchema = z.object({
@@ -12,9 +13,7 @@ export type Tag = z.infer<typeof TagSchema>;
 export const TAG_ENTITY_TAG = 'tag';
 
 // `Tag` plus the optimistic-concurrency `version` token. Never sent over the wire.
-export const TagEntitySchema = TagSchema.extend({
-  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
-});
+export const TagEntitySchema = withPersistenceMeta(TagSchema);
 export type TagEntity = z.infer<typeof TagEntitySchema>;
 
 export type TagError = DuplicateName<'tag'>;

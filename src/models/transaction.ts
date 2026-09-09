@@ -4,6 +4,7 @@ import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
 import { cursorSchema, PageRequestSchema, SortDirection } from './page.js';
+import { withPersistenceMeta } from './persistable.js';
 import type { CursorKey } from './page.js';
 import type { CategoryKind } from './category.js';
 import type { ValidationError } from './error.js';
@@ -149,10 +150,9 @@ export type TransactionView = z.infer<typeof TransactionViewSchema>;
  *  concurrency `version` token (ADR-021) an account-context update/delete reads before deciding
  *  its `Persistable`. Used only in the adapter→controller pipeline; stripped before serialization
  *  (`logic/transaction.ts`'s `addLocalizedLabels` drops both `*Names` and `version`). */
-export const RawTransactionViewSchema = TransactionViewSchema.extend({
+export const RawTransactionViewSchema = withPersistenceMeta(TransactionViewSchema).extend({
   categoryNames: LocalizedNamesSchema.optional(),
   subCategoryNames: LocalizedNamesSchema.optional(),
-  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
 });
 export type RawTransactionView = z.infer<typeof RawTransactionViewSchema>;
 

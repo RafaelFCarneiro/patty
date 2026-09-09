@@ -3,6 +3,7 @@ import { Id } from './id.js';
 import { ConvertedValueSchema } from './currencyRate.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
+import { withPersistenceMeta } from './persistable.js';
 import {
   CreateTransactionSchema,
   STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION,
@@ -46,9 +47,7 @@ export type Account = z.infer<typeof AccountSchema>;
 // model→row adaptation (`modelToDb`/`persistableToDb`) speak `AccountEntity` — the applier itself
 // doesn't: by the time a batch reaches `diplomat/db`, it's already been adapted to a plain row
 // (`versionedTableApplier` in `diplomat/db/effects.ts` is entity-agnostic).
-export const AccountEntitySchema = AccountSchema.extend({
-  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
-});
+export const AccountEntitySchema = withPersistenceMeta(AccountSchema);
 export type AccountEntity = z.infer<typeof AccountEntitySchema>;
 
 // The account aggregate owns its own entity tag — `models/persistable.ts` is generic over any

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CurrencyCode } from './money.js';
+import { withPersistenceMeta } from './persistable.js';
 import type { ValidationError } from './error.js';
 
 export const Locale = z.enum(['en', 'es', 'pt']);
@@ -11,16 +12,17 @@ export type LocaleSource = z.infer<typeof LocaleSource>;
 export const SETTINGS_ENTITY_TAG = 'settings';
 export const SETTINGS_SINGLETON_ID = 'singleton';
 
-export const SettingsEntitySchema = z.object({
-  id: z.literal(SETTINGS_SINGLETON_ID),
-  locale: Locale,
-  localeSource: LocaleSource,
-  // Explicit override; null means "derive from locale" (logic/locale.ts's resolveBaseCurrency,
-  // ADR-026 Phase 2) — unlike locale/localeSource, there is no separate explicit/inferred source
-  // to track, so a plain nullable column is enough.
-  baseCurrency: CurrencyCode.nullable(),
-  version: z.number().int().nonnegative().describe('Optimistic-concurrency token; internal, never on wire/out'),
-});
+export const SettingsEntitySchema = withPersistenceMeta(
+  z.object({
+    id: z.literal(SETTINGS_SINGLETON_ID),
+    locale: Locale,
+    localeSource: LocaleSource,
+    // Explicit override; null means "derive from locale" (logic/locale.ts's resolveBaseCurrency,
+    // ADR-026 Phase 2) — unlike locale/localeSource, there is no separate explicit/inferred source
+    // to track, so a plain nullable column is enough.
+    baseCurrency: CurrencyCode.nullable(),
+  }),
+);
 export type SettingsEntity = z.infer<typeof SettingsEntitySchema>;
 
 export type LabelMap<E extends string> = Record<E, Record<Locale, string>>;
