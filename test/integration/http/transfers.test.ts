@@ -168,4 +168,13 @@ describe('POST /api/transfers', () => {
     const res = await inject({ method: 'POST', url: '/api/transfers', payload: {} });
     expect(res.statusCode).toBe(422);
   });
+
+  it('rejects a legacy idempotencyKey field, rather than silently stripping it (422)', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/transfers',
+      payload: { from: 'A', to: 'B', amount: 10, idempotencyKey: 'legacy-key' },
+    });
+    expect(res.statusCode).toBe(422);
+  });
 });

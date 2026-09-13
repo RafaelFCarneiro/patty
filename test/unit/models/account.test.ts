@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AddAccountMovementSchema,
+  CreateTransferSchema,
   UpdateAccountTransactionSchema,
   accountErrors,
   CreateAccountSchema,
@@ -78,5 +79,17 @@ describe('AddAccountMovementSchema / UpdateAccountTransactionSchema — compose 
   it('UpdateAccountTransactionSchema structurally rejects billMonth/billYear (.strict())', () => {
     const result = UpdateAccountTransactionSchema.safeParse({ id: 'tx-1', billMonth: 6, billYear: 2026 });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('CreateTransferSchema — domain-owned key, caller supplies only a discriminator (ADR-029 phase 2b)', () => {
+  const base = { from: 'Checking', to: 'Savings', amount: 25 };
+
+  it('accepts a plain transfer with no idempotencyKey', () => {
+    expect(CreateTransferSchema.safeParse(base).success).toBe(true);
+  });
+
+  it('rejects a caller still sending the removed idempotencyKey, rather than silently stripping it (.strict())', () => {
+    expect(CreateTransferSchema.safeParse({ ...base, idempotencyKey: 'legacy-key' }).success).toBe(false);
   });
 });

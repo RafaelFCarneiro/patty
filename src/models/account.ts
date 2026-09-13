@@ -148,16 +148,22 @@ export type UpdateAccountTransaction = z.infer<typeof UpdateAccountTransactionSc
 
 /** Natural input for a transfer: account-context vocabulary — a transfer request is an
  *  account-aggregate concern even though it persists as a transaction row via the shared core
- *  primitive (account → core, the allowed direction). */
-export const CreateTransferSchema = z.object({
-  from: z.string().min(1).describe('Source account name'),
-  to: z.string().min(1).describe('Destination account name'),
-  amount: Money.describe('Transfer amount in full units'),
-  status: TransactionStatus.optional().describe('pending | effective; omit for date-aware default'),
-  date: IsoDate.optional().describe('YYYY-MM-DD; defaults to today'),
-  description: z.string().optional().describe('e.g. "aporte mensal"'),
-  discriminator: z.string().min(1).optional().describe(DISCRIMINATOR_DESCRIPTION),
-});
+ *  primitive (account → core, the allowed direction). `.strict()`: a caller still sending the
+ *  removed `idempotencyKey` (ADR-029 Phase 2b) should get a validation error, not have it silently
+ *  stripped by zod's default unknown-key behavior (REST boundary only, same as the sibling
+ *  account/card schemas — the MCP tool's inputSchema is a raw shape the MCP SDK reconstructs
+ *  non-strict internally). */
+export const CreateTransferSchema = z
+  .object({
+    from: z.string().min(1).describe('Source account name'),
+    to: z.string().min(1).describe('Destination account name'),
+    amount: Money.describe('Transfer amount in full units'),
+    status: TransactionStatus.optional().describe('pending | effective; omit for date-aware default'),
+    date: IsoDate.optional().describe('YYYY-MM-DD; defaults to today'),
+    description: z.string().optional().describe('e.g. "aporte mensal"'),
+    discriminator: z.string().min(1).optional().describe(DISCRIMINATOR_DESCRIPTION),
+  })
+  .strict();
 export type CreateTransfer = z.infer<typeof CreateTransferSchema>;
 
 /**
