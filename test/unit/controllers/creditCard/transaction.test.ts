@@ -118,6 +118,29 @@ describe('addCardPurchase — the write is returned as data, not performed (ADR-
     expect(txModel.refs.billId).toBe(billModel.id);
   });
 
+  it('derives a DIFFERENT key for two otherwise-identical purchases targeting different bill cycles', async () => {
+    const deps = makeDeps({
+      creditCards: { list: async () => [card()] } as unknown as Deps['creditCards'],
+      bills: { findByCycle: async () => null } as unknown as Deps['bills'],
+    });
+    const shared = { description: 'Purchase', amount: 30, type: 'expense' as const, card: 'Test Card' };
+
+    const juneResult = await addCardPurchase(
+      deps,
+      { ...shared, billMonth: 6, billYear: 2026 },
+      TransactionSource.enum.mcp,
+    );
+    const julyResult = await addCardPurchase(
+      deps,
+      { ...shared, billMonth: 7, billYear: 2026 },
+      TransactionSource.enum.mcp,
+    );
+
+    expect(idempotencyKeyOfPurchase(juneResult._unsafeUnwrap().persist)).not.toBe(
+      idempotencyKeyOfPurchase(julyResult._unsafeUnwrap().persist),
+    );
+  });
+
   it('on an existing open cycle, emits a version-guarded bill touch (not an insert)', async () => {
     const existingBill = rawBill();
     const deps = makeDeps({

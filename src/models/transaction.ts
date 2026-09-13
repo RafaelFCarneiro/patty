@@ -306,10 +306,13 @@ export type ResolvedSearchRefs = {
 /** Every field that distinguishes one intended transaction write from another (ADR-029 Phase 2b).
  *  `counterpartyId` (a transfer's destination account) is required for transfers — omitting it
  *  would let two transfers with the same source/date/description/amount but different
- *  destinations collide. */
+ *  destinations collide. `billPeriodKey` (a card purchase's resolved bill cycle, `month-year`) is
+ *  required for card purchases for the same reason — an explicit `billMonth`/`billYear` override
+ *  can target a different cycle than an otherwise-identical purchase. */
 export type IdempotencyIdentity = {
   fundingSourceId: string | undefined;
   counterpartyId?: string;
+  billPeriodKey?: string;
   type: TransactionType;
   currency: CurrencyCode;
   date: string;

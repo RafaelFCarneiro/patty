@@ -112,6 +112,12 @@ describe('deriveIdempotencyKey', () => {
     );
   });
 
+  it('differs across billPeriodKey — two card purchases targeting different cycles no longer collide', () => {
+    expect(deriveIdempotencyKey(identity({ billPeriodKey: '6-2026' }), 2)).not.toBe(
+      deriveIdempotencyKey(identity({ billPeriodKey: '7-2026' }), 2),
+    );
+  });
+
   it('rounds via roundToDecimals, not raw toFixed — a float rounding boundary hashes under the real amount', () => {
     // 1.005 isn't exact in binary float; toFixed(2) truncates it to "1.00", roundToDecimals to "1.01".
     const boundary = identity({ amount: 1.005 });

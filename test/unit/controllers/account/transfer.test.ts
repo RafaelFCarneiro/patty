@@ -149,6 +149,26 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
     expect(keyOf(toSavings)).not.toBe(keyOf(toInvestments));
   });
 
+  it('derives the SAME key across an account rename when description is omitted', async () => {
+    // The generated description ("Transferência: <from.name> → <to.name>") must never feed the
+    // key — it's built from display names, which can change independently of the accounts' ids.
+    const renamedFrom = { ...from, name: 'Checking Renamed' };
+    const shared = { amount: 25, date: '2026-06-01' };
+    const before = await createTransfer(
+      makeDeps({ accounts: { list: async () => [from, to] } as unknown as Deps['accounts'] }),
+      { ...shared, from: from.name, to: to.name },
+      TransactionSource.enum.mcp,
+    );
+    const after = await createTransfer(
+      makeDeps({ accounts: { list: async () => [renamedFrom, to] } as unknown as Deps['accounts'] }),
+      { ...shared, from: renamedFrom.name, to: to.name },
+      TransactionSource.enum.mcp,
+    );
+    const keyOf = (r: typeof before) => (r._unsafeUnwrap().persist[0] as { idempotencyKey: string }).idempotencyKey;
+
+    expect(keyOf(before)).toBe(keyOf(after));
+  });
+
   it('response() reports created:true when the shell actually inserted the transfer', async () => {
     const deps = makeDeps({ accounts: { list: async () => [from, to] } as unknown as Deps['accounts'] });
 

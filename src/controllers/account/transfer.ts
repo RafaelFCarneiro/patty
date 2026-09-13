@@ -74,7 +74,10 @@ export const createTransfer = (
         type: entity.type,
         currency: entity.currency,
         date: entity.date,
-        description: entity.description,
+        // input.description, not entity.description — the latter falls back to a display-name-
+        // based placeholder, which would change (and so silently miss a real duplicate) if either
+        // account was renamed between calls.
+        description: input.description ?? '',
         amount: entity.amount,
       },
       decimals,

@@ -171,6 +171,7 @@ const planCardPurchase = (
       {
         // The card, not refs.accountId — that's the internal liability account it wraps.
         fundingSourceId: card.id,
+        billPeriodKey: `${billPeriod.month}-${billPeriod.year}`,
         type: input.type,
         currency,
         date,

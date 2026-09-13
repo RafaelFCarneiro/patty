@@ -176,6 +176,7 @@ export const deriveIdempotencyKey = (
   const canonical = JSON.stringify([
     identity.fundingSourceId ?? null,
     identity.counterpartyId ?? null,
+    identity.billPeriodKey ?? null,
     identity.type,
     identity.currency,
     identity.date,

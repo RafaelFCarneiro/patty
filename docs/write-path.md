@@ -49,10 +49,13 @@ effect runner, appliers, outcomes, and the per-flow notes.
   key. It hashes (`crypto.createHash('sha256')…digest('hex')`) a canonical composition of the write's full
   deterministic identity — funding source id (account or card id; `undefined` for an unattached movement),
   `counterpartyId` (a transfer's destination account; unset for a movement/purchase — omitting it would let two
-  transfers sharing source/date/description/amount but different destinations collide), `type`, `currency`,
-  `date`, `normalizeMerchant`-normalized description, and the amount rounded to the currency's own `decimals` via
-  `roundToDecimals` (never a raw `.toFixed`, which truncates rather than rounds at a float boundary like `1.005`)
-  — plus the caller's optional `discriminator`. The canonical form is `JSON.stringify` of the ordered field
+  transfers sharing source/date/description/amount but different destinations collide), `billPeriodKey` (a card
+  purchase's resolved `month-year` bill cycle; unset for a movement/transfer — an explicit `billMonth`/`billYear`
+  override can target a different cycle than an otherwise-identical purchase, so it must be part of the identity
+  too), `type`, `currency`, `date`, `normalizeMerchant`-normalized description, and the amount rounded to the
+  currency's own `decimals` via `roundToDecimals` (never a raw `.toFixed`, which truncates rather than rounds at
+  a float boundary like `1.005`) — plus the caller's optional `discriminator`. The canonical form is
+  `JSON.stringify` of the ordered field
   array, not a plain string-joined concatenation: a caller-supplied `discriminator` is otherwise-unconstrained
   text, so concatenating it with a plain separator (even one chosen to look safe against the other, more
   constrained fields) risks two different field combinations serializing to the same string; `JSON.stringify`'s
