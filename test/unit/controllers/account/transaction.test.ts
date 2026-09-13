@@ -842,4 +842,26 @@ describe('importAccountStatement — pure per-line plan for the shell', () => {
       expect(idempotencyKeyOf(first!._unsafeUnwrap())).toBe(idempotencyKeyOf(second!._unsafeUnwrap()));
     },
   );
+
+  it(
+    'an unattached statement whose lines override currency per item (#184) still resolves EACH ' +
+      "line's own decimals — two per-item-BTC lines differing only past the 8th decimal stay distinct",
+    async () => {
+      const deps = makeDeps();
+
+      const plan = await importAccountStatement(
+        deps,
+        {
+          items: [
+            { description: 'BTC buy', amount: 0.12345671, type: 'expense', currency: CurrencyCode.enum.BTC },
+            { description: 'BTC buy', amount: 0.12345679, type: 'expense', currency: CurrencyCode.enum.BTC },
+          ],
+        },
+        TransactionSource.enum.import,
+      );
+
+      const [first, second] = await Promise.all(plan.lines.map((line) => plan.flowFor(line)()));
+      expect(idempotencyKeyOf(first!._unsafeUnwrap())).not.toBe(idempotencyKeyOf(second!._unsafeUnwrap()));
+    },
+  );
 });

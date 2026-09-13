@@ -70,6 +70,7 @@ const rawViewFor = (entity: MinimalEntity): RawTransactionView =>
 
 const from = account({ id: 'acc-from', name: 'Checking' });
 const to = account({ id: 'acc-to', name: 'Savings' });
+const otherTo = account({ id: 'acc-other-to', name: 'Investments' });
 
 describe('createTransfer — validation', () => {
   it('rejects transferring from a credit account', async () => {
@@ -77,11 +78,7 @@ describe('createTransfer — validation', () => {
       accounts: { list: async () => [{ ...from, type: AccountType.enum.credit }, to] } as unknown as Deps['accounts'],
     });
 
-    const result = await createTransfer(
-      deps,
-      { from: from.name, to: to.name, amount: 10 },
-      TransactionSource.enum.mcp,
-    );
+    const result = await createTransfer(deps, { from: from.name, to: to.name, amount: 10 }, TransactionSource.enum.mcp);
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('validation');
@@ -94,11 +91,7 @@ describe('createTransfer — validation', () => {
       } as unknown as Deps['accounts'],
     });
 
-    const result = await createTransfer(
-      deps,
-      { from: from.name, to: to.name, amount: 10 },
-      TransactionSource.enum.mcp,
-    );
+    const result = await createTransfer(deps, { from: from.name, to: to.name, amount: 10 }, TransactionSource.enum.mcp);
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('validation');
@@ -109,11 +102,7 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
   it('returns a single insert Persistable for a transfer transaction between the resolved accounts', async () => {
     const deps = makeDeps({ accounts: { list: async () => [from, to] } as unknown as Deps['accounts'] });
 
-    const result = await createTransfer(
-      deps,
-      { from: from.name, to: to.name, amount: 25 },
-      TransactionSource.enum.mcp,
-    );
+    const result = await createTransfer(deps, { from: from.name, to: to.name, amount: 25 }, TransactionSource.enum.mcp);
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
@@ -141,25 +130,30 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
 
     const first = await createTransfer(deps, input, TransactionSource.enum.mcp);
     const second = await createTransfer(deps, input, TransactionSource.enum.mcp);
-    const third = await createTransfer(
-      deps,
-      { ...input, discriminator: 'second-one' },
-      TransactionSource.enum.mcp,
-    );
+    const third = await createTransfer(deps, { ...input, discriminator: 'second-one' }, TransactionSource.enum.mcp);
     const keyOf = (r: typeof first) => (r._unsafeUnwrap().persist[0] as { idempotencyKey: string }).idempotencyKey;
 
     expect(keyOf(first)).toBe(keyOf(second));
     expect(keyOf(first)).not.toBe(keyOf(third));
   });
 
+  it('derives a DIFFERENT key for two otherwise-identical transfers to different destinations', async () => {
+    const deps = makeDeps({
+      accounts: { list: async () => [from, to, otherTo] } as unknown as Deps['accounts'],
+    });
+    const shared = { from: from.name, amount: 25, date: '2026-06-01', description: 'aporte mensal' };
+
+    const toSavings = await createTransfer(deps, { ...shared, to: to.name }, TransactionSource.enum.mcp);
+    const toInvestments = await createTransfer(deps, { ...shared, to: otherTo.name }, TransactionSource.enum.mcp);
+    const keyOf = (r: typeof toSavings) => (r._unsafeUnwrap().persist[0] as { idempotencyKey: string }).idempotencyKey;
+
+    expect(keyOf(toSavings)).not.toBe(keyOf(toInvestments));
+  });
+
   it('response() reports created:true when the shell actually inserted the transfer', async () => {
     const deps = makeDeps({ accounts: { list: async () => [from, to] } as unknown as Deps['accounts'] });
 
-    const result = await createTransfer(
-      deps,
-      { from: from.name, to: to.name, amount: 25 },
-      TransactionSource.enum.mcp,
-    );
+    const result = await createTransfer(deps, { from: from.name, to: to.name, amount: 25 }, TransactionSource.enum.mcp);
     const outcome = result._unsafeUnwrap();
     const { model: entity } = outcome.persist[0] as { model: MinimalEntity };
 
@@ -171,11 +165,7 @@ describe('createTransfer — the write is returned as data, not performed (ADR-0
   it('response() reports created:false and the EXISTING data on an idempotent duplicate replay', async () => {
     const deps = makeDeps({ accounts: { list: async () => [from, to] } as unknown as Deps['accounts'] });
 
-    const result = await createTransfer(
-      deps,
-      { from: from.name, to: to.name, amount: 25 },
-      TransactionSource.enum.mcp,
-    );
+    const result = await createTransfer(deps, { from: from.name, to: to.name, amount: 25 }, TransactionSource.enum.mcp);
     const outcome = result._unsafeUnwrap();
     const existing = rawViewFor({
       id: 'existing-transfer',

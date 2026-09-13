@@ -185,14 +185,21 @@ export const importAccountStatement = async (
 ): Promise<StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult>> => {
   // Each line's idempotency key is now derived inside addAccountExpense/addAccountIncome itself
   // (the same flowFor below reuses verbatim), against the real resolved account/currency — no
-  // batch-level account/decimals pre-resolution needed here anymore (ADR-029 Phase 2b).
+  // batch-level account pre-resolution needed here anymore (ADR-029 Phase 2b).
   const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
-  // Resolves locale once for the whole import rather than once per line: every line's flow reads
-  // deps.locale() to build its localized response, so overriding it here to the same in-flight
-  // promise keeps every item's labels consistent even if the process-level locale cache resets
-  // mid-import.
+  // Resolves locale (and the currencies reference list, for each line's own resolveDecimals call)
+  // once for the whole import rather than once per line: every line's flow reads deps.locale() to
+  // build its localized response, and deps.currencies.list() to round its idempotency key's amount
+  // — overriding both here to the same in-flight promise keeps every item's labels consistent even
+  // if the process-level locale cache resets mid-import, and avoids an N-line import running N
+  // identical currency-list reads.
   const localePromise = deps.locale();
-  const cachedDeps: Deps = { ...deps, locale: () => localePromise };
+  const currenciesPromise = deps.currencies.list();
+  const cachedDeps: Deps = {
+    ...deps,
+    locale: () => localePromise,
+    currencies: { ...deps.currencies, list: () => currenciesPromise },
+  };
   const flowFor = (line: (typeof lines)[number]) => (): ResultAsync<FlowOutcome<ClassifiedUpsertResult>, AppError> => {
     const movement = { ...R.omit(line, ['type']), account: input.account };
     return line.type === MovementType.enum.expense

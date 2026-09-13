@@ -3,6 +3,7 @@ import { purry } from 'remeda';
 import { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
 import type { CurrencyCode } from '../models/money.js';
+import { roundToDecimals } from './money.js';
 import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDirection } from '../models/page.js';
 import type {
   CategoryFields,
@@ -163,9 +164,13 @@ export const entityFromExisting = (existing: RawTransactionView): TransactionEnt
 
 /** The full deterministic identity a transaction's idempotency key is derived from (ADR-029
  *  Phase 2b): the funding source (account/card id; `undefined` for an unattached movement) plus
- *  every field that distinguishes one intended write from another. */
+ *  every field that distinguishes one intended write from another. `counterpartyId` is the
+ *  transfer's destination account — set only by `createTransfer`, since a transfer's identity is
+ *  incomplete without it: two transfers sharing the same source/date/description/amount but
+ *  different destinations are genuinely different writes, not a retry of each other. */
 export type IdempotencyIdentity = {
   fundingSourceId: string | undefined;
+  counterpartyId?: string;
   type: TransactionType;
   currency: CurrencyCode;
   date: string;
@@ -175,36 +180,38 @@ export type IdempotencyIdentity = {
 
 /**
  * Domain-owned idempotency key (ADR-029 Phase 2b, replacing the caller-supplied whole key): a
- * sha256 hash of the canonical, fixed-field-order composition of the write's full deterministic
- * identity — funding source, type, currency, date, normalized description, and amount rounded to
- * the currency's own decimals — plus the caller's optional `discriminator`. Deterministic ⇒ pure:
- * re-deriving from identical input (a true retry) always yields the same key, which is what makes
- * dedup work; a caller appends a discriminator only to record a genuinely-distinct-but-identical
- * transaction (e.g. two identical purchases the same day). `decimals` rounds the amount component
- * to the currency's own precision — a flat 2 would collide two BTC/USDC amounts that only differ
- * past the 2nd decimal, silently dropping the second as a duplicate. The single home for both
- * single-add and bulk import: every insert-shaped flow (`addAccountMovement`, `addCardPurchase`,
- * `createTransfer`) calls this once it has resolved the entity's real funding source/currency;
- * bulk import reuses those same flows per line rather than deriving its own key.
+ * sha256 hash of the canonical composition of the write's full deterministic identity — funding
+ * source, transfer counterparty, type, currency, date, normalized description, and amount rounded
+ * to the currency's own decimals (via `roundToDecimals`, not a raw `.toFixed`, so a value that
+ * lands exactly on a floating-point rounding boundary — e.g. `1.005` at 2 decimals — hashes under
+ * the amount it actually rounds to, not `.toFixed`'s different, incorrect truncation) — plus the
+ * caller's optional `discriminator`. The canonical form is a `JSON.stringify` of the ordered field
+ * array, never a plain string-joined concatenation: JSON's per-element quoting/escaping makes the
+ * encoding unambiguous regardless of what characters a field contains (a caller-supplied
+ * `discriminator` is unconstrained, so it — and description, once normalized — must never be
+ * concatenation-joined with a plain separator a field's own content could reproduce). Deterministic
+ * ⇒ pure: re-deriving from identical input (a true retry) always yields the same key, which is what
+ * makes dedup work; a caller appends a discriminator only to record a genuinely-distinct-but-identical
+ * transaction (e.g. two identical purchases the same day). The single home for both single-add and
+ * bulk import: every insert-shaped flow (`addAccountMovement`, `addCardPurchase`, `createTransfer`)
+ * calls this once it has resolved the entity's real funding source/currency; bulk import reuses
+ * those same flows per line rather than deriving its own key.
  */
 export const deriveIdempotencyKey = (
   identity: IdempotencyIdentity,
   decimals: number,
   discriminator?: string,
 ): string => {
-  // Space-joined, fixed field order: every field is either a closed enum (type/currency), an
-  // id/ISO date with no internal spaces, normalizeMerchant's letters-and-spaces-only output (never
-  // a digit), or a fixed-decimals numeric string — so no two distinct identities can join into the
-  // same canonical string.
-  const canonical = [
-    identity.fundingSourceId ?? '',
+  const canonical = JSON.stringify([
+    identity.fundingSourceId ?? null,
+    identity.counterpartyId ?? null,
     identity.type,
     identity.currency,
     identity.date,
     normalizeMerchant(identity.description),
-    identity.amount.toFixed(decimals),
-    discriminator ?? '',
-  ].join(' ');
+    roundToDecimals(identity.amount, decimals).toFixed(decimals),
+    discriminator ?? null,
+  ]);
   return createHash('sha256').update(canonical).digest('hex');
 };
 

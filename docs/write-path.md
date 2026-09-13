@@ -46,19 +46,27 @@ effect runner, appliers, outcomes, and the per-flow notes.
   `deriveIdempotencyKey(identity, decimals, discriminator?)` is the single derivation for every transaction
   insert — single-add (`addAccountExpense`/`addAccountIncome`/`addCardPurchase`/`createTransfer`) and bulk import
   alike, since bulk import's `flowFor` reuses those same single-line flows verbatim rather than deriving its own
-  key. It hashes (`crypto.createHash('sha256')…digest('hex')`) a canonical, fixed-field-order, space-joined
-  composition of the write's full deterministic identity — funding source id (account or card id; `undefined`
-  for an unattached movement), `type`, `currency`, `date`, `normalizeMerchant`-normalized description, and the
-  amount rounded to the currency's own `decimals` (`decimalsLookup`/`roundToDecimals`-style, ADR-026) — plus the
-  caller's optional `discriminator`. Deterministic composition ⇒ pure ⇒ stays in `logic/` (no `randomUUID`, no
-  clock read); a sha256 hash of a string is a pure computation like any other, unlike the id/clock reads that
-  are barred from `logic/`. `CreateTransactionSchema`/`CreateTransferSchema` (wire/in) carry no whole-key field
-  at all — only an optional `discriminator?: string`, the load-bearing escape hatch for recording a
-  genuinely-distinct transaction that would otherwise derive an identical key (e.g. two identical purchases the
-  same day). Each insert-shaped flow calls `deps.currencies.list()` itself to resolve `decimals` for the
-  entity's own resolved currency, once it has the funding source and currency in hand — bulk import no longer
-  pre-resolves an account/card and decimals for the whole batch the way it used to, since each line's own flow
-  does that resolution now. `recurringIdempotencyKey` (`rec-<ruleId>-<date>`, `controllers/recurring.ts`) and the
+  key. It hashes (`crypto.createHash('sha256')…digest('hex')`) a canonical composition of the write's full
+  deterministic identity — funding source id (account or card id; `undefined` for an unattached movement),
+  `counterpartyId` (a transfer's destination account; unset for a movement/purchase — omitting it would let two
+  transfers sharing source/date/description/amount but different destinations collide), `type`, `currency`,
+  `date`, `normalizeMerchant`-normalized description, and the amount rounded to the currency's own `decimals` via
+  `roundToDecimals` (never a raw `.toFixed`, which truncates rather than rounds at a float boundary like `1.005`)
+  — plus the caller's optional `discriminator`. The canonical form is `JSON.stringify` of the ordered field
+  array, not a plain string-joined concatenation: a caller-supplied `discriminator` is otherwise-unconstrained
+  text, so concatenating it with a plain separator (even one chosen to look safe against the other, more
+  constrained fields) risks two different field combinations serializing to the same string; `JSON.stringify`'s
+  per-element quoting/escaping keeps every field boundary unambiguous regardless of content. Deterministic
+  composition ⇒ pure ⇒ stays in `logic/` (no `randomUUID`, no clock read); a sha256 hash of a string is a pure
+  computation like any other, unlike the id/clock reads that are barred from `logic/`.
+  `CreateTransactionSchema`/`CreateTransferSchema` (wire/in) carry no whole-key field at all — only an optional
+  `discriminator?: string`, the load-bearing escape hatch for recording a genuinely-distinct transaction that
+  would otherwise derive an identical key (e.g. two identical purchases the same day). Each insert-shaped flow
+  calls `deps.currencies.list()` itself to resolve `decimals` for the entity's own resolved currency, once it has
+  the funding source and currency in hand; bulk import (`importAccountStatement`/`importCardStatement`) caches
+  that call's promise onto the batch's `cachedDeps` the same way it already does for `deps.locale()`, so an
+  N-line import performs one currency-list read, not N, while each line still independently resolves its own
+  real account/card and currency (no batch-level account/decimals pre-resolution the way it used to). `recurringIdempotencyKey` (`rec-<ruleId>-<date>`, `controllers/recurring.ts`) and the
   bill-payment transfer's `billpay-<billId>` (`controllers/creditCard/bill.ts`) are unrelated, hand-built keys
   for internally-generated writes that never go through `CreateTransactionSchema` — outside this derivation.
   **One-time key-format discontinuity**: a statement re-imported after this landed won't dedup against
