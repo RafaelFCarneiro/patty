@@ -66,10 +66,6 @@ export const createTransfer = (
       refs: { accountId: from.id, toAccountId: to.id },
     };
 
-    // Domain-owned key (ADR-029 Phase 2b): the source account is the funding source for a
-    // transfer, mirroring `entity.currency` (also taken from `from`, never `to`) — but the
-    // destination (`counterpartyId`) must be part of the identity too, or two transfers sharing
-    // the same source/date/description/amount but different destinations would incorrectly dedup.
     const decimals = await resolveDecimals(deps, entity.currency);
     const idempotencyKey = deriveIdempotencyKey(
       {

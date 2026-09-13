@@ -17,7 +17,6 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   subCategories: {} as Deps['subCategories'],
   correlations: {} as Deps['correlations'],
   creditCards: {} as Deps['creditCards'],
-  // deriveIdempotencyKey needs the resolved currency's decimals (ADR-029 Phase 2b).
   currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
   currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],

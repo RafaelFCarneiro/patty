@@ -39,8 +39,6 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   subCategories: {} as Deps['subCategories'],
   correlations: {} as Deps['correlations'],
   creditCards: {} as Deps['creditCards'],
-  // deriveIdempotencyKey needs the resolved currency's decimals (ADR-029 Phase 2b) — every
-  // insert-shaped flow now calls deps.currencies.list(), not just bulk import.
   currencies: { list: async () => SEEDED_CURRENCIES } as unknown as Deps['currencies'],
   currencyRates: {} as Deps['currencyRates'],
   dashboards: {} as Deps['dashboards'],
@@ -370,9 +368,7 @@ describe('addCardPurchase — tag-set resolution (ADR-023 step 2)', () => {
   });
 });
 
-/** The derived idempotencyKey off the transaction Persistable a flow's outcome carries — every
- *  bulk-import test below runs the real per-line flow (ADR-029 Phase 2b: the key is derived
- *  inside addCardPurchase itself now, never present on `plan.lines` itself). */
+/** The derived idempotencyKey off the transaction Persistable in a flow's persist batch. */
 const idempotencyKeyOfPurchase = (persist: readonly { entity: string; idempotencyKey?: string }[]): string =>
   (persist.find((p) => p.entity === 'transaction') as { idempotencyKey: string }).idempotencyKey;
 

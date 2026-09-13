@@ -120,8 +120,6 @@ const planAccountMovement = (
       },
     };
 
-    // Domain-owned key (ADR-029 Phase 2b): derived from the full resolved identity, never a
-    // caller-supplied whole key — input.discriminator is the only caller-controlled input into it.
     const decimals = await resolveDecimals(deps, currency);
     const idempotencyKey = deriveIdempotencyKey(
       { fundingSourceId: account?.id, type, currency, date, description: input.description, amount: input.amount },
@@ -183,16 +181,9 @@ export const importAccountStatement = async (
   input: ImportAccountStatement,
   source: TransactionSource,
 ): Promise<StatementImportPlan<ImportAccountStatementItem, ClassifiedUpsertResult>> => {
-  // Each line's idempotency key is now derived inside addAccountExpense/addAccountIncome itself
-  // (the same flowFor below reuses verbatim), against the real resolved account/currency — no
-  // batch-level account pre-resolution needed here anymore (ADR-029 Phase 2b).
   const lines = defaultStatementLines(toIsoDate(deps.clock()), input.items, input.rawInput);
-  // Resolves locale (and the currencies reference list, for each line's own resolveDecimals call)
-  // once for the whole import rather than once per line: every line's flow reads deps.locale() to
-  // build its localized response, and deps.currencies.list() to round its idempotency key's amount
-  // — overriding both here to the same in-flight promise keeps every item's labels consistent even
-  // if the process-level locale cache resets mid-import, and avoids an N-line import running N
-  // identical currency-list reads.
+  // Cached once for the whole batch — every line's own flow reads locale/currencies, and refetching
+  // per line would mean N identical currency-list queries for an N-line import.
   const localePromise = deps.locale();
   const currenciesPromise = deps.currencies.list();
   const cachedDeps: Deps = {

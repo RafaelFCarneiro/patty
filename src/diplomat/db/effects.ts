@@ -62,11 +62,9 @@ type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteCol
  *  second entity-supplied hook is the signal this design is wrong (ADR-023 option D). */
 export type ReadBack = (tx: Tx, id: string) => Promise<unknown>;
 
-/** The physical dedup column every idempotency-keyed insert writes to, by fixed convention
- *  (ADR-029 Phase 2b) — never a per-registration name. Not every `VersionedTable` has this column
- *  (only `transactions` does today); a table that doesn't simply never receives an insert whose
- *  `Persistable` carries a key, so `keyColumn` below is `undefined` for it and the whole
- *  idempotency path is skipped. */
+/** The fixed dedup column every idempotency-keyed insert writes to (ADR-029 Phase 2b) — never a
+ *  per-registration name. Not every `VersionedTable` has it; `keyColumn` below is `undefined` for
+ *  one that doesn't. */
 const IDEMPOTENCY_KEY_COLUMN = 'idempotencyKey';
 
 type VersionedTableConfig = {
@@ -106,14 +104,11 @@ export const versionedTableApplier = <T extends VersionedTable>(
 
   return {
     insert: async (tx, model, idempotencyKey) => {
-      // Reject a missing key here, loudly, rather than let it reach the database as an opaque
-      // NOT NULL constraint violation — a table carrying the column is a promise every insert into
-      // it must keep (only `transactions` today).
+      // Reject either mismatch loudly here, rather than let a missing key reach the database as an
+      // opaque NOT NULL violation, or a set key silently no-op with no dedup at all.
       if (keyColumn && idempotencyKey === undefined) {
         throw new Error(missingIdempotencyKeyMessage());
       }
-      // The reverse mistake: a flow set a key for an entity whose table has no idempotencyKey
-      // column at all — silently dropping it would look like it worked while providing no dedup.
       if (!keyColumn && idempotencyKey !== undefined) {
         throw new Error(unexpectedIdempotencyKeyMessage());
       }
@@ -179,9 +174,7 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
   const outcome = await (async (): Promise<ApplierOutcome> => {
     switch (p.op) {
       case PersistOp.enum.insert:
-        // An idempotent-duplicate no-op reports `applied: false` — inserts never retry here; the
-        // duplicate treatment itself is the engine's, opted into per-insert by the envelope's own
-        // `idempotencyKey` presence, never a per-entity registration (ADR-029 Phase 2b).
+        // An idempotent-duplicate no-op reports `applied: false` — inserts never retry here.
         return applier.insert(tx, p.model, p.idempotencyKey);
       case PersistOp.enum.update: {
         const updateOutcome = await applier.update(tx, p.model);

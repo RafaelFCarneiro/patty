@@ -34,9 +34,9 @@ export const withPersistenceMeta = <T extends z.ZodRawShape>(model: z.ZodObject<
  * `INITIAL_VERSION`, which isn't something the core decides. It also carries an optional
  * `idempotencyKey` — dedup metadata for the write intent, never a business-model field: an entity
  * opts in by the insert itself carrying a key, written to the fixed `idempotencyKey` column
- * (`versionedTableApplier`, `diplomat/db/effects.ts`, ADR-029 Phase 2b) — never a per-registration
- * column name. A read-first entity (dashboards, settings) leaves it unset. `update` carries the full desired
- * end-state as the versioned entity — `model.version` is the version the core read; the entity's
+ * (`versionedTableApplier`, `diplomat/db/effects.ts`). A read-first entity (dashboards, settings)
+ * leaves it unset. `update` carries the full desired end-state as the versioned entity —
+ * `model.version` is the version the core read; the entity's
  * `EntityApplier` computes the persisted version from it (`model.version + 1`) and applies
  * `... SET ..., version = ? WHERE id = ? AND version = ?`. `delete` carries just the id + the
  * version read, for the same versioned guard.

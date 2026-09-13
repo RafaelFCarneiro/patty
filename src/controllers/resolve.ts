@@ -49,11 +49,8 @@ export const resolveCardRef = (deps: Deps, name: string): ResultAsync<CreditCard
     resolutionToResult(resolveByName(cards, name), 'card'),
   );
 
-/** A currency's own fractional digits, resolved off the live currencies reference list — shared by
- *  every insert-shaped transaction flow to round its idempotency key's amount component
- *  (ADR-029 Phase 2b). No `Result`: every `CurrencyCode` is a validated enum member, always present
- *  in the reference list (`decimalsLookup` itself falls back to fiat decimals for the
- *  should-never-happen case of a missing code). */
+/** A currency's own fractional digits off the live reference list. No `Result`: every
+ *  `CurrencyCode` is a validated enum member, always present in the list. */
 export const resolveDecimals = async (deps: Deps, currency: CurrencyCode): Promise<number> =>
   decimalsLookup(await deps.currencies.list())(currency);
 

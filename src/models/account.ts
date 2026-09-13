@@ -110,11 +110,9 @@ export type AddAccountMovement = z.infer<typeof AddAccountMovementSchema>;
 /** A single line of an `import_account_statement` request: the transaction core's minimal
  *  `CreateTransactionSchema` minus `rawInput`/`subCategory`/`tags` (statement-level concerns) — no
  *  `account` (fixed once, at the statement's top level — single-source, no per-line account) and no
- *  `card`/`billMonth`/`billYear` (card/bill-assignment vocabulary the core never carries).
- *  `discriminator` carries through unchanged (already optional on the core schema), letting a line
- *  force a distinct dedup key the same way a single add can. Unlike `AddAccountMovementSchema`,
- *  `type` stays required — a statement line still needs its own expense-vs-income marker,
- *  since the movement kind isn't fixed by which tool was called. */
+ *  `card`/`billMonth`/`billYear` (card/bill-assignment vocabulary the core never carries). Unlike
+ *  `AddAccountMovementSchema`, `type` stays required — a statement line still needs its own
+ *  expense-vs-income marker, since the movement kind isn't fixed by which tool was called. */
 export const ImportAccountStatementItemSchema = CreateTransactionSchema.omit({
   rawInput: true,
   subCategory: true,

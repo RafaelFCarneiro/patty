@@ -113,21 +113,13 @@ describe('deriveIdempotencyKey', () => {
   });
 
   it('rounds via roundToDecimals, not raw toFixed — a float rounding boundary hashes under the real amount', () => {
-    // 1.005 is not exactly representable in binary float; Number.prototype.toFixed(2) truncates it
-    // to "1.00", while roundToDecimals (EPSILON-corrected, logic/money.ts) correctly rounds it up
-    // to 1.01. The derived key must agree with the latter, or a distinct insert at this exact
-    // boundary could be silently dropped as a false duplicate of a genuinely different amount.
+    // 1.005 isn't exact in binary float; toFixed(2) truncates it to "1.00", roundToDecimals to "1.01".
     const boundary = identity({ amount: 1.005 });
     expect(deriveIdempotencyKey(boundary, 2)).toBe(deriveIdempotencyKey(identity({ amount: 1.01 }), 2));
     expect(deriveIdempotencyKey(boundary, 2)).not.toBe(deriveIdempotencyKey(identity({ amount: 1.0 }), 2));
   });
 
   it('does not collide when a word boundary shifts between description and discriminator (regression)', () => {
-    // A plain space-joined canonical string would be ambiguous here: description:'a'+discriminator:'b c'
-    // and description:'a b'+discriminator:'c' could concatenate to related-looking strings. The
-    // JSON-array canonical encoding (quoted, comma-separated elements) keeps every field boundary
-    // unambiguous regardless of what characters a field (especially the caller-supplied
-    // discriminator, which is otherwise unconstrained) contains.
     const a = deriveIdempotencyKey(identity({ description: 'a' }), 2, 'b c');
     const b = deriveIdempotencyKey(identity({ description: 'a b' }), 2, 'c');
     expect(a).not.toBe(b);

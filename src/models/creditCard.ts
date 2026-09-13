@@ -101,8 +101,7 @@ export type AddCardPurchase = z.infer<typeof AddCardPurchaseSchema>;
  *  no per-line card) and minus `rawInput`/`subCategory`/`tags` (statement-level concerns: `rawInput`
  *  belongs to the whole pasted statement, and bulk import classifies automatically rather than
  *  taking a sub-category or tags per line — the same reduced shape the retired god bulk item
- *  carried). `discriminator` carries through unchanged (already optional on the core schema),
- *  letting a line force a distinct dedup key the same way a single add can. */
+ *  carried). */
 export const ImportCardStatementItemSchema = AddCardPurchaseSchema.omit({
   card: true,
   rawInput: true,

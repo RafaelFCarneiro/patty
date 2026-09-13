@@ -646,11 +646,9 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
 });
 
 describe('engine idempotency treatment — fixed column, opt-in by envelope-key presence (ADR-029 Phase 2b)', () => {
-  // The dedup column is no longer a per-registration name — it's `transactions.idempotencyKey` by
-  // fixed convention, so the generic treatment itself (fresh insert / duplicate-key no-op /
-  // id-guard separation / missing-key rejection) is exercised against the real transactions table
-  // in the `transactionApplier` suite above, not an arbitrary stand-in table. This block covers the
-  // remaining case: a table with NO idempotencyKey column at all.
+  // The generic mechanics (fresh insert, duplicate no-op, id-guard separation, missing-key
+  // rejection) are exercised against the real transactions table in the suite below; this covers
+  // the remaining case — a table with no idempotencyKey column at all.
   it('an insert carrying a key for a table with no idempotencyKey column rejects loudly, never hits SQL', async () => {
     const tagRegistry: ApplierRegistry = { tag: versionedTableApplier(tags) };
     const model = { id: randomUUID(), name: `Tag ${randomUUID()}`, version: 0 };
