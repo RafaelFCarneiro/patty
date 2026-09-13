@@ -37,7 +37,6 @@ describe('MCP integration > credit cards', () => {
           date: today,
           card: cardName,
           category: 'Outros',
-          idempotencyKey: `integration-card-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
 

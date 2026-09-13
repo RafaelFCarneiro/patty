@@ -26,7 +26,6 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
           amount: 25,
           date: today,
           account: accountName,
-          idempotencyKey: `add-account-expense-${stamp}`,
         },
       })) as { transaction?: { type?: string; accountName?: string; currency?: string } };
 
@@ -57,7 +56,6 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
           amount: 3000,
           date: today,
           account: accountName,
-          idempotencyKey: `add-account-income-${stamp}`,
         },
       })) as { transaction?: { type?: string; accountName?: string } };
 
@@ -68,7 +66,7 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
     }
   });
 
-  it('is idempotent — same idempotencyKey returns the existing movement', async () => {
+  it('is idempotent — a repeat call with identical input returns the existing movement', async () => {
     const accountName = `AddExpense Idempotent Account ${stamp}`;
     const { client, transport } = makeClient();
 
@@ -85,7 +83,6 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
         amount: 10,
         date: today,
         account: accountName,
-        idempotencyKey: `add-account-expense-idempotent-${stamp}`,
       };
 
       const first = (await callTool(client, { name: 'add_account_expense', args })) as {
@@ -124,7 +121,6 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
           amount: 10,
           date: today,
           account: cardName,
-          idempotencyKey: `add-account-expense-credit-guard-${stamp}`,
         },
       })) as { error?: { code?: string } };
       expect(err.error?.code).toBe('validation');
@@ -152,7 +148,6 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
               description: `Empty category ${stamp2}`,
               amount: 10,
               category: '',
-              idempotencyKey: `add-expense-empty-category-${stamp2}`,
             },
           },
         },
@@ -181,7 +176,6 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
               description: `Empty subCategory ${stamp2}`,
               amount: 10,
               subCategory: '',
-              idempotencyKey: `add-expense-empty-subcategory-${stamp2}`,
             },
           },
         },
@@ -212,7 +206,6 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
               description: `Empty account ${stamp2}`,
               amount: 10,
               account: '',
-              idempotencyKey: `add-expense-empty-account-${stamp2}`,
             },
           },
         },
@@ -248,7 +241,6 @@ describe('MCP integration > add_account_expense / add_account_income (ADR-016 st
               amount: 500,
               type: 'income',
               date: today,
-              idempotencyKey: `bulk-income-${stamp}`,
             },
           ],
         },

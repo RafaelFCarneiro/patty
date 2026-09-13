@@ -62,7 +62,6 @@ describe('DELETE /api/categories/:name', () => {
         amount: 10,
         date: '2026-06-01',
         category: 'InUseCat',
-        idempotencyKey: 'cat-ref-tx',
       },
     });
     const res = await inject({ method: 'DELETE', url: '/api/categories/InUseCat' });

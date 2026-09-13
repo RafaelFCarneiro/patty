@@ -6,7 +6,7 @@ import { IsoDate } from './date.js';
 import { withPersistenceMeta } from './persistable.js';
 import {
   CreateTransactionSchema,
-  STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION,
+  DISCRIMINATOR_DESCRIPTION,
   STATEMENT_ITEMS_DESCRIPTION,
   STATEMENT_RAW_INPUT_DESCRIPTION,
   TransactionStatus,
@@ -108,24 +108,16 @@ export const AddAccountMovementSchema = CreateTransactionSchema.extend({
 export type AddAccountMovement = z.infer<typeof AddAccountMovementSchema>;
 
 /** A single line of an `import_account_statement` request: the transaction core's minimal
- *  `CreateTransactionSchema` minus `idempotencyKey`/`rawInput`/`subCategory`/`tags` (statement-level
- *  concerns) — no `account` (fixed once, at the statement's top level — single-source, no per-line
- *  account) and no `card`/`billMonth`/`billYear` (card/bill-assignment vocabulary the core never
- *  carries). Unlike `AddAccountMovementSchema`, `type` stays required — a statement line still
- *  needs its own expense-vs-income discriminator, since the movement kind isn't fixed by which
- *  tool was called. */
+ *  `CreateTransactionSchema` minus `rawInput`/`subCategory`/`tags` (statement-level concerns) — no
+ *  `account` (fixed once, at the statement's top level — single-source, no per-line account) and no
+ *  `card`/`billMonth`/`billYear` (card/bill-assignment vocabulary the core never carries). Unlike
+ *  `AddAccountMovementSchema`, `type` stays required — a statement line still needs its own
+ *  expense-vs-income marker, since the movement kind isn't fixed by which tool was called. */
 export const ImportAccountStatementItemSchema = CreateTransactionSchema.omit({
-  idempotencyKey: true,
   rawInput: true,
   subCategory: true,
   tags: true,
-})
-  .extend({
-    idempotencyKey: CreateTransactionSchema.shape.idempotencyKey
-      .optional()
-      .describe(STATEMENT_IDEMPOTENCY_KEY_DESCRIPTION),
-  })
-  .strict();
+}).strict();
 export type ImportAccountStatementItem = z.infer<typeof ImportAccountStatementItemSchema>;
 
 /** Account statement import: single-source — every item is an expense or income (per item's
@@ -156,16 +148,19 @@ export type UpdateAccountTransaction = z.infer<typeof UpdateAccountTransactionSc
 
 /** Natural input for a transfer: account-context vocabulary — a transfer request is an
  *  account-aggregate concern even though it persists as a transaction row via the shared core
- *  primitive (account → core, the allowed direction). */
-export const CreateTransferSchema = z.object({
-  from: z.string().min(1).describe('Source account name'),
-  to: z.string().min(1).describe('Destination account name'),
-  amount: Money.describe('Transfer amount in full units'),
-  status: TransactionStatus.optional().describe('pending | effective; omit for date-aware default'),
-  date: IsoDate.optional().describe('YYYY-MM-DD; defaults to today'),
-  description: z.string().optional().describe('e.g. "aporte mensal"'),
-  idempotencyKey: z.string().min(1).describe('Stable dedup key'),
-});
+ *  primitive (account → core, the allowed direction). `.strict()`: same REST-boundary-only
+ *  reasoning as `AddAccountMovementSchema` above. */
+export const CreateTransferSchema = z
+  .object({
+    from: z.string().min(1).describe('Source account name'),
+    to: z.string().min(1).describe('Destination account name'),
+    amount: Money.describe('Transfer amount in full units'),
+    status: TransactionStatus.optional().describe('pending | effective; omit for date-aware default'),
+    date: IsoDate.optional().describe('YYYY-MM-DD; defaults to today'),
+    description: z.string().optional().describe('e.g. "aporte mensal"'),
+    discriminator: z.string().min(1).optional().describe(DISCRIMINATOR_DESCRIPTION),
+  })
+  .strict();
 export type CreateTransfer = z.infer<typeof CreateTransferSchema>;
 
 /**

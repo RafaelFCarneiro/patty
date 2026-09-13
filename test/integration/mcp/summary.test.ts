@@ -33,7 +33,6 @@ describe('MCP integration > get_spending_summary displayCurrency', () => {
           amount: 20,
           date,
           account: accountName,
-          idempotencyKey: `summary-dc-omit-${stamp}`,
         },
       });
 
@@ -68,7 +67,6 @@ describe('MCP integration > get_spending_summary displayCurrency', () => {
           amount: 100,
           date,
           account: usdName,
-          idempotencyKey: `summary-dc-usd-${stamp}`,
         },
       });
       await callTool(client, {
@@ -78,7 +76,6 @@ describe('MCP integration > get_spending_summary displayCurrency', () => {
           amount: 500,
           date,
           account: brlName,
-          idempotencyKey: `summary-dc-brl-${stamp}`,
         },
       });
 
@@ -118,7 +115,6 @@ describe('MCP integration > get_spending_summary displayCurrency', () => {
           amount: 1,
           date,
           account: btcName,
-          idempotencyKey: `summary-dc-btc-${stamp}`,
         },
       });
 
@@ -152,7 +148,6 @@ describe('MCP integration > get_spending_summary displayCurrency', () => {
           amount: 1,
           date,
           account: usdcName,
-          idempotencyKey: `summary-dc-usdc-income-${stamp}`,
         },
       });
 

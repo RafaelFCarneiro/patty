@@ -17,7 +17,9 @@ export const registerTransferTools = (server: McpServer, ctx: McpContext): void 
         'Move value between two accounts (e.g. conta corrente → investimentos). Creates a transaction ' +
         "with type 'transfer' (FROM + TO accounts): debits one balance, credits the other, never appears " +
         'in spending summaries, and shows in both account histories (search_transactions). Both accounts ' +
-        'must share the same currency (FX not available yet). Idempotent via idempotencyKey.',
+        'must share the same currency (FX not available yet). Idempotent automatically — a repeat call with ' +
+        'the same from/to/description/date/amount is deduped; pass discriminator to record a genuinely ' +
+        'separate transfer that would otherwise look identical.',
       inputSchema: CreateTransferSchema.shape,
     },
     async (args) => {

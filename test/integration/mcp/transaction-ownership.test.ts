@@ -32,7 +32,6 @@ describe('MCP integration > transaction ownership guard (ADR-017/ADR-020)', () =
           amount: 30,
           type: 'expense',
           card: cardName,
-          idempotencyKey: `ownership-purchase-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(purchase.transaction?.id, 'expected a created transaction');
@@ -61,7 +60,6 @@ describe('MCP integration > transaction ownership guard (ADR-017/ADR-020)', () =
           description: `Ownership expense ${stamp}`,
           amount: 15,
           category: 'Other',
-          idempotencyKey: `ownership-expense-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(created.transaction?.id, 'expected a created transaction');
@@ -96,7 +94,6 @@ describe('MCP integration > transaction ownership guard (ADR-017/ADR-020)', () =
           amount: 25,
           type: 'expense',
           card: cardName,
-          idempotencyKey: `ownership-delete-purchase-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(purchase.transaction?.id, 'expected a created transaction');
@@ -125,7 +122,6 @@ describe('MCP integration > transaction ownership guard (ADR-017/ADR-020)', () =
           description: `OwnershipDelete expense ${stamp}`,
           amount: 12,
           category: 'Other',
-          idempotencyKey: `ownership-delete-expense-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(created.transaction?.id, 'expected a created transaction');

@@ -39,7 +39,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `add-card-purchase-${stamp}`,
         },
       })) as { transaction?: { billId?: string } };
       ensure(created.transaction?.billId, 'expected the purchase to be attached to a bill');
@@ -77,7 +76,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
           card: cardName,
           billMonth: nextCycle.month,
           billYear: nextCycle.year,
-          idempotencyKey: `add-card-purchase-explicit-${stamp}`,
         },
       })) as { transaction?: { billId?: string } };
       ensure(created.transaction?.billId, 'expected the purchase to be attached to a bill');
@@ -117,7 +115,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `add-card-purchase-paidguard-${stamp}`,
         },
       });
       await callTool(client, { name: 'pay_bill', args: { card: cardName, month, year } });
@@ -132,7 +129,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
           card: cardName,
           billMonth: month,
           billYear: year,
-          idempotencyKey: `add-card-purchase-paidguard-late-explicit-${stamp}`,
         },
       })) as { error?: { code?: string; issues?: string[] } };
       expect(explicitErr.error?.code).toBe('validation');
@@ -146,7 +142,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
           type: 'expense',
           date: today,
           card: cardName,
-          idempotencyKey: `add-card-purchase-paidguard-late-auto-${stamp}`,
         },
       })) as { error?: { code?: string } };
       expect(autoErr.error?.code).toBe('validation');
@@ -155,7 +150,7 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
     }
   });
 
-  it('is idempotent — same idempotencyKey returns the existing purchase', async () => {
+  it('is idempotent — a repeat call with identical input returns the existing purchase', async () => {
     const cardName = `AddPurchase Idempotent Card ${stamp}`;
     const { client, transport } = makeClient();
 
@@ -173,7 +168,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
         type: 'expense',
         date: today,
         card: cardName,
-        idempotencyKey: `add-card-purchase-idempotent-${stamp}`,
       };
 
       const first = (await callTool(client, { name: 'add_card_purchase', args })) as {
@@ -214,7 +208,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
               type: 'expense',
               card: `AddPurchase Empty Category Card ${stamp2}`,
               category: '',
-              idempotencyKey: `add-purchase-empty-category-${stamp2}`,
             },
           },
         },
@@ -245,7 +238,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
               type: 'expense',
               card: `AddPurchase Empty SubCategory Card ${stamp2}`,
               subCategory: '',
-              idempotencyKey: `add-purchase-empty-subcategory-${stamp2}`,
             },
           },
         },
@@ -277,7 +269,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
               amount: 10,
               type: 'expense',
               card: '',
-              idempotencyKey: `add-purchase-empty-card-${stamp2}`,
             },
           },
         },
@@ -313,7 +304,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
               amount: 20,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-card-${stamp}`,
             },
           ],
         },
@@ -427,14 +417,12 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
               amount: 10,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-shared-a-${stamp}`,
             },
             {
               description: `Shared bill line B ${stamp}`,
               amount: 15,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-shared-b-${stamp}`,
             },
           ],
         },
@@ -479,7 +467,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
               amount: 10,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-partial-a-${stamp}`,
             },
             {
               // billMonth without billYear fails the domain's pairing guard
@@ -489,7 +476,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
               amount: 20,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-partial-bad-${stamp}`,
               billMonth: month,
             },
             {
@@ -497,7 +483,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
               amount: 30,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-partial-c-${stamp}`,
             },
           ],
         },
@@ -546,7 +531,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
           card: cardName,
           billMonth: nextCycle.month,
           billYear: nextCycle.year,
-          idempotencyKey: `bulk-paidcycle-seed-${stamp}`,
         },
       });
       await callTool(client, {
@@ -566,14 +550,12 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
               date: today,
               billMonth: nextCycle.month,
               billYear: nextCycle.year,
-              idempotencyKey: `bulk-paidcycle-line-${stamp}`,
             },
             {
               description: `Current-cycle line ${stamp}`,
               amount: 8,
               type: 'expense',
               date: today,
-              idempotencyKey: `bulk-paidcycle-current-${stamp}`,
             },
           ],
         },
@@ -627,7 +609,6 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
                   type: 'expense',
                   date: today,
                   account: bankName,
-                  idempotencyKey: `bulk-exclusive-${stamp}`,
                 },
               ],
             },

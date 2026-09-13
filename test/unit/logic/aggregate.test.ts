@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { shapeAggregateResult } from '../../../src/logic/aggregate.js';
-import type { DecimalsFor } from '../../../src/logic/money.js';
+import type { DecimalsFor } from '../../../src/models/money.js';
 import { AggregateGroupBy, AggregateSort } from '../../../src/models/aggregate.js';
 import type { AggregateDbRow } from '../../../src/wire/db/aggregate.js';
 

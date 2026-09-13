@@ -69,7 +69,6 @@ describe('MCP integration > accounts', () => {
           date: today,
           account: accountName,
           category: 'Other',
-          idempotencyKey: `integration-balance-income-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       if (income.transaction?.id) createdTxIds.push(income.transaction.id);
@@ -82,7 +81,6 @@ describe('MCP integration > accounts', () => {
           date: today,
           account: accountName,
           category: 'Other',
-          idempotencyKey: `integration-balance-expense-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       if (expense.transaction?.id) createdTxIds.push(expense.transaction.id);

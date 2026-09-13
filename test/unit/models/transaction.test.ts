@@ -13,14 +13,19 @@ describe('TransactionSchema — idempotencyKey lives on the envelope, not the do
     expect(Object.keys(TransactionSchema.shape)).not.toContain('idempotencyKey');
   });
 
-  it('CreateTransactionSchema (wire/in) still REQUIRES idempotencyKey — callers/derivation still supply it', () => {
-    expect(Object.keys(CreateTransactionSchema.shape)).toContain('idempotencyKey');
-    // Presence alone would still pass if the field silently became optional — pin the requiredness.
-    expect(CreateTransactionSchema.shape.idempotencyKey.isOptional()).toBe(false);
-  });
-
   it('TransactionViewSchema (wire/out) still carries idempotencyKey — reflects the stored column, out of scope', () => {
     expect(Object.keys(TransactionViewSchema.shape)).toContain('idempotencyKey');
+  });
+});
+
+describe('CreateTransactionSchema — domain-owned key, caller supplies only a discriminator (ADR-029 phase 2b)', () => {
+  it('no longer accepts a caller-supplied whole idempotencyKey', () => {
+    expect(Object.keys(CreateTransactionSchema.shape)).not.toContain('idempotencyKey');
+  });
+
+  it('carries an optional discriminator', () => {
+    expect(Object.keys(CreateTransactionSchema.shape)).toContain('discriminator');
+    expect(CreateTransactionSchema.shape.discriminator.isOptional()).toBe(true);
   });
 });
 

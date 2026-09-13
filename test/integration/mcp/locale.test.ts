@@ -81,7 +81,6 @@ describe('MCP integration > i18n', () => {
         amount: 10,
         account: 'Test i18n',
         category: 'Alimentação',
-        idempotencyKey: 'i18n-resolve-pt-1',
       },
     });
     expect((tx as { transaction: { categoryId: string } }).transaction.categoryId).toBe('cat-food');
@@ -96,7 +95,6 @@ describe('MCP integration > i18n', () => {
         amount: 10,
         account: 'Test i18n',
         category: 'Food',
-        idempotencyKey: 'i18n-resolve-cross-1',
       },
     });
     expect((tx as { transaction: { categoryId: string } }).transaction.categoryId).toBe('cat-food');
@@ -124,7 +122,6 @@ describe('MCP integration > i18n', () => {
         description: 'FARMÁCIA SÃO JOÃO',
         amount: 35,
         account: 'Test i18n',
-        idempotencyKey: 'i18n-classify-pt-1',
       },
     })) as { transaction: { categoryId: string }; classification: { method: string } };
     expect(tx.transaction.categoryId).toBe('cat-health');
@@ -138,7 +135,6 @@ describe('MCP integration > i18n', () => {
         description: 'GASOLINERA REPSOL',
         amount: 50,
         account: 'Test i18n',
-        idempotencyKey: 'i18n-classify-es-1',
       },
     })) as { transaction: { categoryId: string }; classification: { method: string } };
     expect(tx.transaction.categoryId).toBe('cat-transport');

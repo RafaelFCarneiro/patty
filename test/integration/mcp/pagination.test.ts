@@ -43,7 +43,6 @@ describe('MCP integration > search_transactions pagination (ADR-014)', () => {
           amount,
           type: 'expense' as const,
           date,
-          idempotencyKey: `pager-${stamp}-${g}-${r}`,
         });
         amount += 1;
       }

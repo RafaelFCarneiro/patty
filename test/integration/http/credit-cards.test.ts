@@ -137,7 +137,6 @@ describe('PATCH /api/credit-cards/:name', () => {
         type: 'expense',
         date: '2026-06-05',
         card: 'Bill Boundary Card',
-        idempotencyKey: 'boundary-purchase',
       },
     });
     const before = await inject({
@@ -217,7 +216,6 @@ describe('POST /api/credit-cards/purchases', () => {
         type: 'expense',
         date: '2026-06-05',
         card: 'Purchase Card',
-        idempotencyKey: 'rest-card-purchase',
       },
     });
     expect(res.statusCode).toBe(201);
@@ -237,7 +235,6 @@ describe('POST /api/credit-cards/purchases', () => {
       type: 'expense',
       date: '2026-06-05',
       card: 'Idempotent Purchase Card',
-      idempotencyKey: 'rest-idempotent-card-purchase',
     };
     const first = await inject({ method: 'POST', url: '/api/credit-cards/purchases', payload });
     expect(first.statusCode).toBe(201);
@@ -272,7 +269,6 @@ describe('POST /api/credit-cards/purchases', () => {
         date: '2026-06-05',
         card: 'Strict Purchase Card',
         account: 'Purchase Card Account Bank',
-        idempotencyKey: 'rest-card-purchase-with-account',
       },
     });
     expect(res.statusCode).toBe(422);
@@ -294,7 +290,6 @@ describe('POST /api/credit-cards/purchases', () => {
         date: '2026-06-05',
         card: 'Empty Category Purchase Card',
         category: '',
-        idempotencyKey: 'rest-card-purchase-empty-category',
       },
     });
     expect(res.statusCode).toBe(422);
@@ -316,7 +311,6 @@ describe('POST /api/credit-cards/purchases', () => {
         date: '2026-06-05',
         card: 'Empty SubCategory Purchase Card',
         subCategory: '',
-        idempotencyKey: 'rest-card-purchase-empty-subcategory',
       },
     });
     expect(res.statusCode).toBe(422);
@@ -344,7 +338,6 @@ describe('DELETE /api/credit-cards/:name', () => {
         type: 'expense',
         date: '2026-06-05',
         card: 'FullDelCard',
-        idempotencyKey: 'del-card-purchase',
       },
     });
     const dryRun = await inject({ method: 'DELETE', url: '/api/credit-cards/FullDelCard' });

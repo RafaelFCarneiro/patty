@@ -16,8 +16,8 @@ import type {
   RecurringCandidateInput,
 } from '../../../src/models/correlations.js';
 import { Locale } from '../../../src/models/locale.js';
-import { decimalsLookup, type DecimalsFor } from '../../../src/logic/money.js';
-import { CurrencyCode } from '../../../src/models/money.js';
+import { decimalsLookup } from '../../../src/logic/money.js';
+import { CurrencyCode, type DecimalsFor } from '../../../src/models/money.js';
 import type { CategoryWindowedSpend } from '../../../src/models/transaction.js';
 import type { MerchantSpendDbRow, SpendingShiftDbRow } from '../../../src/wire/db/correlations.js';
 import { SEEDED_CURRENCIES } from '../fixtures/currencies.js';

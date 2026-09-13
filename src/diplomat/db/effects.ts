@@ -62,35 +62,36 @@ type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteCol
  *  second entity-supplied hook is the signal this design is wrong (ADR-023 option D). */
 export type ReadBack = (tx: Tx, id: string) => Promise<unknown>;
 
-type VersionedTableConfig<T extends VersionedTable> = {
-  /** The row field (drizzle column property name) the applier WRITES the `Persistable`'s own
-   *  `idempotencyKey` into, opting the entity into the engine's generic idempotency treatment
-   *  (ADR-029 Phase 2: the key rides the insert envelope, not the model) — when an insert carries
-   *  a key, it's written to this column and `insert` conflict-targets it — the dedup contract "a
-   *  row with this key already exists" makes the existing row the outcome. Distinct from, and
-   *  never merged with, the id-scoped conflict target: that one is a structural retry guard, not
-   *  idempotency (ADR-023). */
-  idempotencyColumn?: Extract<keyof T, string>;
+/** The fixed dedup column every idempotency-keyed insert writes to (ADR-029 Phase 2b) — never a
+ *  per-registration name. Not every `VersionedTable` has it; `keyColumn` below is `undefined` for
+ *  one that doesn't. */
+const IDEMPOTENCY_KEY_COLUMN = 'idempotencyKey';
+
+type VersionedTableConfig = {
   readBack?: ReadBack;
 };
 
 /**
  * Builds an `EntityApplier` for any table following the `id`/`version` convention. Two mechanics
- * worth knowing: `insert`'s `onConflictDoNothing` is scoped to a single conflict target (the
- * registered idempotency column when the row carries a key, else `id`), so a genuine violation of
- * any other unique column (e.g. `tags.name`) still surfaces as a real error instead of being
- * swallowed as a same-id retry; and the next `version` is computed here in application code from
- * the row's own field, never a SQL-side `version + 1` the database evaluates on its own.
+ * worth knowing: `insert`'s `onConflictDoNothing` is scoped to a single conflict target (the fixed
+ * `idempotencyKey` column when the row carries a key AND the table has that column, else `id`), so
+ * a genuine violation of any other unique column (e.g. `tags.name`) still surfaces as a real error
+ * instead of being swallowed as a same-id retry; and the next `version` is computed here in
+ * application code from the row's own field, never a SQL-side `version + 1` the database evaluates
+ * on its own.
  */
-export const missingIdempotencyKeyMessage = (idempotencyColumn: string): string =>
-  `runEffects: entity registered with idempotencyColumn "${idempotencyColumn}" but the insert carries no idempotencyKey`;
+export const missingIdempotencyKeyMessage = (): string =>
+  `runEffects: table has an "${IDEMPOTENCY_KEY_COLUMN}" column but the insert carries no idempotencyKey`;
+
+export const unexpectedIdempotencyKeyMessage = (): string =>
+  `runEffects: insert carries an idempotencyKey but its table has no "${IDEMPOTENCY_KEY_COLUMN}" column`;
 
 export const versionedTableApplier = <T extends VersionedTable>(
   table: T,
-  config: VersionedTableConfig<T> = {},
+  config: VersionedTableConfig = {},
 ): EntityApplier => {
-  const { idempotencyColumn, readBack } = config;
-  const keyColumn = idempotencyColumn ? (table[idempotencyColumn] as AnySQLiteColumn) : undefined;
+  const { readBack } = config;
+  const keyColumn = (table as unknown as Record<string, AnySQLiteColumn | undefined>)[IDEMPOTENCY_KEY_COLUMN];
 
   // The engine's one idempotency read: which row already holds the key a just-conflicted insert
   // carried. Runs inside the same transaction as the no-op'd insert, so absence is an invariant
@@ -103,13 +104,17 @@ export const versionedTableApplier = <T extends VersionedTable>(
 
   return {
     insert: async (tx, model, idempotencyKey) => {
-      // Reject a missing key here, loudly, rather than let it reach the database as an opaque
-      // NOT NULL constraint violation.
-      if (idempotencyColumn && idempotencyKey === undefined) {
-        throw new Error(missingIdempotencyKeyMessage(idempotencyColumn));
+      // Reject either mismatch loudly here, rather than let a missing key reach the database as an
+      // opaque NOT NULL violation, or a set key silently no-op with no dedup at all.
+      if (keyColumn && idempotencyKey === undefined) {
+        throw new Error(missingIdempotencyKeyMessage());
+      }
+      if (!keyColumn && idempotencyKey !== undefined) {
+        throw new Error(unexpectedIdempotencyKeyMessage());
       }
       const row = model as Record<string, unknown> & { id: string };
-      const rowToInsert = idempotencyColumn ? { ...row, [idempotencyColumn]: idempotencyKey } : row;
+      const rowToInsert =
+        keyColumn && idempotencyKey !== undefined ? { ...row, [IDEMPOTENCY_KEY_COLUMN]: idempotencyKey } : row;
       const result = await tx
         .insert(table)
         .values(rowToInsert as never)
@@ -169,8 +174,7 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
   const outcome = await (async (): Promise<ApplierOutcome> => {
     switch (p.op) {
       case PersistOp.enum.insert:
-        // An idempotent-duplicate no-op reports `applied: false` — inserts never retry here; the
-        // duplicate treatment itself is the engine's, declared per entity (`idempotencyColumn`).
+        // An idempotent-duplicate no-op reports `applied: false` — inserts never retry here.
         return applier.insert(tx, p.model, p.idempotencyKey);
       case PersistOp.enum.update: {
         const updateOutcome = await applier.update(tx, p.model);

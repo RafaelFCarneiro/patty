@@ -265,9 +265,9 @@ export const transactionsRepo = (db: Db): TransactionsRepo => ({
 const readBack = async (tx: Tx, id: string): Promise<RawTransactionView> =>
   expectPresent(await fetchTx(tx, id), rowNotFoundAfterWrite('transactions', 'write'));
 
-/** Collapsed to a registration (ADR-023 decision 5): the idempotency column and post-write
- *  projection are declared config; nothing entity-specific decides anything here. */
+/** Collapsed to a registration (ADR-023 decision 5): the post-write projection is declared config;
+ *  the idempotency column is the fixed `idempotencyKey` by convention (ADR-029 Phase 2b) —
+ *  `transactions` opts in simply by having that column and by every insert flow supplying a key. */
 export const transactionApplier: EntityApplier = versionedTableApplier(transactions, {
-  idempotencyColumn: 'idempotencyKey',
   readBack,
 });

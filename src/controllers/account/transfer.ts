@@ -10,7 +10,7 @@ import { guard } from '../../common/result.js';
 import { areDifferentAccounts, assertCurrencyMatch, assertNonCreditType } from '../../logic/account.js';
 import * as persistence from '../../logic/persistence.js';
 import { toIsoDate } from '../../logic/period.js';
-import { buildUpsertResult, defaultStatusFor } from '../../logic/transaction.js';
+import { buildUpsertResult, defaultStatusFor, deriveIdempotencyKey } from '../../logic/transaction.js';
 import { accountErrors } from '../../models/account.js';
 import type { Account, CreateTransfer } from '../../models/account.js';
 import type { FlowOutcome } from '../../models/persistable.js';
@@ -23,7 +23,7 @@ import {
 } from '../../models/transaction.js';
 import type { TransactionSource } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
-import { resolveAccountRef } from '../resolve.js';
+import { resolveAccountRef, resolveDecimals } from '../resolve.js';
 
 const validateTransferAccounts = (from: Account, to: Account) =>
   safeTry(function* () {
@@ -66,10 +66,26 @@ export const createTransfer = (
       refs: { accountId: from.id, toAccountId: to.id },
     };
 
+    const decimals = await resolveDecimals(deps, entity.currency);
+    const idempotencyKey = deriveIdempotencyKey(
+      {
+        fundingSourceId: from.id,
+        counterpartyId: to.id,
+        type: entity.type,
+        currency: entity.currency,
+        date: entity.date,
+        // input.description, not entity.description — the latter falls back to a display-name-
+        // based placeholder, which would change (and so silently miss a real duplicate) if either
+        // account was renamed between calls.
+        description: input.description ?? '',
+        amount: entity.amount,
+      },
+      decimals,
+      input.discriminator,
+    );
+
     const locale = await deps.locale();
-    const persist = [
-      persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity, idempotencyKey: input.idempotencyKey }),
-    ];
+    const persist = [persistence.insert({ entity: TRANSACTION_ENTITY_TAG, model: entity, idempotencyKey })];
     // Transfers are never classified — explicit `undefined` (purry needs the arity to match
     // `buildUpsertResult`'s 2-arg curry: `classification`, `locale`).
     const response = buildUpsertResult(undefined, locale);

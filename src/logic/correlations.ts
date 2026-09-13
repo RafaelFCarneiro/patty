@@ -3,7 +3,7 @@ import { unknownLabels } from './aggregate.js';
 import { localizeCategoryName } from './category.js';
 import { isSubCategoryRow, matchesTarget, resolveTargetNames } from './budget.js';
 import type { CurrencyAmount } from './currencyRate.js';
-import { roundMoney, roundToDecimals, type DecimalsFor } from './money.js';
+import { roundMoney, roundToDecimals } from './money.js';
 import { daysBetween } from './period.js';
 import { nextDue } from './recurring.js';
 import type { BudgetViewInput } from '../models/budget.js';
@@ -25,7 +25,7 @@ import {
   type UnbudgetedSpend,
 } from '../models/correlations.js';
 import type { Locale } from '../models/locale.js';
-import type { CurrencyCode } from '../models/money.js';
+import type { CurrencyCode, DecimalsFor } from '../models/money.js';
 import type { CategoryWindowedSpend } from '../models/transaction.js';
 import { RecurringPeriod } from '../models/recurring.js';
 

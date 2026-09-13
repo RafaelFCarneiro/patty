@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto';
 import { purry } from 'remeda';
 import { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
+import { roundToDecimals } from './money.js';
 import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDirection } from '../models/page.js';
 import type {
   CategoryFields,
@@ -8,6 +10,7 @@ import type {
   ClassifiedUpsertResult,
   ClassifyOutcome,
   DefaultedStatementLine,
+  IdempotencyIdentity,
   UpsertTransactionResult,
   SearchTransactions,
   StatementLine,
@@ -159,28 +162,39 @@ export const entityFromExisting = (existing: RawTransactionView): TransactionEnt
 
 // ─── Bulk ─────────────────────────────────────────────────────────────────────
 
-/** Stable idempotency key derived from statement line: re-importing is a no-op. `decimals` rounds
- *  the amount component to the line's own currency precision — a flat 2 would collide two BTC/USDC
- *  amounts that only differ past the 2nd decimal, silently dropping the second as a duplicate. */
+/** Domain-owned idempotency key (ADR-029 Phase 2b): a sha256 hash of `identity` plus the caller's
+ *  optional `discriminator`, the escape hatch for a genuinely-distinct transaction that would
+ *  otherwise derive an identical key. The single derivation for single-add and bulk import alike —
+ *  bulk reuses the same single-line flows, so it never derives its own key. */
 export const deriveIdempotencyKey = (
-  item: { date: string; description: string; amount: number },
+  identity: IdempotencyIdentity,
   decimals: number,
-): string =>
-  `${item.date}-${normalizeMerchant(item.description).replace(/\s+/g, '-') || 'tx'}-${item.amount.toFixed(decimals)}`;
+  discriminator?: string,
+): string => {
+  // JSON.stringify, not a plain-joined string — discriminator is unconstrained caller text, so a
+  // plain separator could let two different field combinations hash identically.
+  const canonical = JSON.stringify([
+    identity.fundingSourceId ?? null,
+    identity.counterpartyId ?? null,
+    identity.billPeriodKey ?? null,
+    identity.type,
+    identity.currency,
+    identity.date,
+    normalizeMerchant(identity.description),
+    // roundToDecimals, not a raw toFixed — toFixed truncates rather than rounds at a float
+    // boundary (e.g. 1.005 at 2 decimals), which would hash the wrong amount.
+    roundToDecimals(identity.amount, decimals).toFixed(decimals),
+    discriminator ?? null,
+  ]);
+  return createHash('sha256').update(canonical).digest('hex');
+};
 
 // today is the caller's already-resolved toIsoDate(deps.clock()) — logic never reads the clock.
-// decimals is likewise resolved by the caller, never read here.
 export const defaultStatementLines = <Line extends StatementLine>(
   today: string,
   lines: readonly Line[],
   rawInput: string | undefined,
-  decimals: number,
-): DefaultedStatementLine<Line>[] =>
-  lines.map((line) => {
-    const date = line.date ?? today;
-    const idempotencyKey = line.idempotencyKey ?? deriveIdempotencyKey({ ...line, date }, decimals);
-    return { ...line, date, idempotencyKey, rawInput };
-  });
+): DefaultedStatementLine<Line>[] => lines.map((line) => ({ ...line, date: line.date ?? today, rawInput }));
 
 export const LOW_CONFIDENCE_THRESHOLD = 0.6;
 

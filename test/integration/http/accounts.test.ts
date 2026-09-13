@@ -125,7 +125,6 @@ describe('PATCH /api/accounts/:name', () => {
         amount: 5,
         date: '2026-06-01',
         account: 'TypeBlock',
-        idempotencyKey: 'type-block-tx',
       },
     });
     const res = await inject({ method: 'PATCH', url: '/api/accounts/TypeBlock', payload: { type: 'savings' } });
@@ -262,7 +261,6 @@ describe('DELETE /api/accounts/:name', () => {
         amount: 5,
         date: '2026-06-01',
         account: 'DelTxBlock',
-        idempotencyKey: 'del-tx-block',
       },
     });
     const res = await inject({ method: 'DELETE', url: '/api/accounts/DelTxBlock' });
@@ -347,7 +345,6 @@ describe('GET /api/accounts/balances', () => {
         amount: 500,
         date: '2026-06-01',
         account: 'BalanceAcct',
-        idempotencyKey: 'bal-income',
       },
     });
     await inject({
@@ -358,7 +355,6 @@ describe('GET /api/accounts/balances', () => {
         amount: 200,
         date: '2026-06-01',
         account: 'BalanceAcct',
-        idempotencyKey: 'bal-expense',
       },
     });
     const res = await inject({ method: 'GET', url: '/api/accounts/balances?account=BalanceAcct' });
@@ -386,7 +382,6 @@ describe('GET /api/accounts/balances', () => {
         date: '2026-06-15',
         account: 'ProjAcct',
         status: 'pending',
-        idempotencyKey: 'proj-pend',
       },
     });
     const noProj = await inject({ method: 'GET', url: '/api/accounts/balances?account=ProjAcct' });

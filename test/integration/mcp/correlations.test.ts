@@ -131,7 +131,6 @@ const seedBaseline = async (
       category,
       currency,
       date,
-      idempotencyKey: `corr-baseline-${stamp}-${category}-${currency}-${i}`,
     });
   }
 };
@@ -173,7 +172,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-current-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -204,7 +202,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-newcat-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -258,7 +255,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-cur-brl-${stamp}`,
       });
       await addExpense(client, {
         description: 'USD current',
@@ -266,7 +262,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         category: categoryName,
         currency: 'USD',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-cur-usd-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -298,7 +293,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-pending-eff-${stamp}`,
       });
       await addExpense(client, {
         description: 'pending spend, should not count',
@@ -307,7 +301,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         currency: 'BRL',
         status: 'pending',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-pending-pnd-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -349,7 +342,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
           to: toAccount.name,
           amount: 1000,
           date: CURRENT_DATE,
-          idempotencyKey: `corr-transfer-${stamp}`,
         },
       })) as { transaction?: { id?: string } };
       ensure(transfer.transaction?.id, 'transfer transaction id missing');
@@ -363,7 +355,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-transfer-spend-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -390,7 +381,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         category: 'Investments',
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-invest-income-${stamp}`,
       });
       await addExpense(client, {
         description: 'money moved into the investment, the actual spend',
@@ -398,7 +388,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         category: 'Investments',
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-invest-expense-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -428,7 +417,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-small-${stamp}`,
       });
 
       const filtered = (await callTool(client, {
@@ -475,7 +463,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
         category: categoryName,
         currency: 'BTC',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-btc-current-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -631,7 +618,6 @@ describe('MCP integration > find_correlations (budget_fit)', () => {
           subCategory: subCategoryName,
           currency: 'BRL',
           date,
-          idempotencyKey: `corr-budget-sub-baseline-${stamp}-${i}`,
         });
       }
       await createBudget(client, { subCategory: subCategoryName, currency: 'BRL', limit: 50 });
@@ -670,7 +656,6 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-conc-single-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -712,7 +697,6 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
           category: categoryName,
           currency: 'BRL',
           date: CURRENT_DATE,
-          idempotencyKey: `corr-conc-topn-${stamp}-${i}`,
         });
       }
 
@@ -747,7 +731,6 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-conc-cur-brl-${stamp}`,
       });
       await addExpense(client, {
         description: 'Uber',
@@ -755,7 +738,6 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
         category: categoryName,
         currency: 'USD',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-conc-cur-usd-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -787,7 +769,6 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-conc-pending-eff-${stamp}`,
       });
       await addExpense(client, {
         description: 'Amazon',
@@ -796,7 +777,6 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
         currency: 'BRL',
         status: 'pending',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-conc-pending-pnd-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -827,7 +807,6 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
         category: wantedCategory,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-conc-filter-wanted-${stamp}`,
       });
       await addExpense(client, {
         description: 'Amazon',
@@ -835,7 +814,6 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
         category: otherCategory,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-conc-filter-other-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -876,7 +854,6 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
         category: categoryName,
         currency: 'USDC',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-conc-usdc-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -916,7 +893,6 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
           category: 'Subscriptions',
           currency: 'BRL',
           date: daysAgo(offset),
-          idempotencyKey: `corr-candidate-streaming-${i}`,
         });
       }
 
@@ -953,7 +929,6 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
           category: 'Subscriptions',
           currency: 'BRL',
           date: daysAgo(offset),
-          idempotencyKey: `corr-candidate-excluded-${i}`,
         });
       }
       await callTool(client, {
@@ -990,7 +965,6 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
         category: 'Subscriptions',
         currency: 'BRL',
         date: daysAgo(30),
-        idempotencyKey: 'corr-candidate-sparse-0',
       });
       await addExpense(client, {
         description: merchant,
@@ -998,7 +972,6 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
         category: 'Subscriptions',
         currency: 'BRL',
         date: daysAgo(0),
-        idempotencyKey: 'corr-candidate-sparse-1',
       });
 
       const result = (await callTool(client, {
@@ -1025,7 +998,6 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
           category: 'Subscriptions',
           currency: 'BRL',
           date: daysAgo(offset),
-          idempotencyKey: `corr-candidate-irregular-${i}`,
         });
       }
 
@@ -1052,7 +1024,6 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
           category: 'Subscriptions',
           currency: 'BTC',
           date: daysAgo(offset),
-          idempotencyKey: `corr-candidate-btc-${i}`,
         });
       }
 
@@ -1103,7 +1074,6 @@ describe('MCP integration > find_correlations displayCurrency', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-dc-shift-${stamp}`,
       });
 
       const withoutConversion = (await callTool(client, {
@@ -1139,7 +1109,6 @@ describe('MCP integration > find_correlations displayCurrency', () => {
         category: categoryName,
         currency: 'BTC',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-dc-shift-btc-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -1172,7 +1141,6 @@ describe('MCP integration > find_correlations displayCurrency', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-dc-budget-eff-${stamp}`,
       });
       await addExpense(client, {
         description: 'pending spend — still committed',
@@ -1181,7 +1149,6 @@ describe('MCP integration > find_correlations displayCurrency', () => {
         currency: 'BRL',
         status: 'pending',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-dc-budget-pnd-${stamp}`,
       });
 
       const withoutConversion = (await callTool(client, {
@@ -1219,7 +1186,6 @@ describe('MCP integration > find_correlations displayCurrency', () => {
         category: categoryName,
         currency: 'BTC',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-dc-budget-btc-${stamp}`,
       });
 
       const result = (await callTool(client, {
@@ -1250,7 +1216,6 @@ describe('MCP integration > find_correlations displayCurrency', () => {
         category: categoryName,
         currency: 'BRL',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-dc-merchant-${stamp}`,
       });
 
       const withoutConversion = (await callTool(client, {
@@ -1285,7 +1250,6 @@ describe('MCP integration > find_correlations displayCurrency', () => {
         category: categoryName,
         currency: 'BTC',
         date: CURRENT_DATE,
-        idempotencyKey: `corr-dc-merchant-btc-${stamp}`,
       });
 
       const result = (await callTool(client, {

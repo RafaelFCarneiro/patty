@@ -37,7 +37,6 @@ describe('MCP integration > crypto currencies (ADR-026 Phase 1)', () => {
           date: today,
           account: accountName,
           category: 'Other',
-          idempotencyKey: `integration-btc-income-${stamp}`,
         },
       })) as { transaction?: { id?: string; amount?: number } };
       if (income.transaction?.id) createdTxIds.push(income.transaction.id);
@@ -87,7 +86,6 @@ describe('MCP integration > crypto currencies (ADR-026 Phase 1)', () => {
           date: today,
           account: accountName,
           category: 'Other',
-          idempotencyKey: `integration-usdc-expense-${stamp}`,
         },
       })) as { transaction?: { id?: string; amount?: number } };
       if (expense.transaction?.id) createdTxIds.push(expense.transaction.id);

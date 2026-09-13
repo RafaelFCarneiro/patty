@@ -23,7 +23,6 @@ describe('GET /api/bills', () => {
         amount: 50,
         type: 'expense',
         date: '2026-06-05',
-        idempotencyKey: 'bill-chg-1',
         card: 'BillCard',
       },
     });
@@ -52,7 +51,6 @@ describe('GET /api/bills', () => {
         amount: 10,
         type: 'expense',
         date: '2026-06-05',
-        idempotencyKey: 'bill-leak-1',
         card: 'LeakCheckCard',
       },
     });
@@ -81,7 +79,6 @@ describe('GET /api/bills', () => {
         type: 'expense',
         date: '2026-06-05',
         card: 'NoteBillCard',
-        idempotencyKey: 'note-bill-1',
         note: 'warranty',
       },
     });
@@ -109,7 +106,6 @@ describe('GET /api/bills', () => {
         type: 'expense',
         date: '2026-06-05',
         card: 'CoerceCard',
-        idempotencyKey: 'coerce-chg',
       },
     });
     const res = await inject({ method: 'GET', url: '/api/bills?card=CoerceCard&month=6&year=2026' });
@@ -147,7 +143,6 @@ describe('POST /api/bills/pay', () => {
         amount: 300,
         type: 'expense',
         date: '2026-06-05',
-        idempotencyKey: 'pay-bill-chg',
         card: 'PayBillCard',
       },
     });
@@ -181,7 +176,6 @@ describe('POST /api/bills/pay', () => {
         type: 'expense',
         date: '2026-06-05',
         card: 'NoDefaultCard',
-        idempotencyKey: 'nodef-chg',
       },
     });
     const res = await inject({
@@ -212,7 +206,6 @@ describe('POST /api/bills/pay', () => {
         type: 'expense',
         date: '2026-06-05',
         card: 'USDMismatchCard',
-        idempotencyKey: 'mismatch-chg',
       },
     });
     const res = await inject({
@@ -253,7 +246,6 @@ describe('POST /api/bills/revert', () => {
         amount: 300,
         type: 'expense',
         date: '2026-06-05',
-        idempotencyKey: 'revert-bill-chg',
         card: 'RevertBillCard',
       },
     });
@@ -291,7 +283,6 @@ describe('POST /api/bills/revert', () => {
         amount: 20,
         type: 'expense',
         date: '2026-06-05',
-        idempotencyKey: 'noop-revert-chg',
         card: 'NoopRevertCard',
       },
     });

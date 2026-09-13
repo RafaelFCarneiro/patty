@@ -33,7 +33,6 @@ describe('MCP integration > transaction category locale', () => {
         amount: 50,
         account,
         category: 'Food',
-        idempotencyKey: 'tx-cat-locale-1',
       },
     });
   });
@@ -68,7 +67,6 @@ describe('MCP integration > transaction category locale', () => {
         amount: 30,
         account,
         category: 'Food',
-        idempotencyKey: 'tx-cat-locale-es-1',
       },
     })) as CreateResult;
     expect(result.transaction.categoryName).toBe('Alimentación');
@@ -85,7 +83,6 @@ describe('MCP integration > transaction category locale', () => {
         amount: 20,
         account,
         category: 'Custom Cat',
-        idempotencyKey: 'tx-cat-locale-custom-1',
       },
     })) as CreateResult;
     expect(result.transaction.categoryName).toBe('Custom Cat');
@@ -124,7 +121,6 @@ describe('MCP integration > transaction category locale', () => {
         amount: 15,
         account,
         subCategory: 'Groceries',
-        idempotencyKey: 'tx-subcat-locale-1',
       },
     });
 

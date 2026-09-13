@@ -11,7 +11,6 @@ const baseCreate = {
   amount: 10,
   type: 'expense' as const,
   card: 'Nubank',
-  idempotencyKey: 'k-1',
 };
 
 describe('AddCardPurchaseSchema — composes up from the minimal core (ADR-019)', () => {
