@@ -303,6 +303,20 @@ export type ResolvedSearchRefs = {
 
 // ─── Domain result types ──────────────────────────────────────────
 
+/** Every field that distinguishes one intended transaction write from another (ADR-029 Phase 2b).
+ *  `counterpartyId` (a transfer's destination account) is required for transfers — omitting it
+ *  would let two transfers with the same source/date/description/amount but different
+ *  destinations collide. */
+export type IdempotencyIdentity = {
+  fundingSourceId: string | undefined;
+  counterpartyId?: string;
+  type: TransactionType;
+  currency: CurrencyCode;
+  date: string;
+  description: string;
+  amount: number;
+};
+
 /** A CategoryFields name resolved to ids — categoryId is always the top-level category's id. */
 export const CategorySelectionSchema = z.object({
   categoryId: Id.describe("Resolved category id (the sub-category's parent id, when a sub-category was resolved)"),

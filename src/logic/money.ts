@@ -1,10 +1,5 @@
 import * as R from 'remeda';
-import { CurrencyCode, type Currency } from '../models/money.js';
-
-/** A currency's own fractional digits (BRL/USD 2, USDC 6, BTC 8 — ADR-026) — rounding a total to a
- *  flat 2 decimals would corrupt a native BTC/USDC amount. Sourced from the currencies repo by the
- *  controller; never hardcoded in `logic/`. */
-export type DecimalsFor = (currency: CurrencyCode) => number;
+import { CurrencyCode, type Currency, type DecimalsFor } from '../models/money.js';
 
 /** Fiat's own fractional digits — the fallback when a currency is missing from the reference list
  *  and `roundMoney`'s fixed default (see below). */

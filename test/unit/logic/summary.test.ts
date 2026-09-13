@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { summarize } from '../../../src/logic/summary.js';
-import type { DecimalsFor } from '../../../src/logic/money.js';
+import type { DecimalsFor } from '../../../src/models/money.js';
 
 // Fiat-shaped 2 decimals for every currency, matching existing behavior before ADR-026 — tests
 // that care about a different currency's own decimals pass their own lookup explicitly.

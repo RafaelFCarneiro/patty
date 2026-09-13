@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { purry } from 'remeda';
 import { IsoDate } from '../models/date.js';
 import type { Locale } from '../models/locale.js';
-import type { CurrencyCode } from '../models/money.js';
 import { roundToDecimals } from './money.js';
 import { CURSOR_VERSION, decodeCursor, encodeCursor, type CursorKey, type SortDirection } from '../models/page.js';
 import type {
@@ -11,6 +10,7 @@ import type {
   ClassifiedUpsertResult,
   ClassifyOutcome,
   DefaultedStatementLine,
+  IdempotencyIdentity,
   UpsertTransactionResult,
   SearchTransactions,
   StatementLine,
@@ -161,20 +161,6 @@ export const entityFromExisting = (existing: RawTransactionView): TransactionEnt
 });
 
 // ─── Bulk ─────────────────────────────────────────────────────────────────────
-
-/** Every field that distinguishes one intended transaction write from another (ADR-029 Phase 2b).
- *  `counterpartyId` (a transfer's destination account) is required for transfers — omitting it
- *  would let two transfers with the same source/date/description/amount but different
- *  destinations collide. */
-export type IdempotencyIdentity = {
-  fundingSourceId: string | undefined;
-  counterpartyId?: string;
-  type: TransactionType;
-  currency: CurrencyCode;
-  date: string;
-  description: string;
-  amount: number;
-};
 
 /** Domain-owned idempotency key (ADR-029 Phase 2b): a sha256 hash of `identity` plus the caller's
  *  optional `discriminator`, the escape hatch for a genuinely-distinct transaction that would
