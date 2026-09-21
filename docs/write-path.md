@@ -90,26 +90,44 @@ effect runner, appliers, outcomes, and the per-flow notes.
 
 ### The effect runner — the engine
 
-- **`runEffects(db, registry, flow)`** (`diplomat/db/effects.ts` — the only place that touches `Db` for a
-  converted flow) invokes `flow` and executes the effects it returns. **Single-atomic-unit** mode: the `persist`
-  batch applied in one `db.transaction`, each row-shaped `Persistable` dispatched by `p.entity` through the
-  `registry`; **response** always produced; message dispatch is a named-but-unbuilt future effect kind.
-  `update`/`delete` apply `... SET ..., version = <read version + 1> WHERE id = ? AND version = ?` — the new
-  version computed in application code, **never** a SQL-side `version + 1`. A version-guarded op affecting zero
-  rows rolls back the whole batch and re-invokes `flow` (fresh read → fresh decision), bounded, then surfaces
-  the generic `conflict` `AppError` (`models/error.ts`, no business payload). **The retry loop covers two
-  distinct classes (ADR-024): `VersionConflict` (logical — a stale read)** and **`SQLITE_BUSY` (physical — a
-  contended writer, classified by `isSqliteBusy` in `diplomat/db/sqliteErrors.ts` on the driver error's base
+- **The port seam (ADR-030 Phase 1).** `runEffects`/`runEffectsSequence` no longer take a `Db` and no longer
+  name `Db.transaction` directly. They take a **`TransactionRunner<TTx>`** (`{ runInTransaction: (work: (tx:
+  TTx) => Promise<T>) => Promise<T> }`) and an **`IsTransientContention`** classifier (`(cause: unknown) =>
+  boolean`) as their first two arguments, alongside the `registry`. Both are the **adapter port**: the
+  composition root (`main.ts`, `test/integration/app-builder.ts`) binds them to the concrete SQLite
+  adapter — `diplomat/db/driver.ts`'s `createTransactionRunner(db)` wraps libSQL Drizzle's `Db.transaction`,
+  and `diplomat/db/sqliteErrors.ts`'s `isSqliteBusy` is passed as `isTransientContention`. `EntityApplier` /
+  `ApplierRegistry` / `ReadBack` are generic over the same opaque transaction handle `TTx`, defaulted to the
+  SQLite adapter's own `Tx` (now derived in `driver.ts`, re-exported from `effects.ts` for existing import
+  paths) so every existing SQLite-backed registration keeps typing itself without repeating the argument. The
+  engine's retry predicate (`isRetryable`, exported for its own unit coverage) reads `cause instanceof
+  VersionConflict || isTransientContention(cause)` — no sqlite-specific import in the core's retry decision.
+  This is an in-place seam only: the engine still physically lives in `diplomat/db/effects.ts` alongside the
+  SQLite adapter (`driver.ts`, `sqliteErrors.ts`, `versionedTableApplier`) — the relocation to a
+  driver-free `src/effects/` module is ADR-030 Phase 2.
+- **`runEffects(runner, isTransientContention, registry, flow)`** (`diplomat/db/effects.ts` — the only place
+  that calls `runInTransaction` for a converted flow) invokes `flow` and executes the effects it returns.
+  **Single-atomic-unit** mode: the `persist` batch applied in one `runInTransaction` unit of work, each
+  row-shaped `Persistable` dispatched by `p.entity` through the `registry`; **response** always produced;
+  message dispatch is a named-but-unbuilt future effect kind. `update`/`delete` apply `... SET ..., version =
+  <read version + 1> WHERE id = ? AND version = ?` — the new version computed in application code, **never**
+  a SQL-side `version + 1`. A version-guarded op affecting zero rows rolls back the whole batch and re-invokes
+  `flow` (fresh read → fresh decision), bounded, then surfaces the generic `conflict` `AppError`
+  (`models/error.ts`, no business payload). **The retry loop covers two distinct classes (ADR-024):
+  `VersionConflict` (logical — a stale read)** and **transient physical contention (the SQLite adapter's
+  `isTransientContention` = `isSqliteBusy` in `diplomat/db/sqliteErrors.ts`, matched on the driver error's base
   `.code`, covering `SQLITE_BUSY` and the more specific `SQLITE_BUSY_SNAPSHOT`)**; `applyBatch` catches either
-  and treats them identically — roll back, re-invoke, same `MAX_RUN_EFFECTS_ATTEMPTS` budget. `busy_timeout`
-  (`diplomat/db/driver.ts`) already absorbs the common case by having the driver wait for the lock instead of
-  throwing; this retry is the bounded defense-in-depth for contention that outlives that timeout.
-- **`runEffectsSequence(db, registry, items, flowFor)`** — the second mode: each item's flow (built by `flowFor`,
-  invoked only when the runner reaches it) runs through the same `attempt`/retry primitive, in its **own
-  transaction**, in order. Item *i+1* sees item *i*'s committed writes — which is why bulk import reuses the
-  single-line flows verbatim. A unit's version conflict retries only that unit; a domain error or exhausted
-  retries is recorded as `Err` and the sequence **continues** (partial success). Returns one `SequenceOutcome<T>`
-  (`Result<T, AppError>`) per item, positionally parallel to `items`.
+  (via `isRetryable`) and treats them identically — roll back, re-invoke, same `MAX_RUN_EFFECTS_ATTEMPTS`
+  budget. `busy_timeout` (`diplomat/db/driver.ts`) already absorbs the common case by having the driver wait
+  for the lock instead of throwing; this retry is the bounded defense-in-depth for contention that outlives
+  that timeout.
+- **`runEffectsSequence(runner, isTransientContention, registry, items, flowFor)`** — the second mode: each
+  item's flow (built by `flowFor`, invoked only when the runner reaches it) runs through the same
+  `attempt`/retry primitive, in its **own transaction**, in order. Item *i+1* sees item *i*'s committed
+  writes — which is why bulk import reuses the single-line flows verbatim. A unit's version conflict retries
+  only that unit; a domain error or exhausted retries is recorded as `Err` and the sequence **continues**
+  (partial success). Returns one `SequenceOutcome<T>` (`Result<T, AppError>`) per item, positionally parallel
+  to `items`.
 - **`EntityApplier` / `ApplierRegistry`** (`diplomat/db/effects.ts`) — the engine dispatches a row-shaped
   `Persistable` to `registry[p.entity]`; it never names an entity and never needs a new `case` as entities
   convert. The `ApplierRegistry` is assembled once at the composition root (`main.ts`,

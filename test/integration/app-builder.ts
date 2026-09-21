@@ -3,7 +3,8 @@ import { createRequire } from 'node:module';
 import type { FastifyInstance } from 'fastify';
 import { inject } from 'vitest';
 import { bootstrap } from '../../src/diplomat/db/bootstrap.js';
-import { openDatabase } from '../../src/diplomat/db/driver.js';
+import { createTransactionRunner, openDatabase } from '../../src/diplomat/db/driver.js';
+import { isSqliteBusy } from '../../src/diplomat/db/sqliteErrors.js';
 import { accountApplier, accountsRepo } from '../../src/diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from '../../src/diplomat/db/repos/bills.js';
 import { budgetApplier, budgetsRepo } from '../../src/diplomat/db/repos/budgets.js';
@@ -105,9 +106,11 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     [SETTINGS_ENTITY_TAG]: settingsApplier,
   };
   const changeBus = createChangeBus();
-  const boundRunEffects: RunEffects = (flow) => runEffects(db, applierRegistry, flow, changeBus.publish);
+  const transactionRunner = createTransactionRunner(db);
+  const boundRunEffects: RunEffects = (flow) =>
+    runEffects(transactionRunner, isSqliteBusy, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
-    runEffectsSequence(db, applierRegistry, items, flowFor, changeBus.publish);
+    runEffectsSequence(transactionRunner, isSqliteBusy, applierRegistry, items, flowFor, changeBus.publish);
   const app = buildHttpApp(
     deps,
     version,

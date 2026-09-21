@@ -18,7 +18,7 @@ import { setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import type { Db } from '../../../src/diplomat/db/driver.js';
-import { openDatabase } from '../../../src/diplomat/db/driver.js';
+import { createTransactionRunner, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { accountApplier, accountsRepo } from '../../../src/diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from '../../../src/diplomat/db/repos/bills.js';
 import { categoryApplier } from '../../../src/diplomat/db/repos/categories.js';
@@ -52,6 +52,7 @@ import {
   type EntityApplier,
   type SequenceOutcome,
 } from '../../../src/diplomat/db/effects.js';
+import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
 import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus } from '../../../src/models/bill.js';
@@ -79,7 +80,13 @@ const TEST_KEY = 'e'.repeat(64);
 
 let tmpDir: string;
 let db: Db;
+let runner: ReturnType<typeof createTransactionRunner>;
 let registry: ApplierRegistry;
+
+// The ADR-030 port's SQLite binding, wired here the same way the composition root (`main.ts`)
+// wires it — every direct `runEffects`/`runEffectsSequence` call below exercises the real
+// adapter, not a stub, so this suite stays the behavior proof it always was.
+const isTransientContention = isSqliteBusy;
 
 beforeEach(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-uow-'));
@@ -87,6 +94,7 @@ beforeEach(async () => {
     DB_PATH: join(tmpDir, 'uow.db'),
     FINTRACK_DB_KEY: TEST_KEY,
   });
+  runner = createTransactionRunner(db);
   await bootstrap(db);
   registry = { [ACCOUNT_ENTITY_TAG]: accountApplier };
 });
@@ -208,7 +216,7 @@ const readIds = async (id: string): Promise<unknown[]> => db.all(sql`SELECT id F
 describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () => {
   it('applies a batch atomically: a version-conflicting update rolls back a sibling insert', async () => {
     const seed = newAccount();
-    await runEffects(db, registry, insertOne(seed));
+    await runEffects(runner, isTransientContention, registry, insertOne(seed));
 
     const sibling = newAccount();
     const staleUpdate: Persistable = persistence.update({
@@ -217,7 +225,7 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
     });
     const insertSibling: Persistable = persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: sibling });
 
-    const result = await runEffects(db, registry, () =>
+    const result = await runEffects(runner, isTransientContention, registry, () =>
       okAsync({ persist: [insertSibling, staleUpdate], response: null }),
     );
 
@@ -229,7 +237,7 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
 
   it('rolls back a version conflict, re-invokes the flow for a fresh read, and succeeds', async () => {
     const seed = newAccount();
-    await runEffects(db, registry, insertOne(seed));
+    await runEffects(runner, isTransientContention, registry, insertOne(seed));
 
     let calls = 0;
     const flow = () => {
@@ -244,7 +252,7 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
       });
     };
 
-    const result = await runEffects(db, registry, flow);
+    const result = await runEffects(runner, isTransientContention, registry, flow);
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe(2); // succeeded on the retry (flow's 2nd invocation)
@@ -253,7 +261,7 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
 
   it('exhausts retries and surfaces the generic conflict error when the version never matches', async () => {
     const seed = newAccount();
-    await runEffects(db, registry, insertOne(seed));
+    await runEffects(runner, isTransientContention, registry, insertOne(seed));
 
     let calls = 0;
     const flow = () => {
@@ -265,7 +273,7 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
       });
     };
 
-    const result = await runEffects(db, registry, flow);
+    const result = await runEffects(runner, isTransientContention, registry, flow);
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -275,9 +283,9 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
 
   it('applies a versioned delete the same way it applies a versioned update', async () => {
     const seed = newAccount();
-    await runEffects(db, registry, insertOne(seed));
+    await runEffects(runner, isTransientContention, registry, insertOne(seed));
 
-    const result = await runEffects(db, registry, () =>
+    const result = await runEffects(runner, isTransientContention, registry, () =>
       okAsync({
         persist: [persistence.remove({ entity: ACCOUNT_ENTITY_TAG, id: seed.id, version: seed.version })],
         response: null,
@@ -290,9 +298,9 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
 
   it('refuses a versioned delete against a stale version, leaving the row untouched', async () => {
     const seed = newAccount();
-    await runEffects(db, registry, insertOne(seed));
+    await runEffects(runner, isTransientContention, registry, insertOne(seed));
 
-    const result = await runEffects(db, registry, () =>
+    const result = await runEffects(runner, isTransientContention, registry, () =>
       okAsync({
         persist: [persistence.remove({ entity: ACCOUNT_ENTITY_TAG, id: seed.id, version: seed.version + 1 })],
         response: null,
@@ -306,7 +314,9 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
   it('an empty persist batch (a dry-run preview flow) skips db.transaction entirely', async () => {
     const transactionSpy = vi.spyOn(db, 'transaction');
 
-    const result = await runEffects(db, registry, () => okAsync({ persist: [], response: 'preview' }));
+    const result = await runEffects(runner, isTransientContention, registry, () =>
+      okAsync({ persist: [], response: 'preview' }),
+    );
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe('preview');
@@ -318,7 +328,7 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
   it('treats a duplicate insert (same id) as an idempotent no-op, never a conflict', async () => {
     const model = newAccount();
 
-    const result = await runEffects(db, registry, () =>
+    const result = await runEffects(runner, isTransientContention, registry, () =>
       okAsync({
         persist: [
           persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model }),
@@ -341,7 +351,7 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
     // rather than re-deriving it.
     const seed = newAccount({ version: 99 });
 
-    await runEffects(db, registry, insertOne(seed));
+    await runEffects(runner, isTransientContention, registry, insertOne(seed));
 
     expect(await readVersion(seed.id)).toBe(99);
   });
@@ -358,7 +368,7 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
     };
     const mixedRegistry: ApplierRegistry = { ...registry, widget: widgetApplier };
 
-    const result = await runEffects(db, mixedRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, mixedRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: 'widget', model: { id: 'w-1' } }],
         response: null,
@@ -370,7 +380,7 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
   });
 
   it('throws a clear error for a Persistable whose entity has no registered applier', async () => {
-    const outcome = runEffects(db, {}, () =>
+    const outcome = runEffects(runner, isTransientContention, {}, () =>
       okAsync({ persist: [{ op: PersistOp.enum.insert, entity: 'unregistered', model: {} }], response: null }),
     );
 
@@ -380,7 +390,7 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
   it('resolves an idempotency-aware response by calling it with the batch apply outcomes (rule 6)', async () => {
     const model = newAccount();
 
-    const result = await runEffects(db, registry, () =>
+    const result = await runEffects(runner, isTransientContention, registry, () =>
       okAsync({
         persist: [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model })],
         response: (outcomes: PersistOutcome[]) => ({ created: outcomes[0]?.applied }),
@@ -393,9 +403,9 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
 
   it('reports applied:false (not a conflict) for the outcome of an idempotent duplicate insert', async () => {
     const model = newAccount();
-    await runEffects(db, registry, insertOne(model));
+    await runEffects(runner, isTransientContention, registry, insertOne(model));
 
-    const result = await runEffects(db, registry, () =>
+    const result = await runEffects(runner, isTransientContention, registry, () =>
       okAsync({
         persist: [persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model })],
         response: (outcomes: PersistOutcome[]) => ({ created: outcomes[0]?.applied }),
@@ -425,7 +435,7 @@ describe('runEffects — SQLITE_BUSY treated as a retryable physical conflict, b
     const flakyRegistry: ApplierRegistry = { [ACCOUNT_ENTITY_TAG]: flakyApplier };
     const model = newAccount();
 
-    const result = await runEffects(db, flakyRegistry, insertOne(model));
+    const result = await runEffects(runner, isTransientContention, flakyRegistry, insertOne(model));
 
     expect(result.isOk()).toBe(true);
     expect(calls).toBe(2); // failed on the first attempt, committed on the retry
@@ -444,7 +454,7 @@ describe('runEffects — SQLITE_BUSY treated as a retryable physical conflict, b
     const busyRegistry: ApplierRegistry = { [ACCOUNT_ENTITY_TAG]: alwaysBusyApplier };
     const model = newAccount();
 
-    const result = await runEffects(db, busyRegistry, insertOne(model));
+    const result = await runEffects(runner, isTransientContention, busyRegistry, insertOne(model));
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -468,7 +478,13 @@ describe('runEffectsSequence — sequence-of-independent-units mode (ADR-022 ste
       return insertOne(unit === 'one' ? a1 : a3);
     };
 
-    const outcomes = await runEffectsSequence(db, registry, ['one', 'two', 'three'], flowFor);
+    const outcomes = await runEffectsSequence(
+      runner,
+      isTransientContention,
+      registry,
+      ['one', 'two', 'three'],
+      flowFor,
+    );
 
     expect(outcomes[0]?.isOk()).toBe(true);
     expect(outcomes[1]?.isErr()).toBe(true);
@@ -501,7 +517,13 @@ describe('runEffectsSequence — sequence-of-independent-units mode (ADR-022 ste
       };
     };
 
-    const outcomes = await runEffectsSequence(db, registry, ['one', 'two', 'three'], flowFor);
+    const outcomes = await runEffectsSequence(
+      runner,
+      isTransientContention,
+      registry,
+      ['one', 'two', 'three'],
+      flowFor,
+    );
 
     expect(outcomes.map((o) => o.isOk())).toEqual([true, true, true]);
     expect(unit1Calls).toBe(1);
@@ -525,7 +547,13 @@ describe('runEffectsSequence — sequence-of-independent-units mode (ADR-022 ste
         );
     };
 
-    const outcomes = await runEffectsSequence(db, registry, ['one', 'two'] as const, flowFor);
+    const outcomes = await runEffectsSequence(
+      runner,
+      isTransientContention,
+      registry,
+      ['one', 'two'] as const,
+      flowFor,
+    );
 
     expect(outcomes[0]?.isOk()).toBe(true);
     expect(outcomes[1]?.isOk()).toBe(true);
@@ -549,7 +577,13 @@ describe('runEffectsSequence — sequence-of-independent-units mode (ADR-022 ste
       };
     };
 
-    const outcomes = await runEffectsSequence(db, registry, ['one', 'two', 'three'], flowFor);
+    const outcomes = await runEffectsSequence(
+      runner,
+      isTransientContention,
+      registry,
+      ['one', 'two', 'three'],
+      flowFor,
+    );
 
     expect(outcomes[0]?.isOk()).toBe(true);
     expect(outcomes[1]?.isErr()).toBe(true);
@@ -576,7 +610,8 @@ describe('runEffectsSequence — sequence-of-independent-units mode (ADR-022 ste
     // Second item duplicates the first item's id — an idempotent no-op, not an error.
     const items = [shared, shared, a3];
     const outcomes: SequenceOutcome<{ created: boolean }>[] = await runEffectsSequence(
-      db,
+      runner,
+      isTransientContention,
       registry,
       items,
       idempotentInsert,
@@ -597,7 +632,7 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
     const tagRegistry: ApplierRegistry = { tag: tagApplier };
     const tagId = randomUUID();
 
-    const inserted = await runEffects(db, tagRegistry, () =>
+    const inserted = await runEffects(runner, isTransientContention, tagRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: 'tag', model: { id: tagId, name: `Tag ${tagId}`, version: 0 } }],
         response: null,
@@ -605,7 +640,7 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
     );
     expect(inserted.isOk()).toBe(true);
 
-    const updated = await runEffects(db, tagRegistry, () =>
+    const updated = await runEffects(runner, isTransientContention, tagRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.update, entity: 'tag', model: { id: tagId, name: 'Renamed', version: 0 } }],
         response: null,
@@ -626,7 +661,7 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
     const tagRegistry: ApplierRegistry = { tag: tagApplier };
     const name = `Tag ${randomUUID()}`;
 
-    const first = await runEffects(db, tagRegistry, () =>
+    const first = await runEffects(runner, isTransientContention, tagRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: 'tag', model: { id: randomUUID(), name, version: 0 } }],
         response: null,
@@ -634,7 +669,7 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
     );
     expect(first.isOk()).toBe(true);
 
-    const outcome = runEffects(db, tagRegistry, () =>
+    const outcome = runEffects(runner, isTransientContention, tagRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: 'tag', model: { id: randomUUID(), name, version: 0 } }],
         response: null,
@@ -660,7 +695,9 @@ describe('engine idempotency treatment — fixed column, opt-in by envelope-key 
         response: null,
       });
 
-    await expect(runEffects(db, tagRegistry, flow)).rejects.toThrow(unexpectedIdempotencyKeyMessage());
+    await expect(runEffects(runner, isTransientContention, tagRegistry, flow)).rejects.toThrow(
+      unexpectedIdempotencyKeyMessage(),
+    );
     expect(await db.all(sql`SELECT id FROM tags WHERE name = ${model.name}`)).toHaveLength(0);
   });
 });
@@ -706,7 +743,7 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
   it('insert reports applied:true and reads back the persisted, joined view for a brand-new transaction', async () => {
     const row = newTransactionRow();
 
-    const result = await runEffects(db, transactionRegistry, insertRow(row));
+    const result = await runEffects(runner, isTransientContention, transactionRegistry, insertRow(row));
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
@@ -717,12 +754,12 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
   it('insert reports applied:false and reads back the EXISTING row on an idempotency-key duplicate', async () => {
     const key = `idem-${randomUUID()}`;
     const original = newTransactionRow({ description: 'Original' });
-    await runEffects(db, transactionRegistry, insertRow(original, key));
+    await runEffects(runner, isTransientContention, transactionRegistry, insertRow(original, key));
 
     // Same idempotency key, different id and description — a replay with drifted content; the
     // existing (first-write-wins) row is what must come back, not this attempt's own values.
     const replay = newTransactionRow({ description: 'Replay attempt' });
-    const result = await runEffects(db, transactionRegistry, insertRow(replay, key));
+    const result = await runEffects(runner, isTransientContention, transactionRegistry, insertRow(replay, key));
 
     expect(result.isOk()).toBe(true);
     const outcome = result._unsafeUnwrap();
@@ -734,12 +771,17 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
 
   it('the id guard stays separate: a same-id insert under a DIFFERENT key still raises', async () => {
     const original = newTransactionRow();
-    await runEffects(db, transactionRegistry, insertRow(original, `idem-${randomUUID()}`));
+    await runEffects(runner, isTransientContention, transactionRegistry, insertRow(original, `idem-${randomUUID()}`));
 
     // With a key present the conflict target is the fixed idempotencyKey column, so an id
     // collision is NOT absorbed as a structural same-id retry — the two guards never merge.
     await expect(
-      runEffects(db, transactionRegistry, insertRow({ ...original, description: 'Collides on id' })),
+      runEffects(
+        runner,
+        isTransientContention,
+        transactionRegistry,
+        insertRow({ ...original, description: 'Collides on id' }),
+      ),
     ).rejects.toThrow();
   });
 
@@ -751,7 +793,9 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
         response: null,
       });
 
-    await expect(runEffects(db, transactionRegistry, flow)).rejects.toThrow(missingIdempotencyKeyMessage());
+    await expect(runEffects(runner, isTransientContention, transactionRegistry, flow)).rejects.toThrow(
+      missingIdempotencyKeyMessage(),
+    );
     expect(await db.all(sql`SELECT id FROM transactions WHERE id = ${row.id}`)).toHaveLength(0);
   });
 
@@ -760,7 +804,7 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
     await db.run(sql`INSERT INTO merchants (key) VALUES (${merchantKey})`);
     const row = newTransactionRow({ merchantKey });
 
-    const result = await runEffects(db, transactionRegistry, insertRow(row));
+    const result = await runEffects(runner, isTransientContention, transactionRegistry, insertRow(row));
 
     expect(result.isOk()).toBe(true);
     const [dbRow] = await db.all<{ merchant_key: string }>(
@@ -772,17 +816,17 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
   it('insert fails on a merchantKey with no existing merchants row — the applier no longer creates one', async () => {
     const row = newTransactionRow({ merchantKey: `merchant-${randomUUID()}` });
 
-    await expect(runEffects(db, transactionRegistry, insertRow(row))).rejects.toThrow();
+    await expect(runEffects(runner, isTransientContention, transactionRegistry, insertRow(row))).rejects.toThrow();
   });
 
   it('update applies a newly-introduced merchantKey too, without creating the merchants row itself', async () => {
     const row = newTransactionRow();
-    await runEffects(db, transactionRegistry, insertRow(row));
+    await runEffects(runner, isTransientContention, transactionRegistry, insertRow(row));
 
     const newMerchantKey = `merchant-${randomUUID()}`;
     await db.run(sql`INSERT INTO merchants (key) VALUES (${newMerchantKey})`);
     const updated: TransactionRowEntity = { ...row, merchantKey: newMerchantKey };
-    const result = await runEffects(db, transactionRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, transactionRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: updated }] as Persistable[],
         response: null,
@@ -798,10 +842,10 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
 
   it('update is version-guarded: bumps version on a matching version, never touching transaction_tags', async () => {
     const row = newTransactionRow();
-    await runEffects(db, transactionRegistry, insertRow(row));
+    await runEffects(runner, isTransientContention, transactionRegistry, insertRow(row));
 
     const updated: TransactionRowEntity = { ...row, description: 'Renamed' };
-    const result = await runEffects(db, transactionRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, transactionRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: updated }] as Persistable[],
         response: null,
@@ -817,10 +861,10 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
 
   it('update rolls back and surfaces the generic conflict error on a stale version', async () => {
     const row = newTransactionRow();
-    await runEffects(db, transactionRegistry, insertRow(row));
+    await runEffects(runner, isTransientContention, transactionRegistry, insertRow(row));
 
     const stale: TransactionRowEntity = { ...row, description: 'Stale writer', version: row.version + 5 };
-    const result = await runEffects(db, transactionRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, transactionRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: stale }] as Persistable[],
         response: null,
@@ -833,9 +877,9 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
 
   it('delete is version-guarded, same as update', async () => {
     const row = newTransactionRow();
-    await runEffects(db, transactionRegistry, insertRow(row));
+    await runEffects(runner, isTransientContention, transactionRegistry, insertRow(row));
 
-    const result = await runEffects(db, transactionRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, transactionRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.delete, entity: TRANSACTION_ENTITY_TAG, id: row.id, version: row.version },
@@ -850,7 +894,7 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
 
   it('a delete blocked by a bill-payment FK retries bounded, then surfaces the generic conflict', async () => {
     const row = newTransactionRow();
-    await runEffects(db, transactionRegistry, insertRow(row));
+    await runEffects(runner, isTransientContention, transactionRegistry, insertRow(row));
     const { cardId } = await insertCreditCardWithAccount();
     await db.insert(bills).values({
       id: randomUUID(),
@@ -874,7 +918,7 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
         response: null,
       });
     };
-    const result = await runEffects(db, transactionRegistry, flow);
+    const result = await runEffects(runner, isTransientContention, transactionRegistry, flow);
 
     // Before the collapse the bespoke delete had no error handling and this FK violation surfaced
     // as a raw throw; the generic applier treats it as the same "world changed" condition a stale
@@ -915,10 +959,10 @@ describe('transactionTagApplier — set-replace addressed by the transaction id 
 
   it('attaches the given tag ids to the addressed transaction row', async () => {
     const row = newTransactionRow();
-    await runEffects(db, tagLinksRegistry, insertRow(row));
+    await runEffects(runner, isTransientContention, tagLinksRegistry, insertRow(row));
     const tagId = await seedTag(`Tag ${randomUUID()}`);
 
-    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.id, [tagId]));
+    const result = await runEffects(runner, isTransientContention, tagLinksRegistry, insertTagSet(row.id, [tagId]));
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe(true);
@@ -927,13 +971,18 @@ describe('transactionTagApplier — set-replace addressed by the transaction id 
 
   it('is a set-replace: re-applying with a different set removes the old links, not just adds new ones', async () => {
     const row = newTransactionRow();
-    await runEffects(db, tagLinksRegistry, insertRow(row));
+    await runEffects(runner, isTransientContention, tagLinksRegistry, insertRow(row));
     const firstTagId = await seedTag(`Tag ${randomUUID()}`);
     const secondTagName = `Tag ${randomUUID()}`;
     const secondTagId = await seedTag(secondTagName);
 
-    await runEffects(db, tagLinksRegistry, insertTagSet(row.id, [firstTagId]));
-    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.id, [secondTagId]));
+    await runEffects(runner, isTransientContention, tagLinksRegistry, insertTagSet(row.id, [firstTagId]));
+    const result = await runEffects(
+      runner,
+      isTransientContention,
+      tagLinksRegistry,
+      insertTagSet(row.id, [secondTagId]),
+    );
 
     expect(result.isOk()).toBe(true);
     expect(await readLinkedTagNames(row.id)).toEqual([secondTagName]);
@@ -941,11 +990,11 @@ describe('transactionTagApplier — set-replace addressed by the transaction id 
 
   it('an empty tag id set clears every existing link', async () => {
     const row = newTransactionRow();
-    await runEffects(db, tagLinksRegistry, insertRow(row));
+    await runEffects(runner, isTransientContention, tagLinksRegistry, insertRow(row));
     const tagId = await seedTag(`Tag ${randomUUID()}`);
-    await runEffects(db, tagLinksRegistry, insertTagSet(row.id, [tagId]));
+    await runEffects(runner, isTransientContention, tagLinksRegistry, insertTagSet(row.id, [tagId]));
 
-    const result = await runEffects(db, tagLinksRegistry, insertTagSet(row.id, []));
+    const result = await runEffects(runner, isTransientContention, tagLinksRegistry, insertTagSet(row.id, []));
 
     expect(result.isOk()).toBe(true);
     expect(await readLinkedTagNames(row.id)).toEqual([]);
@@ -955,11 +1004,16 @@ describe('transactionTagApplier — set-replace addressed by the transaction id 
     // The duplicate-replay signature: the minted id was never inserted. The FK miss is translated
     // to a no-op, never a raw error — and the batch as a whole still commits.
     const bystander = newTransactionRow();
-    await runEffects(db, tagLinksRegistry, insertRow(bystander));
+    await runEffects(runner, isTransientContention, tagLinksRegistry, insertRow(bystander));
     const tagId = await seedTag(`Tag ${randomUUID()}`);
-    await runEffects(db, tagLinksRegistry, insertTagSet(bystander.id, [tagId]));
+    await runEffects(runner, isTransientContention, tagLinksRegistry, insertTagSet(bystander.id, [tagId]));
 
-    const result = await runEffects(db, tagLinksRegistry, insertTagSet(`never-inserted-${randomUUID()}`, [tagId]));
+    const result = await runEffects(
+      runner,
+      isTransientContention,
+      tagLinksRegistry,
+      insertTagSet(`never-inserted-${randomUUID()}`, [tagId]),
+    );
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe(false);
@@ -968,7 +1022,7 @@ describe('transactionTagApplier — set-replace addressed by the transaction id 
 
   it('update is structurally unreachable — every write to this entity is an insert (set-replace)', async () => {
     await expect(
-      runEffects(db, tagLinksRegistry, () =>
+      runEffects(runner, isTransientContention, tagLinksRegistry, () =>
         okAsync({
           persist: [
             {
@@ -985,7 +1039,7 @@ describe('transactionTagApplier — set-replace addressed by the transaction id 
 
   it('delete is structurally unreachable — links are removed via the transaction cascade', async () => {
     await expect(
-      runEffects(db, tagLinksRegistry, () =>
+      runEffects(runner, isTransientContention, tagLinksRegistry, () =>
         okAsync({
           persist: [
             { op: PersistOp.enum.delete, entity: TRANSACTION_TAG_ENTITY_TAG, id: 'unused', version: 0 },
@@ -998,12 +1052,12 @@ describe('transactionTagApplier — set-replace addressed by the transaction id 
 
   it('deleting the transaction still cascades its links, once the applier no longer manages them itself', async () => {
     const row = newTransactionRow();
-    await runEffects(db, tagLinksRegistry, insertRow(row));
+    await runEffects(runner, isTransientContention, tagLinksRegistry, insertRow(row));
     const tagId = await seedTag(`Tag ${randomUUID()}`);
-    await runEffects(db, tagLinksRegistry, insertTagSet(row.id, [tagId]));
+    await runEffects(runner, isTransientContention, tagLinksRegistry, insertTagSet(row.id, [tagId]));
     expect(await readLinkedTagNames(row.id)).toHaveLength(1);
 
-    const result = await runEffects(db, tagLinksRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, tagLinksRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.delete, entity: TRANSACTION_ENTITY_TAG, id: row.id, version: row.version },
@@ -1058,7 +1112,12 @@ describe('transactionApplier + transactionTagApplier — duplicate-insert tag se
     const secondTagId = await seedTag(`Tag ${randomUUID()}`);
 
     const original = newTransactionRow({ description: 'Original' });
-    const firstResult = await runEffects(db, combinedRegistry, insertWithTags(original, [firstTagId], key));
+    const firstResult = await runEffects(
+      runner,
+      isTransientContention,
+      combinedRegistry,
+      insertWithTags(original, [firstTagId], key),
+    );
     expect(firstResult.isOk()).toBe(true);
     expect(await readLinkedTagNames(original.id)).toEqual([firstTagName]);
 
@@ -1066,7 +1125,12 @@ describe('transactionApplier + transactionTagApplier — duplicate-insert tag se
     // insert no-ops, the replay's minted id is never inserted, and the tag set addressing it
     // no-ops on the FK miss: first-write-wins, same as the rest of the row.
     const replay = newTransactionRow({ description: 'Replay attempt' });
-    const replayResult = await runEffects(db, combinedRegistry, insertWithTags(replay, [secondTagId], key));
+    const replayResult = await runEffects(
+      runner,
+      isTransientContention,
+      combinedRegistry,
+      insertWithTags(replay, [secondTagId], key),
+    );
 
     expect(replayResult.isOk()).toBe(true);
     expect(await readLinkedTagNames(original.id)).toEqual([firstTagName]);
@@ -1080,7 +1144,7 @@ describe('merchantApplier — hand-written single-table applier for a key-only, 
   it('inserts a brand-new merchant normally', async () => {
     const key = `merchant-${randomUUID()}`;
 
-    const result = await runEffects(db, merchantOnlyRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, merchantOnlyRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: MERCHANT_ENTITY_TAG, model: { key } }] as Persistable[],
         response: null,
@@ -1094,7 +1158,7 @@ describe('merchantApplier — hand-written single-table applier for a key-only, 
   it('is idempotent on a repeat key — no error, no duplicate row', async () => {
     const key = `merchant-${randomUUID()}`;
     const insertMerchant = () =>
-      runEffects(db, merchantOnlyRegistry, () =>
+      runEffects(runner, isTransientContention, merchantOnlyRegistry, () =>
         okAsync({
           persist: [{ op: PersistOp.enum.insert, entity: MERCHANT_ENTITY_TAG, model: { key } }] as Persistable[],
           response: null,
@@ -1112,7 +1176,7 @@ describe('merchantApplier — hand-written single-table applier for a key-only, 
   it('reports applied:true on a fresh key and applied:false on a repeat, never faking either', async () => {
     const key = `merchant-${randomUUID()}`;
     const insertMerchant = () =>
-      runEffects(db, merchantOnlyRegistry, () =>
+      runEffects(runner, isTransientContention, merchantOnlyRegistry, () =>
         okAsync({
           persist: [{ op: PersistOp.enum.insert, entity: MERCHANT_ENTITY_TAG, model: { key } }] as Persistable[],
           response: (outcomes: PersistOutcome[]) => outcomes[0]?.applied,
@@ -1125,7 +1189,7 @@ describe('merchantApplier — hand-written single-table applier for a key-only, 
 
   it('update is structurally unreachable — a merchant is only ever inserted', async () => {
     await expect(
-      runEffects(db, merchantOnlyRegistry, () =>
+      runEffects(runner, isTransientContention, merchantOnlyRegistry, () =>
         okAsync({
           persist: [
             {
@@ -1142,7 +1206,7 @@ describe('merchantApplier — hand-written single-table applier for a key-only, 
 
   it('delete is structurally unreachable — merchants are never removed', async () => {
     await expect(
-      runEffects(db, merchantOnlyRegistry, () =>
+      runEffects(runner, isTransientContention, merchantOnlyRegistry, () =>
         okAsync({
           persist: [
             { op: PersistOp.enum.delete, entity: MERCHANT_ENTITY_TAG, id: 'unused', version: 0 },
@@ -1179,7 +1243,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
     const merchantKey = `merchant-${randomUUID()}`;
     await seedMerchant(merchantKey);
 
-    const result = await runEffects(db, merchantRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, merchantRegistry, () =>
       okAsync({
         persist: [
           {
@@ -1204,7 +1268,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
     const merchantKey = `merchant-${randomUUID()}`;
     await seedMerchant(merchantKey);
     const insertEdge = () =>
-      runEffects(db, merchantRegistry, () =>
+      runEffects(runner, isTransientContention, merchantRegistry, () =>
         okAsync({
           persist: [
             {
@@ -1232,7 +1296,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
     const merchantKey = `merchant-${randomUUID()}`;
     await seedMerchant(merchantKey);
     const insertEdge = (weightDelta: number, origin: 'rule' | 'history') =>
-      runEffects(db, merchantRegistry, () =>
+      runEffects(runner, isTransientContention, merchantRegistry, () =>
         okAsync({
           persist: [
             {
@@ -1267,7 +1331,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
     const merchantKey = `merchant-${randomUUID()}`;
     await seedMerchant(merchantKey);
     const row = newTransactionRow({ description: 'Coffee', amount: 5, merchantKey });
-    await runEffects(db, merchantRegistry, () =>
+    await runEffects(runner, isTransientContention, merchantRegistry, () =>
       okAsync({
         persist: [
           {
@@ -1282,7 +1346,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
     );
 
     const staleUpdate: TransactionRowEntity = { ...row, categoryId, version: row.version + 5 }; // never matches
-    const result = await runEffects(db, merchantRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, merchantRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.update, entity: TRANSACTION_ENTITY_TAG, model: staleUpdate },
@@ -1311,7 +1375,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
     const model = { merchantKey, categoryId, version: 0 };
 
     await expect(
-      runEffects(db, merchantRegistry, () =>
+      runEffects(runner, isTransientContention, merchantRegistry, () =>
         okAsync({
           persist: [{ op: PersistOp.enum.update, entity: MERCHANT_CATEGORY_ENTITY_TAG, model }] as Persistable[],
           response: null,
@@ -1322,7 +1386,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
 
   it('delete throws — merchant-category edges are never removed', async () => {
     await expect(
-      runEffects(db, merchantRegistry, () =>
+      runEffects(runner, isTransientContention, merchantRegistry, () =>
         okAsync({
           persist: [
             { op: PersistOp.enum.delete, entity: MERCHANT_CATEGORY_ENTITY_TAG, id: 'unused', version: 0 },
@@ -1356,7 +1420,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
     const { cardId } = await seedCard();
     const model = newBillModel(cardId);
 
-    const result = await runEffects(db, billRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, billRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: BILL_ENTITY_TAG, model }] as Persistable[],
         response: null,
@@ -1371,7 +1435,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
   it('update/delete follow the plain versioned convention (versionedTableApplier mechanics)', async () => {
     const { cardId } = await seedCard();
     const model = newBillModel(cardId);
-    await runEffects(db, billRegistry, () =>
+    await runEffects(runner, isTransientContention, billRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.insert, entity: BILL_ENTITY_TAG, model }] as Persistable[],
         response: null,
@@ -1379,7 +1443,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
     );
 
     const closedModel = { ...model, status: BillStatus.enum.closed, version: 0 };
-    const updated = await runEffects(db, billRegistry, () =>
+    const updated = await runEffects(runner, isTransientContention, billRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.update, entity: BILL_ENTITY_TAG, model: closedModel }] as Persistable[],
         response: null,
@@ -1391,7 +1455,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
     );
     expect(row).toEqual({ status: BillStatus.enum.closed, version: 1 });
 
-    const deleted = await runEffects(db, billRegistry, () =>
+    const deleted = await runEffects(runner, isTransientContention, billRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.delete, entity: BILL_ENTITY_TAG, id: model.id, version: 1 }] as Persistable[],
         response: null,
@@ -1419,7 +1483,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
       });
     };
 
-    const result = await runEffects(db, billRegistry, flow);
+    const result = await runEffects(runner, isTransientContention, billRegistry, flow);
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -1458,7 +1522,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
       });
     };
 
-    const result = await runEffects(db, billRegistry, flow);
+    const result = await runEffects(runner, isTransientContention, billRegistry, flow);
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe(2); // succeeded on the retry (flow's 2nd invocation)
@@ -1469,7 +1533,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
   });
 
   it('a genuine failure unrelated to the race still propagates, never swallowed as a conflict', async () => {
-    const outcome = runEffects(db, billRegistry, () =>
+    const outcome = runEffects(runner, isTransientContention, billRegistry, () =>
       okAsync({
         // creditCardId references a non-existent card — a real FK violation, not the cycle race.
         persist: [
@@ -1560,11 +1624,11 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
   it('two sequential pay_bill calls: exactly one transfer, one paid flip, second is idempotent', async () => {
     const { deps, cardName } = await seedCardWithOpenBill();
 
-    const first = await runEffects(db, fullRegistry, payBillFlow(deps, cardName));
+    const first = await runEffects(runner, isTransientContention, fullRegistry, payBillFlow(deps, cardName));
     expect(first.isOk()).toBe(true);
     expect(first._unsafeUnwrap().status).toBe(BillStatus.enum.paid);
 
-    const second = await runEffects(db, fullRegistry, payBillFlow(deps, cardName));
+    const second = await runEffects(runner, isTransientContention, fullRegistry, payBillFlow(deps, cardName));
     expect(second.isOk()).toBe(true);
     expect(second._unsafeUnwrap().status).toBe(BillStatus.enum.paid);
     expect(second._unsafeUnwrap().paymentTransactionId).toBe(first._unsafeUnwrap().paymentTransactionId);
@@ -1597,7 +1661,7 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
     };
     const racingDeps: Deps = { ...deps, bills: racingBills };
 
-    const result = await runEffects(db, fullRegistry, payBillFlow(racingDeps, cardName));
+    const result = await runEffects(runner, isTransientContention, fullRegistry, payBillFlow(racingDeps, cardName));
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().status).toBe(BillStatus.enum.paid);
@@ -1613,7 +1677,7 @@ describe('tagApplier — name-uniqueness race surfaces as a generic conflict (AD
 
   it('inserts a brand-new tag normally', async () => {
     const id = randomUUID();
-    const result = await runEffects(db, tagRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, tagRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.insert, entity: TAG_ENTITY_TAG, model: { id, name: `Tag ${id}`, version: 0 } },
@@ -1640,7 +1704,7 @@ describe('tagApplier — name-uniqueness race surfaces as a generic conflict (AD
       });
     };
 
-    const result = await runEffects(db, tagRegistry, flow);
+    const result = await runEffects(runner, isTransientContention, tagRegistry, flow);
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -1678,7 +1742,7 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
 
   it('inserts a brand-new dashboard normally', async () => {
     const name = `dash-${randomUUID()}`;
-    const result = await runEffects(db, dashboardRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, dashboardRegistry, () =>
       okAsync({
         persist: [
           {
@@ -1719,7 +1783,7 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
       });
     };
 
-    const result = await runEffects(db, dashboardRegistry, flow);
+    const result = await runEffects(runner, isTransientContention, dashboardRegistry, flow);
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -1761,7 +1825,7 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
     };
     const racingDeps: Deps = { ...deps, dashboards: racingDashboards };
 
-    const result = await runEffects(db, dashboardRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, dashboardRegistry, () =>
       saveDashboard(racingDeps, name, '<section>mine</section>'),
     );
 
@@ -1808,7 +1872,9 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
       locale: async () => Locale.enum.en,
     } as unknown as Deps;
 
-    const result = await runEffects(db, dashboardRegistry, () => renameDashboard(deps, name, newName));
+    const result = await runEffects(runner, isTransientContention, dashboardRegistry, () =>
+      renameDashboard(deps, name, newName),
+    );
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'duplicate_name', entity: 'dashboard', name: newName });
@@ -1823,7 +1889,7 @@ describe("settingsApplier — a concurrent first insert on the singleton retries
   const settingsRegistry: ApplierRegistry = { [SETTINGS_ENTITY_TAG]: settingsApplier };
 
   it('inserts the singleton row normally when absent', async () => {
-    const result = await runEffects(db, settingsRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, settingsRegistry, () =>
       okAsync({
         persist: [
           {
@@ -1868,7 +1934,7 @@ describe("settingsApplier — a concurrent first insert on the singleton retries
       });
     };
 
-    const result = await runEffects(db, settingsRegistry, flow);
+    const result = await runEffects(runner, isTransientContention, settingsRegistry, flow);
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -1899,7 +1965,7 @@ describe("settingsApplier — a concurrent first insert on the singleton retries
     };
     const racingDeps: Deps = { ...deps, settings: racingSettings };
 
-    const result = await runEffects(db, settingsRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, settingsRegistry, () =>
       setLocale(racingDeps, { locale: Locale.enum.es, source: LocaleSource.enum.explicit }),
     );
 
@@ -1936,7 +2002,7 @@ describe('categoryApplier — plain mechanics; merchant_category cascades via sc
       .insert(categories)
       .values({ id: categoryId, name: `Category ${categoryId}`, kind: CategoryKind.enum.both, version: 0 });
 
-    const result = await runEffects(db, categoryRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, categoryRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: categoryId, version: 0 },
@@ -1953,7 +2019,7 @@ describe('categoryApplier — plain mechanics; merchant_category cascades via sc
     const categoryId = await seedCategoryWithLearnedEdge();
     expect(await db.all(sql`SELECT 1 FROM merchant_category WHERE category_id = ${categoryId}`)).toHaveLength(1);
 
-    const result = await runEffects(db, categoryRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, categoryRegistry, () =>
       okAsync({
         persist: [
           { op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: categoryId, version: 0 },
@@ -1978,7 +2044,7 @@ describe('categoryApplier — plain mechanics; merchant_category cascades via sc
       .insert(categories)
       .values({ id: subId, name: `Sub ${subId}`, kind: CategoryKind.enum.both, parentId, version: 0 });
 
-    const result = await runEffects(db, categoryRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, categoryRegistry, () =>
       okAsync({
         persist: [{ op: PersistOp.enum.delete, entity: CATEGORY_ENTITY_TAG, id: subId, version: 0 }] as Persistable[],
         response: null,
@@ -2013,7 +2079,12 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
   it('a card with no correlated rows is removed along with its internal account', async () => {
     const { cardId, accountId } = await insertCardWithAccount();
 
-    const result = await runEffects(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+    const result = await runEffects(
+      runner,
+      isTransientContention,
+      cardRegistry,
+      deleteCardBatch(cardId, 0, accountId, 0),
+    );
 
     expect(result.isOk()).toBe(true);
     expect(await db.all(sql`SELECT id FROM credit_cards WHERE id = ${cardId}`)).toHaveLength(0);
@@ -2036,7 +2107,12 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
       version: 0,
     });
 
-    const result = await runEffects(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+    const result = await runEffects(
+      runner,
+      isTransientContention,
+      cardRegistry,
+      deleteCardBatch(cardId, 0, accountId, 0),
+    );
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -2046,7 +2122,12 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
   it('a stale account version rolls back the whole batch, the card cascade included — nothing partial', async () => {
     const { cardId, accountId } = await insertCardWithAccount();
 
-    const result = await runEffects(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 99));
+    const result = await runEffects(
+      runner,
+      isTransientContention,
+      cardRegistry,
+      deleteCardBatch(cardId, 0, accountId, 99),
+    );
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -2059,7 +2140,12 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
     const { cardId, accountId } = await insertCardWithAccount();
     await db.delete(creditCards).where(sql`${creditCards.id} = ${cardId}`);
 
-    const result = await runEffects(db, cardRegistry, deleteCardBatch(cardId, 0, accountId, 0));
+    const result = await runEffects(
+      runner,
+      isTransientContention,
+      cardRegistry,
+      deleteCardBatch(cardId, 0, accountId, 0),
+    );
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
@@ -2107,7 +2193,7 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
       });
     };
 
-    const result = await runEffects(db, raceRegistry, flow);
+    const result = await runEffects(runner, isTransientContention, raceRegistry, flow);
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toBe(2);
@@ -2137,7 +2223,7 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
       version: 0,
     };
 
-    const result = await runEffects(db, cardRegistry, () =>
+    const result = await runEffects(runner, isTransientContention, cardRegistry, () =>
       okAsync({
         persist: [
           persistence.insert({ entity: ACCOUNT_ENTITY_TAG, model: accountModel }),
@@ -2285,7 +2371,7 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
   it('removes every correlated bill/transaction, breaks the paid bill<->transfer circular FK', async () => {
     const { deps, cardName, payerId } = await seedCardWithBillsAndTransactions();
 
-    const result = await runEffects(db, fullRegistry, deleteCreditCardFlow(deps, cardName));
+    const result = await runEffects(runner, isTransientContention, fullRegistry, deleteCreditCardFlow(deps, cardName));
 
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ deleted: true, card: cardName });
@@ -2307,7 +2393,8 @@ describe('runEffects / runEffectsSequence — change bus publish hook (ADR-027 P
     const second = newAccount();
 
     const result = await runEffects(
-      db,
+      runner,
+      isTransientContention,
       registry,
       () =>
         okAsync({
@@ -2328,24 +2415,30 @@ describe('runEffects / runEffectsSequence — change bus publish hook (ADR-027 P
   it('never publishes for an empty persist batch (a dry-run preview flow)', async () => {
     const publish = vi.fn();
 
-    await runEffects(db, registry, () => okAsync({ persist: [], response: 'preview' }), publish);
+    await runEffects(
+      runner,
+      isTransientContention,
+      registry,
+      () => okAsync({ persist: [], response: 'preview' }),
+      publish,
+    );
 
     expect(publish).not.toHaveBeenCalled();
   });
 
   it('does not publish the entity of an idempotent-duplicate insert — nothing actually changed', async () => {
     const seed = newAccount();
-    await runEffects(db, registry, insertOne(seed));
+    await runEffects(runner, isTransientContention, registry, insertOne(seed));
 
     const publish = vi.fn();
-    await runEffects(db, registry, insertOne(seed), publish); // same id — no-ops
+    await runEffects(runner, isTransientContention, registry, insertOne(seed), publish); // same id — no-ops
 
     expect(publish).not.toHaveBeenCalled();
   });
 
   it('publishes exactly once, on the successful attempt, after a version-conflict retry', async () => {
     const seed = newAccount();
-    await runEffects(db, registry, insertOne(seed));
+    await runEffects(runner, isTransientContention, registry, insertOne(seed));
 
     const publish = vi.fn();
     let calls = 0;
@@ -2358,7 +2451,7 @@ describe('runEffects / runEffectsSequence — change bus publish hook (ADR-027 P
       });
     };
 
-    const result = await runEffects(db, registry, flow, publish);
+    const result = await runEffects(runner, isTransientContention, registry, flow, publish);
 
     expect(result.isOk()).toBe(true);
     expect(publish).toHaveBeenCalledOnce();
@@ -2375,7 +2468,14 @@ describe('runEffects / runEffectsSequence — change bus publish hook (ADR-027 P
       return insertOne(unit === 'one' ? a1 : a3);
     };
 
-    const outcomes = await runEffectsSequence(db, registry, ['one', 'two', 'three'] as const, flowFor, publish);
+    const outcomes = await runEffectsSequence(
+      runner,
+      isTransientContention,
+      registry,
+      ['one', 'two', 'three'] as const,
+      flowFor,
+      publish,
+    );
 
     expect(outcomes[0]?.isOk()).toBe(true);
     expect(outcomes[1]?.isErr()).toBe(true);
@@ -2385,7 +2485,7 @@ describe('runEffects / runEffectsSequence — change bus publish hook (ADR-027 P
   });
 
   it('defaults to a no-op when publish is omitted — every existing direct caller is unaffected', async () => {
-    const result = await runEffects(db, registry, insertOne(newAccount()));
+    const result = await runEffects(runner, isTransientContention, registry, insertOne(newAccount()));
     expect(result.isOk()).toBe(true);
   });
 });

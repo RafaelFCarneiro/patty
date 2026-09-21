@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { fileURLToPath } from 'node:url';
-import { openDatabase } from '../../../src/diplomat/db/driver.js';
+import { createTransactionRunner, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { accountsRepo } from '../../../src/diplomat/db/repos/accounts.js';
 import { billsRepo } from '../../../src/diplomat/db/repos/bills.js';
 import { budgetsRepo } from '../../../src/diplomat/db/repos/budgets.js';
@@ -23,6 +23,7 @@ import { settingsApplier, settingsRepo } from '../../../src/diplomat/db/repos/se
 import { tagsRepo } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
 import { runEffects, type ApplierRegistry } from '../../../src/diplomat/db/effects.js';
+import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
 import { Locale, LocaleSource, SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { listCategories } from '../../../src/controllers/categories.js';
@@ -36,6 +37,7 @@ let tmpDir: string;
 let deps: Deps;
 let registry: ApplierRegistry;
 let db: Awaited<ReturnType<typeof openDatabase>>;
+let runner: ReturnType<typeof createTransactionRunner>;
 
 describe('empty DB (ADR-008)', () => {
   beforeAll(async () => {
@@ -44,6 +46,7 @@ describe('empty DB (ADR-008)', () => {
       DB_PATH: join(tmpDir, 'empty.db'),
       FINTRACK_DB_KEY: TEST_KEY,
     });
+    runner = createTransactionRunner(db);
     await migrate(db, { migrationsFolder: MIGRATIONS });
 
     const settingsR = settingsRepo(db);
@@ -95,7 +98,7 @@ describe('empty DB (ADR-008)', () => {
 
   it('inferred set_locale switches locale and stores inferred source', async () => {
     const flow = () => setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred });
-    const result = await runEffects(db, registry, flow);
+    const result = await runEffects(runner, isSqliteBusy, registry, flow);
     expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });
     const prefs = await getPreferences(deps);
     expect(prefs).toEqual({

@@ -11,6 +11,13 @@ import * as schema from './schema.js';
 
 export type Db = LibSQLDatabase<typeof schema>;
 
+/** The transaction handle `db.transaction` hands its callback — inferred from `Db` itself rather
+ *  than naming a drizzle-internal type directly. `driver.ts` is the SQLite adapter (ADR-030): the
+ *  sole place this concrete handle is derived from `Db`. Re-exported from `diplomat/db/effects.ts`
+ *  (the engine's port, generic over an opaque `TTx`) so every existing import path there still
+ *  resolves. */
+export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+
 const KEYCHAIN_SERVICE = 'fintrack';
 const KEYCHAIN_ACCOUNT = 'db-encryption-key';
 
@@ -93,3 +100,13 @@ export const openDatabase = async (config: DbConfig): Promise<Db> => {
   await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
   return drizzle(client, { schema });
 };
+
+/** Adapts libSQL Drizzle's `Db.transaction` to the effect engine's `TransactionRunner` port
+ *  (ADR-030 Phase 1) — `diplomat/db/effects.ts`'s `runEffects`/`runEffectsSequence` call
+ *  `runInTransaction` and never name `Db.transaction` directly; this is the one place, at the
+ *  composition root's binding, that still does. No explicit return-type annotation: the object
+ *  literal structurally satisfies `TransactionRunner<Tx>` without this adapter-side file importing
+ *  that port type from the engine. */
+export const createTransactionRunner = (db: Db) => ({
+  runInTransaction: <T>(work: (tx: Tx) => Promise<T>): Promise<T> => db.transaction(work),
+});
