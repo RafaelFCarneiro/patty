@@ -212,11 +212,13 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     A converted controller builds `Persistable`s and returns them in `persist` (or, for bulk import, a
     `StatementImportPlan` the shell runs through `runEffectsSequence`); it never calls a repo write method and
     never touches `Db`. **`deps` exposes no write method at all, for any entity** — every repo is read-only
-    (queries and pure helpers only), and no domain rule survives as a SQL predicate in a repo. Only
-    `diplomat/db/effects.ts` (invoked from the MCP/REST handler) touches `Db`. The per-flow conversion history,
-    the applier catalogue, the `versionedTableApplier` unique-conflict/singleton-race handling
-    (`dashboardApplier`/`settingsApplier`), and the `resetLocale`-to-shell move live in `docs/write-path.md`
-    and ADR-021/022/023 — not here.
+    (queries and pure helpers only), and no domain rule survives as a SQL predicate in a repo. `diplomat/db/effects.ts`
+    (invoked from the MCP/REST handler) is the write-path engine, but since ADR-030 Phase 1 it no longer touches
+    `Db` itself — it calls an injected `TransactionRunner`/`isTransientContention` port instead; only
+    `diplomat/db/driver.ts`'s `createTransactionRunner(db)`, bound at the composition root (`main.ts`), touches
+    `Db`. The per-flow conversion history, the applier catalogue, the `versionedTableApplier`
+    unique-conflict/singleton-race handling (`dashboardApplier`/`settingsApplier`), the port seam, and the
+    `resetLocale`-to-shell move live in `docs/write-path.md` and ADR-021/022/023/030 — not here.
 20. **An `effective` transaction's date is never in the future** (Feature Design 014). Enforced at `pay_bill`
     (phase A: the payment transfer's date must be on or before today) and `confirm_transaction` (phase B: the
     resolved date — the given `date`, or the existing date if omitted — must be on or before today,
@@ -396,3 +398,4 @@ shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-0
 - ADR-027: UI app shell — shared shell hosting dashboard **content fragments**; `source: inline|file` discriminator (defaults are git-versioned files, customs stay inline, `save_dashboard` always inline); entity-tagged **SSE** live-update; same Fastify, no build (extends/revises ADR-013; see `docs/ui.md`)
 - ADR-028: read-side cross-aggregate correlation lives in controllers, not repos — refines ADR-011 (aggregation stays in the repo; correlating two aggregates does not); transaction "what counts" predicates single-sourced (`txPredicates`); applied to `get_budget_status` (phase 2) and `find_correlations`' `budget_fit` (phase 3, complete) — `budgetTargetMatch` fully retired
 - ADR-029: managed-entity persistence contract — an engine-owned base for id/version/idempotency, and the seam for a future DB-agnostic effect engine; refines ADR-021/022/023, realizes #134 (accepted; Phase 1 — `PersistenceMeta`/`withPersistenceMeta`, one declaration home for the version token — complete; Phase 2 — idempotency key onto the `insert` envelope, dropped from `TransactionSchema` — complete; Phase 2b — domain-owned hashed key over the full deterministic identity (funding source included), caller supplies only an optional `discriminator`, fixed `idempotencyKey` dedup column by convention — complete)
+- ADR-030: extract the effect engine into a DB-agnostic core behind an explicit adapter port — delivers ADR-029 Phase 3 at the agreed 3a scope, SQLite stays the sole adapter (Postgres/3b is its own future ADR); refines/extends ADR-021/022/023 (accepted; Phase 1 — the port seam in place, still inside `diplomat/db`: `TransactionRunner`/`isTransientContention` injected in place of a direct `Db`/`isSqliteBusy` dependency, `runEffects`/`runEffectsSequence`/`EntityApplier`/`ApplierRegistry`/`ReadBack` generic over an opaque `Tx`, behavior-preserving — complete; Phase 2 — relocate the driver-free core and the `Persistable`/`PersistenceMeta` data contract to `src/effects/`, decouple from FinTrack's error taxonomy — not started)
