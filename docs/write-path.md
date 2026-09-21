@@ -105,8 +105,9 @@ effect runner, appliers, outcomes, and the per-flow notes.
   This is an in-place seam only: the engine still physically lives in `diplomat/db/effects.ts` alongside the
   SQLite adapter (`driver.ts`, `sqliteErrors.ts`, `versionedTableApplier`) — the relocation to a
   driver-free `src/effects/` module is ADR-030 Phase 2.
-- **`runEffects(runner, isTransientContention, registry, flow)`** (`diplomat/db/effects.ts` — the only place
-  that calls `runInTransaction` for a converted flow) invokes `flow` and executes the effects it returns.
+- **`runEffects(runner, isTransientContention, registry, flow)`** (`diplomat/db/effects.ts` — the only file
+  that calls `runInTransaction`, via the shared `applyBatch`/`attempt` primitive both this mode and
+  `runEffectsSequence` below run through) invokes `flow` and executes the effects it returns.
   **Single-atomic-unit** mode: the `persist` batch applied in one `runInTransaction` unit of work, each
   row-shaped `Persistable` dispatched by `p.entity` through the `registry`; **response** always produced;
   message dispatch is a named-but-unbuilt future effect kind. `update`/`delete` apply `... SET ..., version =

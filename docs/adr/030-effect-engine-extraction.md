@@ -1,6 +1,6 @@
 # ADR-030: Extract the effect engine into a DB-agnostic core behind an explicit adapter port
 
-**Status:** Proposed · **Date:** 2026-09-13 · **Deciders:** Rafael · Delivers **ADR-029 Phase 3** (the deferred
+**Status:** Accepted · **Date:** 2026-09-13 · **Deciders:** Rafael · Delivers **ADR-029 Phase 3** (the deferred
 "extract the DB-agnostic core") at the **3a** scope agreed there: split a driver-free effect-engine core with an
 explicit adapter **port**, keep SQLite as the sole adapter. A **networked/Postgres backend is explicitly out of
 scope** (3b) — it reopens the local-first foundation (ADR-004/005/007/013/024) and hosted/auth deferred in
@@ -130,7 +130,7 @@ the later lift-out is a move, not a rewrite.
 
 ## Action Items
 
-1. [ ] Review/accept this ADR.
+1. [x] Review/accept this ADR.
 2. [x] Phase 1 — port seam in place (`TransactionRunner`, `isTransientContention`, opaque `Tx`); behavior-preserving.
 3. [ ] Phase 2 — relocate the driver-free core **and the data contract** to `src/effects/`; decouple from
    FinTrack's error taxonomy; `diplomat/db` implements the port; lint rule + dependency-table entry;
