@@ -6,9 +6,10 @@ import { McpTransport } from '../../../src/config.js';
 import { saveDashboard } from '../../../src/controllers/dashboards.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
-import { openDatabase } from '../../../src/diplomat/db/driver.js';
+import { createTransactionRunner, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { runEffects, type ApplierRegistry } from '../../../src/diplomat/db/effects.js';
 import { dashboardApplier, dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
+import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
 import { Locale } from '../../../src/models/locale.js';
 
@@ -46,7 +47,9 @@ describe('dashboard seed persistence across restart (ADR-008 onConflictDoNothing
       locale: async () => Locale.enum.en,
     } as unknown as Deps;
     const registry: ApplierRegistry = { [DASHBOARD_ENTITY_TAG]: dashboardApplier };
-    const result = await runEffects(firstDb, registry, () => saveDashboard(deps, 'overview', overriddenHtml));
+    const result = await runEffects(createTransactionRunner(firstDb), isSqliteBusy, registry, () =>
+      saveDashboard(deps, 'overview', overriddenHtml),
+    );
     expect(result.isOk()).toBe(true);
 
     // Simulate a restart: reopen the same file and bootstrap again.

@@ -6,8 +6,13 @@ import type { PublishChange } from '../changeBus.js';
 import type { AppError } from '../../common/errors.js';
 import { conflict } from '../../models/error.js';
 import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } from '../../models/persistable.js';
-import type { Db } from './driver.js';
-import { isForeignKeyConstraintViolation, isSqliteBusy } from './sqliteErrors.js';
+import type { Tx } from './driver.js';
+import { isForeignKeyConstraintViolation } from './sqliteErrors.js';
+
+// Re-exported so every existing `import type { Tx } from '../effects.js'` call site keeps
+// resolving — `driver.ts` (the SQLite adapter, ADR-030) is now the sole place that derives it
+// from `Db`.
+export type { Tx };
 
 // A version conflict re-invokes `flow` for a fresh read → fresh decision
 // (docs/functional-core-imperative-shell.md rule 4), up to this many attempts total. Exported so
@@ -20,10 +25,21 @@ export const MAX_RUN_EFFECTS_ATTEMPTS = 3;
 // stay backward-compatible.
 const noopPublish: PublishChange = () => {};
 
-/** The transaction handle `db.transaction` hands its callback — inferred from `Db` itself rather
- *  than naming a drizzle-internal type directly. Exported so each `EntityApplier` (which runs
- *  inside that same transaction) can type its methods against it. */
-export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+/** The port (ADR-030): opens a unit of work, commits on success, rolls back on throw. The
+ *  composition root binds this to the concrete adapter (`diplomat/db/driver.ts`'s
+ *  `createTransactionRunner` wraps libSQL Drizzle's `Db.transaction`) — the retry/orchestration
+ *  code below calls `runInTransaction` and never names `Db.transaction` directly. Generic over an
+ *  opaque transaction handle `TTx`, defaulted to the SQLite adapter's own `Tx` so every existing
+ *  call site inside `diplomat/db` keeps resolving it without repeating the type argument. */
+export type TransactionRunner<TTx = Tx> = {
+  runInTransaction: <T>(work: (tx: TTx) => Promise<T>) => Promise<T>;
+};
+
+/** The port's other capability (ADR-030): classifies a thrown transaction failure as transient
+ *  physical contention — retried the same way as a `VersionConflict` — versus a genuine error,
+ *  which propagates. The SQLite adapter's implementation (`sqliteErrors.ts`'s `isSqliteBusy`) is
+ *  wired in at the composition root; this file never imports it. */
+export type IsTransientContention = (cause: unknown) => boolean;
 
 /** An applier's own outcome, before `applyPersistable` stamps its `Persistable`'s entity tag onto
  *  it — an applier never states its own tag, since the same applier can be registered under
@@ -36,18 +52,20 @@ type ApplierOutcome = Omit<PersistOutcome, 'entity'>;
  * db-row-shaped `model` — the model→row adaptation happens upstream, at the handler that calls
  * `runEffects`, never here — so `unknown` is deliberate: this file has no entity-specific row
  * type to name. Each method returns an `ApplierOutcome`; `applied` drives this file's own
- * retry/conflict decision (rule 4).
+ * retry/conflict decision (rule 4). Generic over the opaque transaction handle `TTx` (ADR-030),
+ * defaulted to `Tx` so every existing (all SQLite-backed) registration keeps typing itself without
+ * repeating the argument.
  */
-export type EntityApplier = {
-  insert: (tx: Tx, model: unknown, idempotencyKey?: string) => Promise<ApplierOutcome>;
-  update: (tx: Tx, model: unknown) => Promise<ApplierOutcome>;
-  delete: (tx: Tx, id: string, version: number) => Promise<ApplierOutcome>;
+export type EntityApplier<TTx = Tx> = {
+  insert: (tx: TTx, model: unknown, idempotencyKey?: string) => Promise<ApplierOutcome>;
+  update: (tx: TTx, model: unknown) => Promise<ApplierOutcome>;
+  delete: (tx: TTx, id: string, version: number) => Promise<ApplierOutcome>;
 };
 
 /** Every entity tag a converted flow might produce a `Persistable` for, mapped to how to apply
  *  it — assembled once at the composition root; this file only ever looks values up in it, never
  *  lists an entity itself. */
-export type ApplierRegistry = Record<string, EntityApplier>;
+export type ApplierRegistry<TTx = Tx> = Record<string, EntityApplier<TTx>>;
 
 /** An `id` + `version` column shape, matching most mutable tables — a table outside the
  *  convention (the link/key-only tables carry no `id`/`version` at all) hand-writes its own
@@ -59,8 +77,9 @@ type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteCol
  *  surviving row's — never the discarded mint), returning the decoded view that lands on
  *  `PersistOutcome.read`. The one sanctioned entity-supplied hook performing a read inside the
  *  engine — a recorded deviation from FC/IS rules 3/6 (`docs/architecture.md` § Write path); a
- *  second entity-supplied hook is the signal this design is wrong (ADR-023 option D). */
-export type ReadBack = (tx: Tx, id: string) => Promise<unknown>;
+ *  second entity-supplied hook is the signal this design is wrong (ADR-023 option D). Generic over
+ *  `TTx` (ADR-030), same default as `EntityApplier`. */
+export type ReadBack<TTx = Tx> = (tx: TTx, id: string) => Promise<unknown>;
 
 /** The fixed dedup column every idempotency-keyed insert writes to (ADR-029 Phase 2b) — never a
  *  per-registration name. Not every `VersionedTable` has it; `keyColumn` below is `undefined` for
@@ -158,18 +177,22 @@ export const versionedTableApplier = <T extends VersionedTable>(
 };
 
 /** Signals "roll back the whole batch and re-invoke the flow for a fresh read/decision" up
- *  through `db.transaction`'s rejection; caught by `applyBatch`, never leaks past `runEffects`.
+ *  through `runInTransaction`'s rejection; caught by `applyBatch`, never leaks past `runEffects`.
  *  Exported so an `EntityApplier` can raise the same retry for its own non-version conflict (see
  *  `diplomat/db/repos/bills.ts`'s `billApplier`). */
 export class VersionConflict extends Error {}
 
-const resolveApplier = (registry: ApplierRegistry, entity: string): EntityApplier => {
+const resolveApplier = <TTx>(registry: ApplierRegistry<TTx>, entity: string): EntityApplier<TTx> => {
   const applier = registry[entity];
   if (!applier) throw new Error(`runEffects: no applier registered for entity "${entity}"`);
   return applier;
 };
 
-const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistable): Promise<PersistOutcome> => {
+const applyPersistable = async <TTx>(
+  tx: TTx,
+  registry: ApplierRegistry<TTx>,
+  p: Persistable,
+): Promise<PersistOutcome> => {
   const applier = resolveApplier(registry, p.entity);
   const outcome = await (async (): Promise<ApplierOutcome> => {
     switch (p.op) {
@@ -195,27 +218,36 @@ const applyPersistable = async (tx: Tx, registry: ApplierRegistry, p: Persistabl
   return { ...outcome, entity: p.entity };
 };
 
+/** The retry decision (ADR-030): a logical version conflict or a cause the adapter classifies as
+ *  transient physical contention (SQLite: busy_timeout exhausted, or a WAL checkpoint-starvation
+ *  snapshot conflict, ADR-024) is retried the same way; anything else is a genuine failure and
+ *  propagates. Composed purely from the `VersionConflict` sentinel this file owns and the
+ *  adapter-supplied `isTransientContention` classifier — no sqlite-specific import here. Exported
+ *  so this composition has its own fast unit coverage, independent of the integration suite that
+ *  exercises it end-to-end against a real SQLite adapter. */
+export const isRetryable = (cause: unknown, isTransientContention: IsTransientContention): boolean =>
+  cause instanceof VersionConflict || isTransientContention(cause);
+
 /** Applies the whole batch in one transaction, returning each outcome positionally parallel to
- *  `persist` — empty on a version conflict or a busy physical lock, since the transaction already
- *  rolled back. An empty batch (a dry-run preview flow) skips `db.transaction` entirely. */
-const applyBatch = async (
-  db: Db,
-  registry: ApplierRegistry,
+ *  `persist` — empty on a version conflict or a transient physical lock, since the transaction
+ *  already rolled back. An empty batch (a dry-run preview flow) skips `runInTransaction` entirely.
+ */
+const applyBatch = async <TTx>(
+  runner: TransactionRunner<TTx>,
+  isTransientContention: IsTransientContention,
+  registry: ApplierRegistry<TTx>,
   persist: Persistable[],
 ): Promise<{ applied: boolean; outcomes: PersistOutcome[] }> => {
   if (persist.length === 0) return { applied: true, outcomes: [] };
 
   const outcomes: PersistOutcome[] = [];
   try {
-    await db.transaction(async (tx) => {
+    await runner.runInTransaction(async (tx) => {
       for (const p of persist) outcomes.push(await applyPersistable(tx, registry, p));
     });
     return { applied: true, outcomes };
   } catch (cause) {
-    // SQLITE_BUSY (busy_timeout exhausted, or a WAL checkpoint-starvation snapshot conflict) is
-    // physical contention, not a logical version conflict — but the recovery is identical: roll
-    // back and re-invoke the flow for a fresh read (ADR-024).
-    if (cause instanceof VersionConflict || isSqliteBusy(cause)) return { applied: false, outcomes: [] };
+    if (isRetryable(cause, isTransientContention)) return { applied: false, outcomes: [] };
     throw cause;
   }
 };
@@ -242,42 +274,50 @@ const publishChangedEntities = (outcomes: PersistOutcome[], publish: PublishChan
   if (entities.length > 0) publish(entities);
 };
 
-const attempt = <T>(
-  db: Db,
-  registry: ApplierRegistry,
+const attempt = <T, TTx>(
+  runner: TransactionRunner<TTx>,
+  isTransientContention: IsTransientContention,
+  registry: ApplierRegistry<TTx>,
   flow: Flow<T>,
   attemptsLeft: number,
   publish: PublishChange,
 ): ResultAsync<T, AppError> =>
   flow().andThen(({ persist, response }) =>
-    ResultAsync.fromSafePromise(applyBatch(db, registry, persist)).andThen(({ applied, outcomes }) => {
-      if (applied) {
-        publishChangedEntities(outcomes, publish);
-        return okAsync(resolveResponse(response, outcomes));
-      }
-      if (attemptsLeft <= 1) return errAsync<T, AppError>(conflict);
-      return attempt(db, registry, flow, attemptsLeft - 1, publish);
-    }),
+    ResultAsync.fromSafePromise(applyBatch(runner, isTransientContention, registry, persist)).andThen(
+      ({ applied, outcomes }) => {
+        if (applied) {
+          publishChangedEntities(outcomes, publish);
+          return okAsync(resolveResponse(response, outcomes));
+        }
+        if (attemptsLeft <= 1) return errAsync<T, AppError>(conflict);
+        return attempt(runner, isTransientContention, registry, flow, attemptsLeft - 1, publish);
+      },
+    ),
   );
 
 /**
  * The generic effect runner (docs/functional-core-imperative-shell.md): runs `flow`, applies the
- * `persist` batch it returns in one `db.transaction` by dispatching each `Persistable` to the
- * `registry`'s applier for its entity, and returns `flow`'s `response`. Entity-agnostic — only the
- * `registry` (built once at the composition root) knows which entity is which. A version conflict
- * or a busy physical lock (`SQLITE_BUSY`, ADR-024) rolls back the whole batch and re-invokes
- * `flow`, up to `MAX_RUN_EFFECTS_ATTEMPTS` times, before surfacing the generic `conflict` error.
- * This is the single-atomic-unit mode — the "unit of work" mode. `publish` (ADR-027 Phase 3) is
+ * `persist` batch it returns in one `runner.runInTransaction` unit of work by dispatching each
+ * `Persistable` to the `registry`'s applier for its entity, and returns `flow`'s `response`.
+ * Entity-agnostic — only the `registry` (built once at the composition root) knows which entity is
+ * which. A version conflict or transient physical contention (`isTransientContention`, ADR-024)
+ * rolls back the whole batch and re-invokes `flow`, up to `MAX_RUN_EFFECTS_ATTEMPTS` times, before
+ * surfacing the generic `conflict` error. This is the single-atomic-unit mode — the "unit of work"
+ * mode. `runner`/`isTransientContention` are the adapter port (ADR-030) — the composition root
+ * binds them to the concrete SQLite implementation (`diplomat/db/driver.ts`'s
+ * `createTransactionRunner`, `sqliteErrors.ts`'s `isSqliteBusy`). `publish` (ADR-027 Phase 3) is
  * the change bus's post-commit hook, called once per successful commit with the batch's changed
  * entity tags — optional so every existing direct caller (chiefly tests) is unaffected; the
  * composition root binds the real change bus.
  */
-export const runEffects = <T>(
-  db: Db,
-  registry: ApplierRegistry,
+export const runEffects = <T, TTx = Tx>(
+  runner: TransactionRunner<TTx>,
+  isTransientContention: IsTransientContention,
+  registry: ApplierRegistry<TTx>,
   flow: Flow<T>,
   publish: PublishChange = noopPublish,
-): ResultAsync<T, AppError> => attempt(db, registry, flow, MAX_RUN_EFFECTS_ATTEMPTS, publish);
+): ResultAsync<T, AppError> =>
+  attempt(runner, isTransientContention, registry, flow, MAX_RUN_EFFECTS_ATTEMPTS, publish);
 
 /** One unit's outcome from `runEffectsSequence`: its response, or the `AppError` it failed with
  *  (a domain error from its own flow, or a bounded-retry-exhausted `conflict`). A plain neverthrow
@@ -297,16 +337,19 @@ export type SequenceOutcome<T> = Result<T, AppError>;
  * unexpected failure (not a version conflict) still throws, same as `runEffects`. `publish`
  * (ADR-027 Phase 3), same default as `runEffects`, fires per unit that actually commits.
  */
-export const runEffectsSequence = async <I, T>(
-  db: Db,
-  registry: ApplierRegistry,
+export const runEffectsSequence = async <I, T, TTx = Tx>(
+  runner: TransactionRunner<TTx>,
+  isTransientContention: IsTransientContention,
+  registry: ApplierRegistry<TTx>,
   items: readonly I[],
   flowFor: (item: I) => Flow<T>,
   publish: PublishChange = noopPublish,
 ): Promise<SequenceOutcome<T>[]> => {
   const outcomes: SequenceOutcome<T>[] = [];
   for (const item of items) {
-    outcomes.push(await attempt(db, registry, flowFor(item), MAX_RUN_EFFECTS_ATTEMPTS, publish));
+    outcomes.push(
+      await attempt(runner, isTransientContention, registry, flowFor(item), MAX_RUN_EFFECTS_ATTEMPTS, publish),
+    );
   }
   return outcomes;
 };
