@@ -2,7 +2,7 @@ import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import { guard } from '../common/result.js';
 import * as persistence from '../logic/persistence.js';
-import type { FlowOutcome } from '../models/persistable.js';
+import type { FlowOutcome } from '../effects/persistable.js';
 import { tagErrors, TAG_ENTITY_TAG, type Tag } from '../models/tag.js';
 import type { Deps } from './deps.js';
 

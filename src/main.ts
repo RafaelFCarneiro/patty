@@ -8,8 +8,9 @@ import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
 import { createTransactionRunner, openDatabase } from './diplomat/db/driver.js';
-import { runEffects, runEffectsSequence, type ApplierRegistry } from './diplomat/db/effects.js';
+import type { ApplierRegistry } from './diplomat/db/effects.js';
 import { isSqliteBusy } from './diplomat/db/sqliteErrors.js';
+import { runEffects, runEffectsSequence } from './effects/engine.js';
 import { createLocaleResolver } from './diplomat/db/localeCache.js';
 import { accountApplier, accountsRepo } from './diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from './diplomat/db/repos/bills.js';
@@ -36,6 +37,7 @@ import { CATEGORY_ENTITY_TAG } from './models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from './models/creditCard.js';
 import { CURRENCY_RATE_ENTITY_TAG } from './models/currencyRate.js';
 import { DASHBOARD_ENTITY_TAG } from './models/dashboard.js';
+import { conflict } from './models/error.js';
 import { SETTINGS_ENTITY_TAG } from './models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from './models/merchant.js';
 import { RECURRING_ENTITY_TAG } from './models/recurring.js';
@@ -125,11 +127,14 @@ const main = async (): Promise<void> => {
   };
 
   const changeBus = createChangeBus();
-  const transactionRunner = createTransactionRunner(db);
-  const boundRunEffects: RunEffects = (flow) =>
-    runEffects(transactionRunner, isSqliteBusy, applierRegistry, flow, changeBus.publish);
+  const engineContext = {
+    runner: createTransactionRunner(db),
+    isTransientContention: isSqliteBusy,
+    conflictError: () => conflict,
+  };
+  const boundRunEffects: RunEffects = (flow) => runEffects(engineContext, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
-    runEffectsSequence(transactionRunner, isSqliteBusy, applierRegistry, items, flowFor, changeBus.publish);
+    runEffectsSequence(engineContext, applierRegistry, items, flowFor, changeBus.publish);
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
     const server = await connectStdio(

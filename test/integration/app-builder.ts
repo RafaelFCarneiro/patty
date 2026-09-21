@@ -37,9 +37,11 @@ import { TAG_ENTITY_TAG } from '../../src/models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../src/models/transactionTag.js';
 import { buildHttpApp } from '../../src/server.js';
-import { runEffects, runEffectsSequence, type ApplierRegistry } from '../../src/diplomat/db/effects.js';
+import type { ApplierRegistry } from '../../src/diplomat/db/effects.js';
 import { createChangeBus, type ChangeBus } from '../../src/diplomat/changeBus.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
+import { runEffects, runEffectsSequence } from '../../src/effects/engine.js';
+import { conflict } from '../../src/models/error.js';
 
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64);
 
@@ -106,11 +108,14 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     [SETTINGS_ENTITY_TAG]: settingsApplier,
   };
   const changeBus = createChangeBus();
-  const transactionRunner = createTransactionRunner(db);
-  const boundRunEffects: RunEffects = (flow) =>
-    runEffects(transactionRunner, isSqliteBusy, applierRegistry, flow, changeBus.publish);
+  const engineContext = {
+    runner: createTransactionRunner(db),
+    isTransientContention: isSqliteBusy,
+    conflictError: () => conflict,
+  };
+  const boundRunEffects: RunEffects = (flow) => runEffects(engineContext, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
-    runEffectsSequence(transactionRunner, isSqliteBusy, applierRegistry, items, flowFor, changeBus.publish);
+    runEffectsSequence(engineContext, applierRegistry, items, flowFor, changeBus.publish);
   const app = buildHttpApp(
     deps,
     version,

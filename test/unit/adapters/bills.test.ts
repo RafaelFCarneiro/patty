@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as billAdapters from '../../../src/adapters/bills.js';
 import { BILL_ENTITY_TAG, BillStatus, type BillEntity } from '../../../src/models/bill.js';
-import { INITIAL_VERSION, PersistOp, type Persistable } from '../../../src/models/persistable.js';
+import { INITIAL_VERSION, PersistOp, type Persistable } from '../../../src/effects/persistable.js';
 
 const bill: BillEntity = {
   id: 'bill-1',

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { isRetryable, VersionConflict } from '../../../../src/diplomat/db/effects.js';
+import { isRetryable, VersionConflict } from '../../../src/effects/engine.js';
 
 // The one new pure decision point the ADR-030 port seam introduces: `applyBatch`
-// (`diplomat/db/effects.ts`) composes it from the `VersionConflict` sentinel the core owns and the
+// (`src/effects/engine.ts`) composes it from the `VersionConflict` sentinel the core owns and the
 // adapter-supplied `isTransientContention` classifier, with no sqlite-specific import. The full
 // retry loop is proven end-to-end against a real SQLite adapter in
 // `test/integration/db/effects.test.ts`; this covers just the composition, in isolation.

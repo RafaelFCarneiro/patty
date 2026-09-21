@@ -7,10 +7,12 @@ import { saveDashboard } from '../../../src/controllers/dashboards.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { createTransactionRunner, openDatabase } from '../../../src/diplomat/db/driver.js';
-import { runEffects, type ApplierRegistry } from '../../../src/diplomat/db/effects.js';
+import type { ApplierRegistry } from '../../../src/diplomat/db/effects.js';
 import { dashboardApplier, dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
+import { runEffects } from '../../../src/effects/engine.js';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
+import { conflict } from '../../../src/models/error.js';
 import { Locale } from '../../../src/models/locale.js';
 
 const TEST_KEY = 'e'.repeat(64);
@@ -47,8 +49,10 @@ describe('dashboard seed persistence across restart (ADR-008 onConflictDoNothing
       locale: async () => Locale.enum.en,
     } as unknown as Deps;
     const registry: ApplierRegistry = { [DASHBOARD_ENTITY_TAG]: dashboardApplier };
-    const result = await runEffects(createTransactionRunner(firstDb), isSqliteBusy, registry, () =>
-      saveDashboard(deps, 'overview', overriddenHtml),
+    const result = await runEffects(
+      { runner: createTransactionRunner(firstDb), isTransientContention: isSqliteBusy, conflictError: () => conflict },
+      registry,
+      () => saveDashboard(deps, 'overview', overriddenHtml),
     );
     expect(result.isOk()).toBe(true);
 

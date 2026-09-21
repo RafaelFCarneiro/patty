@@ -22,9 +22,11 @@ import { recurringRepo } from '../../../src/diplomat/db/repos/recurring.js';
 import { settingsApplier, settingsRepo } from '../../../src/diplomat/db/repos/settings.js';
 import { tagsRepo } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
-import { runEffects, type ApplierRegistry } from '../../../src/diplomat/db/effects.js';
+import type { ApplierRegistry } from '../../../src/diplomat/db/effects.js';
 import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
+import { runEffects } from '../../../src/effects/engine.js';
 import { Locale, LocaleSource, SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
+import { conflict } from '../../../src/models/error.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { listCategories } from '../../../src/controllers/categories.js';
 import { getPreferences, setLocale } from '../../../src/controllers/settings.js';
@@ -98,7 +100,11 @@ describe('empty DB (ADR-008)', () => {
 
   it('inferred set_locale switches locale and stores inferred source', async () => {
     const flow = () => setLocale(deps, { locale: Locale.enum.pt, source: LocaleSource.enum.inferred });
-    const result = await runEffects(runner, isSqliteBusy, registry, flow);
+    const result = await runEffects(
+      { runner, isTransientContention: isSqliteBusy, conflictError: () => conflict },
+      registry,
+      flow,
+    );
     expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });
     const prefs = await getPreferences(deps);
     expect(prefs).toEqual({

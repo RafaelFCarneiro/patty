@@ -11,7 +11,7 @@ import type { Category, SubCategory } from '../models/category.js';
 import type { CreditCard } from '../models/creditCard.js';
 import { ambiguous, notFound } from '../models/error.js';
 import type { CurrencyCode } from '../models/money.js';
-import type { Persistable } from '../models/persistable.js';
+import type { Persistable } from '../effects/persistable.js';
 import type { TransactionView } from '../models/transaction.js';
 import type { Deps } from './deps.js';
 

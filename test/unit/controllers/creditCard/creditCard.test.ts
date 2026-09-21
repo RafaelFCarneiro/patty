@@ -16,7 +16,7 @@ import {
 } from '../../../../src/models/creditCard.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
 import { Locale } from '../../../../src/models/locale.js';
-import { PersistOp } from '../../../../src/models/persistable.js';
+import { PersistOp } from '../../../../src/effects/persistable.js';
 import {
   ClassificationMethod,
   TRANSACTION_ENTITY_TAG,

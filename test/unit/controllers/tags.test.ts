@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTag, deleteTag } from '../../../src/controllers/tags.js';
 import type { Deps } from '../../../src/controllers/deps.js';
-import { PersistOp } from '../../../src/models/persistable.js';
+import { PersistOp } from '../../../src/effects/persistable.js';
 import { TAG_ENTITY_TAG, type Tag, type TagEntity } from '../../../src/models/tag.js';
 import { Locale } from '../../../src/models/locale.js';
 

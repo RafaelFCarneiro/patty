@@ -3,7 +3,7 @@ import { resolveLegAccounts, resolveTagLinks } from '../../../src/controllers/re
 import type { Deps } from '../../../src/controllers/deps.js';
 import { AccountType, type Account } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { PersistOp } from '../../../src/models/persistable.js';
+import { PersistOp } from '../../../src/effects/persistable.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transactionTag.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({

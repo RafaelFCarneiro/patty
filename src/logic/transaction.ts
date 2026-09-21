@@ -20,7 +20,7 @@ import type {
   UpdateTransaction,
 } from '../models/transaction.js';
 import type { RawTransactionView } from '../models/transaction.js';
-import type { PersistOutcome } from '../models/persistable.js';
+import type { PersistOutcome } from '../effects/persistable.js';
 import { outcomeFor } from './persistence.js';
 import {
   transactionErrors,

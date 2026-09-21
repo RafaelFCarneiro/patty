@@ -87,8 +87,8 @@ that isn't in scope for your change just because you're touching the file.
 
 A converted controller still composes with `safeTry`/`guard`/`okOr` exactly as before — only the last step
 changes: instead of `await`ing a repo write and returning the written row, it builds the write as a typed
-`Persistable` (`models/persistable.ts`) via the `logic/persistence.ts` builders, and returns it alongside the
-response, for the diplomat shell's `runEffects` (`diplomat/db/effects.ts`) to apply:
+`Persistable` (`effects/persistable.ts`) via the `logic/persistence.ts` builders, and returns it alongside the
+response, for the diplomat shell's `runEffects` (`src/effects/engine.ts`) to apply:
 
 ```ts
 // ✅ DO — the core decides and returns the write as data; it never calls a repo write method
@@ -125,14 +125,14 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   they never need a new case as more flows convert. The write intent (`op`) they set is a named enum
   (`PersistOp`), not a bare `'insert'`/`'update'`/`'delete'` string — "constants over literals" applies to the
   op the same as any other domain value.
-- **The entity tag is owned by the entity's own model file, not by `models/persistable.ts`.** `Persistable` is
+- **The entity tag is owned by the entity's own model file, not by `effects/persistable.ts`.** `Persistable` is
   generic (`Persistable<Tag, Model>`) — it never imports or lists a specific entity. `models/account.ts` owns
   `ACCOUNT_ENTITY_TAG = 'account'`; a category flow would add `CATEGORY_ENTITY_TAG` to `models/category.ts`,
   never touching `persistable.ts`. This is the same "constants over literals" instinct pointed at the shared
   scaffolding itself: a god enum every entity has to be registered in is its own kind of magic-value coupling.
 - An `insert` `Persistable`'s model is the plain, wire-shaped domain model (`Account`) — **no `version`**. A
   brand-new row's version is always the same structural constant (`INITIAL_VERSION`, exported from
-  `models/persistable.ts`); that's not a decision the core makes, so it never appears in what the core builds
+  `effects/persistable.ts`); that's not a decision the core makes, so it never appears in what the core builds
   or returns. `update`/`delete` are different: `version` is the value the core actually read, so it's real
   data the model carries (`AccountEntity` — `Account` + `version`).
 - **The `modelToDb` adaptation happens once, explicitly, at the diplomat handler — never inside `diplomat/db`.**
@@ -144,7 +144,7 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   rule from earlier in this doc ("diplomats adapt `wire/in -> model` before controller calls and `model ->
   wire/out` after") extended one step further: the same handler also adapts `model -> db row` between the
   controller and the shell.
-- **The shell's generic engine (`diplomat/db/effects.ts`) never names a specific entity.** It dispatches
+- **The shell's generic engine (`src/effects/engine.ts`) never names a specific entity.** It dispatches
   each already-row-shaped `Persistable` to `registry[p.entity]` — an `EntityApplier` (just the drizzle table
   op, e.g. `tx.insert(accounts).values(row)`) that lives beside that entity's other persistence code. The
   `ApplierRegistry` is assembled once at the composition root (`main.ts`); `runEffects` itself only ever

@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+/** The engine's own data contract (ADR-030 Phase 2) — moved out of `models/persistable.ts`, where
+ *  ADR-029 had parked it before this module existed. Zero FinTrack imports: every entity's own tag
+ *  constant lives in its own model file, never here. */
+
 /** The write intent a `Persistable` carries — named so call sites construct one via `.enum.*`,
  *  never a bare `'insert'`/`'update'`/`'delete'` string (constants over literals). */
 export const PersistOp = z.enum(['insert', 'update', 'delete']);

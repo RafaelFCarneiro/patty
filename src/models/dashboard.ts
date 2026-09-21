@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Id } from './id.js';
-import { withPersistenceMeta } from './persistable.js';
+import { withPersistenceMeta } from '../effects/persistable.js';
 import { validation, type DuplicateName, type NotFound, type ValidationError } from './error.js';
 
 // A generous ceiling for a data-less dashboard fragment (the baseline template is ~20KB, down from

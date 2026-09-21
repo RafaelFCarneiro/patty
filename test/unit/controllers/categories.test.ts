@@ -7,7 +7,7 @@ import {
 } from '../../../src/controllers/categories.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import { CATEGORY_ENTITY_TAG, CategoryKind, type Category, type SubCategory } from '../../../src/models/category.js';
-import { PersistOp } from '../../../src/models/persistable.js';
+import { PersistOp } from '../../../src/effects/persistable.js';
 import { Locale } from '../../../src/models/locale.js';
 
 const category = (overrides: Partial<Category> = {}): Category => ({

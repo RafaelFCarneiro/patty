@@ -1,7 +1,7 @@
 /** Pure merchant-name normalization: bank-statement noise → stable merchant key. */
 
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG, type MerchantCategoryEdge } from '../models/merchant.js';
-import type { Persistable } from '../models/persistable.js';
+import type { Persistable } from '../effects/persistable.js';
 import { ClassificationMethod } from '../models/transaction.js';
 import { insert } from './persistence.js';
 
