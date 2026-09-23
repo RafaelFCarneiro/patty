@@ -2,18 +2,11 @@ import { errAsync, okAsync, type Result, ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import { PersistOp, type FlowOutcome, type Persistable, type PersistOutcome } from './persistable.js';
 
-/**
- * The driver-free effect-engine core (ADR-030 Phase 2) — the retry loop, batch orchestration,
- * outcome/response shaping, and the post-commit publish hook, moved out of `diplomat/db/effects.ts`.
- * No Drizzle, no sqlite, no FinTrack error taxonomy: generic over an opaque transaction handle
- * `TTx` and an opaque error type `E`. `diplomat/db` is the SQLite adapter that implements the
- * **port** this file defines (`TransactionRunner`, `EntityApplier`, `ApplierRegistry`, `ReadBack`,
- * `IsTransientContention`) and binds it at the composition root (`main.ts`).
- */
+/** ADR-030: zero Drizzle/libSQL/FinTrack imports, lint-enforced — `diplomat/db` is the SQLite
+ *  adapter that implements the port this file defines. */
 
-/** A live-update hook (ADR-027 Phase 3): called once per successful commit with the batch's changed
- *  entity tags. `diplomat/changeBus.ts` is the concrete in-process implementation FinTrack binds at
- *  the composition root; this file only ever depends on the function shape. */
+/** `diplomat/changeBus.ts` has the concrete implementation; redeclared here (not imported) so this
+ *  file stays independent of `diplomat/`. */
 export type PublishChange = (entities: readonly string[]) => void;
 
 // The vast majority of call sites (every direct `runEffects`/`runEffectsSequence` test call, plus
@@ -43,11 +36,9 @@ export type TransactionRunner<TTx> = {
  *  wired in at the composition root; this file never imports it. */
 export type IsTransientContention = (cause: unknown) => boolean;
 
-/** The engine's binding (ADR-030): the adapter port plus the composition root's mapping from a
- *  retry-exhausted conflict to the shell's own error type — this is how the engine stays ignorant
- *  of FinTrack's `AppError` union while every real caller still gets a properly-typed error back.
- *  Bundled as one object (rather than positional args) since the three always travel together,
- *  bound once at the composition root. */
+/** The adapter port plus the composition root's mapping from a retry-exhausted conflict to the
+ *  shell's own error type — this is how the engine stays ignorant of FinTrack's `AppError` union
+ *  while every real caller still gets a properly-typed error back. */
 export type EngineContext<TTx, E> = {
   runner: TransactionRunner<TTx>;
   isTransientContention: IsTransientContention;

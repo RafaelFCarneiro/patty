@@ -10,16 +10,7 @@ import {
 import type { Tx } from './driver.js';
 import { isForeignKeyConstraintViolation } from './sqliteErrors.js';
 
-/**
- * The SQLite adapter (ADR-030): implements the port `src/effects/engine.ts` defines
- * (`EntityApplier`/`ApplierRegistry`/`ReadBack`) against Drizzle, and specializes each port type
- * with this adapter's own concrete `Tx` as the default type argument so every existing
- * SQLite-backed registration (`accountApplier: EntityApplier = ...`, etc.) keeps typing itself
- * without repeating it. `runEffects`/`runEffectsSequence`/`VersionConflict`/`MAX_RUN_EFFECTS_ATTEMPTS`
- * live in `src/effects/engine.ts` now — this file only re-exports `VersionConflict` (a plain value,
- * not Tx-shaped) for the many appliers below that throw it; every other engine entry point is
- * imported directly from `effects/engine.js` at its own call sites (composition root, tests).
- */
+// Re-exported (not just imported) since the appliers below throw it directly.
 export { VersionConflict };
 
 // Re-exported so every existing `import type { Tx } from '../effects.js'` call site keeps
@@ -27,6 +18,7 @@ export { VersionConflict };
 // from `Db`.
 export type { Tx };
 
+// Tx-defaulted so every SQLite-backed registration below keeps typing itself without repeating it.
 export type EntityApplier<TTx = Tx> = EngineEntityApplier<TTx>;
 export type ApplierRegistry<TTx = Tx> = EngineApplierRegistry<TTx>;
 export type ReadBack<TTx = Tx> = EngineReadBack<TTx>;
