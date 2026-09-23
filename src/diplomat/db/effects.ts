@@ -29,7 +29,7 @@ export type { Tx };
 
 export type EntityApplier<TTx = Tx> = EngineEntityApplier<TTx>;
 export type ApplierRegistry<TTx = Tx> = EngineApplierRegistry<TTx>;
-type ReadBack<TTx = Tx> = EngineReadBack<TTx>;
+export type ReadBack<TTx = Tx> = EngineReadBack<TTx>;
 
 /** The fixed dedup column every idempotency-keyed insert writes to (ADR-029 Phase 2b) — never a
  *  per-registration name. Not every `VersionedTable` has it; `keyColumn` below is `undefined` for
