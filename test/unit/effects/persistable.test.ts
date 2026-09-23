@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PersistenceMeta, withPersistenceMeta } from '../../../src/models/persistable.js';
+import { PersistenceMeta, withPersistenceMeta } from '../../../src/effects/persistable.js';
 import { TagSchema } from '../../../src/models/tag.js';
 
 describe('withPersistenceMeta', () => {

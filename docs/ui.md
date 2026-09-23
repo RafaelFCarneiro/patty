@@ -293,7 +293,7 @@ is composition-root-only (called once in `main.ts` / `test/integration/app-build
 parameter — the same crossing pattern as `RunEffects`/`resetLocale`. No external broker: the MCP server, HTTP
 sidecar, and scheduler share one process (ADR-024), so an in-process emitter is the whole mechanism.
 
-**The post-commit publish hook** lives in `diplomat/db/effects.ts`'s `attempt` (the one place a batch commits,
+**The post-commit publish hook** lives in `src/effects/engine.ts`'s `attempt` (the one place a batch commits,
 shared by `runEffects` and `runEffectsSequence`): once `applyBatch` reports `applied: true`, the deduped entity
 tags of every outcome that itself `applied: true` are published. An idempotent-duplicate insert
 (`applied: false`) changed nothing, so its entity is never published; a version-conflict retry's failed

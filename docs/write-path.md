@@ -19,22 +19,23 @@ effect runner, appliers, outcomes, and the per-flow notes.
 - **A converted controller returns `ResultAsync<{ persist: Persistable[]; response: T }, AppError>`** (not
   `ResultAsync<T>`), composed with `safeTry` as before — it just builds `Persistable`s instead of calling
   `deps.<x>.create`. Builders: `logic/persistence.ts`'s `insert`/`update`/`remove`.
-- **`Persistable` / `PersistOp`** (`models/persistable.ts`) are **entity-agnostic** — `Persistable<Tag, Model>`
+- **`Persistable` / `PersistOp`** (`src/effects/persistable.ts`, moved out of `models/persistable.ts` at ADR-030
+  Phase 2 — it was always engine-level, not FinTrack domain) are **entity-agnostic** — `Persistable<Tag, Model>`
   generic over the entity's own tag + model, never a closed union; this file never imports a specific entity.
   `PersistOp` is a named enum (`insert`/`update`/`delete`). Each entity module owns its own tag constant
   (e.g. `models/account.ts`'s `ACCOUNT_ENTITY_TAG`).
 - **`version`** — every mutable table carries `version INTEGER NOT NULL DEFAULT 0` (§ Relational schema): an
   optimistic-concurrency token, persistence-side only, never on the public model/wire shape. An `insert`
-  `Persistable`'s model omits it (a new row is always `INITIAL_VERSION`, `models/persistable.ts`); only
+  `Persistable`'s model omits it (a new row is always `INITIAL_VERSION`, `effects/persistable.ts`); only
   `update`/`delete` carry the real read `version`, via the persistence-side type (`AccountEntity` = `Account`
   + `version`).
-- **The managed-entity base — one declaration home for the version token.** `models/persistable.ts`'s
+- **The managed-entity base — one declaration home for the version token.** `effects/persistable.ts`'s
   `PersistenceMeta`/`withPersistenceMeta` is where every entity's persistence-side type is built:
   `XxxEntitySchema = withPersistenceMeta(XxxSchema)` extends the pure model with `PersistenceMeta`'s `version`
   field, so the token's shape (`z.number().int().nonnegative()`, its `describe`) is declared exactly once instead
-  of per entity. `withPersistenceMeta` takes no specific entity model and no Drizzle import — it's the nucleus a
-  future DB-agnostic effect-engine extraction would cut along (`models/persistable.ts` + `effects.ts`'s
-  `runEffects`/registry, minus `versionedTableApplier`).
+  of per entity. `withPersistenceMeta` takes no specific entity model and no Drizzle import — it lives beside the
+  engine core it was always the nucleus of (ADR-030 Phase 2: `effects/persistable.ts` + `effects/engine.ts`'s
+  `runEffects`/registry; `versionedTableApplier` stays behind in `diplomat/db`, the SQLite adapter).
 - **`idempotencyKey` — optional dedup metadata on the `insert` `Persistable` itself, not the model** (ADR-029
   Phase 2). `insert: { op: 'insert'; entity: Tag; model: Model; idempotencyKey?: string }` — a flow that opts an
   entity into the engine's generic idempotency treatment (below) sets this field alongside `model`, never inside
@@ -90,48 +91,52 @@ effect runner, appliers, outcomes, and the per-flow notes.
 
 ### The effect runner — the engine
 
-- **The port seam (ADR-030 Phase 1).** `runEffects`/`runEffectsSequence` no longer take a `Db` and no longer
-  name `Db.transaction` directly. They take a **`TransactionRunner<TTx>`** (`{ runInTransaction: (work: (tx:
-  TTx) => Promise<T>) => Promise<T> }`) and an **`IsTransientContention`** classifier (`(cause: unknown) =>
-  boolean`) as their first two arguments, alongside the `registry`. Both are the **adapter port**: the
-  composition root (`main.ts`, `test/integration/app-builder.ts`) binds them to the concrete SQLite
-  adapter — `diplomat/db/driver.ts`'s `createTransactionRunner(db)` wraps libSQL Drizzle's `Db.transaction`,
-  and `diplomat/db/sqliteErrors.ts`'s `isSqliteBusy` is passed as `isTransientContention`. `EntityApplier` /
-  `ApplierRegistry` / `ReadBack` are generic over the same opaque transaction handle `TTx`, defaulted to the
-  SQLite adapter's own `Tx` (now derived in `driver.ts`, re-exported from `effects.ts` for existing import
-  paths) so every existing SQLite-backed registration keeps typing itself without repeating the argument. The
-  engine's retry predicate (`isRetryable`, exported for its own unit coverage) reads `cause instanceof
-  VersionConflict || isTransientContention(cause)` — no sqlite-specific import in the core's retry decision.
-  This is an in-place seam only: the engine still physically lives in `diplomat/db/effects.ts` alongside the
-  SQLite adapter (`driver.ts`, `sqliteErrors.ts`, `versionedTableApplier`) — the relocation to a
-  driver-free `src/effects/` module is ADR-030 Phase 2.
-- **`runEffects(runner, isTransientContention, registry, flow)`** (`diplomat/db/effects.ts` — the only file
-  that calls `runInTransaction`, via the shared `applyBatch`/`attempt` primitive both this mode and
+- **The engine lives in `src/effects/engine.ts` (ADR-030 Phase 2)** — a standalone, driver-free module: no
+  `drizzle-orm`/`@libsql`, no `diplomat/`/`models/`/`common/`/`controllers/`/`logic/` imports (lint-enforced,
+  `eslint.config.js`). `runEffects`/`runEffectsSequence` take an **`EngineContext<TTx, E>`** —
+  `{ runner: TransactionRunner<TTx>; isTransientContention: IsTransientContention; conflictError: () => E }` —
+  as their first argument (bundling the ADR-030 Phase 1 port seam's `TransactionRunner`/`IsTransientContention`
+  plus a new **error binding**), followed by the `registry`. `TransactionRunner<TTx>` is `{ runInTransaction:
+  (work: (tx: TTx) => Promise<T>) => Promise<T> }`; `IsTransientContention` is `(cause: unknown) => boolean`.
+  The engine no longer names `Db.transaction`, and — new at Phase 2 — no longer names FinTrack's `AppError`/
+  `conflict` either: it is generic over an opaque error type `E`, and a retry-exhausted conflict surfaces as
+  `ctx.conflictError()` rather than an imported constant. The composition root (`main.ts`,
+  `test/integration/app-builder.ts`) binds the whole context to the concrete SQLite adapter and FinTrack's own
+  error — `diplomat/db/driver.ts`'s `createTransactionRunner(db)` wraps libSQL Drizzle's `Db.transaction`,
+  `diplomat/db/sqliteErrors.ts`'s `isSqliteBusy` is passed as `isTransientContention`, and `() =>
+  conflict` (`models/error.ts`) is passed as `conflictError`. `EntityApplier` / `ApplierRegistry` / `ReadBack`
+  are generic over the same opaque transaction handle `TTx`, with no default in the engine itself (it has no
+  concrete `Tx` to default to) — `diplomat/db/effects.ts`, the SQLite adapter, re-exports each one specialized
+  with its own `Tx` as the default type argument, so every existing SQLite-backed registration
+  (`accountApplier: EntityApplier = ...`) keeps typing itself without repeating the argument. The engine's
+  retry predicate (`isRetryable`, exported for its own unit coverage) reads `cause instanceof VersionConflict
+  || isTransientContention(cause)` — no sqlite-specific import in the core's retry decision.
+- **`runEffects(ctx, registry, flow)`** (`src/effects/engine.ts` — the only file that calls
+  `ctx.runner.runInTransaction`, via the shared `applyBatch`/`attempt` primitive both this mode and
   `runEffectsSequence` below run through) invokes `flow` and executes the effects it returns.
   **Single-atomic-unit** mode: the `persist` batch applied in one `runInTransaction` unit of work, each
   row-shaped `Persistable` dispatched by `p.entity` through the `registry`; **response** always produced;
   message dispatch is a named-but-unbuilt future effect kind. `update`/`delete` apply `... SET ..., version =
   <read version + 1> WHERE id = ? AND version = ?` — the new version computed in application code, **never**
   a SQL-side `version + 1`. A version-guarded op affecting zero rows rolls back the whole batch and re-invokes
-  `flow` (fresh read → fresh decision), bounded, then surfaces the generic `conflict` `AppError`
-  (`models/error.ts`, no business payload). **The retry loop covers two distinct classes (ADR-024):
-  `VersionConflict` (logical — a stale read)** and **transient physical contention (the SQLite adapter's
-  `isTransientContention` = `isSqliteBusy` in `diplomat/db/sqliteErrors.ts`, matched on the driver error's base
-  `.code`, covering `SQLITE_BUSY` and the more specific `SQLITE_BUSY_SNAPSHOT`)**; `applyBatch` catches either
-  (via `isRetryable`) and treats them identically — roll back, re-invoke, same `MAX_RUN_EFFECTS_ATTEMPTS`
-  budget. `busy_timeout` (`diplomat/db/driver.ts`) already absorbs the common case by having the driver wait
-  for the lock instead of throwing; this retry is the bounded defense-in-depth for contention that outlives
-  that timeout.
-- **`runEffectsSequence(runner, isTransientContention, registry, items, flowFor)`** — the second mode: each
-  item's flow (built by `flowFor`, invoked only when the runner reaches it) runs through the same
-  `attempt`/retry primitive, in its **own transaction**, in order. Item *i+1* sees item *i*'s committed
-  writes — which is why bulk import reuses the single-line flows verbatim. A unit's version conflict retries
-  only that unit; a domain error or exhausted retries is recorded as `Err` and the sequence **continues**
-  (partial success). Returns one `SequenceOutcome<T>` (`Result<T, AppError>`) per item, positionally parallel
-  to `items`.
-- **`EntityApplier` / `ApplierRegistry`** (`diplomat/db/effects.ts`) — the engine dispatches a row-shaped
-  `Persistable` to `registry[p.entity]`; it never names an entity and never needs a new `case` as entities
-  convert. The `ApplierRegistry` is assembled once at the composition root (`main.ts`,
+  `flow` (fresh read → fresh decision), bounded, then surfaces `ctx.conflictError()` — at the composition root,
+  FinTrack's generic `conflict` `AppError` (`models/error.ts`, no business payload). **The retry loop covers two
+  distinct classes (ADR-024): `VersionConflict` (logical — a stale read)** and **transient physical contention
+  (the SQLite adapter's `isTransientContention` = `isSqliteBusy` in `diplomat/db/sqliteErrors.ts`, matched on
+  the driver error's base `.code`, covering `SQLITE_BUSY` and the more specific `SQLITE_BUSY_SNAPSHOT`)**;
+  `applyBatch` catches either (via `isRetryable`) and treats them identically — roll back, re-invoke, same
+  `MAX_RUN_EFFECTS_ATTEMPTS` budget. `busy_timeout` (`diplomat/db/driver.ts`) already absorbs the common case
+  by having the driver wait for the lock instead of throwing; this retry is the bounded defense-in-depth for
+  contention that outlives that timeout.
+- **`runEffectsSequence(ctx, registry, items, flowFor)`** — the second mode: each item's flow (built by
+  `flowFor`, invoked only when the runner reaches it) runs through the same `attempt`/retry primitive, in its
+  **own transaction**, in order. Item *i+1* sees item *i*'s committed writes — which is why bulk import reuses
+  the single-line flows verbatim. A unit's version conflict retries only that unit; a domain error or exhausted
+  retries is recorded as `Err` and the sequence **continues** (partial success). Returns one `SequenceOutcome<T,
+  E>` (`Result<T, E>`; `E` is `AppError` at every real call site) per item, positionally parallel to `items`.
+- **`EntityApplier` / `ApplierRegistry`** (port types owned by `src/effects/engine.ts`) — the engine dispatches
+  a row-shaped `Persistable` to `registry[p.entity]`; it never names an entity and never needs a new `case` as
+  entities convert. The `ApplierRegistry` is assembled once at the composition root (`main.ts`,
   `test/integration/app-builder.ts`).
 - **`RunEffects` is shell-only, never a field on `Deps`.** `controllers/deps.ts` exports the type, but only the
   `diplomat/mcp`/`diplomat/http` handlers hold an instance — a controller cannot reach it to apply its own
@@ -207,7 +212,7 @@ effect runner, appliers, outcomes, and the per-flow notes.
 
 ### Outcomes and responses
 
-- **`PersistOutcome`** (`models/persistable.ts`) — what the shell reports per `Persistable`: `applied` (did the
+- **`PersistOutcome`** (`effects/persistable.ts`) — what the shell reports per `Persistable`: `applied` (did the
   insert land, or no-op as an idempotent duplicate), the entity's already-decoded `read` of what is now
   persisted, and the `entity` tag. A `FlowOutcome.response` is normally the plain core-derived value; an
   idempotency-aware flow instead returns a **pure, sync** function of `PersistOutcome[]` that `runEffects` calls

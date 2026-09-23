@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
-import { withPersistenceMeta } from './persistable.js';
+import { withPersistenceMeta } from '../effects/persistable.js';
 import type { ValidationError } from './error.js';
 
 // Entity tag for this aggregate's `Persistable`s.

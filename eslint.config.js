@@ -60,4 +60,27 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // ADR-030: src/effects/ is the driver-free, FinTrack-free effect-engine core — the lift-out
+    // destination is its own repo/package, so a Drizzle/libSQL/diplomat/FinTrack-domain import
+    // here must fail the build, the same way `logic/` may never reach into `diplomat/`.
+    files: ['src/effects/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['drizzle-orm', 'drizzle-orm/*', '@libsql/*'],
+              message: 'src/effects/ is driver-free (ADR-030) — no database-driver imports.',
+            },
+            {
+              group: ['**/diplomat/**', '**/models/**', '**/common/**', '**/controllers/**', '**/logic/**'],
+              message: 'src/effects/ carries no FinTrack code (ADR-030) — it depends only on zod/neverthrow/remeda.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

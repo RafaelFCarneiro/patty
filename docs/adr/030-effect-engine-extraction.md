@@ -132,7 +132,7 @@ the later lift-out is a move, not a rewrite.
 
 1. [x] Review/accept this ADR.
 2. [x] Phase 1 — port seam in place (`TransactionRunner`, `isTransientContention`, opaque `Tx`); behavior-preserving.
-3. [ ] Phase 2 — relocate the driver-free core **and the data contract** to `src/effects/`; decouple from
+3. [x] Phase 2 — relocate the driver-free core **and the data contract** to `src/effects/`; decouple from
    FinTrack's error taxonomy; `diplomat/db` implements the port; lint rule + dependency-table entry;
    `docs/write-path.md` + `docs/architecture.md` updated.
 4. [ ] (Deferred, own ADR) lift `src/effects/` into its own repo + publish as a library FinTrack depends on

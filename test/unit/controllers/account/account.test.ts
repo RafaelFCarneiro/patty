@@ -6,7 +6,7 @@ import {
   updateAccount,
 } from '../../../../src/controllers/account/account.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
-import { PersistOp } from '../../../../src/models/persistable.js';
+import { PersistOp } from '../../../../src/effects/persistable.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../../src/models/account.js';
 import type { CurrencyRateEntity } from '../../../../src/models/currencyRate.js';
 import { CurrencyCode, type Currency } from '../../../../src/models/money.js';

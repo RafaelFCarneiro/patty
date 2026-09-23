@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { confirmTransaction } from '../../../../src/controllers/transaction/core.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
-import type { FlowOutcome, PersistOutcome } from '../../../../src/models/persistable.js';
-import { PersistOp } from '../../../../src/models/persistable.js';
+import type { FlowOutcome, PersistOutcome } from '../../../../src/effects/persistable.js';
+import { PersistOp } from '../../../../src/effects/persistable.js';
 import { TransactionStatus, TransactionType, type RawTransactionView } from '../../../../src/models/transaction.js';
 import { Locale } from '../../../../src/models/locale.js';
 

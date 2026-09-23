@@ -29,7 +29,7 @@ import type {
 } from '../../models/account.js';
 import { notFound } from '../../models/error.js';
 import { Locale } from '../../models/locale.js';
-import type { FlowOutcome, Persistable } from '../../models/persistable.js';
+import type { FlowOutcome, Persistable } from '../../effects/persistable.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 

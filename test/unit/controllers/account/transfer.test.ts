@@ -3,8 +3,8 @@ import { createTransfer } from '../../../../src/controllers/account/transfer.js'
 import type { Deps } from '../../../../src/controllers/deps.js';
 import { AccountType, type Account } from '../../../../src/models/account.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
-import type { FlowOutcome, PersistOutcome } from '../../../../src/models/persistable.js';
-import { PersistOp } from '../../../../src/models/persistable.js';
+import type { FlowOutcome, PersistOutcome } from '../../../../src/effects/persistable.js';
+import { PersistOp } from '../../../../src/effects/persistable.js';
 import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
 import { Locale } from '../../../../src/models/locale.js';
 import { SEEDED_CURRENCIES } from '../../fixtures/currencies.js';

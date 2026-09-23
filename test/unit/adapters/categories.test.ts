@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CATEGORY_ENTITY_TAG, CategoryKind, type CategoryWriteModel } from '../../../src/models/category.js';
-import { INITIAL_VERSION, PersistOp, type Persistable } from '../../../src/models/persistable.js';
+import { INITIAL_VERSION, PersistOp, type Persistable } from '../../../src/effects/persistable.js';
 import * as wireInCategories from '../../../src/wire/in/categories.js';
 import * as categoryAdapters from '../../../src/adapters/categories.js';
 
