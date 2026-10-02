@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { transactionErrors } from '../../../src/models/transaction.js';
 import { setupHttpTest } from './setup.js';
 
 const { inject } = setupHttpTest();
@@ -977,6 +978,52 @@ describe('GET /api/transactions', () => {
   it('rejects invalid date (422)', async () => {
     const res = await inject({ method: 'GET', url: '/api/transactions?from=bad' });
     expect(res.statusCode).toBe(422);
+  });
+
+  describe('month/year period (half-open [first-of-month, first-of-next-month))', () => {
+    const seedExpense = (description: string, date: string) =>
+      inject({ method: 'POST', url: '/api/accounts/expenses', payload: { description, amount: 3, date } });
+    const descriptionsFor = async (query: string): Promise<string[]> => {
+      const res = await inject({ method: 'GET', url: `/api/transactions?${query}&limit=200` });
+      expect(res.statusCode).toBe(200);
+      return (res.json().items as Array<{ description: string }>).map((t) => t.description);
+    };
+
+    it("includes the month's last day and excludes the 1st of the next month", async () => {
+      await seedExpense('Boundary last day', '2033-09-30');
+      await seedExpense('Boundary next first', '2033-10-01');
+      const descriptions = await descriptionsFor('month=9&year=2033');
+      expect(descriptions).toContain('Boundary last day');
+      expect(descriptions).not.toContain('Boundary next first');
+    });
+
+    it('rolls December over into January of the next year', async () => {
+      await seedExpense('Rollover dec last', '2033-12-31');
+      await seedExpense('Rollover jan first', '2034-01-01');
+      const december = await descriptionsFor('month=12&year=2033');
+      expect(december).toContain('Rollover dec last');
+      expect(december).not.toContain('Rollover jan first');
+      expect(await descriptionsFor('month=1&year=2034')).toContain('Rollover jan first');
+    });
+
+    it('returns the same rows as the equivalent exclusive from/to range', async () => {
+      await seedExpense('Parity last day', '2033-11-30');
+      const byPeriod = await descriptionsFor('month=11&year=2033');
+      const byRange = await descriptionsFor('from=2033-11-01&to=2033-12-01');
+      expect(byPeriod).toContain('Parity last day');
+      expect(byPeriod).toEqual(byRange);
+    });
+
+    it('rejects an out-of-range month (422)', async () => {
+      const res = await inject({ method: 'GET', url: '/api/transactions?month=13&year=2033' });
+      expect(res.statusCode).toBe(422);
+    });
+
+    it('rejects month/year combined with from/to (422)', async () => {
+      const res = await inject({ method: 'GET', url: '/api/transactions?month=9&year=2033&from=2033-09-01' });
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error).toEqual(transactionErrors.exclusivePeriodRange);
+    });
   });
 
   it('paginates via cursor with no gaps or duplicates (ADR-014)', async () => {

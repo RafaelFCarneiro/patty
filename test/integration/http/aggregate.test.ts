@@ -234,6 +234,29 @@ describe('GET /api/aggregate', () => {
     expect(months[0] < months[months.length - 1]).toBe(true);
   });
 
+  it("counts a month's last day and excludes the 1st of the next month, including across December", async () => {
+    const account = 'AggBoundaryAcct';
+    await inject({
+      method: 'POST',
+      url: '/api/accounts',
+      payload: { name: account, type: 'checking', currency: 'USD', initialBalance: 0 },
+    });
+    const seed = (description: string, amount: number, date: string) =>
+      inject({ method: 'POST', url: '/api/accounts/expenses', payload: { description, amount, date, account } });
+    await seed('Agg boundary sep last', 30, '2025-09-30');
+    await seed('Agg boundary oct first', 1, '2025-10-01');
+    await seed('Agg boundary dec last', 31, '2024-12-31');
+    await seed('Agg boundary jan first', 2, '2025-01-01');
+    const usdTotal = async (period: string): Promise<number> => {
+      const res = await inject({ method: 'GET', url: `/api/aggregate?groupBy=category&${period}&account=${account}` });
+      expect(res.statusCode).toBe(200);
+      return res.json().currencies.find((c: { currency: string }) => c.currency === 'USD').total;
+    };
+    expect(await usdTotal('month=9&year=2025')).toBe(30);
+    expect(await usdTotal('month=12&year=2024')).toBe(31);
+    expect(await usdTotal('from=2025-09-01&to=2025-10-01')).toBe(30);
+  });
+
   it('rejects missing period (422)', async () => {
     const res = await inject({ method: 'GET', url: '/api/aggregate?groupBy=category' });
     expect(res.statusCode).toBe(422);

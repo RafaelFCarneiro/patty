@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assertExclusivePeriodOrRange,
   assertHasPeriodOrRange,
   baselineRange,
   daysBetween,
@@ -125,6 +126,28 @@ describe('assertHasPeriodOrRange', () => {
 
   it('true with from only (null to)', () => {
     expect(assertHasPeriodOrRange({ from: '2026-01-01', to: null })).toBe(true);
+  });
+});
+
+describe('assertExclusivePeriodOrRange', () => {
+  it('true with month+year only', () => {
+    expect(assertExclusivePeriodOrRange({ month: 9, year: 2026 })).toBe(true);
+  });
+
+  it('true with from/to only', () => {
+    expect(assertExclusivePeriodOrRange({ from: '2026-09-01', to: '2026-10-01' })).toBe(true);
+  });
+
+  it('true with neither', () => {
+    expect(assertExclusivePeriodOrRange({})).toBe(true);
+  });
+
+  it('false with month+year and from', () => {
+    expect(assertExclusivePeriodOrRange({ month: 9, year: 2026, from: '2026-09-01' })).toBe(false);
+  });
+
+  it('false with month+year and to', () => {
+    expect(assertExclusivePeriodOrRange({ month: 9, year: 2026, to: '2026-10-01' })).toBe(false);
   });
 });
 

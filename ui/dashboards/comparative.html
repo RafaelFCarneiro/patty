@@ -883,10 +883,6 @@
             }
         }
 
-        function getLastDay(year, month) {
-            return new Date(year, month, 0).getDate();
-        }
-
         // Bootstrap data fetch
         async function initDashboard() {
             if (panelsLoading) panelsLoading.classList.add('active');
@@ -922,26 +918,13 @@
 
             try {
                 async function fetchMonthTransactions(year, month) {
-                    const lastDay = getLastDay(year, month);
-                    const mStr = String(month).padStart(2, '0');
-                    
-                    const fromStr = `${year}-${mStr}-01`;
-                    const toStr = `${year}-${mStr}-${String(lastDay).padStart(2, '0')}`;
-                    
-                    // Add 1 day to prevent timezone cutoff
-                    const endDateObj = new Date(year, month - 1, lastDay + 1);
-                    const toYear = endDateObj.getFullYear();
-                    const toMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
-                    const toDay = String(endDateObj.getDate()).padStart(2, '0');
-                    const adjustedTo = `${toYear}-${toMonth}-${toDay}`;
-
                     let allItems = [];
                     let cursor = null;
                     
                     while (true) {
                         const queryParams = new URLSearchParams({
-                            from: fromStr,
-                            to: adjustedTo,
+                            month: String(month),
+                            year: String(year),
                             sort: 'date',
                             dir: 'desc'
                         });
@@ -974,7 +957,7 @@
                         cursor = nextCursor;
                     }
                     
-                    return allItems.filter(t => t.date && t.date <= toStr);
+                    return allItems;
                 }
 
                 allTransactions = await fetchMonthTransactions(selectedYear, selectedMonth);

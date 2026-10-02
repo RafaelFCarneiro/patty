@@ -913,19 +913,14 @@ async function fetchBudgetStatus(month, year, displayCurrency) {
 }
 
 async function fetchAllTransactionsForMonth(year, month) {
-    const mStr = String(month).padStart(2, '0');
-    const lastDay = new Date(year, month, 0).getDate();
-    const fromStr = `${year}-${mStr}-01`;
-    const toStr = `${year}-${mStr}-${String(lastDay).padStart(2, '0')}`;
-
     let items = [];
     let cursor = null;
 
     try {
         while (true) {
             const params = new URLSearchParams({
-                from: fromStr,
-                to: toStr,
+                month: String(month),
+                year: String(year),
                 sort: 'date',
                 dir: 'desc'
             });

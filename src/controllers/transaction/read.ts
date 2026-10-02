@@ -1,7 +1,8 @@
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
-import { periodRange } from '../../logic/period.js';
+import { guard } from '../../common/result.js';
+import { assertExclusivePeriodOrRange, periodRange } from '../../logic/period.js';
 import {
   addLocalizedLabels,
   hasCategory,
@@ -10,7 +11,12 @@ import {
   resolveCursorKey,
 } from '../../logic/transaction.js';
 import type { Page } from '../../models/page.js';
-import type { ResolvedSearchRefs, SearchTransactions, TransactionView } from '../../models/transaction.js';
+import {
+  transactionErrors,
+  type ResolvedSearchRefs,
+  type SearchTransactions,
+  type TransactionView,
+} from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCategoryRef, resolveSubCategoryRef } from '../resolve.js';
 
@@ -19,6 +25,7 @@ export const searchTransactions = (
   input: SearchTransactions,
 ): ResultAsync<Page<TransactionView>, AppError> =>
   safeTry(async function* () {
+    yield* guard(assertExclusivePeriodOrRange(input), transactionErrors.exclusivePeriodRange);
     const range = input.month && input.year ? periodRange({ month: input.month, year: input.year }) : null;
     const account = input.account ? yield* resolveAccountRef(deps, input.account) : null;
     const category = hasCategory(input) ? yield* resolveCategoryRef(deps, input.category) : null;

@@ -36,6 +36,11 @@ dashboard data-less; the save endpoint won't catch a violation for you.
      it costs an extra query and every other page already omits it. Other list endpoints (`list_accounts`,
      `list_categories`, `list_tags`, `list_credit_cards`, `list_recurring`, a bill's `transactions`) are plain
      arrays — the envelope is specifically the signal that a collection can page.
+   - **Month views: pass `month` + `year`, never compute the month's boundaries yourself.** `/api/transactions`
+     and `/api/aggregate` take `month`+`year` **or** `from`/`to` — send one or the other (`/api/transactions`
+     rejects both). `to` is **exclusive** (`date >= from AND date < to`), so a hand-built `to` set to the
+     month's last day silently drops every transaction dated on it. If you genuinely need an arbitrary range, `to` is the day *after* the last day
+     you want included (a month is `[YYYY-MM-01, first-of-next-month)`, December → next year's `-01-01`).
 2. **Discover the user's perspective — ask in personal-finance terms, not layout terms.** Different users
    (and the same user in a different financial moment) care about different views. If it isn't already clear,
    offer the common perspectives below (2–4 targeted questions max, with your recommendation) instead of a

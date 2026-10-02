@@ -900,55 +900,15 @@
             return new Date(year, month, 0).getDate();
         }
 
-        // Adaptive segment fetch to safely handle months with > 50 transactions without truncation
-        async function fetchMonthSegment(year, month, startDay, endDay) {
-            const mStr = String(month).padStart(2, '0');
-            const sStr = String(startDay).padStart(2, '0');
-            const eStr = String(endDay).padStart(2, '0');
-            
-            const url = `/api/transactions?from=${year}-${mStr}-${sStr}&to=${year}-${mStr}-${eStr}`;
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`Erro ao buscar transações de ${mStr}/${year} entre dias ${sStr} e ${eStr}`);
-            const list = await res.json();
-            
-            if (!Array.isArray(list) || list.length < 50) {
-                return list || [];
-            }
-            
-            if (startDay === endDay) {
-                return list;
-            }
-            
-            const mid = Math.floor((startDay + endDay) / 2);
-            const [part1, part2] = await Promise.all([
-                fetchMonthSegment(year, month, startDay, mid),
-                fetchMonthSegment(year, month, mid + 1, endDay)
-            ]);
-            
-            return part1.concat(part2);
-        }
-
         // Fetch transactions for selected month using safe pagination
         async function fetchMonthTransactions(year, month) {
-            const lastDay = getLastDay(year, month);
-            const mStr = String(month).padStart(2, '0');
-            const fromStr = `${year}-${mStr}-01`;
-            const toStr = `${year}-${mStr}-${String(lastDay).padStart(2, '0')}`;
-            
-            // Add 1 day to prevent timezone cutoff
-            const endDateObj = new Date(year, month - 1, lastDay + 1);
-            const toYear = endDateObj.getFullYear();
-            const toMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
-            const toDay = String(endDateObj.getDate()).padStart(2, '0');
-            const adjustedTo = `${toYear}-${toMonth}-${toDay}`;
-
             let allItems = [];
             let cursor = null;
             
             while (true) {
                 const queryParams = new URLSearchParams({
-                    from: fromStr,
-                    to: adjustedTo,
+                    month: String(month),
+                    year: String(year),
                     sort: 'date',
                     dir: 'desc'
                 });
@@ -981,7 +941,7 @@
                 cursor = nextCursor;
             }
             
-            return allItems.filter(t => t.date && t.date <= toStr);
+            return allItems;
         }
 
         // Toast controller
@@ -1882,8 +1842,7 @@ function initCustomSelects() {
                 creditCards = cardsData;
                 categories = categoriesData;
 
-                // 2. Fetch monthly transactions adaptively (preventing 50-limit truncation)
-                const lastDay = getLastDay(selectedYear, selectedMonth);
+                // 2. Fetch monthly transactions via cursor pagination (preventing 50-limit truncation)
                 allTransactions = await fetchMonthTransactions(selectedYear, selectedMonth);
 
                 // 3. Fetch credit card bills of the next cycle (the one currently open/accumulating during selectedMonth)
