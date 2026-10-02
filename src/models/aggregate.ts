@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ConvertedTotalSchema } from './currencyRate.js';
-import { IsoDate, PeriodSchema } from './date.js';
+import { PeriodSchema, RangeFrom, RangeTo } from './date.js';
 import type { ValidationError } from './error.js';
 import { CurrencyCode } from './money.js';
 import { MovementType } from './transaction.js';
@@ -19,8 +19,8 @@ export const AggregateSpendingSchema = z.object({
   metric: AggregateMetric.optional().describe('Aggregation metric: sum, count, or avg of amount'),
   month: PeriodSchema.shape.month.optional(),
   year: PeriodSchema.shape.year.optional(),
-  from: IsoDate.optional().describe('Start date (inclusive, YYYY-MM-DD) — alternative to month/year'),
-  to: IsoDate.optional().describe('End date (exclusive, YYYY-MM-DD) — alternative to month/year'),
+  from: RangeFrom,
+  to: RangeTo,
   account: z.string().min(1).optional().describe('Filter by account name'),
   category: z.string().min(1).optional().describe('Filter by category name'),
   type: MovementType.optional().describe('Filter by movement type: expense or income'),

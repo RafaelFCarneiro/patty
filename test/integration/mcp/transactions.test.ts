@@ -2,7 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toIsoDate } from '../../../src/logic/period.js';
-import { callTool, deleteTransactions, ensure, makeClient, preferredAccount, searchTransactions } from './helpers.js';
+import { transactionErrors } from '../../../src/models/transaction.js';
+import {
+  callTool,
+  callToolError,
+  deleteTransactions,
+  ensure,
+  makeClient,
+  preferredAccount,
+  searchTransactions,
+} from './helpers.js';
 
 describe('MCP integration > transactions', () => {
   let createdTxIds: string[] = [];
@@ -144,6 +153,20 @@ describe('MCP integration > transactions', () => {
       const results = (await searchTransactions(client, { text: '   ', limit: 200 })) as Array<{ id?: string }>;
 
       expect(results.some((tx) => tx.id === txId)).toBe(true);
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('search_transactions rejects month/year combined with from/to', async () => {
+    const { client, transport } = makeClient();
+    try {
+      await client.connect(transport);
+      const { error } = (await callToolError(client, {
+        name: 'search_transactions',
+        args: { month: 9, year: 2026, to: '2026-10-01', limit: 10 },
+      })) as { error: unknown };
+      expect(error).toEqual(transactionErrors.exclusivePeriodRange);
     } finally {
       await transport.close();
     }

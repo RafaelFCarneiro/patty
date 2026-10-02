@@ -1512,24 +1512,13 @@
 
             try {
                 async function fetchPendingTransactions(year, month) {
-                    const lastDay = new Date(year, month, 0).getDate();
-                    const mStr = String(month).padStart(2, '0');
-                    const fromStr = `${year}-${mStr}-01`;
-                    const toStr = `${year}-${mStr}-${String(lastDay).padStart(2, '0')}`;
-                    
-                    const endDateObj = new Date(year, month - 1, lastDay + 1);
-                    const toYear = endDateObj.getFullYear();
-                    const toMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
-                    const toDay = String(endDateObj.getDate()).padStart(2, '0');
-                    const adjustedTo = `${toYear}-${toMonth}-${toDay}`;
-
                     let allItems = [];
                     let cursor = null;
                     
                     while (true) {
                         const queryParams = new URLSearchParams({
-                            from: fromStr,
-                            to: adjustedTo,
+                            month: String(month),
+                            year: String(year),
                             status: 'pending',
                             sort: 'date',
                             dir: 'desc'
@@ -1563,7 +1552,7 @@
                         cursor = nextCursor;
                     }
                     
-                    return allItems.filter(t => t.date && t.date <= toStr);
+                    return allItems;
                 }
 
                 allTransactions = await fetchPendingTransactions(year, month);

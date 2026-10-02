@@ -130,6 +130,17 @@ describe('wireIn adapters', () => {
     expect(parsed.limit).toBe(25);
   });
 
+  it('SearchTransactionsQuerySchema coerces string month/year from the query string', () => {
+    const parsed = wireInTransactions.SearchTransactionsQuerySchema.parse({ month: '9', year: '2033' });
+    expect(parsed).toMatchObject({ month: 9, year: 2033 });
+  });
+
+  it('SearchTransactionsQuerySchema rejects an out-of-range or non-numeric month from the query string', () => {
+    const { SearchTransactionsQuerySchema } = wireInTransactions;
+    expect(SearchTransactionsQuerySchema.safeParse({ month: '13', year: '2033' }).success).toBe(false);
+    expect(SearchTransactionsQuerySchema.safeParse({ month: 'abc', year: '2033' }).success).toBe(false);
+  });
+
   it('searchWireInToModel defaults sort to date, dir to desc, includeTotal to false', () => {
     const parsed = wireInTransactions.SearchTransactionsInputSchema.parse({});
     expect(transactionAdapters.searchWireInToModel(parsed)).toMatchObject({

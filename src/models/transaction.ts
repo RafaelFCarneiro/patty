@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { LocalizedNamesSchema } from './category.js';
-import { IsoDate } from './date.js';
+import { IsoDate, PeriodSchema, RangeFrom, RangeTo } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
 import { cursorSchema, PageRequestSchema, SortDirection } from './page.js';
@@ -270,10 +270,10 @@ export const DeleteTransactionSchema = z.object({
 export type DeleteTransactionInput = z.infer<typeof DeleteTransactionSchema>;
 
 export const SearchTransactionsSchema = z.object({
-  month: z.number().int().min(1).max(12).optional().describe('Filter by month (1-12)'),
-  year: z.number().int().min(2000).max(2100).optional().describe('Filter by year'),
-  from: IsoDate.optional().describe('Start date (inclusive)'),
-  to: IsoDate.optional().describe('End date (inclusive)'),
+  month: PeriodSchema.shape.month.describe('Filter by month (1-12), with year — alternative to from/to').optional(),
+  year: PeriodSchema.shape.year.describe('Filter by year, with month — alternative to from/to').optional(),
+  from: RangeFrom,
+  to: RangeTo,
   type: TransactionType.optional().describe('Filter by type (expense/income/transfer)'),
   status: TransactionStatus.optional().describe('"pending" to list scheduled transactions; omit for all'),
   ...CategoryFieldsSchema.shape,
@@ -439,6 +439,10 @@ export const transactionErrors = {
   exclusiveCategorySubCategoryUpdate: {
     code: 'validation',
     issues: ['provide category OR subCategory, not both'],
+  } satisfies TransactionError,
+  exclusivePeriodRange: {
+    code: 'validation',
+    issues: ['provide month/year OR from/to, not both'],
   } satisfies TransactionError,
   invalidCursor: {
     code: 'validation',

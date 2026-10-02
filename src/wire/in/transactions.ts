@@ -20,6 +20,8 @@ export type ConfirmTransaction = z.infer<typeof ConfirmTransactionSchema>;
 // what's genuinely required). `includeTotal` arrives as a query string, not a real boolean.
 export const SearchTransactionsQuerySchema = SearchTransactionsSchema.extend({
   // A query string never carries a real number — coerce, like CoercedPeriodSchema (wire/in/period.js).
+  month: z.preprocess(coerceToNumber, SearchTransactionsSchema.shape.month),
+  year: z.preprocess(coerceToNumber, SearchTransactionsSchema.shape.year),
   limit: z.preprocess(coerceToNumber, SearchTransactionsSchema.shape.limit).optional(),
   sort: SearchTransactionsSchema.shape.sort.optional(),
   dir: SearchTransactionsSchema.shape.dir.optional(),

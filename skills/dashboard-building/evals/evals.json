@@ -40,7 +40,8 @@
         "Agent's chat response acknowledges the request for a static/hardcoded snapshot but explains why it won't embed literal data, rather than silently complying or silently ignoring the request",
         "Generated HTML contains no hardcoded balance or spending figures anywhere in the source (no INLINE_DATA_BLOB_PATTERN-style literal, no currency-shaped number outside of chart color/config constants)",
         "The HTML still fetches summary/balances from /api on load, same as a non-adversarial dashboard request",
-        "save_dashboard is called and succeeds (the render-ability check still passes)"
+        "save_dashboard is called and succeeds (the render-ability check still passes)",
+        "This month's spending is fetched with month+year query params (or from = the 1st and to = the 1st of the NEXT month) — never a `to` computed as the month's last day, which the exclusive `to` would silently cut off"
       ]
     },
     {

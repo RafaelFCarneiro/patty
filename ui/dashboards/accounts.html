@@ -1774,28 +1774,16 @@
 
             const month = parseInt(monthSelect.value);
             const year = parseInt(yearSelect.value);
-            const lastDay = getLastDayOfMonth(year, month);
-            const padMonth = String(month).padStart(2, '0');
 
             try {
                 async function fetchMonthTransactions(year, month, accountName) {
-                    const fromStr = `${year}-${padMonth}-01`;
-                    const toStr = `${year}-${padMonth}-${String(lastDay).padStart(2, '0')}`;
-                    
-                    // Add 1 day to prevent timezone cutoff
-                    const endDateObj = new Date(year, month - 1, lastDay + 1);
-                    const toYear = endDateObj.getFullYear();
-                    const toMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
-                    const toDay = String(endDateObj.getDate()).padStart(2, '0');
-                    const adjustedTo = `${toYear}-${toMonth}-${toDay}`;
-
                     let allItems = [];
                     let cursor = null;
                     
                     while (true) {
                         const queryParams = new URLSearchParams({
-                            from: fromStr,
-                            to: adjustedTo,
+                            month: String(month),
+                            year: String(year),
                             account: accountName,
                             sort: 'date',
                             dir: 'desc'
@@ -1829,7 +1817,7 @@
                         cursor = nextCursor;
                     }
                     
-                    return allItems.filter(t => t.date && t.date <= toStr);
+                    return allItems;
                 }
 
                 transactions = await fetchMonthTransactions(year, month, activeAccount.name);
