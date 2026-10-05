@@ -17,7 +17,7 @@ import {
   type PayBill,
   type RawBill,
 } from '../../models/bill.js';
-import type { FlowOutcome, Persistable } from '../../effects/persistable.js';
+import type { FlowOutcome, Persistable } from '@rafaelfcarneiro/effect-runner';
 import {
   ClassificationMethod,
   TRANSACTION_ENTITY_TAG,

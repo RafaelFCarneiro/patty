@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { overlayResolvedTags, resolveTagIds, resolveTagNames, tagSetPersistable } from '../../../src/logic/tag.js';
-import { PersistOp, type PersistOutcome } from '../../../src/effects/persistable.js';
+import { PersistOp, type PersistOutcome } from '@rafaelfcarneiro/effect-runner';
 import type { Tag } from '../../../src/models/tag.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transactionTag.js';
 

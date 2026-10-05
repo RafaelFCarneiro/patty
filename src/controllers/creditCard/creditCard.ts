@@ -18,7 +18,7 @@ import {
   type UpdateCreditCard,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
-import type { FlowOutcome, Persistable } from '../../effects/persistable.js';
+import type { FlowOutcome, Persistable } from '@rafaelfcarneiro/effect-runner';
 import { TRANSACTION_ENTITY_TAG } from '../../models/transaction.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCardRef } from '../resolve.js';

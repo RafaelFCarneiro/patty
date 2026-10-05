@@ -1,7 +1,7 @@
 import type { Result, ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import type { StalenessThresholds } from '../logic/currencyRate.js';
-import type { FlowOutcome } from '../effects/persistable.js';
+import type { FlowOutcome } from '@rafaelfcarneiro/effect-runner';
 import type { Locale } from '../models/locale.js';
 import type { AccountsRepo } from '../diplomat/db/repos/accounts.js';
 import type { BillsRepo } from '../diplomat/db/repos/bills.js';

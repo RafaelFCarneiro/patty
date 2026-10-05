@@ -9,7 +9,7 @@ import {
   type CurrencyRateView,
   type SetExchangeRateInput,
 } from '../models/currencyRate.js';
-import type { FlowOutcome } from '../effects/persistable.js';
+import type { FlowOutcome } from '@rafaelfcarneiro/effect-runner';
 import type { Deps } from './deps.js';
 
 type RateFields = Pick<SetExchangeRateInput, 'from' | 'to' | 'rate' | 'asOf' | 'source'>;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as currencyRateAdapters from '../../../src/adapters/currencyRates.js';
 import { CURRENCY_RATE_ENTITY_TAG, type CurrencyRateEntity } from '../../../src/models/currencyRate.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { INITIAL_VERSION, PersistOp, type Persistable } from '../../../src/effects/persistable.js';
+import { INITIAL_VERSION, PersistOp, type Persistable } from '@rafaelfcarneiro/effect-runner';
 import type { CurrencyRateRow } from '../../../src/wire/db/currencyRates.js';
 
 const row: CurrencyRateRow = {

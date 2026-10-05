@@ -7,7 +7,7 @@ import {
   withMerchantLearning,
 } from '../../../src/logic/merchant.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from '../../../src/models/merchant.js';
-import { PersistOp, type Persistable } from '../../../src/effects/persistable.js';
+import { PersistOp, type Persistable } from '@rafaelfcarneiro/effect-runner';
 import { TRANSACTION_ENTITY_TAG } from '../../../src/models/transaction.js';
 
 describe('normalizeMerchant', () => {

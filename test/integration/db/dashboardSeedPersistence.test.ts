@@ -10,7 +10,7 @@ import { createTransactionRunner, openDatabase } from '../../../src/diplomat/db/
 import type { ApplierRegistry } from '../../../src/diplomat/db/effects.js';
 import { dashboardApplier, dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
-import { runEffects } from '../../../src/effects/engine.js';
+import { runEffects } from '@rafaelfcarneiro/effect-runner';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
 import { conflict } from '../../../src/models/error.js';
 import { Locale } from '../../../src/models/locale.js';

@@ -10,7 +10,7 @@ import { bootstrap } from './diplomat/db/bootstrap.js';
 import { createTransactionRunner, openDatabase } from './diplomat/db/driver.js';
 import type { ApplierRegistry } from './diplomat/db/effects.js';
 import { isSqliteBusy } from './diplomat/db/sqliteErrors.js';
-import { runEffects, runEffectsSequence } from './effects/engine.js';
+import { runEffects, runEffectsSequence } from '@rafaelfcarneiro/effect-runner';
 import { createLocaleResolver } from './diplomat/db/localeCache.js';
 import { accountApplier, accountsRepo } from './diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from './diplomat/db/repos/bills.js';

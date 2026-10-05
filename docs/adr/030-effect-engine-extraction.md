@@ -135,8 +135,7 @@ the later lift-out is a move, not a rewrite.
 3. [x] Phase 2 — relocate the driver-free core **and the data contract** to `src/effects/`; decouple from
    FinTrack's error taxonomy; `diplomat/db` implements the port; lint rule + dependency-table entry;
    `docs/write-path.md` + `docs/architecture.md` updated.
-4. [ ] (Deferred, own ADR) lift `src/effects/` into its own repo + publish as a library FinTrack depends on
-   (the stated destination).
+4. [x] Lift `src/effects/` into its own repo + publish as a library FinTrack depends on — done by ADR-031.
 5. [ ] (Deferred, own ADR) 3b — Postgres/other backend adapter, gated on the local-first-vs-hosted decision.
 
 Each phase is feature-sized (spans the write-path engine, multiple layers) → independent verification subagent

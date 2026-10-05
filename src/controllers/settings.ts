@@ -16,7 +16,7 @@ import {
   type SetLocaleInput,
   type SettingsEntity,
 } from '../models/locale.js';
-import type { FlowOutcome, Persistable } from '../effects/persistable.js';
+import type { FlowOutcome, Persistable } from '@rafaelfcarneiro/effect-runner';
 import type { Deps } from './deps.js';
 
 export const getPreferences = async (deps: Deps): Promise<Preferences> => {

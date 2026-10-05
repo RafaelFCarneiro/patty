@@ -43,7 +43,7 @@ import {
   type UpdateCardTransaction,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
-import { type FlowOutcome, type Persistable, type PersistOutcome } from '../../effects/persistable.js';
+import { type FlowOutcome, type Persistable, type PersistOutcome } from '@rafaelfcarneiro/effect-runner';
 import {
   ClassificationMethod,
   DELETE_TRANSACTION_CONFIRM_HINT,

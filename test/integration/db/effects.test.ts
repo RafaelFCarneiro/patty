@@ -54,7 +54,7 @@ import {
   runEffects,
   runEffectsSequence,
   type SequenceOutcome,
-} from '../../../src/effects/engine.js';
+} from '@rafaelfcarneiro/effect-runner';
 import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus } from '../../../src/models/bill.js';
@@ -70,7 +70,7 @@ import {
   type FlowOutcome,
   type Persistable,
   type PersistOutcome,
-} from '../../../src/effects/persistable.js';
+} from '@rafaelfcarneiro/effect-runner';
 import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
 import {
   ClassificationMethod,
@@ -112,7 +112,7 @@ afterEach(() => {
 });
 
 // Carries `version` even though a fresh insert never sends it (Persistable's insert model is the
-// plain `Account` — see effects/persistable.ts): the same factory doubles as the seed for the
+// plain `Account` — see `@rafaelfcarneiro/effect-runner`): the same factory doubles as the seed for the
 // update/delete cases below, which do need a real version to key their guard off.
 const newAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
   id: randomUUID(),

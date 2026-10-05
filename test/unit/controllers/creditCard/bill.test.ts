@@ -8,7 +8,7 @@ import type { CreditCard } from '../../../../src/models/creditCard.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
 import { Locale } from '../../../../src/models/locale.js';
 import { toIsoDate } from '../../../../src/logic/period.js';
-import { PersistOp } from '../../../../src/effects/persistable.js';
+import { PersistOp } from '@rafaelfcarneiro/effect-runner';
 import { TransactionSource, type RawTransactionView } from '../../../../src/models/transaction.js';
 
 const account = (overrides: Partial<Account> = {}): Account => ({

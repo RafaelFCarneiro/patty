@@ -9,7 +9,7 @@ import {
 import type { Deps } from '../../../src/controllers/deps.js';
 import { DASHBOARD_ENTITY_TAG, DashboardSource } from '../../../src/models/dashboard.js';
 import type { Dashboard, DashboardEntity, DashboardListItem } from '../../../src/models/dashboard.js';
-import { PersistOp } from '../../../src/effects/persistable.js';
+import { PersistOp } from '@rafaelfcarneiro/effect-runner';
 
 const FIXED_CLOCK = new Date('2026-07-02T12:00:00.000Z');
 
