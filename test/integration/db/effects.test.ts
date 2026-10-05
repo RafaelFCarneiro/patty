@@ -51,8 +51,12 @@ import {
 import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
 import {
   MAX_RUN_EFFECTS_ATTEMPTS,
+  PersistOp,
   runEffects,
   runEffectsSequence,
+  type FlowOutcome,
+  type Persistable,
+  type PersistOutcome,
   type SequenceOutcome,
 } from '@rafaelfcarneiro/effect-runner';
 import * as persistence from '../../../src/logic/persistence.js';
@@ -65,12 +69,6 @@ import { conflict, validation } from '../../../src/models/error.js';
 import { Locale, LocaleSource, SETTINGS_ENTITY_TAG, SETTINGS_SINGLETON_ID } from '../../../src/models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import {
-  PersistOp,
-  type FlowOutcome,
-  type Persistable,
-  type PersistOutcome,
-} from '@rafaelfcarneiro/effect-runner';
 import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
 import {
   ClassificationMethod,

@@ -215,7 +215,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     A converted controller builds `Persistable`s and returns them in `persist` (or, for bulk import, a
     `StatementImportPlan` the shell runs through `runEffectsSequence`); it never calls a repo write method and
     never touches `Db`. **`deps` exposes no write method at all, for any entity** — every repo is read-only
-    (queries and pure helpers only), and no domain rule survives as a SQL predicate in a repo. the package's `runEffects`
+    (queries and pure helpers only), and no domain rule survives as a SQL predicate in a repo. The package's `runEffects`
     (invoked from the MCP/REST handler) is the write-path engine — a standalone, driver-free external package
     (no Drizzle/libSQL/FinTrack imports) rather than living inside `diplomat/db`; it calls an
     injected `TransactionRunner`/`isTransientContention` port and maps a retry-exhausted conflict through an
