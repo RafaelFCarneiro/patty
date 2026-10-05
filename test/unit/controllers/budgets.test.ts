@@ -19,7 +19,7 @@ import { CategoryKind } from '../../../src/models/category.js';
 import type { CurrencyRateEntity } from '../../../src/models/currencyRate.js';
 import { Locale } from '../../../src/models/locale.js';
 import { CurrencyCode, type Currency } from '../../../src/models/money.js';
-import { PersistOp } from '@rafaelfcarneiro/effect-runner';
+import { PersistOp } from '@rfc0/effect-runner';
 import type { CategorySpend } from '../../../src/models/transaction.js';
 
 const foodCategory: Category = { id: 'cat-food', name: 'Food', kind: CategoryKind.enum.expense, names: null };

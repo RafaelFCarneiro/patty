@@ -19,13 +19,13 @@ effect runner, appliers, outcomes, and the per-flow notes.
 - **A converted controller returns `ResultAsync<{ persist: Persistable[]; response: T }, AppError>`** (not
   `ResultAsync<T>`), composed with `safeTry` as before — it just builds `Persistable`s instead of calling
   `deps.<x>.create`. Builders: `logic/persistence.ts`'s `insert`/`update`/`remove`.
-- **`Persistable` / `PersistOp`** (`@rafaelfcarneiro/effect-runner` — engine-level, not FinTrack domain) are **entity-agnostic** — `Persistable<Tag, Model>`
+- **`Persistable` / `PersistOp`** (`@rfc0/effect-runner` — engine-level, not FinTrack domain) are **entity-agnostic** — `Persistable<Tag, Model>`
   generic over the entity's own tag + model, never a closed union; this file never imports a specific entity.
   `PersistOp` is a named enum (`insert`/`update`/`delete`). Each entity module owns its own tag constant
   (e.g. `models/account.ts`'s `ACCOUNT_ENTITY_TAG`).
 - **`version`** — every mutable table carries `version INTEGER NOT NULL DEFAULT 0` (§ Relational schema): an
   optimistic-concurrency token, persistence-side only, never on the public model/wire shape. An `insert`
-  `Persistable`'s model omits it (a new row is always `INITIAL_VERSION`, `@rafaelfcarneiro/effect-runner`); only
+  `Persistable`'s model omits it (a new row is always `INITIAL_VERSION`, `@rfc0/effect-runner`); only
   `update`/`delete` carry the real read `version`, via the persistence-side type (`AccountEntity` = `Account`
   + `version`).
 - **The managed-entity base — one declaration home for the version token.** the package's
@@ -33,7 +33,7 @@ effect runner, appliers, outcomes, and the per-flow notes.
   `XxxEntitySchema = withPersistenceMeta(XxxSchema)` extends the pure model with `PersistenceMeta`'s `version`
   field, so the token's shape (`z.number().int().nonnegative()`, its `describe`) is declared exactly once instead
   of per entity. `withPersistenceMeta` takes no specific entity model and no Drizzle import — it lives beside the
-  engine core it is the nucleus of (both ship in `@rafaelfcarneiro/effect-runner`; `versionedTableApplier` stays behind in `diplomat/db`, the SQLite adapter).
+  engine core it is the nucleus of (both ship in `@rfc0/effect-runner`; `versionedTableApplier` stays behind in `diplomat/db`, the SQLite adapter).
 - **`idempotencyKey` — optional dedup metadata on the `insert` `Persistable` itself, not the model** (ADR-029
   Phase 2). `insert: { op: 'insert'; entity: Tag; model: Model; idempotencyKey?: string }` — a flow that opts an
   entity into the engine's generic idempotency treatment (below) sets this field alongside `model`, never inside
@@ -89,7 +89,7 @@ effect runner, appliers, outcomes, and the per-flow notes.
 
 ### The effect runner — the engine
 
-- **The engine lives in the external package `@rafaelfcarneiro/effect-runner`** — a standalone, driver-free module with no
+- **The engine lives in the external package `@rfc0/effect-runner`** — a standalone, driver-free module with no
   database-driver or FinTrack imports (its own lint enforces this). `runEffects`/`runEffectsSequence` take an **`EngineContext<TTx, E>`** —
   `{ runner: TransactionRunner<TTx>; isTransientContention: IsTransientContention; conflictError: () => E }` —
   as their first argument (bundling the ADR-030 Phase 1 port seam's `TransactionRunner`/`IsTransientContention`
@@ -209,7 +209,7 @@ effect runner, appliers, outcomes, and the per-flow notes.
 
 ### Outcomes and responses
 
-- **`PersistOutcome`** (`@rafaelfcarneiro/effect-runner`) — what the shell reports per `Persistable`: `applied` (did the
+- **`PersistOutcome`** (`@rfc0/effect-runner`) — what the shell reports per `Persistable`: `applied` (did the
   insert land, or no-op as an idempotent duplicate), the entity's already-decoded `read` of what is now
   persisted, and the `entity` tag. A `FlowOutcome.response` is normally the plain core-derived value; an
   idempotency-aware flow instead returns a **pure, sync** function of `PersistOutcome[]` that `runEffects` calls

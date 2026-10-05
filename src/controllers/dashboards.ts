@@ -10,7 +10,7 @@ import {
   type Dashboard,
   type DashboardListItem,
 } from '../models/dashboard.js';
-import type { FlowOutcome, Persistable } from '@rafaelfcarneiro/effect-runner';
+import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { Deps } from './deps.js';
 
 /** ADR-027 Phase 2 non-negotiable: `save_dashboard` always stores `source: inline`, `path: null` —

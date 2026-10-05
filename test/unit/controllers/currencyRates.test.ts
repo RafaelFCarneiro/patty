@@ -3,7 +3,7 @@ import { listExchangeRates, setExchangeRate } from '../../../src/controllers/cur
 import type { Deps } from '../../../src/controllers/deps.js';
 import { CURRENCY_RATE_ENTITY_TAG, type CurrencyRateEntity } from '../../../src/models/currencyRate.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { PersistOp } from '@rafaelfcarneiro/effect-runner';
+import { PersistOp } from '@rfc0/effect-runner';
 
 const { USD, BRL } = CurrencyCode.enum;
 

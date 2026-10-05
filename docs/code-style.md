@@ -87,8 +87,8 @@ that isn't in scope for your change just because you're touching the file.
 
 A converted controller still composes with `safeTry`/`guard`/`okOr` exactly as before — only the last step
 changes: instead of `await`ing a repo write and returning the written row, it builds the write as a typed
-`Persistable` (`@rafaelfcarneiro/effect-runner`) via the `logic/persistence.ts` builders, and returns it alongside the
-response, for the diplomat shell's `runEffects` (`@rafaelfcarneiro/effect-runner`) to apply:
+`Persistable` (`@rfc0/effect-runner`) via the `logic/persistence.ts` builders, and returns it alongside the
+response, for the diplomat shell's `runEffects` (`@rfc0/effect-runner`) to apply:
 
 ```ts
 // ✅ DO — the core decides and returns the write as data; it never calls a repo write method
@@ -125,7 +125,7 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   they never need a new case as more flows convert. The write intent (`op`) they set is a named enum
   (`PersistOp`), not a bare `'insert'`/`'update'`/`'delete'` string — "constants over literals" applies to the
   op the same as any other domain value.
-- **The entity tag is owned by the entity's own model file, not by `@rafaelfcarneiro/effect-runner`.** `Persistable` is
+- **The entity tag is owned by the entity's own model file, not by `@rfc0/effect-runner`.** `Persistable` is
   generic (`Persistable<Tag, Model>`) — it never imports or lists a specific entity. `models/account.ts` owns
   `ACCOUNT_ENTITY_TAG = 'account'`; a category flow would add `CATEGORY_ENTITY_TAG` to `models/category.ts`,
   never touching `persistable.ts`. This is the same "constants over literals" instinct pointed at the shared
@@ -144,7 +144,7 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   rule from earlier in this doc ("diplomats adapt `wire/in -> model` before controller calls and `model ->
   wire/out` after") extended one step further: the same handler also adapts `model -> db row` between the
   controller and the shell.
-- **The shell's generic engine (`@rafaelfcarneiro/effect-runner`) never names a specific entity.** It dispatches
+- **The shell's generic engine (`@rfc0/effect-runner`) never names a specific entity.** It dispatches
   each already-row-shaped `Persistable` to `registry[p.entity]` — an `EntityApplier` (just the drizzle table
   op, e.g. `tx.insert(accounts).values(row)`) that lives beside that entity's other persistence code. The
   `ApplierRegistry` is assembled once at the composition root (`main.ts`); `runEffects` itself only ever

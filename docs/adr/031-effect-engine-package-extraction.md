@@ -1,6 +1,6 @@
 # ADR-031: Lift `src/effects/` into its own repository + package; FinTrack consumes it as a dependency
 
-**Status:** Accepted (FinTrack consumption landed on `refactor/consume-effects-package`; package published as `@rafaelfcarneiro/effect-runner@0.1.1`) · **Date:** 2026-09-23 · **Deciders:** Rafael · Executes the **deferred destination** of
+**Status:** Accepted (FinTrack consumption landed on `refactor/consume-effects-package`; package published as `@rfc0/effect-runner@0.2.0`) · **Date:** 2026-09-23 · **Deciders:** Rafael · Executes the **deferred destination** of
 ADR-030 (and the north star of ADR-029/030): the effect engine becomes its **own project — a standalone
 library** FinTrack depends on, so FinTrack sheds the engine's structure/responsibility and keeps only its actual
 purpose, **financial management**. Cross-repo: this ADR is a runbook spanning a **new repository** and a FinTrack
@@ -27,7 +27,7 @@ API is the port + the data contract** — that surface is what semver governs.
 
 ### Package identity
 
-- **Name:** **`@rafaelfcarneiro/effect-runner`** — scoped (matching `@rafaelfcarneiro/fintrack`), domain-neutral
+- **Name:** **`@rfc0/effect-runner`** — scoped under the dedicated `@rfc0` npm organization (the engine first shipped as `@rafaelfcarneiro/effect-runner` 0.1.x, then moved here because npm cannot transfer packages between scopes; that package is deprecated), domain-neutral
   (it is a generic FC/IS effect runner with optimistic-concurrency + idempotency, not a finance library),
   **published public** on npmjs.com (`npm publish --access public`).
 - **Exports:** the two modules' public surface (`runEffects`/`runEffectsSequence`, the port types
@@ -90,7 +90,7 @@ one caveat the publish-now path accepts: the port's public API is shaped by a si
    the port, LICENSE. Green gate; tag `v0.1.0`. _(Repo creation + tag/publish are done by Rafael — outside this
    session's reach; I can scaffold every file for seeding.)_
 2. **FinTrack branch `refactor/consume-effects-package`.** Add the published dependency
-   (`@rafaelfcarneiro/effect-runner`, a `^0.1.0` range);
+   (`@rfc0/effect-runner`, a `^0.2.0` range);
    rewrite the ~35 `../effects/…` imports across `models/`/`controllers/`/`logic/`/`adapters/`/`diplomat/db` to
    the package; **delete `src/effects/`** and `test/unit/effects/`; keep `test/integration/db/effects.test.ts`
    (adapter test); remove the `src/effects/**` eslint block; update `docs/architecture.md` (dependency table + ADR
@@ -99,13 +99,13 @@ one caveat the publish-now path accepts: the port's public API is shaped by a si
 
 ## Action Items
 
-1. [x] Decided: name **`@rafaelfcarneiro/effect-runner`**; **published public on npmjs.com**; **MIT** (lib
+1. [x] Decided: name **`@rfc0/effect-runner`**; **published public on npmjs.com**; **MIT** (lib
    diverges from FinTrack's Apache-2.0 for max reuse); `zod` as `peerDependency`.
-2. [x] Scaffolded and published the new package (`RafaelFCarneiro/effect-runner`, npm trusted publishing + staged approval; `0.1.1` live).
+2. [x] Scaffolded and published the new package (`RafaelFCarneiro/effect-runner`, npm trusted publishing + staged approval; `0.2.0` live under `@rfc0`).
 3. [x] FinTrack `refactor/consume-effects-package` — depend on the package, rewrite imports, delete `src/effects/`,
    drop the lint block, update docs. DoD + subagent verification (behavior unchanged; no `src/effects/` left).
 4. [ ] Toward `1.0` — once the port's public API has held across a real second consumer (e.g. a Postgres
-   adapter), cut `@rafaelfcarneiro/effect-runner@1.0.0` and pin FinTrack to the stable major.
+   adapter), cut `@rfc0/effect-runner@1.0.0` and pin FinTrack to the stable major.
 
 This is feature-sized on the FinTrack side (multi-layer import rewrite + a deletion + docs) → independent
 verification subagent, charged with confirming no `src/effects/` reference survives, imports resolve to the

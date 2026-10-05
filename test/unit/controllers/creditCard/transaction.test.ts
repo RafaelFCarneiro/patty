@@ -12,7 +12,7 @@ import type { CreditCard } from '../../../../src/models/creditCard.js';
 import { CurrencyCode } from '../../../../src/models/money.js';
 import { Locale } from '../../../../src/models/locale.js';
 import { BillStatus, type RawBill } from '../../../../src/models/bill.js';
-import { PersistOp, type PersistOutcome } from '@rafaelfcarneiro/effect-runner';
+import { PersistOp, type PersistOutcome } from '@rfc0/effect-runner';
 import {
   TransactionSource,
   type RawTransactionView,

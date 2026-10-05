@@ -3,7 +3,7 @@ import * as R from 'remeda';
 import type { AppError } from '../../common/errors.js';
 import { summarizeBulkItems, toBulkItemResult } from '../../logic/transaction.js';
 import type { BulkItemResult, BulkResult } from '../../logic/transaction.js';
-import type { FlowOutcome } from '@rafaelfcarneiro/effect-runner';
+import type { FlowOutcome } from '@rfc0/effect-runner';
 import type { ClassifiedUpsertResult, DefaultedStatementLine, StatementLine } from '../../models/transaction.js';
 
 type Flow<T> = () => ResultAsync<FlowOutcome<T>, AppError>;

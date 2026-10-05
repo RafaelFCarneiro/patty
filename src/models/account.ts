@@ -3,7 +3,7 @@ import { Id } from './id.js';
 import { ConvertedValueSchema } from './currencyRate.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
-import { withPersistenceMeta } from '@rafaelfcarneiro/effect-runner';
+import { withPersistenceMeta } from '@rfc0/effect-runner';
 import {
   CreateTransactionSchema,
   DISCRIMINATOR_DESCRIPTION,
@@ -50,7 +50,7 @@ export type Account = z.infer<typeof AccountSchema>;
 export const AccountEntitySchema = withPersistenceMeta(AccountSchema);
 export type AccountEntity = z.infer<typeof AccountEntitySchema>;
 
-// The account aggregate owns its own entity tag — `@rafaelfcarneiro/effect-runner`'s `Persistable` is generic over any
+// The account aggregate owns its own entity tag — `@rfc0/effect-runner`'s `Persistable` is generic over any
 // entity's tag/model and never lists this constant itself, so adding a new converted aggregate
 // never means editing that shared file.
 export const ACCOUNT_ENTITY_TAG = 'account';

@@ -1,17 +1,17 @@
 import { EventEmitter } from 'node:events';
-import type { PublishChange } from '@rafaelfcarneiro/effect-runner';
+import type { PublishChange } from '@rfc0/effect-runner';
 
 /**
  * In-process change notification (ADR-027 Phase 3): a plain `EventEmitter` wrapper, never an
  * external broker — the MCP server, HTTP sidecar, and scheduler share one process (ADR-024
- * context), so this is the whole mechanism. `runEffects` (`@rafaelfcarneiro/effect-runner`) publishes the
+ * context), so this is the whole mechanism. `runEffects` (`@rfc0/effect-runner`) publishes the
  * entity tags of every batch that actually committed writes; `GET /ui/events`
  * (`diplomat/http/routes/ui.ts`) subscribes and forwards them to connected browsers over SSE. Lives
  * at the `diplomat/` root — not owned by any one surface, just the shared plumbing between the
  * two — mirroring how `RunEffects` crosses the same boundary. `createChangeBus()` itself is
  * composition-root-only, called once in `main.ts`/`test/integration/app-builder.ts`; `diplomat/db`
  * and `diplomat/http` only ever import the `ChangeBus` type from here (and `PublishChange` from
- * `@rafaelfcarneiro/effect-runner`, the port type this file's `publish`/`subscribe` shape is built from) and
+ * `@rfc0/effect-runner`, the port type this file's `publish`/`subscribe` shape is built from) and
  * receive the bound `publish`/`subscribe` function as a parameter, never construct one themselves.
  * Known limit: only reaches subscribers on this process — a write from a different stdio server
  * won't push here (mitigated by ADR-024 steering multi-client use to the single HTTP-transport

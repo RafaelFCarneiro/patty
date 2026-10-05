@@ -1,5 +1,5 @@
 import { BILL_ENTITY_TAG, type BillEntity } from '../models/bill.js';
-import { INITIAL_VERSION, PersistOp, type FlowOutcome, type Persistable } from '@rafaelfcarneiro/effect-runner';
+import { INITIAL_VERSION, PersistOp, type FlowOutcome, type Persistable } from '@rfc0/effect-runner';
 
 /**
  * Adapts one bill `Persistable`'s model to db-row shape — hand-written rather than built from

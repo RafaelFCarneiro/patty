@@ -1,5 +1,5 @@
 import * as R from 'remeda';
-import type { Persistable, PersistOutcome } from '@rafaelfcarneiro/effect-runner';
+import type { Persistable, PersistOutcome } from '@rfc0/effect-runner';
 import type { Tag } from '../models/tag.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../models/transactionTag.js';
 import { insert, outcomeFor } from './persistence.js';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CREDIT_CARD_ENTITY_TAG, type CreditCard, type CreditCardEntity } from '../../../src/models/creditCard.js';
-import { INITIAL_VERSION, PersistOp, type Persistable } from '@rafaelfcarneiro/effect-runner';
+import { INITIAL_VERSION, PersistOp, type Persistable } from '@rfc0/effect-runner';
 import * as wireInCreditCards from '../../../src/wire/in/creditCards.js';
 import * as creditCardAdapters from '../../../src/adapters/creditCards.js';
 import type { CreditCardRow } from '../../../src/wire/db/creditCards.js';

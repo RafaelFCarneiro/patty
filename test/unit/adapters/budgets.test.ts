@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUDGET_ENTITY_TAG, BudgetPeriod, type BudgetEntity } from '../../../src/models/budget.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { INITIAL_VERSION, PersistOp, type Persistable } from '@rafaelfcarneiro/effect-runner';
+import { INITIAL_VERSION, PersistOp, type Persistable } from '@rfc0/effect-runner';
 import type { BudgetRow } from '../../../src/wire/db/budgets.js';
 import * as budgetAdapters from '../../../src/adapters/budgets.js';
 

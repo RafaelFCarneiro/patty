@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { confirmTransaction } from '../../../../src/controllers/transaction/core.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
-import { PersistOp, type FlowOutcome, type PersistOutcome } from '@rafaelfcarneiro/effect-runner';
+import { PersistOp, type FlowOutcome, type PersistOutcome } from '@rfc0/effect-runner';
 import { TransactionStatus, TransactionType, type RawTransactionView } from '../../../../src/models/transaction.js';
 import { Locale } from '../../../../src/models/locale.js';
 

@@ -18,7 +18,7 @@ import {
   type SubCategory,
 } from '../models/category.js';
 import { notFound } from '../models/error.js';
-import type { FlowOutcome } from '@rafaelfcarneiro/effect-runner';
+import type { FlowOutcome } from '@rfc0/effect-runner';
 import type { Deps } from './deps.js';
 import { resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
 
