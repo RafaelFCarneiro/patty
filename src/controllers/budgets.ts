@@ -31,7 +31,7 @@ import {
 import { notFound } from '../models/error.js';
 import type { Locale } from '../models/locale.js';
 import type { CurrencyCode } from '../models/money.js';
-import type { FlowOutcome } from '../effects/persistable.js';
+import type { FlowOutcome } from '@rfc0/effect-runner';
 import type { BudgetStatusOut } from '../wire/out/budgets.js';
 import type { Deps } from './deps.js';
 import { resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';

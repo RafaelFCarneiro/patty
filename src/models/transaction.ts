@@ -4,7 +4,7 @@ import { IsoDate, PeriodSchema, RangeFrom, RangeTo } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
 import { cursorSchema, PageRequestSchema, SortDirection } from './page.js';
-import { withPersistenceMeta } from '../effects/persistable.js';
+import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { CursorKey } from './page.js';
 import type { CategoryKind } from './category.js';
 import type { ValidationError } from './error.js';
@@ -108,8 +108,8 @@ export const TransactionSchema = z.object({
 export type Transaction = z.infer<typeof TransactionSchema>;
 
 // The transaction aggregate owns its own entity tag (ADR-021), mirroring `models/account.ts`'s
-// `ACCOUNT_ENTITY_TAG` — `effects/persistable.ts` is generic over any entity's tag/model and never
-// lists this constant itself.
+// `ACCOUNT_ENTITY_TAG` — `@rfc0/effect-runner`'s `Persistable` is generic over any entity's
+// tag/model and never lists this constant itself.
 export const TRANSACTION_ENTITY_TAG = 'transaction';
 
 // Same shape as Transaction, kept distinct for call-site clarity at every Persistable builder.

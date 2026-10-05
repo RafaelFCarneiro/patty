@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CurrencyCode } from './money.js';
-import { withPersistenceMeta } from '../effects/persistable.js';
+import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { ValidationError } from './error.js';
 
 export const Locale = z.enum(['en', 'es', 'pt']);

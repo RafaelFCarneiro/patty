@@ -6,7 +6,7 @@ import {
   type ApplierRegistry as EngineApplierRegistry,
   type EntityApplier as EngineEntityApplier,
   type ReadBack as EngineReadBack,
-} from '../../effects/engine.js';
+} from '@rfc0/effect-runner';
 import type { Tx } from './driver.js';
 import { isForeignKeyConstraintViolation } from './sqliteErrors.js';
 

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
 import { CurrencyCode, Money } from './money.js';
-import { withPersistenceMeta } from '../effects/persistable.js';
+import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { LabelMap } from './locale.js';
 import { MovementType } from './transaction.js';
 

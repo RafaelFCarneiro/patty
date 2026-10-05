@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Id } from './id.js';
-import { withPersistenceMeta } from '../effects/persistable.js';
+import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { DuplicateName } from './error.js';
 
 export const TagSchema = z.object({

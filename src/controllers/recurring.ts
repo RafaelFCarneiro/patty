@@ -20,7 +20,7 @@ import {
   type RecurringRuleEntity,
   type RecurringRuleView,
 } from '../models/recurring.js';
-import { type FlowOutcome, type Persistable, type PersistOutcome } from '../effects/persistable.js';
+import { type FlowOutcome, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
 import {
   ClassificationMethod,
   TRANSACTION_ENTITY_TAG,

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { entityDbAdapter, insert, outcomeFor, remove, update } from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { INITIAL_VERSION, PersistOp, type Persistable, type PersistOutcome } from '../../../src/effects/persistable.js';
+import { INITIAL_VERSION, PersistOp, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
 
 const account: Account = {
   id: 'acc-1',

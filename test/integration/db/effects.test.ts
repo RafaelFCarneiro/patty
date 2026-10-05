@@ -51,10 +51,14 @@ import {
 import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
 import {
   MAX_RUN_EFFECTS_ATTEMPTS,
+  PersistOp,
   runEffects,
   runEffectsSequence,
+  type FlowOutcome,
+  type Persistable,
+  type PersistOutcome,
   type SequenceOutcome,
-} from '../../../src/effects/engine.js';
+} from '@rfc0/effect-runner';
 import * as persistence from '../../../src/logic/persistence.js';
 import { ACCOUNT_ENTITY_TAG, AccountType, type AccountEntity } from '../../../src/models/account.js';
 import { BILL_ENTITY_TAG, BillStatus } from '../../../src/models/bill.js';
@@ -65,12 +69,6 @@ import { conflict, validation } from '../../../src/models/error.js';
 import { Locale, LocaleSource, SETTINGS_ENTITY_TAG, SETTINGS_SINGLETON_ID } from '../../../src/models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import {
-  PersistOp,
-  type FlowOutcome,
-  type Persistable,
-  type PersistOutcome,
-} from '../../../src/effects/persistable.js';
 import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
 import {
   ClassificationMethod,
@@ -112,7 +110,7 @@ afterEach(() => {
 });
 
 // Carries `version` even though a fresh insert never sends it (Persistable's insert model is the
-// plain `Account` — see effects/persistable.ts): the same factory doubles as the seed for the
+// plain `Account` — see `@rfc0/effect-runner`): the same factory doubles as the seed for the
 // update/delete cases below, which do need a real version to key their guard off.
 const newAccount = (overrides: Partial<AccountEntity> = {}): AccountEntity => ({
   id: randomUUID(),

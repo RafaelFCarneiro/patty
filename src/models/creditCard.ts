@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { BillQuerySchema } from './bill.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
-import { withPersistenceMeta } from '../effects/persistable.js';
+import { withPersistenceMeta } from '@rfc0/effect-runner';
 import {
   CreateTransactionSchema,
   STATEMENT_ITEMS_DESCRIPTION,

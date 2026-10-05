@@ -32,7 +32,7 @@ import {
   type UpdateTransaction,
 } from '../../models/transaction.js';
 import type { CurrencyCode } from '../../models/money.js';
-import type { FlowOutcome, Persistable } from '../../effects/persistable.js';
+import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveCategoryRef, resolveSubCategoryRef } from '../resolve.js';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TAG_ENTITY_TAG, TagSchema, type Tag } from '../../../src/models/tag.js';
-import { INITIAL_VERSION, PersistOp, type Persistable } from '../../../src/effects/persistable.js';
+import { INITIAL_VERSION, PersistOp, type Persistable } from '@rfc0/effect-runner';
 import * as tagsAdapters from '../../../src/adapters/tags.js';
 
 describe('Tag model schema', () => {

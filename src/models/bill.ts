@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { IsoDate } from './date.js';
 import { Id } from './id.js';
-import { withPersistenceMeta } from '../effects/persistable.js';
+import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { ValidationError } from './error.js';
 import type { LabelMap } from './locale.js';
 import type { TransactionView } from './transaction.js';

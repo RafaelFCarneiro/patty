@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../src/models/account.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { INITIAL_VERSION, PersistOp, type Persistable } from '../../../src/effects/persistable.js';
+import { INITIAL_VERSION, PersistOp, type Persistable } from '@rfc0/effect-runner';
 import * as wireInAccounts from '../../../src/wire/in/accounts.js';
 import * as accountAdapters from '../../../src/adapters/accounts.js';
 import type { AccountRow } from '../../../src/wire/db/accounts.js';

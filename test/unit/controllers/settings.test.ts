@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Locale, LocaleSource, SETTINGS_ENTITY_TAG, SETTINGS_SINGLETON_ID } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
-import { PersistOp } from '../../../src/effects/persistable.js';
+import { PersistOp } from '@rfc0/effect-runner';
 import { getPreferences, setBaseCurrency, setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
 import type { SettingsEntity } from '../../../src/models/locale.js';

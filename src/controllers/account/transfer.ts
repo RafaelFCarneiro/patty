@@ -13,7 +13,7 @@ import { toIsoDate } from '../../logic/period.js';
 import { buildUpsertResult, defaultStatusFor, deriveIdempotencyKey } from '../../logic/transaction.js';
 import { accountErrors } from '../../models/account.js';
 import type { Account, CreateTransfer } from '../../models/account.js';
-import type { FlowOutcome } from '../../effects/persistable.js';
+import type { FlowOutcome } from '@rfc0/effect-runner';
 import {
   ClassificationMethod,
   TRANSACTION_ENTITY_TAG,

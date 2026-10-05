@@ -5,7 +5,7 @@ import {
   type FlowOutcome,
   type Persistable,
   type PersistOutcome,
-} from '../effects/persistable.js';
+} from '@rfc0/effect-runner';
 
 /**
  * Builders for each `Persistable` write intent (docs/functional-core-imperative-shell.md) — one

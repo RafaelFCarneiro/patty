@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { CategoryKind } from './category.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
-import { withPersistenceMeta } from '../effects/persistable.js';
+import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { NotFound, ValidationError } from './error.js';
 
 export const BudgetPeriod = z.enum(['monthly']);

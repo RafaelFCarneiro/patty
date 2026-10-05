@@ -24,7 +24,7 @@ import { tagsRepo } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
 import type { ApplierRegistry } from '../../../src/diplomat/db/effects.js';
 import { isSqliteBusy } from '../../../src/diplomat/db/sqliteErrors.js';
-import { runEffects } from '../../../src/effects/engine.js';
+import { runEffects } from '@rfc0/effect-runner';
 import { Locale, LocaleSource, SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
 import { conflict } from '../../../src/models/error.js';
 import { CurrencyCode } from '../../../src/models/money.js';
