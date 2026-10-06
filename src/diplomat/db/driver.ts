@@ -55,6 +55,19 @@ const readKeyFile = (path: string): string => {
 // The only place the native keychain module is loaded, so the file/env key paths never load it (ADR-032).
 const loadKeyring = () => import('@napi-rs/keyring');
 
+// A hand-edited or corrupted keychain entry must fail here with a clear message, not reach libSQL.
+const validateStoredKey = (stored: string): string => {
+  const parsed = EncryptionKey.safeParse(stored);
+  if (!parsed.success) {
+    throw new Error(
+      'fintrack: the encryption key stored in the OS keychain is not a 64-character hex key. ' +
+        'Remove the "fintrack" / "db-encryption-key" keychain entry (this loses access to an existing database ' +
+        `encrypted with it), or supply the correct key. ${KEY_GENERATION_HINT}`,
+    );
+  }
+  return parsed.data;
+};
+
 const resolveKeychainKey = async (): Promise<string> => {
   try {
     const { Entry } = await loadKeyring();
@@ -86,7 +99,7 @@ export const resolveEncryptionKey = async (config: DbConfig): Promise<string> =>
     console.warn('fintrack: using FINTRACK_DB_KEY from the environment; OS keychain bypassed.');
     return config.FINTRACK_DB_KEY;
   }
-  return resolveKeychainKey();
+  return validateStoredKey(await resolveKeychainKey());
 };
 
 /** Best-effort: WAL is verified to work with libSQL's encryption-at-rest in this project's target

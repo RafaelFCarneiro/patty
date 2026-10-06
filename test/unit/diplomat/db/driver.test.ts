@@ -104,6 +104,12 @@ describe('resolveEncryptionKey (ADR-032)', () => {
     await expect(resolveEncryptionKey({ DB_PATH })).resolves.toBe(FILE_KEY);
   });
 
+  it('rejects a malformed existing keychain entry instead of passing it to libSQL', async () => {
+    keychain.getPassword.mockReturnValue('not-a-valid-key');
+    await expect(resolveEncryptionKey({ DB_PATH })).rejects.toThrow(/keychain is not a 64-character hex key/);
+    expect(keychain.setPassword).not.toHaveBeenCalled();
+  });
+
   it('fails fast with an actionable error when no source is set and the keychain is unavailable', async () => {
     keychain.getPassword.mockImplementation(() => {
       throw new Error('no secret service');
