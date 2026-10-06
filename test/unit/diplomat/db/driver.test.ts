@@ -33,6 +33,7 @@ describe('resolveEncryptionKey (ADR-032)', () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-key-'));
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     keychain.loaded.mockClear();
+    vi.resetModules();
     keychain.getPassword.mockReset();
     keychain.setPassword.mockReset();
   });

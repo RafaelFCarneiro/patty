@@ -1,6 +1,7 @@
 import { homedir } from 'node:os';
 import { isAbsolute } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { LOOPBACK_HOST } from '../../src/common/net.js';
 import { loadConfig } from '../../src/config.js';
 
 const ORIGINAL_ENV = { ...process.env };
@@ -148,7 +149,7 @@ describe('loadConfig', () => {
   });
 
   it('HOST defaults to loopback when omitted', () => {
-    expect(loadConfig().HOST).toBe('127.0.0.1');
+    expect(loadConfig().HOST).toBe(LOOPBACK_HOST);
   });
 
   it('HOST env override is respected', () => {

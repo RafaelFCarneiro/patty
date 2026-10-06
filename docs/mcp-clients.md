@@ -117,8 +117,8 @@ taken, it logs an actionable message to stderr and skips starting instead of fai
 session can then help you find and free the port (see `docs/architecture.md` § HTTP sidecar, ADR-013
 Decision 7).
 
-The sidecar binds `127.0.0.1` only — never the LAN. This API has no auth (local-first, ADR-013), so it is
-never reachable from other devices on your network, only from this machine. Use `127.0.0.1` in the URL, not
+The sidecar binds `127.0.0.1` by default (`HOST` overrides it, e.g. `0.0.0.0` inside a container whose port is published on host loopback only) — never the LAN. This API has no auth (local-first, ADR-013), so it is
+not reachable from other devices on your network, only from this machine. Use `127.0.0.1` in the URL, not
 `localhost` — some resolvers prefer IPv6 (`::1`), which this server does not bind.
 
 ## Multiple clients at once (dogfooding)
@@ -171,7 +171,7 @@ Native HTTP support — no bridge. In `.vscode/mcp.json`:
 
 Running from source instead (`npm run dev`)? Use port `3001` — this repo's own `.vscode/mcp.json` already does.
 
-Use `127.0.0.1`, not `localhost` — VS Code's fetch can resolve `localhost` to IPv6 `::1`, and the backend binds loopback-only on IPv4 (`127.0.0.1`), deliberately not the `::`/`0.0.0.0` wildcard, so the REST/MCP surface is never reachable from other devices on the LAN (this API has no auth). `localhost` resolving to `::1` will fail to connect; `127.0.0.1` always works.
+Use `127.0.0.1`, not `localhost` — VS Code's fetch can resolve `localhost` to IPv6 `::1`, and the backend binds loopback-only on IPv4 (`127.0.0.1`) by default (`HOST` is the explicit opt-in to anything else), deliberately not the `::`/`0.0.0.0` wildcard, so the REST/MCP surface is never reachable from other devices on the LAN (this API has no auth). `localhost` resolving to `::1` will fail to connect; `127.0.0.1` always works.
 
 ### ChatGPT (HTTP mode, untested — requires tunnel)
 

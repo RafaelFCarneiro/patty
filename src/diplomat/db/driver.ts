@@ -52,10 +52,12 @@ const readKeyFile = (path: string): string => {
   return parsed.data;
 };
 
-// Loaded only here so the file/env paths never load the native module (ADR-032).
+// The only place the native keychain module is loaded, so the file/env key paths never load it (ADR-032).
+const loadKeyring = () => import('@napi-rs/keyring');
+
 const resolveKeychainKey = async (): Promise<string> => {
   try {
-    const { Entry } = await import('@napi-rs/keyring');
+    const { Entry } = await loadKeyring();
     const entry = new Entry(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
     const existing = entry.getPassword();
     if (existing) return existing;
