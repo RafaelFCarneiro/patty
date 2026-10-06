@@ -19,11 +19,11 @@ engine wiring, appliers, outcomes, and the per-flow notes.
 > `ApplierRegistry`, `ReadBack`, `IsTransientContention`, `EngineContext`, `PublishChange`), and the engine
 > semantics (one transaction per batch — an empty batch skips the transaction entirely — the version guard, the
 > bounded retry loop, idempotency, `runEffectsSequence`, change publication) are specified in its
-> [architecture doc](https://github.com/RafaelFCarneiro/effect-runner/blob/main/docs/architecture.md), with its principle in its
-> [FC/IS doc](https://github.com/RafaelFCarneiro/effect-runner/blob/main/docs/functional-core-imperative-shell.md). The package docs are not in the npm tarball — read them
+> [architecture doc](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.3.0/docs/architecture.md), with its principle in its
+> [FC/IS doc](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.3.0/docs/functional-core-imperative-shell.md). The package docs are not in the npm tarball — read them
 > on GitHub. **This file covers FinTrack's side only**: the SQLite adapter, the composition-root wiring, and the
 > per-flow notes. The package's public API (every `src/index.ts` export) is semver-governed
-> ([ADR 0001](https://github.com/RafaelFCarneiro/effect-runner/blob/main/docs/adr/0001-extracted-from-fintrack.md)); a port change lands there first.
+> ([ADR 0001](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.3.0/docs/adr/0001-extracted-from-fintrack.md)); a port change lands there first.
 
 ### The core's contract — what a controller returns
 
@@ -94,45 +94,27 @@ engine wiring, appliers, outcomes, and the per-flow notes.
 
 ### The effect runner — FinTrack's wiring
 
-The engine's mechanics (retry loop, version guard, `runEffectsSequence`, change publication) are documented in the
-package — see the pointer above. FinTrack's side:
+The engine's behavior (retry, version guard, idempotency, empty batches, `runEffectsSequence`, change publication
+and its failure isolation) is the package's to document — see the pointer above. FinTrack only does the following:
 
-- **Composition-root binding.** `runEffects`/`runEffectsSequence` take an `EngineContext<TTx, E>` and a registry.
-  The composition root (`main.ts`, `test/integration/app-builder.ts`) binds the context to the SQLite adapter and
-  FinTrack's own error: `diplomat/db/driver.ts`'s `createTransactionRunner(db)` wraps libSQL Drizzle's
-  `Db.transaction` (`runner`), `diplomat/db/sqliteErrors.ts`'s `isSqliteBusy` is `isTransientContention`, and
-  `() => conflict` (`models/error.ts` — a generic `AppError`, no business payload) is `conflictError`. A
-  retry-exhausted conflict therefore surfaces as that `conflict`. `E` is `AppError` at every real call site.
-- **Typed `Tx` default.** The package's `EntityApplier`/`ApplierRegistry`/`ReadBack` are generic over an opaque
-  `TTx` with no default; `diplomat/db/effects.ts` re-exports each specialized with FinTrack's own `Tx`, so
-  registrations (`accountApplier: EntityApplier = ...`) type themselves without repeating the argument.
-- **Two retry classes, one budget (ADR-024).** The engine retries a `VersionConflict` (logical — a stale read)
-  and anything `isTransientContention` accepts, identically, within `MAX_RUN_EFFECTS_ATTEMPTS`. FinTrack's
-  transient class is `isSqliteBusy`, matched on the driver error's base `.code` — `SQLITE_BUSY` and the more
-  specific `SQLITE_BUSY_SNAPSHOT`. `busy_timeout` (`diplomat/db/driver.ts`) absorbs the common case by having the
-  driver wait for the lock instead of throwing; the retry is bounded defense-in-depth for contention that outlives
-  it.
-- **Version guard in the applier.** `versionedTableApplier` writes `... SET ..., version = <read version + 1>
-  WHERE id = ? AND version = ?` — the new version computed in application code, **never** a SQL-side
-  `version + 1`; zero rows affected reports `applied: false`, which the engine turns into a retry.
-- **Change bus binding.** The composition root (`main.ts`) passes `changeBus.publish` (from the bus `createChangeBus` in
-  `@rfc0/effect-runner` returns) as `publish` to both `runEffects` and `runEffectsSequence`; the same stderr
-  reporter is wired as the bus `onError` (subscriber failures are isolated by the bus) and as the engine
-  context's `onPublishError` (backstop for a publish that throws) — a notification failure never fails a
-  committed write. The engine calls it once per commit with the deduped entity tags that actually wrote;
-  idempotent-duplicate (`applied: false`) outcomes publish nothing, and neither does an empty batch.
-- **Empty batches are no-ops.** A flow returning `persist: []` (a dry-run preview, or an idempotent
-  `{ deleted: false }` delete) never opens a transaction — no applier runs, no outcomes, no publish.
+- **Composition-root binding** (`main.ts`, `test/integration/app-builder.ts`). The `EngineContext` is bound to the
+  SQLite adapter and FinTrack's own error: `diplomat/db/driver.ts`'s `createTransactionRunner(db)` is `runner`,
+  `diplomat/db/sqliteErrors.ts`'s `isSqliteBusy` is `isTransientContention` (`SQLITE_BUSY` and
+  `SQLITE_BUSY_SNAPSHOT`, matched on the driver error's base `.code`; `busy_timeout` in `driver.ts` absorbs the
+  common case, ADR-024), and `() => conflict` (`models/error.ts`) is `conflictError`. `E` is `AppError`.
+- **The `ApplierRegistry`** is assembled once there, one `EntityApplier` per FinTrack entity tag.
+- **Typed `Tx`.** `diplomat/db/effects.ts` re-exports the package's `EntityApplier`/`ApplierRegistry`/`ReadBack`
+  specialized with FinTrack's own `Tx`.
+- **Change bus.** `main.ts` calls `createChangeBus({ onError })` once, passes `changeBus.publish` to
+  `runEffects`/`runEffectsSequence`, hands `changeBus.subscribe` to the HTTP sidecar (SSE, `docs/ui.md`), and wires
+  one shared stderr reporter (`reportChangeError`) as both the bus `onError` and the context's `onPublishError`.
+  stderr only — stdout carries the stdio MCP protocol (ADR-007).
 - **`runEffectsSequence` use.** Bulk import (`importAccountStatement`/`importCardStatement`) runs its lines through
-  it, which is why it reuses the single-line flows verbatim: line *i+1* sees line *i*'s committed writes, and a
-  failed line is recorded as `Err` while the rest continue.
-- **The `ApplierRegistry`** is assembled once at the composition root (`main.ts`,
-  `test/integration/app-builder.ts`); the engine never names a FinTrack entity.
+  it and reuses the single-line flows verbatim.
 - **`RunEffects` is shell-only, never a field on `Deps`.** `controllers/deps.ts` exports the type, but only the
   `diplomat/mcp`/`diplomat/http` handlers hold an instance — a controller cannot reach it to apply its own
-  writes. `resetLocale` (locale-cache invalidation, `diplomat/db/localeCache.ts`) is threaded the same shell-only
-  way to the one handler that needs it (`set_locale`), called only after the write commits — infrastructure
-  bookkeeping attached to a write, not a domain-declared effect.
+  writes. `resetLocale` (`diplomat/db/localeCache.ts`) is threaded the same way to the one handler that needs it
+  (`set_locale`), called only after the write commits.
 
 ### Appliers — the mechanical write
 
@@ -142,42 +124,26 @@ package — see the pointer above. FinTrack's side:
   read). All registered appliers satisfy it.
 - **`versionedTableApplier(table, { readBack? })`** (`diplomat/db/effects.ts`) builds a complete `EntityApplier`
   from a drizzle table for any `id`+`version` table — `accountApplier` is `versionedTableApplier(accounts)`;
-  `transactionApplier` is `versionedTableApplier(transactions, { readBack })` (ADR-023: the once-bespoke applier
-  collapsed to a registration). The dedup column is no longer a registration option — it's the fixed
-  `idempotencyKey` column by convention (ADR-029 Phase 2b): the applier looks up `table.idempotencyKey` itself
-  (present only on `transactions` today) and opts a table into dedup purely by whether that column exists AND
-  the insert's own `Persistable.idempotencyKey` is set — never by a per-registration name. Tables outside the
-  `id`/`version` convention hand-write
-  their own `EntityApplier` against the same interface: the `id`/`version`-less `merchants`, `merchant_category`,
-  `transaction_tags`. `dashboards` used to key on `name` itself and hand-write its applier this way too; Feature
-  Design 013 Phase 1 normalized it to `id`/`version` with `name UNIQUE`, moving it into the
-  versioned-entity-with-unique-secondary-key family below instead.
+  `transactionApplier` adds a `readBack`. It writes the next version computed in application code (never a
+  SQL-side `version + 1`) guarded by `WHERE id = ? AND version = ?`. Dedup is by convention: the applier uses the
+  table's fixed `idempotencyKey` column when it exists (only `transactions` today): the key is merged onto the row,
+  the insert conflict-targets that column, and a duplicate no-ops with `applied: false` while a generic key lookup
+  (`findSurvivingRowId`) resolves the surviving row for `readBack`. A key-less insert falls back to the id-scoped
+  `onConflictDoNothing` (a structural same-id guard, not idempotency). Tables outside the `id`/
+  `version` convention (`merchants`, `merchant_category`, `transaction_tags`) hand-write their `EntityApplier`.
 - **FK violation on a versioned `delete` → `VersionConflict`.** A row acquiring a referrer between the flow's
   read and its apply is the same "world changed" race a stale version reports; `versionedTableApplier` catches
   `isForeignKeyConstraintViolation` (`diplomat/db/sqliteErrors.ts`) and rethrows `VersionConflict` so the flow
   retries. (Rationale: ADR-021.)
-- **`billApplier`** (`diplomat/db/repos/bills.ts`) — `update`/`delete` are plain `versionedTableApplier`, but a
-  bill is *created* by upsert-on-cycle (`UNIQUE(creditCardId, month, year)`), not by `id`, so the id-scoped
-  `onConflictDoNothing` doesn't swallow a same-cycle race; `billApplier` rethrows the
-  `isUniqueConstraintViolation` (`diplomat/db/sqliteErrors.ts`) as `VersionConflict` and the flow retries,
-  touching the winning cycle. `tagApplier` mirrors this exactly for `tags.name`'s `UNIQUE` (retry → the domain's
-  own name check returns `duplicate_name`). `dashboardApplier` (`diplomat/db/repos/dashboards.ts`) is the same
-  wrapper again for `dashboards.name`'s `UNIQUE` (Feature Design 013 Phase 1 — `dashboards` used to key on `name`
-  itself and hand-write its own `EntityApplier`; normalizing to a surrogate `id` PK with `name UNIQUE` let it
-  join this family instead): a concurrent first save of a brand-new name mints two ids, both insert, and the
-  second's `SQLITE_CONSTRAINT_UNIQUE` retries the same way. (Rationale: ADR-021.) `budgetApplier`
-  (`diplomat/db/repos/budgets.ts`, Feature Design 015 phase 1 — the first entity built entirely on the FC/IS write
-  path from scratch) joins the same family: `budgets` has the secondary `UNIQUE(category_id, currency, period)`
-  beyond `createBudget`'s own pre-check (`findByTarget`, which only guards the common case), so a concurrent
-  create of the same target races into a real `SQLITE_CONSTRAINT_UNIQUE` the id-scoped `onConflictDoNothing`
-  doesn't swallow; `budgetApplier` rethrows it as `VersionConflict` and the flow retries, the retry's own
-  `findByTarget` then returning `duplicate_budget`. `update`/`delete` stay plain — neither touches the
-  target/currency/period key. `currencyRateApplier` (`diplomat/db/repos/currencyRates.ts`, ADR-026 Phase 2)
-  joins the same family for `currency_rates`' secondary `UNIQUE(from_code, to_code)`, but with the opposite
-  retry outcome from every other member: `set_exchange_rate` is **upsert-latest**, not reject-duplicate, so a
-  concurrent first insert of the same new pair retries into an **update** (the retry's own `findByPair` now sees
-  the committed row and overwrites it) rather than surfacing a domain error — both concurrent callers succeed,
-  the later commit wins. `update`/`delete` stay plain, same as `budgetApplier`.
+- **Secondary-`UNIQUE` appliers.** `billApplier` (`diplomat/db/repos/bills.ts`; a bill is created by
+  upsert-on-cycle, `UNIQUE(creditCardId, month, year)`), `tagApplier` (`tags.name`), `dashboardApplier`
+  (`dashboards.name`), and `budgetApplier` (`UNIQUE(category_id, currency, period)`) wrap `insert` so an
+  `isUniqueConstraintViolation` is rethrown as `VersionConflict` and the flow retries; the retry's own domain
+  check then returns the clean error (`duplicate_name`, `duplicate_budget`) or touches the winning row.
+  `dashboardApplier.update` wraps it too (a rename can collide). `update`/`delete` otherwise stay plain.
+  `currencyRateApplier` (`UNIQUE(from_code, to_code)`) has the opposite outcome: `set_exchange_rate` is
+  upsert-latest, so a concurrent first insert retries into an **update** and both callers succeed. (Rationale:
+  ADR-021.)
 - **The `merchant` entity** — key-only, hand-written `merchantApplier` (insert-only, `onConflictDoNothing`).
   Every flow whose decision implies a merchant emits its own `MERCHANT_ENTITY_TAG` `Persistable` ahead of
   whatever references it, via `logic/merchant.ts`'s `withMerchant` (transaction inserts) and
@@ -209,30 +175,18 @@ package — see the pointer above. FinTrack's side:
   same contract per item. Response-shaping helpers live in `logic/transaction.ts` (`viewFromOutcome`;
   `buildUpsertResult` → `UpsertTransactionResult` / `ClassifiedUpsertResult`), `purry`'d so that e.g.
   `buildUpsertResult(classification, locale)` **is** the `(outcomes) => T` a flow assigns directly.
-- **Outcomes are addressed by entity tag, never by batch position** (ADR-023). The engine stamps each
-  outcome with its source `entity`; `logic/persistence.ts`'s `outcomeFor(tag, outcomes)` (asserting exactly one
-  match) finds a flow's own outcome regardless of batch position — needed because a merchant insert is
-  *prepended* ahead of the transaction that FKs it. Exception: `applyDueRecurring` slices `outcomes`
+- **Outcomes are addressed by entity tag, never by batch position** (ADR-023): `logic/persistence.ts`'s
+  `outcomeFor(tag, outcomes)` (asserting exactly one match) — needed because a merchant insert is *prepended*
+  ahead of the transaction that FKs it. Exception: `applyDueRecurring` slices `outcomes`
   positionally (`R.zip`), safe because nothing is ever prepended ahead of its transaction inserts.
-- **The generic idempotency treatment** (ADR-023 decision 4, key placement per ADR-029 Phase 2, content and
-  column convention per Phase 2b). The key rides the `insert` `Persistable`'s own optional `idempotencyKey`
-  field — engine metadata on the write envelope, never a field of the domain model (`TransactionSchema` doesn't
-  carry it; only the wire/out read view does). The physical column is fixed by convention, never a per-entity
-  registration: `versionedTableApplier` looks up `table.idempotencyKey` itself. When an insert carries a key AND
-  the table has that column, `versionedTableApplier` merges it onto the row under the fixed column name before
-  inserting, conflict-targets the column, a duplicate no-ops with `applied: false`, and the engine resolves
-  which row survived (one generic `SELECT id … WHERE idempotencyKey = ?`) so `readBack` reads the persisted row.
-  Distinct from the id-scoped `onConflictDoNothing({ target: table.id })` a key-less insert falls back to (a
-  structural same-id guard, not idempotency). `logic/persistence.ts`'s `insert` builder and every entity flow
-  that mints one (`add_account_expense`/`add_account_income`/`add_card_purchase`/`create_transfer`, `pay_bill`'s
-  bill-payment transfer, `apply_due_recurring`'s per-occurrence inserts, and the bulk-import lines that reuse
-  those same single-line flows) set `idempotencyKey` on the `Persistable` itself, alongside `model`, never inside
-  it. Read-first-dedup entities (dashboards, settings) carry no key, same as before. An entity opts into dedup
-  purely by its insert *carrying* a key — not by naming a column — but a table that physically has the
-  `idempotencyKey` column is still a promise every insert into it must keep: `versionedTableApplier.insert`
-  rejects immediately if the column exists but the envelope carries no key (and, symmetrically, if the envelope
-  carries a key but the table has no such column) — caught here rather than left to surface as an opaque
-  database `NOT NULL` constraint violation once the row reaches SQL.
+- **Idempotency key placement** (ADR-023 decision 4, ADR-029). The key rides the `insert` `Persistable`'s own
+  optional `idempotencyKey` — envelope metadata, never a field of the domain model (`TransactionSchema` doesn't
+  carry it). `logic/persistence.ts`'s `insert` builder and every flow that mints one
+  (`add_account_expense`/`add_account_income`/`add_card_purchase`/`create_transfer`, `pay_bill`'s transfer,
+  `apply_due_recurring`, and bulk-import lines reusing the single-line flows) set it alongside `model`.
+  Read-first-dedup entities (dashboards, settings) carry none. A table that physically has the `idempotencyKey`
+  column is a promise every insert into it keeps: `versionedTableApplier.insert` rejects a keyless insert (and a
+  keyed insert into a table without the column) up front rather than surfacing an opaque `NOT NULL` violation.
 - **The `readBack` deviation** (ADR-023 decision 4; the `ReadBack` type is the package's). An entity may register
   a post-write projection — `transactions` reads the display-joined view via `fetchTx` — landing on
   `PersistOutcome.read`. This is a projection read executed **inside the engine's unit of work**, **capped at one

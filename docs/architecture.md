@@ -47,7 +47,7 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | `controllers/` | `logic/`, `models/`, `common/`, `@rfc0/effect-runner` (the `Persistable`/`FlowOutcome` data contract), injected deps interfaces |
 | `logic/` | `logic/`, `models/`, `@rfc0/effect-runner` (the `Persistable`/`PersistOutcome`/`FlowOutcome` data contract — `logic/persistence.ts`'s builders) only |
 | `models/` | zod/schema helpers, `models/error.ts` (shared error primitives), `@rfc0/effect-runner` (`withPersistenceMeta` — the version-token nucleus). Each model defines its own error union and payload builders (ADR-012); models never import the composed `AppError`. |
-| `@rfc0/effect-runner` (external, MIT, npmjs.com — own repo) | **zod (peer), neverthrow, remeda only; no database driver, ever.** The driver-free effect-engine core (`runEffects`/`runEffectsSequence`/`VersionConflict`/the adapter port) plus its own data contract (`Persistable`/`PersistOutcome`/`FlowOutcome`/`PersistenceMeta`). Its public API is semver-governed: FinTrack depends on a version range and never reaches into its internals. It knows nothing of FinTrack. |
+| `@rfc0/effect-runner` (external, MIT, npmjs.com — own repo) | The effect engine and its data contract; its public API is semver-governed and FinTrack imports only that. No database driver, ever; it knows nothing of FinTrack. Behavior is documented in the package. |
 | `models/creditCard.ts` | Same base `models/` rule, **plus** it may depend on `models/transaction.ts` (ADR-016: the aggregate model may depend on the core model, never the reverse) — `AddCardPurchaseSchema`/`UpdateCardTransactionSchema` `.extend` the core's minimal `CreateTransactionSchema`/`UpdateTransactionSchema` (ADR-019 step 1) with credit-card-only vocabulary the core no longer carries at all: `AddCardPurchaseSchema` adds `card` (required) plus `billMonth`/`billYear`; `UpdateCardTransactionSchema` adds `billMonth`/`billYear` (bill reassignment — there is no `card` field on update, a transaction's card can't change) plus `account`, kept reachable only so `cardErrors.accountChangeRejectedForCard` can fire (see invariant #18). Same for the errors: `cardErrors.paidBillImmutable`/`cardErrors.accountChangeRejectedForCard` are raised exclusively by the credit-card aggregate (`controllers/creditCard/transaction.ts`), never the core, so their payloads live here — and, since ADR-019 step 1, so do `cardErrors.billPeriodIncomplete`/`cardErrors.billAssignmentRequiresCard` (moved from `models/transaction.ts`'s `transactionErrors`, where the core used to raise them itself before the minimal-core change removed the fields that made that necessary). This mirrors the controller-layer arrow at the schema/error-vocabulary layer: hosting an aggregate-exclusive schema or error inside the "core" model file would be the same bounded-context leak the ADR exists to prevent, even without a literal import cycle — the test is not "is this ValidationError-shaped" (both sides are) but "who is the only caller." |
 | `models/account.ts` | Same base `models/` rule, **plus** it may depend on `models/transaction.ts` (ADR-016 step 3: same aggregate-may-depend-on-core rule as `models/creditCard.ts` above) — `AddAccountMovementSchema`/`UpdateAccountTransactionSchema` `.extend` the core's minimal `CreateTransactionSchema`/`UpdateTransactionSchema` (ADR-019 step 1) with `account`, the one field this aggregate owns (card/bill vocabulary never reaches the core at all, so there's nothing left here to omit). `accountErrors.creditPostRejected` (raised only by the account aggregate, `controllers/account/transaction.ts`) already lived here before this split, consistent with the same rule. `CreateTransferSchema` moved here at ADR-016 step 4 (from `models/transaction.ts`, which never had a `createTransfer` entry point of its own) for the same reason: a transfer request is account-context vocabulary, even though `transfer.ts` persists it via the core's `TransactionType.enum.transfer` row shape. |
 | `common/errors` | `models/` (composes `AppError` as the union of per-model error types; ADR-012) |
@@ -119,9 +119,8 @@ Database: encrypted libSQL file (`fintrack.db`) opened via `@libsql/client` (asy
 Drizzle handle. WAL lets the HTTP sidecar's reads proceed without blocking the writer; busy_timeout makes a
 contended writer wait for the lock instead of throwing `SQLITE_BUSY` immediately — the case that matters when
 more than one stdio server (ADR-007, spawned per client) holds a connection to the same file at once.
-`runEffects`'s retry loop (`docs/write-path.md` § The effect runner) additionally treats `SQLITE_BUSY` as
-retryable the same way it treats a `VersionConflict`, as defense-in-depth for contention that outlives the
-timeout. **WAL sidecar files** (`fintrack.db-wal`, `fintrack.db-shm`) appear beside the DB file — back up or copy
+`isSqliteBusy` (bound as the engine's `isTransientContention`, `docs/write-path.md`) makes `SQLITE_BUSY` retryable as
+defense-in-depth for contention that outlives the timeout. **WAL sidecar files** (`fintrack.db-wal`, `fintrack.db-shm`) appear beside the DB file — back up or copy
 the database as a set with them, or checkpoint (`PRAGMA wal_checkpoint`) first.
 
 Every mutable entity table below also carries `version INTEGER NOT NULL DEFAULT 0` (not shown per-line) —
@@ -215,17 +214,12 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     A converted controller builds `Persistable`s and returns them in `persist` (or, for bulk import, a
     `StatementImportPlan` the shell runs through `runEffectsSequence`); it never calls a repo write method and
     never touches `Db`. **`deps` exposes no write method at all, for any entity** — every repo is read-only
-    (queries and pure helpers only), and no domain rule survives as a SQL predicate in a repo. The package's `runEffects`
-    (invoked from the MCP/REST handler) is the write-path engine — a standalone, driver-free external package
-    (no Drizzle/libSQL/FinTrack imports) rather than living inside `diplomat/db`; it calls an
-    injected `TransactionRunner`/`isTransientContention` port and maps a retry-exhausted conflict through an
-    injected `conflictError` factory, so it never touches `Db` or FinTrack's `AppError` union itself. Only
-    `diplomat/db/driver.ts`'s `createTransactionRunner(db)`, bound at the composition root (`main.ts`) alongside
-    `sqliteErrors.ts`'s `isSqliteBusy` and `models/error.ts`'s `conflict`, touches `Db`. `diplomat/db/effects.ts`
-    is now just the SQLite adapter's `versionedTableApplier` (implements the engine's `EntityApplier` port against
-    Drizzle). The per-flow conversion history, the applier catalogue, the `versionedTableApplier`
-    unique-conflict/singleton-race handling (`dashboardApplier`/`settingsApplier`), the port seam, and the
-    `resetLocale`-to-shell move live in `docs/write-path.md` and ADR-021/022/023/030 — not here.
+    (queries and pure helpers only), and no domain rule survives as a SQL predicate in a repo. The package's
+    `runEffects` (invoked from the MCP/REST handler) applies the batch through the ports FinTrack binds at the
+    composition root (`main.ts`): `diplomat/db/driver.ts`'s `createTransactionRunner(db)`, `sqliteErrors.ts`'s
+    `isSqliteBusy`, and `models/error.ts`'s `conflict`. Only that adapter touches `Db`; `diplomat/db/effects.ts` is
+    the SQLite `versionedTableApplier`. The conversion history, applier catalogue, and unique-race handling live in
+    `docs/write-path.md` and ADR-021/022/023/030 — not here.
 20. **An `effective` transaction's date is never in the future** (Feature Design 014). Enforced at `pay_bill`
     (phase A: the payment transfer's date must be on or before today) and `confirm_transaction` (phase B: the
     resolved date — the given `date`, or the existing date if omitted — must be on or before today,

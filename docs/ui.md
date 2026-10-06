@@ -294,13 +294,9 @@ stderr reporter — never stdout, which carries the stdio MCP protocol, ADR-007)
 triggered it. No external broker: the MCP server, HTTP sidecar, and scheduler share one process (ADR-024), so an
 in-process bus is the whole mechanism.
 
-**The post-commit publish hook** lives in `@rfc0/effect-runner`'s engine, in `attempt` (the one place a batch commits,
-shared by `runEffects` and `runEffectsSequence`): once `applyBatch` reports `applied: true`, the deduped entity
-tags of every outcome that itself `applied: true` are published. An idempotent-duplicate insert
-(`applied: false`) changed nothing, so its entity is never published; a version-conflict retry's failed
-attempts publish nothing (only the eventual successful commit does). `publish` is the last parameter of
-`runEffects`/`runEffectsSequence`, defaulting to a no-op, so existing direct callers (chiefly tests) are
-unaffected — only the composition root binds the real bus.
+**The post-commit publish** is the package's (`runEffects`/`runEffectsSequence` publish the entity tags of a
+committed batch that wrote; see its [change-notification section](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.3.0/docs/architecture.md#change-notification)).
+FinTrack only subscribes: the tags in each SSE message are those the engine published.
 
 **`GET /ui/events`** (`registerUiEventsRoute`) is the shell's `EventSource` target. The handler calls
 `reply.hijack()` (an SSE stream never ends like a normal response), `reply.raw.writeHead()` +
