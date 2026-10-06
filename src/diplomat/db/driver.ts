@@ -1,12 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { Entry } from '@napi-rs/keyring';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
-import type { Config } from '../../config.js';
+import { EncryptionKey, type Config } from '../../config.js';
 import * as schema from './schema.js';
 
 export type Db = LibSQLDatabase<typeof schema>;
@@ -28,20 +27,35 @@ const KEYCHAIN_ACCOUNT = 'db-encryption-key';
 const JOURNAL_MODE_WAL = 'WAL';
 const BUSY_TIMEOUT_MS = 5000;
 
-type DbConfig = Pick<Config, 'DB_PATH' | 'FINTRACK_DB_KEY'>;
+type DbConfig = Pick<Config, 'DB_PATH' | 'FINTRACK_DB_KEY' | 'FINTRACK_DB_KEY_FILE'>;
 
-const resolveEncryptionKey = (config: DbConfig): string => {
-  // Env-var override: CI, headless, or manual recovery (ADR-005). We log that we are in
-  // env-var mode (never the key value itself) so the weaker posture is visible.
-  if (config.FINTRACK_DB_KEY) {
-    console.warn('fintrack: using FINTRACK_DB_KEY from the environment; OS keychain bypassed.');
-    return config.FINTRACK_DB_KEY;
-  }
+const KEY_GENERATION_HINT =
+  'Generate one with `openssl rand -hex 32` and provide it via FINTRACK_DB_KEY_FILE ' +
+  '(e.g. a Docker secret mounted at /run/secrets/fintrack_db_key) or the FINTRACK_DB_KEY environment variable.';
 
-  // Otherwise the key lives in the OS keychain (generated on first run). If the keychain
-  // is unavailable (e.g. headless Linux without a Secret Service), fail fast with an
-  // actionable message instead of an opaque native error.
+const readKeyFile = (path: string): string => {
+  let contents: string;
   try {
+    contents = readFileSync(path, 'utf8');
+  } catch (cause) {
+    throw new Error(
+      `fintrack: cannot read the encryption key file FINTRACK_DB_KEY_FILE (${path}). ${KEY_GENERATION_HINT}`,
+      { cause },
+    );
+  }
+  const parsed = EncryptionKey.safeParse(contents.trim());
+  if (!parsed.success) {
+    throw new Error(
+      `fintrack: FINTRACK_DB_KEY_FILE (${path}) must contain a 64-character hex key (a trailing newline is fine). ${KEY_GENERATION_HINT}`,
+    );
+  }
+  return parsed.data;
+};
+
+// Loaded only here so the file/env paths never load the native module (ADR-032).
+const resolveKeychainKey = async (): Promise<string> => {
+  try {
+    const { Entry } = await import('@napi-rs/keyring');
     const entry = new Entry(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
     const existing = entry.getPassword();
     if (existing) return existing;
@@ -51,12 +65,26 @@ const resolveEncryptionKey = (config: DbConfig): string => {
     return key;
   } catch (cause) {
     throw new Error(
-      'fintrack: cannot access the OS keychain for the database encryption key. ' +
-        'On headless or CI environments, provide a 64-character hex key via the ' +
-        'FINTRACK_DB_KEY environment variable.',
+      `fintrack: cannot access the OS keychain for the database encryption key, and no key source was configured. ${KEY_GENERATION_HINT}`,
       { cause },
     );
   }
+};
+
+// Order: key file -> env var -> OS keychain. The key is never written next to the data: the
+// keychain generates on first run for local use only, and every other path fails fast.
+export const resolveEncryptionKey = async (config: DbConfig): Promise<string> => {
+  if (config.FINTRACK_DB_KEY_FILE) {
+    console.warn('fintrack: using the encryption key from FINTRACK_DB_KEY_FILE; OS keychain bypassed.');
+    return readKeyFile(config.FINTRACK_DB_KEY_FILE);
+  }
+  // Env-var override: CI, headless, or manual recovery (ADR-005). We log that we are in
+  // env-var mode (never the key value itself) so the weaker posture is visible.
+  if (config.FINTRACK_DB_KEY) {
+    console.warn('fintrack: using FINTRACK_DB_KEY from the environment; OS keychain bypassed.');
+    return config.FINTRACK_DB_KEY;
+  }
+  return resolveKeychainKey();
 };
 
 /** Best-effort: WAL is verified to work with libSQL's encryption-at-rest in this project's target
@@ -86,11 +114,11 @@ export const enableWal = async (client: ReturnType<typeof createClient>): Promis
 
 /**
  * Open the encrypted libSQL database and return a Drizzle client.
- * The encryption key comes from FINTRACK_DB_KEY or the OS keychain (generated on first
- * run); throws if neither is available so the DB is never opened unencrypted.
+ * The encryption key comes from FINTRACK_DB_KEY_FILE, FINTRACK_DB_KEY or the OS keychain (generated
+ * on first run); throws if none is available so the DB is never opened unencrypted.
  */
 export const openDatabase = async (config: DbConfig): Promise<Db> => {
-  const encryptionKey = resolveEncryptionKey(config);
+  const encryptionKey = await resolveEncryptionKey(config);
   // mode 0o700 applies only when the directory is first created; pre-existing directories
   // keep their current permissions (Node does not retroactively tighten them).
   mkdirSync(dirname(config.DB_PATH), { recursive: true, mode: 0o700 });

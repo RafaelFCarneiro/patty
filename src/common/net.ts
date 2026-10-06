@@ -6,7 +6,20 @@
  */
 export const LOOPBACK_HOST = '127.0.0.1';
 
-export const isPortInUse = (e: unknown): e is { code: string; port: number } =>
+/** Bind addresses meaning "every interface" — not a URL anyone can open. */
+const WILDCARD_HOSTS: ReadonlySet<string> = new Set(['0.0.0.0', '::']);
+
+/**
+ * Origin (`http://host:port`) a user can actually open for a server bound to `host`. A wildcard
+ * bind is reachable through the machine's own loopback (e.g. a container's host-side port
+ * publish), so it prints `LOOPBACK_HOST`; any other host prints itself (IPv6 literals bracketed).
+ */
+export const httpOrigin = (host: string, port: number): string => {
+  const reachableHost = WILDCARD_HOSTS.has(host) ? LOOPBACK_HOST : host;
+  return `http://${reachableHost.includes(':') ? `[${reachableHost}]` : reachableHost}:${port}`;
+};
+
+export const isPortInUse = (e: unknown): e is { code: string; port: number; address?: string } =>
   typeof e === 'object' &&
   e !== null &&
   (e as { code?: string }).code === 'EADDRINUSE' &&

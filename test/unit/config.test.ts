@@ -7,6 +7,8 @@ const ORIGINAL_ENV = { ...process.env };
 
 beforeEach(() => {
   delete process.env['FINTRACK_DB_KEY'];
+  delete process.env['FINTRACK_DB_KEY_FILE'];
+  delete process.env['HOST'];
   delete process.env['FINTRACK_LOCALE'];
 });
 
@@ -143,5 +145,35 @@ describe('loadConfig', () => {
   it('CRYPTO_RATE_STALE_HOURS rejects a negative value', () => {
     process.env['CRYPTO_RATE_STALE_HOURS'] = '-1';
     expect(() => loadConfig()).toThrow();
+  });
+
+  it('HOST defaults to loopback when omitted', () => {
+    expect(loadConfig().HOST).toBe('127.0.0.1');
+  });
+
+  it('HOST env override is respected', () => {
+    process.env['HOST'] = '0.0.0.0';
+    expect(loadConfig().HOST).toBe('0.0.0.0');
+  });
+
+  it('rejects an empty HOST', () => {
+    process.env['HOST'] = '';
+    expect(() => loadConfig()).toThrow();
+  });
+
+  it('accepts an absolute FINTRACK_DB_KEY_FILE', () => {
+    process.env['FINTRACK_DB_KEY_FILE'] = '/run/secrets/fintrack_db_key';
+    expect(loadConfig().FINTRACK_DB_KEY_FILE).toBe('/run/secrets/fintrack_db_key');
+  });
+
+  it('rejects a relative FINTRACK_DB_KEY_FILE', () => {
+    process.env['FINTRACK_DB_KEY_FILE'] = 'secrets/key';
+    expect(() => loadConfig()).toThrow(/absolute path/);
+  });
+
+  it('rejects FINTRACK_DB_KEY and FINTRACK_DB_KEY_FILE set together (ambiguous source)', () => {
+    process.env['FINTRACK_DB_KEY'] = 'a'.repeat(64);
+    process.env['FINTRACK_DB_KEY_FILE'] = '/run/secrets/fintrack_db_key';
+    expect(() => loadConfig()).toThrow(/ambiguous/);
   });
 });

@@ -71,6 +71,29 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
     expect(address.address).toBe(LOOPBACK_HOST);
   });
 
+  it('binds the configured host and prints a reachable loopback URL for a wildcard bind (ADR-032)', async () => {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const wildcardHost = '0.0.0.0';
+
+    sidecar = await startHttpSidecar(
+      deps,
+      version,
+      runEffects,
+      runEffectsSequence,
+      () => {},
+      () => () => {},
+      0,
+      wildcardHost,
+    );
+
+    expect(sidecar.listening).toBe(true);
+    const address = sidecar.app.server.address() as AddressInfo;
+    expect(address.address).toBe(wildcardHost);
+    const logged = stderr.mock.calls.flat().join(' ');
+    expect(logged).toContain(`http://${LOOPBACK_HOST}:${address.port}/api`);
+    expect(logged).not.toContain(wildcardHost);
+  });
+
   it('drains cleanly on shutdown — the port is released', async () => {
     sidecar = await startHttpSidecar(deps, version, runEffects, runEffectsSequence, () => {}, () => () => {}, 0);
     expect(sidecar.listening).toBe(true);

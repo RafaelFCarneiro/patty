@@ -80,6 +80,8 @@ The `stdio` transport itself has **no port concerns for the MCP connection** —
 
 ## Port configuration (HTTP mode and the sidecar)
 
+`HOST` (default `127.0.0.1`) is the bind address for the same HTTP server. Leave it on loopback for local use: the API has no authentication, so `HOST=0.0.0.0` (or `::`) exposes it to every device on the network. It exists for containers, where the host-side port publish must stay on loopback (`127.0.0.1:51737:51737`, ADR-032). Startup messages print `127.0.0.1` for a wildcard bind and the configured host otherwise.
+
 `PORT` (default `51737` for the published package — deliberately not a common Node/Fastify dev-server port like 3000/3001/8080, to minimize collisions with other software; `npm run dev` overrides this to `3001` for contributors, see `docs/architecture.md` § HTTP sidecar) is read whenever the HTTP server starts: pure `http` mode, or the `stdio` sidecar (on by default). The server binds **one fixed port** — it does not auto-pick a free port, because the client config must match.
 
 If you run several servers in HTTP mode, give each its own port:

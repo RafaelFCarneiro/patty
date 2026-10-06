@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPortInUse, portInUseReason } from '../../../src/common/net.js';
+import { httpOrigin, isPortInUse, portInUseReason } from '../../../src/common/net.js';
 
 describe('isPortInUse', () => {
   it('recognizes an EADDRINUSE error carrying a port number', () => {
@@ -25,5 +25,20 @@ describe('isPortInUse', () => {
 describe('portInUseReason', () => {
   it('names the port in a human-readable reason', () => {
     expect(portInUseReason(3001)).toBe('port 3001 is already in use (another service or MCP server is on it)');
+  });
+});
+
+describe('httpOrigin', () => {
+  it.each(['0.0.0.0', '::'])('prints loopback for the wildcard host %s', (host) => {
+    expect(httpOrigin(host, 51737)).toBe('http://127.0.0.1:51737');
+  });
+
+  it('prints an explicit host as itself', () => {
+    expect(httpOrigin('192.168.1.10', 3001)).toBe('http://192.168.1.10:3001');
+    expect(httpOrigin('127.0.0.1', 3001)).toBe('http://127.0.0.1:3001');
+  });
+
+  it('brackets an explicit IPv6 literal', () => {
+    expect(httpOrigin('::1', 3001)).toBe('http://[::1]:3001');
   });
 });
