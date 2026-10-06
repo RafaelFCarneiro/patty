@@ -107,9 +107,9 @@ Run FinTrack as a container instead of through npm: the dashboards (`/ui`), REST
 are served from one port, and your data lives in a Docker volume.
 
 ```bash
-openssl rand -hex 32 > fintrack_db_key   # the database encryption key
-chmod 0444 fintrack_db_key               # the container's unprivileged user (uid 1000) must be able to read it
-docker compose up -d                     # pulls ghcr.io/rafaelfcarneiro/fintrack:latest (add --build to build from source)
+(umask 077; openssl rand -hex 32 > fintrack_db_key)   # the database encryption key, owner-only
+sudo chown 1000 fintrack_db_key   # Linux only: the container's unprivileged user (uid 1000) must own it; skip on Docker Desktop
+docker compose up -d              # pulls ghcr.io/rafaelfcarneiro/fintrack:latest (add --build to build from source)
 ```
 
 Then open <http://127.0.0.1:51737/ui> and point your MCP client at `http://127.0.0.1:51737/mcp`

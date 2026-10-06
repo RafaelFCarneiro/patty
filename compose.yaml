@@ -3,9 +3,10 @@
 # One-time setup — the database encryption key lives in a file Docker mounts as a secret
 # (never in an env var: those show up in `docker inspect`):
 #
-#   openssl rand -hex 32 > fintrack_db_key
-#   chmod 0444 fintrack_db_key     # the container runs as the unprivileged `node` user (uid 1000),
-#                                  # so the file must be readable by it (or `chown 1000 fintrack_db_key`)
+#   (umask 077; openssl rand -hex 32 > fintrack_db_key)   # owner-only: never make the key world-readable
+#   sudo chown 1000 fintrack_db_key   # Linux only: the container runs as the unprivileged `node` user
+#                                     # (uid 1000), so it must own the 0600 file. Docker Desktop maps
+#                                     # file ownership itself — skip this there.
 #   docker compose up -d
 #
 # Keep the key: without it the database in the fintrack-data volume cannot be decrypted. Back up the

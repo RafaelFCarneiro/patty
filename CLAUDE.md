@@ -19,7 +19,7 @@ The HTTP sidecar (REST `/api` + `/ui` dashboards) starts automatically alongside
 
 - REST API: `http://127.0.0.1:3001/api` (from source) / `http://127.0.0.1:51737/api` (published package)
 - MCP endpoint (streamable HTTP): `http://127.0.0.1:3001/mcp` (from source) / `http://127.0.0.1:51737/mcp` (published package)
-- Docker: `openssl rand -hex 32 > fintrack_db_key && chmod 0444 fintrack_db_key && docker compose up --build` serves everything on `http://127.0.0.1:51737` (ADR-032) — loopback publish only, unauthenticated API; verify an image with `docker build -t fintrack:ci . && scripts/docker-smoke.sh fintrack:ci`.
+- Docker: `(umask 077; openssl rand -hex 32 > fintrack_db_key) && docker compose up --build` (on Linux also `sudo chown 1000 fintrack_db_key` first — the key file stays owner-only, never world-readable) serves everything on `http://127.0.0.1:51737` (ADR-032) — loopback publish only, unauthenticated API; verify an image with `docker build -t fintrack:ci . && scripts/docker-smoke.sh fintrack:ci`.
 - Run `npx ntl` for an interactive, described list of all scripts.
 
 ## Commands
