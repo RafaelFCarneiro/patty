@@ -12,35 +12,40 @@ effects; the domain is structurally incapable of writing.
 
 Per `docs/functional-core-imperative-shell.md`: a controller **decides** and returns the write as data; the
 diplomat shell **applies** it. Organized below by concern — the core's contract, the boundary adaptation, the
-effect runner, appliers, outcomes, and the per-flow notes.
+engine wiring, appliers, outcomes, and the per-flow notes.
+
+> **The engine is the external package `@rfc0/effect-runner` (ADR-031) and documents itself.** The `Persistable`
+> / `PersistOutcome` / `FlowOutcome` data contract, the adapter port (`TransactionRunner`, `EntityApplier`,
+> `ApplierRegistry`, `ReadBack`, `IsTransientContention`, `EngineContext`, `PublishChange`), and the engine
+> semantics (one transaction per batch — an empty batch skips the transaction entirely — the version guard, the
+> bounded retry loop, idempotency, `runEffectsSequence`, change publication) are specified in its
+> [architecture doc](https://github.com/RafaelFCarneiro/effect-runner/blob/main/docs/architecture.md), with its principle in its
+> [FC/IS doc](https://github.com/RafaelFCarneiro/effect-runner/blob/main/docs/functional-core-imperative-shell.md). The package docs are not in the npm tarball — read them
+> on GitHub. **This file covers FinTrack's side only**: the SQLite adapter, the composition-root wiring, and the
+> per-flow notes. The package's public API (every `src/index.ts` export) is semver-governed
+> ([ADR 0001](https://github.com/RafaelFCarneiro/effect-runner/blob/main/docs/adr/0001-extracted-from-fintrack.md)); a port change lands there first.
 
 ### The core's contract — what a controller returns
 
 - **A converted controller returns `ResultAsync<{ persist: Persistable[]; response: T }, AppError>`** (not
   `ResultAsync<T>`), composed with `safeTry` as before — it just builds `Persistable`s instead of calling
   `deps.<x>.create`. Builders: `logic/persistence.ts`'s `insert`/`update`/`remove`.
-- **`Persistable` / `PersistOp`** (`@rfc0/effect-runner` — engine-level, not FinTrack domain) are **entity-agnostic** — `Persistable<Tag, Model>`
-  generic over the entity's own tag + model, never a closed union; this file never imports a specific entity.
-  `PersistOp` is a named enum (`insert`/`update`/`delete`). Each entity module owns its own tag constant
-  (e.g. `models/account.ts`'s `ACCOUNT_ENTITY_TAG`).
+- **`Persistable` / `PersistOp`** come from `@rfc0/effect-runner` (see its architecture doc for the shapes).
+  Each FinTrack entity module owns its own tag constant (e.g. `models/account.ts`'s `ACCOUNT_ENTITY_TAG`).
 - **`version`** — every mutable table carries `version INTEGER NOT NULL DEFAULT 0` (§ Relational schema): an
   optimistic-concurrency token, persistence-side only, never on the public model/wire shape. An `insert`
   `Persistable`'s model omits it (a new row is always `INITIAL_VERSION`, `@rfc0/effect-runner`); only
   `update`/`delete` carry the real read `version`, via the persistence-side type (`AccountEntity` = `Account`
   + `version`).
-- **The managed-entity base — one declaration home for the version token.** the package's
-  `PersistenceMeta`/`withPersistenceMeta` is where every entity's persistence-side type is built:
-  `XxxEntitySchema = withPersistenceMeta(XxxSchema)` extends the pure model with `PersistenceMeta`'s `version`
-  field, so the token's shape (`z.number().int().nonnegative()`, its `describe`) is declared exactly once instead
-  of per entity. `withPersistenceMeta` takes no specific entity model and no Drizzle import — it lives beside the
-  engine core it is the nucleus of (both ship in `@rfc0/effect-runner`; `versionedTableApplier` stays behind in `diplomat/db`, the SQLite adapter).
+- **The managed-entity base.** Every entity's persistence-side type is built with the package's
+  `withPersistenceMeta`: `XxxEntitySchema = withPersistenceMeta(XxxSchema)` adds the `version` field, so the
+  token's shape is declared once, not per entity. `versionedTableApplier` (the SQLite adapter) stays in
+  `diplomat/db`.
 - **`idempotencyKey` — optional dedup metadata on the `insert` `Persistable` itself, not the model** (ADR-029
-  Phase 2). `insert: { op: 'insert'; entity: Tag; model: Model; idempotencyKey?: string }` — a flow that opts an
-  entity into the engine's generic idempotency treatment (below) sets this field alongside `model`, never inside
-  it. `logic/persistence.ts`'s `insert` builder accepts and carries it through unchanged; `TransactionSchema`
-  itself carries no such field — only the wire/out read view does, since the key is engine bookkeeping, not a
-  transaction business property. An entity with no idempotency config (dashboards, settings) simply never sets
-  this field.
+  Phase 2; envelope shape in the package's architecture doc). `logic/persistence.ts`'s `insert` builder accepts
+  and carries it through unchanged; `TransactionSchema` carries no such field — only the wire/out read view
+  does, since the key is engine bookkeeping, not a transaction business property. An entity with no idempotency
+  config (dashboards, settings) never sets it.
 - **The key is domain-derived, never caller-supplied** (ADR-029 Phase 2b). `logic/transaction.ts`'s
   `deriveIdempotencyKey(identity, decimals, discriminator?)` is the single derivation for every transaction
   insert — single-add (`addAccountExpense`/`addAccountIncome`/`addCardPurchase`/`createTransfer`) and bulk import
@@ -87,54 +92,40 @@ effect runner, appliers, outcomes, and the per-flow notes.
   because a bill `update` needs `paymentTransactionId: undefined` (leave the column unchanged) to differ from
   `null` (clear it) — an asymmetry the uniform factory can't express.
 
-### The effect runner — the engine
+### The effect runner — FinTrack's wiring
 
-- **The engine lives in the external package `@rfc0/effect-runner`** — a standalone, driver-free module with no
-  database-driver or FinTrack imports (its own lint enforces this). `runEffects`/`runEffectsSequence` take an **`EngineContext<TTx, E>`** —
-  `{ runner: TransactionRunner<TTx>; isTransientContention: IsTransientContention; conflictError: () => E }` —
-  as their first argument (bundling the ADR-030 Phase 1 port seam's `TransactionRunner`/`IsTransientContention`
-  plus a new **error binding**), followed by the `registry`. `TransactionRunner<TTx>` is `{ runInTransaction:
-  (work: (tx: TTx) => Promise<T>) => Promise<T> }`; `IsTransientContention` is `(cause: unknown) => boolean`.
-  The engine no longer names `Db.transaction`, and — new at Phase 2 — no longer names FinTrack's `AppError`/
-  `conflict` either: it is generic over an opaque error type `E`, and a retry-exhausted conflict surfaces as
-  `ctx.conflictError()` rather than an imported constant. The composition root (`main.ts`,
-  `test/integration/app-builder.ts`) binds the whole context to the concrete SQLite adapter and FinTrack's own
-  error — `diplomat/db/driver.ts`'s `createTransactionRunner(db)` wraps libSQL Drizzle's `Db.transaction`,
-  `diplomat/db/sqliteErrors.ts`'s `isSqliteBusy` is passed as `isTransientContention`, and `() =>
-  conflict` (`models/error.ts`) is passed as `conflictError`. `EntityApplier` / `ApplierRegistry` / `ReadBack`
-  are generic over the same opaque transaction handle `TTx`, with no default in the engine itself (it has no
-  concrete `Tx` to default to) — `diplomat/db/effects.ts`, the SQLite adapter, re-exports each one specialized
-  with its own `Tx` as the default type argument, so every existing SQLite-backed registration
-  (`accountApplier: EntityApplier = ...`) keeps typing itself without repeating the argument. The engine's
-  retry predicate (`isRetryable`, exported for its own unit coverage) reads `cause instanceof VersionConflict
-  || isTransientContention(cause)` — no sqlite-specific import in the core's retry decision.
-- **`runEffects(ctx, registry, flow)`** (the package's engine — the only code that calls
-  `ctx.runner.runInTransaction`, via the shared `applyBatch`/`attempt` primitive both this mode and
-  `runEffectsSequence` below run through) invokes `flow` and executes the effects it returns.
-  **Single-atomic-unit** mode: the `persist` batch applied in one `runInTransaction` unit of work, each
-  row-shaped `Persistable` dispatched by `p.entity` through the `registry`; **response** always produced;
-  message dispatch is a named-but-unbuilt future effect kind. `update`/`delete` apply `... SET ..., version =
-  <read version + 1> WHERE id = ? AND version = ?` — the new version computed in application code, **never**
-  a SQL-side `version + 1`. A version-guarded op affecting zero rows rolls back the whole batch and re-invokes
-  `flow` (fresh read → fresh decision), bounded, then surfaces `ctx.conflictError()` — at the composition root,
-  FinTrack's generic `conflict` `AppError` (`models/error.ts`, no business payload). **The retry loop covers two
-  distinct classes (ADR-024): `VersionConflict` (logical — a stale read)** and **transient physical contention
-  (the SQLite adapter's `isTransientContention` = `isSqliteBusy` in `diplomat/db/sqliteErrors.ts`, matched on
-  the driver error's base `.code`, covering `SQLITE_BUSY` and the more specific `SQLITE_BUSY_SNAPSHOT`)**;
-  `applyBatch` catches either (via `isRetryable`) and treats them identically — roll back, re-invoke, same
-  `MAX_RUN_EFFECTS_ATTEMPTS` budget. `busy_timeout` (`diplomat/db/driver.ts`) already absorbs the common case
-  by having the driver wait for the lock instead of throwing; this retry is the bounded defense-in-depth for
-  contention that outlives that timeout.
-- **`runEffectsSequence(ctx, registry, items, flowFor)`** — the second mode: each item's flow (built by
-  `flowFor`, invoked only when the runner reaches it) runs through the same `attempt`/retry primitive, in its
-  **own transaction**, in order. Item *i+1* sees item *i*'s committed writes — which is why bulk import reuses
-  the single-line flows verbatim. A unit's version conflict retries only that unit; a domain error or exhausted
-  retries is recorded as `Err` and the sequence **continues** (partial success). Returns one `SequenceOutcome<T,
-  E>` (`Result<T, E>`; `E` is `AppError` at every real call site) per item, positionally parallel to `items`.
-- **`EntityApplier` / `ApplierRegistry`** (port types owned by the package) — the engine dispatches
-  a row-shaped `Persistable` to `registry[p.entity]`; it never names an entity and never needs a new `case` as
-  entities convert. The `ApplierRegistry` is assembled once at the composition root (`main.ts`,
-  `test/integration/app-builder.ts`).
+The engine's mechanics (retry loop, version guard, `runEffectsSequence`, change publication) are documented in the
+package — see the pointer above. FinTrack's side:
+
+- **Composition-root binding.** `runEffects`/`runEffectsSequence` take an `EngineContext<TTx, E>` and a registry.
+  The composition root (`main.ts`, `test/integration/app-builder.ts`) binds the context to the SQLite adapter and
+  FinTrack's own error: `diplomat/db/driver.ts`'s `createTransactionRunner(db)` wraps libSQL Drizzle's
+  `Db.transaction` (`runner`), `diplomat/db/sqliteErrors.ts`'s `isSqliteBusy` is `isTransientContention`, and
+  `() => conflict` (`models/error.ts` — a generic `AppError`, no business payload) is `conflictError`. A
+  retry-exhausted conflict therefore surfaces as that `conflict`. `E` is `AppError` at every real call site.
+- **Typed `Tx` default.** The package's `EntityApplier`/`ApplierRegistry`/`ReadBack` are generic over an opaque
+  `TTx` with no default; `diplomat/db/effects.ts` re-exports each specialized with FinTrack's own `Tx`, so
+  registrations (`accountApplier: EntityApplier = ...`) type themselves without repeating the argument.
+- **Two retry classes, one budget (ADR-024).** The engine retries a `VersionConflict` (logical — a stale read)
+  and anything `isTransientContention` accepts, identically, within `MAX_RUN_EFFECTS_ATTEMPTS`. FinTrack's
+  transient class is `isSqliteBusy`, matched on the driver error's base `.code` — `SQLITE_BUSY` and the more
+  specific `SQLITE_BUSY_SNAPSHOT`. `busy_timeout` (`diplomat/db/driver.ts`) absorbs the common case by having the
+  driver wait for the lock instead of throwing; the retry is bounded defense-in-depth for contention that outlives
+  it.
+- **Version guard in the applier.** `versionedTableApplier` writes `... SET ..., version = <read version + 1>
+  WHERE id = ? AND version = ?` — the new version computed in application code, **never** a SQL-side
+  `version + 1`; zero rows affected reports `applied: false`, which the engine turns into a retry.
+- **Change bus binding.** The composition root (`main.ts`) passes `changeBus.publish` (the package's
+  `PublishChange`, re-exported by `diplomat/changeBus.ts`) as `publish` to both `runEffects` and
+  `runEffectsSequence`. The engine calls it once per commit with the deduped entity tags that actually wrote;
+  idempotent-duplicate (`applied: false`) outcomes publish nothing, and neither does an empty batch.
+- **Empty batches are no-ops.** A flow returning `persist: []` (a dry-run preview, or an idempotent
+  `{ deleted: false }` delete) never opens a transaction — no applier runs, no outcomes, no publish.
+- **`runEffectsSequence` use.** Bulk import (`importAccountStatement`/`importCardStatement`) runs its lines through
+  it, which is why it reuses the single-line flows verbatim: line *i+1* sees line *i*'s committed writes, and a
+  failed line is recorded as `Err` while the rest continue.
+- **The `ApplierRegistry`** is assembled once at the composition root (`main.ts`,
+  `test/integration/app-builder.ts`); the engine never names a FinTrack entity.
 - **`RunEffects` is shell-only, never a field on `Deps`.** `controllers/deps.ts` exports the type, but only the
   `diplomat/mcp`/`diplomat/http` handlers hold an instance — a controller cannot reach it to apply its own
   writes. `resetLocale` (locale-cache invalidation, `diplomat/db/localeCache.ts`) is threaded the same shell-only
@@ -209,16 +200,14 @@ effect runner, appliers, outcomes, and the per-flow notes.
 
 ### Outcomes and responses
 
-- **`PersistOutcome`** (`@rfc0/effect-runner`) — what the shell reports per `Persistable`: `applied` (did the
-  insert land, or no-op as an idempotent duplicate), the entity's already-decoded `read` of what is now
-  persisted, and the `entity` tag. A `FlowOutcome.response` is normally the plain core-derived value; an
-  idempotency-aware flow instead returns a **pure, sync** function of `PersistOutcome[]` that `runEffects` calls
-  once applied (`response` never performs I/O — rule 1). First users: `add_account_expense`/`add_account_income`/
-  `create_transfer`'s `created` flag; bulk import reuses the same contract per item. Response-shaping helpers
-  live in `logic/transaction.ts` (`viewFromOutcome`; `buildUpsertResult` → `UpsertTransactionResult` /
-  `ClassifiedUpsertResult`), `purry`'d so that e.g. `buildUpsertResult(classification, locale)` **is** the
-  `(outcomes) => T` a flow assigns directly.
-- **Outcomes are addressed by entity tag, never by batch position** (ADR-023). `applyPersistable` stamps each
+- **`PersistOutcome`** is the package's per-`Persistable` report (`applied`, `read`, `entity` — see its
+  architecture doc). A `FlowOutcome.response` is normally the plain core-derived value; an idempotency-aware flow
+  instead returns a **pure, sync** function of `PersistOutcome[]` (`response` never performs I/O — rule 1). First
+  users: `add_account_expense`/`add_account_income`/`create_transfer`'s `created` flag; bulk import reuses the
+  same contract per item. Response-shaping helpers live in `logic/transaction.ts` (`viewFromOutcome`;
+  `buildUpsertResult` → `UpsertTransactionResult` / `ClassifiedUpsertResult`), `purry`'d so that e.g.
+  `buildUpsertResult(classification, locale)` **is** the `(outcomes) => T` a flow assigns directly.
+- **Outcomes are addressed by entity tag, never by batch position** (ADR-023). The engine stamps each
   outcome with its source `entity`; `logic/persistence.ts`'s `outcomeFor(tag, outcomes)` (asserting exactly one
   match) finds a flow's own outcome regardless of batch position — needed because a merchant insert is
   *prepended* ahead of the transaction that FKs it. Exception: `applyDueRecurring` slices `outcomes`
@@ -242,11 +231,11 @@ effect runner, appliers, outcomes, and the per-flow notes.
   rejects immediately if the column exists but the envelope carries no key (and, symmetrically, if the envelope
   carries a key but the table has no such column) — caught here rather than left to surface as an opaque
   database `NOT NULL` constraint violation once the row reaches SQL.
-- **The `readBack` deviation** (ADR-023 decision 4). An entity may register a post-write projection —
-  `transactions` reads the display-joined view via `fetchTx` — landing on `PersistOutcome.read`. This is a
-  projection read executed **inside the engine**, **capped at one hook**, and is *not* sanctioned by FC/IS
-  (rule 6 permits an outcome-dependent response, not an in-engine read) — recorded here as the project's
-  deliberate deviation. A second such hook is the signal to switch to ADR-023 option D (the core builds the full
+- **The `readBack` deviation** (ADR-023 decision 4; the `ReadBack` type is the package's). An entity may register
+  a post-write projection — `transactions` reads the display-joined view via `fetchTx` — landing on
+  `PersistOutcome.read`. This is a projection read executed **inside the engine's unit of work**, **capped at one
+  hook**, and is *not* sanctioned by FC/IS (rule 6 permits an outcome-dependent response, not an in-engine
+  read) — recorded here as the project's deliberate deviation. A second such hook is the signal to switch to ADR-023 option D (the core builds the full
   response itself).
 
 ### Per-flow notes
