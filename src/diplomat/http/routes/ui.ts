@@ -42,7 +42,7 @@ const serveUiFile = async (reply: FastifyReply, path: string, contentType: strin
 /**
  * Live update (ADR-027 Phase 3): the shell (`ui/app.js`) opens one long-lived `EventSource` here
  * for the life of the page; every message is `{"entities": [...]}` — the entity tags of a batch
- * that just committed, straight from the change bus's `subscribe` (`diplomat/db/effects.ts`'s
+ * that just committed, straight from the change bus's `subscribe` (`@rfc0/effect-runner`'s
  * post-commit publish hook). `reply.hijack()` opts out of Fastify's own response lifecycle (its
  * automatic `send()`/timeout/hook handling assumes a response that ends promptly, which an SSE
  * stream deliberately never does) so this handler owns `reply.raw` until the client disconnects.
