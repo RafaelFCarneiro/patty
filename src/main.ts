@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
-import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
+import { httpOrigin, isPortInUse, portInUseMessage } from './common/net.js';
 import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
@@ -72,7 +72,16 @@ const maybeStartSidecar = async (
 ): Promise<HttpSidecar | null> => {
   if (!config.FINTRACK_HTTP) return null;
   const { startHttpSidecar } = await loadServerModule();
-  return startHttpSidecar(deps, version, runEffects, runEffectsSequence, resetLocale, subscribeToChanges, config.PORT);
+  return startHttpSidecar(
+    deps,
+    version,
+    runEffects,
+    runEffectsSequence,
+    resetLocale,
+    subscribeToChanges,
+    config.PORT,
+    config.HOST,
+  );
 };
 
 const main = async (): Promise<void> => {
@@ -206,23 +215,17 @@ const main = async (): Promise<void> => {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  await app.listen({ port: config.PORT, host: LOOPBACK_HOST });
+  await app.listen({ port: config.PORT, host: config.HOST });
   // config.PORT may be 0 (OS-assigned); read back the address actually bound for the banner.
   const boundPort = (app.server.address() as AddressInfo).port;
+  const origin = httpOrigin(config.HOST, boundPort);
   // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe.
-  console.log(
-    `fintrack: REST http://${LOOPBACK_HOST}:${boundPort}/api` + ` · MCP http://${LOOPBACK_HOST}:${boundPort}/mcp`,
-  );
+  console.log(`fintrack: REST ${origin}/api · MCP ${origin}/mcp`);
 };
 
 main().catch((e: unknown) => {
   if (isPortInUse(e)) {
-    const port = e.port;
-    console.error(
-      `fintrack: ${portInUseReason(port)}.\n` +
-        `Set a different port and retry, e.g. PORT=${port + 1} fintrack\n` +
-        `Then point your MCP client at http://${LOOPBACK_HOST}:${port + 1}/mcp`,
-    );
+    console.error(portInUseMessage(e));
     process.exit(1);
   }
   console.error(e);

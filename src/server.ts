@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
-import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
+import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
 import { registerRoutes } from './diplomat/http/routes.js';
 import { registerMcpRoute } from './diplomat/mcp/route.js';
@@ -47,17 +47,18 @@ export const startHttpSidecar = async (
   resetLocale: () => void,
   subscribeToChanges: ChangeBus['subscribe'],
   port: number,
+  host: string = LOOPBACK_HOST,
 ): Promise<HttpSidecar> => {
   const app = buildHttpApp(deps, version, runEffects, runEffectsSequence, resetLocale, subscribeToChanges, {
     logger: false,
   });
   try {
-    await app.listen({ port, host: LOOPBACK_HOST });
+    await app.listen({ port, host });
     // `port` may be 0 (OS-assigned); read back the address actually bound for the banner.
     const boundPort = (app.server.address() as AddressInfo).port;
+    const origin = httpOrigin(host, boundPort);
     console.error(
-      `fintrack: HTTP sidecar up — REST http://${LOOPBACK_HOST}:${boundPort}/api · ` +
-        `MCP http://${LOOPBACK_HOST}:${boundPort}/mcp · dashboard http://${LOOPBACK_HOST}:${boundPort}/ui/overview`,
+      `fintrack: HTTP sidecar up — REST ${origin}/api · MCP ${origin}/mcp · dashboard ${origin}/ui/overview`,
     );
     return { app, listening: true };
   } catch (e) {

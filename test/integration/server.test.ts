@@ -3,7 +3,7 @@ import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { LOOPBACK_HOST } from '../../src/common/net.js';
+import { IPV4_WILDCARD_HOST, LOOPBACK_HOST } from '../../src/common/net.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
 import { startHttpSidecar, type HttpSidecar } from '../../src/server.js';
 import { buildApp } from './app-builder.js';
@@ -69,6 +69,29 @@ describe('HTTP sidecar (ADR-013 Decision 7)', () => {
 
     const address = sidecar.app.server.address() as AddressInfo;
     expect(address.address).toBe(LOOPBACK_HOST);
+  });
+
+  it('binds the configured host and prints a reachable loopback URL for a wildcard bind (ADR-032)', async () => {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const wildcardHost = IPV4_WILDCARD_HOST;
+
+    sidecar = await startHttpSidecar(
+      deps,
+      version,
+      runEffects,
+      runEffectsSequence,
+      () => {},
+      () => () => {},
+      0,
+      wildcardHost,
+    );
+
+    expect(sidecar.listening).toBe(true);
+    const address = sidecar.app.server.address() as AddressInfo;
+    expect(address.address).toBe(wildcardHost);
+    const logged = stderr.mock.calls.flat().join(' ');
+    expect(logged).toContain(`http://${LOOPBACK_HOST}:${address.port}/api`);
+    expect(logged).not.toContain(wildcardHost);
   });
 
   it('drains cleanly on shutdown — the port is released', async () => {
