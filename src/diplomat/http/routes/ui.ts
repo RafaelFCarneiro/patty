@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { ChangeBus } from '../../changeBus.js';
+import type { ChangeBus } from '@rfc0/effect-runner';
 import { CACHE_CONTROL_NO_CACHE } from '../respond.js';
 
 // Resolved relative to this module's own file location (not process.cwd()) so it works

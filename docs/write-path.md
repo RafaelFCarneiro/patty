@@ -115,9 +115,11 @@ package — see the pointer above. FinTrack's side:
 - **Version guard in the applier.** `versionedTableApplier` writes `... SET ..., version = <read version + 1>
   WHERE id = ? AND version = ?` — the new version computed in application code, **never** a SQL-side
   `version + 1`; zero rows affected reports `applied: false`, which the engine turns into a retry.
-- **Change bus binding.** The composition root (`main.ts`) passes `changeBus.publish` (the package's
-  `PublishChange`, re-exported by `diplomat/changeBus.ts`) as `publish` to both `runEffects` and
-  `runEffectsSequence`. The engine calls it once per commit with the deduped entity tags that actually wrote;
+- **Change bus binding.** The composition root (`main.ts`) passes `changeBus.publish` (from the bus `createChangeBus` in
+  `@rfc0/effect-runner` returns) as `publish` to both `runEffects` and `runEffectsSequence`; the same stderr
+  reporter is wired as the bus `onError` (subscriber failures are isolated by the bus) and as the engine
+  context's `onPublishError` (backstop for a publish that throws) — a notification failure never fails a
+  committed write. The engine calls it once per commit with the deduped entity tags that actually wrote;
   idempotent-duplicate (`applied: false`) outcomes publish nothing, and neither does an empty batch.
 - **Empty batches are no-ops.** A flow returning `persist: []` (a dry-run preview, or an idempotent
   `{ deleted: false }` delete) never opens a transaction — no applier runs, no outcomes, no publish.

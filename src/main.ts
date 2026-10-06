@@ -2,7 +2,6 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
-import { createChangeBus, type ChangeBus } from './diplomat/changeBus.js';
 import { isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
@@ -10,7 +9,7 @@ import { bootstrap } from './diplomat/db/bootstrap.js';
 import { createTransactionRunner, openDatabase } from './diplomat/db/driver.js';
 import type { ApplierRegistry } from './diplomat/db/effects.js';
 import { isSqliteBusy } from './diplomat/db/sqliteErrors.js';
-import { runEffects, runEffectsSequence } from '@rfc0/effect-runner';
+import { createChangeBus, runEffects, runEffectsSequence, type ChangeBus } from '@rfc0/effect-runner';
 import { createLocaleResolver } from './diplomat/db/localeCache.js';
 import { accountApplier, accountsRepo } from './diplomat/db/repos/accounts.js';
 import { billApplier, billsRepo } from './diplomat/db/repos/bills.js';
@@ -56,6 +55,11 @@ const { version } = require('../package.json') as { version: string };
  * Isolated here as one named function instead of an inline import() at each call site.
  */
 const loadServerModule = () => import('./server.js');
+
+// stderr only — stdout carries the MCP protocol on the stdio transport (ADR-007).
+const reportChangeError = (cause: unknown): void => {
+  console.error('[fintrack] change notification failed:', cause);
+};
 
 const maybeStartSidecar = async (
   deps: Deps,
@@ -126,11 +130,12 @@ const main = async (): Promise<void> => {
     [SETTINGS_ENTITY_TAG]: settingsApplier,
   };
 
-  const changeBus = createChangeBus();
+  const changeBus = createChangeBus({ onError: reportChangeError });
   const engineContext = {
     runner: createTransactionRunner(db),
     isTransientContention: isSqliteBusy,
     conflictError: () => conflict,
+    onPublishError: reportChangeError,
   };
   const boundRunEffects: RunEffects = (flow) => runEffects(engineContext, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>

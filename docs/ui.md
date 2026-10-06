@@ -286,12 +286,13 @@ baseline fragment, and self-check (fragment not full page; no embedded data; sam
 
 ## Live update — SSE, entity-tagged (ADR-027 Phase 3)
 
-**The change bus** (`src/diplomat/changeBus.ts`) is a plain `EventEmitter` wrapper — `createChangeBus()`
-returns `{ publish, subscribe }`. It sits at the `diplomat/` root, owned by neither surface. `createChangeBus()`
-is composition-root-only (called once in `main.ts` / `test/integration/app-builder.ts`); `diplomat/db` and
-`diplomat/http` import only the `PublishChange`/`ChangeBus` **types** and receive the bound function as a
-parameter — the same crossing pattern as `RunEffects`/`resetLocale`. No external broker: the MCP server, HTTP
-sidecar, and scheduler share one process (ADR-024), so an in-process emitter is the whole mechanism.
+**The change bus** comes from `@rfc0/effect-runner` (`createChangeBus({ onError })` returns `{ publish, subscribe }`);
+FinTrack owns only the SSE forwarding below and the wiring in `main.ts` / `test/integration/app-builder.ts`, which
+calls `createChangeBus` once and hands the bound `subscribe` down as a parameter — the same crossing pattern as
+`RunEffects`/`resetLocale`. A subscriber that throws is isolated by the bus and reported to its `onError` (a shared
+stderr reporter — never stdout, which carries the stdio MCP protocol, ADR-007); it can't fail the write that
+triggered it. No external broker: the MCP server, HTTP sidecar, and scheduler share one process (ADR-024), so an
+in-process bus is the whole mechanism.
 
 **The post-commit publish hook** lives in `@rfc0/effect-runner`'s engine, in `attempt` (the one place a batch commits,
 shared by `runEffects` and `runEffectsSequence`): once `applyBatch` reports `applied: true`, the deduped entity

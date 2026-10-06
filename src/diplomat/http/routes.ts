@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { ChangeBus } from '../changeBus.js';
+import type { ChangeBus } from '@rfc0/effect-runner';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
 import type { HttpContext } from './context.js';
 import { buildOpenApiDocument, mountRoutes, type RouteDefinition } from './openapi.js';

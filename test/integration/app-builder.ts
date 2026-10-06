@@ -38,9 +38,8 @@ import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../src/models/transactionTag.js';
 import { buildHttpApp } from '../../src/server.js';
 import type { ApplierRegistry } from '../../src/diplomat/db/effects.js';
-import { createChangeBus, type ChangeBus } from '../../src/diplomat/changeBus.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
-import { runEffects, runEffectsSequence } from '@rfc0/effect-runner';
+import { createChangeBus, runEffects, runEffectsSequence, type ChangeBus } from '@rfc0/effect-runner';
 import { conflict } from '../../src/models/error.js';
 
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64);
@@ -54,7 +53,11 @@ export type AppContext = {
   changeBus: ChangeBus;
 };
 
-export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promise<AppContext> => {
+export const buildApp = async (opts?: {
+  port?: number;
+  dbPath?: string;
+  onChangeError?: (cause: unknown) => void;
+}): Promise<AppContext> => {
   const db = await openDatabase({
     DB_PATH: opts?.dbPath ?? (inject('DB_PATH' as never) as string),
     FINTRACK_DB_KEY: TEST_ENCRYPTION_KEY,
@@ -107,11 +110,12 @@ export const buildApp = async (opts?: { port?: number; dbPath?: string }): Promi
     [DASHBOARD_ENTITY_TAG]: dashboardApplier,
     [SETTINGS_ENTITY_TAG]: settingsApplier,
   };
-  const changeBus = createChangeBus();
+  const changeBus = createChangeBus({ onError: opts?.onChangeError });
   const engineContext = {
     runner: createTransactionRunner(db),
     isTransientContention: isSqliteBusy,
     conflictError: () => conflict,
+    onPublishError: opts?.onChangeError,
   };
   const boundRunEffects: RunEffects = (flow) => runEffects(engineContext, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
