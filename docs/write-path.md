@@ -16,9 +16,9 @@ engine wiring, appliers, outcomes, and the per-flow notes.
 
 > **The engine is the external package `@rfc0/effect-runner` (ADR-031) and documents itself.** The `Persistable`
 > / `PersistOutcome` / `FlowOutcome` data contract, the adapter port (`TransactionRunner`, `EntityApplier`,
-> `ApplierRegistry`, `ReadBack`, `IsTransientContention`, `EngineContext`), and the engine semantics (one
-> transaction per batch, the version guard, the bounded retry loop, idempotency, `runEffectsSequence`, change
-> publication) are specified in its
+> `ApplierRegistry`, `ReadBack`, `IsTransientContention`, `EngineContext`, `PublishChange`), and the engine
+> semantics (one transaction per batch — an empty batch skips the transaction entirely — the version guard, the
+> bounded retry loop, idempotency, `runEffectsSequence`, change publication) are specified in its
 > [architecture doc](https://github.com/RafaelFCarneiro/effect-runner/blob/main/docs/architecture.md), with its principle in its
 > [FC/IS doc](https://github.com/RafaelFCarneiro/effect-runner/blob/main/docs/functional-core-imperative-shell.md). The package docs are not in the npm tarball — read them
 > on GitHub. **This file covers FinTrack's side only**: the SQLite adapter, the composition-root wiring, and the
@@ -115,6 +115,12 @@ package — see the pointer above. FinTrack's side:
 - **Version guard in the applier.** `versionedTableApplier` writes `... SET ..., version = <read version + 1>
   WHERE id = ? AND version = ?` — the new version computed in application code, **never** a SQL-side
   `version + 1`; zero rows affected reports `applied: false`, which the engine turns into a retry.
+- **Change bus binding.** The composition root (`main.ts`) passes `changeBus.publish` (the package's
+  `PublishChange`, re-exported by `diplomat/changeBus.ts`) as `publish` to both `runEffects` and
+  `runEffectsSequence`. The engine calls it once per commit with the deduped entity tags that actually wrote;
+  idempotent-duplicate (`applied: false`) outcomes publish nothing, and neither does an empty batch.
+- **Empty batches are no-ops.** A flow returning `persist: []` (a dry-run preview, or an idempotent
+  `{ deleted: false }` delete) never opens a transaction — no applier runs, no outcomes, no publish.
 - **`runEffectsSequence` use.** Bulk import (`importAccountStatement`/`importCardStatement`) runs its lines through
   it, which is why it reuses the single-line flows verbatim: line *i+1* sees line *i*'s committed writes, and a
   failed line is recorded as `Err` while the rest continue.
