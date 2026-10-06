@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { isAbsolute } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { LOOPBACK_HOST } from '../../src/common/net.js';
+import { IPV4_WILDCARD_HOST, LOOPBACK_HOST } from '../../src/common/net.js';
 import { loadConfig } from '../../src/config.js';
 
 const ORIGINAL_ENV = { ...process.env };
@@ -153,8 +153,8 @@ describe('loadConfig', () => {
   });
 
   it('HOST env override is respected', () => {
-    process.env['HOST'] = '0.0.0.0';
-    expect(loadConfig().HOST).toBe('0.0.0.0');
+    process.env['HOST'] = IPV4_WILDCARD_HOST;
+    expect(loadConfig().HOST).toBe(IPV4_WILDCARD_HOST);
   });
 
   it('rejects an empty HOST', () => {

@@ -7,7 +7,9 @@
 export const LOOPBACK_HOST = '127.0.0.1';
 
 /** Bind addresses meaning "every interface" — not a URL anyone can open. */
-const WILDCARD_HOSTS: ReadonlySet<string> = new Set(['0.0.0.0', '::']);
+export const IPV4_WILDCARD_HOST = '0.0.0.0';
+export const IPV6_WILDCARD_HOST = '::';
+const WILDCARD_HOSTS: ReadonlySet<string> = new Set([IPV4_WILDCARD_HOST, IPV6_WILDCARD_HOST]);
 
 /**
  * Origin (`http://host:port`) a user can actually open for a server bound to `host`. A wildcard

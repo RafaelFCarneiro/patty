@@ -4,14 +4,14 @@ import { createRequire } from 'node:module';
 import { networkInterfaces, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { LOOPBACK_HOST } from '../../../src/common/net.js';
+import { IPV4_WILDCARD_HOST, LOOPBACK_HOST } from '../../../src/common/net.js';
 import { McpTransport } from '../../../src/config.js';
 import { waitForStderr } from './helpers.js';
 
 const require = createRequire(import.meta.url);
 const ENTRY = 'src/main.ts';
 const TSX_CLI = require.resolve('tsx/cli');
-const WILDCARD_HOST = '0.0.0.0';
+const WILDCARD_HOST = IPV4_WILDCARD_HOST;
 
 const findLanAddress = (): string | undefined =>
   Object.values(networkInterfaces())
@@ -20,7 +20,7 @@ const findLanAddress = (): string | undefined =>
 
 describe('pure http mode binds the configured HOST (ADR-032)', () => {
   let tmpDir: string;
-  let child: ChildProcess;
+  let child: ChildProcess | undefined;
   let stdout = '';
   let stderr = '';
 
@@ -30,9 +30,11 @@ describe('pure http mode binds the configured HOST (ADR-032)', () => {
     const keyFile = join(tmpDir, 'db-key');
     writeFileSync(keyFile, `${'d'.repeat(64)}\n`);
 
+    // A globally configured FINTRACK_DB_KEY (CI/headless) would clash with the key file as a second source.
+    const { FINTRACK_DB_KEY: _inheritedKey, ...inheritedEnv } = process.env;
     child = spawn(process.execPath, [TSX_CLI, ENTRY], {
       env: {
-        ...process.env,
+        ...inheritedEnv,
         MCP_TRANSPORT: McpTransport.enum.http,
         HOST: WILDCARD_HOST,
         // PORT=0 lets the OS assign a free port so this never collides with a running instance.
@@ -47,9 +49,13 @@ describe('pure http mode binds the configured HOST (ADR-032)', () => {
   });
 
   afterAll(async () => {
-    const exited = new Promise((resolve) => child.once('exit', resolve));
-    child.kill('SIGTERM');
-    await exited;
+    // Setup may have failed before spawning, or the child may already have exited — waiting on an
+    // `exit` event that has already fired would hang the suite.
+    if (child && child.exitCode === null && child.signalCode === null) {
+      const exited = new Promise((resolve) => child?.once('exit', resolve));
+      child.kill('SIGTERM');
+      await exited;
+    }
     rmSync(tmpDir, { recursive: true, force: true });
   });
 

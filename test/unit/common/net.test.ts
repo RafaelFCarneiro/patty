@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { httpOrigin, isPortInUse, portInUseMessage, portInUseReason } from '../../../src/common/net.js';
+import {
+  httpOrigin,
+  IPV4_WILDCARD_HOST,
+  IPV6_WILDCARD_HOST,
+  isPortInUse,
+  portInUseMessage,
+  portInUseReason,
+} from '../../../src/common/net.js';
 
 describe('isPortInUse', () => {
   it('recognizes an EADDRINUSE error carrying a port number', () => {
@@ -29,7 +36,7 @@ describe('portInUseReason', () => {
 });
 
 describe('httpOrigin', () => {
-  it.each(['0.0.0.0', '::'])('prints loopback for the wildcard host %s', (host) => {
+  it.each([IPV4_WILDCARD_HOST, IPV6_WILDCARD_HOST])('prints loopback for the wildcard host %s', (host) => {
     expect(httpOrigin(host, 51737)).toBe('http://127.0.0.1:51737');
   });
 
@@ -52,7 +59,7 @@ describe('portInUseMessage', () => {
   });
 
   it('prints a reachable loopback URL when the bind address was a wildcard', () => {
-    expect(portInUseMessage({ port: 51737, address: '0.0.0.0' })).toContain('http://127.0.0.1:51738/mcp');
+    expect(portInUseMessage({ port: 51737, address: IPV4_WILDCARD_HOST })).toContain('http://127.0.0.1:51738/mcp');
   });
 
   it('prints an explicit bind address as itself, bracketing IPv6', () => {
