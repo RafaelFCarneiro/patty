@@ -30,7 +30,11 @@ LABEL org.opencontainers.image.title="FinTrack" \
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# The repo manifest carries 0.0.0-development (semantic-release stamps it only in its own workspace);
+# the release job passes the real version so the server reports it.
+ARG VERSION=0.0.0-development
 COPY package.json ./
+RUN npm pkg set version="${VERSION}"
 COPY drizzle ./drizzle
 COPY ui ./ui
 COPY skills ./skills
@@ -48,7 +52,7 @@ USER node
 EXPOSE 51737
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD ["node", "-e", "fetch('http://127.0.0.1:'+process.env.PORT+'/api/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+    CMD ["node", "-e", "fetch('http://127.0.0.1:'+process.env.PORT+'/api/status').then(r=>r.ok?r.json():Promise.reject()).then(s=>process.exit(s.db==='ok'?0:1)).catch(()=>process.exit(1))"]
 
 ENTRYPOINT ["tini", "--"]
 CMD ["node", "dist/main.js"]

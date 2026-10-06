@@ -62,14 +62,14 @@ echo "== running as non-root"
 
 echo "== GET /api/status and /ui"
 [ "$(http_code "$BASE/api/status")" = "200" ] || fail "/api/status not 200"
-curl -fsS "$BASE/api/status" | grep -q '"db":"ok"' || fail "/api/status does not report db ok"
+curl -fsS "$BASE/api/status" | grep '"db":"ok"' >/dev/null || fail "/api/status does not report db ok"
 [ "$(http_code "$BASE/ui")" = "200" ] || fail "/ui not 200"
 
 echo "== POST /mcp initialize"
 INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'
 curl -fsS -X POST "$BASE/mcp" \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-  -d "$INIT" | grep -q '"result"' || fail "/mcp initialize returned no JSON-RPC result"
+  -d "$INIT" | grep '"result"' >/dev/null || fail "/mcp initialize returned no JSON-RPC result"
 
 echo "== create an account"
 [ "$(http_code -X POST "$BASE/api/accounts" -H 'Content-Type: application/json' -d '{"name":"Smoke"}')" = "201" ] \
@@ -79,7 +79,7 @@ echo "== restart and check persistence"
 docker restart "$NAME" >/dev/null
 wait_healthy
 BASE="$(base_url)"
-curl -fsS "$BASE/api/accounts" | grep -q '"Smoke"' || fail "account did not survive restart"
+curl -fsS "$BASE/api/accounts" | grep '"Smoke"' >/dev/null || fail "account did not survive restart"
 
 echo "== only /data is writable"
 # /var/tmp is writable by `node` on a normal root filesystem, so this only fails under --read-only.
@@ -87,8 +87,9 @@ if docker exec "$NAME" sh -c 'touch /var/tmp/probe 2>/dev/null'; then fail "root
 docker exec "$NAME" sh -c 'touch /data/.probe && rm /data/.probe' || fail "/data is not writable"
 
 echo "== key never leaks into logs, env or volume"
-if docker logs "$NAME" 2>&1 | grep -q "$KEY_VALUE"; then fail "key found in container logs"; fi
-if docker inspect "$NAME" | grep -q "$KEY_VALUE"; then fail "key found in container config"; fi
+# `grep -q` would exit early and SIGPIPE the producer, which pipefail reports as "no match".
+if docker logs "$NAME" 2>&1 | grep "$KEY_VALUE" >/dev/null; then fail "key found in container logs"; fi
+if docker inspect "$NAME" | grep "$KEY_VALUE" >/dev/null; then fail "key found in container config"; fi
 if docker run --rm -v "$VOLUME":/data --entrypoint grep "$IMAGE" -rqF "$KEY_VALUE" /data; then fail "key found on the data volume"; fi
 
 echo "== no key source: fails fast with the openssl hint"
@@ -97,6 +98,6 @@ NOKEY_OUT="$(docker run --rm --name "$NAME-nokey" --read-only --tmpfs /tmp "$IMA
 NOKEY_CODE=$?
 set -e
 [ "$NOKEY_CODE" -ne 0 ] || fail "container started without a key source"
-echo "$NOKEY_OUT" | grep -q "openssl rand -hex 32" || { echo "$NOKEY_OUT" >&2; fail "missing openssl hint in logs"; }
+echo "$NOKEY_OUT" | grep "openssl rand -hex 32" >/dev/null || { echo "$NOKEY_OUT" >&2; fail "missing openssl hint in logs"; }
 
 echo "smoke OK"

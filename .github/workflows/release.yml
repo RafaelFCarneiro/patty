@@ -55,6 +55,12 @@ jobs:
         run: npm run build
 
       # --- release ---
+      # A full workflow rerun can find an older release tag already on HEAD; only a tag that appears
+      # during this run counts as a release.
+      - name: Record tags already on HEAD
+        id: tags-before
+        run: echo "tag=$(git tag --points-at HEAD 'v*' | sort -V | tail -n1)" >> "$GITHUB_OUTPUT"
+
       - name: semantic-release
         id: semantic-release
         env:
@@ -67,9 +73,11 @@ jobs:
       # no @semantic-release/git, so HEAD is never moved by a commit.
       - name: Detect released version
         id: version
+        env:
+          TAG_BEFORE: ${{ steps.tags-before.outputs.tag }}
         run: |
           tag="$(git tag --points-at HEAD 'v*' | sort -V | tail -n1)"
-          if [ -n "$tag" ]; then
+          if [ -n "$tag" ] && [ "$tag" != "$TAG_BEFORE" ]; then
             echo "released=true" >> "$GITHUB_OUTPUT"
             echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
           else
@@ -120,6 +128,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ needs.release.outputs.version }}
           provenance: mode=max
           sbom: true
           cache-from: type=gha
