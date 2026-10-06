@@ -23,6 +23,30 @@ to `main` (no `@semantic-release/git` plugin), so it never fights branch protect
 Nothing extra is needed in the repo: the workflow authenticates with the built-in `GITHUB_TOKEN`
 (scopes granted via the job's `permissions:` block). No secrets to configure.
 
+## Container image (GHCR)
+
+The same workflow publishes the container image (ADR-032) right after the npm release. The `release` job exposes
+two outputs, `released` and `version`, read from the `vX.Y.Z` tag semantic-release creates on `HEAD` (it has no
+`@semantic-release/git`, so `HEAD` is the tagged commit; no tag → `released=false`). The `image` job runs only when
+`released == 'true'`:
+
+- checks out the release tag, sets up QEMU + buildx, logs in to `ghcr.io` with `GITHUB_TOKEN`
+  (`permissions: contents: read, packages: write`);
+- tags `ghcr.io/rafaelfcarneiro/fintrack` as `X.Y.Z`, `X.Y`, `X` and `latest` — the same version as the npm package;
+- builds **`linux/amd64` and `linux/arm64`** from the `Dockerfile` (the TypeScript build runs natively on the runner;
+  only the production `npm ci` runs per target architecture), pushing with provenance and an SBOM and a GitHub Actions
+  layer cache.
+
+`ci.yml` builds the image for `linux/amd64` on every pull request (no push) and runs `scripts/docker-smoke.sh`
+against it: read-only root, key from a mounted file, `/api/status` + `/ui` + MCP `initialize`, data surviving a
+restart, no key in logs/config/volume, and a fast failure with the `openssl` hint when no key is supplied. Run it
+locally with `docker build -t fintrack:ci . && scripts/docker-smoke.sh fintrack:ci`.
+
+**One-time manual step:** a package first pushed to GHCR is **private** and linked to the repository only by label.
+After the first image release, open the repository's **Packages → fintrack → Package settings** and set the
+visibility you want (keep it private, or make it public so `docker compose up` works without `docker login ghcr.io`).
+Private pulls need a token with `read:packages`.
+
 ## Installing & using the package (per machine, one-time auth)
 
 Because the package is private on GitHub Packages, npm needs a token to download it.

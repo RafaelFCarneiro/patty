@@ -101,6 +101,31 @@ VS Code `.vscode/mcp.json` (HTTP, published package):
 
 ---
 
+## Docker
+
+Run FinTrack as a container instead of through npm: the dashboards (`/ui`), REST (`/api`) and the MCP endpoint (`/mcp`)
+are served from one port, and your data lives in a Docker volume.
+
+```bash
+(umask 077; openssl rand -hex 32 > fintrack_db_key)   # the database encryption key, owner-only
+sudo chown 1000 fintrack_db_key   # Linux only: the container's unprivileged user (uid 1000) must own it; skip on Docker Desktop
+docker compose up -d              # pulls ghcr.io/rafaelfcarneiro/fintrack:latest (add --build to build from source)
+```
+
+Then open <http://127.0.0.1:51737/ui> and point your MCP client at `http://127.0.0.1:51737/mcp`
+(per-client setup: [`docs/mcp-clients.md`](docs/mcp-clients.md#docker-container-http-on-12700151737)).
+
+- **Loopback only.** `compose.yaml` publishes `127.0.0.1:51737:51737`. The API has **no authentication** until
+  ADR-033, so publishing as `51737:51737` would expose your finances to everyone on the network.
+- **One replica per volume.** SQLite and the in-process scheduler assume a single process; don't scale the service.
+- **Backup = the volume *and* the key.** The database is encrypted; if you lose `fintrack_db_key` the data is
+  unrecoverable. Back both up (and keep the key somewhere other than next to the volume backup).
+- The image is multi-arch (`linux/amd64`, `linux/arm64`) and hardened in compose: non-root, read-only root filesystem
+  (only `/data` and a `/tmp` tmpfs are writable), all capabilities dropped. The private package/image visibility is
+  covered in [`docs/releasing.md`](docs/releasing.md#container-image-ghcr).
+
+---
+
 ## Development (from source)
 
 ```bash
