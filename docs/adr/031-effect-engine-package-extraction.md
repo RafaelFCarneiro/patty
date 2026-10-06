@@ -79,6 +79,9 @@ one caveat the publish-now path accepts: the port's public API is shaped by a si
   keeps the API adjustable while it settles.)
 - **The port becomes a versioned public API.** Breaking the `EntityApplier`/`TransactionRunner`/`Persistable`
   surface is now a semver-major of the package, not an in-repo refactor. This is the discipline the split buys.
+- **The change bus ships in the package too** (0.3.0): FinTrack's own `diplomat/changeBus.ts` is deleted; the package bus
+  isolates subscriber failures (bus `onError`) and the engine's `onPublishError` backstops a throwing publish, so a
+  notification can never fail a committed write.
 - **3b (Postgres) later** implements the package's port — in FinTrack or its own adapter package — without
   touching the engine repo.
 

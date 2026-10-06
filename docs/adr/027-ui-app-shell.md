@@ -124,6 +124,7 @@ separate host: the zero-build, local-first posture (ADR-004/007/013) is unchange
    `ui/`.
 3. **SSE live-update** (`feat/ui-live-update`): the in-process change-event bus + the `runEffects` post-commit
    publish (entity tags); `GET /ui/events` SSE route; the shell subscribes and refetches sections by dependency.
+   *Note:* the bus itself is now `@rfc0/effect-runner`'s `createChangeBus` (ADR-031); FinTrack owns only the SSE forwarding + wiring.
 
 ## Action Items
 

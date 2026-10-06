@@ -125,11 +125,9 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   they never need a new case as more flows convert. The write intent (`op`) they set is a named enum
   (`PersistOp`), not a bare `'insert'`/`'update'`/`'delete'` string — "constants over literals" applies to the
   op the same as any other domain value.
-- **The entity tag is owned by the entity's own model file, not by `@rfc0/effect-runner`.** `Persistable` is
-  generic (`Persistable<Tag, Model>`) — it never imports or lists a specific entity. `models/account.ts` owns
-  `ACCOUNT_ENTITY_TAG = 'account'`; a category flow would add `CATEGORY_ENTITY_TAG` to `models/category.ts`,
-  never touching `persistable.ts`. This is the same "constants over literals" instinct pointed at the shared
-  scaffolding itself: a god enum every entity has to be registered in is its own kind of magic-value coupling.
+- **The entity tag is owned by the entity's own model file**, not by `@rfc0/effect-runner` (`Persistable` is
+  generic): `models/account.ts` owns `ACCOUNT_ENTITY_TAG = 'account'`, and a new entity adds its own constant
+  there — a shared god enum would be magic-value coupling.
 - An `insert` `Persistable`'s model is the plain, wire-shaped domain model (`Account`) — **no `version`**. A
   brand-new row's version is always the same structural constant (`INITIAL_VERSION`, exported from
   the package); that's not a decision the core makes, so it never appears in what the core builds
@@ -144,12 +142,9 @@ export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<Acc
   rule from earlier in this doc ("diplomats adapt `wire/in -> model` before controller calls and `model ->
   wire/out` after") extended one step further: the same handler also adapts `model -> db row` between the
   controller and the shell.
-- **The shell's generic engine (`@rfc0/effect-runner`) never names a specific entity.** It dispatches
-  each already-row-shaped `Persistable` to `registry[p.entity]` — an `EntityApplier` (just the drizzle table
-  op, e.g. `tx.insert(accounts).values(row)`) that lives beside that entity's other persistence code. The
-  `ApplierRegistry` is assembled once at the composition root (`main.ts`); `runEffects` itself only ever
-  calls generic `applier.insert/update/delete` — never an `if (entity === 'account')`, and never a call into
-  `modelToDb`.
+- **Appliers are registered, never branched on.** An entity's `EntityApplier` lives beside its other persistence
+  code (e.g. `diplomat/db/repos/accounts.ts`) and is registered once in the `ApplierRegistry` at the composition
+  root (`main.ts`); nothing in FinTrack special-cases an entity tag around the engine.
 - **Don't hand-write an `EntityApplier` for a table that already fits the `id`/`version` convention** — call
   `versionedTableApplier(table)` (`diplomat/db/effects.ts`) instead. `accountApplier` is
   `versionedTableApplier(accounts)`, nothing more: once the model→row adaptation moved to the handler (above),

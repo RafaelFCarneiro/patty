@@ -98,7 +98,7 @@ Layer rules (enforce in review — violations are bugs):
 
 - `logic/` never imports `diplomat/`, `controllers/`, or anything that does I/O.
 - `diplomat/` contains no business logic — it parses, delegates, and translates.
-- **The effect engine is the external package `@rfc0/effect-runner` (ADR-031)** — the retry loop, the adapter port, and its own `Persistable`/`PersistOutcome`/`FlowOutcome` data contract; it knows nothing of FinTrack and has no database driver. FinTrack depends on a semver range and imports only its public API. `diplomat/db` is its SQLite adapter (`versionedTableApplier`, `driver.ts`, `sqliteErrors.ts`) and implements the port; the package never imports FinTrack. Engine changes are made in its own repo (`RafaelFCarneiro/effect-runner`), released, then the dependency is bumped here.
+- **The effect engine is the external package `@rfc0/effect-runner` (ADR-031)** — its behavior is documented in its own repo; FinTrack is a consumer and imports only its public API (semver range). `diplomat/db` is the SQLite adapter that implements its port. Engine changes are made in `RafaelFCarneiro/effect-runner`, released, then the dependency is bumped here.
 - Controllers return `ResultAsync<T, AppError>` (neverthrow) for **expected** failures (unknown account, ambiguous category…); unexpected errors throw and become 500s.
 - Decode at the boundary: every external input (HTTP body, MCP args, SQL rows) is zod-parsed before entering the domain.
 - Fastify routes: use `reply.send()` consistently — never mix with bare `return` in the same handler, as it causes hard-to-debug double-send issues.
