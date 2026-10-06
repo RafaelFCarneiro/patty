@@ -17,3 +17,4 @@ Dockerfile
 compose.yaml
 .dockerignore
 .DS_Store
+skills/**/evals

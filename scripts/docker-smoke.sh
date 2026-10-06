@@ -82,7 +82,8 @@ BASE="$(base_url)"
 curl -fsS "$BASE/api/accounts" | grep -q '"Smoke"' || fail "account did not survive restart"
 
 echo "== only /data is writable"
-if docker exec "$NAME" sh -c 'touch /app/probe 2>/dev/null'; then fail "root filesystem is writable"; fi
+# /var/tmp is writable by `node` on a normal root filesystem, so this only fails under --read-only.
+if docker exec "$NAME" sh -c 'touch /var/tmp/probe 2>/dev/null'; then fail "root filesystem is writable"; fi
 docker exec "$NAME" sh -c 'touch /data/.probe && rm /data/.probe' || fail "/data is not writable"
 
 echo "== key never leaks into logs, env or volume"
