@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
-import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
+import { httpOrigin, isPortInUse, portInUseMessage } from './common/net.js';
 import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
@@ -225,12 +225,7 @@ const main = async (): Promise<void> => {
 
 main().catch((e: unknown) => {
   if (isPortInUse(e)) {
-    const port = e.port;
-    console.error(
-      `fintrack: ${portInUseReason(port)}.\n` +
-        `Set a different port and retry, e.g. PORT=${port + 1} fintrack\n` +
-        `Then point your MCP client at ${httpOrigin(e.address ?? LOOPBACK_HOST, port + 1)}/mcp`,
-    );
+    console.error(portInUseMessage(e));
     process.exit(1);
   }
   console.error(e);

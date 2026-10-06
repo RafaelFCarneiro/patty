@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createClient } from '@libsql/client';
@@ -112,6 +112,21 @@ describe('resolveEncryptionKey (ADR-032)', () => {
       /keychain.*openssl rand -hex 32.*FINTRACK_DB_KEY_FILE.*FINTRACK_DB_KEY/s,
     );
     expect(keychain.setPassword).not.toHaveBeenCalled();
+  });
+
+  it('never writes a key file next to the data when resolution fails', async () => {
+    const dataDir = join(tmpDir, 'data');
+    mkdirSync(dataDir);
+    keychain.getPassword.mockImplementation(() => {
+      throw new Error('no secret service');
+    });
+
+    await expect(resolveEncryptionKey({ DB_PATH: join(dataDir, 'fintrack.db') })).rejects.toThrow();
+    await expect(
+      resolveEncryptionKey({ DB_PATH: join(dataDir, 'fintrack.db'), FINTRACK_DB_KEY_FILE: join(tmpDir, 'absent') }),
+    ).rejects.toThrow();
+
+    expect(readdirSync(dataDir)).toEqual([]);
   });
 });
 
