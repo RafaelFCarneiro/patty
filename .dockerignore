@@ -1,0 +1,19 @@
+# Build context: only what the Dockerfile COPYs (package files, tsconfig*, src, drizzle, ui, skills).
+node_modules
+dist
+coverage
+.git
+.github
+.claude
+.vscode
+test
+docs
+scripts
+*.db
+*.db-*
+.env*
+fintrack_db_key
+Dockerfile
+compose.yaml
+.dockerignore
+.DS_Store

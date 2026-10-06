@@ -1,0 +1,42 @@
+# FinTrack, containerised (ADR-032).
+#
+# One-time setup — the database encryption key lives in a file Docker mounts as a secret
+# (never in an env var: those show up in `docker inspect`):
+#
+#   openssl rand -hex 32 > fintrack_db_key
+#   chmod 0444 fintrack_db_key     # the container runs as the unprivileged `node` user (uid 1000),
+#                                  # so the file must be readable by it (or `chown 1000 fintrack_db_key`)
+#   docker compose up -d
+#
+# Keep the key: without it the database in the fintrack-data volume cannot be decrypted. Back up the
+# volume and the key together. Run exactly one replica per volume (SQLite, in-process scheduler).
+services:
+  fintrack:
+    image: ghcr.io/rafaelfcarneiro/fintrack:latest
+    build: . # `docker compose up --build` builds from source instead of pulling
+    ports:
+      # Loopback only. Changing this to "51737:51737" exposes an UNAUTHENTICATED finance API to the
+      # whole network until authentication lands (ADR-033).
+      - '127.0.0.1:51737:51737'
+    volumes:
+      - fintrack-data:/data
+    secrets:
+      - fintrack_db_key
+    environment:
+      FINTRACK_DB_KEY_FILE: /run/secrets/fintrack_db_key
+    restart: unless-stopped
+    # Hardening: the only writable paths are /data (volume) and /tmp (tmpfs).
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  fintrack-data:
+
+secrets:
+  fintrack_db_key:
+    file: ./fintrack_db_key

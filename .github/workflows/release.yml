@@ -17,6 +17,9 @@ jobs:
   release:
     name: Build, test & publish
     runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.version.outputs.released }}
+      version: ${{ steps.version.outputs.version }}
     permissions:
       contents: write # create the GitHub Release + git tag
       packages: write # publish to GitHub Packages
@@ -53,8 +56,71 @@ jobs:
 
       # --- release ---
       - name: semantic-release
+        id: semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # create release + tag, comment
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # .npmrc auth written by setup-node
           NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }} # @semantic-release/npm publish auth
         run: npx semantic-release
+
+      # semantic-release creates the vX.Y.Z tag on HEAD when (and only when) it cuts a release; it has
+      # no @semantic-release/git, so HEAD is never moved by a commit.
+      - name: Detect released version
+        id: version
+        run: |
+          tag="$(git tag --points-at HEAD 'v*' | sort -V | tail -n1)"
+          if [ -n "$tag" ]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            echo "version=" >> "$GITHUB_OUTPUT"
+          fi
+
+  image:
+    name: Publish container image
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/rafaelfcarneiro/fintrack
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.release.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

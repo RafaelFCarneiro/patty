@@ -122,7 +122,7 @@ spawning a process. `docs/mcp-clients.md` gains a Docker section per client; the
 
 1. [x] Review/accept this ADR (accepted 2026-10-06).
 2. [x] Phase 1 — container-ready runtime seams.
-3. [ ] Phase 2 — image, compose, CI build, GHCR publish, docs.
+3. [x] Phase 2 — image, compose, CI build, GHCR publish, docs.
 4. [ ] ADR-033 — authentication (gate for non-loopback exposure).
 
 Each phase is feature-sized (config + startup path, or new build/release infrastructure) → independent

@@ -189,6 +189,39 @@ Ollama serves models; it has no MCP client. Use a bridge such as `ollmcp` (`uvx 
 
 ---
 
+## Docker (container, HTTP on `127.0.0.1:51737`)
+
+The image ([README § Docker](../README.md#docker)) always runs the HTTP transport, so every client connects by URL —
+`http://127.0.0.1:51737/mcp` — instead of spawning a process. The compose file publishes the port on host loopback only
+(`127.0.0.1:51737:51737`); keep it that way, the API has no authentication until ADR-033. Use `127.0.0.1`, not `localhost`.
+Each client's HTTP support was checked against its own docs:
+
+| Client | Streamable HTTP | How |
+|---|---|---|
+| Claude Code | native | `claude mcp add --transport http fintrack http://127.0.0.1:51737/mcp` |
+| VS Code / GitHub Copilot | native | `.vscode/mcp.json`: `{ "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:51737/mcp" } } }` |
+| Google Antigravity | native, but the key is **`serverUrl`** (`url`/`httpUrl` are rejected) | `~/.gemini/config/mcp_config.json`: `{ "mcpServers": { "fintrack": { "serverUrl": "http://127.0.0.1:51737/mcp" } } }` |
+| OpenAI Codex | native | `codex mcp add fintrack --url http://127.0.0.1:51737/mcp`, or `[mcp_servers.fintrack]` with `url = "http://127.0.0.1:51737/mcp"` in `~/.codex/config.toml` |
+| Claude Desktop | `claude_desktop_config.json` only launches stdio servers → local bridge | `mcp-remote` (below) |
+
+Claude Desktop (bridge — same shape as the HTTP-transport section above):
+
+```json
+"mcpServers": {
+  "fintrack": {
+    "command": "npx",
+    "args": ["-y", "mcp-remote@latest", "http://127.0.0.1:51737/mcp", "--transport", "http-only"]
+  }
+}
+```
+
+Desktop's *Connectors → Add custom connector* flow is for internet-hosted remote servers; it is not documented for
+loopback URLs, so use the bridge for the container.
+
+The `npx @rafaelfcarneiro/fintrack setup <tool>` command writes stdio configs only; for the container, edit the config by hand as above.
+
+---
+
 ## Debugging
 
 ```bash
