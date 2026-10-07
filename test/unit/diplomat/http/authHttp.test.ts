@@ -191,6 +191,28 @@ describe('createAttemptLimiter', () => {
     expect(limiter.isLimited('1.1.1.1', 'rafael')).toBe(false);
   });
 
+  it('takes the reserved strike back when the attempt throws, and rethrows', async () => {
+    const clock = { value: 0 };
+    const limiter = createAttemptLimiter(() => clock.value);
+    for (let attempt = 0; attempt < MAX_FAILURES_PER_USERNAME * 2; attempt += 1) {
+      await expect(
+        limiter.attempt('1.1.1.1', 'rafael', async () => {
+          throw new Error('backend down');
+        }),
+      ).rejects.toThrow('backend down');
+    }
+    expect(limiter.isLimited('1.1.1.1', 'rafael')).toBe(false);
+  });
+
+  it('keeps the reserved strike when the attempt returns, until the caller settles it', async () => {
+    const clock = { value: 0 };
+    const limiter = createAttemptLimiter(() => clock.value);
+    for (let attempt = 0; attempt < MAX_FAILURES_PER_USERNAME; attempt += 1) {
+      expect(await limiter.attempt('1.1.1.1', 'rafael', async () => 'invalid')).toBe('invalid');
+    }
+    expect(limiter.isLimited('1.1.1.1', 'rafael')).toBe(true);
+  });
+
   it('recovers after the window', () => {
     const clock = { value: 0 };
     const limiter = createAttemptLimiter(() => clock.value);

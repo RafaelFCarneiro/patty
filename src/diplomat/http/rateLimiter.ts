@@ -68,6 +68,9 @@ export type AttemptLimiter = {
   recordSuccess: (ip: string, username: string) => void;
   /** The attempt was not a failed guess (e.g. a conflict): take its strike back. */
   forgive: (ip: string, username: string) => void;
+  /** Reserve a strike, run the attempt, and take the strike back if it THROWS (a backend failure is not a
+   *  guess); a returned result is left for the caller to settle with `recordSuccess`/`forgive`. */
+  attempt: <T>(ip: string, username: string, run: () => PromiseLike<T>) => Promise<T>;
 };
 
 export const createAttemptLimiter = (now: () => number = Date.now): AttemptLimiter => {
@@ -77,7 +80,7 @@ export const createAttemptLimiter = (now: () => number = Date.now): AttemptLimit
     maxFailures: MAX_FAILURES_PER_USERNAME,
     now,
   });
-  return {
+  const limiter: AttemptLimiter = {
     isLimited: (ip, username) => perIp.isLimited(ipKey(ip)) || perUsername.isLimited(usernameKey(username)),
     recordFailure: (ip, username) => {
       perIp.recordFailure(ipKey(ip));
@@ -91,5 +94,15 @@ export const createAttemptLimiter = (now: () => number = Date.now): AttemptLimit
       perIp.forgive(ipKey(ip));
       perUsername.forgive(usernameKey(username));
     },
+    attempt: async (ip, username, run) => {
+      limiter.recordFailure(ip, username);
+      try {
+        return await run();
+      } catch (cause) {
+        limiter.forgive(ip, username);
+        throw cause;
+      }
+    },
   };
+  return limiter;
 };

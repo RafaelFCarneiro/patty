@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import Fastify from 'fastify';
+import { registerUiRoutes } from '../../../src/diplomat/http/routes/ui.js';
 import { LOOPBACK_HOST } from '../../../src/common/net.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 import { claimOwner } from './helpers.js';
@@ -48,6 +50,34 @@ describe('GET /ui/events with sessions required', () => {
       new Promise<string>((resolve) => setTimeout(() => resolve('still open'), 3000)),
     ]);
     controller.abort();
+    expect(outcome).toBe('closed');
+  });
+});
+
+describe('GET /ui/events when the session check itself fails', () => {
+  it('fails closed: the stream ends and nothing is left unhandled', async () => {
+    const app = Fastify();
+    registerUiRoutes(app, () => () => {}, {
+      logoutControl: false,
+      session: {
+        isActive: async () => {
+          throw new Error('database unavailable');
+        },
+        everyMs: RECHECK_MS,
+      },
+    });
+    await app.listen({ port: 0, host: LOOPBACK_HOST });
+    const port = (app.server.address() as AddressInfo).port;
+    const controller = new AbortController();
+    const res = await fetch(`http://${LOOPBACK_HOST}:${port}/ui/events`, { signal: controller.signal });
+    const reader = res.body!.getReader();
+
+    const outcome = await Promise.race([
+      reader.read().then(({ done }) => (done ? 'closed' : 'data')),
+      new Promise<string>((resolve) => setTimeout(() => resolve('still open'), 3000)),
+    ]);
+    controller.abort();
+    await app.close();
     expect(outcome).toBe('closed');
   });
 });

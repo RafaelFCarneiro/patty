@@ -94,8 +94,9 @@ export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext)
       }
       // Reserve the strike before the slow verification: the check above and this take no await between
       // them, so N concurrent guesses are counted as they arrive rather than all slipping past `isLimited`.
-      loginLimiter.recordFailure(req.ip, username);
-      const result = await ctx.runEffects(() => login(ctx.deps, parsed.data));
+      const result = await loginLimiter.attempt(req.ip, username, () =>
+        ctx.runEffects(() => login(ctx.deps, parsed.data)),
+      );
       if (result.isOk()) {
         loginLimiter.recordSuccess(req.ip, username);
         return startSession(reply, result.value, next);
@@ -116,8 +117,9 @@ export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext)
       const { username } = parsed.data;
       if (setupLimiter.isLimited(req.ip, username)) return failSetup(RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
 
-      setupLimiter.recordFailure(req.ip, username);
-      const result = await ctx.runEffects(() => claimOwner(ctx.deps, parsed.data));
+      const result = await setupLimiter.attempt(req.ip, username, () =>
+        ctx.runEffects(() => claimOwner(ctx.deps, parsed.data)),
+      );
       if (result.isOk()) {
         setupLimiter.recordSuccess(req.ip, username);
         return startSession(reply, result.value, DEFAULT_LANDING_PATH);

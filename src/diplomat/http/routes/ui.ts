@@ -72,9 +72,13 @@ const registerUiEventsRoute = (
     // user must end it too, or it would keep delivering change notifications to someone no longer signed in.
     if (session) {
       const recheck = setInterval(() => {
-        void session.isActive(req).then((active) => {
-          if (!active) reply.raw.end();
-        });
+        // Fail closed: a check that cannot be completed ends the stream rather than leaving it authorized.
+        void session
+          .isActive(req)
+          .catch(() => false)
+          .then((active) => {
+            if (!active) reply.raw.end();
+          });
       }, session.everyMs ?? SSE_SESSION_RECHECK_MS);
       recheck.unref();
       reply.raw.on('close', () => clearInterval(recheck));
