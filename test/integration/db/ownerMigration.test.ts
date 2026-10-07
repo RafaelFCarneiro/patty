@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { DATA_REWRITING_MIGRATIONS } from '../../../src/diplomat/db/migrations.js';
+import { lockPath } from '../../../src/diplomat/db/migrationLock.js';
 import { backupPath } from '../../../src/diplomat/db/safetyCopy.js';
 import { OWNER_USER_ID } from '../../../src/models/auth.js';
 
@@ -156,6 +157,30 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     expect(await ownerRows(reopened)).toHaveLength(1);
     expect(statSync(backup).mtimeMs).toBe(firstCopy);
     expect(stderr.mock.calls.flat().join(' ')).not.toContain('backed up');
+  });
+
+  it('keeps the pre-migration backup intact when two starters race (several stdio servers, ADR-024)', async () => {
+    const legacy = await open();
+    await bootstrap(legacy, preAuthFolder);
+    await seedDomainData(legacy);
+    const beforeDump = await domainDump(legacy);
+    const first = await open();
+    const second = await open();
+
+    await Promise.all([bootstrap(first), bootstrap(second)]);
+
+    expect(await ownerRows(first)).toHaveLength(1);
+    expect(existsSync(lockPath(dbPath))).toBe(false);
+    // Neither starter copied the other's already-migrated file over the good backup.
+    const restored = await openDatabase({ DB_PATH: backupPath(dbPath, AUTH_MIGRATION_TAG), FINTRACK_DB_KEY: TEST_KEY });
+    expect(await restored.all(sql`SELECT name FROM sqlite_master WHERE name = 'users'`)).toEqual([]);
+    expect(await domainDump(restored)).toEqual(beforeDump);
+    expect(
+      stderr.mock.calls
+        .flat()
+        .join(' ')
+        .match(/backed up the database/g),
+    ).toHaveLength(1);
   });
 
   it('creates the owner on a brand-new database and takes no backup of nothing', async () => {

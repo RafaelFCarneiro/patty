@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from './driver.js';
 import { DATA_REWRITING_MIGRATIONS } from './migrations.js';
+import { withMigrationLock } from './migrationLock.js';
 
 const BACKUP_FILE_MODE = 0o600;
 const TEMP_SUFFIX = '.tmp';
@@ -61,6 +62,26 @@ const checkpointWal = async (db: Db): Promise<void> => {
         'writing). Stop the other process and retry.',
     );
   }
+};
+
+/**
+ * Applies `migrate` — taking the safety copy first when a data-rewriting migration is pending. The copy and
+ * the migration run under one cross-process lock, and "is it still pending?" is re-asked once the lock is
+ * held, so concurrent starters can neither interleave their copies nor back up an already-migrated file.
+ */
+export const migrateWithSafetyCopy = async (
+  db: Db,
+  migrationsFolder: string,
+  migrate: () => Promise<void>,
+): Promise<void> => {
+  const dbFile = await databaseFile(db);
+  const needsCopy = (await pendingRewritingTags(db, migrationsFolder)).length > 0;
+  if (!needsCopy || dbFile === '' || !existsSync(dbFile)) return migrate();
+
+  return withMigrationLock(dbFile, async () => {
+    await backupBeforeRewriting(db, migrationsFolder);
+    await migrate();
+  });
 };
 
 /**

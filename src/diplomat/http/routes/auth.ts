@@ -130,7 +130,12 @@ export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext)
 
     scope.post(LOGOUT_PATH, async (req, reply) => {
       const token = readCookie(req.headers.cookie, SESSION_COOKIE_NAME);
-      if (token) await ctx.runEffects(() => logout(ctx.deps, ctx.deps.secrets.hashSecret(token)));
+      const revoked = token
+        ? await ctx.runEffects(() => logout(ctx.deps, ctx.deps.secrets.hashSecret(token)))
+        : undefined;
+      // The cookie is only cleared once the session row is really gone: reporting a logout that did not
+      // commit would leave a still-valid token (possibly copied elsewhere) behind a "logged out" screen.
+      if (revoked?.isErr()) return reply.status(statusOf(revoked.error)).send({ error: revoked.error });
       return reply.header('set-cookie', clearedSessionCookie(ctx.secureCookie)).redirect(LOGIN_PATH, SEE_OTHER);
     });
   });

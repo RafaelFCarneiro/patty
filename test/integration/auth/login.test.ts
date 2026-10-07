@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto';
+import Fastify from 'fastify';
+import { errAsync } from 'neverthrow';
 import { sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { registerAuthRoutes } from '../../../src/diplomat/http/routes/auth.js';
+import { conflict } from '../../../src/models/error.js';
 import {
+  authDepsOf,
   claimOwner,
   FORM_HEADERS,
   formBody,
@@ -161,6 +166,30 @@ describe('POST /ui/login', () => {
       url: '/ui/login?next=/ui/%22%3E%3Cscript%3Ealert(1)%3C/script%3E',
     });
     expect(res.body).not.toContain('<script>alert');
+  });
+});
+
+describe('logout when the session cannot be deleted', () => {
+  it('does not clear the cookie or claim success', async () => {
+    const ctx = await claimedApp();
+    const cookie = sessionCookieOf(await login(ctx, { username: USERNAME, password: PASSWORD })) ?? '';
+    const auth = authDepsOf(ctx);
+    const app = Fastify();
+    registerAuthRoutes(app, {
+      deps: auth,
+      secureCookie: false,
+      runEffects: () => errAsync(conflict) as never, // the delete exhausted its optimistic-concurrency retries
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/ui/logout',
+      headers: { cookie, host: LOOPBACK_HOST, origin: LOOPBACK_ORIGIN },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: conflict });
+    expect(res.headers['set-cookie']).toBeUndefined();
+    expect(res.headers.location).toBeUndefined();
+    await app.close();
   });
 });
 

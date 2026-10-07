@@ -157,7 +157,11 @@ checkpoints the WAL and copies the database file next to itself:
 - The path is logged to stderr (never the key). It is **not** made for a brand-new database, nor on later starts.
 - To roll back: stop FinTrack, put the `.bak` back as `fintrack.db` (delete any `-wal`/`-shm` beside it), and run the
   previous release.
-- Delete it once you've confirmed the upgrade. A refused backup (the database is busy under another process) stops
+- Several FinTrack processes starting at once (multiple MCP clients) take turns on a lock file,
+  `<DB_PATH>.migrate.lock`, so exactly one takes the backup and migrates; a lock left by a killed process is
+  broken automatically. If a start reports it is waiting on the lock for a minute, no other FinTrack is
+  running, and the file persists, delete it.
+- Delete the backup once you've confirmed the upgrade. A refused backup (the database is busy under another process) stops
   startup rather than migrating without a safety copy.
 
 ## Threat model so far

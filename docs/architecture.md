@@ -314,7 +314,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     listed in `diplomat/db/migrations.ts`'s `DATA_REWRITING_MIGRATIONS` runs against a database that already has
     applied migrations, `diplomat/db/safetyCopy.ts` checkpoints the WAL and copies the file to
     `<DB_PATH>.pre-<migration>.bak` (mode `0600`, same encryption, path logged to stderr); a brand-new database gets
-    none, and a busy checkpoint aborts startup rather than migrate without a trustworthy copy.
+    none, and a busy checkpoint aborts startup rather than migrate without a trustworthy copy. The copy and the migration run under a cross-process lock (`diplomat/db/migrationLock.ts`: an exclusively-created `<DB_PATH>.migrate.lock` holding the owner's pid, broken when that process is gone), and "is it still pending?" is re-asked once the lock is held — so several stdio servers starting at once can neither interleave their copies nor back up an already-migrated file.
 
 ## Authentication (ADR-033)
 
