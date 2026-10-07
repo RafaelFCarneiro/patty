@@ -92,12 +92,15 @@ export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext)
       if (loginLimiter.isLimited(req.ip, username)) {
         return failLogin(RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
       }
+      // Reserve the strike before the slow verification: the check above and this take no await between
+      // them, so N concurrent guesses are counted as they arrive rather than all slipping past `isLimited`.
+      loginLimiter.recordFailure(req.ip, username);
       const result = await ctx.runEffects(() => login(ctx.deps, parsed.data));
       if (result.isOk()) {
-        loginLimiter.recordSuccess(username);
+        loginLimiter.recordSuccess(req.ip, username);
         return startSession(reply, result.value, next);
       }
-      if (result.error.code === authErrors.invalidCredentials.code) loginLimiter.recordFailure(req.ip, username);
+      if (result.error.code !== authErrors.invalidCredentials.code) loginLimiter.forgive(req.ip, username);
       return failLogin(statusOf(result.error), messageFor(result.error));
     });
 
@@ -113,9 +116,13 @@ export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext)
       const { username } = parsed.data;
       if (setupLimiter.isLimited(req.ip, username)) return failSetup(RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
 
+      setupLimiter.recordFailure(req.ip, username);
       const result = await ctx.runEffects(() => claimOwner(ctx.deps, parsed.data));
-      if (result.isOk()) return startSession(reply, result.value, DEFAULT_LANDING_PATH);
-      if (result.error.code === authErrors.invalidSetupCode.code) setupLimiter.recordFailure(req.ip, username);
+      if (result.isOk()) {
+        setupLimiter.recordSuccess(req.ip, username);
+        return startSession(reply, result.value, DEFAULT_LANDING_PATH);
+      }
+      if (result.error.code !== authErrors.invalidSetupCode.code) setupLimiter.forgive(req.ip, username);
       return failSetup(statusOf(result.error), messageFor(result.error));
     });
 

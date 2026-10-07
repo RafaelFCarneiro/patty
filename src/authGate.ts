@@ -7,7 +7,7 @@ import { safeNextPath } from './wire/in/auth.js';
 import { AuthMode, authErrors, isUiPath, OWNER_PRINCIPAL, type AuthError, type Principal } from './models/auth.js';
 import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from './diplomat/http/authPaths.js';
 import type { HttpAuth } from './diplomat/http/context.js';
-import { readCookie, SESSION_COOKIE_NAME } from './diplomat/http/cookies.js';
+import { resolvePrincipal } from './diplomat/http/session.js';
 
 /**
  * The auth hook (ADR-033 §1, §2, §6): composition-root wiring, deliberately outside `diplomat/*` — it
@@ -65,15 +65,6 @@ export const registerAuthGate = (app: FastifyInstance, auth: HttpAuth): void => 
 
   const { deps, runEffects, publicUrl } = auth;
 
-  type Resolution = { principal: Principal | null } | { failure: AppError };
-
-  const resolvePrincipal = async (req: FastifyRequest): Promise<Resolution> => {
-    const token = readCookie(req.headers.cookie, SESSION_COOKIE_NAME);
-    if (!token) return { principal: null };
-    const result = await runEffects(() => authenticate(deps, deps.secrets.hashSecret(token)));
-    return result.isOk() ? { principal: result.value } : { failure: result.error };
-  };
-
   const rejectUnauthenticated = async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply> => {
     if (!isUiPath(pathOf(req.url))) return reject(reply, authErrors.unauthenticated);
     const target = (await ownerNeedsSetup(deps)) ? SETUP_PATH : loginRedirectTarget(req);
@@ -90,7 +81,7 @@ export const registerAuthGate = (app: FastifyInstance, auth: HttpAuth): void => 
       return verdict ? reject(reply, verdict) : undefined;
     }
 
-    const resolved = await resolvePrincipal(req);
+    const resolved = await resolvePrincipal(auth, req);
     if ('failure' in resolved) return reject(reply, resolved.failure);
     if (resolved.principal === null) return rejectUnauthenticated(req, reply);
 

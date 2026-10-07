@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import { AUTH_ENTITY_TAGS } from '../../../models/auth.js';
 import { LOGOUT_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../authPaths.js';
@@ -13,6 +13,7 @@ const MONEY_JS_PATH = `${UI_ROOT}/money.js`;
 const CSS_CONTENT_TYPE = 'text/css; charset=utf-8';
 const JS_CONTENT_TYPE = 'text/javascript; charset=utf-8';
 const SSE_CONTENT_TYPE = 'text/event-stream; charset=utf-8';
+const SSE_SESSION_RECHECK_MS = 30_000;
 
 // Where ui/shell.html reserves room for controls that only exist when sessions do (ADR-033).
 const AUTH_CONTROLS_MARKER = '<!--fintrack:auth-controls-->';
@@ -36,8 +37,12 @@ const serveUiFile = async (reply: FastifyReply, path: string, contentType: strin
  * Not a `RouteDefinition` — same reasoning as the rest of this file: a browser-facing stream, not
  * part of the `/api` JSON contract.
  */
-const registerUiEventsRoute = (app: FastifyInstance, subscribe: ChangeBus['subscribe']): void => {
-  app.get(`${UI_ROOT_PATH}/events`, (_req, reply) => {
+const registerUiEventsRoute = (
+  app: FastifyInstance,
+  subscribe: ChangeBus['subscribe'],
+  session: SessionRecheck | undefined,
+): void => {
+  app.get(`${UI_ROOT_PATH}/events`, (req, reply) => {
     reply.hijack();
     reply.raw.writeHead(200, {
       'content-type': SSE_CONTENT_TYPE,
@@ -62,6 +67,18 @@ const registerUiEventsRoute = (app: FastifyInstance, subscribe: ChangeBus['subsc
     // (diplomat/mcp/route.ts) — this handler owns the response after hijack(), and it's the
     // response's own lifecycle this cleanup is guarding.
     reply.raw.on('close', unsubscribe);
+
+    // With sessions on, the cookie was checked only when this stream opened. Logout, expiry or a disabled
+    // user must end it too, or it would keep delivering change notifications to someone no longer signed in.
+    if (session) {
+      const recheck = setInterval(() => {
+        void session.isActive(req).then((active) => {
+          if (!active) reply.raw.end();
+        });
+      }, session.everyMs ?? SSE_SESSION_RECHECK_MS);
+      recheck.unref();
+      reply.raw.on('close', () => clearInterval(recheck));
+    }
   });
 };
 
@@ -75,10 +92,12 @@ const registerUiEventsRoute = (app: FastifyInstance, subscribe: ChangeBus['subsc
  * entry) — a browser-facing HTML/asset/stream surface, not part of the `/api` JSON contract,
  * mirroring how the dashboard HTML route worked before this module replaced it.
  */
+export type SessionRecheck = { isActive: (req: FastifyRequest) => Promise<boolean>; everyMs?: number };
+
 export const registerUiRoutes = (
   app: FastifyInstance,
   subscribeToChanges: ChangeBus['subscribe'],
-  options: { logoutControl: boolean } = { logoutControl: false },
+  options: { logoutControl: boolean; session?: SessionRecheck } = { logoutControl: false },
 ): void => {
   const serveShell = async (_req: unknown, reply: FastifyReply) => {
     const shell = await readCached(SHELL_PATH);
@@ -90,5 +109,5 @@ export const registerUiRoutes = (
   app.get(UI_APP_CSS_PATH, async (_req, reply) => serveUiFile(reply, APP_CSS_PATH, CSS_CONTENT_TYPE));
   app.get(`${UI_ROOT_PATH}/assets/app.js`, async (_req, reply) => serveUiFile(reply, APP_JS_PATH, JS_CONTENT_TYPE));
   app.get(`${UI_ROOT_PATH}/assets/money.js`, async (_req, reply) => serveUiFile(reply, MONEY_JS_PATH, JS_CONTENT_TYPE));
-  registerUiEventsRoute(app, subscribeToChanges);
+  registerUiEventsRoute(app, subscribeToChanges, options.session);
 };

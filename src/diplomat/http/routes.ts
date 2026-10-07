@@ -21,7 +21,8 @@ import { tagRoutes } from './routes/tag.js';
 import { transactionRoutes } from './routes/transaction.js';
 import { transferRoutes } from './routes/transfer.js';
 import { registerAuthRoutes } from './routes/auth.js';
-import { registerUiRoutes } from './routes/ui.js';
+import { registerUiRoutes, type SessionRecheck } from './routes/ui.js';
+import { resolvePrincipal } from './session.js';
 
 /**
  * Thin diplomat: zod-parse (wire/in) → wireInToModel → controller → map Result to HTTP.
@@ -61,6 +62,15 @@ export const buildRouteDefinitions = (
   ];
 };
 
+// A long-lived stream is authenticated once, when it opens — so it asks again on this schedule.
+const sessionRecheck = (auth: Extract<HttpAuth, { mode: 'required' }>): SessionRecheck => ({
+  isActive: async (req) => {
+    const resolution = await resolvePrincipal(auth, req);
+    return 'principal' in resolution && resolution.principal !== null;
+  },
+  everyMs: auth.sessionRecheckMs,
+});
+
 export const registerRoutes = (
   app: FastifyInstance,
   deps: Deps,
@@ -74,7 +84,10 @@ export const registerRoutes = (
   mountRoutes(app, definitions);
 
   const authRequired = auth.mode === AuthMode.enum.required;
-  registerUiRoutes(app, subscribeToChanges, { logoutControl: authRequired });
+  registerUiRoutes(app, subscribeToChanges, {
+    logoutControl: authRequired,
+    session: auth.mode === AuthMode.enum.required ? sessionRecheck(auth) : undefined,
+  });
   if (authRequired) registerAuthRoutes(app, auth);
 
   // Built from the same list just mounted; excluded from its own document by design.

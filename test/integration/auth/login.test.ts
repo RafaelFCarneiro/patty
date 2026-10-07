@@ -84,6 +84,25 @@ describe('POST /ui/login', () => {
     expect(sessionCookieOf(blocked)).toBeUndefined();
   });
 
+  it('counts concurrent guesses as they arrive: a burst cannot slip past the limiter together', async () => {
+    const ctx = await claimedApp();
+    const burst = await Promise.all(
+      Array.from({ length: 12 }, (_, attempt) => login(ctx, { username: USERNAME, password: `wrong-${attempt}` })),
+    );
+    const statuses = burst.map((res) => res.statusCode);
+    expect(statuses.filter((status) => status === 401)).toHaveLength(5);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(7);
+  });
+
+  it('does not let a burst of correct logins exhaust the per-IP allowance', async () => {
+    const ctx = await claimedApp();
+    const burst = await Promise.all(
+      Array.from({ length: 6 }, () => login(ctx, { username: USERNAME, password: PASSWORD })),
+    );
+    expect(burst.every((res) => res.statusCode === 303 || res.statusCode === 429)).toBe(true);
+    expect(burst.some((res) => res.statusCode === 303)).toBe(true);
+  });
+
   it('trips the per-IP rate limit when many different usernames fail', async () => {
     const ctx = await claimedApp();
     for (let attempt = 0; attempt < 20; attempt += 1) {

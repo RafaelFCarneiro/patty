@@ -84,6 +84,8 @@ export const buildApp = async (opts?: {
   onChangeError?: (cause: unknown) => void;
   /** Present → sessions are required (ADR-033); omitted → auth disabled, exactly the pre-auth behavior. */
   auth?: Partial<AuthConfig>;
+  /** How often an open /ui/events stream re-checks its session (default 30 s; tests shorten it). */
+  sessionRecheckMs?: number;
 }): Promise<AppContext> => {
   const db = await openDatabase({
     DB_PATH: opts?.dbPath ?? (inject('DB_PATH' as never) as string),
@@ -151,9 +153,11 @@ export const buildApp = async (opts?: {
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
     runEffectsSequence(engineContext, applierRegistry, items, flowFor, changeBus.publish);
   const announced: string[] = [];
-  const auth = opts?.auth
+  const prepared = opts?.auth
     ? await prepareAuth({ ...REQUIRED_AUTH, ...opts.auth }, db, boundRunEffects, (message) => announced.push(message))
     : DISABLED_AUTH;
+  const auth: HttpAuth =
+    prepared.mode === AuthMode.enum.required ? { ...prepared, sessionRecheckMs: opts?.sessionRecheckMs } : prepared;
   const app = buildHttpApp(
     deps,
     version,

@@ -122,6 +122,16 @@ describe('createRateLimiter', () => {
     expect(limiter.isLimited('k')).toBe(false);
   });
 
+  it('forgives only the most recent strike', () => {
+    const clock = { value: 0 };
+    const limiter = make(clock);
+    [1, 2, 3].forEach(() => limiter.recordFailure('k'));
+    expect(limiter.isLimited('k')).toBe(true);
+    limiter.forgive('k');
+    expect(limiter.isLimited('k')).toBe(false);
+    limiter.forgive('never-seen');
+  });
+
   it('resets a key', () => {
     const clock = { value: 0 };
     const limiter = make(clock);
@@ -157,8 +167,28 @@ describe('createAttemptLimiter', () => {
     const clock = { value: 0 };
     const limiter = createAttemptLimiter(() => clock.value);
     for (let attempt = 0; attempt < MAX_FAILURES_PER_USERNAME; attempt += 1) limiter.recordFailure('1.1.1.1', 'rafael');
-    limiter.recordSuccess('rafael');
+    limiter.recordSuccess('1.1.1.1', 'rafael');
     expect(limiter.isLimited('2.2.2.2', 'rafael')).toBe(false);
+  });
+
+  it('takes back the IP strike of a successful attempt, so reserving up front costs honest users nothing', () => {
+    const clock = { value: 0 };
+    const limiter = createAttemptLimiter(() => clock.value);
+    for (let attempt = 0; attempt < MAX_FAILURES_PER_IP; attempt += 1) {
+      limiter.recordFailure('1.1.1.1', `user-${attempt}`); // reserved before verification
+      limiter.recordSuccess('1.1.1.1', `user-${attempt}`);
+    }
+    expect(limiter.isLimited('1.1.1.1', 'fresh')).toBe(false);
+  });
+
+  it('forgives an attempt that was not a failed guess', () => {
+    const clock = { value: 0 };
+    const limiter = createAttemptLimiter(() => clock.value);
+    for (let attempt = 0; attempt < MAX_FAILURES_PER_USERNAME; attempt += 1) {
+      limiter.recordFailure('1.1.1.1', 'rafael');
+      limiter.forgive('1.1.1.1', 'rafael');
+    }
+    expect(limiter.isLimited('1.1.1.1', 'rafael')).toBe(false);
   });
 
   it('recovers after the window', () => {

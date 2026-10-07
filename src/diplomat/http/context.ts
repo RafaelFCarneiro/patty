@@ -24,6 +24,6 @@ export type AuthRoutesContext = {
  */
 export type HttpAuth =
   | { mode: typeof AuthMode.enum.disabled }
-  | ({ mode: typeof AuthMode.enum.required; publicUrl?: string } & AuthRoutesContext);
+  | ({ mode: typeof AuthMode.enum.required; publicUrl?: string; sessionRecheckMs?: number } & AuthRoutesContext);
 
 export const DISABLED_AUTH: HttpAuth = { mode: AuthMode.enum.disabled };
