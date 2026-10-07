@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
-import type { HttpContext } from './context.js';
+import { AuthMode } from '../../models/auth.js';
+import { DISABLED_AUTH, type HttpAuth, type HttpContext } from './context.js';
 import { buildOpenApiDocument, mountRoutes, type RouteDefinition } from './openapi.js';
 import { CACHE_CONTROL_NO_CACHE } from './respond.js';
 import { accountRoutes } from './routes/account.js';
@@ -19,6 +20,7 @@ import { systemRoutes } from './routes/system.js';
 import { tagRoutes } from './routes/tag.js';
 import { transactionRoutes } from './routes/transaction.js';
 import { transferRoutes } from './routes/transfer.js';
+import { registerAuthRoutes } from './routes/auth.js';
 import { registerUiRoutes } from './routes/ui.js';
 
 /**
@@ -66,11 +68,14 @@ export const registerRoutes = (
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
   subscribeToChanges: ChangeBus['subscribe'],
+  auth: HttpAuth = DISABLED_AUTH,
 ): void => {
   const definitions = buildRouteDefinitions(deps, version, runEffects, runEffectsSequence);
   mountRoutes(app, definitions);
 
-  registerUiRoutes(app, subscribeToChanges);
+  const authRequired = auth.mode === AuthMode.enum.required;
+  registerUiRoutes(app, subscribeToChanges, { logoutControl: authRequired });
+  if (authRequired) registerAuthRoutes(app, auth);
 
   // Built from the same list just mounted; excluded from its own document by design.
   const openApiDocument = buildOpenApiDocument(definitions, version);

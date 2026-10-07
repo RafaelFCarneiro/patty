@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FinTrack — set up</title>
+    <link rel="stylesheet" href="{{stylesheet}}" />
+  </head>
+  <body>
+    <main class="auth-card">
+      <h1>Set up FinTrack</h1>
+      <p class="auth-lede">Enter the one-time setup code from the FinTrack log, then choose your login.</p>
+      {{error}}
+      <form class="auth-form" method="post" action="{{action}}">
+        <label>Setup code
+          <input name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" required autofocus />
+        </label>
+        <label>Username
+          <input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required />
+        </label>
+        <label>Password
+          <input name="password" type="password" autocomplete="new-password" minlength="{{passwordMinLength}}" required />
+        </label>
+        <p class="auth-hint">At least {{passwordMinLength}} characters. There are no other rules — a long passphrase is best.</p>
+        <button type="submit">Create login</button>
+      </form>
+    </main>
+  </body>
+</html>

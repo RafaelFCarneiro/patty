@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  hostnameOfHostHeader,
   httpOrigin,
   IPV4_WILDCARD_HOST,
   IPV6_WILDCARD_HOST,
+  isLoopbackHost,
   isPortInUse,
   portInUseMessage,
   portInUseReason,
@@ -66,4 +68,48 @@ describe('portInUseMessage', () => {
     expect(portInUseMessage({ port: 3001, address: '192.168.1.10' })).toContain('http://192.168.1.10:3002/mcp');
     expect(portInUseMessage({ port: 3001, address: '::1' })).toContain('http://[::1]:3002/mcp');
   });
+});
+
+describe('isLoopbackHost (ADR-033 §1)', () => {
+  it.each(['127.0.0.1', '127.0.0.2', '127.255.255.255', 'localhost', 'LOCALHOST', '::1', '[::1]', ' 127.0.0.1 '])(
+    'treats %s as loopback',
+    (host) => {
+      expect(isLoopbackHost(host)).toBe(true);
+    },
+  );
+
+  it.each([
+    '0.0.0.0',
+    '::',
+    '192.168.1.10',
+    '10.0.0.1',
+    '128.0.0.1',
+    '127.0.0.256',
+    '127.0.0',
+    '127.0.0.1.evil.example',
+    'localhost.evil.example',
+    'evil-localhost',
+    '',
+    '::2',
+  ])('does not treat %s as loopback', (host) => {
+    expect(isLoopbackHost(host)).toBe(false);
+  });
+});
+
+describe('hostnameOfHostHeader', () => {
+  it.each([
+    ['127.0.0.1:51737', '127.0.0.1'],
+    ['localhost', 'localhost'],
+    ['[::1]:51737', '::1'],
+    ['fintrack.example.com:8443', 'fintrack.example.com'],
+  ])('extracts the hostname of %s', (header, hostname) => {
+    expect(hostnameOfHostHeader(header)).toBe(hostname);
+  });
+
+  it.each(['', 'a b', 'localhost:99999999', 'evil.example/path@127.0.0.1'])(
+    'returns null for a malformed header %j',
+    (header) => {
+      expect(hostnameOfHostHeader(header)).not.toBe('127.0.0.1');
+    },
+  );
 });

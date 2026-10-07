@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
+import { prepareAuth } from './authRuntime.js';
 import { httpOrigin, isPortInUse, portInUseMessage } from './common/net.js';
 import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
@@ -28,8 +29,13 @@ import { tagApplier, tagsRepo } from './diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from './diplomat/db/repos/transactions.js';
 import { transactionTagApplier } from './diplomat/db/repos/transactionTags.js';
 import { healthRepo } from './diplomat/db/repos/health.js';
+import { sessionApplier } from './diplomat/db/repos/sessions.js';
+import { setupCodeApplier } from './diplomat/db/repos/setupCodes.js';
+import { userApplier } from './diplomat/db/repos/users.js';
+import type { HttpAuth } from './diplomat/http/context.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { ACCOUNT_ENTITY_TAG } from './models/account.js';
+import { SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from './models/auth.js';
 import { BILL_ENTITY_TAG } from './models/bill.js';
 import { BUDGET_ENTITY_TAG } from './models/budget.js';
 import { CATEGORY_ENTITY_TAG } from './models/category.js';
@@ -69,6 +75,7 @@ const maybeStartSidecar = async (
   resetLocale: () => void,
   subscribeToChanges: ChangeBus['subscribe'],
   config: Config,
+  auth: HttpAuth,
 ): Promise<HttpSidecar | null> => {
   if (!config.FINTRACK_HTTP) return null;
   const { startHttpSidecar } = await loadServerModule();
@@ -81,6 +88,7 @@ const maybeStartSidecar = async (
     subscribeToChanges,
     config.PORT,
     config.HOST,
+    { auth, trustProxy: config.TRUST_PROXY },
   );
 };
 
@@ -137,6 +145,9 @@ const main = async (): Promise<void> => {
     [RECURRING_ENTITY_TAG]: recurringRuleApplier,
     [DASHBOARD_ENTITY_TAG]: dashboardApplier,
     [SETTINGS_ENTITY_TAG]: settingsApplier,
+    [USER_ENTITY_TAG]: userApplier,
+    [SESSION_ENTITY_TAG]: sessionApplier,
+    [SETUP_CODE_ENTITY_TAG]: setupCodeApplier,
   };
 
   const changeBus = createChangeBus({ onError: reportChangeError });
@@ -149,6 +160,9 @@ const main = async (): Promise<void> => {
   const boundRunEffects: RunEffects = (flow) => runEffects(engineContext, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
     runEffectsSequence(engineContext, applierRegistry, items, flowFor, changeBus.publish);
+
+  // Sessions guard the HTTP surface only: stdio is spawned by the user and acts as the owner (ADR-033 §1).
+  const auth = await prepareAuth(config, db, boundRunEffects);
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
     const server = await connectStdio(
@@ -168,6 +182,7 @@ const main = async (): Promise<void> => {
       localeResolver.resetLocale,
       changeBus.subscribe,
       config,
+      auth,
     );
 
     // 'close' commonly follows 'end' on stdin, and a client can also send SIGINT/SIGTERM around
@@ -200,6 +215,7 @@ const main = async (): Promise<void> => {
     boundRunEffectsSequence,
     localeResolver.resetLocale,
     changeBus.subscribe,
+    { auth, trustProxy: config.TRUST_PROXY },
   );
 
   // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.

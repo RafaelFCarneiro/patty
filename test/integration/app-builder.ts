@@ -23,6 +23,10 @@ import { transactionApplier, transactionsRepo } from '../../src/diplomat/db/repo
 import { transactionTagApplier } from '../../src/diplomat/db/repos/transactionTags.js';
 import { healthRepo } from '../../src/diplomat/db/repos/health.js';
 import { createLocaleResolver } from '../../src/diplomat/db/localeCache.js';
+import { sessionApplier } from '../../src/diplomat/db/repos/sessions.js';
+import { setupCodeApplier } from '../../src/diplomat/db/repos/setupCodes.js';
+import { userApplier } from '../../src/diplomat/db/repos/users.js';
+import { SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from '../../src/models/auth.js';
 import { ACCOUNT_ENTITY_TAG } from '../../src/models/account.js';
 import { BILL_ENTITY_TAG } from '../../src/models/bill.js';
 import { BUDGET_ENTITY_TAG } from '../../src/models/budget.js';
@@ -36,7 +40,12 @@ import { SETTINGS_ENTITY_TAG } from '../../src/models/locale.js';
 import { TAG_ENTITY_TAG } from '../../src/models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../src/models/transactionTag.js';
-import { buildHttpApp } from '../../src/server.js';
+import { prepareAuth, type AuthConfig } from '../../src/authRuntime.js';
+import type { HttpAuth } from '../../src/diplomat/http/context.js';
+import { DISABLED_AUTH } from '../../src/diplomat/http/context.js';
+import { buildHttpApp, registerHttpApp } from '../../src/server.js';
+import { AuthMode } from '../../src/models/auth.js';
+import type { Db } from '../../src/diplomat/db/driver.js';
 import type { ApplierRegistry } from '../../src/diplomat/db/effects.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
 import { createChangeBus, runEffects, runEffectsSequence, type ChangeBus } from '@rfc0/effect-runner';
@@ -51,12 +60,30 @@ export type AppContext = {
   runEffects: RunEffects;
   runEffectsSequence: RunEffectsSequence;
   changeBus: ChangeBus;
+  db: Db;
+  /** Wire the same deps/auth onto another Fastify instance (a test that must hook it before routes exist). */
+  registerOn: (app: FastifyInstance) => void;
+  auth: HttpAuth;
+  /** Everything startup printed to stderr — the setup-code banner, in auth-required mode. */
+  announced: string[];
+};
+
+/** Auth `required` on a loopback bind with the sidecar on — what a container behind a proxy runs. */
+export const REQUIRED_AUTH: AuthConfig = {
+  FINTRACK_AUTH: AuthMode.enum.required,
+  PUBLIC_URL: undefined,
+  HOST: '127.0.0.1',
+  PORT: 51737,
+  MCP_TRANSPORT: 'http',
+  FINTRACK_HTTP: true,
 };
 
 export const buildApp = async (opts?: {
   port?: number;
   dbPath?: string;
   onChangeError?: (cause: unknown) => void;
+  /** Present → sessions are required (ADR-033); omitted → auth disabled, exactly the pre-auth behavior. */
+  auth?: Partial<AuthConfig>;
 }): Promise<AppContext> => {
   const db = await openDatabase({
     DB_PATH: opts?.dbPath ?? (inject('DB_PATH' as never) as string),
@@ -109,6 +136,9 @@ export const buildApp = async (opts?: {
     [RECURRING_ENTITY_TAG]: recurringRuleApplier,
     [DASHBOARD_ENTITY_TAG]: dashboardApplier,
     [SETTINGS_ENTITY_TAG]: settingsApplier,
+    [USER_ENTITY_TAG]: userApplier,
+    [SESSION_ENTITY_TAG]: sessionApplier,
+    [SETUP_CODE_ENTITY_TAG]: setupCodeApplier,
   };
   const changeBus = createChangeBus({ onError: opts?.onChangeError });
   const engineContext = {
@@ -120,6 +150,10 @@ export const buildApp = async (opts?: {
   const boundRunEffects: RunEffects = (flow) => runEffects(engineContext, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
     runEffectsSequence(engineContext, applierRegistry, items, flowFor, changeBus.publish);
+  const announced: string[] = [];
+  const auth = opts?.auth
+    ? await prepareAuth({ ...REQUIRED_AUTH, ...opts.auth }, db, boundRunEffects, (message) => announced.push(message))
+    : DISABLED_AUTH;
   const app = buildHttpApp(
     deps,
     version,
@@ -127,11 +161,26 @@ export const buildApp = async (opts?: {
     boundRunEffectsSequence,
     localeResolver.resetLocale,
     changeBus.subscribe,
-    { logger: false },
+    { logger: false, auth },
   );
+  const registerOn = (other: FastifyInstance): void =>
+    registerHttpApp(
+      other,
+      deps,
+      version,
+      boundRunEffects,
+      boundRunEffectsSequence,
+      localeResolver.resetLocale,
+      changeBus.subscribe,
+      auth,
+    );
 
   return {
     app,
+    db,
+    registerOn,
+    auth,
+    announced,
     deps,
     version,
     runEffects: boundRunEffects,

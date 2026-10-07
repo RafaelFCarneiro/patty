@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FinTrack — log in</title>
+    <link rel="stylesheet" href="{{stylesheet}}" />
+  </head>
+  <body>
+    <main class="auth-card">
+      <h1>FinTrack</h1>
+      <p class="auth-lede">Log in to continue.</p>
+      {{error}}
+      <form class="auth-form" method="post" action="{{action}}">
+        <input type="hidden" name="next" value="{{next}}" />
+        <label>Username
+          <input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus />
+        </label>
+        <label>Password
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit">Log in</button>
+      </form>
+    </main>
+  </body>
+</html>

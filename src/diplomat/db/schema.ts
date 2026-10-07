@@ -11,6 +11,7 @@ import {
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
+import { UserRole } from '../../models/auth.js';
 import { BudgetPeriod } from '../../models/budget.js';
 import { DashboardSource } from '../../models/dashboard.js';
 import { Locale, LocaleSource } from '../../models/locale.js';
@@ -250,3 +251,38 @@ export const currencyRates = sqliteTable(
   },
   (t) => [uniqueIndex('currency_rates_from_to').on(t.fromCode, t.toCode)],
 );
+
+// ADR-033 §2/§7. `username`/`password_hash` are null until the owner row (inserted by migration on
+// every database) is claimed through the setup code; `username` holds the normalized form, so the
+// plain UNIQUE index is case-insensitive.
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(),
+  username: text('username').unique(),
+  passwordHash: text('password_hash'),
+  role: text('role', { enum: UserRole.options }).notNull(),
+  createdAt: text('created_at').notNull(),
+  disabledAt: text('disabled_at'),
+  version: integer('version').notNull().default(0),
+});
+
+// Only sha256(token) is stored — a database read never yields a usable session.
+export const sessions = sqliteTable('sessions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  createdAt: text('created_at').notNull(),
+  lastSeenAt: text('last_seen_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  version: integer('version').notNull().default(0),
+});
+
+export const setupCodes = sqliteTable('setup_codes', {
+  id: text('id').primaryKey(),
+  codeHash: text('code_hash').notNull().unique(),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  usedAt: text('used_at'),
+  version: integer('version').notNull().default(0),
+});

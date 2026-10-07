@@ -8,6 +8,10 @@
 #                                     # (uid 1000), so it must own the 0600 file. Docker Desktop maps
 #                                     # file ownership itself — skip this there.
 #   docker compose up -d
+#   docker compose logs fintrack     # the first start prints a one-time setup code (XXXX-XXXX-XXXX-XXXX-XXXX)
+#
+# Then open http://127.0.0.1:51737/ui/setup, enter the code and choose a username and password: that claims the
+# instance. Everything except /api/health needs that login (the container runs with FINTRACK_AUTH=required).
 #
 # Keep the key: without it the database in the fintrack-data volume cannot be decrypted. Back up the
 # volume and the key together. Run exactly one replica per volume (SQLite, in-process scheduler).
@@ -16,8 +20,9 @@ services:
     image: ghcr.io/rafaelfcarneiro/fintrack:latest
     build: . # `docker compose up --build` builds from source instead of pulling
     ports:
-      # Loopback only. Changing this to "51737:51737" exposes an UNAUTHENTICATED finance API to the
-      # whole network until authentication lands (ADR-033).
+      # Loopback only. Logins protect the API, but this is plain HTTP: "51737:51737" would send your password and
+      # session across the network in the clear. Keep it on loopback until TLS-terminating proxy support is
+      # documented (ADR-033 Phase 3).
       - '127.0.0.1:51737:51737'
     volumes:
       - fintrack-data:/data
@@ -25,6 +30,8 @@ services:
       - fintrack_db_key
     environment:
       FINTRACK_DB_KEY_FILE: /run/secrets/fintrack_db_key
+      # FINTRACK_AUTH defaults to `required` here (HOST=0.0.0.0) and cannot be `disabled`. Behind a reverse proxy
+      # also set PUBLIC_URL (https://your.host) and TRUST_PROXY — see docs/auth.md.
     restart: unless-stopped
     # Hardening: the only writable paths are /data (volume) and /tmp (tmpfs).
     read_only: true

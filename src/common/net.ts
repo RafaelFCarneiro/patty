@@ -11,6 +11,25 @@ export const IPV4_WILDCARD_HOST = '0.0.0.0';
 export const IPV6_WILDCARD_HOST = '::';
 const WILDCARD_HOSTS: ReadonlySet<string> = new Set([IPV4_WILDCARD_HOST, IPV6_WILDCARD_HOST]);
 
+const LOCALHOST_NAME = 'localhost';
+const IPV6_LOOPBACK_HOST = '::1';
+const IPV4_LOOPBACK_BLOCK = /^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+const MAX_IPV4_OCTET = 255;
+
+const stripBrackets = (host: string): string => (host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host);
+
+/**
+ * True for a host that only this machine can reach: `localhost`, `::1`, or anything in 127.0.0.0/8.
+ * A wildcard bind is deliberately NOT loopback — it listens on every interface. Used both to derive
+ * the auth default from `HOST` and to refuse an unauthenticated non-loopback bind (ADR-033 §1).
+ */
+export const isLoopbackHost = (host: string): boolean => {
+  const normalized = stripBrackets(host.trim().toLowerCase());
+  if (normalized === LOCALHOST_NAME || normalized === IPV6_LOOPBACK_HOST) return true;
+  const octets = IPV4_LOOPBACK_BLOCK.exec(normalized)?.slice(1).map(Number);
+  return octets !== undefined && octets.every((octet) => octet <= MAX_IPV4_OCTET);
+};
+
 /**
  * Origin (`http://host:port`) a user can actually open for a server bound to `host`. A wildcard
  * bind is reachable through the machine's own loopback (e.g. a container's host-side port
@@ -37,3 +56,13 @@ export const portInUseMessage = ({ port, address }: { port: number; address?: st
 /** Shared wording for both the fatal (pure http) and non-fatal (sidecar) EADDRINUSE messages. */
 export const portInUseReason = (port: number): string =>
   `port ${port} is already in use (another service or MCP server is on it)`;
+
+/** The hostname of a `Host` request header (port stripped, IPv6 unbracketed), or `null` if it is not a
+ *  well-formed host — a malformed header is never trusted as loopback. */
+export const hostnameOfHostHeader = (hostHeader: string): string | null => {
+  try {
+    return stripBrackets(new URL(`http://${hostHeader}`).hostname);
+  } catch {
+    return null;
+  }
+};

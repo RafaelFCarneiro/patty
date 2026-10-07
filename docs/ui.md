@@ -217,6 +217,13 @@ fragments were first converted to files.
 - **`GET /ui/assets/app.css` / `GET /ui/assets/app.js` / `GET /ui/assets/money.js`** — three fixed routes
   reading three fixed files (not a general static server), also `no-cache`.
 - **`GET /ui/events`** — the SSE live-update stream (see below).
+- **Sessions (auth `required` only).** Every `/ui*` route except the sign-in pages needs a session cookie; without
+  one a browser is redirected to `/ui/setup` (owner unclaimed) or `/ui/login?next=…`. The sign-in pages
+  (`GET`/`POST /ui/login`, `/ui/setup`, `POST /ui/logout`, `diplomat/http/routes/auth.ts`) render the standalone
+  templates `ui/login.html` / `ui/setup.html` (shell palette via `app.css`, no scripts, no third-party loads,
+  `Content-Security-Policy` locked down). `ui/shell.html` reserves `<!--fintrack:auth-controls-->`: `registerUiRoutes`
+  replaces it with the logout form (bottom of the sidebar) when auth is `required` and with nothing otherwise — the
+  shell is the same bytes either way except for that one marker. See `docs/auth.md`.
 - These are browser-facing routes, **not** `RouteDefinition`s, so `/ui*` is deliberately excluded from the
   `/api` OpenAPI document (that document exists to give agents `fetch()` shapes for the JSON API). Dashboard
   *management* (list/get/save/delete/rename) has full REST parity under `/api/dashboards*` and is documented

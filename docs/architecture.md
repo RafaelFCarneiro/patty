@@ -5,7 +5,7 @@
 > Layer concepts: `docs/diplomatic-architecture.md` (where the layers are) and
 > `docs/functional-core-imperative-shell.md` (what crosses the write-path boundary between them — ADR-021,
 > mandatory reading alongside the Diplomat doc for any write-flow change).
-> Write-path mechanics: `docs/write-path.md`. Browser `/ui` surface: `docs/ui.md`.
+> Write-path mechanics: `docs/write-path.md`. Browser `/ui` surface: `docs/ui.md`. Operator guide to authentication: `docs/auth.md`.
 
 ## Stack
 
@@ -55,6 +55,8 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | `diplomat/*` | `controllers/`, `adapters/`, `models/`, wire schemas, runtime clients |
 | `diplomat/http`, `server.ts` → `@rfc0/effect-runner` | **Type-only**: the `ChangeBus` type (`['subscribe']`) for the SSE route's parameter; the bound bus is built in the composition root (`main.ts`) and passed in, never constructed inside `diplomat/*`. |
 | `diplomat/db` | Same base `diplomat/*` rule, **plus** `@rfc0/effect-runner` — it is the SQLite adapter implementing the port the package's engine defines (`versionedTableApplier` builds an `EntityApplier`; `driver.ts`'s `createTransactionRunner` implements `TransactionRunner`; `sqliteErrors.ts`'s `isSqliteBusy` implements `IsTransientContention`). Imports the package, never the reverse. |
+| `diplomat/auth/credentials.ts` | `controllers/deps.ts` (type-only: the `AuthSecrets` shape it implements), `@node-rs/argon2`, `node:crypto` — the real hashing/randomness behind the injected `AuthSecrets`. Loaded lazily (`authRuntime.ts`) so a run with auth disabled never loads the native argon2 module. |
+| `src/authGate.ts`, `src/authRuntime.ts` (composition root) | Joins `diplomat/http` (cookies, public routes, `HttpAuth`) to `controllers/auth.ts`, `diplomat/db/repos` and `diplomat/auth` — wiring that imports more than one `diplomat/*` submodule, so it lives outside them (like `server.ts`/`main.ts`). `diplomat/http` never imports it. |
 | `diplomat/db/seed/` | `models/` (types and runtime enums) — nothing outside `diplomat/db` imports `seed/` |
 | `diplomat/mcp` → `diplomat/http/{routes,openapi}.ts` | **Documented exception**: `buildRouteDefinitions`/`buildOpenApiDocument` are deterministic, no-business-logic wire-schema-driven builders (their only module-scope effect is a one-time, idempotent `extendZodWithOpenApi(z)` zod-prototype patch) reused verbatim by both the REST route and the `fintrack://openapi` MCP resource — including under stdio transport, which never touches Fastify — so the two surfaces can't drift (ADR-013 Phase A). |
 | `controllers/transaction/{core,read,bulk}.ts` | **Narrower than `controllers/` above (ADR-016)**: same base rule, but additionally must NOT import `logic/bill.js`, `deps.bills`, or anything from `controllers/creditCard/*`/`controllers/account/*`/`models/creditCard.ts`/`models/account.ts` — not even a type-only import (enforced: `rg "logic/bill\|deps\.bills" src/controllers/transaction/` and `rg "creditCard|controllers/account" src/controllers/transaction/ src/models/transaction.ts` each match only the header comments that document this rule — no actual import or usage) — this is the shared transaction core (row integrity, category resolution, generic patch/delete primitives, cross-cutting reads) that aggregates depend on, never the reverse. `bulk.ts` (ADR-017 step 2, ADR-022 step 3) makes **no** ownership decision at all — unlike its predecessor `createTransactionsBulk` (which delegated the account-vs-card dispatch to a composition-root router), single-source statement imports fix ownership by construction: whichever aggregate importer (`importCardStatement`/`importAccountStatement`) built the plan already knows which one card/account every line belongs to. `bulk.ts` is pure: `defaultStatementLines` defaults each line's `date` and stamps on the whole import's `rawInput` (the idempotency key is no longer defaulted here — each line's own single-add flow derives it, ADR-029 Phase 2b); `buildBulkResult` shapes the shell's per-line `SequenceOutcome`s back into the `BulkResult` contract. Both are typed purely against the core's own generic `StatementLine`/`ClassifiedUpsertResult`, with no card- or account-shaped field baked into either signature. `bulk.ts` never runs anything itself — each aggregate importer hands the shell a `StatementImportPlan` (defaulted lines + a `flowFor` closure factory), and the MCP/REST handler runs it through `runEffectsSequence` (see `docs/write-path.md`). |
@@ -177,6 +179,14 @@ dashboards          (id PK, name UNIQUE, html (nullable), source: inline|file DE
                      source/path added ADR-027 Phase 2; CHECK enforces exactly one of html/path per source;
                      see § Dashboards / `/ui` surface)
 
+users               (id PK, username UNIQUE? — stored normalized (trimmed, NFKC, lower-cased), null until the owner
+                     is claimed, password_hash? (argon2id PHC string, null until claimed),
+                     role: admin|member, created_at, disabled_at?, version)
+sessions            (id PK, user_id FK→users ON DELETE CASCADE, token_hash UNIQUE — sha256 of the cookie
+                     token, never the token — created_at, last_seen_at, expires_at, version)
+setup_codes         (id PK, code_hash UNIQUE — sha256, never the code — created_at, expires_at, used_at?,
+                     version)
+
 transactions_fts    VIRTUAL TABLE fts5(description, content='transactions')
                     — kept in sync via INSERT/UPDATE/DELETE triggers
 ```
@@ -291,6 +301,76 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     still reuses `correlationsRepo.spendingShifts` (a category-only, budget-unaware read — out of
     ADR-028's scope).
 
+23. **Exactly one owner, created by migration, claimed — never created — by setup (ADR-033 §7).**
+    Migration `0018_auth_identity` inserts one `users` row (`OWNER_USER_ID`, role `admin`, no username, no
+    `password_hash`) on every database, fresh or existing, and touches no domain table; the owner is never created
+    lazily at runtime. The owner is the "default user": stdio and every `disabled`-mode request act as it
+    (`OWNER_PRINCIPAL`). `controllers/auth.ts`'s `claimOwner` is the only flow that gives it credentials and emits
+    an `update` of the owner — **no flow inserts a `user`**, so no path can create a second, empty user a database's
+    data doesn't belong to. A setup code exists only while auth is `required` AND the owner has no credentials.
+    **Secrets are stored only as hashes:** passwords as argon2id, session tokens and setup codes as sha256 — the
+    plaintext token exists in the cookie and the plaintext code in one stderr line, nowhere else — and are never
+    logged (the Fastify logger redacts `cookie`, `set-cookie`, `authorization`). **Safety copy:** before a migration
+    listed in `diplomat/db/migrations.ts`'s `DATA_REWRITING_MIGRATIONS` runs against a database that already has
+    applied migrations, `diplomat/db/safetyCopy.ts` checkpoints the WAL and copies the file to
+    `<DB_PATH>.pre-<migration>.bak` (mode `0600`, same encryption, path logged to stderr); a brand-new database gets
+    none, and a busy checkpoint aborts startup rather than migrate without a trustworthy copy.
+
+## Authentication (ADR-033)
+
+Identity guards the **HTTP surface only** (`/api`, `/mcp`, `/ui`); stdio is trusted and acts as the owner.
+`docs/auth.md` is the operator guide; this section is the as-built structure.
+
+**Config** (`config.ts`, validated together; invalid combinations are startup errors):
+
+| Variable | Rule |
+| --- | --- |
+| `FINTRACK_AUTH` | `AuthMode` (`required` \| `disabled`). Default `defaultAuthMode(HOST)`: loopback → `disabled`, else `required`. `disabled` with a non-loopback `HOST` is rejected. |
+| `PUBLIC_URL` | Optional `http(s)` **origin** (`new URL(v).origin === v`: no path, no trailing slash; empty = unset). `https` → cookie `Secure`. A CSRF expected origin. |
+| `TRUST_PROXY` | Optional; `true`/`false`/hop count/address list → Fastify `trustProxy`. |
+
+`isLoopbackHost` (`common/net.ts`: `127.0.0.0/8`, `::1`, `localhost`) is the one loopback test, shared by config and the
+CSRF origin check.
+
+**The hook and the principal.** `src/authGate.ts`'s `registerAuthGate` adds one `onRequest` hook on the root Fastify
+instance, **before any route** (`server.ts`'s `registerHttpApp`), so it also guards a request no route matched. It
+sets `req.principal` (`{ userId, role }`, `models/auth.ts`; typed in `diplomat/http/principal.ts`):
+
+- auth `disabled` → `OWNER_PRINCIPAL`, always (the hook is trivial; no auth routes are registered);
+- auth `required` → `controllers/auth.ts`'s `authenticate(tokenHash)` on the `fintrack_session` cookie. No valid
+  session → `401` JSON `{ error: { code: 'unauthenticated' } }` for `/api`, `/mcp` and anything outside `/ui`, or a
+  `303` to `/ui/setup` (owner unclaimed) / `/ui/login?next=…` for `/ui`.
+
+The only exemptions are `PUBLIC_ROUTES` (`diplomat/http/authPaths.ts`), matched on the route's **registered pattern +
+method** (`req.routeOptions.url`), never the raw URL: `GET|HEAD /api/health`, `GET|HEAD|POST /ui/login`,
+`GET|HEAD|POST /ui/setup`, `GET|HEAD /ui/assets/app.css`. A path with no route is protected. An integration test
+enumerates every route Fastify registers (an `onRoute` listener attached before registration) and asserts each one
+outside the list is rejected without a session. Controllers do not take the principal: the instance has one user.
+
+**CSRF.** After authentication, an unsafe method carrying the session cookie must declare (`Origin`, else `Referer`)
+an origin in `allowedOrigins(PUBLIC_URL, Host)` — `PUBLIC_URL`, plus the request's own origin when its `Host` is
+loopback; otherwise `403 forbidden_origin`. Public `POST`s are checked when the browser declares an origin. Pure rules
+are in `logic/auth.ts` (`declaredOrigin`, `isSameOrigin`, `isUnsafeMethod`).
+
+**Flows** (`controllers/auth.ts`, rules in `logic/auth.ts`, all through `runEffects`):
+`issueSetupCode` (startup), `claimOwner` (`POST /ui/setup`), `login`, `logout`, `authenticate` (every request;
+writes nothing unless the session is stale, `SESSION_TOUCH_INTERVAL_MS`), `pruneExpiredSessions` (startup).
+Hashing, randomness and the clock are injected (`AuthDeps.secrets`, `clock`, `newId`); `diplomat/auth/credentials.ts`
+supplies argon2id (OWASP first-choice parameters, named constants) and sha256. `adapters/auth.ts` adapts the three
+auth entities' batches once, in `authRuntime.ts`'s `bindAuthRunEffects`; their appliers are plain
+`versionedTableApplier`s registered at the composition root. The login/setup/logout pages and routes are
+`diplomat/http/routes/auth.ts` (urlencoded body parsing lives only in that route scope, so `/api` keeps refusing it),
+with in-process per-IP/per-username throttling (`diplomat/http/rateLimiter.ts`).
+
+**Sessions.** Opaque 32-byte base64url token; `sha256(token)` stored. Sliding idle expiry
+(`SESSION_IDLE_TTL_MS`) capped by `SESSION_ABSOLUTE_MAX_MS` from creation; `last_seen_at`/`expires_at` rewritten at most
+every `SESSION_TOUCH_INTERVAL_MS`; logout deletes the row; expired rows are deleted when presented, at login and at
+startup. Cookie: `HttpOnly; SameSite=Lax; Path=/; Max-Age`, `Secure` iff `PUBLIC_URL` is `https`.
+
+**Public surface and health.** `GET /api/health` returns `{ status: 'ok', db: 'ok' | 'error' }` through
+`controllers/status.ts`'s `getHealth`, which shares `databaseState` with `getStatus` (one DB check). `/api/status`
+requires a session. The container `HEALTHCHECK` is `/api/health`.
+
 ## Tool surface
 
 55 MCP tools (contract: `docs/mcp-tools.md`), most mirrored as REST routes, both thin over the same controllers — `list_budgets`/`get_budget_status` (Feature Design 015) now have REST parity (`GET /api/budgets`, `GET /api/budgets/status`); `create_budget`/`update_budget`/`delete_budget` and `find_correlations` (Feature Design 016) are MCP-only for now, no REST mirror yet. `set/list_exchange_rates` and `set_base_currency` (ADR-026 Phase 2) have full REST parity (`GET`/`POST /api/exchange-rates`, `POST /api/exchange-rates/bulk`, `GET /api/preferences`, `POST /api/settings/base-currency`). Client connections: `docs/mcp-clients.md`.
@@ -326,7 +406,8 @@ since no tag is used by more than one domain file. `respond.ts` holds the shared
 runEffects, runEffectsSequence }`), built once in `routes.ts` and passed to every route builder. `GET /ui`,
 `GET /ui/:name`, and `GET /ui/assets/{app.css,app.js,money.js}` — browser-facing HTML/asset routes, not
 `RouteDefinition`s (no OpenAPI entry) — are mounted by `routes/ui.ts`'s `registerUiRoutes(app)`, called from
-`registerRoutes` alongside `mountRoutes` (ADR-027 Phase 1; see § Dashboards / `/ui` surface). `routes.ts`
+`registerRoutes` alongside `mountRoutes` (ADR-027 Phase 1; see § Dashboards / `/ui` surface). `routes/auth.ts`'s `registerAuthRoutes` (the `/ui/login`, `/ui/setup`, `/ui/logout` pages — browser HTML like `routes/ui.ts`,
+no OpenAPI entry; mounted only when auth is `required`) is called from `registerRoutes` too. `routes.ts`
 reduces to construction + aggregation: `buildRouteDefinitions` concatenates every domain's array into the one
 list `mountRoutes`/`buildOpenApiDocument` consume (§ OpenAPI contract), and `registerRoutes` mounts it, the UI
 shell/asset routes, and `/api/openapi.json`.
@@ -340,12 +421,12 @@ In the default **stdio** transport, the HTTP server (REST + streamable HTTP MCP,
 - **stderr only, never stdout:** stdio carries the MCP protocol on stdout (ADR-007), so the sidecar's Fastify instance runs with `logger: false` and all sidecar messages (startup banner — including the `/ui/overview` URL so the user knows where to open the dashboard — and the bind-failure diagnostic) go through `console.error`.
 - **Clean shutdown:** SIGINT/SIGTERM and stdin end/close (client disconnect) drain both the stdio server and the sidecar (only if it's actually listening) before the process exits.
 - **Pure `http` mode is unchanged:** when `MCP_TRANSPORT=http`, the Fastify server (`buildHttpApp`, default `logger: true`) is the *only* surface running, so a bind failure there stays fatal (`process.exit(1)` with an actionable message) — there is no stdio fallback to keep the process alive. This is a deliberate, documented difference from the sidecar's non-fatal handling, not a regression.
-- **Loopback bind by default, configurable via `HOST` (`config.ts`; default `common/net.ts`'s `LOOPBACK_HOST`, `127.0.0.1`):** both the sidecar (`startHttpSidecar`'s `host` argument) and pure `http` mode bind `config.HOST` — the `::`/`0.0.0.0` wildcard is an explicit opt-in (a container must bind it; its port publish must stay on the host's loopback). Startup banners and the port-in-use hint print `httpOrigin(host, port)` (`common/net.ts`): a wildcard host prints `127.0.0.1`, any other host prints itself. This API has no auth (ADR-013 assumes local-first), and binding the wildcard address is reachable from any device on the same LAN, not just this machine — verified empirically, not just in theory. `localhost` may still fail to connect on systems where it resolves to IPv6 `::1`; clients should use `127.0.0.1` explicitly (`docs/mcp-clients.md`).
+- **Loopback bind by default, configurable via `HOST` (`config.ts`; default `common/net.ts`'s `LOOPBACK_HOST`, `127.0.0.1`):** both the sidecar (`startHttpSidecar`'s `host` argument) and pure `http` mode bind `config.HOST` — the `::`/`0.0.0.0` wildcard is an explicit opt-in (a container must bind it; its port publish must stay on the host's loopback). Startup banners and the port-in-use hint print `httpOrigin(host, port)` (`common/net.ts`): a wildcard host prints `127.0.0.1`, any other host prints itself. A wildcard or LAN bind is reachable from any device on the network, not just this machine — verified empirically, not just in theory — so it defaults `FINTRACK_AUTH` to `required` (§ Authentication), and `FINTRACK_AUTH=disabled` on a non-loopback `HOST` is a startup error. Auth is resolved once in `authRuntime.ts`'s `prepareAuth` (between `bootstrap` and the first listener): when nothing serves HTTP, or auth is disabled, it builds nothing and prints no setup code. `localhost` may still fail to connect on systems where it resolves to IPv6 `::1`; clients should use `127.0.0.1` explicitly (`docs/mcp-clients.md`).
 - **Default `PORT` differs by run mode, deliberately:** the published package (`config.ts`'s `DEFAULT_PORT`) defaults to `51737`, chosen because it sits in IANA's dynamic/private range (49152-65535) — never assigned to a registered service — rather than a common Node/Fastify/React dev-server port like 3000/3001/8080, which would maximize collision risk with other software on a typical machine. `npm run dev` overrides `PORT` back to the familiar `3001` (`package.json`), so a contributor's local dev instance never collides with an already-running installed instance on the published default. The two values are independent knobs, not a `NODE_ENV`-style branch in `config.ts` — only the npm script differs.
 
 ## Distribution: container image
 
-Besides the npm package, the repo ships an image (`Dockerfile`, `compose.yaml`; published to `ghcr.io/rafaelfcarneiro/fintrack`, multi-arch, tagged like the npm version plus `latest`). Image defaults: `MCP_TRANSPORT=http`, `HOST=0.0.0.0`, `PORT=51737`, `DB_PATH=/data/fintrack.db`, `NODE_ENV=production`; runs as the non-root `node` user behind `tini`; `/data` (a volume) is the only writable path, the root filesystem is mountable read-only (`compose.yaml` does) with `/tmp` as tmpfs. The encryption key is never in the image or the volume: it arrives as a file (`FINTRACK_DB_KEY_FILE`, a Docker secret), and startup fails fast without a key source. The healthcheck is `GET /api/status`. Exactly one container per volume (SQLite, in-process change bus and scheduler). Because the container must bind the wildcard address, every shipped example publishes the port on host loopback only (`127.0.0.1:51737:51737`) — the API is unauthenticated. `src/` is identical for npm and container runs; the build/publish pipeline is in `docs/releasing.md`.
+Besides the npm package, the repo ships an image (`Dockerfile`, `compose.yaml`; published to `ghcr.io/rafaelfcarneiro/fintrack`, multi-arch, tagged like the npm version plus `latest`). Image defaults: `MCP_TRANSPORT=http`, `HOST=0.0.0.0`, `PORT=51737`, `DB_PATH=/data/fintrack.db`, `NODE_ENV=production`; runs as the non-root `node` user behind `tini`; `/data` (a volume) is the only writable path, the root filesystem is mountable read-only (`compose.yaml` does) with `/tmp` as tmpfs. The encryption key is never in the image or the volume: it arrives as a file (`FINTRACK_DB_KEY_FILE`, a Docker secret), and startup fails fast without a key source. The healthcheck is `GET /api/health` (public; `db: ok` is required). `HOST=0.0.0.0` makes auth `required`: the first start prints a one-time setup code to the container log, and `/ui/setup` claims the owner (§ Authentication). Exactly one container per volume (SQLite, in-process change bus and scheduler). Every shipped example still publishes the port on host loopback only (`127.0.0.1:51737:51737`): the container speaks plain HTTP, and `/mcp` accepts only a session cookie, which MCP clients do not carry. `src/` is identical for npm and container runs; the build/publish pipeline is in `docs/releasing.md`.
 
 ## OpenAPI contract (ADR-013 Phase A)
 
@@ -406,4 +487,4 @@ shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-0
 - ADR-030: extract the effect engine into a DB-agnostic core behind an explicit adapter port — delivers ADR-029 Phase 3 at the agreed 3a scope, SQLite stays the sole adapter (Postgres/3b is its own future ADR); refines/extends ADR-021/022/023 (accepted; Phase 1 — the port seam in place, still inside `diplomat/db`: `TransactionRunner`/`isTransientContention` injected in place of a direct `Db`/`isSqliteBusy` dependency, `runEffects`/`runEffectsSequence`/`EntityApplier`/`ApplierRegistry`/`ReadBack` generic over an opaque `Tx`, behavior-preserving — complete; Phase 2 — relocated the driver-free core and the `Persistable`/`PersistenceMeta` data contract to `src/effects/`, decoupled the engine from FinTrack's error taxonomy (generic over an injected `conflictError` factory), `diplomat/db` is now the SQLite adapter (`versionedTableApplier`), lint-enforced dependency isolation — complete; Phase 3 (repo/package lift-out) — delivered by ADR-031; 3b (Postgres adapter) — deferred, own ADR)
 - ADR-031: the effect engine lives in its own repository and is consumed as the published `@rfc0/effect-runner` package (MIT, npmjs.com, semver-governed port) — FinTrack keeps only the SQLite adapter (`diplomat/db`) (accepted; complete)
 - ADR-032: Docker distribution — container image on GHCR, HTTP transport by default, SQLite on a volume; `HOST`, `FINTRACK_DB_KEY_FILE`, fail-fast key resolution and lazy keychain import (accepted; Phase 1 — container-ready runtime — complete, Phase 2 — image/CI/publish — complete)
-- ADR-033: authentication and multi-user — identity (owner row by migration, password login, sessions, setup code), personal access tokens, in-process OAuth 2.1 AS for MCP, per-user tenancy; phased (accepted; Phase 1 — identity — in progress)
+- ADR-033: authentication and multi-user — identity (owner row by migration, password login, sessions, setup code), personal access tokens, in-process OAuth 2.1 AS for MCP, per-user tenancy; phased (accepted; Phase 1 — identity: owner row, sessions, setup code, UI login, auth mode, minimal public surface — complete; Phases 2–4 pending)

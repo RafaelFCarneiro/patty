@@ -18,7 +18,10 @@ import type { MerchantsRepo } from '../diplomat/db/repos/merchants.js';
 import type { RecurringRepo } from '../diplomat/db/repos/recurring.js';
 import type { SettingsRepo } from '../diplomat/db/repos/settings.js';
 import type { TagsRepo } from '../diplomat/db/repos/tags.js';
+import type { SessionsRepo } from '../diplomat/db/repos/sessions.js';
+import type { SetupCodesRepo } from '../diplomat/db/repos/setupCodes.js';
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js';
+import type { UsersRepo } from '../diplomat/db/repos/users.js';
 
 /** Side-effect dependencies, injected so controllers stay testable. */
 export type Deps = {
@@ -42,6 +45,34 @@ export type Deps = {
   newId: () => string;
   locale: () => Promise<Locale>;
   rateStaleness: StalenessThresholds;
+};
+
+/** Secrets and randomness, injected so `logic/` and controllers stay deterministic and testable. The
+ *  real implementations (argon2id, CSPRNG, sha256) live in `diplomat/auth/credentials.ts`. */
+export type AuthSecrets = {
+  hashPassword: (password: string) => Promise<string>;
+  /** Constant-time; resolves `false` (never throws) for a mismatch or an unreadable hash. */
+  verifyPassword: (hash: string, password: string) => Promise<boolean>;
+  /** A fresh opaque session token (256 random bits, base64url). */
+  randomToken: () => string;
+  /** The raw characters of a fresh setup code, before display grouping. */
+  randomSetupCode: () => string;
+  /** sha256 of a secret — what is stored instead of the session token or setup code. */
+  hashSecret: (secret: string) => string;
+  /** A real hash nobody holds the password for — verified against when the user does not exist, so an
+   *  unknown username takes as long as a wrong password (ADR-033 §2). */
+  dummyPasswordHash: string;
+};
+
+/** Identity dependencies (ADR-033): kept apart from `Deps` because auth is infrastructure the domain
+ *  controllers never see — only `controllers/auth.ts` and the HTTP edge's auth hook use these. */
+export type AuthDeps = {
+  users: UsersRepo;
+  sessions: SessionsRepo;
+  setupCodes: SetupCodesRepo;
+  clock: () => Date;
+  newId: () => string;
+  secrets: AuthSecrets;
 };
 
 /**

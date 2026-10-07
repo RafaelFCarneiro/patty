@@ -115,11 +115,26 @@ docker compose up -d --build      # builds from source; or, with GHCR access, dr
 The published image `ghcr.io/rafaelfcarneiro/fintrack` is private. Pulling it requires
 `docker login ghcr.io` with a GitHub token that has `read:packages`; otherwise build from source as above.
 
-Then open <http://127.0.0.1:51737/ui> and point your MCP client at `http://127.0.0.1:51737/mcp`
-(per-client setup: [`docs/mcp-clients.md`](docs/mcp-clients.md#docker-container-http-on-12700151737)).
+The first start prints a one-time **setup code** to the container log. Claim the instance with it:
 
-- **Loopback only.** `compose.yaml` publishes `127.0.0.1:51737:51737`. The API has **no authentication** until
-  ADR-033, so publishing as `51737:51737` would expose your finances to everyone on the network.
+```bash
+docker compose logs fintrack      # find the code: XXXX-XXXX-XXXX-XXXX-XXXX
+```
+
+Open <http://127.0.0.1:51737/ui/setup>, enter the code, and choose a username and a password (12+ characters).
+You're logged in; the code is single-use and a restart before you finish prints a fresh one.
+The container requires a login for everything except `/api/health` — see [`docs/auth.md`](docs/auth.md).
+
+> **MCP over HTTP is temporarily session-only.** `/mcp` accepts only a login session cookie until personal access
+> tokens ship, so MCP clients can't connect to the container yet; use the npm/stdio setup above for MCP in the
+> meantime. The dashboards and REST API work in your browser session.
+
+(Once tokens land, point your MCP client at `http://127.0.0.1:51737/mcp` —
+per-client setup: [`docs/mcp-clients.md`](docs/mcp-clients.md#docker-container-http-on-12700151737).)
+
+- **Loopback only.** `compose.yaml` publishes `127.0.0.1:51737:51737`. The login protects the API, but the
+  container speaks plain HTTP — publishing as `51737:51737` would send your password and session across the network
+  in the clear. Keep the publish on loopback until TLS-terminating proxy support is documented.
 - **One replica per volume.** SQLite and the in-process scheduler assume a single process; don't scale the service.
 - **Backup = the volume *and* the key.** The database is encrypted; if you lose `fintrack_db_key` the data is
   unrecoverable. Back both up (and keep the key somewhere other than next to the volume backup).

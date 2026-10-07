@@ -1,7 +1,8 @@
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
-import { LOOPBACK_HOST } from './common/net.js';
+import { isLoopbackHost, LOOPBACK_HOST } from './common/net.js';
+import { AuthMode } from './models/auth.js';
 import { Locale } from './models/locale.js';
 
 export const McpTransport = z.enum(['stdio', 'http']);
@@ -21,6 +22,36 @@ const DEFAULT_PORT = 51737;
 /** The database encryption key: 64 hex characters (32 bytes). Shared by every key source — the env
  *  var is decoded here, the key file's contents in `diplomat/db/driver.ts`. */
 export const EncryptionKey = z.string().regex(/^[0-9a-f]{64}$/i, 'must be a 64-character hex string');
+
+/** Auth default from the bind host (ADR-033 §1): loopback keeps today's zero-config behavior, anything
+ *  reachable from elsewhere requires a session. */
+export const defaultAuthMode = (host: string): AuthMode =>
+  isLoopbackHost(host) ? AuthMode.enum.disabled : AuthMode.enum.required;
+
+// An empty string (`PUBLIC_URL=` from a compose file or shell) means "unset", not "invalid".
+const optionalEnv = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+
+// The external origin only — it is compared verbatim against the browser's `Origin` header (CSRF) and
+// decides the cookie `Secure` flag, so a path or trailing slash would make both silently wrong.
+const PublicUrl = z
+  .string()
+  .url()
+  .refine((value) => /^https?:\/\//.test(value) && new URL(value).origin === value, {
+    message: 'PUBLIC_URL must be an http(s) origin with no path or trailing slash, e.g. https://fintrack.example.com',
+  });
+
+// Fastify's `trustProxy`: `true`/`false`, a hop count, or a comma-separated list of trusted
+// addresses/CIDRs. Anything else is passed through for Fastify (proxy-addr) to interpret.
+const HOP_COUNT = /^\d+$/;
+const TrustProxy = z
+  .string()
+  .min(1)
+  .transform((value): boolean | number | string => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return HOP_COUNT.test(value) ? Number(value) : value;
+  });
 
 const Env = z
   .object({
@@ -43,6 +74,13 @@ const Env = z
     // a wildcard bind is an explicit, visible opt-in (a container needs it; its port publish must stay
     // on the host's loopback — ADR-032).
     HOST: z.string().min(1).default(LOOPBACK_HOST),
+    // `required` makes every HTTP route demand a session; default derived from HOST (ADR-033 §1).
+    FINTRACK_AUTH: optionalEnv(AuthMode),
+    // External origin of this instance behind a reverse proxy — the CSRF expected origin, and https
+    // turns on the cookie `Secure` flag. Optional in Phase 1 (OAuth makes it mandatory in Phase 3).
+    PUBLIC_URL: optionalEnv(PublicUrl),
+    // Passed to Fastify so rate limiting sees the real client IP behind a reverse proxy.
+    TRUST_PROXY: optionalEnv(TrustProxy),
     MCP_TRANSPORT: McpTransport.default(McpTransport.enum.stdio),
     // HTTP sidecar alongside stdio MCP (ADR-013 Decision 7) — on by default: the dashboard/REST
     // surface is a core feature, not an add-on. A bind failure is caught and non-fatal (stdio
@@ -60,7 +98,14 @@ const Env = z
   .refine((env) => !(env.FINTRACK_DB_KEY && env.FINTRACK_DB_KEY_FILE), {
     path: ['FINTRACK_DB_KEY_FILE'],
     message: 'FINTRACK_DB_KEY and FINTRACK_DB_KEY_FILE are both set — the key source is ambiguous; set only one',
-  });
+  })
+  .refine((env) => !(env.FINTRACK_AUTH === AuthMode.enum.disabled && !isLoopbackHost(env.HOST)), {
+    path: ['FINTRACK_AUTH'],
+    message:
+      'FINTRACK_AUTH=disabled is only allowed on a loopback HOST (127.0.0.0/8, ::1, localhost) — the API would be ' +
+      'unauthenticated on a reachable interface. Remove FINTRACK_AUTH (it defaults to required here) or bind a loopback HOST.',
+  })
+  .transform((env) => ({ ...env, FINTRACK_AUTH: env.FINTRACK_AUTH ?? defaultAuthMode(env.HOST) }));
 
 export type Config = z.infer<typeof Env>;
 

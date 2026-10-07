@@ -3,8 +3,24 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
+import { registerAuthGate } from './authGate.js';
+import { DISABLED_AUTH, type HttpAuth } from './diplomat/http/context.js';
 import { registerRoutes } from './diplomat/http/routes.js';
 import { registerMcpRoute } from './diplomat/mcp/route.js';
+
+// Cookies and bearer credentials must never reach a log line (ADR-033 §2), whatever a serializer adds.
+const REDACTED_LOG_PATHS = ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'];
+const LOG_CENSOR = '[Redacted]';
+
+export const httpLoggerOptions = (enabled: boolean) =>
+  enabled ? { redact: { paths: REDACTED_LOG_PATHS, censor: LOG_CENSOR } } : false;
+
+export type HttpOptions = {
+  logger?: boolean;
+  /** Fastify `trustProxy` (`TRUST_PROXY`): lets rate limiting see the real client IP behind a proxy. */
+  trustProxy?: boolean | number | string;
+  auth?: HttpAuth;
+};
 
 /**
  * Composition root for the HTTP surface (REST + streamable-HTTP MCP): wires the two
@@ -19,15 +35,36 @@ export const buildHttpApp = (
   runEffectsSequence: RunEffectsSequence,
   resetLocale: () => void,
   subscribeToChanges: ChangeBus['subscribe'],
-  opts?: { logger?: boolean },
+  opts?: HttpOptions,
 ): FastifyInstance => {
   // ADR-027 Phase 3: GET /ui/events is a genuinely long-lived connection (SSE) — without this,
   // fastify.close() waits for it to end on its own, which it never does, hanging shutdown for as
   // long as any browser tab has a dashboard open.
-  const app = Fastify({ logger: opts?.logger ?? true, forceCloseConnections: true });
-  registerRoutes(app, deps, version, runEffects, runEffectsSequence, subscribeToChanges);
-  registerMcpRoute(app, deps, version, runEffects, runEffectsSequence, resetLocale);
+  const app = Fastify({
+    logger: httpLoggerOptions(opts?.logger ?? true),
+    trustProxy: opts?.trustProxy,
+    forceCloseConnections: true,
+  });
+  registerHttpApp(app, deps, version, runEffects, runEffectsSequence, resetLocale, subscribeToChanges, opts?.auth);
   return app;
+};
+
+/** Everything `buildHttpApp` adds to a bare Fastify instance, in the one order that matters: the auth hook
+ *  first, so it guards every route registered after it (and any request no route matches). Exported so a
+ *  test can attach an `onRoute` listener to the instance before the routes exist. */
+export const registerHttpApp = (
+  app: FastifyInstance,
+  deps: Deps,
+  version: string,
+  runEffects: RunEffects,
+  runEffectsSequence: RunEffectsSequence,
+  resetLocale: () => void,
+  subscribeToChanges: ChangeBus['subscribe'],
+  auth: HttpAuth = DISABLED_AUTH,
+): void => {
+  registerAuthGate(app, auth);
+  registerRoutes(app, deps, version, runEffects, runEffectsSequence, subscribeToChanges, auth);
+  registerMcpRoute(app, deps, version, runEffects, runEffectsSequence, resetLocale);
 };
 
 export type HttpSidecar = { app: FastifyInstance; listening: boolean };
@@ -48,8 +85,10 @@ export const startHttpSidecar = async (
   subscribeToChanges: ChangeBus['subscribe'],
   port: number,
   host: string = LOOPBACK_HOST,
+  opts?: Pick<HttpOptions, 'trustProxy' | 'auth'>,
 ): Promise<HttpSidecar> => {
   const app = buildHttpApp(deps, version, runEffects, runEffectsSequence, resetLocale, subscribeToChanges, {
+    ...opts,
     logger: false,
   });
   try {

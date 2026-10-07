@@ -1,6 +1,7 @@
-import { getStatus } from '../../../controllers/status.js';
+import { getHealth, getStatus } from '../../../controllers/status.js';
 import { HealthOut, StatusOut } from '../../../wire/out/status.js';
 import type { HttpContext } from '../context.js';
+import { HEALTH_PATH } from '../authPaths.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
 
 const SYSTEM_TAG = 'System';
@@ -10,11 +11,11 @@ export const systemRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'get',
-      path: '/api/health',
+      path: HEALTH_PATH,
       tags: [SYSTEM_TAG],
-      summary: 'Liveness probe',
+      summary: 'Liveness and database probe — the only unauthenticated /api route (ADR-033 §6)',
       responses: { 200: okResponse('OK', HealthOut) },
-      handler: async () => ({ status: 'ok' }),
+      handler: async () => getHealth(deps),
     },
     {
       method: 'get',

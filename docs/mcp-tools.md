@@ -613,7 +613,7 @@ No input. Returns `{ name: "fintrack", version, db, locale }`:
 
 A convenience for tool-only callers (AI agent / chat user). The MCP protocol already exposes version via the `initialize` handshake `serverInfo` and liveness via `ping` — this tool complements those for callers that can only invoke tools.
 
-REST mirror: `GET /api/status` returns the same payload. `GET /api/health` remains as a bare liveness probe (`{ status: "ok" }`).
+REST mirror: `GET /api/status` returns the same payload (and, over HTTP with auth `required`, needs a session). `GET /api/health` is the one public probe: liveness plus the database check (`{ status: "ok", db: "ok" | "error" }`).
 
 ## Resources
 
