@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
+import { okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { issueSetupCode } from '../../../src/controllers/auth.js';
 import { prepareAuth } from '../../../src/authRuntime.js';
@@ -68,6 +69,46 @@ describe('setup code issuance', () => {
     expect(stale.statusCode).toBe(403);
     const fresh = await post(ctx, { code: second as string, username: USERNAME, password: PASSWORD });
     expect(fresh.statusCode).toBe(303);
+  });
+
+  it('leaves exactly one valid code when a starter loses the race to issue (insert, then update)', async () => {
+    const ctx = await createApp();
+    const run = bindAuthRunEffects(ctx.runEffects);
+    const deps = authDepsOf(ctx);
+    const issue = () => issueSetupCode(deps, AuthMode.enum.required);
+
+    // Starter B reads while no code exists and decides to INSERT the singleton…
+    await ctx.db.run(sql`DELETE FROM setup_codes`);
+    const staleInsert = (await issue())._unsafeUnwrap();
+    // …but starter A commits its own code first.
+    const a = (await run(issue))._unsafeUnwrap()?.code as string;
+
+    // B's insert now collides with A's row. It must not silently no-op (leaving B printing a code that was
+    // never stored): it retries, re-reads, and replaces A's code in place.
+    let attempts = 0;
+    const b = (await run(() => (attempts++ === 0 ? okAsync(staleInsert) : issue())))._unsafeUnwrap();
+    expect(attempts).toBe(2);
+
+    expect(await ctx.db.all(sql`SELECT 1 FROM setup_codes`)).toHaveLength(1);
+    expect((await post(ctx, { code: a, username: USERNAME, password: PASSWORD })).statusCode).toBe(403);
+    expect((await post(ctx, { code: b?.code as string, username: USERNAME, password: PASSWORD })).statusCode).toBe(303);
+  });
+
+  it('leaves exactly one valid code when a starter loses the race to replace it (stale update)', async () => {
+    const ctx = await createApp();
+    const run = bindAuthRunEffects(ctx.runEffects);
+    const deps = authDepsOf(ctx);
+    const issue = () => issueSetupCode(deps, AuthMode.enum.required);
+
+    const staleUpdate = (await issue())._unsafeUnwrap(); // B read the row at version v…
+    const a = (await run(issue))._unsafeUnwrap()?.code as string; // …A bumped it to v+1
+    let attempts = 0;
+    const b = (await run(() => (attempts++ === 0 ? okAsync(staleUpdate) : issue())))._unsafeUnwrap();
+
+    expect(attempts).toBe(2);
+    expect(await ctx.db.all(sql`SELECT 1 FROM setup_codes`)).toHaveLength(1);
+    expect((await post(ctx, { code: a, username: USERNAME, password: PASSWORD })).statusCode).toBe(403);
+    expect((await post(ctx, { code: b?.code as string, username: USERNAME, password: PASSWORD })).statusCode).toBe(303);
   });
 
   it('issues no code when auth is disabled', async () => {

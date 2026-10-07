@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -17,11 +17,12 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 const tick = (ms = 30) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 describe('withMigrationLock', () => {
-  it('holds a pid-stamped lock file while working and removes it afterwards', async () => {
-    await withMigrationLock(dbFile, async () => {
+  it("holds the lock while working and returns the work's result", async () => {
+    const result = await withMigrationLock(dbFile, async () => {
       expect(existsSync(lockPath(dbFile))).toBe(true);
+      return 42;
     });
-    expect(existsSync(lockPath(dbFile))).toBe(false);
+    expect(result).toBe(42);
   });
 
   it('releases the lock even when the work throws', async () => {
@@ -30,7 +31,11 @@ describe('withMigrationLock', () => {
         throw new Error('migration failed');
       }),
     ).rejects.toThrow('migration failed');
-    expect(existsSync(lockPath(dbFile))).toBe(false);
+    let ran = false;
+    await withMigrationLock(dbFile, async () => {
+      ran = true;
+    });
+    expect(ran).toBe(true);
   });
 
   it('makes a second starter wait until the first has finished', async () => {
@@ -53,8 +58,9 @@ describe('withMigrationLock', () => {
     expect(events).toEqual(['first:start', 'first:end', 'second:start']);
   });
 
-  it('breaks a lock whose owner process is gone', async () => {
-    writeFileSync(lockPath(dbFile), '2147483646'); // no such pid
+  it('is not wedged by a leftover companion file (a crashed holder leaves nothing to clean up)', async () => {
+    await withMigrationLock(dbFile, async () => undefined);
+    expect(existsSync(lockPath(dbFile))).toBe(true); // kept on purpose: removing it would let two inodes be locked
     let ran = false;
     await withMigrationLock(dbFile, async () => {
       ran = true;
@@ -62,12 +68,20 @@ describe('withMigrationLock', () => {
     expect(ran).toBe(true);
   });
 
-  it('breaks an unreadable (garbled) lock rather than waiting on it forever', async () => {
-    writeFileSync(lockPath(dbFile), 'not a pid');
-    let ran = false;
-    await withMigrationLock(dbFile, async () => {
-      ran = true;
+  it('locks different databases independently', async () => {
+    const other = join(dir, 'other.db');
+    const events: string[] = [];
+    let release: () => void = () => undefined;
+    const held = withMigrationLock(dbFile, async () => {
+      events.push('a');
+      await new Promise<void>((resolve) => (release = resolve));
     });
-    expect(ran).toBe(true);
+    await tick();
+    await withMigrationLock(other, async () => {
+      events.push('b');
+    });
+    expect(events).toEqual(['a', 'b']);
+    release();
+    await held;
   });
 });

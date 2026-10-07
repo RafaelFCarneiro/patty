@@ -19,6 +19,7 @@ import {
   OWNER_USER_ID,
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
+  SETUP_CODE_ID,
   USER_ENTITY_TAG,
   UserRole,
   type SessionEntity,
@@ -73,7 +74,7 @@ const depsFor = ({ users = [], sessions = [], codes = [], now = NOW }: World = {
     },
     setupCodes: {
       findByHash: async (hash) => codes.find((code) => code.codeHash === hash) ?? null,
-      list: async () => codes,
+      current: async () => codes.find((code) => code.id === SETUP_CODE_ID) ?? null,
     },
     clock: () => now,
     newId: () => `id-${(ids += 1)}`,
@@ -105,7 +106,7 @@ const sessionRow = (overrides: Partial<SessionEntity> = {}): SessionEntity => ({
 });
 
 const codeRow = (overrides: Partial<SetupCodeEntity> = {}): SetupCodeEntity => ({
-  id: 'c1',
+  id: SETUP_CODE_ID,
   codeHash: 'sha(ABCDEFGHJKMNPQRSTVWX)',
   createdAt: NOW.toISOString(),
   expiresAt: new Date(NOW.getTime() + SETUP_CODE_TTL_MS).toISOString(),
@@ -128,16 +129,24 @@ describe('issueSetupCode', () => {
     expect(stored).not.toContain('ABCD-EFGH');
   });
 
-  it('retires every earlier code, so a restart invalidates the previous one', async () => {
-    const earlier = [codeRow({ id: 'c1' }), codeRow({ id: 'c2', codeHash: 'other', usedAt: NOW.toISOString() })];
+  it('replaces the single setup-code row in place, so a restart invalidates the previous code', async () => {
+    const earlier = codeRow({ codeHash: 'sha(PREVIOUS)', usedAt: NOW.toISOString(), version: 3 });
     const { persist } = await outcomeOf(
-      issueSetupCode(depsFor({ users: [unclaimedOwner()], codes: earlier }), AuthMode.enum.required),
+      issueSetupCode(depsFor({ users: [unclaimedOwner()], codes: [earlier] }), AuthMode.enum.required),
     );
-    expect(opsOf(persist)).toEqual([
-      `${PersistOp.enum.delete}:${SETUP_CODE_ENTITY_TAG}`,
-      `${PersistOp.enum.delete}:${SETUP_CODE_ENTITY_TAG}`,
-      `${PersistOp.enum.insert}:${SETUP_CODE_ENTITY_TAG}`,
-    ]);
+    expect(opsOf(persist)).toEqual([`${PersistOp.enum.update}:${SETUP_CODE_ENTITY_TAG}`]);
+    expect((persist[0] as { model: SetupCodeEntity }).model).toMatchObject({
+      id: SETUP_CODE_ID,
+      codeHash: 'sha(ABCDEFGHJKMNPQRSTVWX)',
+      usedAt: null,
+      version: 3, // version-guarded against the row it read
+    });
+  });
+
+  it('inserts the singleton the first time, under its fixed id', async () => {
+    const { persist } = await outcomeOf(issueSetupCode(depsFor({ users: [unclaimedOwner()] }), AuthMode.enum.required));
+    expect(persist).toHaveLength(1);
+    expect(persist[0]).toMatchObject({ op: PersistOp.enum.insert, model: { id: SETUP_CODE_ID } });
   });
 
   it.each([

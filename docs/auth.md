@@ -77,7 +77,7 @@ docker compose logs fintrack        # Docker
   rules — a long passphrase is best). You are logged in straight away.
 - The code is 100 random bits, valid for **30 minutes**, and **single use**. Only its SHA-256 is stored; the plaintext
   exists in the log line and nowhere else.
-- **A restart while still unclaimed prints a fresh code and invalidates the previous one.** Lost the code? Restart.
+- **A restart while still unclaimed prints a fresh code and invalidates the previous one** (there is only ever one code, replaced in place — even if two processes start together, only the last one stored works).** Lost the code? Restart.
 - Once the owner is claimed, no code is issued, `/ui/setup` redirects to login and a POST to it is refused (`409`).
 - No code is printed in `disabled` mode.
 
@@ -157,10 +157,9 @@ checkpoints the WAL and copies the database file next to itself:
 - The path is logged to stderr (never the key). It is **not** made for a brand-new database, nor on later starts.
 - To roll back: stop FinTrack, put the `.bak` back as `fintrack.db` (delete any `-wal`/`-shm` beside it), and run the
   previous release.
-- Several FinTrack processes starting at once (multiple MCP clients) take turns on a lock file,
-  `<DB_PATH>.migrate.lock`, so exactly one takes the backup and migrates; a lock left by a killed process is
-  broken automatically. If a start reports it is waiting on the lock for a minute, no other FinTrack is
-  running, and the file persists, delete it.
+- Several FinTrack processes starting at once (multiple MCP clients) take turns on an OS-level lock
+  (`<DB_PATH>.migrate.lock`, a tiny companion SQLite file), so exactly one takes the backup and migrates. The lock
+  dies with its holder; the file itself is harmless and is left in place.
 - Delete the backup once you've confirmed the upgrade. A refused backup (the database is busy under another process) stops
   startup rather than migrating without a safety copy.
 

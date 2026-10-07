@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { DATA_REWRITING_MIGRATIONS } from '../../../src/diplomat/db/migrations.js';
-import { lockPath } from '../../../src/diplomat/db/migrationLock.js';
 import { backupPath } from '../../../src/diplomat/db/safetyCopy.js';
 import { OWNER_USER_ID } from '../../../src/models/auth.js';
 
@@ -170,7 +169,6 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     await Promise.all([bootstrap(first), bootstrap(second)]);
 
     expect(await ownerRows(first)).toHaveLength(1);
-    expect(existsSync(lockPath(dbPath))).toBe(false);
     // Neither starter copied the other's already-migrated file over the good backup.
     const restored = await openDatabase({ DB_PATH: backupPath(dbPath, AUTH_MIGRATION_TAG), FINTRACK_DB_KEY: TEST_KEY });
     expect(await restored.all(sql`SELECT name FROM sqlite_master WHERE name = 'users'`)).toEqual([]);

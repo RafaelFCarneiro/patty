@@ -19,6 +19,9 @@ export const UI_ROOT_PATH = '/ui';
 export const USER_ENTITY_TAG = 'user';
 export const SESSION_ENTITY_TAG = 'session';
 export const SETUP_CODE_ENTITY_TAG = 'setup_code';
+/** There is at most ONE setup code: issuing replaces it in place (ADR-033 §2), so concurrent starters can
+ *  never leave two valid codes — the loser of the race retries into an update. */
+export const SETUP_CODE_ID = 'setup-code';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A session never outlives this, however active — also the browser cookie's lifetime (the server's sliding

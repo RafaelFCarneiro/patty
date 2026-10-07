@@ -21,6 +21,7 @@ import {
   OWNER_USER_ID,
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
+  SETUP_CODE_ID,
   USER_ENTITY_TAG,
   type AuthMode,
   type ClaimOwnerInput,
@@ -43,8 +44,9 @@ const startSession = (deps: AuthDeps, userId: string, now: Date) => {
   return { persistable, started };
 };
 
-/** Startup: while auth is on and the owner has no credentials, mint a fresh one-time setup code and
- *  retire every earlier one (a restart invalidates the previous code). Otherwise issue nothing. */
+/** Startup: while auth is on and the owner has no credentials, mint a fresh one-time setup code, replacing the
+ *  single setup-code row in place (a restart — or a concurrent starter — invalidates the previous code).
+ *  Otherwise issue nothing. */
 export const issueSetupCode = (
   deps: AuthDeps,
   mode: AuthMode,
@@ -56,20 +58,20 @@ export const issueSetupCode = (
     const now = deps.clock();
     const code = formatSetupCode(deps.secrets.randomSetupCode());
     const expiresAt = new Date(now.getTime() + SETUP_CODE_TTL_MS).toISOString();
-    const retired = R.map(await deps.setupCodes.list(), (previous) =>
-      persistence.remove({ entity: SETUP_CODE_ENTITY_TAG, id: previous.id, version: previous.version }),
-    );
-    const issued = persistence.insert({
-      entity: SETUP_CODE_ENTITY_TAG,
-      model: {
-        id: deps.newId(),
-        codeHash: deps.secrets.hashSecret(normalizeSetupCode(code)),
-        createdAt: now.toISOString(),
-        expiresAt,
-        usedAt: null,
-      },
-    });
-    return ok({ persist: [...retired, issued], response: { code, expiresAt } });
+    const fresh = {
+      id: SETUP_CODE_ID,
+      codeHash: deps.secrets.hashSecret(normalizeSetupCode(code)),
+      createdAt: now.toISOString(),
+      expiresAt,
+      usedAt: null,
+    };
+    const current = await deps.setupCodes.current();
+    const persist: Persistable[] = [
+      current
+        ? persistence.update({ entity: SETUP_CODE_ENTITY_TAG, model: { ...fresh, version: current.version } })
+        : persistence.insert({ entity: SETUP_CODE_ENTITY_TAG, model: fresh }),
+    ];
+    return ok({ persist, response: { code, expiresAt } });
   });
 
 /**
