@@ -177,28 +177,20 @@ describe('CSRF', () => {
   it('applies to POST /mcp as well', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
-    const initialize = {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'initialize',
-      params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '0' } },
+    const headers = {
+      cookie,
+      host: LOOPBACK_HOST,
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
     };
-    const headers = { cookie, host: LOOPBACK_HOST, accept: 'application/json, text/event-stream' };
-    const crossSite = await ctx.app.inject({
-      method: 'POST',
-      url: '/mcp',
-      headers: { ...headers, origin: 'https://evil.example' },
-      payload: initialize,
-    });
-    expect(crossSite.statusCode).toBe(403);
-    const sameSite = await ctx.app.inject({
-      method: 'POST',
-      url: '/mcp',
-      headers: { ...headers, origin: LOOPBACK_ORIGIN },
-      payload: initialize,
-    });
-    expect(sameSite.statusCode).toBe(200);
-    expect(sameSite.body).toContain('"result"');
+    // Malformed JSON: a same-origin request clears the gate and is then refused by body parsing (400), so the
+    // MCP handler never runs — its transport arms a socket timer that light-my-request's fake socket can't
+    // service (the real initialize round-trip is covered by scripts/docker-smoke.sh).
+    const send = (origin: string) =>
+      ctx.app.inject({ method: 'POST', url: '/mcp', headers: { ...headers, origin }, payload: '{' });
+
+    expect((await send('https://evil.example')).statusCode).toBe(403);
+    expect((await send(LOOPBACK_ORIGIN)).statusCode).toBe(400);
   });
 
   it('leaves safe methods alone', async () => {
