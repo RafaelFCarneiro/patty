@@ -109,8 +109,11 @@ are served from one port, and your data lives in a Docker volume.
 ```bash
 (umask 077; openssl rand -hex 32 > fintrack_db_key)   # the database encryption key, owner-only
 sudo chown 1000 fintrack_db_key   # Linux only: the container's unprivileged user (uid 1000) must own it; skip on Docker Desktop
-docker compose up -d              # pulls ghcr.io/rafaelfcarneiro/fintrack:latest (add --build to build from source)
+docker compose up -d --build      # builds from source; or, with GHCR access, drop --build to pull the image
 ```
+
+The published image `ghcr.io/rafaelfcarneiro/fintrack` is private. Pulling it requires
+`docker login ghcr.io` with a GitHub token that has `read:packages`; otherwise build from source as above.
 
 Then open <http://127.0.0.1:51737/ui> and point your MCP client at `http://127.0.0.1:51737/mcp`
 (per-client setup: [`docs/mcp-clients.md`](docs/mcp-clients.md#docker-container-http-on-12700151737)).
