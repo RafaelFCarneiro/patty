@@ -474,6 +474,7 @@ header, .dashboard-header {
 /* --- Sign-in pages (ADR-033): /ui/login and /ui/setup share the shell's palette, no framework --- */
 .auth-card {
     margin: auto;
+    box-sizing: border-box; /* the 2rem padding and border count inside the width, or a 320px screen clips it */
     width: min(26rem, calc(100vw - 2rem));
     padding: 2rem;
     background: var(--panel-bg);

@@ -52,13 +52,18 @@ export const PasswordSchema = z
  *  username normalizes through it, so a `LoginInput`/`ClaimOwnerInput` reaching a controller already holds it. */
 export const normalizeUsername = (raw: string): string => raw.trim().normalize('NFKC').toLowerCase();
 
+// Normalize FIRST, then validate the stored form: NFKC can expand a character (`ﬃ` → `ffi`), so checking the
+// length of the raw input would let the schema emit a username longer than its own policy allows.
 export const UsernameSchema = z
   .string()
-  .trim()
-  .min(USERNAME_MIN_LENGTH, `username must be at least ${USERNAME_MIN_LENGTH} characters`)
-  .max(USERNAME_MAX_LENGTH)
-  .regex(USERNAME_PATTERN, 'username may contain letters, digits and . _ @ + -')
-  .transform(normalizeUsername);
+  .transform(normalizeUsername)
+  .pipe(
+    z
+      .string()
+      .min(USERNAME_MIN_LENGTH, `username must be at least ${USERNAME_MIN_LENGTH} characters`)
+      .max(USERNAME_MAX_LENGTH)
+      .regex(USERNAME_PATTERN, 'username may contain letters, digits and . _ @ + -'),
+  );
 
 /** What a request acts as — resolved at the HTTP edge from the session (or the owner, when auth is
  *  disabled or on stdio) and, from Phase 4, threaded into controllers as an explicit argument. */

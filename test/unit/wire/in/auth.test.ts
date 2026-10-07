@@ -84,6 +84,18 @@ describe('SetupFormSchema', () => {
     expect(SetupFormSchema.safeParse({ ...valid, username }).success).toBe(false);
   });
 
+  it('validates the NORMALIZED username, so an expanding character cannot slip past the length limit', () => {
+    // NFKC turns each 'ﬃ' into 'ffi': 30 of them pass a raw-length check of 64 but store 90 characters.
+    expect(SetupFormSchema.safeParse({ ...valid, username: 'ﬃ'.repeat(30) }).success).toBe(false);
+    // …and a name that is only long-enough after normalization is accepted in its normalized form.
+    expect(SetupFormSchema.parse({ ...valid, username: 'ﬃ' }).username).toBe('ffi');
+    expect(SetupFormSchema.safeParse({ ...valid, username: `${'a'.repeat(63)}ﬃ` }).success).toBe(false);
+  });
+
+  it('trims before validating, so padding cannot satisfy the minimum length', () => {
+    expect(SetupFormSchema.safeParse({ ...valid, username: '  a  ' }).success).toBe(false);
+  });
+
   it('requires a code', () => {
     expect(SetupFormSchema.safeParse({ ...valid, code: '' }).success).toBe(false);
   });
