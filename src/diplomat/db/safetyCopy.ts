@@ -1,4 +1,5 @@
-import { chmodSync, copyFileSync, existsSync, readFileSync, renameSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, readFileSync, renameSync } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -74,14 +75,16 @@ export const backupBeforeRewriting = async (db: Db, migrationsFolder: string): P
   if (tags.length === 0 || dbFile === '' || !existsSync(dbFile)) return [];
 
   await checkpointWal(db);
-  return tags.map((tag) => {
+  const copied: string[] = [];
+  for (const tag of tags) {
     const destination = backupPath(dbFile, tag);
-    // Copy then rename: a crash mid-copy never leaves a truncated file under the final name.
+    // Copy then rename: a crash mid-copy never leaves a truncated file under the final name. The file is
+    // created 0600 from the start (`mode`), so there is no moment it is readable by anyone else.
     const partial = `${destination}${TEMP_SUFFIX}`;
-    copyFileSync(dbFile, partial);
-    chmodSync(partial, BACKUP_FILE_MODE);
+    await pipeline(createReadStream(dbFile), createWriteStream(partial, { mode: BACKUP_FILE_MODE }));
     renameSync(partial, destination);
     console.error(`fintrack: backed up the database before migration ${tag} → ${destination}`);
-    return destination;
-  });
+    copied.push(destination);
+  }
+  return copied;
 };

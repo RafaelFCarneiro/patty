@@ -4,8 +4,8 @@ import { httpStatus, type AppError } from './common/errors.js';
 import { authenticate, ownerNeedsSetup } from './controllers/auth.js';
 import { declaredOrigin, isSameOrigin, isUnsafeMethod } from './logic/auth.js';
 import { safeNextPath } from './wire/in/auth.js';
-import { AuthMode, authErrors, OWNER_PRINCIPAL, type AuthError, type Principal } from './models/auth.js';
-import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH, UI_ROOT_PATH } from './diplomat/http/authPaths.js';
+import { AuthMode, authErrors, isUiPath, OWNER_PRINCIPAL, type AuthError, type Principal } from './models/auth.js';
+import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from './diplomat/http/authPaths.js';
 import type { HttpAuth } from './diplomat/http/context.js';
 import { readCookie, SESSION_COOKIE_NAME } from './diplomat/http/cookies.js';
 
@@ -23,7 +23,6 @@ import { readCookie, SESSION_COOKIE_NAME } from './diplomat/http/cookies.js';
 
 const NEXT_PARAM = 'next';
 
-const isUiPath = (path: string): boolean => path === UI_ROOT_PATH || path.startsWith(`${UI_ROOT_PATH}/`);
 const pathOf = (url: string): string => url.split('?')[0] ?? url;
 
 /** Origins a browser may legitimately send for this request: `PUBLIC_URL`, plus — when the request itself

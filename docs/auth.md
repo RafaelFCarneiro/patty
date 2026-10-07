@@ -94,7 +94,8 @@ Without the code nobody can claim an exposed instance: there is no window in whi
   (`HttpOnly`, `SameSite=Lax`, `Path=/`, plus `Secure` when `PUBLIC_URL` is `https`). The database stores only the
   token's SHA-256, so reading the database yields no usable session.
 - **Expiry is sliding with an absolute cap:** 7 days after last use, and never more than 30 days after login.
-  Activity is recorded at most every 5 minutes. Expired sessions are deleted when they are presented, at each login,
+  The cookie itself lives for the 30-day cap and is never re-issued — the server's idle expiry is what ends a quiet
+  session. Activity is recorded at most every 5 minutes. Expired sessions are deleted when they are presented, at each login,
   and at startup.
 - **Logout** (the button at the bottom of the sidebar, or `POST /ui/logout`) deletes the session row, so the token is
   dead immediately — not merely forgotten by the browser.
@@ -139,7 +140,9 @@ script) has no browser to defend.
 Login and setup are rate-limited in process, per client IP **and** per submitted username: 5 failures per username
 and 20 per IP in any 15 minutes, then `429` — even for the correct password — until the window clears. A successful
 login clears that username's count. Failures are counted for unknown usernames too, so the limiter reveals nothing.
-Behind a reverse proxy set `TRUST_PROXY`, or every client shares the proxy's IP.
+Behind a reverse proxy set `TRUST_PROXY`, or every client shares the proxy's IP and 20 failed logins from anyone
+lock everyone out. Prefer a **hop count** (`TRUST_PROXY=1` for one proxy) or the proxy's address/CIDR over `true`:
+`true` trusts any client's `X-Forwarded-For`, which lets an attacker pick the IP the limiter sees.
 
 ## Backups made before a migration
 

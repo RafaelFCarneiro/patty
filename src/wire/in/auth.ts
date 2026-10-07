@@ -4,7 +4,7 @@ import {
   normalizeUsername,
   PASSWORD_MAX_LENGTH,
   PasswordSchema,
-  UI_ROOT_PATH,
+  isUiPath,
   UsernameSchema,
 } from '../../models/auth.js';
 
@@ -15,8 +15,6 @@ const SETUP_CODE_MAX_LENGTH = 64;
 const MAX_NEXT_LENGTH = 2048;
 const SAME_ORIGIN_PROBE = 'http://same-origin.invalid';
 const UNSAFE_NEXT_CHARACTERS = /[\\\u0000-\u001f\u007f]/;
-
-const isUiPath = (path: string): boolean => path === UI_ROOT_PATH || path.startsWith(`${UI_ROOT_PATH}/`);
 
 /**
  * Where to send the browser after login/setup: a same-origin path under `/ui`, or the default. Anything

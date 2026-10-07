@@ -13,7 +13,6 @@ import {
   isUnsafeMethod,
   newSession,
   normalizeSetupCode,
-  SESSION_ABSOLUTE_MAX_MS,
   SESSION_IDLE_TTL_MS,
   SESSION_TOUCH_INTERVAL_MS,
   setupBanner,
@@ -23,6 +22,7 @@ import {
 } from '../../../src/logic/auth.js';
 import {
   AuthMode,
+  SESSION_ABSOLUTE_MAX_MS,
   OWNER_USER_ID,
   UserRole,
   type SessionEntity,

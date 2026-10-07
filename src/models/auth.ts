@@ -13,12 +13,22 @@ export type UserRole = z.infer<typeof UserRole>;
  *  `INSERT` in `drizzle/0018_auth_identity.sql`; `test/integration/db/ownerMigration.test.ts` pins it. */
 export const OWNER_USER_ID = 'user-owner';
 
+/** The browser surface's root path — redirects are validated against it and `diplomat/http` mounts on it. */
+export const UI_ROOT_PATH = '/ui';
+
 export const USER_ENTITY_TAG = 'user';
 export const SESSION_ENTITY_TAG = 'session';
 export const SETUP_CODE_ENTITY_TAG = 'setup_code';
 
-/** The browser surface's root path — redirects are validated against it and `diplomat/http` mounts on it. */
-export const UI_ROOT_PATH = '/ui';
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** A session never outlives this, however active — also the browser cookie's lifetime (the server's sliding
+ *  idle expiry decides validity; the cookie just must not expire before the server would). */
+export const SESSION_ABSOLUTE_MAX_MS = 30 * DAY_MS;
+
+export const isUiPath = (path: string): boolean => path === UI_ROOT_PATH || path.startsWith(`${UI_ROOT_PATH}/`);
+
+/** Entities the auth flows write — never worth telling a dashboard about. */
+export const AUTH_ENTITY_TAGS: readonly string[] = [USER_ENTITY_TAG, SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG];
 
 /** Where a login or setup lands when the caller named no (valid) destination. */
 export const DEFAULT_LANDING_PATH = UI_ROOT_PATH;

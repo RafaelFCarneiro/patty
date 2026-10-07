@@ -163,7 +163,8 @@ describe('sessions', () => {
     expect(cookie).toContain('Path=/');
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('SameSite=Lax');
-    expect(cookie).toMatch(/Max-Age=\d+/);
+    // The 30-day absolute cap: the cookie never expires before the server would end the session.
+    expect(cookie).toContain('Max-Age=2592000');
     expect(cookie).not.toContain('Secure');
   });
 

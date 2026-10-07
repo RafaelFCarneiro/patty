@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
+import { AUTH_ENTITY_TAGS } from '../../../models/auth.js';
 import { LOGOUT_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../authPaths.js';
 import { CACHE_CONTROL_NO_CACHE } from '../respond.js';
 import { HTML_CONTENT_TYPE, readCached, UI_ROOT } from '../uiFiles.js';
@@ -52,7 +53,10 @@ const registerUiEventsRoute = (app: FastifyInstance, subscribe: ChangeBus['subsc
       // A publish can race a client disconnect that hasn't reached the 'close' handler below yet
       // — skip the write rather than push data onto a response that's already torn down.
       if (reply.raw.destroyed) return;
-      reply.raw.write(`data: ${JSON.stringify({ entities })}\n\n`);
+      // Auth bookkeeping (a session touch, a login) is not a dashboard's business.
+      const visible = entities.filter((tag) => !AUTH_ENTITY_TAGS.includes(tag));
+      if (visible.length === 0) return;
+      reply.raw.write(`data: ${JSON.stringify({ entities: visible })}\n\n`);
     });
     // reply.raw (not req.raw), matching the other hijacked route in this codebase
     // (diplomat/mcp/route.ts) — this handler owns the response after hijack(), and it's the

@@ -65,9 +65,7 @@ export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext)
   const setupLimiter = createAttemptLimiter();
 
   const startSession = (reply: FastifyReply, started: { token: string; expiresAt: string }, next: string) =>
-    reply
-      .header('set-cookie', sessionCookie(started.token, started.expiresAt, ctx.secureCookie, ctx.deps.clock()))
-      .redirect(next, SEE_OTHER);
+    reply.header('set-cookie', sessionCookie(started.token, ctx.secureCookie)).redirect(next, SEE_OTHER);
 
   void app.register(async (scope) => {
     scope.addContentTypeParser(
@@ -99,7 +97,7 @@ export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext)
         loginLimiter.recordSuccess(username);
         return startSession(reply, result.value, next);
       }
-      if (result.error.code === 'invalid_credentials') loginLimiter.recordFailure(req.ip, username);
+      if (result.error.code === authErrors.invalidCredentials.code) loginLimiter.recordFailure(req.ip, username);
       return failLogin(statusOf(result.error), messageFor(result.error));
     });
 
@@ -117,7 +115,7 @@ export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext)
 
       const result = await ctx.runEffects(() => claimOwner(ctx.deps, parsed.data));
       if (result.isOk()) return startSession(reply, result.value, DEFAULT_LANDING_PATH);
-      if (result.error.code === 'invalid_setup_code') setupLimiter.recordFailure(req.ip, username);
+      if (result.error.code === authErrors.invalidSetupCode.code) setupLimiter.recordFailure(req.ip, username);
       return failSetup(statusOf(result.error), messageFor(result.error));
     });
 

@@ -1,4 +1,10 @@
-import { AuthMode, type SessionEntity, type SetupCodeEntity, type UserEntity } from '../models/auth.js';
+import {
+  AuthMode,
+  SESSION_ABSOLUTE_MAX_MS,
+  type SessionEntity,
+  type SetupCodeEntity,
+  type UserEntity,
+} from '../models/auth.js';
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
@@ -6,8 +12,6 @@ const DAY_MS = 24 * 60 * MINUTE_MS;
 
 /** A session dies after this long without being seen (sliding)… */
 export const SESSION_IDLE_TTL_MS = 7 * DAY_MS;
-/** …and, however active, this long after it was created (absolute maximum). */
-export const SESSION_ABSOLUTE_MAX_MS = 30 * DAY_MS;
 /** `last_seen_at`/`expires_at` are rewritten at most this often — not on every request. */
 export const SESSION_TOUCH_INTERVAL_MS = 5 * MINUTE_MS;
 export const SETUP_CODE_TTL_MS = 30 * MINUTE_MS;

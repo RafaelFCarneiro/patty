@@ -1,3 +1,5 @@
+import { SESSION_ABSOLUTE_MAX_MS } from '../../models/auth.js';
+
 /** The browser session cookie (ADR-033 §2). One name, used by the hook that reads it and the routes that
  *  set and clear it. */
 export const SESSION_COOKIE_NAME = 'fintrack_session';
@@ -30,7 +32,7 @@ const serialize = (value: string, { secure, maxAgeMs }: CookieOptions): string =
     ...(secure ? ['Secure'] : []),
   ].join(`${COOKIE_PAIR_SEPARATOR} `);
 
-export const sessionCookie = (token: string, expiresAtIso: string, secure: boolean, now: Date): string =>
-  serialize(token, { secure, maxAgeMs: Date.parse(expiresAtIso) - now.getTime() });
+export const sessionCookie = (token: string, secure: boolean): string =>
+  serialize(token, { secure, maxAgeMs: SESSION_ABSOLUTE_MAX_MS });
 
 export const clearedSessionCookie = (secure: boolean): string => serialize('', { secure, maxAgeMs: 0 });

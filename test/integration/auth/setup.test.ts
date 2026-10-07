@@ -98,6 +98,22 @@ describe('setup code issuance', () => {
 });
 
 describe('POST /ui/setup', () => {
+  it('lets exactly one of two simultaneous claims win, leaving one owner', async () => {
+    const ctx = await createApp();
+    const code = codeFrom(ctx.announced);
+    const [first, second] = await Promise.all([
+      post(ctx, { code, username: 'first-claimant', password: PASSWORD }),
+      post(ctx, { code, username: 'second-claimant', password: PASSWORD }),
+    ]);
+
+    // The loser retries on the version conflict, finds the owner claimed, and is refused.
+    expect([first.statusCode, second.statusCode].sort()).toEqual([303, 409]);
+    const winner = first.statusCode === 303 ? 'first-claimant' : 'second-claimant';
+    const users = await owners(ctx);
+    expect(users).toHaveLength(1);
+    expect(users[0]?.username).toBe(winner);
+  });
+
   it('claims the existing owner — same id, no new row — and starts a session', async () => {
     const ctx = await createApp();
     const before = await owners(ctx);

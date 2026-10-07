@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SESSION_ABSOLUTE_MAX_MS } from '../../../../src/models/auth.js';
 import { escapeHtml } from '../../../../src/diplomat/http/authPages.js';
 import {
   HEALTH_PATH,
@@ -58,21 +59,17 @@ describe('PUBLIC_ROUTES (ADR-033 §6)', () => {
 });
 
 describe('session cookie', () => {
-  const NOW = new Date('2026-10-07T12:00:00.000Z');
-  const IN_ONE_HOUR = new Date(NOW.getTime() + 3_600_000).toISOString();
+  const ABSOLUTE_MAX_SECONDS = SESSION_ABSOLUTE_MAX_MS / 1000;
 
-  it('is HttpOnly, SameSite=Lax, Path=/ with a Max-Age matching the session expiry', () => {
-    const cookie = sessionCookie('abc_DEF-123', IN_ONE_HOUR, false, NOW);
-    expect(cookie).toBe(`${SESSION_COOKIE_NAME}=abc_DEF-123; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600`);
+  it('is HttpOnly, SameSite=Lax, Path=/ and lives as long as a session possibly can', () => {
+    expect(sessionCookie('abc_DEF-123', false)).toBe(
+      `${SESSION_COOKIE_NAME}=abc_DEF-123; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ABSOLUTE_MAX_SECONDS}`,
+    );
   });
 
   it('adds Secure only when asked', () => {
-    expect(sessionCookie('t', IN_ONE_HOUR, true, NOW)).toMatch(/; Secure$/);
-    expect(sessionCookie('t', IN_ONE_HOUR, false, NOW)).not.toContain('Secure');
-  });
-
-  it('never carries a negative Max-Age', () => {
-    expect(sessionCookie('t', NOW.toISOString(), false, new Date(NOW.getTime() + 5000))).toContain('Max-Age=0');
+    expect(sessionCookie('t', true)).toMatch(/; Secure$/);
+    expect(sessionCookie('t', false)).not.toContain('Secure');
   });
 
   it('is cleared with an empty value and Max-Age=0, with the same attributes so the browser matches it', () => {
