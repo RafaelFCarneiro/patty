@@ -4,6 +4,7 @@ import type { ChangeBus } from '@rfc0/effect-runner';
 import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
 import { DISABLED_AUTH, type HttpAuth } from './diplomat/http/context.js';
+import { AuthMode } from './models/auth.js';
 import { registerAuthHook } from './diplomat/http/hooks/auth.js';
 import { registerRoutes } from './diplomat/http/routes.js';
 import { registerMcpRoute } from './diplomat/mcp/route.js';
@@ -66,7 +67,15 @@ export const registerHttpApp = (
   // also guards a request no route matches.
   registerAuthHook(app, auth);
   registerRoutes(app, deps, version, runEffects, runEffectsSequence, subscribeToChanges, auth);
-  registerMcpRoute(app, deps, version, runEffects, runEffectsSequence, resetLocale);
+  registerMcpRoute(
+    app,
+    deps,
+    version,
+    runEffects,
+    runEffectsSequence,
+    resetLocale,
+    auth.mode === AuthMode.enum.required ? auth.publicUrl : undefined,
+  );
 };
 
 export type HttpSidecar = { app: FastifyInstance; listening: boolean };

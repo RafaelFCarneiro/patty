@@ -34,6 +34,7 @@ import { buildBulkResult } from '../../../controllers/transaction/bulk.js';
 import type { McpContext } from '../context.js';
 import { fromResult, json } from '../respond.js';
 import { STATEMENT_IMPORT_RESULT_DESCRIPTION } from '../shared.js';
+import { MUTATING, READ_ONLY } from '../annotations.js';
 
 /** Shared by add_account_expense/add_account_income — identical aside from which movement kind
  *  is being recorded. */
@@ -52,6 +53,7 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
   server.registerTool(
     'add_account_expense',
     {
+      annotations: MUTATING,
       title: 'Add account expense',
       description: addAccountMovementDescription('expense'),
       inputSchema: AddAccountMovementSchema.shape,
@@ -66,6 +68,7 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
   server.registerTool(
     'add_account_income',
     {
+      annotations: MUTATING,
       title: 'Add account income',
       description: addAccountMovementDescription('income'),
       inputSchema: AddAccountMovementSchema.shape,
@@ -80,6 +83,7 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
   server.registerTool(
     'import_account_statement',
     {
+      annotations: MUTATING,
       title: 'Import an account statement',
       description:
         'Import a bank/wallet statement (pasted text, CSV lines) — every item is an expense or income ' +
@@ -99,6 +103,7 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
   server.registerTool(
     TransactionTool.updateAccountTransaction,
     {
+      annotations: MUTATING,
       title: 'Update account transaction',
       description:
         "Update an account transaction by id (from search_transactions) — the account aggregate's update " +
@@ -124,6 +129,7 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
   server.registerTool(
     TransactionTool.deleteAccountTransaction,
     {
+      annotations: MUTATING,
       title: 'Delete account transaction',
       description:
         "Delete an account transaction by id — the account aggregate's delete entry point " +
@@ -143,6 +149,7 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
   server.registerTool(
     'create_account',
     {
+      annotations: MUTATING,
       title: 'Create account',
       description:
         'Create a bank account / wallet. Type defaults to checking, currency to USD. ' +
@@ -159,6 +166,7 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
   server.registerTool(
     'get_account_balances',
     {
+      annotations: READ_ONLY,
       title: 'Get account balances',
       description:
         'Returns { balances, consolidatedNetWorth }. Each balance is derived: initialBalance + income − expenses ' +
@@ -185,6 +193,7 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
   server.registerTool(
     'list_accounts',
     {
+      annotations: READ_ONLY,
       title: 'List accounts',
       description: 'List accounts with their currencies, optionally filtered by type (checking = conta corrente).',
       inputSchema: {
@@ -197,6 +206,7 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
   server.registerTool(
     'update_account',
     {
+      annotations: MUTATING,
       title: 'Update account',
       description:
         'Update a bank account. name (via newName) and initialBalance are always editable. ' +
@@ -216,6 +226,7 @@ export const registerAccountTools = (server: McpServer, ctx: McpContext): void =
   server.registerTool(
     'delete_account',
     {
+      annotations: MUTATING,
       title: 'Delete account',
       description:
         'Delete a bank account by name. Blocked if any transactions, transfers, recurring rules, or credit cards ' +

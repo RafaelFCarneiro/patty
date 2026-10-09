@@ -4,6 +4,7 @@ import { getSpendingSummary } from '../../../controllers/summary.js';
 import { CurrencyCode } from '../../../models/money.js';
 import type { McpContext } from '../context.js';
 import { json } from '../respond.js';
+import { READ_ONLY } from '../annotations.js';
 
 export const registerSummaryTools = (server: McpServer, ctx: McpContext): void => {
   const { deps } = ctx;
@@ -11,6 +12,7 @@ export const registerSummaryTools = (server: McpServer, ctx: McpContext): void =
   server.registerTool(
     'get_spending_summary',
     {
+      annotations: READ_ONLY,
       title: 'Get spending summary',
       description:
         'Income, expenses, balance and per-category totals for a month — ' +

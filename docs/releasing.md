@@ -41,7 +41,7 @@ two outputs, `released` and `version`, read from the `vX.Y.Z` tag semantic-relea
 against it: read-only root, key from a mounted file, the unauthenticated surface limited to `/api/health` (ADR-033),
 the setup code read from the container log and exchanged at `/ui/setup`, then `/api/status` + `/ui` + MCP `initialize`
 with the session cookie and a matching `Origin`, a cross-origin write refused, the owner/session/data surviving a
-restart with no second setup code, no key/password/token in logs/config/volume, and a fast failure with the `openssl` hint when no key is supplied. Run it
+restart with no second setup code, personal access tokens minted through the session and used as a bearer on `/mcp` and `/api` (a read token refused `403 insufficient_scope` on a write tool and route, a bad bearer never falling back to the cookie, no credential answered `401` with a `resource_metadata` URL that resolves, a revoked token refused at once), no key/password/session or access token in logs/config/volume, and a fast failure with the `openssl` hint when no key is supplied. Run it
 locally with `docker build -t fintrack:ci . && scripts/docker-smoke.sh fintrack:ci`.
 
 **One-time manual step:** a package first pushed to GHCR is **private** and linked to the repository only by label.

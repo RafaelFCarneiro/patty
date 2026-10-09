@@ -18,6 +18,7 @@ import type { MerchantsRepo } from '../diplomat/db/repos/merchants.js';
 import type { RecurringRepo } from '../diplomat/db/repos/recurring.js';
 import type { SettingsRepo } from '../diplomat/db/repos/settings.js';
 import type { TagsRepo } from '../diplomat/db/repos/tags.js';
+import type { AccessTokensRepo } from '../diplomat/db/repos/accessTokens.js';
 import type { SessionsRepo } from '../diplomat/db/repos/sessions.js';
 import type { SetupCodesRepo } from '../diplomat/db/repos/setupCodes.js';
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js';
@@ -55,6 +56,8 @@ export type AuthSecrets = {
   verifyPassword: (hash: string, password: string) => Promise<boolean>;
   /** A fresh opaque session token (256 random bits, base64url). */
   randomToken: () => string;
+  /** A fresh personal access token: `ftk_` + 256 random bits (base64url). Shown once, never stored. */
+  randomAccessToken: () => string;
   /** The raw characters of a fresh setup code, before display grouping. */
   randomSetupCode: () => string;
   /** sha256 of a secret — what is stored instead of the session token or setup code. */
@@ -69,6 +72,7 @@ export type AuthSecrets = {
 export type AuthDeps = {
   users: UsersRepo;
   sessions: SessionsRepo;
+  accessTokens: AccessTokensRepo;
   setupCodes: SetupCodesRepo;
   clock: () => Date;
   newId: () => string;

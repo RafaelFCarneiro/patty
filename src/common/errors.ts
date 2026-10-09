@@ -71,6 +71,16 @@ export const formatAppError = (e: AppError): string => {
       return `${e.code}: ${AUTH_MESSAGES.rateLimited}`;
     case 'forbidden_origin':
       return `${e.code}: ${e.hint}`;
+    case 'invalid_token':
+      return `${e.code}: ${AUTH_MESSAGES.invalidToken}`;
+    case 'insufficient_scope':
+      return `${e.code}: ${AUTH_MESSAGES.insufficientScope} (needs ${e.scope})`;
+    case 'unknown_token':
+      return `${e.code}: ${AUTH_MESSAGES.unknownToken} (${e.id})`;
+    case 'resource_metadata_unavailable':
+      return `${e.code}: ${e.hint}`;
+    case 'session_required':
+      return `${e.code}: ${AUTH_MESSAGES.sessionRequired}`;
     default: {
       const _exhaustive: never = e;
       throw new Error(`unmapped error code: ${JSON.stringify(_exhaustive)}`);
@@ -88,12 +98,17 @@ export const httpStatus = (e: AppError): number => {
     case 'unknown_bill':
     case 'unknown_dashboard':
     case 'unknown_budget':
+    case 'unknown_token':
+    case 'resource_metadata_unavailable':
       return 404;
     case 'unauthenticated':
     case 'invalid_credentials':
+    case 'invalid_token':
       return 401;
     case 'invalid_setup_code':
     case 'forbidden_origin':
+    case 'insufficient_scope':
+    case 'session_required':
       return 403;
     case 'rate_limited':
       return 429;

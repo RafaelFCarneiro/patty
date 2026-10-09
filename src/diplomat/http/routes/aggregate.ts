@@ -4,6 +4,7 @@ import { AggregateSpendingInputSchema } from '../../../wire/in/aggregate.js';
 import type { HttpContext } from '../context.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, notFound404, parse, send, validation422 } from '../respond.js';
+import { READ_SCOPE } from '../../../models/auth.js';
 
 const AGGREGATE_TAG = 'Aggregate';
 
@@ -12,6 +13,7 @@ export const aggregateRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/aggregate',
       tags: [AGGREGATE_TAG],
       summary: 'Aggregate spending',

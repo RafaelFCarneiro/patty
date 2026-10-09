@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import { AUTH_ENTITY_TAGS } from '../../../models/auth.js';
-import { LOGOUT_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../authPaths.js';
+import { LOGOUT_PATH, TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../authPaths.js';
 import { CACHE_CONTROL_NO_CACHE } from '../respond.js';
 import { HTML_CONTENT_TYPE, readCached, UI_ROOT } from '../uiFiles.js';
 
@@ -17,6 +17,9 @@ const SSE_SESSION_RECHECK_MS = 30_000;
 
 // Where ui/shell.html reserves room for controls that only exist when sessions do (ADR-033).
 const AUTH_CONTROLS_MARKER = '<!--fintrack:auth-controls-->';
+const TOKENS_CONTROL =
+  `<a href="${TOKENS_PATH}" class="sidebar-more-btn sidebar-tokens" aria-label="Access tokens" title="Access tokens">` +
+  '<i class="fa-solid fa-key"></i></a>';
 const LOGOUT_CONTROL =
   `<form method="post" action="${LOGOUT_PATH}" class="sidebar-logout">` +
   '<button type="submit" class="sidebar-more-btn" aria-label="Log out" title="Log out">' +
@@ -101,11 +104,11 @@ export type SessionRecheck = { isActive: (req: FastifyRequest) => Promise<boolea
 export const registerUiRoutes = (
   app: FastifyInstance,
   subscribeToChanges: ChangeBus['subscribe'],
-  options: { logoutControl: boolean; session?: SessionRecheck } = { logoutControl: false },
+  options: { authControls: boolean; session?: SessionRecheck } = { authControls: false },
 ): void => {
   const serveShell = async (_req: unknown, reply: FastifyReply) => {
     const shell = await readCached(SHELL_PATH);
-    const html = shell.replace(AUTH_CONTROLS_MARKER, options.logoutControl ? LOGOUT_CONTROL : '');
+    const html = shell.replace(AUTH_CONTROLS_MARKER, options.authControls ? `${TOKENS_CONTROL}${LOGOUT_CONTROL}` : '');
     return reply.header('cache-control', CACHE_CONTROL_NO_CACHE).type(HTML_CONTENT_TYPE).send(html);
   };
   app.get(UI_ROOT_PATH, serveShell);

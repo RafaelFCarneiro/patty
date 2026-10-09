@@ -1,4 +1,4 @@
-# Authentication flows (ADR-033 Phase 1)
+# Authentication flows (ADR-033 Phases 1–2)
 
 These diagrams show the flows as built: who takes part in each one and what happens at each step.
 The operator guide is [`auth.md`](auth.md); the decision record is
@@ -11,13 +11,17 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 | Config | `src/config.ts` | Decides the auth mode from `HOST` / `PUBLIC_URL` / `TRUST_PROXY` / `FINTRACK_AUTH` |
 | Bootstrap | `src/diplomat/db/bootstrap.ts`, `safetyCopy.ts`, `migrationLock.ts` | Migrations, the owner row, the pre-migration backup |
 | AuthRuntime | `src/authRuntime.ts` | Builds the identity deps, prunes sessions, issues and prints the setup code |
-| AuthHook | `src/diplomat/http/hooks/auth.ts` — `registerAuthHook` (decisions in `src/logic/auth.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, session resolution, the CSRF check, redirects |
+| AuthHook | `src/diplomat/http/hooks/auth.ts` — `registerAuthHook` (decisions in `src/logic/auth.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, credential precedence (bearer vs. cookie), session/token resolution, the CSRF check, the route-scope check, challenges and redirects |
+| Bearer | `src/diplomat/http/bearer.ts` | Builds the `WWW-Authenticate` response (`logic/auth.ts`'s `bearerChallenge`; only the origin is resolved at the edge) — shared by the hook and the MCP route |
 | AuthRoutes | `src/diplomat/http/routes/auth.ts` | `/ui/setup`, `/ui/login`, `/ui/logout`: form parsing, rate limiting, cookies |
-| Controller | `src/controllers/auth.ts` | `issueSetupCode`, `claimOwner`, `login`, `logout`, `authenticate`; returns `{ persist, response }` |
-| Logic | `src/logic/auth.ts` | Pure rules: expiry, the sliding window, "can log in", origin comparison |
-| Secrets | `src/diplomat/auth/credentials.ts` | argon2id, CSPRNG tokens and codes, sha256 |
+| TokenRoutes | `src/diplomat/http/routes/tokens.ts` | `/ui/tokens`, `/ui/tokens/:id/revoke`: session-only token pages |
+| WellKnown | `src/diplomat/http/routes/wellKnown.ts` | The two Protected Resource Metadata (RFC 9728) routes |
+| McpRoute | `src/diplomat/mcp/route.ts`, `scopes.ts` | `POST /mcp`: per-tool scope pre-check on the JSON-RPC body, `req.auth` for the transport, per-tool re-check |
+| Controller | `src/controllers/auth.ts`, `src/controllers/accessTokens.ts` | `issueSetupCode`, `claimOwner`, `login`, `logout`, `authenticate`; `createToken`, `listTokens`, `revokeToken`, `authenticateToken`; returns `{ persist, response }` |
+| Logic | `src/logic/auth.ts` | Pure rules: expiry, the sliding window, "can log in", origin comparison, scopes, the token verdict, credential parsing, challenges, the metadata document |
+| Secrets | `src/diplomat/auth/credentials.ts` | argon2id, CSPRNG session tokens, access tokens (`ftk_…`) and codes, sha256 |
 | Runner | `@rfc0/effect-runner` via `runEffects` | Applies the persistables in one transaction (optimistic versions, retries) |
-| DB | `users`, `sessions`, `setup_codes` | Stores only hashes, never a token or code in plaintext |
+| DB | `users`, `sessions`, `setup_codes`, `access_tokens` | Stores only hashes, never a token or code in plaintext |
 
 ---
 
@@ -133,30 +137,102 @@ flowchart TD
     A[Request arrives] --> B{Mode?}
     B -- disabled --> L{"Host loopback?<br/>AND (no Origin<br/>OR loopback Origin)"}
     L -- no --> FL["403 forbidden_origin<br/>DNS-rebound or cross-site page<br/>hint: set PUBLIC_URL"]
-    L -- yes --> C[principal = OWNER] --> Z[Handler]
-    B -- required --> D{Matched route is in<br/>the PUBLIC_ROUTES allowlist?<br/>/api/health · /ui/login · /ui/setup · app.css}
+    L -- yes --> C["principal = OWNER (every scope)<br/>the Authorization header is ignored"] --> Z[Handler]
+    B -- required --> D{Matched route is in<br/>the PUBLIC_ROUTES allowlist?<br/>/api/health · /ui/login · /ui/setup · app.css<br/>· the two /.well-known/oauth-protected-resource routes}
     D -- yes --> E{Unsafe method AND<br/>Origin/Referer declared?}
     E -- "yes, not ours" --> F[403 forbidden_origin]
     E -- otherwise --> Z
-    D -- no, incl. unknown paths --> G[Read the fintrack_session cookie]
+    D -- no, incl. unknown paths --> BP{"Path is /api or /mcp<br/>AND an Authorization<br/>header is present?"}
+    BP -- "yes" --> BT["Bearer branch — diagram 4b:<br/>the header is authoritative,<br/>the cookie is never consulted"]
+    BP -- no --> G[Read the fintrack_session cookie]
     G --> H{Cookie present?}
     H -- no --> N
     H -- yes --> I[sha256 token → session row → user]
     I --> J{Valid?<br/>not idle-expired: 7 d sliding<br/>under the 30 d absolute cap<br/>user claimed, not disabled}
     J -- no --> K[Delete the session row] --> N
-    J -- yes --> L{Last seen ≥ 5 min ago?}
-    L -- yes --> M[Slide expiry: UPDATE session] --> O
-    L -- no --> O
+    J -- yes --> L2{Last seen ≥ 5 min ago?}
+    L2 -- yes --> M[Slide expiry: UPDATE session] --> O
+    L2 -- no --> O
     O{Unsafe method?<br/>POST/PUT/PATCH/DELETE}
     O -- yes --> P{Origin equals PUBLIC_URL,<br/>or this loopback host's own origin?}
     P -- no --> F
     P -- yes --> Q
-    O -- no --> Q[principal = user] --> Z
+    O -- no --> Q["principal = user, every scope<br/>(a session holds read + write)"] --> Z
     N{Path under /ui?}
-    N -- "no: /api, /mcp" --> R[401 JSON unauthenticated]
+    N -- "no: /api, /mcp, other" --> R["401 JSON unauthenticated<br/>+ WWW-Authenticate: Bearer resource_metadata, scope"]
     N -- yes --> S{Owner unclaimed?}
     S -- yes --> T[303 → /ui/setup]
     S -- no --> U[303 → /ui/login?next=…]
+```
+
+## 4b. Bearer token request (REST / MCP)
+
+Precedence → verify → scope → handler / 401 / 403. A bearer carries no ambient credential, so there is **no CSRF check**.
+`/ui` never takes this path: a bearer there is "no credential" and gets the login redirect.
+
+```mermaid
+flowchart TD
+    A["/api or /mcp request<br/>with an Authorization header"] --> B{"Header is exactly<br/>Bearer ftk_… ?"}
+    B -- "no: another scheme, empty,<br/>not our prefix" --> X1["401 invalid_token<br/>WWW-Authenticate: Bearer error=invalid_token, resource_metadata<br/>the cookie is NOT tried"]
+    B -- yes --> C[sha256 token → access_tokens row → user]
+    C --> D{"Row exists, not revoked,<br/>not expired,<br/>owner claimed and enabled?"}
+    D -- no --> X1
+    D -- yes --> E{"last_used_at older<br/>than 5 min?"}
+    E -- yes --> F[UPDATE last_used_at — version-guarded] --> G
+    E -- no --> G["principal = user with the TOKEN's scopes<br/>via = token, tokenId"]
+    G --> H{"Scope needed by the matched route<br/>(RouteDefinition.scope; POST /mcp: read)<br/>covered? write implies read"}
+    H -- no --> X2["403 insufficient_scope<br/>WWW-Authenticate: Bearer error=insufficient_scope, scope=fintrack:write, resource_metadata"]
+    H -- yes --> I{"POST /mcp?"}
+    I -- no --> Z[REST handler]
+    I -- yes --> J["preHandler: read the JSON-RPC body<br/>(each message of a batch)<br/>tools/call of a write tool?<br/>unknown tool counts as write"]
+    J -- "needs write, token has read only" --> X2
+    J -- ok --> K["req.raw.auth = AuthInfo<br/>(token id, clientId pat:id, scopes)"]
+    K --> L["tool wrapper re-checks<br/>extra.authInfo.scopes against the tool's readOnlyHint scope<br/>(no authInfo over HTTP = refused)"]
+    L -- short --> X3["tool error insufficient_scope — the tool never runs"]
+    L -- ok --> M[Tool runs]
+```
+
+## 4c. Create / revoke a token
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Person (browser, signed in)
+    participant Hook as AuthHook
+    participant Routes as TokenRoutes
+    participant Ctl as Controller (accessTokens)
+    participant Sec as Secrets
+    participant Run as Runner
+    participant DB
+
+    U->>Hook: POST /ui/tokens {name, access, expiry, password} (cookie + same Origin)
+    Hook->>Hook: /ui → session only (a bearer here is ignored), then the CSRF Origin check
+    Hook->>Routes: pass, principal.via = session
+    Routes->>Routes: preHandler insists on via = session, zod validates: name 1–80, access read|write, expiry none|30|90|365, password present. Rate limit per IP and user
+    Routes->>Run: runEffects(createToken)
+    Run->>Ctl: run the flow
+    Ctl->>Sec: verify the password against the user's hash (step-up, same cost if it fails). Wrong: 403 page, nothing created
+    Ctl->>Sec: randomAccessToken() = ftk_ + 32 random bytes (base64url)
+    Ctl->>Sec: sha256(token), display prefix = ftk_ + first 6 chars
+    Ctl-->>Run: persist: INSERT access_token {hash, prefix, scopes, expires_at} and the response is the plaintext + summary
+    Run->>DB: one transaction
+    Run-->>Routes: plaintext (in memory only)
+    Routes-->>U: 200 page showing the token ONCE (no-store, CSP) — "you won't see it again"
+    Note over DB: only the hash and the prefix are stored, and request logs redact Authorization
+
+    U->>Hook: POST /ui/tokens/:id/revoke (cookie + same Origin)
+    Hook->>Routes: pass
+    Routes->>Run: runEffects(revokeToken)
+    Run->>Ctl: find the token among this user's
+    alt unknown id
+        Ctl-->>Routes: unknown_token → 404 page
+    else already revoked
+        Ctl-->>Run: persist: nothing (idempotent)
+    else active
+        Ctl-->>Run: persist: UPDATE revoked_at (row kept)
+    end
+    Routes-->>U: 303 → /ui/tokens
+    Note over U,DB: the very next request with that token is 401 invalid_token
 ```
 
 ## 5. Logout and live dashboards (SSE)
@@ -196,13 +272,15 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph L1["Local npm: loopback, no PUBLIC_URL or TRUST_PROXY, only loopback Host/Origin answered"]
-      S1[MCP client] -- stdio, trusted --> O1((Owner))
-      B1[Browser /ui, /api] -- auth disabled --> O1
+      S1[MCP client] -- stdio, trusted --> O1((Owner, all scopes))
+      B1[Browser /ui, /api] -- auth disabled, Authorization ignored --> O1
     end
     subgraph L2["Docker or exposed: auth required"]
       B2[Browser] -- session cookie + Origin check --> O2((Owner))
-      M2[MCP client over HTTP] -. "no cookie: 401<br/>until Phase 2 bearer tokens" .-> X2[rejected]
+      M2["MCP client over HTTP<br/>Authorization: Bearer ftk_…"] -- "access token, no CSRF check<br/>scopes: read or read+write" --> O2
+      M2 -. "no credential: 401 + resource_metadata" .-> X2[rejected]
       H2[Healthcheck] -- /api/health only --> P2[public]
+      W2[Any client] -- "/.well-known/oauth-protected-resource[/mcp]" --> P2
     end
 ```
 

@@ -17,6 +17,7 @@ import { DeletedOut } from '../../../wire/out/common.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { CACHE_CONTROL_NO_CACHE, conflict409, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
 
 const DASHBOARDS_TAG = 'Dashboards';
 
@@ -27,6 +28,7 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/dashboards',
       tags: [DASHBOARDS_TAG],
       summary: 'List dashboards',
@@ -35,6 +37,7 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/dashboards/:name',
       tags: [DASHBOARDS_TAG],
       summary: 'Get a dashboard as JSON',
@@ -49,6 +52,7 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/dashboards',
       tags: [DASHBOARDS_TAG],
       summary: 'Save (upsert) a dashboard',
@@ -63,6 +67,7 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'delete',
+      scope: WRITE_SCOPE,
       path: '/api/dashboards/:name',
       tags: [DASHBOARDS_TAG],
       summary: 'Delete dashboard',
@@ -76,6 +81,7 @@ export const dashboardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/dashboards/:name/rename',
       tags: [DASHBOARDS_TAG],
       summary: 'Rename a dashboard',

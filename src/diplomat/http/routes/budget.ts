@@ -6,6 +6,7 @@ import { BudgetStatusOutSchema } from '../../../wire/out/budgets.js';
 import type { HttpContext } from '../context.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
 import { parse, validation422 } from '../respond.js';
+import { READ_SCOPE } from '../../../models/auth.js';
 
 const BUDGETS_TAG = 'Budgets';
 
@@ -14,6 +15,7 @@ export const budgetRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/budgets',
       tags: [BUDGETS_TAG],
       summary: 'List budgets',
@@ -22,6 +24,7 @@ export const budgetRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/budgets/status',
       tags: [BUDGETS_TAG],
       summary: 'Get budget status',

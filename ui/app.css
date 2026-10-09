@@ -550,3 +550,106 @@ header, .dashboard-header {
 .sidebar-logout {
     margin: 0;
 }
+
+/* --- Access tokens (ADR-033): /ui/tokens reuses the sign-in card, widened for its table --- */
+.tokens-card {
+    width: min(60rem, calc(100vw - 2rem));
+    margin-block: 2rem;
+}
+
+.tokens-card h2 {
+    margin: 2rem 0 1rem;
+    font-size: 1.1rem;
+}
+
+.tokens-card a {
+    color: var(--accent-primary);
+}
+
+.tokens-card code {
+    font-size: 0.85em;
+}
+
+.tokens-scroll {
+    overflow-x: auto;
+}
+
+.tokens-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.tokens-table th,
+.tokens-table td {
+    padding: 0.5rem 0.6rem;
+    text-align: left;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.tokens-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.tokens-table form {
+    margin: 0;
+}
+
+.token-status-active {
+    color: var(--income-color);
+}
+
+.token-status-expired,
+.token-status-revoked {
+    color: var(--text-muted);
+}
+
+.token-revoke {
+    padding: 0.3rem 0.7rem;
+    color: var(--expense-color);
+    font: inherit;
+    background: transparent;
+    border: 1px solid var(--expense-color);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.auth-form select {
+    padding: 0.7rem 0.9rem;
+    color: var(--text-main);
+    font: inherit;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+}
+
+.auth-form select option {
+    color: #111;
+}
+
+.auth-warning {
+    margin: 0 0 1rem;
+    padding: 0.7rem 0.9rem;
+    color: var(--warning-color);
+    font-size: 0.9rem;
+    background: rgba(245, 158, 11, 0.12);
+    border-radius: 10px;
+}
+
+.token-secret {
+    margin: 0 0 1rem;
+    padding: 0.8rem 0.9rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.9rem;
+    overflow-wrap: anywhere; /* 47 unbreakable characters must not overflow a phone-width card */
+    user-select: all; /* a triple-click selects the whole token */
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed var(--accent-primary);
+    border-radius: 10px;
+}
+
+.sidebar-tokens {
+    color: var(--text-muted);
+}

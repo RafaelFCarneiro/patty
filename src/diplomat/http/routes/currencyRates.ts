@@ -8,6 +8,7 @@ import { BulkSetExchangeRatesOut } from '../../../wire/out/currencyRates.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { parse, send, validation422 } from '../respond.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
 
 const EXCHANGE_RATES_TAG = 'Exchange rates';
 
@@ -16,6 +17,7 @@ export const currencyRateRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/exchange-rates',
       tags: [EXCHANGE_RATES_TAG],
       summary: 'List exchange rates',
@@ -24,6 +26,7 @@ export const currencyRateRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/exchange-rates',
       tags: [EXCHANGE_RATES_TAG],
       summary: 'Set exchange rate (upsert)',
@@ -38,6 +41,7 @@ export const currencyRateRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/exchange-rates/bulk',
       tags: [EXCHANGE_RATES_TAG],
       summary: 'Set exchange rates (bulk upsert, partial success)',

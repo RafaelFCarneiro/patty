@@ -34,6 +34,7 @@ import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../..
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, confirmQuery, idParam, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
 
 const CREDIT_CARDS_TAG = 'CreditCards';
 const BILLS_TAG = 'Bills';
@@ -43,6 +44,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/credit-cards/purchases',
       tags: [CREDIT_CARDS_TAG],
       summary: 'Add a credit-card purchase',
@@ -74,6 +76,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/credit-cards/statement',
       tags: [CREDIT_CARDS_TAG],
       summary: 'Import a credit-card statement',
@@ -94,6 +97,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/credit-cards',
       tags: [CREDIT_CARDS_TAG],
       summary: 'List credit cards',
@@ -102,6 +106,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/credit-cards',
       tags: [CREDIT_CARDS_TAG],
       summary: 'Create credit card',
@@ -124,6 +129,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'patch',
+      scope: WRITE_SCOPE,
       path: '/api/credit-cards/:name',
       tags: [CREDIT_CARDS_TAG],
       summary: 'Update credit card',
@@ -147,6 +153,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'delete',
+      scope: WRITE_SCOPE,
       path: '/api/credit-cards/:name',
       tags: [CREDIT_CARDS_TAG],
       summary: 'Delete credit card',
@@ -170,6 +177,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/bills',
       tags: [BILLS_TAG],
       summary: 'Get a credit card bill (fatura)',
@@ -188,6 +196,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/bills/pay',
       tags: [BILLS_TAG],
       summary: 'Pay a credit card bill',
@@ -205,6 +214,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/bills/revert',
       tags: [BILLS_TAG],
       summary: 'Revert a credit card bill payment',
@@ -225,6 +235,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'patch',
+      scope: WRITE_SCOPE,
       path: '/api/credit-cards/transactions/:id',
       tags: [CREDIT_CARDS_TAG],
       summary: 'Update a credit-card transaction',
@@ -250,6 +261,7 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'delete',
+      scope: WRITE_SCOPE,
       path: '/api/credit-cards/transactions/:id',
       tags: [CREDIT_CARDS_TAG],
       summary: 'Delete a credit-card transaction',

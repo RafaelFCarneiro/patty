@@ -6,6 +6,7 @@ import { CurrencyCode } from '../../../models/money.js';
 import * as settingsAdapters from '../../../adapters/settings.js';
 import type { McpContext } from '../context.js';
 import { fromResult, json } from '../respond.js';
+import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerSystemTools = (server: McpServer, ctx: McpContext): void => {
   const { deps, version, runEffects, resetLocale } = ctx;
@@ -13,6 +14,7 @@ export const registerSystemTools = (server: McpServer, ctx: McpContext): void =>
   server.registerTool(
     'set_locale',
     {
+      annotations: MUTATING,
       title: 'Set locale',
       description:
         'Set the display language for default categories (en/es/pt). The AI agent should call this ' +
@@ -38,6 +40,7 @@ export const registerSystemTools = (server: McpServer, ctx: McpContext): void =>
   server.registerTool(
     'get_preferences',
     {
+      annotations: READ_ONLY,
       title: 'Get user preferences',
       description:
         'Returns the stored locale preference, locale_source, and the resolved base currency. Use this to ' +
@@ -53,6 +56,7 @@ export const registerSystemTools = (server: McpServer, ctx: McpContext): void =>
   server.registerTool(
     'set_base_currency',
     {
+      annotations: MUTATING,
       title: 'Set base currency',
       description:
         'Set the explicit base currency — the default target for future read-time valuation (ADR-026). ' +
@@ -69,6 +73,7 @@ export const registerSystemTools = (server: McpServer, ctx: McpContext): void =>
   server.registerTool(
     'get_status',
     {
+      annotations: READ_ONLY,
       title: 'Get server status',
       description:
         'Returns server name, version, database reachability, and active locale. ' +

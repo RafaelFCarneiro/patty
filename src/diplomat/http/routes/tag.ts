@@ -7,6 +7,7 @@ import { DeletedOut } from '../../../wire/out/common.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, idParam, parse, send, validation422 } from '../respond.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
 
 const TAGS_TAG = 'Tags';
 
@@ -15,6 +16,7 @@ export const tagRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/tags',
       tags: [TAGS_TAG],
       summary: 'List tags',
@@ -23,6 +25,7 @@ export const tagRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/tags',
       tags: [TAGS_TAG],
       summary: 'Create tag',
@@ -37,6 +40,7 @@ export const tagRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'delete',
+      scope: WRITE_SCOPE,
       path: '/api/tags/:id',
       tags: [TAGS_TAG],
       summary: 'Delete tag',

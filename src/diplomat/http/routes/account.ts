@@ -35,6 +35,7 @@ import {
   send,
   validation422,
 } from '../respond.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
 
 const ACCOUNTS_TAG = 'Accounts';
 
@@ -43,6 +44,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/accounts',
       tags: [ACCOUNTS_TAG],
       summary: 'List accounts',
@@ -56,6 +58,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/accounts/balances',
       tags: [ACCOUNTS_TAG],
       summary: 'Get account balances',
@@ -74,6 +77,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/accounts',
       tags: [ACCOUNTS_TAG],
       summary: 'Create account',
@@ -89,6 +93,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'patch',
+      scope: WRITE_SCOPE,
       path: '/api/accounts/:name',
       tags: [ACCOUNTS_TAG],
       summary: 'Update account',
@@ -110,6 +115,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'delete',
+      scope: WRITE_SCOPE,
       path: '/api/accounts/:name',
       tags: [ACCOUNTS_TAG],
       summary: 'Delete account',
@@ -128,6 +134,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/accounts/expenses',
       tags: [ACCOUNTS_TAG],
       summary: 'Add an account expense',
@@ -157,6 +164,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/accounts/income',
       tags: [ACCOUNTS_TAG],
       summary: 'Add account income',
@@ -186,6 +194,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/accounts/statement',
       tags: [ACCOUNTS_TAG],
       summary: 'Import an account statement',
@@ -206,6 +215,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'patch',
+      scope: WRITE_SCOPE,
       path: '/api/accounts/transactions/:id',
       tags: [ACCOUNTS_TAG],
       summary: 'Update an account transaction',
@@ -232,6 +242,7 @@ export const accountRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'delete',
+      scope: WRITE_SCOPE,
       path: '/api/accounts/transactions/:id',
       tags: [ACCOUNTS_TAG],
       summary: 'Delete an account transaction',

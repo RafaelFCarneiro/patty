@@ -3,6 +3,7 @@ import { aggregateSpending } from '../../../controllers/aggregate.js';
 import { AggregateMetric, AggregateSort, AggregateSpendingSchema, type ResolvedAggregateSpending } from '../../../models/aggregate.js';
 import type { McpContext } from '../context.js';
 import { fromResult } from '../respond.js';
+import { READ_ONLY } from '../annotations.js';
 
 export const registerAggregateTools = (server: McpServer, ctx: McpContext): void => {
   const { deps } = ctx;
@@ -10,6 +11,7 @@ export const registerAggregateTools = (server: McpServer, ctx: McpContext): void
   server.registerTool(
     'aggregate_spending',
     {
+      annotations: READ_ONLY,
       title: 'Aggregate spending',
       description:
         'Flexible spending aggregation: group transactions by category, account, tag, month, or merchant, ' +

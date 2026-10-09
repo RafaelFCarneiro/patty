@@ -35,6 +35,7 @@ import { buildBulkResult } from '../../../controllers/transaction/bulk.js';
 import type { McpContext } from '../context.js';
 import { fromResult, json } from '../respond.js';
 import { STATEMENT_IMPORT_RESULT_DESCRIPTION } from '../shared.js';
+import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerCreditCardTools = (server: McpServer, ctx: McpContext): void => {
   const { deps, runEffects, runEffectsSequence } = ctx;
@@ -42,6 +43,7 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
   server.registerTool(
     'import_card_statement',
     {
+      annotations: MUTATING,
       title: 'Import a credit-card statement',
       description:
         'Import a credit-card statement (pasted text, CSV lines) — every item is a purchase on the ONE ' +
@@ -67,6 +69,7 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
   server.registerTool(
     'add_card_purchase',
     {
+      annotations: MUTATING,
       title: 'Add credit-card purchase',
       description:
         "Record a credit-card purchase, joining the cycle bill (fatura) — the credit-card aggregate's " +
@@ -90,6 +93,7 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
   server.registerTool(
     'create_credit_card',
     {
+      annotations: MUTATING,
       title: 'Create credit card',
       description:
         'Create a credit card with its internal liability account (ADR-010). closingDay: day the fatura ' +
@@ -106,13 +110,14 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
 
   server.registerTool(
     'list_credit_cards',
-    { title: 'List credit cards', description: 'List all credit cards.', inputSchema: {} },
+    { annotations: READ_ONLY, title: 'List credit cards', description: 'List all credit cards.', inputSchema: {} },
     async () => json(await listCreditCards(deps)),
   );
 
   server.registerTool(
     'update_credit_card',
     {
+      annotations: MUTATING,
       title: 'Update credit card',
       description:
         "Update a credit card. name identifies the card; newName renames it — the card's internal account " +
@@ -134,6 +139,7 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
   server.registerTool(
     'delete_credit_card',
     {
+      annotations: MUTATING,
       title: 'Delete credit card',
       description:
         'Hard delete a credit card and everything associated: internal credit account, all purchases, ' +
@@ -158,6 +164,7 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
   server.registerTool(
     'get_bill',
     {
+      annotations: READ_ONLY,
       title: 'Get credit card bill (fatura)',
       description:
         'Get a card bill for a month: status (open/closed/paid), close/due dates, total, and its transactions.',
@@ -169,6 +176,7 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
   server.registerTool(
     'pay_bill',
     {
+      annotations: MUTATING,
       title: 'Pay credit card bill',
       description:
         'Pay a credit card bill. Creates a canonical transfer (payer account → card internal account) ' +
@@ -190,6 +198,7 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
   server.registerTool(
     'revert_bill_payment',
     {
+      annotations: MUTATING,
       title: 'Revert credit card bill payment',
       description:
         'Undo a bill payment: deletes the payment transfer and flips the bill back from paid to closed. ' +
@@ -205,6 +214,7 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
   server.registerTool(
     TransactionTool.updateCardTransaction,
     {
+      annotations: MUTATING,
       title: 'Update credit-card transaction',
       description:
         "Update a credit-card transaction by id (from search_transactions) — the credit-card aggregate's " +
@@ -234,6 +244,7 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
   server.registerTool(
     TransactionTool.deleteCardTransaction,
     {
+      annotations: MUTATING,
       title: 'Delete credit-card transaction',
       description:
         "Delete a credit-card transaction by id — the credit-card aggregate's delete entry point " +

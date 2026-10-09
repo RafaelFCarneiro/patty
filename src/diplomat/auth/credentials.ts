@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { hash, verify } from '@node-rs/argon2';
 import type { AuthSecrets } from '../../controllers/deps.js';
+import { TOKEN_PREFIX } from '../../models/auth.js';
 
 // OWASP Password Storage Cheat Sheet, first-choice argon2id parameters. `@node-rs/argon2` defaults to
 // argon2id when no algorithm is given (its `Algorithm` enum is not available at runtime to import).
@@ -13,7 +14,7 @@ const ARGON2_OPTIONS = {
   parallelism: ARGON2_PARALLELISM,
 } as const;
 
-const SESSION_TOKEN_BYTES = 32; // 256 bits
+const TOKEN_BYTES = 32; // 256 bits — session tokens and access tokens alike
 const TOKEN_ENCODING = 'base64url';
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
@@ -35,7 +36,11 @@ export const verifyPassword = async (storedHash: string, password: string): Prom
   }
 };
 
-export const randomToken = (): string => randomBytes(SESSION_TOKEN_BYTES).toString(TOKEN_ENCODING);
+export const randomToken = (): string => randomBytes(TOKEN_BYTES).toString(TOKEN_ENCODING);
+
+/** `ftk_` + 32 random bytes, base64url — the prefix keeps a leaked token greppable (ADR-033 §3). */
+export const randomAccessToken = (): string =>
+  `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString(TOKEN_ENCODING)}`;
 
 export const randomSetupCode = (): string =>
   Array.from(randomBytes(SETUP_CODE_LENGTH), (byte) => SETUP_CODE_ALPHABET[byte & SETUP_CODE_SYMBOL_MASK]).join('');
@@ -48,6 +53,7 @@ export const createSecrets = async (): Promise<AuthSecrets> => ({
   hashPassword,
   verifyPassword,
   randomToken,
+  randomAccessToken,
   randomSetupCode,
   hashSecret,
   dummyPasswordHash: await hashPassword(randomToken()),

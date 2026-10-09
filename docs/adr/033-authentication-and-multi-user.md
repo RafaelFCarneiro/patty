@@ -303,7 +303,7 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
 
 1. [x] Review/accept this ADR (accepted 2026-10-06).
 2. [x] Phase 1 — identity, sessions, UI login, setup code, auth mode.
-3. [ ] Phase 2 — personal access tokens, scopes, protected resource metadata.
+3. [x] Phase 2 — personal access tokens, scopes, protected resource metadata.
 4. [ ] Phase 3 — in-process OAuth 2.1 AS for MCP; non-loopback exposure supported behind TLS.
 5. [ ] Phase 4 — multi-user tenancy.
 

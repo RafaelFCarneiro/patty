@@ -5,6 +5,7 @@ import { McpTransport, type Config } from './config.js';
 import { issueSetupCode, pruneExpiredSessions } from './controllers/auth.js';
 import type { AuthDeps, RunEffects } from './controllers/deps.js';
 import type { Db } from './diplomat/db/driver.js';
+import { accessTokensRepo } from './diplomat/db/repos/accessTokens.js';
 import { sessionsRepo } from './diplomat/db/repos/sessions.js';
 import { setupCodesRepo } from './diplomat/db/repos/setupCodes.js';
 import { usersRepo } from './diplomat/db/repos/users.js';
@@ -63,6 +64,7 @@ export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEff
   const deps: AuthDeps = {
     users: usersRepo(db),
     sessions: sessionsRepo(db),
+    accessTokens: accessTokensRepo(db),
     setupCodes: setupCodesRepo(db),
     clock: () => new Date(),
     newId: () => randomUUID(),

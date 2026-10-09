@@ -9,6 +9,8 @@ import {
   PUBLIC_ROUTES,
   SETUP_PATH,
   UI_APP_CSS_PATH,
+  MCP_PRM_PATH,
+  PRM_WELL_KNOWN_PATH,
 } from '../../../../src/diplomat/http/authPaths.js';
 import {
   clearedSessionCookie,
@@ -25,8 +27,10 @@ import {
 } from '../../../../src/diplomat/http/rateLimiter.js';
 
 describe('PUBLIC_ROUTES (ADR-033 §6)', () => {
-  it('is exactly liveness, the two session-creating pages and their stylesheet', () => {
-    expect(Object.keys(PUBLIC_ROUTES).sort()).toEqual([HEALTH_PATH, LOGIN_PATH, SETUP_PATH, UI_APP_CSS_PATH].sort());
+  it('is exactly liveness, the two session-creating pages, their stylesheet and the resource metadata', () => {
+    expect(Object.keys(PUBLIC_ROUTES).sort()).toEqual(
+      [HEALTH_PATH, LOGIN_PATH, SETUP_PATH, UI_APP_CSS_PATH, PRM_WELL_KNOWN_PATH, MCP_PRM_PATH].sort(),
+    );
   });
 
   it('never exposes logout, status, the API, MCP or the other UI assets', () => {

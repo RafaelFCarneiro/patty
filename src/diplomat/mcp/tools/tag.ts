@@ -5,17 +5,21 @@ import { CreateTagSchema } from '../../../wire/in/tags.js';
 import * as tagAdapters from '../../../adapters/tags.js';
 import type { McpContext } from '../context.js';
 import { fromResult, json } from '../respond.js';
+import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerTagTools = (server: McpServer, ctx: McpContext): void => {
   const { deps, runEffects } = ctx;
 
-  server.registerTool('list_tags', { title: 'List tags', description: 'List all tags.', inputSchema: {} }, async () =>
-    json(await listTags(deps)),
+  server.registerTool(
+    'list_tags',
+    { annotations: READ_ONLY, title: 'List tags', description: 'List all tags.', inputSchema: {} },
+    async () => json(await listTags(deps)),
   );
 
   server.registerTool(
     'create_tag',
     {
+      annotations: MUTATING,
       title: 'Create tag',
       description:
         'Create a tag. Tags can be attached to transactions to label them ' +
@@ -31,6 +35,7 @@ export const registerTagTools = (server: McpServer, ctx: McpContext): void => {
   server.registerTool(
     'delete_tag',
     {
+      annotations: MUTATING,
       title: 'Delete tag',
       description: 'Delete a tag by id. Removes the tag and all its associations with transactions.',
       inputSchema: { id: z.string().min(1) },

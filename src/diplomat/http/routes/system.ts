@@ -3,6 +3,7 @@ import { HealthOut, StatusOut } from '../../../wire/out/status.js';
 import type { HttpContext } from '../context.js';
 import { HEALTH_PATH } from '../authPaths.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
+import { READ_SCOPE } from '../../../models/auth.js';
 
 const SYSTEM_TAG = 'System';
 
@@ -11,6 +12,7 @@ export const systemRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: HEALTH_PATH,
       tags: [SYSTEM_TAG],
       summary: 'Liveness and database probe — the only unauthenticated /api route (ADR-033 §6)',
@@ -19,6 +21,7 @@ export const systemRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/status',
       tags: [SYSTEM_TAG],
       summary: 'Server status',

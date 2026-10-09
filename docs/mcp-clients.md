@@ -181,7 +181,7 @@ ChatGPT's servers connect from the internet: needs a paid plan with Developer Mo
 cloudflared tunnel --url http://127.0.0.1:51737   # → https://xxx.trycloudflare.com (:3001 from source)
 ```
 
-Add connector with URL `https://xxx.trycloudflare.com/mcp`, auth: none. ⚠️ The tunnel exposes the unauthenticated API to anyone with the URL — test only, kill the tunnel after. Permanent exposure needs MCP auth (Phase 4).
+Add connector with URL `https://xxx.trycloudflare.com/mcp`, auth: none. ⚠️ The tunnel exposes the API to anyone with the URL — test only, kill the tunnel after. An auth-disabled loopback instance refuses a tunnel's non-loopback `Host`; a tunnel to the container still needs a bearer token, so a connector that cannot send a static header waits for OAuth (ADR-033 Phase 3).
 
 ### Ollama (HTTP mode, untested — needs a bridge client)
 
@@ -197,36 +197,51 @@ The image ([README § Docker](../README.md#docker)) always runs the HTTP transpo
 
 > A client that reaches FinTrack through a **non-loopback hostname** (a LAN name, a tunnel) needs authentication on — set `PUBLIC_URL`; an auth-disabled instance only answers `127.0.0.1`, `localhost` and `::1` Hosts (and loopback `Origin`s).
 
-> **Temporary limitation — the container's `/mcp` needs a login session.** The container runs with authentication
-> `required` (ADR-033), and until personal access tokens ship (Phase 2) `/mcp` accepts only a browser **session
-> cookie**, which MCP clients don't carry — every request without one is `401`. **Until then, connect MCP clients
-> over stdio** (the npm sections above), which is trusted and unaffected; the dashboards (`/ui`) and REST (`/api`)
-> work in a logged-in browser. The table below is what will work once bearer tokens land (Phase 2 adds the
-> `Authorization: Bearer ftk_…` header to each). See [`docs/auth.md`](auth.md#temporary-limitation-mcp-over-http-in-the-container).
+The container requires authentication (ADR-033), so every HTTP client sends a **personal access token** as
+`Authorization: Bearer ftk_…`:
 
-Each client's HTTP support was checked against its own docs:
+1. Open <http://127.0.0.1:51737/ui/tokens> (the key icon in the dashboard sidebar) in your logged-in browser.
+2. Create a token (the page asks for your password again) — *read only* if the client only needs to look at your data, *read and write* if it records or changes
+   anything — with an expiry (default 90 days).
+3. Copy it from the page that follows. It is shown **once**; FinTrack keeps only a hash.
+4. Give it to the client as below. Revoke it at `/ui/tokens` at any time; the very next request is refused.
 
-| Client | Streamable HTTP | How |
+A read-only token can use every read tool (`list_*`, `get_*`, `search_transactions`, …) and is refused (`403
+insufficient_scope`) on any tool that changes data — the split is listed in [`mcp-tools.md`](mcp-tools.md#scopes-per-tool).
+A client that gets `401` with `WWW-Authenticate: Bearer … resource_metadata="…"` has no or a bad token; the metadata URL
+resolves to FinTrack's [Protected Resource Metadata](auth.md#protected-resource-metadata).
+
+Keep the token out of the config file you commit: use the environment variable or input prompt where the client has one.
+Each client's way of sending a custom header was checked against its own documentation:
+
+| Client | Streamable HTTP | How to send `Authorization: Bearer ftk_…` |
 |---|---|---|
-| Claude Code | native | `claude mcp add --transport http fintrack http://127.0.0.1:51737/mcp` |
-| VS Code / GitHub Copilot | native | `.vscode/mcp.json`: `{ "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:51737/mcp" } } }` |
-| Google Antigravity | native, but the key is **`serverUrl`** (`url`/`httpUrl` are rejected) | `~/.gemini/config/mcp_config.json`: `{ "mcpServers": { "fintrack": { "serverUrl": "http://127.0.0.1:51737/mcp" } } }` |
-| OpenAI Codex | native | `codex mcp add fintrack --url http://127.0.0.1:51737/mcp`, or `[mcp_servers.fintrack]` with `url = "http://127.0.0.1:51737/mcp"` in `~/.codex/config.toml` |
-| Claude Desktop | `claude_desktop_config.json` only launches stdio servers → local bridge | `mcp-remote` (below) |
+| Claude Code | native | `claude mcp add --transport http fintrack http://127.0.0.1:51737/mcp --header "Authorization: Bearer ftk_…"`; or in `.mcp.json`: `{ "mcpServers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:51737/mcp", "headers": { "Authorization": "Bearer ${FINTRACK_TOKEN}" } } } }` (`${VAR}` is expanded from the environment) |
+| VS Code / GitHub Copilot | native | `.vscode/mcp.json` with a prompted secret: `{ "inputs": [{ "type": "promptString", "id": "fintrack-token", "description": "FinTrack access token", "password": true }], "servers": { "fintrack": { "type": "http", "url": "http://127.0.0.1:51737/mcp", "headers": { "Authorization": "Bearer ${input:fintrack-token}" } } } }` — VS Code asks for the value when the server first starts |
+| Google Antigravity | native, but the key is **`serverUrl`** (`url`/`httpUrl` are rejected) | `~/.gemini/config/mcp_config.json`: `{ "mcpServers": { "fintrack": { "serverUrl": "http://127.0.0.1:51737/mcp", "headers": { "Authorization": "Bearer ftk_…" } } } }` — the token sits in the file in clear (its docs do not promise environment substitution in `headers`), so keep that file out of version control |
+| OpenAI Codex | native | `~/.codex/config.toml`: `[mcp_servers.fintrack]` with `url = "http://127.0.0.1:51737/mcp"` and `bearer_token_env_var = "FINTRACK_TOKEN"` (Codex builds `Authorization: Bearer <value of $FINTRACK_TOKEN>`); `http_headers` / `env_http_headers` set other headers |
+| MCP Inspector | native (Streamable HTTP) | CLI: `npx @modelcontextprotocol/inspector --cli --transport http --server-url http://127.0.0.1:51737/mcp --header "Authorization: Bearer ftk_…" --method tools/list`; a server entry in its config file takes `"headers": { … }` |
+| Claude Desktop | `claude_desktop_config.json` only launches stdio servers → local bridge | `mcp-remote` with `--header` (below). *Connectors → Add custom connector* is for internet-hosted servers; I found no documented field there for a static header, so use the bridge. |
 
-Claude Desktop (bridge — same shape as the HTTP-transport section above):
+Claude Desktop (bridge — `mcp-remote`'s `--header`; the token goes in `env` so the argument has no space in it, which
+`mcp-remote` documents as a workaround for Claude Desktop on Windows mangling arguments with spaces, and keeps the secret
+out of the process list's arguments):
 
 ```json
 "mcpServers": {
   "fintrack": {
     "command": "npx",
-    "args": ["-y", "mcp-remote@latest", "http://127.0.0.1:51737/mcp", "--transport", "http-only"]
+    "args": ["-y", "mcp-remote@latest", "http://127.0.0.1:51737/mcp", "--transport", "http-only", "--header", "Authorization:${FINTRACK_AUTH_HEADER}"],
+    "env": { "FINTRACK_AUTH_HEADER": "Bearer ftk_…" }
   }
 }
 ```
 
-Desktop's *Connectors → Add custom connector* flow is for internet-hosted remote servers; it is not documented for
-loopback URLs, so use the bridge for the container.
+`mcp-remote` also accepts `--header-file <path>` (one `Name: value` per line) to keep the credential out of the
+configuration entirely.
+
+If a client cannot send a custom header at all, connect it over stdio instead (the npm sections above): stdio is trusted
+and needs no token.
 
 The `npx @rafaelfcarneiro/fintrack setup <tool>` command writes stdio configs only; for the container, edit the config by hand as above.
 

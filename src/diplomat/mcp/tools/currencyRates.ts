@@ -6,6 +6,7 @@ import { SetExchangeRatesSchema } from '../../../wire/in/currencyRates.js';
 import * as currencyRateAdapters from '../../../adapters/currencyRates.js';
 import type { McpContext } from '../context.js';
 import { fromResult, json } from '../respond.js';
+import { MUTATING, READ_ONLY } from '../annotations.js';
 
 const RATE_TOOL_DESCRIPTION_PREFIX =
   'FinTrack never fetches exchange rates itself (local-first, zero external calls — ADR-026). ' +
@@ -18,6 +19,7 @@ export const registerCurrencyRateTools = (server: McpServer, ctx: McpContext): v
   server.registerTool(
     'set_exchange_rate',
     {
+      annotations: MUTATING,
       title: 'Set exchange rate',
       description:
         RATE_TOOL_DESCRIPTION_PREFIX +
@@ -34,6 +36,7 @@ export const registerCurrencyRateTools = (server: McpServer, ctx: McpContext): v
   server.registerTool(
     'set_exchange_rates',
     {
+      annotations: MUTATING,
       title: 'Set exchange rates (bulk)',
       description:
         RATE_TOOL_DESCRIPTION_PREFIX +
@@ -54,6 +57,7 @@ export const registerCurrencyRateTools = (server: McpServer, ctx: McpContext): v
   server.registerTool(
     'list_exchange_rates',
     {
+      annotations: READ_ONLY,
       title: 'List exchange rates',
       description:
         'All stored exchange rates, each with its own `asOf`. Staleness is not evaluated here — this ' +

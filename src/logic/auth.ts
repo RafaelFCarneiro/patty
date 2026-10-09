@@ -1,11 +1,28 @@
 import { HTTP_SCHEME_PREFIX, hostnameOfHostHeader, isLoopbackHost } from '../common/net.js';
 import {
+  type AccessTokenEntity,
+  type AccessTokenSummary,
+  ALL_SCOPES,
+  API_PATH_PREFIX,
   AuthMode,
   authErrors,
   type AuthError,
+  MCP_PATH,
+  MCP_PRM_PATH,
+  type Principal,
+  PrincipalVia,
+  READ_SCOPE,
+  type Scope,
   SESSION_ABSOLUTE_MAX_MS,
   type SessionEntity,
   type SetupCodeEntity,
+  TOKEN_ACCESS_SCOPES,
+  TOKEN_DISPLAY_PREFIX_RANDOM_CHARS,
+  TOKEN_EXPIRY_DAYS,
+  TOKEN_PREFIX,
+  TokenStatus,
+  WRITE_SCOPE,
+  type NewTokenSpec,
   type UserEntity,
 } from '../models/auth.js';
 
@@ -23,7 +40,8 @@ const SETUP_CODE_GROUP_SIZE = 4;
 const SETUP_CODE_GROUP_SEPARATOR = '-';
 const NON_ALPHANUMERIC = /[^A-Za-z0-9]/g;
 
-const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
+const READ_METHODS = ['GET', 'HEAD'];
+const SAFE_METHODS: ReadonlySet<string> = new Set([...READ_METHODS, 'OPTIONS']);
 const OPAQUE_ORIGIN = 'null';
 const WEB_PROTOCOLS: ReadonlySet<string> = new Set(['http:', 'https:']);
 
@@ -85,6 +103,14 @@ export const touched = (session: SessionEntity, now: Date): SessionEntity => ({
   ...session,
   lastSeenAt: now.toISOString(),
   expiresAt: slidingExpiry(session.createdAt, now),
+});
+
+/** A signed-in user acting through the browser: every scope (the session is the owner's own). */
+export const sessionPrincipal = (user: UserEntity): Principal => ({
+  userId: user.id,
+  role: user.role,
+  scopes: [...ALL_SCOPES],
+  via: PrincipalVia.enum.session,
 });
 
 export type SessionVerdict = { kind: 'invalid' } | { kind: 'valid'; touch: boolean };
@@ -204,3 +230,204 @@ export const setupBanner = (fields: { code: string; setupUrl: string; expiresAt:
     '└──────────────────────────────────────────────────────────────────────',
     '',
   ].join('\n');
+
+// ─── Scopes ────────────────────────────────────────────────────────────────
+
+const MCP_TOOLS_CALL_METHOD = 'tools/call';
+
+/** `fintrack:write` implies `fintrack:read`; nothing else implies anything. */
+export const hasScope = (granted: readonly string[], required: Scope): boolean =>
+  granted.includes(required) ||
+  (required === READ_SCOPE && granted.includes(WRITE_SCOPE));
+
+/** The default REST rule: reading methods need `read`, every other method needs `write`. Route definitions
+ *  call this explicitly so each one's scope stays visible and reviewable (and a new method fails closed). */
+export const defaultScopeForMethod = (method: string): Scope =>
+  READ_METHODS.includes(method.toUpperCase()) ? READ_SCOPE : WRITE_SCOPE;
+
+/** An MCP tool's scope comes from its `readOnlyHint` annotation — the single source. Anything not declared
+ *  read-only needs `write`. */
+export const scopeOfTool = (readOnlyHint: boolean | undefined): Scope =>
+  readOnlyHint === true ? READ_SCOPE : WRITE_SCOPE;
+
+type JsonRpcMessage = { method?: unknown; params?: { name?: unknown } | null };
+
+/**
+ * The scope a POST /mcp body needs: `write` if any message is a `tools/call` of a write tool (or of a tool
+ * we cannot place — fail closed), else `read`. Other JSON-RPC methods (initialize, tools/list, resources/*,
+ * prompts/*, ping, notifications) execute nothing that writes. Handles a batch (array) as well as one message.
+ */
+export const requiredMcpScope = (body: unknown, toolScope: (name: string) => Scope | undefined): Scope => {
+  const messages: unknown[] = Array.isArray(body) ? body : [body];
+  const needsWrite = messages.some((message) => {
+    if (typeof message !== 'object' || message === null) return false;
+    const { method, params } = message as JsonRpcMessage;
+    if (method !== MCP_TOOLS_CALL_METHOD) return false;
+    const name = params?.name;
+    return (
+      typeof name !== 'string' || (toolScope(name) ?? WRITE_SCOPE) === WRITE_SCOPE
+    );
+  });
+  return needsWrite ? WRITE_SCOPE : READ_SCOPE;
+};
+
+// ─── Bearer credentials (personal access tokens) ───────────────────────────
+
+const BEARER_SCHEME = 'Bearer';
+const BEARER_HEADER = new RegExp(`^${BEARER_SCHEME}[ \\t]+(\\S+)$`, 'i');
+const MAX_TOKEN_LENGTH = 256;
+
+export type Credential = { kind: 'none' } | { kind: 'bearer'; token: string } | { kind: 'malformed' };
+
+/** The `Authorization` header is authoritative when present: it must be `Bearer ftk_…`. Anything else
+ *  (another scheme, no token, a token that is not ours) is `malformed` — never a reason to try the cookie. */
+export const credentialOf = (authorization: string | undefined): Credential => {
+  if (authorization === undefined) return { kind: 'none' };
+  const token = BEARER_HEADER.exec(authorization)?.[1];
+  return token !== undefined && token.startsWith(TOKEN_PREFIX) && token.length <= MAX_TOKEN_LENGTH
+    ? { kind: 'bearer', token }
+    : { kind: 'malformed' };
+};
+
+/** Only `/api` and `/mcp` take a bearer token; `/ui` is the browser surface and stays session-only. */
+export const acceptsBearer = (path: string): boolean =>
+  [API_PATH_PREFIX, MCP_PATH].some((root) => path === root || path.startsWith(`${root}/`));
+
+/** `ftk_` + the first characters of the random part — enough to recognise a token in a list, not to use it. */
+export const tokenDisplayPrefix = (token: string): string =>
+  token.slice(0, TOKEN_PREFIX.length + TOKEN_DISPLAY_PREFIX_RANDOM_CHARS);
+
+export const newAccessToken = (
+  fields: { id: string; userId: string; tokenHash: string; prefix: string; input: NewTokenSpec },
+  now: Date,
+) => {
+  const days = TOKEN_EXPIRY_DAYS[fields.input.expiry];
+  return {
+    id: fields.id,
+    userId: fields.userId,
+    name: fields.input.name,
+    tokenHash: fields.tokenHash,
+    prefix: fields.prefix,
+    scopes: [...TOKEN_ACCESS_SCOPES[fields.input.access]],
+    createdAt: now.toISOString(),
+    lastUsedAt: null,
+    expiresAt: days === null ? null : toIso(now.getTime() + days * DAY_MS),
+    revokedAt: null,
+  };
+};
+
+/** A token's fields before it has been written (no `version` yet). */
+type TokenFields = Omit<AccessTokenEntity, 'version'>;
+
+export const tokenStatus = (token: TokenFields, now: Date): TokenStatus =>
+  token.revokedAt !== null
+    ? TokenStatus.enum.revoked
+    : token.expiresAt !== null && now.getTime() >= millis(token.expiresAt)
+      ? TokenStatus.enum.expired
+      : TokenStatus.enum.active;
+
+/** The token as the list shows it — never the hash. */
+export const summarizeToken = (token: TokenFields, now: Date): AccessTokenSummary => ({
+  id: token.id,
+  userId: token.userId,
+  name: token.name,
+  prefix: token.prefix,
+  scopes: token.scopes,
+  createdAt: token.createdAt,
+  lastUsedAt: token.lastUsedAt,
+  expiresAt: token.expiresAt,
+  revokedAt: token.revokedAt,
+  status: tokenStatus(token, now),
+});
+
+export type TokenVerdict = { kind: 'invalid' } | { kind: 'valid'; touch: boolean };
+
+/** Unknown, revoked, expired, or belonging to an owner who is unclaimed/disabled → invalid. `last_used_at` is
+ *  rewritten at most every `SESSION_TOUCH_INTERVAL_MS`, like a session's. */
+export const evaluateToken = (token: AccessTokenEntity | null, user: UserEntity | null, now: Date): TokenVerdict =>
+  token === null ||
+  tokenStatus(token, now) !== TokenStatus.enum.active ||
+  user === null ||
+  !hasCredentials(user) ||
+  user.disabledAt !== null
+    ? { kind: 'invalid' }
+    : {
+        kind: 'valid',
+        touch: token.lastUsedAt === null || now.getTime() - millis(token.lastUsedAt) >= SESSION_TOUCH_INTERVAL_MS,
+      };
+
+export const usedToken = (token: AccessTokenEntity, now: Date): AccessTokenEntity => ({
+  ...token,
+  lastUsedAt: now.toISOString(),
+});
+
+export const revokedToken = (token: AccessTokenEntity, now: Date): AccessTokenEntity => ({
+  ...token,
+  revokedAt: now.toISOString(),
+});
+
+export const tokenPrincipal = (token: AccessTokenEntity, user: UserEntity): Principal => ({
+  userId: user.id,
+  role: user.role,
+  scopes: token.scopes,
+  via: PrincipalVia.enum.token,
+  tokenId: token.id,
+});
+
+// ─── Challenges (RFC 6750 §3, MCP authorization §"Error Handling") ──────────
+
+export type ChallengeableError = Extract<
+  AuthError,
+  { code: 'unauthenticated' | 'invalid_token' | 'insufficient_scope' }
+>;
+
+const quoted = (value: string): string => `"${value.replace(/["\\]/g, '\\$&')}"`;
+const param = (name: string, value: string): string => `${name}=${quoted(value)}`;
+const joinScopes = (scopes: readonly Scope[]): string => scopes.join(' ');
+
+/** The origin the resource is served from: `PUBLIC_URL`, else the request's own loopback origin; `null` when
+ *  the instance cannot say (non-loopback host, no `PUBLIC_URL`). */
+export const resourceOrigin = (publicUrl: string | undefined, host: string | undefined): string | null =>
+  allowedOrigins(publicUrl, host)[0] ?? null;
+
+export const resourceMetadataUrl = (origin: string): string => `${origin}${MCP_PRM_PATH}`;
+
+/**
+ * The one place a `WWW-Authenticate` value is built.
+ *   - no credential        → `resource_metadata` + every scope (what a client should request);
+ *   - invalid/expired token → `error="invalid_token"` + `resource_metadata`;
+ *   - too little scope      → `error="insufficient_scope"` + the scope that was needed + `resource_metadata`.
+ * `resource_metadata` is left out when the instance cannot name its own origin.
+ */
+export const bearerChallenge = (error: ChallengeableError, metadataUrl: string | null): string => {
+  const metadata = metadataUrl === null ? [] : [param('resource_metadata', metadataUrl)];
+  switch (error.code) {
+    case 'unauthenticated':
+      return `${BEARER_SCHEME} ${[...metadata, param('scope', joinScopes(ALL_SCOPES))].join(', ')}`;
+    case 'invalid_token':
+      return `${BEARER_SCHEME} ${[param('error', error.code), ...metadata].join(', ')}`;
+    case 'insufficient_scope':
+      return `${BEARER_SCHEME} ${[param('error', error.code), param('scope', error.scope), ...metadata].join(', ')}`;
+    default: {
+      const _exhaustive: never = error;
+      throw new Error(`unmapped challenge: ${JSON.stringify(_exhaustive)}`);
+    }
+  }
+};
+
+// ─── Protected Resource Metadata (RFC 9728) ────────────────────────────────
+
+const RESOURCE_NAME = 'FinTrack';
+const BEARER_METHOD_HEADER = 'header';
+
+/**
+ * The metadata document for resource `<origin>/mcp`. `authorization_servers` is OPTIONAL in RFC 9728 and is
+ * omitted until the in-process authorization server exists (ADR-033 Phase 3); `offline_access` is never listed
+ * (MCP authorization: refresh tokens are not a resource requirement).
+ */
+export const protectedResourceMetadata = (origin: string) => ({
+  resource: `${origin}${MCP_PATH}`,
+  scopes_supported: [...ALL_SCOPES],
+  bearer_methods_supported: [BEARER_METHOD_HEADER],
+  resource_name: RESOURCE_NAME,
+});

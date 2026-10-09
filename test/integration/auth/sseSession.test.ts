@@ -58,7 +58,7 @@ describe('GET /ui/events when the session check itself fails', () => {
   it('fails closed: the stream ends and nothing is left unhandled', async () => {
     const app = Fastify();
     registerUiRoutes(app, () => () => {}, {
-      logoutControl: false,
+      authControls: false,
       session: {
         isActive: async () => {
           throw new Error('database unavailable');

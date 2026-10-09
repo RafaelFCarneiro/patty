@@ -23,10 +23,16 @@ import { transactionApplier, transactionsRepo } from '../../src/diplomat/db/repo
 import { transactionTagApplier } from '../../src/diplomat/db/repos/transactionTags.js';
 import { healthRepo } from '../../src/diplomat/db/repos/health.js';
 import { createLocaleResolver } from '../../src/diplomat/db/localeCache.js';
+import { accessTokenApplier } from '../../src/diplomat/db/repos/accessTokens.js';
 import { sessionApplier } from '../../src/diplomat/db/repos/sessions.js';
 import { setupCodeApplier } from '../../src/diplomat/db/repos/setupCodes.js';
 import { userApplier } from '../../src/diplomat/db/repos/users.js';
-import { SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from '../../src/models/auth.js';
+import {
+  ACCESS_TOKEN_ENTITY_TAG,
+  SESSION_ENTITY_TAG,
+  SETUP_CODE_ENTITY_TAG,
+  USER_ENTITY_TAG,
+} from '../../src/models/auth.js';
 import { ACCOUNT_ENTITY_TAG } from '../../src/models/account.js';
 import { BILL_ENTITY_TAG } from '../../src/models/bill.js';
 import { BUDGET_ENTITY_TAG } from '../../src/models/budget.js';
@@ -141,6 +147,7 @@ export const buildApp = async (opts?: {
     [SETTINGS_ENTITY_TAG]: settingsApplier,
     [USER_ENTITY_TAG]: userApplier,
     [SESSION_ENTITY_TAG]: sessionApplier,
+    [ACCESS_TOKEN_ENTITY_TAG]: accessTokenApplier,
     [SETUP_CODE_ENTITY_TAG]: setupCodeApplier,
   };
   const changeBus = createChangeBus({ onError: opts?.onChangeError });

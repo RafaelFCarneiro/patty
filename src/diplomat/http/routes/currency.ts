@@ -3,6 +3,7 @@ import { listCurrencies } from '../../../controllers/currencies.js';
 import { CurrencySchema } from '../../../models/money.js';
 import type { HttpContext } from '../context.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
+import { READ_SCOPE } from '../../../models/auth.js';
 
 const CURRENCIES_TAG = 'Currencies';
 
@@ -11,6 +12,7 @@ export const currencyRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/currencies',
       tags: [CURRENCIES_TAG],
       summary: 'List currencies',
