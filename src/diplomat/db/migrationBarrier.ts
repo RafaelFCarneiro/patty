@@ -17,6 +17,13 @@ type MigrationRow = { created_at: number | string | null };
  * another connection and the snapshot is exactly the state the migrations then start from: nothing can commit
  * between the two, and nothing can be lost from the backup.
  *
+ * DRIFT GUARD — this file re-implements `drizzle-orm/libsql`'s migrator (with `@libsql/client`'s `migrate()`/
+ * `transaction()` underneath). Bumping `drizzle-orm`, `drizzle-kit` or `@libsql/client` therefore requires the
+ * parity tests in `test/integration/db/ownerMigration.test.ts` ("parity with drizzle-orm/libsql's own migrator")
+ * to pass: they migrate the same pre-auth database both ways and compare schema, `__drizzle_migrations` rows, data
+ * and connection settings. If they fail, fix this runner (or drop it) — do not loosen the test. See
+ * `docs/releasing.md` § Dependency upgrades.
+ *
  * It mirrors `drizzle-orm/libsql`'s `migrate()` (foreign keys off, the same statements, the same
  * `__drizzle_migrations` rows), only with the lock taken first and held across `whileHeld`.
  */

@@ -92,6 +92,17 @@ Upgrades are safe to run anytime: the database migrates itself forward on the ne
 (`bootstrap()` applies any pending Drizzle migrations idempotently), and your `<home directory>/.fintrack/fintrack.db` is untouched
 otherwise. You'll see new releases on the repo's **Releases** page with auto-generated notes.
 
+## Dependency upgrades — `drizzle-orm`, `drizzle-kit`, `@libsql/client`
+
+`src/diplomat/db/migrationBarrier.ts` **mirrors drizzle's libSQL migrator** (`drizzle-orm/libsql`'s `migrate()` and
+`@libsql/client`'s `migrate()`/`transaction()` underneath): it applies a pending data-rewriting migration inside one
+write transaction so the pre-migration backup cannot miss a concurrent writer (ADR-033 § 7). Bumping any of those
+three packages therefore **requires the parity tests to pass** — `npx vitest run --config vitest.integration.config.ts
+test/integration/db/ownerMigration.test.ts` — before merging. They migrate the same pre-auth database through this
+runner and through drizzle alone and compare the schema, every `__drizzle_migrations` row, the data, and the app
+connection's `foreign_keys`/`busy_timeout`. A failure means drizzle's behavior changed: update the runner to match
+(or remove it) — never relax the test.
+
 ## Transport modes (`MCP_TRANSPORT`)
 
 FinTrack supports two MCP transports, selected by the `MCP_TRANSPORT` env var (default `stdio`):

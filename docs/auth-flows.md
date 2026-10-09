@@ -11,7 +11,7 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 | Config | `src/config.ts` | Decides the auth mode from `HOST` / `PUBLIC_URL` / `TRUST_PROXY` / `FINTRACK_AUTH` |
 | Bootstrap | `src/diplomat/db/bootstrap.ts`, `safetyCopy.ts`, `migrationLock.ts` | Migrations, the owner row, the pre-migration backup |
 | AuthRuntime | `src/authRuntime.ts` | Builds the identity deps, prunes sessions, issues and prints the setup code |
-| AuthGate | `src/diplomat/http/hooks/auth.ts` (decisions in `src/logic/auth.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, session resolution, the CSRF check, redirects |
+| AuthHook | `src/diplomat/http/hooks/auth.ts` — `registerAuthHook` (decisions in `src/logic/auth.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, session resolution, the CSRF check, redirects |
 | AuthRoutes | `src/diplomat/http/routes/auth.ts` | `/ui/setup`, `/ui/login`, `/ui/logout`: form parsing, rate limiting, cookies |
 | Controller | `src/controllers/auth.ts` | `issueSetupCode`, `claimOwner`, `login`, `logout`, `authenticate`; returns `{ persist, response }` |
 | Logic | `src/logic/auth.ts` | Pure rules: expiry, the sliding window, "can log in", origin comparison |
@@ -37,9 +37,9 @@ flowchart TD
     F --> I
     G --> I
     I[Open DB with key<br/>file → env → keychain] --> J{Data-rewriting migration pending<br/>on an existing DB?}
-    J -- yes --> K[Take the OS-level migration lock<br/>take SQLite's write lock<br/>VACUUM INTO db.pre-0018_auth_identity.bak<br/>encrypted, 0600<br/>apply migrations in the same transaction]
+    J -- yes --> K[Take the OS-level migration lock<br/>VACUUM INTO db.pre-0018_auth_identity.bak<br/>under SQLite's write lock<br/>encrypted, 0600<br/>migrations applied in the same transaction]
     J -- no --> L
-    K --> L[Apply migrations<br/>0018 inserts the OWNER row:<br/>id user-owner, admin, no credentials]
+    K --> L[Migrations applied<br/>0018 inserts the OWNER row:<br/>id user-owner, admin, no credentials]
     L --> M{Mode required<br/>AND an HTTP surface?}
     M -- no --> N[Every HTTP request acts as the owner<br/>stdio acts as the owner]
     M -- yes --> O[Load argon2, build the identity deps<br/>prune expired sessions]
@@ -58,24 +58,24 @@ flowchart TD
 sequenceDiagram
     autonumber
     actor Op as Operator (browser)
-    participant Gate as AuthGate
+    participant Hook as AuthHook
     participant Routes as AuthRoutes
     participant Ctl as Controller.claimOwner
     participant Sec as Secrets
     participant Run as Runner
     participant DB
 
-    Op->>Gate: GET /ui
-    Gate->>Gate: not a public route, no session cookie
-    Gate->>DB: owner unclaimed?
-    DB-->>Gate: yes
-    Gate-->>Op: 303 → /ui/setup
-    Op->>Gate: GET /ui/setup (public)
-    Gate->>Routes: pass
+    Op->>Hook: GET /ui
+    Hook->>Hook: not a public route, no session cookie
+    Hook->>DB: owner unclaimed?
+    DB-->>Hook: yes
+    Hook-->>Op: 303 → /ui/setup
+    Op->>Hook: GET /ui/setup (public)
+    Hook->>Routes: pass
     Routes-->>Op: setup form (CSP locked, no-store)
-    Op->>Gate: POST /ui/setup {code, username, password}
-    Gate->>Gate: public route — if the browser declared an Origin, it must be ours (forced-login defence)
-    Gate->>Routes: pass
+    Op->>Hook: POST /ui/setup {code, username, password}
+    Hook->>Hook: public route — if the browser declared an Origin, it must be ours (forced-login defence)
+    Hook->>Routes: pass
     Routes->>Routes: zod: normalize the username (NFKC, lowercase), password ≥ 12
     Routes->>Routes: rate limiter: reserve a strike (per IP and per username)
     Routes->>Run: runEffects(claimOwner)
@@ -99,18 +99,18 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     actor U as User (browser)
-    participant Gate as AuthGate
+    participant Hook as AuthHook
     participant Routes as AuthRoutes
     participant Ctl as Controller.login
     participant Sec as Secrets
     participant DB
 
-    U->>Gate: GET /ui/overview (no cookie)
-    Gate-->>U: 303 → /ui/login?next=/ui/overview  (next is validated: same-origin, under /ui only)
+    U->>Hook: GET /ui/overview (no cookie)
+    Hook-->>U: 303 → /ui/login?next=/ui/overview  (next is validated: same-origin, under /ui only)
     U->>Routes: GET /ui/login (public) → form
-    U->>Gate: POST /ui/login {username, password, next}
-    Gate->>Gate: public route + Origin check if declared
-    Gate->>Routes: pass
+    U->>Hook: POST /ui/login {username, password, next}
+    Hook->>Hook: public route + Origin check if declared
+    Hook->>Routes: pass
     Routes->>Routes: limited? (IP: 20 per 15 min · username: 5 per 15 min) → 429 page
     Routes->>Routes: reserve a strike
     Routes->>Ctl: runEffects(login)
@@ -165,14 +165,14 @@ flowchart TD
 sequenceDiagram
     autonumber
     actor U as User (browser)
-    participant Gate as AuthGate
+    participant Hook as AuthHook
     participant Routes as AuthRoutes
     participant SSE as /ui/events stream
     participant DB
 
-    U->>Gate: GET /ui/events (cookie)
-    Gate->>Gate: session valid → principal
-    Gate->>SSE: open the stream
+    U->>Hook: GET /ui/events (cookie)
+    Hook->>Hook: session valid → principal
+    Hook->>SSE: open the stream
     loop every 30 s
         SSE->>DB: re-resolve the session (fails closed on error)
         alt session gone, expired or user disabled
@@ -181,8 +181,8 @@ sequenceDiagram
     end
     Note over SSE: auth writes (user / session / setup_code) are filtered out of change events
 
-    U->>Gate: POST /ui/logout (cookie + same Origin)
-    Gate->>Routes: authenticated + CSRF ok
+    U->>Hook: POST /ui/logout (cookie + same Origin)
+    Hook->>Routes: authenticated + CSRF ok
     Routes->>DB: runEffects(logout) — DELETE the session row
     alt delete committed
         Routes-->>U: 303 → /ui/login + Set-Cookie clearing fintrack_session (Max-Age=0)
@@ -217,8 +217,8 @@ sequenceDiagram
 
     You->>FT: first start after upgrading
     FT->>DB: migration 0018 pending on an existing DB?
-    FT->>DB: take the write lock, then VACUUM INTO fintrack.db.pre-0018_auth_identity.bak (encrypted, same key)
-    FT->>DB: same transaction: create users / sessions / setup_codes + INSERT the owner (no credentials)
+    FT->>DB: VACUUM INTO fintrack.db.pre-0018_auth_identity.bak under SQLite's write lock (encrypted, same key)
+    FT->>DB: migrations applied in the same transaction: create users / sessions / setup_codes + INSERT the owner (no credentials)
     Note over DB: no domain table touched — accounts, transactions … unchanged
     FT-->>You: loopback → auth disabled → everything acts as the owner (same behavior as before)
     Note over You,DB: Later (Docker / auth required): setup code → /ui/setup CLAIMS this owner → same data

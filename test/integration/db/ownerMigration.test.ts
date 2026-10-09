@@ -4,9 +4,10 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createClient } from '@libsql/client';
 import { sql } from 'drizzle-orm';
+import { migrate } from 'drizzle-orm/libsql/migrator';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
-import { openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
+import { BUSY_TIMEOUT_MS, openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { DATA_REWRITING_MIGRATIONS } from '../../../src/diplomat/db/migrations.js';
 import { applyPendingMigrationsHolding, MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
 import { backupPath } from '../../../src/diplomat/db/safetyCopy.js';
@@ -282,25 +283,91 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
       expect(await tryWrite(other)).toBe('committed'); // and writers are welcome again afterwards
     });
 
-    it('applies the migrations exactly as drizzle would: the owner exists and drizzle finds nothing left', async () => {
-      const legacy = await open();
-      await bootstrap(legacy, preAuthFolder);
-      await seedDomainData(legacy);
+    // migrationBarrier.ts re-implements drizzle's libSQL migrator so it can hold the write lock across the
+    // snapshot. This is the guard against the two drifting apart: the same pre-auth database, migrated each way,
+    // must be indistinguishable. A drizzle or @libsql/client bump has to keep it green (docs/releasing.md).
+    describe("parity with drizzle-orm/libsql's own migrator", () => {
+      const openAt = (path: string) => openDatabase({ DB_PATH: path, FINTRACK_DB_KEY: TEST_KEY });
 
-      await applyPendingMigrationsHolding(legacy, REAL_MIGRATIONS_FOLDER, async () => undefined);
-
-      expect(await ownerRows(legacy)).toHaveLength(1);
-      const journal = JSON.parse(readFileSync(join(REAL_MIGRATIONS_FOLDER, 'meta', '_journal.json'), 'utf8')) as {
-        entries: Array<{ when: number }>;
+      /** A pre-auth database with the fixture data, at `path`. */
+      const preAuthDatabase = async (path: string): Promise<Db> => {
+        const db = await openAt(path);
+        await bootstrap(db, preAuthFolder);
+        await seedDomainData(db);
+        return db;
       };
-      const [last] = await legacy.all<{ created_at: number }>(
-        sql`SELECT created_at FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY created_at DESC LIMIT 1`,
-      );
-      expect(Number(last?.created_at)).toBe(journal.entries.at(-1)?.when);
-      const before = await domainDump(legacy);
-      await bootstrap(legacy); // drizzle's own pass: a no-op, no error, nothing changed
-      expect(await domainDump(legacy)).toEqual(before);
-      expect(await ownerRows(legacy)).toHaveLength(1);
+
+      const schemaOf = (db: Db) =>
+        db.all<Row>(sql`SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name`);
+      const bookkeepingOf = (db: Db) =>
+        db.all<Row>(sql`SELECT hash, created_at FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY created_at, hash`);
+      const usersOf = (db: Db) =>
+        // `created_at` is the migration's own clock; everything else is fixed by the SQL.
+        db.all<Row>(sql`SELECT id, username, password_hash, role, disabled_at, version FROM users ORDER BY id`);
+      const pragmasOf = async (db: Db) => ({
+        foreignKeys: await db.all<Row>(sql`PRAGMA foreign_keys`),
+        busyTimeout: await db.all<Row>(sql`PRAGMA busy_timeout`),
+      });
+      // The seeds mint ids and timestamps per database (dashboards), which no migration path can make equal.
+      const comparableDump = async (db: Db): Promise<Record<string, Row[]>> => {
+        const dump = await domainDump(db);
+        const dashboards = (dump['dashboards'] ?? [])
+          .map(({ id: _id, updated_at: _updatedAt, ...rest }) => rest)
+          .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))); // re-sort: the ids were the order
+        return { ...dump, dashboards };
+      };
+
+      it('yields the same schema, bookkeeping, data and connection settings as drizzle alone', async () => {
+        const viaBarrier = await preAuthDatabase(join(tmpDir, 'via-barrier.db'));
+        const viaDrizzle = await preAuthDatabase(join(tmpDir, 'via-drizzle.db'));
+
+        // A: this runner. B: drizzle's migrator alone.
+        await applyPendingMigrationsHolding(viaBarrier, REAL_MIGRATIONS_FOLDER, async () => undefined);
+        await migrate(viaDrizzle, { migrationsFolder: REAL_MIGRATIONS_FOLDER });
+
+        // Compared BEFORE the regular startup pass: bootstrap() runs drizzle's migrate() again, which would quietly
+        // finish anything either side under-applied and make a real difference look equal.
+        expect(await schemaOf(viaBarrier)).toEqual(await schemaOf(viaDrizzle));
+        expect(await bookkeepingOf(viaBarrier)).toEqual(await bookkeepingOf(viaDrizzle));
+        expect(await comparableDump(viaBarrier)).toEqual(await comparableDump(viaDrizzle));
+        expect(await usersOf(viaBarrier)).toEqual(await usersOf(viaDrizzle));
+
+        // …then the same startup pass on both (migrations no-op, seeds), and the end state must still agree.
+        await bootstrap(viaBarrier);
+        await bootstrap(viaDrizzle);
+        expect(await schemaOf(viaBarrier)).toEqual(await schemaOf(viaDrizzle));
+        expect(await bookkeepingOf(viaBarrier)).toEqual(await bookkeepingOf(viaDrizzle));
+        expect(await comparableDump(viaBarrier)).toEqual(await comparableDump(viaDrizzle));
+        expect(await usersOf(viaBarrier)).toEqual(await usersOf(viaDrizzle));
+
+        // The app's Db after startup behaves the same too — and like one freshly opened on the migrated file.
+        const reopened = await openAt(join(tmpDir, 'via-drizzle.db'));
+        // Pinned, so "equal" can't mean "equally wrong": foreign keys enforced, the busy timeout on this connection.
+        expect(await pragmasOf(viaBarrier)).toEqual({
+          foreignKeys: [{ foreign_keys: 1 }],
+          busyTimeout: [{ timeout: BUSY_TIMEOUT_MS }],
+        });
+        expect(await pragmasOf(viaBarrier)).toEqual(await pragmasOf(viaDrizzle));
+        expect(await pragmasOf(viaBarrier)).toEqual(await pragmasOf(reopened));
+      });
+
+      it('ends the bookkeeping on the last journal entry, and drizzle finds nothing left to apply', async () => {
+        const db = await preAuthDatabase(join(tmpDir, 'via-barrier.db'));
+        await applyPendingMigrationsHolding(db, REAL_MIGRATIONS_FOLDER, async () => undefined);
+
+        const journal = JSON.parse(readFileSync(join(REAL_MIGRATIONS_FOLDER, 'meta', '_journal.json'), 'utf8')) as {
+          entries: Array<{ when: number }>;
+        };
+        const rows = await bookkeepingOf(db);
+        expect(Number(rows.at(-1)?.['created_at'])).toBe(journal.entries.at(-1)?.when);
+        expect(rows).toHaveLength(journal.entries.length);
+
+        const before = await comparableDump(db);
+        await migrate(db, { migrationsFolder: REAL_MIGRATIONS_FOLDER }); // would throw on a re-applied CREATE TABLE
+        expect(await comparableDump(db)).toEqual(before);
+        expect(await bookkeepingOf(db)).toEqual(rows);
+        expect(await ownerRows(db)).toHaveLength(1);
+      });
     });
 
     it('rolls everything back, and frees the lock, when the held step fails', async () => {
