@@ -122,9 +122,8 @@ const seedBaseline = async (
   category: string,
   monthlyAmount: number,
   currency: string,
-  stamp: number,
 ): Promise<void> => {
-  for (const [i, date] of BASELINE_DATES.entries()) {
+  for (const date of BASELINE_DATES) {
     await addExpense(client, {
       description: `baseline ${category}`,
       amount: monthlyAmount,
@@ -165,7 +164,7 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
     try {
       await client.connect(transport);
       await callTool(client, { name: 'create_category', args: { name: categoryName } });
-      await seedBaseline(client, categoryName, 100, 'BRL', stamp);
+      await seedBaseline(client, categoryName, 100, 'BRL');
       await addExpense(client, {
         description: 'reference month spend',
         amount: 250,
@@ -225,7 +224,7 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
     try {
       await client.connect(transport);
       await callTool(client, { name: 'create_category', args: { name: categoryName } });
-      await seedBaseline(client, categoryName, 100, 'BRL', stamp);
+      await seedBaseline(client, categoryName, 100, 'BRL');
 
       const result = (await callTool(client, {
         name: 'find_correlations',
@@ -247,8 +246,8 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
     try {
       await client.connect(transport);
       await callTool(client, { name: 'create_category', args: { name: categoryName } });
-      await seedBaseline(client, categoryName, 100, 'BRL', stamp);
-      await seedBaseline(client, categoryName, 50, 'USD', stamp);
+      await seedBaseline(client, categoryName, 100, 'BRL');
+      await seedBaseline(client, categoryName, 50, 'USD');
       await addExpense(client, {
         description: 'BRL current',
         amount: 200,
@@ -371,7 +370,6 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
   });
 
   it('excludes income from current on a both-kind category — a spend shift is never inflated by income', async () => {
-    const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
@@ -410,7 +408,7 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
     try {
       await client.connect(transport);
       await callTool(client, { name: 'create_category', args: { name: categoryName } });
-      await seedBaseline(client, categoryName, 100, 'BRL', stamp);
+      await seedBaseline(client, categoryName, 100, 'BRL');
       await addExpense(client, {
         description: 'small bump, below the default 20% threshold',
         amount: 105,
@@ -456,7 +454,7 @@ describe('MCP integration > find_correlations (spending_shifts)', () => {
     try {
       await client.connect(transport);
       await callTool(client, { name: 'create_category', args: { name: categoryName } });
-      await seedBaseline(client, categoryName, 0.12345678, 'BTC', stamp);
+      await seedBaseline(client, categoryName, 0.12345678, 'BTC');
       await addExpense(client, {
         description: 'BTC current spend',
         amount: 0.87654321,
@@ -487,7 +485,7 @@ describe('MCP integration > find_correlations (budget_fit)', () => {
     try {
       await client.connect(transport);
       await callTool(client, { name: 'create_category', args: { name: categoryName } });
-      await seedBaseline(client, categoryName, 100, 'BRL', stamp); // baseline 100/mo
+      await seedBaseline(client, categoryName, 100, 'BRL'); // baseline 100/mo
       await createBudget(client, { category: categoryName, currency: 'BRL', limit: 50 }); // ratio 2.0
 
       const result = (await callTool(client, {
@@ -511,7 +509,7 @@ describe('MCP integration > find_correlations (budget_fit)', () => {
     try {
       await client.connect(transport);
       await callTool(client, { name: 'create_category', args: { name: categoryName } });
-      await seedBaseline(client, categoryName, 100, 'BRL', stamp); // baseline 100/mo
+      await seedBaseline(client, categoryName, 100, 'BRL'); // baseline 100/mo
       await createBudget(client, { category: categoryName, currency: 'BRL', limit: 1000 }); // ratio 0.1
 
       const result = (await callTool(client, {
@@ -534,7 +532,7 @@ describe('MCP integration > find_correlations (budget_fit)', () => {
     try {
       await client.connect(transport);
       await callTool(client, { name: 'create_category', args: { name: categoryName } });
-      await seedBaseline(client, categoryName, 100, 'BRL', stamp);
+      await seedBaseline(client, categoryName, 100, 'BRL');
 
       const result = (await callTool(client, {
         name: 'find_correlations',
@@ -557,8 +555,8 @@ describe('MCP integration > find_correlations (budget_fit)', () => {
     try {
       await client.connect(transport);
       await callTool(client, { name: 'create_category', args: { name: categoryName } });
-      await seedBaseline(client, categoryName, 100, 'BRL', stamp); // BRL baseline 100/mo
-      await seedBaseline(client, categoryName, 5000, 'USD', stamp); // unrelated, much larger USD baseline
+      await seedBaseline(client, categoryName, 100, 'BRL'); // BRL baseline 100/mo
+      await seedBaseline(client, categoryName, 5000, 'USD'); // unrelated, much larger USD baseline
       await createBudget(client, { category: categoryName, currency: 'BRL', limit: 110 }); // ratio ~0.91, realistic
 
       const result = (await callTool(client, {
@@ -611,7 +609,7 @@ describe('MCP integration > find_correlations (budget_fit)', () => {
       await callTool(client, { name: 'create_sub_category', args: { name: subCategoryName, parentId: parent.id } });
       // seedBaseline targets `category`, which resolves the top-level node — a sub-category budget
       // needs spend against `subCategory` specifically, so this seeds it directly instead.
-      for (const [i, date] of BASELINE_DATES.entries()) {
+      for (const date of BASELINE_DATES) {
         await addExpense(client, {
           description: `baseline ${subCategoryName}`,
           amount: 100,
@@ -690,7 +688,7 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
         ['Ifood', 200],
         ['Amazon', 100],
       ];
-      for (const [i, [description, amount]] of merchants.entries()) {
+      for (const [description, amount] of merchants) {
         await addExpense(client, {
           description,
           amount,
@@ -886,7 +884,7 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      for (const [i, offset] of [90, 60, 30, 0].entries()) {
+      for (const offset of [90, 60, 30, 0]) {
         await addExpense(client, {
           description: merchant,
           amount: 39.9,
@@ -922,7 +920,7 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      for (const [i, offset] of [90, 60, 30, 0].entries()) {
+      for (const offset of [90, 60, 30, 0]) {
         await addExpense(client, {
           description: merchant,
           amount: 20,
@@ -990,7 +988,7 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      for (const [i, offset] of [90, 75, 0].entries()) {
+      for (const offset of [90, 75, 0]) {
         // 15-day then 75-day gap — neither a consistent ~monthly cadence.
         await addExpense(client, {
           description: merchant,
@@ -1017,7 +1015,7 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      for (const [i, offset] of [90, 60, 30, 0].entries()) {
+      for (const offset of [90, 60, 30, 0]) {
         await addExpense(client, {
           description: merchant,
           amount: 0.00123456,

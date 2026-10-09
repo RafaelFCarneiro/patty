@@ -154,7 +154,6 @@ describe('MCP integration > sub-categories', () => {
   });
 
   it('add_account_expense rejects expense transaction with income-only category', async () => {
-    const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
@@ -174,7 +173,6 @@ describe('MCP integration > sub-categories', () => {
   });
 
   it('add_account_income rejects income transaction with expense-only category', async () => {
-    const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
@@ -194,7 +192,6 @@ describe('MCP integration > sub-categories', () => {
   });
 
   it('add_account_expense rejects providing both category and subCategory', async () => {
-    const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
@@ -301,7 +298,6 @@ describe('MCP integration > sub-categories', () => {
   });
 
   it('category_kind_mismatch error includes an actionable hint', async () => {
-    const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
@@ -469,7 +465,6 @@ describe('MCP integration > sub-categories', () => {
   });
 
   it('update_account_transaction rejects kind mismatch when only category changes (no type provided)', async () => {
-    const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
@@ -604,7 +599,6 @@ describe('MCP integration > sub-categories', () => {
   });
 
   it('update_account_transaction rejects type: transfer at the wire boundary', async () => {
-    const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);

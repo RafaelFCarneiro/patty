@@ -193,7 +193,17 @@ Ollama serves models; it has no MCP client. Use a bridge such as `ollmcp` (`uvx 
 
 The image ([README § Docker](../README.md#docker)) always runs the HTTP transport, so every client connects by URL —
 `http://127.0.0.1:51737/mcp` — instead of spawning a process. The compose file publishes the port on host loopback only
-(`127.0.0.1:51737:51737`); keep it that way, the API has no authentication until ADR-033. Use `127.0.0.1`, not `localhost`.
+(`127.0.0.1:51737:51737`); keep it that way — the container serves plain HTTP. Use `127.0.0.1`, not `localhost`.
+
+> A client that reaches FinTrack through a **non-loopback hostname** (a LAN name, a tunnel) needs authentication on — set `PUBLIC_URL`; an auth-disabled instance only answers `127.0.0.1`, `localhost` and `::1` Hosts (and loopback `Origin`s).
+
+> **Temporary limitation — the container's `/mcp` needs a login session.** The container runs with authentication
+> `required` (ADR-033), and until personal access tokens ship (Phase 2) `/mcp` accepts only a browser **session
+> cookie**, which MCP clients don't carry — every request without one is `401`. **Until then, connect MCP clients
+> over stdio** (the npm sections above), which is trusted and unaffected; the dashboards (`/ui`) and REST (`/api`)
+> work in a logged-in browser. The table below is what will work once bearer tokens land (Phase 2 adds the
+> `Authorization: Bearer ftk_…` header to each). See [`docs/auth.md`](auth.md#temporary-limitation-mcp-over-http-in-the-container).
+
 Each client's HTTP support was checked against its own docs:
 
 | Client | Streamable HTTP | How |

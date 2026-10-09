@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
-import type { HttpContext } from './context.js';
+import { AuthMode } from '../../models/auth.js';
+import { DISABLED_AUTH, type HttpAuth, type HttpContext } from './context.js';
 import { buildOpenApiDocument, mountRoutes, type RouteDefinition } from './openapi.js';
 import { CACHE_CONTROL_NO_CACHE } from './respond.js';
 import { accountRoutes } from './routes/account.js';
@@ -19,7 +20,9 @@ import { systemRoutes } from './routes/system.js';
 import { tagRoutes } from './routes/tag.js';
 import { transactionRoutes } from './routes/transaction.js';
 import { transferRoutes } from './routes/transfer.js';
-import { registerUiRoutes } from './routes/ui.js';
+import { registerAuthRoutes } from './routes/auth.js';
+import { registerUiRoutes, type SessionRecheck } from './routes/ui.js';
+import { resolvePrincipal } from './session.js';
 
 /**
  * Thin diplomat: zod-parse (wire/in) → wireInToModel → controller → map Result to HTTP.
@@ -59,6 +62,15 @@ export const buildRouteDefinitions = (
   ];
 };
 
+// A long-lived stream is authenticated once, when it opens — so it asks again on this schedule.
+const sessionRecheck = (auth: Extract<HttpAuth, { mode: typeof AuthMode.enum.required }>): SessionRecheck => ({
+  isActive: async (req) => {
+    const resolution = await resolvePrincipal(auth, req);
+    return 'principal' in resolution && resolution.principal !== null;
+  },
+  everyMs: auth.sessionRecheckMs,
+});
+
 export const registerRoutes = (
   app: FastifyInstance,
   deps: Deps,
@@ -66,11 +78,17 @@ export const registerRoutes = (
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
   subscribeToChanges: ChangeBus['subscribe'],
+  auth: HttpAuth = DISABLED_AUTH,
 ): void => {
   const definitions = buildRouteDefinitions(deps, version, runEffects, runEffectsSequence);
   mountRoutes(app, definitions);
 
-  registerUiRoutes(app, subscribeToChanges);
+  const authRequired = auth.mode === AuthMode.enum.required;
+  registerUiRoutes(app, subscribeToChanges, {
+    logoutControl: authRequired,
+    session: auth.mode === AuthMode.enum.required ? sessionRecheck(auth) : undefined,
+  });
+  if (authRequired) registerAuthRoutes(app, auth);
 
   // Built from the same list just mounted; excluded from its own document by design.
   const openApiDocument = buildOpenApiDocument(definitions, version);

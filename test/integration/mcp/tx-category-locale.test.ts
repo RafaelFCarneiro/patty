@@ -11,7 +11,6 @@ type TxView = {
 };
 type SearchResult = TxView[];
 type CreateResult = { transaction: TxView; created: boolean };
-type Bill = { transactions: TxView[] };
 
 describe('MCP integration > transaction category locale', () => {
   let client: Client;

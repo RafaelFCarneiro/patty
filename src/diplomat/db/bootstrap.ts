@@ -8,6 +8,7 @@ import { normalizeMerchant } from '../../logic/merchant.js';
 import type { Db } from './driver.js';
 import { HTML_FILE_EXTENSION, listDefaultDashboardFiles } from './repos/dashboards.js';
 import { categories, currencies, dashboards, merchantCategory, merchants } from './schema.js';
+import { migrateWithSafetyCopy } from './safetyCopy.js';
 import { CURRENCIES } from './seed/currencies.js';
 import { CATEGORIES } from './seed/categories.js';
 import { DEFAULT_MERCHANT_RULES } from './seed/merchantRules.js';
@@ -99,9 +100,10 @@ const seedMerchantRules = async (db: Db): Promise<void> => {
 // Bootstrap
 // ---------------------------------------------------------------------------
 
-/** Idempotent: applies pending migrations then upserts seed data. Safe on every boot. */
+/** Idempotent: applies pending migrations (after a safety copy, if one rewrites existing data) then
+ *  upserts seed data. Safe on every boot. */
 export const bootstrap = async (db: Db, migrationsFolder = DEFAULT_MIGRATIONS_FOLDER): Promise<void> => {
-  await migrate(db, { migrationsFolder });
+  await migrateWithSafetyCopy(db, migrationsFolder, () => migrate(db, { migrationsFolder }));
   await seedCurrencies(db);
   await seedCategories(db);
   await seedMerchantRules(db);

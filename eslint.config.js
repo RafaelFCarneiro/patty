@@ -16,7 +16,22 @@ export default tseslint.config(
       parser: tseslint.parser,
       parserOptions: { sourceType: 'module' },
     },
+    plugins: { '@typescript-eslint': tseslint.plugin },
     rules: {
+      // Dead imports/locals/params are how an unused `authenticate` import and a never-called `principalOf`
+      // reached review. A leading underscore marks a deliberately unused binding (e.g. a positional callback
+      // argument); `args: 'after-used'` only flags parameters AFTER the last one that is used.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          args: 'after-used',
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
       // Declarative over imperative (docs/code-quality.md, remeda table): the `xs.filter(...)[0]`
       // smell — taking the first match by index instead of R.find / R.firstBy.
       'no-restricted-syntax': [

@@ -39,12 +39,15 @@ COPY drizzle ./drizzle
 COPY ui ./ui
 COPY skills ./skills
 
+# HOST=0.0.0.0 makes FINTRACK_AUTH default to `required` (ADR-033): every route but /api/health, /ui/login and
+# /ui/setup needs a session; the first start prints a one-time setup code to the log to claim the owner.
 ENV NODE_ENV=production \
     MCP_TRANSPORT=http \
     HOST=0.0.0.0 \
     PORT=51737 \
     DB_PATH=/data/fintrack.db
 
+# /api/health is the one unauthenticated probe (liveness + `db`); /api/status needs a session.
 # /data is the only writable path; the encryption key is supplied at run time (FINTRACK_DB_KEY_FILE), never baked in.
 RUN mkdir /data && chown node:node /data
 VOLUME /data
@@ -52,7 +55,7 @@ USER node
 EXPOSE 51737
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD ["node", "-e", "fetch('http://127.0.0.1:'+process.env.PORT+'/api/status').then(r=>r.ok?r.json():Promise.reject()).then(s=>process.exit(s.db==='ok'?0:1)).catch(()=>process.exit(1))"]
+    CMD ["node", "-e", "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>r.ok?r.json():Promise.reject()).then(s=>process.exit(s.db==='ok'?0:1)).catch(()=>process.exit(1))"]
 
 ENTRYPOINT ["tini", "--"]
 CMD ["node", "dist/main.js"]

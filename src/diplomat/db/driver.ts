@@ -25,7 +25,12 @@ const KEYCHAIN_ACCOUNT = 'db-encryption-key';
 // instead of throwing SQLITE_BUSY immediately — the common case for stdio spawned per client
 // (ADR-007) when more than one is connected to the same file at once.
 const JOURNAL_MODE_WAL = 'WAL';
-const BUSY_TIMEOUT_MS = 5000;
+export const BUSY_TIMEOUT_MS = 5000;
+
+/** `busy_timeout` is per connection (ADR-024) and libsql opens a fresh connection after every transaction, so
+ *  anything that has just run one re-asserts it on the connection that follows. */
+export const assertBusyTimeout = (client: ReturnType<typeof createClient>): Promise<unknown> =>
+  client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
 
 type DbConfig = Pick<Config, 'DB_PATH' | 'FINTRACK_DB_KEY' | 'FINTRACK_DB_KEY_FILE'>;
 
@@ -140,7 +145,7 @@ export const openDatabase = async (config: DbConfig): Promise<Db> => {
   const client = createClient({ url: pathToFileURL(config.DB_PATH).href, encryptionKey });
   await enableWal(client);
   // busy_timeout is per-connection (ADR-024), so it is asserted unconditionally on every open.
-  await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+  await assertBusyTimeout(client);
   return drizzle(client, { schema });
 };
 

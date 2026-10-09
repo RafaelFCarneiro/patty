@@ -1,3 +1,4 @@
+import { AUTH_MESSAGES, type AuthError } from '../models/auth.js';
 import type { AccountError } from '../models/account.js';
 import type { BillError } from '../models/bill.js';
 import type { BudgetError } from '../models/budget.js';
@@ -22,6 +23,7 @@ export type AppError =
   | LocaleError
   | CurrencyRateError
   | DashboardError
+  | AuthError
   | Conflict;
 
 export const formatAppError = (e: AppError): string => {
@@ -57,6 +59,18 @@ export const formatAppError = (e: AppError): string => {
       return `${e.code}: ${e.category}${e.subCategory ? `/${e.subCategory}` : ''} (${e.currency}, ${e.period})`;
     case 'conflict':
       return `${e.code}: concurrent update, please retry`;
+    case 'unauthenticated':
+      return `${e.code}: ${AUTH_MESSAGES.unauthenticated}`;
+    case 'invalid_credentials':
+      return `${e.code}: ${AUTH_MESSAGES.invalidCredentials}`;
+    case 'invalid_setup_code':
+      return `${e.code}: ${AUTH_MESSAGES.invalidSetupCode}`;
+    case 'setup_unavailable':
+      return `${e.code}: ${AUTH_MESSAGES.setupUnavailable}`;
+    case 'rate_limited':
+      return `${e.code}: ${AUTH_MESSAGES.rateLimited}`;
+    case 'forbidden_origin':
+      return `${e.code}: ${e.hint}`;
     default: {
       const _exhaustive: never = e;
       throw new Error(`unmapped error code: ${JSON.stringify(_exhaustive)}`);
@@ -75,6 +89,14 @@ export const httpStatus = (e: AppError): number => {
     case 'unknown_dashboard':
     case 'unknown_budget':
       return 404;
+    case 'unauthenticated':
+    case 'invalid_credentials':
+      return 401;
+    case 'invalid_setup_code':
+    case 'forbidden_origin':
+      return 403;
+    case 'rate_limited':
+      return 429;
     case 'ambiguous_account':
     case 'ambiguous_category':
     case 'ambiguous_sub_category':
@@ -83,6 +105,7 @@ export const httpStatus = (e: AppError): number => {
     case 'duplicate_budget':
     case 'in_use':
     case 'conflict':
+    case 'setup_unavailable':
       return 409;
     case 'category_kind_mismatch':
     case 'not_expense_category':

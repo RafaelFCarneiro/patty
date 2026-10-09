@@ -43,7 +43,6 @@ describe('MCP integration > transactions', () => {
     const stamp = Date.now();
     const txDescription = `INTEGRATION MCP ${stamp}`;
     const txDescriptionUpdated = `${txDescription} UPDATED`;
-    const txKey = `integration-mcp-${stamp}-0.01`;
     const today = toIsoDate(new Date());
 
     const { client, transport } = makeClient();

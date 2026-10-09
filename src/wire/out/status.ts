@@ -9,5 +9,5 @@ export const StatusOut = z.object({
 });
 export type StatusOut = z.infer<typeof StatusOut>;
 
-export const HealthOut = z.object({ status: z.literal('ok') });
+export const HealthOut = z.object({ status: z.literal('ok'), db: z.enum(['ok', 'error']) });
 export type HealthOut = z.infer<typeof HealthOut>;
