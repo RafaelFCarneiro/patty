@@ -63,7 +63,7 @@ export const buildRouteDefinitions = (
 };
 
 // A long-lived stream is authenticated once, when it opens — so it asks again on this schedule.
-const sessionRecheck = (auth: Extract<HttpAuth, { mode: 'required' }>): SessionRecheck => ({
+const sessionRecheck = (auth: Extract<HttpAuth, { mode: typeof AuthMode.enum.required }>): SessionRecheck => ({
   isActive: async (req) => {
     const resolution = await resolvePrincipal(auth, req);
     return 'principal' in resolution && resolution.principal !== null;

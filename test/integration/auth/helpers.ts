@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import Fastify, { type LightMyRequestResponse } from 'fastify';
 import { afterEach } from 'vitest';
 import type { AuthDeps } from '../../../src/controllers/deps.js';
+import { AuthMode } from '../../../src/models/auth.js';
 import { SESSION_COOKIE_NAME } from '../../../src/diplomat/http/cookies.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 
@@ -73,7 +74,7 @@ export const claimOwner = async (ctx: AppContext): Promise<string> => {
 };
 
 export const authDepsOf = (ctx: AppContext): AuthDeps => {
-  if (ctx.auth.mode !== 'required') throw new Error('auth is disabled in this app');
+  if (ctx.auth.mode !== AuthMode.enum.required) throw new Error('auth is disabled in this app');
   return ctx.auth.deps;
 };
 

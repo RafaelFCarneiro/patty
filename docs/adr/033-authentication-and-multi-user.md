@@ -36,11 +36,19 @@ phases (see below). Local npm behavior stays zero-config.
 ### 1. Auth mode and exposure
 
 - New setting **`FINTRACK_AUTH`**, either `required` or `disabled`.
-  - The default is derived from `HOST`: loopback means `disabled`, anything else means `required`.
-  - `disabled` together with a non-loopback `HOST` is a **startup error**: the API is never unauthenticated on
-    a reachable interface.
-  - The npm sidecar (loopback) keeps today's zero-config behavior. The container (`HOST=0.0.0.0`) requires auth
-    by default.
+  - The default is derived from **exposure**, not the bind address alone. An instance is *exposed* when `HOST` is
+    not loopback, or when a reverse proxy is configured in front of it (`PUBLIC_URL` is set, or `TRUST_PROXY` is
+    set to anything but `false`/`0`). A proxy normally connects to a loopback bind, so `HOST` by itself would call
+    a public site private. Exposed means `required`; otherwise `disabled`.
+  - `disabled` on an exposed instance is a **startup error**: the API is never unauthenticated to anyone who can
+    reach it, directly or through a proxy.
+  - The npm sidecar (loopback, no proxy) keeps today's zero-config behavior. The container (`HOST=0.0.0.0`)
+    requires auth by default.
+  - With auth `disabled`, only requests that say they are for this machine are answered: the `Host` header must
+    name a loopback host, and an `Origin`, if sent, must be a loopback origin (any port, so tools such as MCP
+    Inspector keep working). Anything else is `403 forbidden_origin`. This closes DNS rebinding and cross-site
+    requests against an unauthenticated loopback server; clients that send no `Origin` (native MCP clients,
+    `curl`) are unaffected.
 - With auth `disabled`, every request acts as the **default user**: the **owner**, a single admin row created
   by migration on every database, fresh or existing (§7).
 - **stdio is trusted** (spec-aligned). It acts as the default user, or as `FINTRACK_USER` (a username) once an
@@ -238,7 +246,8 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
 - **Password + session (chosen)** vs passkeys first. WebAuthn needs a secure context, which hurts LAN setups.
   Passkeys and TOTP are follow-ups.
 - **Auth disabled on loopback (chosen)** vs always on. Always-on would break today's zero-config npm dashboards.
-  Disabling auth on a non-loopback host is impossible by config validation.
+  Disabling auth on an exposed instance (non-loopback host, or a proxy configured via `PUBLIC_URL`/`TRUST_PROXY`) is
+  impossible by config validation, and a disabled instance answers only loopback `Host`/`Origin` requests.
 
 ## Consequences
 
