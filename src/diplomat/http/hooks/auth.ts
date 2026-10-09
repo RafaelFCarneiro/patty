@@ -1,13 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { hostnameOfHostHeader, isLoopbackHost } from './common/net.js';
-import { httpStatus, type AppError } from './common/errors.js';
-import { ownerNeedsSetup } from './controllers/auth.js';
-import { declaredOrigin, isLoopbackRequest, isSameOrigin, isUnsafeMethod } from './logic/auth.js';
-import { safeNextPath } from './wire/in/auth.js';
-import { AuthMode, authErrors, isUiPath, OWNER_PRINCIPAL, type AuthError } from './models/auth.js';
-import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from './diplomat/http/authPaths.js';
-import type { HttpAuth } from './diplomat/http/context.js';
-import { resolvePrincipal } from './diplomat/http/session.js';
+import { hostnameOfHostHeader, isLoopbackHost } from '../../../common/net.js';
+import { httpStatus, type AppError } from '../../../common/errors.js';
+import { ownerNeedsSetup } from '../../../controllers/auth.js';
+import { declaredOrigin, isLoopbackRequest, isSameOrigin, isUnsafeMethod } from '../../../logic/auth.js';
+import { safeNextPath } from '../../../wire/in/auth.js';
+import { AuthMode, authErrors, isUiPath, OWNER_PRINCIPAL, type AuthError } from '../../../models/auth.js';
+import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from '../authPaths.js';
+import type { HttpAuth } from '../context.js';
+import { resolvePrincipal } from '../session.js';
 
 /**
  * The auth hook (ADR-033 §1, §2, §6): composition-root wiring, deliberately outside `diplomat/*` — it
@@ -54,7 +54,7 @@ const loginRedirectTarget = (req: FastifyRequest): string => {
 
 const isLoginOrSetup = (path: string): boolean => path === LOGIN_PATH || path === SETUP_PATH;
 
-export const registerAuthGate = (app: FastifyInstance, auth: HttpAuth): void => {
+export const registerAuthHook = (app: FastifyInstance, auth: HttpAuth): void => {
   app.decorateRequest('principal', undefined);
 
   if (auth.mode === AuthMode.enum.disabled) {

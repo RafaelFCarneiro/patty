@@ -1,8 +1,8 @@
 import { Writable } from 'node:stream';
 import Fastify, { type InjectOptions } from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { allowedOrigins } from '../../src/authGate.js';
-import { httpLoggerOptions } from '../../src/server.js';
+import { allowedOrigins } from '../../../../../src/diplomat/http/hooks/auth.js';
+import { httpLoggerOptions } from '../../../../../src/server.js';
 
 describe('allowedOrigins (CSRF)', () => {
   const PUBLIC = 'https://fintrack.example.com';

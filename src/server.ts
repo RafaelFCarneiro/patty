@@ -3,8 +3,8 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
-import { registerAuthGate } from './authGate.js';
 import { DISABLED_AUTH, type HttpAuth } from './diplomat/http/context.js';
+import { registerAuthHook } from './diplomat/http/hooks/auth.js';
 import { registerRoutes } from './diplomat/http/routes.js';
 import { registerMcpRoute } from './diplomat/mcp/route.js';
 
@@ -62,7 +62,7 @@ export const registerHttpApp = (
   subscribeToChanges: ChangeBus['subscribe'],
   auth: HttpAuth = DISABLED_AUTH,
 ): void => {
-  registerAuthGate(app, auth);
+  registerAuthHook(app, auth);
   registerRoutes(app, deps, version, runEffects, runEffectsSequence, subscribeToChanges, auth);
   registerMcpRoute(app, deps, version, runEffects, runEffectsSequence, resetLocale);
 };
