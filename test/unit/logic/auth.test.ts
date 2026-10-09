@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  allowedOrigins,
   canLogin,
+  csrfVerdict,
   declaredOrigin,
   evaluateSession,
   formatSetupCode,
@@ -14,6 +16,7 @@ import {
   isUnsafeMethod,
   newSession,
   normalizeSetupCode,
+  preSessionCsrfVerdict,
   SESSION_IDLE_TTL_MS,
   SESSION_TOUCH_INTERVAL_MS,
   setupBanner,
@@ -23,6 +26,7 @@ import {
 } from '../../../src/logic/auth.js';
 import {
   AuthMode,
+  authErrors,
   SESSION_ABSOLUTE_MAX_MS,
   OWNER_USER_ID,
   UserRole,
@@ -227,6 +231,117 @@ describe('CSRF helpers', () => {
     expect(isSameOrigin(expected, 'https://fintrack.example.com:8443')).toBe(false);
     expect(isSameOrigin(expected, 'https://fintrack.example.com.evil.example')).toBe(false);
     expect(isSameOrigin(expected, null)).toBe(false);
+  });
+});
+
+describe('allowedOrigins (CSRF)', () => {
+  const PUBLIC = 'https://fintrack.example.com';
+
+  it('is PUBLIC_URL when it is set and the request came in on the public host', () => {
+    expect(allowedOrigins(PUBLIC, 'fintrack.example.com')).toEqual([PUBLIC]);
+  });
+
+  it("also allows the request's own loopback origin (a local operator on the port publish)", () => {
+    expect(allowedOrigins(PUBLIC, '127.0.0.1:51737')).toEqual([PUBLIC, 'http://127.0.0.1:51737']);
+    expect(allowedOrigins(undefined, 'localhost:3001')).toEqual(['http://localhost:3001']);
+    expect(allowedOrigins(undefined, '[::1]:3001')).toEqual(['http://[::1]:3001']);
+  });
+
+  it('never derives an origin from a non-loopback Host — a rebinding attacker controls it', () => {
+    expect(allowedOrigins(undefined, 'attacker.example')).toEqual([]);
+    expect(allowedOrigins(undefined, '192.168.1.10:51737')).toEqual([]);
+    expect(allowedOrigins(PUBLIC, 'attacker.example')).toEqual([PUBLIC]);
+  });
+
+  it('is empty without a Host header or with a malformed one', () => {
+    expect(allowedOrigins(undefined, undefined)).toEqual([]);
+    expect(allowedOrigins(undefined, 'a b')).toEqual([]);
+    expect(allowedOrigins(undefined, '127.0.0.1.evil.example')).toEqual([]);
+  });
+});
+
+describe('csrfVerdict — a request that carries the session cookie', () => {
+  const PUBLIC = 'https://fintrack.example.com';
+  const request = (overrides: Partial<Parameters<typeof csrfVerdict>[0]> = {}) => ({
+    method: 'POST',
+    publicUrl: undefined as string | undefined,
+    host: '127.0.0.1:51737',
+    origin: undefined as string | undefined,
+    referer: undefined as string | undefined,
+    ...overrides,
+  });
+
+  it.each(['GET', 'HEAD', 'OPTIONS'])('lets a safe %s through whatever it declares', (method) => {
+    expect(csrfVerdict(request({ method, origin: 'https://evil.example' }))).toBeNull();
+    expect(csrfVerdict(request({ method, host: 'attacker.example' }))).toBeNull();
+  });
+
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('lets a same-origin %s through', (method) => {
+    expect(csrfVerdict(request({ method, origin: 'http://127.0.0.1:51737' }))).toBeNull();
+  });
+
+  it('accepts the Referer when no Origin is sent', () => {
+    expect(csrfVerdict(request({ referer: 'http://127.0.0.1:51737/ui/accounts' }))).toBeNull();
+  });
+
+  it('refuses an unsafe request that declares nothing', () => {
+    expect(csrfVerdict(request())).toEqual(authErrors.crossOrigin);
+  });
+
+  it.each(['https://evil.example', 'http://127.0.0.1:9999', 'http://127.0.0.1:51737.evil.example', 'null'])(
+    'refuses the cross-origin %j as crossOrigin',
+    (origin) => {
+      expect(csrfVerdict(request({ origin }))).toEqual(authErrors.crossOrigin);
+    },
+  );
+
+  it('does not fall back to the Referer when an Origin header is present', () => {
+    expect(csrfVerdict(request({ origin: 'https://evil.example', referer: 'http://127.0.0.1:51737/ui' }))).toEqual(
+      authErrors.crossOrigin,
+    );
+  });
+
+  it('answers unknownOrigin when the instance cannot name its own origin (non-loopback Host, no PUBLIC_URL)', () => {
+    expect(csrfVerdict(request({ host: 'fintrack.lan:51737', origin: 'http://fintrack.lan:51737' }))).toEqual(
+      authErrors.unknownOrigin,
+    );
+    expect(csrfVerdict(request({ host: undefined, origin: 'http://127.0.0.1:51737' }))).toEqual(
+      authErrors.unknownOrigin,
+    );
+  });
+
+  it('expects PUBLIC_URL when set — and still the loopback host it was reached on', () => {
+    const behindProxy = { publicUrl: PUBLIC, host: 'fintrack.example.com' };
+    expect(csrfVerdict(request({ ...behindProxy, origin: PUBLIC }))).toBeNull();
+    expect(csrfVerdict(request({ ...behindProxy, origin: 'https://evil.example' }))).toEqual(authErrors.crossOrigin);
+    expect(csrfVerdict(request({ publicUrl: PUBLIC, origin: 'http://127.0.0.1:51737' }))).toBeNull();
+  });
+});
+
+describe('preSessionCsrfVerdict — login and setup POSTs', () => {
+  const post = (origin?: string, referer?: string) => ({
+    method: 'POST',
+    publicUrl: undefined,
+    host: '127.0.0.1:51737',
+    origin,
+    referer,
+  });
+
+  it('leaves a client that declares no origin alone (curl, scripts — no browser to defend)', () => {
+    expect(preSessionCsrfVerdict(post())).toBeNull();
+  });
+
+  it('refuses a browser that declares a foreign origin or referer (forced login from a cross-site page)', () => {
+    expect(preSessionCsrfVerdict(post('https://evil.example'))).toEqual(authErrors.crossOrigin);
+    expect(preSessionCsrfVerdict(post(undefined, 'https://evil.example/login-form'))).toEqual(authErrors.crossOrigin);
+  });
+
+  it('accepts a declared origin that is ours', () => {
+    expect(preSessionCsrfVerdict(post('http://127.0.0.1:51737'))).toBeNull();
+  });
+
+  it('never blocks a safe method', () => {
+    expect(preSessionCsrfVerdict({ ...post('https://evil.example'), method: 'GET' })).toBeNull();
   });
 });
 

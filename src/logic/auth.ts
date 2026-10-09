@@ -1,6 +1,8 @@
 import { hostnameOfHostHeader, isLoopbackHost } from '../common/net.js';
 import {
   AuthMode,
+  authErrors,
+  type AuthError,
   SESSION_ABSOLUTE_MAX_MS,
   type SessionEntity,
   type SetupCodeEntity,
@@ -116,6 +118,47 @@ export const declaredOrigin = (origin: string | undefined, referer: string | und
 
 export const isSameOrigin = (expectedOrigin: string, declared: string | null): boolean =>
   declared !== null && declared === expectedOrigin;
+
+/** Origins a browser may legitimately send for this request: `PUBLIC_URL`, plus — when the request itself
+ *  arrived at a loopback host — that host's own origin (a local operator reaching a container through its
+ *  loopback port publish). Never derived from a non-loopback `Host`, which a rebinding attacker controls. */
+export const allowedOrigins = (publicUrl: string | undefined, hostHeader: string | undefined): string[] => {
+  const hostname = hostHeader === undefined ? null : hostnameOfHostHeader(hostHeader);
+  const ownLoopbackOrigin =
+    hostHeader !== undefined && hostname !== null && isLoopbackHost(hostname) ? [`http://${hostHeader}`] : [];
+  return [...(publicUrl === undefined ? [] : [publicUrl]), ...ownLoopbackOrigin];
+};
+
+/** Everything the same-origin (CSRF) decision reads from a request. */
+export type CsrfRequest = {
+  method: string;
+  publicUrl: string | undefined;
+  host: string | undefined;
+  origin: string | undefined;
+  referer: string | undefined;
+};
+
+/**
+ * The CSRF verdict for a request that carries ambient credentials (the session cookie): a safe method passes;
+ * an unsafe one (`POST`/`PUT`/`PATCH`/`DELETE`, including `POST /mcp`) must declare — in `Origin`, else
+ * `Referer` — an origin from `allowedOrigins`. `null` = allowed; otherwise the error to send (`unknownOrigin`
+ * when this instance cannot say what its own origin is, `crossOrigin` when the declared one is not ours).
+ */
+export const csrfVerdict = (request: CsrfRequest): AuthError | null => {
+  if (!isUnsafeMethod(request.method)) return null;
+  const allowed = allowedOrigins(request.publicUrl, request.host);
+  if (allowed.length === 0) return authErrors.unknownOrigin;
+  const declared = declaredOrigin(request.origin, request.referer);
+  return allowed.some((origin) => isSameOrigin(origin, declared)) ? null : authErrors.crossOrigin;
+};
+
+/**
+ * The same check for the pre-session `POST`s (login, setup), which carry no cookie to forge but are still a
+ * forced-login vector from a cross-site page: a browser that declares an origin must declare ours; a client
+ * that declares none (`curl`, scripts) has no browser to defend.
+ */
+export const preSessionCsrfVerdict = (request: CsrfRequest): AuthError | null =>
+  request.origin === undefined && request.referer === undefined ? null : csrfVerdict(request);
 
 // ─── Auth disabled: loopback-only requests ─────────────────────────────────
 

@@ -62,6 +62,8 @@ export const registerHttpApp = (
   subscribeToChanges: ChangeBus['subscribe'],
   auth: HttpAuth = DISABLED_AUTH,
 ): void => {
+  // Ordering is wiring: the auth hook goes on first, so it runs ahead of every route registered below and
+  // also guards a request no route matches.
   registerAuthHook(app, auth);
   registerRoutes(app, deps, version, runEffects, runEffectsSequence, subscribeToChanges, auth);
   registerMcpRoute(app, deps, version, runEffects, runEffectsSequence, resetLocale);

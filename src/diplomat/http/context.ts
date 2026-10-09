@@ -19,8 +19,8 @@ export type AuthRoutesContext = {
 };
 
 /**
- * Whether the HTTP surface demands a session, with what the auth routes and the auth hook (composition
- * root, `diplomat/http/hooks/auth.ts`) need when it does. `disabled` (loopback default, ADR-033 §1) acts as the owner.
+ * Whether the HTTP surface demands a session, with what the auth routes and the auth hook
+ * (`hooks/auth.ts`) need when it does. `disabled` (loopback default, ADR-033 §1) acts as the owner.
  */
 export type HttpAuth =
   | { mode: typeof AuthMode.enum.disabled }

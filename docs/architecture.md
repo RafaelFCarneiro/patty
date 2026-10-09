@@ -56,7 +56,8 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | `diplomat/http`, `server.ts` → `@rfc0/effect-runner` | **Type-only**: the `ChangeBus` type (`['subscribe']`) for the SSE route's parameter; the bound bus is built in the composition root (`main.ts`) and passed in, never constructed inside `diplomat/*`. |
 | `diplomat/db` | Same base `diplomat/*` rule, **plus** `@rfc0/effect-runner` — it is the SQLite adapter implementing the port the package's engine defines (`versionedTableApplier` builds an `EntityApplier`; `driver.ts`'s `createTransactionRunner` implements `TransactionRunner`; `sqliteErrors.ts`'s `isSqliteBusy` implements `IsTransientContention`). Imports the package, never the reverse. |
 | `diplomat/auth/credentials.ts` | `controllers/deps.ts` (type-only: the `AuthSecrets` shape it implements), `@node-rs/argon2`, `node:crypto` — the real hashing/randomness behind the injected `AuthSecrets`. Loaded lazily (`authRuntime.ts`) so a run with auth disabled never loads the native argon2 module. |
-| `src/authGate.ts`, `src/authRuntime.ts` (composition root) | Joins `diplomat/http` (cookies, public routes, `HttpAuth`) to `controllers/auth.ts`, `diplomat/db/repos` and `diplomat/auth` — wiring that imports more than one `diplomat/*` submodule, so it lives outside them (like `server.ts`/`main.ts`). `diplomat/http` never imports it. |
+| `src/authRuntime.ts` (composition root) | Joins `diplomat/db/repos`, `diplomat/http` (public routes, `HttpAuth`) and `diplomat/auth` to `controllers/auth.ts` — wiring that imports more than one `diplomat/*` submodule, so it lives outside them (like `server.ts`/`main.ts`). `diplomat/http` never imports it. |
+| `diplomat/http/hooks/` | The base `diplomat/*` rule, which in practice also allows the pure `logic/` predicates a route module may call (`routes/currencyRates.ts` does too) — no I/O. `hooks/` holds cross-cutting request interceptors (today `hooks/auth.ts`), registered by `server.ts` before any route; `routes/` holds the per-domain handlers. |
 | `diplomat/db/seed/` | `models/` (types and runtime enums) — nothing outside `diplomat/db` imports `seed/` |
 | `diplomat/mcp` → `diplomat/http/{routes,openapi}.ts` | **Documented exception**: `buildRouteDefinitions`/`buildOpenApiDocument` are deterministic, no-business-logic wire-schema-driven builders (their only module-scope effect is a one-time, idempotent `extendZodWithOpenApi(z)` zod-prototype patch) reused verbatim by both the REST route and the `fintrack://openapi` MCP resource — including under stdio transport, which never touches Fastify — so the two surfaces can't drift (ADR-013 Phase A). |
 | `controllers/transaction/{core,read,bulk}.ts` | **Narrower than `controllers/` above (ADR-016)**: same base rule, but additionally must NOT import `logic/bill.js`, `deps.bills`, or anything from `controllers/creditCard/*`/`controllers/account/*`/`models/creditCard.ts`/`models/account.ts` — not even a type-only import (enforced: `rg "logic/bill\|deps\.bills" src/controllers/transaction/` and `rg "creditCard|controllers/account" src/controllers/transaction/ src/models/transaction.ts` each match only the header comments that document this rule — no actual import or usage) — this is the shared transaction core (row integrity, category resolution, generic patch/delete primitives, cross-cutting reads) that aggregates depend on, never the reverse. `bulk.ts` (ADR-017 step 2, ADR-022 step 3) makes **no** ownership decision at all — unlike its predecessor `createTransactionsBulk` (which delegated the account-vs-card dispatch to a composition-root router), single-source statement imports fix ownership by construction: whichever aggregate importer (`importCardStatement`/`importAccountStatement`) built the plan already knows which one card/account every line belongs to. `bulk.ts` is pure: `defaultStatementLines` defaults each line's `date` and stamps on the whole import's `rawInput` (the idempotency key is no longer defaulted here — each line's own single-add flow derives it, ADR-029 Phase 2b); `buildBulkResult` shapes the shell's per-line `SequenceOutcome`s back into the `BulkResult` contract. Both are typed purely against the core's own generic `StatementLine`/`ClassifiedUpsertResult`, with no card- or account-shaped field baked into either signature. `bulk.ts` never runs anything itself — each aggregate importer hands the shell a `StatementImportPlan` (defaulted lines + a `flowFor` closure factory), and the MCP/REST handler runs it through `runEffectsSequence` (see `docs/write-path.md`). |
@@ -332,8 +333,8 @@ Identity guards the **HTTP surface only** (`/api`, `/mcp`, `/ui`); stdio is trus
 `isLoopbackHost` (`common/net.ts`: `127.0.0.0/8`, `::1`, `localhost`) is the one loopback test, shared by config and the
 CSRF origin check.
 
-**The hook and the principal.** `src/authGate.ts`'s `registerAuthGate` adds one `onRequest` hook on the root Fastify
-instance, **before any route** (`server.ts`'s `registerHttpApp`), so it also guards a request no route matched. It
+**The hook and the principal.** `diplomat/http/hooks/auth.ts`'s `registerAuthHook` adds one `onRequest` hook on the root
+Fastify instance, **before any route** (`server.ts`'s `registerHttpApp` — ordering is wiring), so it also guards a request no route matched. It
 sets `req.principal` (`{ userId, role }`, `models/auth.ts`; typed in `diplomat/http/principal.ts`):
 
 - auth `disabled` → `OWNER_PRINCIPAL`, but only for a request that passes `logic/auth.ts`'s `isLoopbackRequest` (a loopback `Host`, and a loopback `Origin` if one is sent — the DNS-rebinding/cross-site guard; otherwise `403 forbidden_origin` on every route). No auth routes are registered;
@@ -349,8 +350,9 @@ outside the list is rejected without a session. Controllers do not take the prin
 
 **CSRF.** After authentication, an unsafe method carrying the session cookie must declare (`Origin`, else `Referer`)
 an origin in `allowedOrigins(PUBLIC_URL, Host)` — `PUBLIC_URL`, plus the request's own origin when its `Host` is
-loopback; otherwise `403 forbidden_origin`. Public `POST`s are checked when the browser declares an origin. Pure rules
-are in `logic/auth.ts` (`declaredOrigin`, `isSameOrigin`, `isUnsafeMethod`).
+loopback; otherwise `403 forbidden_origin`. Public `POST`s are checked when the browser declares an origin. The hook
+only reads the headers and translates; the decisions are pure functions in `logic/auth.ts` (`csrfVerdict`,
+`preSessionCsrfVerdict`, `allowedOrigins`, `isLoopbackRequest`).
 
 **Flows** (`controllers/auth.ts`, rules in `logic/auth.ts`, all through `runEffects`):
 `issueSetupCode` (startup), `claimOwner` (`POST /ui/setup`), `login`, `logout`, `authenticate` (every request;
@@ -395,7 +397,8 @@ runEffects, runEffectsSequence, resetLocale }`), built once in `server.ts` and p
 no module carries the full parameter list. `server.ts` reduces to construction + aggregation: build the server,
 build `ctx`, call each `register…` once.
 
-**HTTP — `diplomat/http`.** `routes/<domain>.ts` (`account`, `category`, `creditCard` — including `Bills`
+**HTTP — `diplomat/http`.** `hooks/<concern>.ts` holds cross-cutting request interceptors (`hooks/auth.ts`), registered
+by `server.ts` before any route; `routes/<domain>.ts` (`account`, `category`, `creditCard` — including `Bills`
 alongside credit cards, same as the MCP side — `transfer`, `recurring`, `transaction`, `tag`, `currency`,
 `currencyRates`, `settings`, `dashboard`, `aggregate`, `summary`, `system`) each export a `<domain>Routes(ctx): RouteDefinition[]` — exactly the routes
 whose controller lives in that domain. Each module declares its own `<DOMAIN>_TAG` constant(s) for its OpenAPI

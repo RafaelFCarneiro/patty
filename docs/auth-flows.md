@@ -11,7 +11,7 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 | Config | `src/config.ts` | Decides the auth mode from `HOST` / `PUBLIC_URL` / `TRUST_PROXY` / `FINTRACK_AUTH` |
 | Bootstrap | `src/diplomat/db/bootstrap.ts`, `safetyCopy.ts`, `migrationLock.ts` | Migrations, the owner row, the pre-migration backup |
 | AuthRuntime | `src/authRuntime.ts` | Builds the identity deps, prunes sessions, issues and prints the setup code |
-| AuthGate | `src/authGate.ts` | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, session resolution, the CSRF check, redirects |
+| AuthGate | `src/diplomat/http/hooks/auth.ts` (decisions in `src/logic/auth.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, session resolution, the CSRF check, redirects |
 | AuthRoutes | `src/diplomat/http/routes/auth.ts` | `/ui/setup`, `/ui/login`, `/ui/logout`: form parsing, rate limiting, cookies |
 | Controller | `src/controllers/auth.ts` | `issueSetupCode`, `claimOwner`, `login`, `logout`, `authenticate`; returns `{ persist, response }` |
 | Logic | `src/logic/auth.ts` | Pure rules: expiry, the sliding window, "can log in", origin comparison |
