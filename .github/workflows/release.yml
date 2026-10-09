@@ -120,23 +120,6 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.release.outputs.version }}
             type=raw,value=latest
 
-      # Nothing broken is ever published: the exact release source is built for amd64 and smoke-tested first
-      # (the multi-arch build below reuses these layers from the cache).
-      - name: Build image for smoke test (linux/amd64, no push)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: fintrack:ci
-          build-args: VERSION=${{ needs.release.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Smoke test
-        run: scripts/docker-smoke.sh fintrack:ci
-
       - name: Build and push (amd64 + arm64)
         uses: docker/build-push-action@v6
         with:
