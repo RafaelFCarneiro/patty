@@ -55,10 +55,13 @@ jobs:
           path: coverage/
           retention-days: 30
 
+  # Not on pull requests: a PR gets many pushes, and each image build pulls the base image from Docker Hub (which
+  # rate-limits shared runners). The image is built and smoke-tested once per merge to main, and again right before
+  # it is published (release.yml). Run scripts/docker-smoke.sh locally while iterating on container changes.
   docker:
     name: Docker image
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@v4

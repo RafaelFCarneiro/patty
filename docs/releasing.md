@@ -37,8 +37,9 @@ two outputs, `released` and `version`, read from the `vX.Y.Z` tag semantic-relea
   only the production `npm ci` runs per target architecture), pushing with provenance and an SBOM and a GitHub Actions
   layer cache.
 
-`ci.yml` builds the image for `linux/amd64` on every pull request (no push) and runs `scripts/docker-smoke.sh`
-against it: read-only root, key from a mounted file, the unauthenticated surface limited to `/api/health` (ADR-033),
+`ci.yml` builds the image for `linux/amd64` on every push to `main` (never on pull requests, which get many pushes and each
+image build pulls the base image from Docker Hub; no push to any registry) and `release.yml` repeats the build and smoke
+test right before it publishes, so a broken image is never published. Both run `scripts/docker-smoke.sh` against it: read-only root, key from a mounted file, the unauthenticated surface limited to `/api/health` (ADR-033),
 the setup code read from the container log and exchanged at `/ui/setup`, then `/api/status` + `/ui` + MCP `initialize`
 with the session cookie and a matching `Origin`, a cross-origin write refused, the owner/session/data surviving a
 restart with no second setup code, personal access tokens minted through the session and used as a bearer on `/mcp` and `/api` (a read token refused `403 insufficient_scope` on a write tool and route, a bad bearer never falling back to the cookie, no credential answered `401` with a `resource_metadata` URL that resolves, a revoked token refused at once), no key/password/session or access token in logs/config/volume, and a fast failure with the `openssl` hint when no key is supplied. Run it
