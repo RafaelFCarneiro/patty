@@ -200,8 +200,14 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
     continue otherwise, with no partial state.
 - **Safety copy before data-rewriting migrations.**
   - Before applying a migration flagged as rewriting existing rows (Phase 1's owner insert, Phase 4's backfill),
-    startup checkpoints the WAL and writes `fintrack.db.pre-<migration>.bak` next to the database. That's the
-    same encrypted file under the same key, so it adds no new exposure.
+    startup takes a consistent snapshot of the database with SQLite's `VACUUM INTO` and writes it to
+    `fintrack.db.pre-<migration>.bak` next to the database. The snapshot is taken while the process holds
+    SQLite's write lock, and the pending migrations are applied in that same transaction, so no other writer
+    (including a process already running on an older release) can commit between the snapshot and the migration
+    and be missing from the backup. The file is standalone (no `-wal` needed to restore) and encrypted under the
+    same key, so it adds no new exposure. A cross-process lock additionally keeps several starters from racing
+    to take it. (Revised during Phase 1 review: the first design, a WAL checkpoint followed by a file copy,
+    could not exclude a concurrent writer.)
   - The log line names the backup path.
   - The migration is also rehearsed against a copy of a real database before the phase merges (see the
     migration plan).

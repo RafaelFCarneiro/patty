@@ -37,7 +37,7 @@ flowchart TD
     F --> I
     G --> I
     I[Open DB with key<br/>file → env → keychain] --> J{Data-rewriting migration pending<br/>on an existing DB?}
-    J -- yes --> K[Take the OS-level migration lock<br/>VACUUM INTO db.pre-0018_auth_identity.bak<br/>encrypted, 0600]
+    J -- yes --> K[Take the OS-level migration lock<br/>take SQLite's write lock<br/>VACUUM INTO db.pre-0018_auth_identity.bak<br/>encrypted, 0600<br/>apply migrations in the same transaction]
     J -- no --> L
     K --> L[Apply migrations<br/>0018 inserts the OWNER row:<br/>id user-owner, admin, no credentials]
     L --> M{Mode required<br/>AND an HTTP surface?}
@@ -217,8 +217,8 @@ sequenceDiagram
 
     You->>FT: first start after upgrading
     FT->>DB: migration 0018 pending on an existing DB?
-    FT->>DB: VACUUM INTO fintrack.db.pre-0018_auth_identity.bak (encrypted, same key)
-    FT->>DB: create users / sessions / setup_codes + INSERT the owner (no credentials)
+    FT->>DB: take the write lock, then VACUUM INTO fintrack.db.pre-0018_auth_identity.bak (encrypted, same key)
+    FT->>DB: same transaction: create users / sessions / setup_codes + INSERT the owner (no credentials)
     Note over DB: no domain table touched — accounts, transactions … unchanged
     FT-->>You: loopback → auth disabled → everything acts as the owner (same behavior as before)
     Note over You,DB: Later (Docker / auth required): setup code → /ui/setup CLAIMS this owner → same data

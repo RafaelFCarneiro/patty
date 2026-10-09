@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { DATA_REWRITING_MIGRATIONS } from '../../../src/diplomat/db/migrations.js';
+import { applyPendingMigrationsHolding, MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
 import { backupPath } from '../../../src/diplomat/db/safetyCopy.js';
 import { OWNER_USER_ID } from '../../../src/models/auth.js';
 
@@ -243,6 +244,145 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     expect(await ownerRows(reopened)).toHaveLength(1);
     expect(statSync(backup).mtimeMs).toBe(firstCopy);
     expect(stderr.mock.calls.flat().join(' ')).not.toContain('backed up');
+  });
+
+  describe('the write barrier between the snapshot and the migration', () => {
+    /** A second process: its own connection to the same file, failing fast instead of waiting out a timeout. */
+    const intruder = async () => {
+      const client = createClient({ url: pathToFileURL(dbPath).href, encryptionKey: TEST_KEY });
+      await client.execute('PRAGMA busy_timeout = 0');
+      return client;
+    };
+    const tryWrite = async (client: Awaited<ReturnType<typeof intruder>>): Promise<string> => {
+      try {
+        await client.execute(
+          `INSERT INTO accounts (id, name, type, initial_balance, currency, version) VALUES ('acc-intruder', 'Late', 'wallet', 1, 'USD', 0)`,
+        );
+        return 'committed';
+      } catch (cause) {
+        return (cause as { code?: string }).code ?? 'unknown error';
+      }
+    };
+
+    it('refuses every other writer from the moment the snapshot starts until the migration has committed', async () => {
+      const legacy = await open();
+      await bootstrap(legacy, preAuthFolder);
+      await seedDomainData(legacy);
+      const other = await intruder();
+      const reader = await intruder(); // its own connection: a read here must not pin the writer's WAL snapshot
+      const during: string[] = [];
+
+      await applyPendingMigrationsHolding(legacy, REAL_MIGRATIONS_FOLDER, async () => {
+        during.push(await tryWrite(other)); // while the snapshot would be taken
+        const readable = await reader.execute('SELECT COUNT(*) AS c FROM accounts');
+        during.push(`read:${readable.rows[0]?.['c']}`); // reads stay open, so the snapshot can run
+      });
+
+      expect(during).toEqual(['SQLITE_BUSY', 'read:2']);
+      expect(await tryWrite(other)).toBe('committed'); // and writers are welcome again afterwards
+    });
+
+    it('applies the migrations exactly as drizzle would: the owner exists and drizzle finds nothing left', async () => {
+      const legacy = await open();
+      await bootstrap(legacy, preAuthFolder);
+      await seedDomainData(legacy);
+
+      await applyPendingMigrationsHolding(legacy, REAL_MIGRATIONS_FOLDER, async () => undefined);
+
+      expect(await ownerRows(legacy)).toHaveLength(1);
+      const journal = JSON.parse(readFileSync(join(REAL_MIGRATIONS_FOLDER, 'meta', '_journal.json'), 'utf8')) as {
+        entries: Array<{ when: number }>;
+      };
+      const [last] = await legacy.all<{ created_at: number }>(
+        sql`SELECT created_at FROM ${sql.identifier(MIGRATIONS_TABLE)} ORDER BY created_at DESC LIMIT 1`,
+      );
+      expect(Number(last?.created_at)).toBe(journal.entries.at(-1)?.when);
+      const before = await domainDump(legacy);
+      await bootstrap(legacy); // drizzle's own pass: a no-op, no error, nothing changed
+      expect(await domainDump(legacy)).toEqual(before);
+      expect(await ownerRows(legacy)).toHaveLength(1);
+    });
+
+    it('rolls everything back, and frees the lock, when the held step fails', async () => {
+      const legacy = await open();
+      await bootstrap(legacy, preAuthFolder);
+      await seedDomainData(legacy);
+      const other = await intruder();
+
+      await expect(
+        applyPendingMigrationsHolding(legacy, REAL_MIGRATIONS_FOLDER, async () => {
+          throw new Error('snapshot failed');
+        }),
+      ).rejects.toThrow('snapshot failed');
+
+      expect(await legacy.all(sql`SELECT name FROM sqlite_master WHERE name = 'users'`)).toEqual([]);
+      expect(await tryWrite(other)).toBe('committed');
+    });
+
+    it('rolls everything back, and surfaces the real error, when a migration statement fails part-way', async () => {
+      const legacy = await open();
+      await bootstrap(legacy, preAuthFolder);
+      await seedDomainData(legacy);
+      const other = await intruder();
+      // The real migrations plus one more that fails AFTER 0018's DDL and owner insert have already run.
+      const failingFolder = join(tmpDir, 'failing-migrations');
+      cpSync(REAL_MIGRATIONS_FOLDER, failingFolder, { recursive: true });
+      writeFileSync(join(failingFolder, '0099_bad.sql'), 'INSERT INTO no_such_table (x) VALUES (1);');
+      const journalPath = join(failingFolder, 'meta', '_journal.json');
+      const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: Array<Record<string, unknown>> };
+      journal.entries.push({ idx: 99, version: '6', when: Date.now(), tag: '0099_bad', breakpoints: true });
+      writeFileSync(journalPath, JSON.stringify(journal));
+      const before = await domainDump(legacy);
+      const [lastBefore] = await legacy.all<{ created_at: number }>(
+        sql`SELECT MAX(created_at) AS created_at FROM ${sql.identifier(MIGRATIONS_TABLE)}`,
+      );
+
+      await expect(applyPendingMigrationsHolding(legacy, failingFolder, async () => undefined)).rejects.toThrow(
+        /no_such_table/, // the migration's own error, not "transaction closed"
+      );
+
+      expect(await legacy.all(sql`SELECT name FROM sqlite_master WHERE name = 'users'`)).toEqual([]);
+      expect(await domainDump(legacy)).toEqual(before);
+      const [lastAfter] = await legacy.all<{ created_at: number }>(
+        sql`SELECT MAX(created_at) AS created_at FROM ${sql.identifier(MIGRATIONS_TABLE)}`,
+      );
+      expect(lastAfter?.created_at).toBe(lastBefore?.created_at);
+      expect(await tryWrite(other)).toBe('committed'); // the write lock was released
+    });
+
+    it('fails with a message an operator can act on when another process is holding a write transaction', async () => {
+      const legacy = await open();
+      await bootstrap(legacy, preAuthFolder);
+      await seedDomainData(legacy);
+      await legacy.run(sql`PRAGMA busy_timeout = 50`); // the first connection's wait, shortened for the test
+      const holder = await intruder();
+      const writing = await holder.transaction('write');
+
+      await expect(
+        applyPendingMigrationsHolding(legacy, REAL_MIGRATIONS_FOLDER, async () => undefined),
+      ).rejects.toThrow(/another FinTrack process is writing/);
+
+      await writing.rollback();
+      expect(await legacy.all(sql`SELECT name FROM sqlite_master WHERE name = 'users'`)).toEqual([]);
+    });
+
+    it('takes the real backup through the barrier: a late writer is refused while it is taken', async () => {
+      const legacy = await open();
+      await bootstrap(legacy, preAuthFolder);
+      await seedDomainData(legacy);
+      const other = await intruder();
+      const refused: string[] = [];
+      // Every console.error line the backup logs is a moment inside the held section.
+      stderr.mockImplementation(((message: unknown) => {
+        if (String(message).includes('backed up')) void tryWrite(other).then((outcome) => refused.push(outcome));
+      }) as never);
+
+      await bootstrap(legacy);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(refused).toEqual(['SQLITE_BUSY']);
+      expect(existsSync(backupPath(dbPath, AUTH_MIGRATION_TAG))).toBe(true);
+    });
   });
 
   it('keeps the pre-migration backup intact when two starters race (several stdio servers, ADR-024)', async () => {

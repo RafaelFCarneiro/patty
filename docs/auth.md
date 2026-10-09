@@ -168,8 +168,10 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 <DB_PATH>.pre-<migration>.bak        e.g.  ~/.fintrack/fintrack.db.pre-0018_auth_identity.bak
 ```
 
-- It is a consistent snapshot of everything committed at that moment — even if another process is writing —
-  and a standalone file (no `-wal`/`-shm` needed). It stays encrypted under the same key, mode `0600`, so it adds no
+- It is a consistent snapshot of everything committed at that moment, taken while FinTrack holds SQLite's write
+  lock and applies the migration in the same transaction — so a process that is already running (even on an older
+  release) cannot commit in between and be missing from it, and its writes simply wait or fail with `database is
+  locked` for the instant of the upgrade. It is a standalone file (no `-wal`/`-shm` needed). It stays encrypted under the same key, mode `0600`, so it adds no
   exposure — and no value without the key.
 - The path is logged to stderr (never the key). It is **not** made for a brand-new database, nor on later starts.
 - To roll back: stop FinTrack, put the `.bak` back as `fintrack.db` (delete the live `-wal`/`-shm` beside it), and run

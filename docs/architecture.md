@@ -313,8 +313,7 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     plaintext token exists in the cookie and the plaintext code in one stderr line, nowhere else — and are never
     logged (the Fastify logger redacts `cookie`, `set-cookie`, `authorization`). **Safety copy:** before a migration
     listed in `diplomat/db/migrations.ts`'s `DATA_REWRITING_MIGRATIONS` runs against a database that already has
-    applied migrations, `diplomat/db/safetyCopy.ts` snapshots it with `VACUUM INTO` (one read transaction, so consistent even against a
-    concurrent writer; encrypted under the same key) to `<DB_PATH>.pre-<migration>.bak` (standalone, mode `0600`,
+    applied migrations, `diplomat/db/safetyCopy.ts` snapshots it with `VACUUM INTO` while holding SQLite's write lock — `migrationBarrier.ts`'s `applyPendingMigrationsHolding` applies the pending migrations in that same `BEGIN IMMEDIATE` transaction (mirroring drizzle's libsql migrator and its `__drizzle_migrations` rows), so no other writer — even a process on an older release — can commit between the snapshot and the migration and be missing from the backup. The snapshot is written, encrypted under the same key, to `<DB_PATH>.pre-<migration>.bak` (standalone, mode `0600`,
     path logged to stderr); a brand-new database gets none. The copy and the migration run under a cross-process lock (`diplomat/db/migrationLock.ts`: an `EXCLUSIVE` transaction on a companion SQLite file `<DB_PATH>.migrate.lock` — OS-owned, so atomic and released when its holder dies), and "is it still pending?" is re-asked once the lock is held — so several stdio servers starting at once can neither interleave their copies nor back up an already-migrated file.
 
 ## Authentication (ADR-033)
