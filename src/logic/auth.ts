@@ -1,3 +1,4 @@
+import { hostnameOfHostHeader, isLoopbackHost } from '../common/net.js';
 import {
   AuthMode,
   SESSION_ABSOLUTE_MAX_MS,
@@ -21,6 +22,8 @@ const SETUP_CODE_GROUP_SEPARATOR = '-';
 const NON_ALPHANUMERIC = /[^A-Za-z0-9]/g;
 
 const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
+const OPAQUE_ORIGIN = 'null';
+const WEB_PROTOCOLS: ReadonlySet<string> = new Set(['http:', 'https:']);
 
 const millis = (iso: string): number => Date.parse(iso);
 const toIso = (millisSinceEpoch: number): string => new Date(millisSinceEpoch).toISOString();
@@ -93,14 +96,18 @@ export const evaluateSession = (session: SessionEntity, user: UserEntity | null,
 
 export const isUnsafeMethod = (method: string): boolean => !SAFE_METHODS.has(method.toUpperCase());
 
-const originOf = (url: string): string | null => {
+const parsedUrl = (url: string): URL | null => {
   try {
-    const { origin } = new URL(url);
-    // Opaque origins (`null`, data:, file:) never equal a real expected origin.
-    return origin === 'null' ? null : origin;
+    return new URL(url);
   } catch {
     return null;
   }
+};
+
+const originOf = (url: string): string | null => {
+  const parsed = parsedUrl(url);
+  // Opaque origins (`null`, data:, file:) never equal a real expected origin.
+  return parsed === null || parsed.origin === OPAQUE_ORIGIN ? null : parsed.origin;
 };
 
 /** The browser-declared origin of a request: `Origin`, else the `Referer`'s origin, else unknown. */
@@ -109,6 +116,33 @@ export const declaredOrigin = (origin: string | undefined, referer: string | und
 
 export const isSameOrigin = (expectedOrigin: string, declared: string | null): boolean =>
   declared !== null && declared === expectedOrigin;
+
+// ─── Auth disabled: loopback-only requests ─────────────────────────────────
+
+// An `Origin` of http(s) on a loopback host, any port (MCP Inspector at http://localhost:6274 must keep working).
+// An opaque (`null`), malformed or non-web origin is not loopback.
+const isLoopbackOrigin = (origin: string): boolean => {
+  const parsed = parsedUrl(origin);
+  return (
+    parsed !== null &&
+    parsed.origin !== OPAQUE_ORIGIN &&
+    WEB_PROTOCOLS.has(parsed.protocol) &&
+    isLoopbackHost(parsed.hostname)
+  );
+};
+
+/**
+ * With auth disabled every request acts as the owner, so the only thing standing between a web page and the
+ * user's finances is who the request says it is for. DNS rebinding sends `Host: attacker.example` to 127.0.0.1;
+ * a cross-site `fetch`/form POST sends `Origin: https://evil.example`. Config guarantees disabled ⇒ loopback bind,
+ * so every legitimate request names a loopback `Host`; a missing or malformed `Host` is refused, and an `Origin`
+ * — which native MCP clients, curl and stdio-adjacent tools simply don't send — must be loopback if present.
+ */
+export const isLoopbackRequest = (request: { host: string | undefined; origin: string | undefined }): boolean => {
+  const hostname = request.host === undefined ? null : hostnameOfHostHeader(request.host);
+  if (hostname === null || !isLoopbackHost(hostname)) return false;
+  return request.origin === undefined || isLoopbackOrigin(request.origin);
+};
 
 // ─── Operator messages ─────────────────────────────────────────────────────
 

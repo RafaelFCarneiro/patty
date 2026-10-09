@@ -591,7 +591,6 @@ describe('MCP integration > get_budget_status', () => {
   });
 
   it('excludes income from spend on a both-kind category — never inflates the cap, on either measure', async () => {
-    const stamp = Date.now();
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);

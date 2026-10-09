@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { hostnameOfHostHeader, isLoopbackHost } from './common/net.js';
 import { httpStatus, type AppError } from './common/errors.js';
-import { authenticate, ownerNeedsSetup } from './controllers/auth.js';
-import { declaredOrigin, isSameOrigin, isUnsafeMethod } from './logic/auth.js';
+import { ownerNeedsSetup } from './controllers/auth.js';
+import { declaredOrigin, isLoopbackRequest, isSameOrigin, isUnsafeMethod } from './logic/auth.js';
 import { safeNextPath } from './wire/in/auth.js';
-import { AuthMode, authErrors, isUiPath, OWNER_PRINCIPAL, type AuthError, type Principal } from './models/auth.js';
+import { AuthMode, authErrors, isUiPath, OWNER_PRINCIPAL, type AuthError } from './models/auth.js';
 import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from './diplomat/http/authPaths.js';
 import type { HttpAuth } from './diplomat/http/context.js';
 import { resolvePrincipal } from './diplomat/http/session.js';
@@ -15,7 +15,8 @@ import { resolvePrincipal } from './diplomat/http/session.js';
  *
  * Registered on the root instance BEFORE any route, so it runs for every route including a request no
  * route matches. It resolves `req.principal`:
- *   - auth `disabled` (loopback)  → the owner, always;
+ *   - auth `disabled` (loopback)  → the owner — but only for a request that names a loopback `Host` (and
+ *     `Origin`, if sent): anything else is a DNS-rebound or cross-site page and gets 403 on every route;
  *   - auth `required`             → the session cookie's user; no session → 401 JSON (`/api`, `/mcp`,
  *     anything not under `/ui`) or a redirect to setup/login (`/ui`). Only `PUBLIC_ROUTES` skip this.
  * stdio never reaches this hook: it is trusted and acts as the owner too (`OWNER_PRINCIPAL`).
@@ -57,13 +58,18 @@ export const registerAuthGate = (app: FastifyInstance, auth: HttpAuth): void => 
   app.decorateRequest('principal', undefined);
 
   if (auth.mode === AuthMode.enum.disabled) {
-    app.addHook('onRequest', async (req) => {
+    app.addHook('onRequest', async (req, reply) => {
+      // Never echo the offending header back: the hint is a constant.
+      if (!isLoopbackRequest({ host: req.headers.host, origin: req.headers.origin })) {
+        return reject(reply, authErrors.nonLoopbackRequest);
+      }
       req.principal = OWNER_PRINCIPAL;
+      return undefined;
     });
     return;
   }
 
-  const { deps, runEffects, publicUrl } = auth;
+  const { deps, publicUrl } = auth;
 
   const rejectUnauthenticated = async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply> => {
     if (!isUiPath(pathOf(req.url))) return reject(reply, authErrors.unauthenticated);

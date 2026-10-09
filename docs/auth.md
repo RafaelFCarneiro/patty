@@ -3,6 +3,7 @@
 How FinTrack decides who may use its HTTP surface (`/api`, `/mcp`, `/ui`), how an instance gets its first login,
 and what that does and doesn't protect. Decisions and rationale: [ADR-033](adr/033-authentication-and-multi-user.md).
 Internals (hook, principal, tables): [`architecture.md`](architecture.md) § Authentication.
+The flows as diagrams (startup, setup, login, the auth hook, logout/SSE, existing databases): [`auth-flows.md`](auth-flows.md).
 
 > **Status: Phase 1 of 4.** This release ships the identity foundation: exactly **one user** (the *owner*), password
 > login, sessions, and the setup code. Personal access tokens (Phase 2), MCP OAuth (Phase 3) and multiple users with
@@ -19,7 +20,15 @@ Internals (hook, principal, tables): [`architecture.md`](architecture.md) § Aut
 | any `HOST`, with `PUBLIC_URL` or `TRUST_PROXY` set | **required** | required | **startup error** |
 
 - **`disabled`** — every request acts as the owner, with no login. This is the npm default (`HOST=127.0.0.1`): the
-  server is reachable only from the machine it runs on, exactly as before authentication existed.
+  server is reachable only from the machine it runs on, exactly as before authentication existed. **It only answers
+  requests that say they are for this machine:** the `Host` header must name a loopback host (`127.0.0.1:port`,
+  `localhost:port`, `[::1]:port` — a missing or malformed one is refused), and an `Origin` header, if the client sends
+  one, must be a loopback origin (`http` or `https`, any port, so MCP Inspector at `http://localhost:6274` works; the
+  opaque `null` is refused). Anything else is `403 forbidden_origin` on every route and method. This closes DNS
+  rebinding — a page you visit resolving its own name to `127.0.0.1` so your browser sends it `Host:
+  attacker.example` — and cross-site `fetch`/form requests carrying `Origin: https://evil.example`. Clients that send
+  no `Origin` (native MCP clients, `curl`) are unaffected. To reach FinTrack by any other hostname, set `PUBLIC_URL`,
+  which turns authentication on.
 - **`required`** — every route except the [public surface](#the-public-surface) needs a session. This is the
   container's mode (`HOST=0.0.0.0`).
 - **`disabled` is refused at startup whenever the instance is reachable by anyone else** — a non-loopback `HOST`, or
@@ -174,6 +183,8 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 **Protects against**
 
 - Another machine on your network reading or writing your finances (required mode is forced off loopback).
+- A web page you visit reaching an auth-disabled instance on `127.0.0.1` — through DNS rebinding or a cross-site
+  request (loopback-only `Host`/`Origin`).
 - A hostile web page driving your logged-in browser (SameSite + Origin check; forms and JSON alike).
 - Guessing credentials online (argon2id, rate limits, one generic error, constant-time unknown-user path).
 - Someone claiming an exposed fresh instance before you (the setup code lives only in your logs).
@@ -185,9 +196,10 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 
 - **Anyone who can read your files.** The database key and the volume together decrypt everything; authentication
   guards the network surface, not the disk. Back up the key and the volume together, and protect both.
-- **Auth `disabled` on loopback.** Any local process — and, via DNS rebinding, a web page you visit — can reach
-  `127.0.0.1`. That is today's behavior and the reason `disabled` is loopback-only; turn on `FINTRACK_AUTH=required`
-  if that matters to you.
+- **Other local processes, with auth `disabled` on loopback.** A web page can no longer reach it (the `Host`/`Origin`
+  rule above), but any program running as any user on your machine can still connect to `127.0.0.1` and act as the
+  owner. That is today's behavior and the reason `disabled` is loopback-only; turn on `FINTRACK_AUTH=required` if
+  that matters to you.
 - **Eavesdropping.** FinTrack serves plain HTTP. Across a network, put a TLS-terminating reverse proxy in front
   (and set `PUBLIC_URL`/`TRUST_PROXY`); Phase 3 documents and supports that deployment.
 - **Username lockout.** Because failures are counted per submitted username, someone who can reach the login page can

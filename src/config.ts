@@ -23,13 +23,12 @@ const DEFAULT_PORT = 51737;
  *  var is decoded here, the key file's contents in `diplomat/db/driver.ts`. */
 export const EncryptionKey = z.string().regex(/^[0-9a-f]{64}$/i, 'must be a 64-character hex string');
 
-/** Auth default from the bind host (ADR-033 §1): loopback keeps today's zero-config behavior, anything
- *  reachable from elsewhere requires a session. */
+// `TRUST_PROXY=0` trusts zero proxy hops: no proxy.
+const NO_PROXY_HOPS = 0;
+
 /** Whether anything besides this machine can reach the instance: a non-loopback bind, or a reverse proxy
  *  configured in front of it (`PUBLIC_URL` names its external origin; `TRUST_PROXY` says to believe it). A
  *  proxy typically connects to a loopback bind, so `HOST` alone would call that instance private. */
-const NO_PROXY_HOPS = 0;
-
 export const isExposed = (env: {
   HOST: string;
   PUBLIC_URL?: string;
@@ -39,6 +38,8 @@ export const isExposed = (env: {
   env.PUBLIC_URL !== undefined ||
   (env.TRUST_PROXY !== undefined && env.TRUST_PROXY !== false && env.TRUST_PROXY !== NO_PROXY_HOPS);
 
+/** Auth default (ADR-033 §1): loopback with no proxy keeps today's zero-config behavior; anything
+ *  reachable from elsewhere requires a session. */
 export const defaultAuthMode = (env: Parameters<typeof isExposed>[0]): AuthMode =>
   isExposed(env) ? AuthMode.enum.required : AuthMode.enum.disabled;
 

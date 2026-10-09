@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createTransfer } from '../../../../src/controllers/account/transfer.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
 import { AccountType, type Account } from '../../../../src/models/account.js';

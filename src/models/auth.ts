@@ -136,6 +136,9 @@ export const AUTH_MESSAGES = {
   crossOriginUnknownOrigin:
     "Cross-origin check could not determine this instance's own origin — set PUBLIC_URL to its external URL.",
   tryAgain: 'Could not complete the request. Try again.',
+  nonLoopbackRequest:
+    'Request host/origin is not loopback — FinTrack without authentication only answers 127.0.0.1, localhost or ' +
+    '::1. To use another hostname, set PUBLIC_URL (which turns authentication on).',
 } as const;
 
 export const authErrors = {
@@ -149,5 +152,7 @@ export const authErrors = {
   rateLimited: { code: 'rate_limited' } satisfies AuthError,
   // CSRF (ADR-033 §2): a cookie-authenticated unsafe request whose Origin is not ours.
   crossOrigin: { code: 'forbidden_origin', hint: AUTH_MESSAGES.crossOrigin } satisfies AuthError,
+  // Auth disabled: only a loopback Host (and Origin, if any) is answered — the DNS-rebinding / cross-site guard.
+  nonLoopbackRequest: { code: 'forbidden_origin', hint: AUTH_MESSAGES.nonLoopbackRequest } satisfies AuthError,
   unknownOrigin: { code: 'forbidden_origin', hint: AUTH_MESSAGES.crossOriginUnknownOrigin } satisfies AuthError,
 };

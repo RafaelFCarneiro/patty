@@ -5,6 +5,7 @@ import {
   evaluateSession,
   formatSetupCode,
   hasCredentials,
+  isLoopbackRequest,
   isSameOrigin,
   isSessionExpired,
   isSetupCodeUsable,
@@ -226,6 +227,69 @@ describe('CSRF helpers', () => {
     expect(isSameOrigin(expected, 'https://fintrack.example.com:8443')).toBe(false);
     expect(isSameOrigin(expected, 'https://fintrack.example.com.evil.example')).toBe(false);
     expect(isSameOrigin(expected, null)).toBe(false);
+  });
+});
+
+describe('isLoopbackRequest — auth-disabled DNS-rebinding / cross-site guard', () => {
+  it.each(['127.0.0.1:3001', '127.0.0.1', 'localhost:3001', 'LOCALHOST:51737', '[::1]:3001', '127.5.6.7:80'])(
+    'answers a request whose Host is %s',
+    (host) => {
+      expect(isLoopbackRequest({ host, origin: undefined })).toBe(true);
+    },
+  );
+
+  it.each([
+    'attacker.example',
+    'attacker.example:3001',
+    '127.0.0.1.attacker.example',
+    'localhost.attacker.example:3001',
+    '192.168.1.10:3001',
+    '0.0.0.0:3001',
+    '[::]:3001',
+    '[2001:db8::1]:3001',
+  ])('refuses a request whose Host is %s (a rebound name or a non-loopback address)', (host) => {
+    expect(isLoopbackRequest({ host, origin: undefined })).toBe(false);
+  });
+
+  it.each([undefined, '', 'a b', 'localhost:99999999', '127.0.0.1@attacker.example', '://'])(
+    'refuses a missing or malformed Host (%j)',
+    (host) => {
+      expect(isLoopbackRequest({ host, origin: undefined })).toBe(false);
+    },
+  );
+
+  it('does not require an Origin — native MCP clients, curl and stdio-adjacent tools send none', () => {
+    expect(isLoopbackRequest({ host: '127.0.0.1:3001', origin: undefined })).toBe(true);
+  });
+
+  it.each([
+    'http://localhost:6274', // MCP Inspector
+    'http://127.0.0.1:3001',
+    'https://localhost',
+    'http://[::1]:3001',
+    'http://127.0.0.2:8080',
+  ])('accepts the loopback Origin %s, any port', (origin) => {
+    expect(isLoopbackRequest({ host: '127.0.0.1:3001', origin })).toBe(true);
+  });
+
+  it.each([
+    'https://evil.example',
+    'http://evil.example:3001',
+    'http://localhost.evil.example',
+    'http://127.0.0.1.evil.example',
+    'http://192.168.1.10:3001',
+    'null', // opaque origin: a sandboxed iframe, a data: URL, a redirect chain
+    '',
+    'not a url',
+    'ftp://localhost',
+    'file:///etc/passwd',
+    'chrome-extension://abcdef',
+  ])('refuses the Origin %j even with a loopback Host', (origin) => {
+    expect(isLoopbackRequest({ host: '127.0.0.1:3001', origin })).toBe(false);
+  });
+
+  it('needs BOTH to pass: a loopback Origin does not rescue a rebound Host', () => {
+    expect(isLoopbackRequest({ host: 'attacker.example', origin: 'http://localhost:6274' })).toBe(false);
   });
 });
 

@@ -1,7 +1,7 @@
 import { purry } from 'remeda';
 import { localizeCategoryKind } from './localize.js';
 import { fold } from './resolve.js';
-import { CategoryKind, type Category, type CategoryReferences } from '../models/category.js';
+import { type Category, type CategoryReferences } from '../models/category.js';
 import type { Locale } from '../models/locale.js';
 
 type HasKind = { kind: Category['kind'] };

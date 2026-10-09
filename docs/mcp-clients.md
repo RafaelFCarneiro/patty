@@ -195,6 +195,8 @@ The image ([README § Docker](../README.md#docker)) always runs the HTTP transpo
 `http://127.0.0.1:51737/mcp` — instead of spawning a process. The compose file publishes the port on host loopback only
 (`127.0.0.1:51737:51737`); keep it that way — the container serves plain HTTP. Use `127.0.0.1`, not `localhost`.
 
+> A client that reaches FinTrack through a **non-loopback hostname** (a LAN name, a tunnel) needs authentication on — set `PUBLIC_URL`; an auth-disabled instance only answers `127.0.0.1`, `localhost` and `::1` Hosts (and loopback `Origin`s).
+
 > **Temporary limitation — the container's `/mcp` needs a login session.** The container runs with authentication
 > `required` (ADR-033), and until personal access tokens ship (Phase 2) `/mcp` accepts only a browser **session
 > cookie**, which MCP clients don't carry — every request without one is `401`. **Until then, connect MCP clients

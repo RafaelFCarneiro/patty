@@ -1,7 +1,8 @@
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createClient } from '@libsql/client';
 import { sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
@@ -13,6 +14,10 @@ import { OWNER_USER_ID } from '../../../src/models/auth.js';
 const TEST_KEY = 'd'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
 const AUTH_MIGRATION_TAG = '0018_auth_identity';
+// A distinctive string written into a domain row before migrating: it must be findable in the bytes of a
+// PLAINTEXT database and absent from an encrypted one.
+const MARKER = 'PLAINTEXT-MARKER-4f9c2e71';
+const SQLITE_PLAINTEXT_HEADER = Buffer.from('SQLite format 3\0');
 
 let tmpDir: string;
 let dbPath: string;
@@ -75,7 +80,7 @@ const seedDomainData = async (db: Db): Promise<void> => {
   );
   await db.run(
     sql`INSERT INTO transactions (id, description, amount, type, status, date, currency, source, idempotency_key, classification_method, confidence, from_account_id, category_id, version)
-        VALUES ('tx-1', 'Groceries', 42.5, 'expense', 'effective', '2026-09-01', 'USD', 'mcp', 'legacy-readable-key', 'rule', 0.8, 'acc-1', 'cat-food', 1)`,
+        VALUES ('tx-1', 'Groceries ${sql.raw(MARKER)}', 42.5, 'expense', 'effective', '2026-09-01', 'USD', 'mcp', 'legacy-readable-key', 'rule', 0.8, 'acc-1', 'cat-food', 1)`,
   );
   await db.run(
     sql`INSERT INTO settings (id, locale, locale_source, version) VALUES ('singleton', 'pt', 'explicit', 2)`,
@@ -154,6 +159,52 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     const restored = await openDatabase({ DB_PATH: backupPath(dbPath, AUTH_MIGRATION_TAG), FINTRACK_DB_KEY: TEST_KEY });
     const ids = await restored.all<{ id: string }>(sql`SELECT id FROM accounts ORDER BY id`);
     expect(ids.map(({ id }) => id)).toEqual(['acc-1', 'acc-2', 'acc-late']);
+  });
+
+  describe('encryption at rest — proven on the raw bytes, not inferred from a wrong key failing', () => {
+    const rawBytes = (path: string): Buffer => readFileSync(path);
+    const startsWithPlaintextHeader = (bytes: Buffer): boolean =>
+      bytes.subarray(0, SQLITE_PLAINTEXT_HEADER.length).equals(SQLITE_PLAINTEXT_HEADER);
+
+    it('control: the detector flags a PLAINTEXT database (so the assertions below can fail)', async () => {
+      const plainPath = join(tmpDir, 'plain.db');
+      const plain = createClient({ url: pathToFileURL(plainPath).href }); // no encryptionKey
+      await plain.execute('CREATE TABLE t (v TEXT)');
+      await plain.execute({ sql: 'INSERT INTO t VALUES (?)', args: [MARKER] });
+      await plain.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+      plain.close();
+
+      const bytes = rawBytes(plainPath);
+      expect(startsWithPlaintextHeader(bytes)).toBe(true);
+      expect(bytes.includes(MARKER)).toBe(true);
+    });
+
+    it('the backup is encrypted: no SQLite plaintext header, and the marker appears nowhere in its bytes', async () => {
+      const legacy = await open();
+      await bootstrap(legacy, preAuthFolder);
+      await seedDomainData(legacy);
+      await bootstrap(legacy);
+
+      const backup = rawBytes(backupPath(dbPath, AUTH_MIGRATION_TAG));
+      expect(backup.length).toBeGreaterThan(SQLITE_PLAINTEXT_HEADER.length);
+      expect(startsWithPlaintextHeader(backup)).toBe(false);
+      expect(backup.includes(MARKER)).toBe(false);
+    });
+
+    it('the main database file holds the same row yet is encrypted too — like compared with like', async () => {
+      const legacy = await open();
+      await bootstrap(legacy, preAuthFolder);
+      await seedDomainData(legacy);
+      await bootstrap(legacy);
+      await legacy.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`); // fold the WAL in so the main file holds the data
+      expect((await legacy.all(sql`SELECT 1 FROM transactions WHERE description LIKE ${`%${MARKER}%`}`)).length).toBe(
+        1,
+      );
+
+      const main = rawBytes(dbPath);
+      expect(startsWithPlaintextHeader(main)).toBe(false);
+      expect(main.includes(MARKER)).toBe(false);
+    });
   });
 
   it('writes a standalone, encrypted backup: no sidecars, no temp file, unreadable without the key', async () => {

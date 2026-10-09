@@ -1,4 +1,3 @@
-import type { FastifyRequest } from 'fastify';
 import type { Principal } from '../../models/auth.js';
 
 declare module 'fastify' {
@@ -8,5 +7,3 @@ declare module 'fastify' {
     principal?: Principal;
   }
 }
-
-export const principalOf = (req: FastifyRequest): Principal | undefined => req.principal;

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { payBill, revertBillPayment } from '../../../../src/controllers/creditCard/bill.js';
 import type { Deps } from '../../../../src/controllers/deps.js';
 import { AccountType, type Account } from '../../../../src/models/account.js';
