@@ -53,7 +53,7 @@ export type SetupForm = z.infer<typeof SetupFormSchema>;
 /** The query string of /ui/login and /ui/setup — where to go afterwards. */
 export const NextQuerySchema = z.object({ next: NextPathSchema });
 
-/** `POST /ui/account/tokens`: what the token form submits. */
+/** `POST /ui/access/tokens`: what the token form submits. */
 export const CreateTokenFormSchema = z.object({
   name: z.string().trim().min(1, 'Give the token a name.').max(TOKEN_NAME_MAX_LENGTH),
   access: TokenAccess,

@@ -19,19 +19,19 @@ const SECRET = /data-testid="token-secret">(ftk_[A-Za-z0-9_-]+)</;
 const get = (ctx: Awaited<ReturnType<typeof createApp>>, url: string, cookie: string) =>
   ctx.app.inject({ method: 'GET', url, headers: { host: LOOPBACK_HOST, cookie } });
 
-describe('/ui/account/tokens', () => {
+describe('/ui/access/tokens', () => {
   it('needs a session: an anonymous browser is sent to log in', async () => {
     const ctx = await createApp();
     await claimOwner(ctx);
-    const res = await ctx.app.inject({ method: 'GET', url: '/ui/account/tokens', headers: { host: LOOPBACK_HOST } });
+    const res = await ctx.app.inject({ method: 'GET', url: '/ui/access/tokens', headers: { host: LOOPBACK_HOST } });
     expect(res.statusCode).toBe(303);
-    expect(res.headers.location).toBe(`/ui/login?next=${encodeURIComponent('/ui/account/tokens')}`);
+    expect(res.headers.location).toBe(`/ui/login?next=${encodeURIComponent('/ui/access/tokens')}`);
   });
 
   it('lists no tokens at first, with the create form', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
-    const res = await get(ctx, '/ui/account/tokens', cookie);
+    const res = await get(ctx, '/ui/access/tokens', cookie);
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('No access tokens yet.');
     expect(res.body).toContain('name="access"');
@@ -41,7 +41,7 @@ describe('/ui/account/tokens', () => {
   it('is locked down like the sign-in pages: CSP, no-store, no framing', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
-    for (const res of [await get(ctx, '/ui/account/tokens', cookie)]) {
+    for (const res of [await get(ctx, '/ui/access/tokens', cookie)]) {
       expect(res.headers['cross-origin-opener-policy']).toBe('same-origin');
       expect(res.headers['cache-control']).toBe('no-store');
       expect(res.headers['content-security-policy']).toContain("default-src 'none'");
@@ -54,7 +54,7 @@ describe('/ui/account/tokens', () => {
     const cookie = await claimOwner(ctx);
     const created = await ctx.app.inject({
       method: 'POST',
-      url: '/ui/account/tokens',
+      url: '/ui/access/tokens',
       headers: browserHeaders(cookie),
       payload: formBody({ password: PASSWORD, name: 'Claude Desktop', access: 'read', expiry: '30' }),
     });
@@ -64,7 +64,7 @@ describe('/ui/account/tokens', () => {
     const token = SECRET.exec(created.body)?.[1] ?? '';
     expect(token).toMatch(/^ftk_[A-Za-z0-9_-]{43}$/);
 
-    const list = await get(ctx, '/ui/account/tokens', cookie);
+    const list = await get(ctx, '/ui/access/tokens', cookie);
     expect(list.body).not.toContain(token);
     expect(list.body).toContain('Claude Desktop');
     expect(list.body).toContain(`${token.slice(0, 10)}…`);
@@ -106,11 +106,11 @@ describe('/ui/account/tokens', () => {
     const name = '<script>alert(1)</script>"&';
     const created = await ctx.app.inject({
       method: 'POST',
-      url: '/ui/account/tokens',
+      url: '/ui/access/tokens',
       headers: browserHeaders(cookie),
       payload: formBody({ password: PASSWORD, name, access: 'read', expiry: 'none' }),
     });
-    const list = await get(ctx, '/ui/account/tokens', cookie);
+    const list = await get(ctx, '/ui/access/tokens', cookie);
     for (const body of [created.body, list.body]) {
       expect(body).not.toContain('<script>alert');
       expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
@@ -128,7 +128,7 @@ describe('/ui/account/tokens', () => {
     ]) {
       const res = await ctx.app.inject({
         method: 'POST',
-        url: '/ui/account/tokens',
+        url: '/ui/access/tokens',
         headers: browserHeaders(cookie),
         payload,
       });
@@ -143,21 +143,21 @@ describe('/ui/account/tokens', () => {
     const cookie = await claimOwner(ctx);
     const { id } = await mintToken(ctx, cookie, { name: 'old laptop' });
     const revoke = () =>
-      ctx.app.inject({ method: 'POST', url: `/ui/account/tokens/${id}/revoke`, headers: browserHeaders(cookie) });
+      ctx.app.inject({ method: 'POST', url: `/ui/access/tokens/${id}/revoke`, headers: browserHeaders(cookie) });
 
     const first = await revoke();
     expect(first.statusCode).toBe(303);
-    expect(first.headers.location).toBe('/ui/account/tokens');
+    expect(first.headers.location).toBe('/ui/access/tokens');
     const revokedAt = (await authDepsOf(ctx).accessTokens.findById(OWNER_USER_ID, id))?.revokedAt;
     expect(revokedAt).toEqual(expect.any(String));
 
     expect((await revoke()).statusCode).toBe(303);
     expect((await authDepsOf(ctx).accessTokens.findById(OWNER_USER_ID, id))?.revokedAt).toBe(revokedAt);
 
-    const list = await get(ctx, '/ui/account/tokens', cookie);
+    const list = await get(ctx, '/ui/access/tokens', cookie);
     expect(list.body).toContain('old laptop');
     expect(list.body).toContain('token-status-revoked');
-    expect(list.body).not.toContain(`/ui/account/tokens/${id}/revoke`); // nothing left to revoke
+    expect(list.body).not.toContain(`/ui/access/tokens/${id}/revoke`); // nothing left to revoke
   });
 
   it('answers 404 for a token that does not exist', async () => {
@@ -165,7 +165,7 @@ describe('/ui/account/tokens', () => {
     const cookie = await claimOwner(ctx);
     const res = await ctx.app.inject({
       method: 'POST',
-      url: '/ui/account/tokens/nope/revoke',
+      url: '/ui/access/tokens/nope/revoke',
       headers: browserHeaders(cookie),
     });
     expect(res.statusCode).toBe(404);
@@ -179,11 +179,11 @@ describe('/ui/account/tokens', () => {
 
     const mint = await ctx.app.inject({
       method: 'POST',
-      url: '/ui/account/tokens',
+      url: '/ui/access/tokens',
       headers: evil,
       payload: formBody({ password: PASSWORD, name: 'x', access: 'write', expiry: 'none' }),
     });
-    const revoke = await ctx.app.inject({ method: 'POST', url: `/ui/account/tokens/${id}/revoke`, headers: evil });
+    const revoke = await ctx.app.inject({ method: 'POST', url: `/ui/access/tokens/${id}/revoke`, headers: evil });
     expect([mint.statusCode, revoke.statusCode]).toEqual([403, 403]);
     const all = await authDepsOf(ctx).accessTokens.listByUser(OWNER_USER_ID);
     expect(all).toHaveLength(1);
@@ -192,10 +192,10 @@ describe('/ui/account/tokens', () => {
 });
 
 describe('the dashboard namespace', () => {
-  it('still serves a dashboard named tokens or account — token management is two segments deep', async () => {
+  it('still serves a dashboard named tokens or access — token management is two segments deep', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
-    for (const name of ['tokens', 'account']) {
+    for (const name of ['tokens', 'access']) {
       const shell = await get(ctx, `/ui/${name}`, cookie);
       expect(shell.statusCode, name).toBe(200);
       expect(shell.body, name).toContain('id="content"');
@@ -209,7 +209,7 @@ describe('the shell’s access-tokens link', () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
     const shell = await get(ctx, '/ui', cookie);
-    expect(shell.body).toContain('href="/ui/account/tokens"');
+    expect(shell.body).toContain('href="/ui/access/tokens"');
     expect(shell.body).toContain('action="/ui/logout"');
   });
 
@@ -217,7 +217,7 @@ describe('the shell’s access-tokens link', () => {
     const ctx = await createApp({ auth: { FINTRACK_AUTH: AuthMode.enum.disabled } });
     const shell = await ctx.app.inject({ method: 'GET', url: '/ui', headers: { host: LOOPBACK_HOST } });
     expect(shell.statusCode).toBe(200);
-    expect(shell.body).not.toContain('/ui/account/tokens');
+    expect(shell.body).not.toContain('/ui/access/tokens');
     expect(shell.body).not.toContain('/ui/logout');
   });
 });

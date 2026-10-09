@@ -201,7 +201,7 @@ export type CreatedAccessToken = { token: string; summary: AccessTokenSummary };
 
 export type NewTokenSpec = { name: string; access: TokenAccess; expiry: TokenExpiry };
 
-/** Creating a token asks for the account password again (step-up): a script that runs in the dashboard's origin
+/** Creating a token asks for the login password again (step-up): a script that runs in the dashboard's origin
  *  holds the session cookie but not the password, so it cannot mint a token for itself. */
 export type CreateTokenInput = NewTokenSpec & { password: string };
 

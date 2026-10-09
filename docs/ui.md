@@ -225,7 +225,7 @@ fragments were first converted to files.
   `Content-Security-Policy` locked down). `ui/shell.html` reserves `<!--fintrack:auth-controls-->`: `registerUiRoutes`
   replaces it with the access-tokens link and the logout form (bottom of the sidebar) when auth is `required` and with nothing otherwise — the
   shell is the same bytes either way except for that one marker. An open `/ui/events` stream re-checks its session
-  every 30 s and closes when the session is gone (logout, expiry, disabled user). **`/ui/account/tokens`** (auth `required` only; `routes/tokens.ts`, templates `ui/tokens.html` / `ui/tokenCreated.html`) lists, creates and revokes personal access tokens — session-only, a bearer token is never accepted on any `/ui` path; the plaintext of a new token appears once, on the response to the create `POST`. See `docs/auth.md`.
+  every 30 s and closes when the session is gone (logout, expiry, disabled user). **`/ui/access/tokens`** (auth `required` only; `routes/tokens.ts`, templates `ui/tokens.html` / `ui/tokenCreated.html`) lists, creates and revokes personal access tokens — session-only, a bearer token is never accepted on any `/ui` path; the plaintext of a new token appears once, on the response to the create `POST`. See `docs/auth.md`.
 - These are browser-facing routes, **not** `RouteDefinition`s, so `/ui*` is deliberately excluded from the
   `/api` OpenAPI document (that document exists to give agents `fetch()` shapes for the JSON API). Dashboard
   *management* (list/get/save/delete/rename) has full REST parity under `/api/dashboards*` and is documented

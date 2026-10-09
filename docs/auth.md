@@ -125,17 +125,17 @@ Without the code nobody can claim an exposed instance: there is no window in whi
 ## Personal access tokens
 
 A personal access token (PAT) lets a script or an MCP client that cannot open a browser call `/api` and `/mcp`.
-Create and revoke them at **`/ui/account/tokens`** (the key icon in the dashboard sidebar; only present when authentication is
+Create and revoke them at **`/ui/access/tokens`** (the key icon in the dashboard sidebar; only present when authentication is
 `required`).
 
 - **Format:** `ftk_` followed by 32 random bytes, base64url (47 characters). The fixed prefix makes a leaked token
   greppable — in a repo, a log, a paste.
-- **Shown once.** `POST /ui/account/tokens` answers with the plaintext on that one page. FinTrack stores only its **SHA-256**
+- **Shown once.** `POST /ui/access/tokens` answers with the plaintext on that one page. FinTrack stores only its **SHA-256**
   and a display prefix (`ftk_` + the first 6 characters) so you can tell tokens apart in the list. Lose it and you
   revoke it and create another. The plaintext is never logged: request logs redact `Authorization`, and nothing else
   receives it.
 - **Name, access, expiry, and your password.** Access is *read only* or *read and write* (see [Scopes](#scopes)). Expiry is *never*, 30,
-  90 or 365 days — the form defaults to 90. Creating a token asks for your **account password again**: a dashboard can
+  90 or 365 days — the form defaults to 90. Creating a token asks for your **login password again**: a dashboard can
   contain a script (a write-scoped client may save one with `save_dashboard`) that runs in the dashboard's origin with
   your session cookie, but it does not know your password, so it cannot mint itself a token. A wrong password is `403` and
   counts toward the same [login rate limit](#brute-force-protection).
@@ -144,7 +144,7 @@ Create and revoke them at **`/ui/account/tokens`** (the key icon in the dashboar
 - **Revoke** sets `revoked_at` and keeps the row, so you can still see what existed; it takes effect on the very next
   request. Revoking twice is harmless.
 - A token stops working when it is revoked, when it expires, or if its owner can no longer log in.
-- **Token management is session-only.** `/ui/account/tokens` is a browser page behind the session cookie and the
+- **Token management is session-only.** `/ui/access/tokens` is a browser page behind the session cookie and the
   [CSRF check](#csrf). A bearer token is never accepted on `/ui`, and there is no `/api` or `/mcp` route (or MCP tool)
   that manages tokens — so a token can never mint, widen or revoke another token directly. Revoking needs no password (it only
   removes access, and you can always mint again).

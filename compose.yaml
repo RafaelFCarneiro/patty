@@ -13,7 +13,7 @@
 # Then open http://127.0.0.1:51737/ui/setup, enter the code and choose a username and password: that claims the
 # instance. Everything except /api/health needs that login (the container runs with FINTRACK_AUTH=required).
 # MCP clients and scripts authenticate /mcp and /api with a personal access token (Authorization: Bearer ftk_…)
-# created at /ui/account/tokens — see docs/mcp-clients.md.
+# created at /ui/access/tokens — see docs/mcp-clients.md.
 #
 # Keep the key: without it the database in the fintrack-data volume cannot be decrypted. Back up the
 # volume and the key together. Run exactly one replica per volume (SQLite, in-process scheduler).

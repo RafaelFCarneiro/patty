@@ -145,7 +145,7 @@ describe('credential precedence on /api and /mcp', () => {
 
     const revoke = await ctx.app.inject({
       method: 'POST',
-      url: `/ui/account/tokens/${writer.id}/revoke`,
+      url: `/ui/access/tokens/${writer.id}/revoke`,
       headers: browserHeaders(cookie),
     });
     expect(revoke.statusCode).toBe(303);
@@ -188,7 +188,7 @@ describe('credential precedence on /api and /mcp', () => {
 describe('bearer is not a browser credential', () => {
   it('is not accepted on /ui — which stays session-only', async () => {
     const { ctx, writer } = await world();
-    for (const url of ['/ui', '/ui/overview', '/ui/account/tokens', '/ui/events']) {
+    for (const url of ['/ui', '/ui/overview', '/ui/access/tokens', '/ui/events']) {
       const res = await ctx.app.inject({ method: 'GET', url, headers: { ...BASE_HEADERS, ...bearer(writer.token) } });
       expect(res.statusCode, url).toBe(303);
       expect(String(res.headers.location)).toMatch(/^\/ui\/login/);
@@ -199,7 +199,7 @@ describe('bearer is not a browser credential', () => {
     const { ctx, cookie } = await world();
     const res = await ctx.app.inject({
       method: 'GET',
-      url: '/ui/account/tokens',
+      url: '/ui/access/tokens',
       headers: { ...BASE_HEADERS, cookie, authorization: 'Bearer garbage' },
     });
     expect(res.statusCode).toBe(200);
@@ -236,12 +236,12 @@ describe('token management is session-only', () => {
 
     const mint = await ctx.app.inject({
       method: 'POST',
-      url: '/ui/account/tokens',
+      url: '/ui/access/tokens',
       headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded' },
       payload: `password=${PASSWORD}&name=sneaky&access=write&expiry=none`,
     });
-    const list = await ctx.app.inject({ method: 'GET', url: '/ui/account/tokens', headers });
-    const revoke = await ctx.app.inject({ method: 'POST', url: `/ui/account/tokens/${reader.id}/revoke`, headers });
+    const list = await ctx.app.inject({ method: 'GET', url: '/ui/access/tokens', headers });
+    const revoke = await ctx.app.inject({ method: 'POST', url: `/ui/access/tokens/${reader.id}/revoke`, headers });
     for (const res of [mint, list, revoke]) {
       expect(res.statusCode).toBe(303);
       expect(String(res.headers.location)).toMatch(/^\/ui\/login/);
@@ -390,7 +390,7 @@ describe('MCP scopes over HTTP', () => {
     const base = await serve(ctx);
     await ctx.app.inject({
       method: 'POST',
-      url: `/ui/account/tokens/${writer.id}/revoke`,
+      url: `/ui/access/tokens/${writer.id}/revoke`,
       headers: browserHeaders(cookie),
     });
     const res = await post(base, writer.token, INITIALIZE_REQUEST);
@@ -451,7 +451,7 @@ describe('auth disabled (the npm loopback default)', () => {
   it('serves no token pages and no resource metadata', async () => {
     const ctx = await createApp({ auth: { FINTRACK_AUTH: AuthMode.enum.disabled } });
     expect(
-      (await ctx.app.inject({ method: 'POST', url: '/ui/account/tokens', headers: BASE_HEADERS })).statusCode,
+      (await ctx.app.inject({ method: 'POST', url: '/ui/access/tokens', headers: BASE_HEADERS })).statusCode,
     ).toBe(404);
     for (const url of ['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp']) {
       expect((await ctx.app.inject({ method: 'GET', url, headers: BASE_HEADERS })).statusCode, url).toBe(404);
