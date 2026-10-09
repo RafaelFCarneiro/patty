@@ -123,7 +123,7 @@ const seedBaseline = async (
   monthlyAmount: number,
   currency: string,
 ): Promise<void> => {
-  for (const [, date] of BASELINE_DATES.entries()) {
+  for (const date of BASELINE_DATES) {
     await addExpense(client, {
       description: `baseline ${category}`,
       amount: monthlyAmount,
@@ -609,7 +609,7 @@ describe('MCP integration > find_correlations (budget_fit)', () => {
       await callTool(client, { name: 'create_sub_category', args: { name: subCategoryName, parentId: parent.id } });
       // seedBaseline targets `category`, which resolves the top-level node — a sub-category budget
       // needs spend against `subCategory` specifically, so this seeds it directly instead.
-      for (const [, date] of BASELINE_DATES.entries()) {
+      for (const date of BASELINE_DATES) {
         await addExpense(client, {
           description: `baseline ${subCategoryName}`,
           amount: 100,
@@ -688,7 +688,7 @@ describe('MCP integration > find_correlations (merchant_concentration)', () => {
         ['Ifood', 200],
         ['Amazon', 100],
       ];
-      for (const [, [description, amount]] of merchants.entries()) {
+      for (const [description, amount] of merchants) {
         await addExpense(client, {
           description,
           amount,
@@ -884,7 +884,7 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      for (const [, offset] of [90, 60, 30, 0].entries()) {
+      for (const offset of [90, 60, 30, 0]) {
         await addExpense(client, {
           description: merchant,
           amount: 39.9,
@@ -920,7 +920,7 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      for (const [, offset] of [90, 60, 30, 0].entries()) {
+      for (const offset of [90, 60, 30, 0]) {
         await addExpense(client, {
           description: merchant,
           amount: 20,
@@ -988,7 +988,7 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      for (const [, offset] of [90, 75, 0].entries()) {
+      for (const offset of [90, 75, 0]) {
         // 15-day then 75-day gap — neither a consistent ~monthly cadence.
         await addExpense(client, {
           description: merchant,
@@ -1015,7 +1015,7 @@ describe('MCP integration > find_correlations (recurring_candidates)', () => {
     const { client, transport } = makeClient();
     try {
       await client.connect(transport);
-      for (const [, offset] of [90, 60, 30, 0].entries()) {
+      for (const offset of [90, 60, 30, 0]) {
         await addExpense(client, {
           description: merchant,
           amount: 0.00123456,

@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LOOPBACK_HOST } from '../../../src/common/net.js';
 import { AUTH_MESSAGES } from '../../../src/models/auth.js';
 import { buildApp, type AppContext } from '../app-builder.js';
+import { concreteUrl, registeredRoutes } from './helpers.js';
 
 // Auth DISABLED (the npm default). Every request acts as the owner, so a request that is not demonstrably from
 // this machine — a DNS-rebound Host, a cross-site Origin — must be refused on every route and method.
@@ -150,6 +151,53 @@ describe('auth disabled — a non-loopback Host is refused on every route', () =
 
   it.each(['a b', 'localhost:99999999', '127.0.0.1@attacker.example'])('refuses a malformed Host %j', async (host) => {
     expect((await ctx.app.inject({ method: 'GET', url: '/api/status', headers: { host } })).statusCode).toBe(403);
+  });
+});
+
+describe('auth disabled — every registered route is guarded, not a hand-picked list', () => {
+  it('answers 403 to a rebound Host on EVERY route Fastify registers, whatever the method', async () => {
+    const routes = await registeredRoutes(ctx);
+
+    // Sanity: the capture saw the whole surface (incl. the hijacking SSE route, MCP and HEAD auto-routes).
+    const seen = routes.map(({ method, url }) => `${method} ${url}`);
+    expect(routes.length).toBeGreaterThan(60);
+    expect(seen).toEqual(
+      expect.arrayContaining(['GET /ui/events', 'POST /mcp', 'GET /api/status', 'HEAD /api/status', 'GET /api/health']),
+    );
+
+    const unguarded: string[] = [];
+    for (const route of routes) {
+      const res = await ctx.app.inject({
+        method: route.method as 'GET',
+        url: concreteUrl(route.url),
+        headers: { host: 'attacker.example' },
+      });
+      if (res.statusCode !== 403) unguarded.push(`${route.method} ${route.url} → ${res.statusCode}`);
+    }
+    expect(unguarded).toEqual([]);
+  });
+
+  it('also refuses methods no route declares (OPTIONS preflights, TRACE) before Fastify can answer them', async () => {
+    for (const method of ['OPTIONS', 'HEAD'] as const) {
+      const res = await ctx.app.inject({ method, url: '/api/status', headers: { host: 'attacker.example' } });
+      expect(res.statusCode, method).toBe(403);
+    }
+  });
+
+  it('keeps the live-update stream working for the real dashboard: loopback Host opens /ui/events', async () => {
+    const res = await new Promise<{ status: number; type: string }>((resolve, reject) => {
+      const req = request(
+        { host: LOOPBACK_HOST, port, path: '/ui/events', headers: { origin: `http://${LOOPBACK_HOST}:${port}` } },
+        (incoming) => {
+          resolve({ status: incoming.statusCode ?? 0, type: String(incoming.headers['content-type']) });
+          incoming.destroy(); // a stream never ends on its own
+        },
+      );
+      req.on('error', reject);
+      req.end();
+    });
+    expect(res.status).toBe(200);
+    expect(res.type).toContain('text/event-stream');
   });
 });
 

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { LightMyRequestResponse } from 'fastify';
+import Fastify, { type LightMyRequestResponse } from 'fastify';
 import { afterEach } from 'vitest';
 import type { AuthDeps } from '../../../src/controllers/deps.js';
 import { SESSION_COOKIE_NAME } from '../../../src/diplomat/http/cookies.js';
@@ -76,3 +76,22 @@ export const authDepsOf = (ctx: AppContext): AuthDeps => {
   if (ctx.auth.mode !== 'required') throw new Error('auth is disabled in this app');
   return ctx.auth.deps;
 };
+
+export type RegisteredRoute = { method: string; url: string };
+
+/** Every (method, url) Fastify actually registers for this app — captured by an `onRoute` listener attached
+ *  BEFORE the routes exist, so a route added tomorrow in any module appears without anyone updating a list. */
+export const registeredRoutes = async (ctx: AppContext): Promise<RegisteredRoute[]> => {
+  const probe = Fastify();
+  const routes: RegisteredRoute[] = [];
+  probe.addHook('onRoute', (route) => {
+    for (const method of [route.method].flat()) routes.push({ method, url: route.url });
+  });
+  ctx.registerOn(probe);
+  await probe.ready();
+  await probe.close();
+  return routes;
+};
+
+/** A registered route pattern with its parameters filled in, so it can be requested. */
+export const concreteUrl = (url: string): string => url.replace(/:[A-Za-z]+/g, 'x').replace('*', 'x');

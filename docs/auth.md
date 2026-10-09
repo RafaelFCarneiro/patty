@@ -22,7 +22,8 @@ The flows as diagrams (startup, setup, login, the auth hook, logout/SSE, existin
 - **`disabled`** — every request acts as the owner, with no login. This is the npm default (`HOST=127.0.0.1`): the
   server is reachable only from the machine it runs on, exactly as before authentication existed. **It only answers
   requests that say they are for this machine:** the `Host` header must name a loopback host (`127.0.0.1:port`,
-  `localhost:port`, `[::1]:port` — a missing or malformed one is refused), and an `Origin` header, if the client sends
+  `localhost:port`, `[::1]:port` — a missing or malformed one is refused, and so is anything that is not a bare
+  `host[:port]` such as `x@127.0.0.1` or `127.0.0.1/x`), and an `Origin` header, if the client sends
   one, must be a loopback origin (`http` or `https`, any port, so MCP Inspector at `http://localhost:6274` works; the
   opaque `null` is refused). Anything else is `403 forbidden_origin` on every route and method. This closes DNS
   rebinding — a page you visit resolving its own name to `127.0.0.1` so your browser sends it `Host:
@@ -196,10 +197,14 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 
 - **Anyone who can read your files.** The database key and the volume together decrypt everything; authentication
   guards the network surface, not the disk. Back up the key and the volume together, and protect both.
-- **Other local processes, with auth `disabled` on loopback.** A web page can no longer reach it (the `Host`/`Origin`
-  rule above), but any program running as any user on your machine can still connect to `127.0.0.1` and act as the
-  owner. That is today's behavior and the reason `disabled` is loopback-only; turn on `FINTRACK_AUTH=required` if
-  that matters to you.
+- **Other local programs and local web apps, with auth `disabled` on loopback.** A web page from another *site* can
+  no longer reach it (the `Host`/`Origin` rule above), but any program running as any user on your machine can still
+  connect to `127.0.0.1` and act as the owner. That includes a web app served from `localhost` on a *different port*
+  (a dev server, a local tool): its `Origin` is loopback, which is accepted on purpose so MCP Inspector
+  (`http://localhost:6274`) works. FinTrack sends no CORS headers, so such a page cannot read responses, and a
+  JSON write is stopped by the browser's preflight — but a simple, body-less cross-origin `POST` is not. That is
+  today's behavior and the reason `disabled` is loopback-only; turn on `FINTRACK_AUTH=required` if that matters to
+  you.
 - **Eavesdropping.** FinTrack serves plain HTTP. Across a network, put a TLS-terminating reverse proxy in front
   (and set `PUBLIC_URL`/`TRUST_PROXY`); Phase 3 documents and supports that deployment.
 - **Username lockout.** Because failures are counted per submitted username, someone who can reach the login page can

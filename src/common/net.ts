@@ -6,6 +6,9 @@
  */
 export const LOOPBACK_HOST = '127.0.0.1';
 
+/** The scheme every origin this server prints or compares for itself starts with (it serves plain HTTP). */
+export const HTTP_SCHEME_PREFIX = 'http://';
+
 /** Bind addresses meaning "every interface" — not a URL anyone can open. */
 export const IPV4_WILDCARD_HOST = '0.0.0.0';
 export const IPV6_WILDCARD_HOST = '::';
@@ -37,7 +40,7 @@ export const isLoopbackHost = (host: string): boolean => {
  */
 export const httpOrigin = (host: string, port: number): string => {
   const reachableHost = WILDCARD_HOSTS.has(host) ? LOOPBACK_HOST : host;
-  return `http://${reachableHost.includes(':') ? `[${reachableHost}]` : reachableHost}:${port}`;
+  return `${HTTP_SCHEME_PREFIX}${reachableHost.includes(':') ? `[${reachableHost}]` : reachableHost}:${port}`;
 };
 
 export const isPortInUse = (e: unknown): e is { code: string; port: number; address?: string } =>
@@ -58,10 +61,19 @@ export const portInUseReason = (port: number): string =>
   `port ${port} is already in use (another service or MCP server is on it)`;
 
 /** The hostname of a `Host` request header (port stripped, IPv6 unbracketed), or `null` if it is not a
- *  well-formed host — a malformed header is never trusted as loopback. */
+ *  well-formed host. A `Host` is an authority — `host[:port]` and nothing else — so userinfo (`x@host`), a path,
+ *  query or fragment (`host/x`, which a backslash also introduces) make it malformed rather than being quietly
+ *  ignored by the URL parser: a malformed header is never trusted as loopback. */
 export const hostnameOfHostHeader = (hostHeader: string): string | null => {
   try {
-    return stripBrackets(new URL(`http://${hostHeader}`).hostname);
+    const parsed = new URL(`${HTTP_SCHEME_PREFIX}${hostHeader}`);
+    const isBareAuthority =
+      parsed.username === '' &&
+      parsed.password === '' &&
+      parsed.pathname === '/' &&
+      parsed.search === '' &&
+      parsed.hash === '';
+    return isBareAuthority ? stripBrackets(parsed.hostname) : null;
   } catch {
     return null;
   }

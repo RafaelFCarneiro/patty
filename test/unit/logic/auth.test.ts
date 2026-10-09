@@ -366,7 +366,18 @@ describe('isLoopbackRequest — auth-disabled DNS-rebinding / cross-site guard',
     expect(isLoopbackRequest({ host, origin: undefined })).toBe(false);
   });
 
-  it.each([undefined, '', 'a b', 'localhost:99999999', '127.0.0.1@attacker.example', '://'])(
+  it.each([
+    undefined,
+    '',
+    'a b',
+    'localhost:99999999',
+    '127.0.0.1@attacker.example',
+    'x@127.0.0.1',
+    '127.0.0.1/x',
+    '127.0.0.1?x',
+    'localhost.', // a trailing-dot FQDN is refused: fail closed
+    '://',
+  ])(
     'refuses a missing or malformed Host (%j)',
     (host) => {
       expect(isLoopbackRequest({ host, origin: undefined })).toBe(false);

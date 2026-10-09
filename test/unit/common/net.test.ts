@@ -106,10 +106,27 @@ describe('hostnameOfHostHeader', () => {
     expect(hostnameOfHostHeader(header)).toBe(hostname);
   });
 
-  it.each(['', 'a b', 'localhost:99999999', 'evil.example/path@127.0.0.1'])(
-    'returns null for a malformed header %j',
-    (header) => {
-      expect(hostnameOfHostHeader(header)).not.toBe('127.0.0.1');
-    },
-  );
+  it.each([
+    '',
+    'a b',
+    'localhost:99999999',
+    'evil.example/path@127.0.0.1',
+    'x@127.0.0.1', // userinfo: not an authority
+    'evil@127.0.0.1:3001',
+    '127.0.0.1/x', // path
+    '127.0.0.1\\@evil', // a backslash starts the path in a special-scheme URL
+    '127.0.0.1?x',
+    '127.0.0.1#x',
+  ])('returns null for a malformed header %j', (header) => {
+    expect(hostnameOfHostHeader(header)).toBeNull();
+  });
+
+  it.each([
+    ['127.1', '127.0.0.1'], // the URL parser's own IPv4 normalization
+    ['2130706433', '127.0.0.1'],
+    ['LOCALHOST:3001', 'localhost'],
+    ['localhost.', 'localhost.'], // an FQDN dot stays distinct: isLoopbackHost refuses it (fails closed)
+  ])('normalizes the well-formed %s the way the URL parser does', (header, hostname) => {
+    expect(hostnameOfHostHeader(header)).toBe(hostname);
+  });
 });

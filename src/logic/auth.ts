@@ -1,4 +1,4 @@
-import { hostnameOfHostHeader, isLoopbackHost } from '../common/net.js';
+import { HTTP_SCHEME_PREFIX, hostnameOfHostHeader, isLoopbackHost } from '../common/net.js';
 import {
   AuthMode,
   authErrors,
@@ -125,7 +125,9 @@ export const isSameOrigin = (expectedOrigin: string, declared: string | null): b
 export const allowedOrigins = (publicUrl: string | undefined, hostHeader: string | undefined): string[] => {
   const hostname = hostHeader === undefined ? null : hostnameOfHostHeader(hostHeader);
   const ownLoopbackOrigin =
-    hostHeader !== undefined && hostname !== null && isLoopbackHost(hostname) ? [`http://${hostHeader}`] : [];
+    hostHeader !== undefined && hostname !== null && isLoopbackHost(hostname)
+      ? [`${HTTP_SCHEME_PREFIX}${hostHeader}`]
+      : [];
   return [...(publicUrl === undefined ? [] : [publicUrl]), ...ownLoopbackOrigin];
 };
 
