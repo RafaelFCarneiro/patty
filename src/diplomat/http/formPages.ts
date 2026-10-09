@@ -14,6 +14,9 @@ const PAGE_HEADERS = {
   'content-security-policy':
     "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
   'x-frame-options': 'DENY',
+  // A dashboard script runs in this same origin; without this it could `window.open` one of these pages, keep the
+  // handle, and read the form or the one-time token. Same-origin COOP puts the page in its own browsing context group.
+  'cross-origin-opener-policy': 'same-origin',
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'same-origin',
 } as const;

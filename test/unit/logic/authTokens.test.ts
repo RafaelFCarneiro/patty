@@ -167,7 +167,7 @@ describe('credentialOf — an Authorization header is authoritative', () => {
 describe('acceptsBearer', () => {
   it('takes /api and /mcp, never /ui', () => {
     for (const path of ['/api', '/api/accounts', '/mcp']) expect(acceptsBearer(path)).toBe(true);
-    for (const path of ['/ui', '/ui/tokens', '/ui/events', '/apix', '/mcpx', '/', '/health']) {
+    for (const path of ['/ui', '/ui/account/tokens', '/ui/events', '/apix', '/mcpx', '/', '/health']) {
       expect(acceptsBearer(path)).toBe(false);
     }
   });

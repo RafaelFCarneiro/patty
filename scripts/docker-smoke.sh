@@ -114,14 +114,14 @@ echo "== create an account"
 echo "== personal access tokens: minted through the session, shown once, usable as a bearer on /api and /mcp"
 TOKEN_PATTERN='ftk_[A-Za-z0-9_-]{43}'
 mint_token() { # name, access (read|write) -> prints the plaintext token
-  authed -fsS -X POST "$BASE/ui/tokens" \
+  authed -fsS -X POST "$BASE/ui/account/tokens" \
     --data-urlencode "password=$SMOKE_PASSWORD" --data-urlencode "name=$1" --data-urlencode "access=$2" --data-urlencode "expiry=30" | grep -oE "$TOKEN_PATTERN" | head -n1
 }
 WRITE_TOKEN="$(mint_token smoke-writer write)"
 READ_TOKEN="$(mint_token smoke-reader read)"
 [ -n "$WRITE_TOKEN" ] && [ -n "$READ_TOKEN" ] && [ "$WRITE_TOKEN" != "$READ_TOKEN" ] || fail "could not mint tokens"
-authed -fsS "$BASE/ui/tokens" | grep -F "$READ_TOKEN" >/dev/null && fail "the token plaintext is listed after creation"
-READER_ID="$(authed -fsS "$BASE/ui/tokens" | grep -oE '/ui/tokens/[0-9a-f-]{36}/revoke' | head -n1 | cut -d/ -f4)"
+authed -fsS "$BASE/ui/account/tokens" | grep -F "$READ_TOKEN" >/dev/null && fail "the token plaintext is listed after creation"
+READER_ID="$(authed -fsS "$BASE/ui/account/tokens" | grep -oE '/ui/account/tokens/[0-9a-f-]{36}/revoke' | head -n1 | cut -d/ -f5)"
 [ -n "$READER_ID" ] || fail "no revoke link for the newest token"
 
 HEADERS_FILE="$WORKDIR/headers"
@@ -144,8 +144,8 @@ authed -fsS "$BASE/api/accounts" | grep '"ViaMcp"' >/dev/null || fail "the write
 [ "$(http_code -H "Authorization: Bearer $READ_TOKEN" "$BASE/api/accounts")" = "200" ] || fail "REST GET with a read token not 200"
 [ "$(http_code -X POST -H "Authorization: Bearer $READ_TOKEN" -H 'Content-Type: application/json' -d '{"name":"No"}' "$BASE/api/accounts")" = "403" ] \
   || fail "REST POST with a read token was not 403"
-[ "$(http_code -H "Authorization: Bearer $READ_TOKEN" "$BASE/ui/tokens")" = "303" ] || fail "a bearer token reached /ui/tokens"
-[ "$(authed_code -X POST "$BASE/ui/tokens" --data-urlencode "password=wrong wrong wrong" --data-urlencode "name=x" --data-urlencode "access=write" --data-urlencode "expiry=30")" = "403" ] \
+[ "$(http_code -H "Authorization: Bearer $READ_TOKEN" "$BASE/ui/account/tokens")" = "303" ] || fail "a bearer token reached /ui/account/tokens"
+[ "$(authed_code -X POST "$BASE/ui/account/tokens" --data-urlencode "password=wrong wrong wrong" --data-urlencode "name=x" --data-urlencode "access=write" --data-urlencode "expiry=30")" = "403" ] \
   || fail "creating a token without the right password was not refused"
 
 echo "== a bad bearer never falls back to the session cookie"
@@ -160,7 +160,7 @@ METADATA_URL="$(grep -i '^www-authenticate:' "$HEADERS_FILE" | grep -oE 'resourc
 curl -fsS "$METADATA_URL" | grep '"resource"' | grep '/mcp"' >/dev/null || fail "resource_metadata $METADATA_URL does not resolve to the MCP resource"
 
 echo "== revoking a token ends it at once"
-[ "$(authed_code -X POST "$BASE/ui/tokens/$READER_ID/revoke")" = "303" ] || fail "revoke did not redirect"
+[ "$(authed_code -X POST "$BASE/ui/account/tokens/$READER_ID/revoke")" = "303" ] || fail "revoke did not redirect"
 [ "$(mcp_status "$READ_TOKEN" "$INIT")" = "401" ] || fail "a revoked token still works"
 grep -i '^www-authenticate:.*error="invalid_token"' "$HEADERS_FILE" >/dev/null || fail "revoked token lacks the invalid_token challenge"
 

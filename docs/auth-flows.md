@@ -14,7 +14,7 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 | AuthHook | `src/diplomat/http/hooks/auth.ts` — `registerAuthHook` (decisions in `src/logic/auth.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, credential precedence (bearer vs. cookie), session/token resolution, the CSRF check, the route-scope check, challenges and redirects |
 | Bearer | `src/diplomat/http/bearer.ts` | Builds the `WWW-Authenticate` response (`logic/auth.ts`'s `bearerChallenge`; only the origin is resolved at the edge) — shared by the hook and the MCP route |
 | AuthRoutes | `src/diplomat/http/routes/auth.ts` | `/ui/setup`, `/ui/login`, `/ui/logout`: form parsing, rate limiting, cookies |
-| TokenRoutes | `src/diplomat/http/routes/tokens.ts` | `/ui/tokens`, `/ui/tokens/:id/revoke`: session-only token pages |
+| TokenRoutes | `src/diplomat/http/routes/tokens.ts` | `/ui/account/tokens`, `/ui/account/tokens/:id/revoke`: session-only token pages |
 | WellKnown | `src/diplomat/http/routes/wellKnown.ts` | The two Protected Resource Metadata (RFC 9728) routes |
 | McpRoute | `src/diplomat/mcp/route.ts`, `scopes.ts` | `POST /mcp`: per-tool scope pre-check on the JSON-RPC body, `req.auth` for the transport, per-tool re-check |
 | Controller | `src/controllers/auth.ts`, `src/controllers/accessTokens.ts` | `issueSetupCode`, `claimOwner`, `login`, `logout`, `authenticate`; `createToken`, `listTokens`, `revokeToken`, `authenticateToken`; returns `{ persist, response }` |
@@ -205,7 +205,7 @@ sequenceDiagram
     participant Run as Runner
     participant DB
 
-    U->>Hook: POST /ui/tokens {name, access, expiry, password} (cookie + same Origin)
+    U->>Hook: POST /ui/account/tokens {name, access, expiry, password} (cookie + same Origin)
     Hook->>Hook: /ui → session only (a bearer here is ignored), then the CSRF Origin check
     Hook->>Routes: pass, principal.via = session
     Routes->>Routes: preHandler insists on via = session, zod validates: name 1–80, access read|write, expiry none|30|90|365, password present. Rate limit per IP and user
@@ -220,7 +220,7 @@ sequenceDiagram
     Routes-->>U: 200 page showing the token ONCE (no-store, CSP) — "you won't see it again"
     Note over DB: only the hash and the prefix are stored, and request logs redact Authorization
 
-    U->>Hook: POST /ui/tokens/:id/revoke (cookie + same Origin)
+    U->>Hook: POST /ui/account/tokens/:id/revoke (cookie + same Origin)
     Hook->>Routes: pass
     Routes->>Run: runEffects(revokeToken)
     Run->>Ctl: find the token among this user's
@@ -231,7 +231,7 @@ sequenceDiagram
     else active
         Ctl-->>Run: persist: UPDATE revoked_at (row kept)
     end
-    Routes-->>U: 303 → /ui/tokens
+    Routes-->>U: 303 → /ui/account/tokens
     Note over U,DB: the very next request with that token is 401 invalid_token
 ```
 

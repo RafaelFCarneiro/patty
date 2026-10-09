@@ -200,11 +200,11 @@ The image ([README § Docker](../README.md#docker)) always runs the HTTP transpo
 The container requires authentication (ADR-033), so every HTTP client sends a **personal access token** as
 `Authorization: Bearer ftk_…`:
 
-1. Open <http://127.0.0.1:51737/ui/tokens> (the key icon in the dashboard sidebar) in your logged-in browser.
+1. Open <http://127.0.0.1:51737/ui/account/tokens> (the key icon in the dashboard sidebar) in your logged-in browser.
 2. Create a token (the page asks for your password again) — *read only* if the client only needs to look at your data, *read and write* if it records or changes
    anything — with an expiry (default 90 days).
 3. Copy it from the page that follows. It is shown **once**; FinTrack keeps only a hash.
-4. Give it to the client as below. Revoke it at `/ui/tokens` at any time; the very next request is refused.
+4. Give it to the client as below. Revoke it at `/ui/account/tokens` at any time; the very next request is refused.
 
 A read-only token can use every read tool (`list_*`, `get_*`, `search_transactions`, …) and is refused (`403
 insufficient_scope`) on any tool that changes data — the split is listed in [`mcp-tools.md`](mcp-tools.md#scopes-per-tool).

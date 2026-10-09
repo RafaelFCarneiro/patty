@@ -109,7 +109,7 @@ const SECRET_PATTERN = /data-testid="token-secret">(ftk_[A-Za-z0-9_-]+)</;
 
 export type MintedToken = { token: string; id: string };
 
-/** Mint a token exactly as the person at `/ui/tokens` does, and read the plaintext off the one page that shows it. */
+/** Mint a token as the person at `/ui/account/tokens` does; read the plaintext off the one page that shows it. */
 export const mintToken = async (
   ctx: AppContext,
   cookie: string,
@@ -117,7 +117,7 @@ export const mintToken = async (
 ): Promise<MintedToken> => {
   const res = await ctx.app.inject({
     method: 'POST',
-    url: '/ui/tokens',
+    url: '/ui/account/tokens',
     headers: browserHeaders(cookie),
     payload: formBody({
       password: PASSWORD,

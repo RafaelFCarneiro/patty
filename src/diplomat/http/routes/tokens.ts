@@ -27,7 +27,7 @@ const requireSession = async (req: FastifyRequest, reply: FastifyReply): Promise
 const firstIssue = (error: z.ZodError): string => error.issues[0]?.message ?? AUTH_MESSAGES.tryAgain;
 
 /**
- * `/ui/tokens` (ADR-033 §3): the personal-access-token pages. Browser HTML behind the session cookie and the
+ * `/ui/account/tokens` (ADR-033 §3): the personal-access-token pages. Browser HTML behind the session cookie and the
  * hook's CSRF check — a bearer token is never accepted on `/ui`, so a token can never mint, widen or revoke
  * another. Thin: parse the form, run the `controllers/accessTokens.ts` flow, render a page. The plaintext token
  * is rendered once, by the response to the create POST, and nowhere else.

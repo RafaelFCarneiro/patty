@@ -21,15 +21,15 @@ const createApp = useAuthApp();
 describe('a bearer token can never reach token management', () => {
   // Path tricks that could make a request look like /api or /mcp to the hook while routing to a /ui page.
   const TRICKS = [
-    '/api/../ui/tokens',
-    '/mcp/../ui/tokens',
-    '/api/%2e%2e/ui/tokens',
+    '/api/../ui/account/tokens',
+    '/mcp/../ui/account/tokens',
+    '/api/%2e%2e/ui/account/tokens',
     '/api/..%2fui/tokens',
-    '//ui/tokens',
-    '/ui/tokens/',
+    '//ui/account/tokens',
+    '/ui/account/tokens/',
     '/ui//tokens',
     '/UI/tokens',
-    '/api/./../ui/tokens',
+    '/api/./../ui/account/tokens',
   ];
 
   it.each(TRICKS)('%s with a write token never lists, mints or revokes', async (url) => {
@@ -78,9 +78,9 @@ describe('a bearer token can never reach token management', () => {
     await app.ready();
 
     for (const [method, url] of [
-      ['GET', '/ui/tokens'],
-      ['POST', '/ui/tokens'],
-      ['POST', '/ui/tokens/abc/revoke'],
+      ['GET', '/ui/account/tokens'],
+      ['POST', '/ui/account/tokens'],
+      ['POST', '/ui/account/tokens/abc/revoke'],
     ] as const) {
       const res = await app.inject({
         method,
@@ -97,7 +97,7 @@ describe('a bearer token can never reach token management', () => {
 
 describe('a script running in the dashboard origin cannot mint itself a token', () => {
   // A write token can save a dashboard whose <script> runs in /ui, with the owner's session cookie and a same-origin
-  // Origin on every fetch. It holds no password, so the step-up on POST /ui/tokens is what stops it.
+  // Origin on every fetch. It holds no password, so the step-up on POST /ui/account/tokens is what stops it.
   it('is refused without — or with a wrong — password, and nothing is created', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
@@ -108,7 +108,7 @@ describe('a script running in the dashboard origin cannot mint itself a token', 
       if (password !== undefined) fields.password = password;
       const res = await ctx.app.inject({
         method: 'POST',
-        url: '/ui/tokens',
+        url: '/ui/account/tokens',
         headers: browserHeaders(cookie),
         payload: formBody(fields),
       });
@@ -123,7 +123,7 @@ describe('a script running in the dashboard origin cannot mint itself a token', 
     const cookie = await claimOwner(ctx);
     const wrong = await ctx.app.inject({
       method: 'POST',
-      url: '/ui/tokens',
+      url: '/ui/account/tokens',
       headers: browserHeaders(cookie),
       payload: formBody({ password: 'nope nope nope', name: 'x', access: 'read', expiry: 'none' }),
     });
@@ -138,7 +138,7 @@ describe('a script running in the dashboard origin cannot mint itself a token', 
     const guess = () =>
       ctx.app.inject({
         method: 'POST',
-        url: '/ui/tokens',
+        url: '/ui/account/tokens',
         headers: browserHeaders(cookie),
         payload: formBody({ password: 'guess guess guess', name: 'x', access: 'read', expiry: 'none' }),
       });
@@ -149,7 +149,7 @@ describe('a script running in the dashboard origin cannot mint itself a token', 
     // Even the right password is refused until the window clears.
     const right = await ctx.app.inject({
       method: 'POST',
-      url: '/ui/tokens',
+      url: '/ui/account/tokens',
       headers: browserHeaders(cookie),
       payload: formBody({ password: PASSWORD, name: 'x', access: 'read', expiry: 'none' }),
     });
@@ -182,7 +182,7 @@ describe('credential classification follows the route the router matched', () =>
     const headers = { host: LOOPBACK_HOST, ...bearer(token) };
 
     expect((await ctx.app.inject({ method: 'GET', url: '/%61pi/status', headers })).statusCode).toBe(200);
-    for (const url of ['/%75i/tokens', '/ui/%74okens']) {
+    for (const url of ['/%75i/account/tokens', '/ui/account/%74okens']) {
       const res = await ctx.app.inject({ method: 'GET', url, headers });
       expect(res.statusCode, url).not.toBe(200);
       expect(res.body, url).not.toContain('Access tokens');

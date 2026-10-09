@@ -551,7 +551,7 @@ header, .dashboard-header {
     margin: 0;
 }
 
-/* --- Access tokens (ADR-033): /ui/tokens reuses the sign-in card, widened for its table --- */
+/* --- Access tokens (ADR-033): /ui/account/tokens reuses the sign-in card, widened for its table --- */
 .tokens-card {
     width: min(60rem, calc(100vw - 2rem));
     margin-block: 2rem;

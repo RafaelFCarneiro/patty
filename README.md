@@ -126,7 +126,7 @@ You're logged in; the code is single-use and a restart before you finish prints 
 The container requires a login for everything except `/api/health` — see [`docs/auth.md`](docs/auth.md).
 
 Connect an MCP client or script with a **personal access token**: in the dashboard open the key icon in the sidebar
-(`/ui/tokens`), create a token (read-only or read+write, with an expiry), copy it — it is shown once — and send it as
+(`/ui/account/tokens`), create a token (read-only or read+write, with an expiry), copy it — it is shown once — and send it as
 `Authorization: Bearer ftk_…` to `http://127.0.0.1:51737/mcp` (MCP) or `/api` (REST). Per-client setup:
 [`docs/mcp-clients.md`](docs/mcp-clients.md#docker-container-http-on-12700151737); how tokens, scopes and revocation work:
 [`docs/auth.md`](docs/auth.md#personal-access-tokens).

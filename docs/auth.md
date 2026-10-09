@@ -125,12 +125,12 @@ Without the code nobody can claim an exposed instance: there is no window in whi
 ## Personal access tokens
 
 A personal access token (PAT) lets a script or an MCP client that cannot open a browser call `/api` and `/mcp`.
-Create and revoke them at **`/ui/tokens`** (the key icon in the dashboard sidebar; only present when authentication is
+Create and revoke them at **`/ui/account/tokens`** (the key icon in the dashboard sidebar; only present when authentication is
 `required`).
 
 - **Format:** `ftk_` followed by 32 random bytes, base64url (47 characters). The fixed prefix makes a leaked token
   greppable — in a repo, a log, a paste.
-- **Shown once.** `POST /ui/tokens` answers with the plaintext on that one page. FinTrack stores only its **SHA-256**
+- **Shown once.** `POST /ui/account/tokens` answers with the plaintext on that one page. FinTrack stores only its **SHA-256**
   and a display prefix (`ftk_` + the first 6 characters) so you can tell tokens apart in the list. Lose it and you
   revoke it and create another. The plaintext is never logged: request logs redact `Authorization`, and nothing else
   receives it.
@@ -144,7 +144,7 @@ Create and revoke them at **`/ui/tokens`** (the key icon in the dashboard sideba
 - **Revoke** sets `revoked_at` and keeps the row, so you can still see what existed; it takes effect on the very next
   request. Revoking twice is harmless.
 - A token stops working when it is revoked, when it expires, or if its owner can no longer log in.
-- **Token management is session-only.** `/ui/tokens` is a browser page behind the session cookie and the
+- **Token management is session-only.** `/ui/account/tokens` is a browser page behind the session cookie and the
   [CSRF check](#csrf). A bearer token is never accepted on `/ui`, and there is no `/api` or `/mcp` route (or MCP tool)
   that manages tokens — so a token can never mint, widen or revoke another token directly. Revoking needs no password (it only
   removes access, and you can always mint again).

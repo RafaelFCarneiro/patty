@@ -23,7 +23,7 @@ The HTTP sidecar (REST `/api` + `/ui` dashboards) starts automatically alongside
 
 - REST API: `http://127.0.0.1:3001/api` (from source) / `http://127.0.0.1:51737/api` (published package)
 - MCP endpoint (streamable HTTP): `http://127.0.0.1:3001/mcp` (from source) / `http://127.0.0.1:51737/mcp` (published package)
-- Docker: `(umask 077; openssl rand -hex 32 > fintrack_db_key) && docker compose up --build` (on Linux also `sudo chown 1000 fintrack_db_key` first — the key file stays owner-only, never world-readable) serves everything on `http://127.0.0.1:51737` (ADR-032) — loopback publish only (plain HTTP); first start prints the setup code (`docker compose logs`) to claim the owner at `/ui/setup`; MCP clients and scripts connect to `/mcp` and `/api` with `Authorization: Bearer ftk_…`, a personal access token created at `/ui/tokens` (`docs/auth.md`, `docs/mcp-clients.md`); verify an image with `docker build -t fintrack:ci . && scripts/docker-smoke.sh fintrack:ci`.
+- Docker: `(umask 077; openssl rand -hex 32 > fintrack_db_key) && docker compose up --build` (on Linux also `sudo chown 1000 fintrack_db_key` first — the key file stays owner-only, never world-readable) serves everything on `http://127.0.0.1:51737` (ADR-032) — loopback publish only (plain HTTP); first start prints the setup code (`docker compose logs`) to claim the owner at `/ui/setup`; MCP clients and scripts connect to `/mcp` and `/api` with `Authorization: Bearer ftk_…`, a personal access token created at `/ui/account/tokens` (`docs/auth.md`, `docs/mcp-clients.md`); verify an image with `docker build -t fintrack:ci . && scripts/docker-smoke.sh fintrack:ci`.
 - Run `npx ntl` for an interactive, described list of all scripts.
 
 ## Commands

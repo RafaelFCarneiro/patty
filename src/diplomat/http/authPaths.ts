@@ -4,7 +4,9 @@ import { API_PATH_PREFIX, MCP_PATH, MCP_PRM_PATH, PRM_WELL_KNOWN_PATH, UI_ROOT_P
  *  hook, the auth routes, the UI routes and the health route can never disagree on a literal. */
 export const HEALTH_PATH = '/api/health';
 export { API_PATH_PREFIX, MCP_PATH, MCP_PRM_PATH, PRM_WELL_KNOWN_PATH, UI_ROOT_PATH };
-export const TOKENS_PATH = `${UI_ROOT_PATH}/tokens`;
+// Two segments on purpose: `/ui/:name` is the one-segment dashboard namespace, and a dashboard may be named anything
+// (including `tokens`), so token management must live outside it.
+export const TOKENS_PATH = `${UI_ROOT_PATH}/account/tokens`;
 export const TOKEN_REVOKE_PATH = `${TOKENS_PATH}/:id/revoke`;
 export const LOGIN_PATH = `${UI_ROOT_PATH}/login`;
 export const SETUP_PATH = `${UI_ROOT_PATH}/setup`;

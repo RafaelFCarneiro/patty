@@ -387,7 +387,7 @@ neither `PUBLIC_URL` nor a loopback `Host` the answer is `404 resource_metadata_
 `listTokens` (metadata + `status`, never a hash), `revokeToken` (sets `revoked_at`, idempotent, `unknown_token` for an id that
 is not the caller's), `authenticateToken` (`logic/auth.ts`'s `evaluateToken` verdict; `last_used_at` rewritten at most every
 `SESSION_TOUCH_INTERVAL_MS`). Expiry choices are `TOKEN_EXPIRY_DAYS` (none/30/90/365). The pages are `routes/tokens.ts`
-(`GET|POST /ui/tokens` — creation re-asks the account password (step-up) and shares the login attempt limiter — and `POST /ui/tokens/:id/revoke`; server-rendered by `tokenPages.ts`, same CSP/no-store headers as the
+(`GET|POST /ui/account/tokens` — creation re-asks the account password (step-up) and shares the login attempt limiter — and `POST /ui/account/tokens/:id/revoke`; server-rendered by `tokenPages.ts`, same CSP/no-store headers as the
 sign-in pages through `formPages.ts`) — **session-only**: browser HTML behind the cookie and the CSRF check, never reachable
 with a bearer (the hook does not accept one on `/ui`, and each route also insists on `via: session`). There is no `/api` or MCP
 way to manage tokens. The shell's sidebar links to the page only when auth is `required` (the `AUTH_CONTROLS_MARKER`, next to logout).
@@ -456,7 +456,7 @@ runEffects, runEffectsSequence }`), built once in `routes.ts` and passed to ever
 `GET /ui/:name`, and `GET /ui/assets/{app.css,app.js,money.js}` — browser-facing HTML/asset routes, not
 `RouteDefinition`s (no OpenAPI entry) — are mounted by `routes/ui.ts`'s `registerUiRoutes(app)`, called from
 `registerRoutes` alongside `mountRoutes` (ADR-027 Phase 1; see § Dashboards / `/ui` surface). `routes/auth.ts`'s `registerAuthRoutes` (the `/ui/login`, `/ui/setup`, `/ui/logout` pages — browser HTML like `routes/ui.ts`,
-no OpenAPI entry; mounted only when auth is `required`) is called from `registerRoutes` too, as are `routes/tokens.ts`'s `registerTokenRoutes` (`/ui/tokens` pages, session-only) and `routes/wellKnown.ts`'s `registerProtectedResourceMetadataRoutes` (both likewise only when auth is `required`). `routes.ts`
+no OpenAPI entry; mounted only when auth is `required`) is called from `registerRoutes` too, as are `routes/tokens.ts`'s `registerTokenRoutes` (`/ui/account/tokens` pages, session-only) and `routes/wellKnown.ts`'s `registerProtectedResourceMetadataRoutes` (both likewise only when auth is `required`). `routes.ts`
 reduces to construction + aggregation: `buildRouteDefinitions` concatenates every domain's array into the one
 list `mountRoutes`/`buildOpenApiDocument` consume (§ OpenAPI contract), and `registerRoutes` mounts it, the UI
 shell/asset routes, and `/api/openapi.json`.
