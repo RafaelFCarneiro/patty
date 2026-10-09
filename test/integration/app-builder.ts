@@ -157,9 +157,11 @@ export const buildApp = async (opts?: {
   const authConfig: AuthConfig = { ...REQUIRED_AUTH, ...opts?.auth };
   const prepared = opts?.auth
     ? await prepareAuth(authConfig, db, boundRunEffects)
-    : { auth: DISABLED_AUTH, announceSetup: () => undefined };
-  // As a real start does once its server has bound: print the setup code, to the captured stderr.
-  prepared.announceSetup(httpOrigin(authConfig.HOST, authConfig.PORT), (message) => announced.push(message));
+    : { auth: DISABLED_AUTH, issueAndAnnounceSetup: async () => undefined };
+  // As a real start does once its server has bound: issue and print the setup code, to the captured stderr.
+  await prepared.issueAndAnnounceSetup(httpOrigin(authConfig.HOST, authConfig.PORT), (message) =>
+    announced.push(message),
+  );
   const auth: HttpAuth =
     prepared.auth.mode === AuthMode.enum.required
       ? { ...prepared.auth, sessionRecheckMs: opts?.sessionRecheckMs }

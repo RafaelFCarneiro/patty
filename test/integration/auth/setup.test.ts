@@ -118,15 +118,17 @@ describe('setup code issuance', () => {
   });
 
   it('issues no code when nothing serves HTTP', async () => {
-    const ctx = await createApp();
+    const ctx = await createApp({ auth: {} });
+    await ctx.db.run(sql`DELETE FROM setup_codes`);
     const announced: string[] = [];
     const prepared = await prepareAuth(
       { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', FINTRACK_HTTP: false },
       ctx.db,
       ctx.runEffects,
     );
-    prepared.announceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
+    await prepared.issueAndAnnounceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
     expect(announced).toEqual([]);
+    expect(await ctx.db.all(sql`SELECT 1 FROM setup_codes`)).toEqual([]);
   });
 
   it('issues no code once the owner is claimed', async () => {
@@ -134,30 +136,53 @@ describe('setup code issuance', () => {
     await claimOwner(ctx);
     const announced: string[] = [];
     const prepared = await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.runEffects);
-    prepared.announceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
+    await prepared.issueAndAnnounceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
     expect(announced).toEqual([]);
   });
 });
 
-describe('announcing the setup code', () => {
-  it('prints nothing until a server has bound — a PORT=0 instance has no usable URL before that', async () => {
+describe('issuing and announcing the setup code', () => {
+  /** A database whose only setup code is the one a first process printed. */
+  const withFirstProcessCode = async () => {
+    const ctx = await createApp();
+    return { ctx, printedByFirstProcess: codeFrom(ctx.announced) };
+  };
+
+  it('issues nothing until a server binds, so a process that never binds cannot replace the printed code', async () => {
+    const { ctx, printedByFirstProcess } = await withFirstProcessCode();
+
+    // A second stdio process: prepares auth, then its sidecar fails to bind (the first owns the port), so
+    // main.ts never calls issueAndAnnounceSetup.
+    await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.runEffects);
+
+    const response = await post(ctx, { code: printedByFirstProcess, username: USERNAME, password: PASSWORD });
+    expect(response.statusCode).toBe(303); // the code the first process announced still works
+  });
+
+  it('prints once bound, naming the real origin — a PORT=0 instance has no usable URL before that', async () => {
     const ctx = await createApp();
     const announced: string[] = [];
     const prepared = await prepareAuth({ ...REQUIRED_AUTH, PORT: 0 }, ctx.db, ctx.runEffects);
-    expect(announced).toEqual([]); // preparing issues the code but prints nothing
+    expect(announced).toEqual([]);
 
-    prepared.announceSetup('http://127.0.0.1:54321', (message) => announced.push(message));
+    await prepared.issueAndAnnounceSetup('http://127.0.0.1:54321', (message) => announced.push(message));
     expect(announced).toHaveLength(1);
     expect(announced[0]).toContain('http://127.0.0.1:54321/ui/setup');
     expect(announced[0]).not.toContain(':0/');
   });
 
-  it('prints nothing at all if the server never bound (the optional sidecar failed)', async () => {
-    const ctx = await createApp();
+  it('replaces the earlier code only at that point, and the new one works', async () => {
+    const { ctx, printedByFirstProcess } = await withFirstProcessCode();
+    const announced: string[] = [];
     const prepared = await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.runEffects);
-    // main.ts simply never calls announceSetup for a sidecar that is not listening; the code stays unprinted.
-    expect(prepared.announceSetup).toBeTypeOf('function');
-    expect(await ctx.db.all(sql`SELECT 1 FROM setup_codes`)).toHaveLength(1);
+    await prepared.issueAndAnnounceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
+
+    expect((await post(ctx, { code: printedByFirstProcess, username: USERNAME, password: PASSWORD })).statusCode).toBe(
+      403,
+    );
+    expect((await post(ctx, { code: codeFrom(announced), username: USERNAME, password: PASSWORD })).statusCode).toBe(
+      303,
+    );
   });
 
   it('names PUBLIC_URL rather than the bind address when one is configured', async () => {
@@ -168,7 +193,7 @@ describe('announcing the setup code', () => {
       ctx.db,
       ctx.runEffects,
     );
-    prepared.announceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
+    await prepared.issueAndAnnounceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
     expect(announced[0]).toContain('https://fintrack.example.com/ui/setup');
     expect(announced[0]).not.toContain('127.0.0.1');
   });

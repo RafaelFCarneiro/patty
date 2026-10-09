@@ -39,22 +39,24 @@ export const httpSurfaceEnabled = (config: Pick<AuthConfig, 'MCP_TRANSPORT' | 'F
 
 /**
  * Composition-root step between `bootstrap` and the first listener (ADR-033): decides whether the HTTP
- * surface demands sessions and, when it does, builds the identity deps, prunes expired sessions, and —
- * while the owner is unclaimed — issues a fresh one-time setup code. The code is only PRINTED once a server has
- * actually bound (`announceSetup`, to STDERR — stdout carries stdio MCP): before that there is no usable URL to
- * name (`PORT=0` is assigned at bind time), and if the optional sidecar fails to bind there is nothing to open.
+ * surface demands sessions and, when it does, builds the identity deps and prunes expired sessions. The one-time
+ * setup code is NOT issued here but by `issueAndAnnounceSetup`, which `main.ts` calls only once a server has
+ * actually bound — for two reasons. Issuing replaces the previous code in place, so a process that then fails to
+ * bind (another stdio server already owns the port and has printed its own code) would invalidate the only code
+ * an operator can see. And the banner needs a real URL (`PORT=0` is assigned at bind time).
  */
 export type PreparedAuth = {
   auth: HttpAuth;
-  /** Print the setup code, if one was issued, naming the origin the server really bound. */
-  announceSetup: (boundOrigin: string, announce?: (message: string) => void) => void;
+  /** While the owner is unclaimed, issue a fresh setup code and print it to STDERR (stdout carries stdio MCP),
+   *  naming the origin the server really bound. A no-op once claimed, in `disabled` mode, or with no HTTP. */
+  issueAndAnnounceSetup: (boundOrigin: string, announce?: (message: string) => void) => Promise<void>;
 };
 
-const NO_SETUP_TO_ANNOUNCE: PreparedAuth['announceSetup'] = () => undefined;
+const NO_SETUP_TO_ISSUE: PreparedAuth['issueAndAnnounceSetup'] = async () => undefined;
 
 export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEffects): Promise<PreparedAuth> => {
   if (config.FINTRACK_AUTH === AuthMode.enum.disabled || !httpSurfaceEnabled(config)) {
-    return { auth: DISABLED_AUTH, announceSetup: NO_SETUP_TO_ANNOUNCE };
+    return { auth: DISABLED_AUTH, issueAndAnnounceSetup: NO_SETUP_TO_ISSUE };
   }
 
   const { createSecrets } = await loadCredentialsModule();
@@ -71,10 +73,6 @@ export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEff
   const pruned = await run(() => pruneExpiredSessions(deps));
   if (pruned.isErr()) throw new Error(`fintrack: could not prune expired sessions — ${formatAppError(pruned.error)}`);
 
-  const issued = await run(() => issueSetupCode(deps, config.FINTRACK_AUTH));
-  if (issued.isErr()) throw new Error(`fintrack: could not issue a setup code — ${formatAppError(issued.error)}`);
-  const code = issued.value;
-
   return {
     auth: {
       mode: AuthMode.enum.required,
@@ -83,7 +81,10 @@ export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEff
       publicUrl: config.PUBLIC_URL,
       secureCookie: isSecureOrigin(config.PUBLIC_URL),
     },
-    announceSetup: (boundOrigin, announce = console.error) => {
+    issueAndAnnounceSetup: async (boundOrigin, announce = console.error) => {
+      const issued = await run(() => issueSetupCode(deps, config.FINTRACK_AUTH));
+      if (issued.isErr()) throw new Error(`fintrack: could not issue a setup code — ${formatAppError(issued.error)}`);
+      const code = issued.value;
       if (!code) return;
       const origin = config.PUBLIC_URL ?? boundOrigin;
       announce(setupBanner({ code: code.code, setupUrl: `${origin}${SETUP_PATH}`, expiresAt: code.expiresAt }));

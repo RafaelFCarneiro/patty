@@ -91,6 +91,14 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   its row 1:1 (`tags`) supplies the identity `modelToDb`. Exception: `adapters/bills.ts` hand-writes its own,
   because a bill `update` needs `paymentTransactionId: undefined` (leave the column unchanged) to differ from
   `null` (clear it) — an asymmetry the uniform factory can't express.
+- **Exception — the auth flows (ADR-033) are adapted once at the composition root.** `login`/`claimOwner`/
+  `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions` are run from several shell sites (the auth hook,
+  the sign-in routes, startup), none of which is "the" handler, and a single batch can mix three entities
+  (`claimOwner`: user + setup code + session). So `adapters/auth.ts`'s `outcomeToDb` (the three entities'
+  `entityDbAdapter` pairs applied in turn — each rewrites only its own tag) is applied in `authRuntime.ts`'s
+  `bindAuthRunEffects`, which wraps the shell's `RunEffects` once: `runEffects(() => flow().map(outcomeToDb))`.
+  Every auth call site then holds that bound runner, never the raw one. Still exactly once, still outside
+  `diplomat/db`; the controllers are unchanged (`{ persist, response }`).
 
 ### The effect runner — FinTrack's wiring
 
@@ -165,6 +173,15 @@ and its failure isolation) is the package's to document — see the pointer abov
   matched names via `logic/tag.ts`'s `overlayResolvedTags`, gated on the **tag set's own** outcome
   (`outcomeFor(TRANSACTION_TAG_ENTITY_TAG, outcomes).applied`) — not the transaction's. (Full reasoning:
   ADR-023 decision 3 / step 3.)
+
+- **Auth entities** (`user`, `session`, `setup_code`; `diplomat/db/repos/{users,sessions,setupCodes}.ts`).
+  `userApplier` and `sessionApplier` are plain `versionedTableApplier`s. `setupCodeApplier` wraps `insert` the way
+  `settingsApplier` does: `setup_codes` holds ONE fixed row (`SETUP_CODE_ID`), so an id collision on insert is the
+  concurrent-first-issue race — it is rethrown as `VersionConflict` and the retry updates the winner's row in place
+  rather than silently no-oping (a lost insert would leave a process printing a code that was never stored).
+  `claimOwner` emits only an owner `update`, a setup-code `update` (consumed) and a session `insert` — never a user
+  `insert`; `authenticate` writes nothing unless the session is stale (`SESSION_TOUCH_INTERVAL_MS`) or must be
+  deleted.
 
 ### Outcomes and responses
 

@@ -61,8 +61,9 @@ Nothing is copied or migrated.
 ## The setup code
 
 While authentication is `required` **and** the owner has no credentials, startup prints a one-time code to
-**stderr** — once the HTTP server is listening, so the URL it names is the one really bound (even with `PORT=0`),
-and nothing is printed if the sidecar could not bind (stdout carries the MCP protocol, so it is never used):
+**stderr** — once the HTTP server is listening, so the URL it names is the one really bound (even with `PORT=0`).
+A second process whose sidecar cannot bind (another one already owns the port) issues and prints nothing, so it
+cannot replace the code you were shown (stdout carries the MCP protocol, so it is never used):
 
 ```
 ┌─ fintrack: first-time setup ─────────────────────────────────────────
