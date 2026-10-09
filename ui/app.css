@@ -543,7 +543,7 @@ header, .dashboard-header {
 }
 
 .auth-hint {
-    color: var(--text-dark);
+    color: var(--text-muted); /* --text-dark is 3.8:1 on the card; this states the password rule, so meet AA 4.5:1 */
     font-size: 0.8rem;
 }
 

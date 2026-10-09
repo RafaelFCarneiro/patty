@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import * as authAdapters from './adapters/auth.js';
 import { formatAppError } from './common/errors.js';
-import { httpOrigin } from './common/net.js';
 import { McpTransport, type Config } from './config.js';
 import { issueSetupCode, pruneExpiredSessions } from './controllers/auth.js';
 import type { AuthDeps, RunEffects } from './controllers/deps.js';
@@ -41,15 +40,22 @@ export const httpSurfaceEnabled = (config: Pick<AuthConfig, 'MCP_TRANSPORT' | 'F
 /**
  * Composition-root step between `bootstrap` and the first listener (ADR-033): decides whether the HTTP
  * surface demands sessions and, when it does, builds the identity deps, prunes expired sessions, and —
- * while the owner is unclaimed — prints a fresh one-time setup code to STDERR (stdout carries stdio MCP).
+ * while the owner is unclaimed — issues a fresh one-time setup code. The code is only PRINTED once a server has
+ * actually bound (`announceSetup`, to STDERR — stdout carries stdio MCP): before that there is no usable URL to
+ * name (`PORT=0` is assigned at bind time), and if the optional sidecar fails to bind there is nothing to open.
  */
-export const prepareAuth = async (
-  config: AuthConfig,
-  db: Db,
-  runEffects: RunEffects,
-  announce: (message: string) => void = console.error,
-): Promise<HttpAuth> => {
-  if (config.FINTRACK_AUTH === AuthMode.enum.disabled || !httpSurfaceEnabled(config)) return DISABLED_AUTH;
+export type PreparedAuth = {
+  auth: HttpAuth;
+  /** Print the setup code, if one was issued, naming the origin the server really bound. */
+  announceSetup: (boundOrigin: string, announce?: (message: string) => void) => void;
+};
+
+const NO_SETUP_TO_ANNOUNCE: PreparedAuth['announceSetup'] = () => undefined;
+
+export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEffects): Promise<PreparedAuth> => {
+  if (config.FINTRACK_AUTH === AuthMode.enum.disabled || !httpSurfaceEnabled(config)) {
+    return { auth: DISABLED_AUTH, announceSetup: NO_SETUP_TO_ANNOUNCE };
+  }
 
   const { createSecrets } = await loadCredentialsModule();
   const deps: AuthDeps = {
@@ -67,18 +73,20 @@ export const prepareAuth = async (
 
   const issued = await run(() => issueSetupCode(deps, config.FINTRACK_AUTH));
   if (issued.isErr()) throw new Error(`fintrack: could not issue a setup code — ${formatAppError(issued.error)}`);
-  if (issued.value) {
-    const origin = config.PUBLIC_URL ?? httpOrigin(config.HOST, config.PORT);
-    announce(
-      setupBanner({ code: issued.value.code, setupUrl: `${origin}${SETUP_PATH}`, expiresAt: issued.value.expiresAt }),
-    );
-  }
+  const code = issued.value;
 
   return {
-    mode: AuthMode.enum.required,
-    deps,
-    runEffects: run,
-    publicUrl: config.PUBLIC_URL,
-    secureCookie: isSecureOrigin(config.PUBLIC_URL),
+    auth: {
+      mode: AuthMode.enum.required,
+      deps,
+      runEffects: run,
+      publicUrl: config.PUBLIC_URL,
+      secureCookie: isSecureOrigin(config.PUBLIC_URL),
+    },
+    announceSetup: (boundOrigin, announce = console.error) => {
+      if (!code) return;
+      const origin = config.PUBLIC_URL ?? boundOrigin;
+      announce(setupBanner({ code: code.code, setupUrl: `${origin}${SETUP_PATH}`, expiresAt: code.expiresAt }));
+    },
   };
 };

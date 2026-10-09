@@ -40,6 +40,7 @@ import { SETTINGS_ENTITY_TAG } from '../../src/models/locale.js';
 import { TAG_ENTITY_TAG } from '../../src/models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../src/models/transactionTag.js';
+import { httpOrigin } from '../../src/common/net.js';
 import { prepareAuth, type AuthConfig } from '../../src/authRuntime.js';
 import type { HttpAuth } from '../../src/diplomat/http/context.js';
 import { DISABLED_AUTH } from '../../src/diplomat/http/context.js';
@@ -153,11 +154,16 @@ export const buildApp = async (opts?: {
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
     runEffectsSequence(engineContext, applierRegistry, items, flowFor, changeBus.publish);
   const announced: string[] = [];
+  const authConfig: AuthConfig = { ...REQUIRED_AUTH, ...opts?.auth };
   const prepared = opts?.auth
-    ? await prepareAuth({ ...REQUIRED_AUTH, ...opts.auth }, db, boundRunEffects, (message) => announced.push(message))
-    : DISABLED_AUTH;
+    ? await prepareAuth(authConfig, db, boundRunEffects)
+    : { auth: DISABLED_AUTH, announceSetup: () => undefined };
+  // As a real start does once its server has bound: print the setup code, to the captured stderr.
+  prepared.announceSetup(httpOrigin(authConfig.HOST, authConfig.PORT), (message) => announced.push(message));
   const auth: HttpAuth =
-    prepared.mode === AuthMode.enum.required ? { ...prepared, sessionRecheckMs: opts?.sessionRecheckMs } : prepared;
+    prepared.auth.mode === AuthMode.enum.required
+      ? { ...prepared.auth, sessionRecheckMs: opts?.sessionRecheckMs }
+      : prepared.auth;
   const app = buildHttpApp(
     deps,
     version,

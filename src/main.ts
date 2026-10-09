@@ -162,7 +162,7 @@ const main = async (): Promise<void> => {
     runEffectsSequence(engineContext, applierRegistry, items, flowFor, changeBus.publish);
 
   // Sessions guard the HTTP surface only: stdio is spawned by the user and acts as the owner (ADR-033 §1).
-  const auth = await prepareAuth(config, db, boundRunEffects);
+  const { auth, announceSetup } = await prepareAuth(config, db, boundRunEffects);
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
     const server = await connectStdio(
@@ -184,6 +184,11 @@ const main = async (): Promise<void> => {
       config,
       auth,
     );
+    // The setup code is printed only now, naming the origin the sidecar really bound (and not at all if it
+    // didn't bind — there would be nothing to open).
+    if (sidecar?.listening) {
+      announceSetup(httpOrigin(config.HOST, (sidecar.app.server.address() as AddressInfo).port));
+    }
 
     // 'close' commonly follows 'end' on stdin, and a client can also send SIGINT/SIGTERM around
     // the same disconnect — guard against shutdown() running (and double process.exit-ing) twice.
@@ -237,6 +242,7 @@ const main = async (): Promise<void> => {
   const origin = httpOrigin(config.HOST, boundPort);
   // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe.
   console.log(`fintrack: REST ${origin}/api · MCP ${origin}/mcp`);
+  announceSetup(origin);
 };
 
 main().catch((e: unknown) => {

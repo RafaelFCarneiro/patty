@@ -61,7 +61,8 @@ Nothing is copied or migrated.
 ## The setup code
 
 While authentication is `required` **and** the owner has no credentials, startup prints a one-time code to
-**stderr** (stdout carries the MCP protocol, so it is never used):
+**stderr** — once the HTTP server is listening, so the URL it names is the one really bound (even with `PORT=0`),
+and nothing is printed if the sidecar could not bind (stdout carries the MCP protocol, so it is never used):
 
 ```
 ┌─ fintrack: first-time setup ─────────────────────────────────────────
@@ -80,7 +81,7 @@ docker compose logs fintrack        # Docker
   rules — a long passphrase is best). You are logged in straight away.
 - The code is 100 random bits, valid for **30 minutes**, and **single use**. Only its SHA-256 is stored; the plaintext
   exists in the log line and nowhere else.
-- **A restart while still unclaimed prints a fresh code and invalidates the previous one** (there is only ever one code, replaced in place — even if two processes start together, only the last one stored works).** Lost the code? Restart.
+- **A restart while still unclaimed prints a fresh code and invalidates the previous one** (there is only ever one code, replaced in place — even if two processes start together, only the last one stored works). Lost the code? Restart.
 - Once the owner is claimed, no code is issued, `/ui/setup` redirects to login and a POST to it is refused (`409`).
 - No code is printed in `disabled` mode.
 

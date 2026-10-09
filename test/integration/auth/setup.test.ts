@@ -120,12 +120,12 @@ describe('setup code issuance', () => {
   it('issues no code when nothing serves HTTP', async () => {
     const ctx = await createApp();
     const announced: string[] = [];
-    await prepareAuth(
+    const prepared = await prepareAuth(
       { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', FINTRACK_HTTP: false },
       ctx.db,
       ctx.runEffects,
-      (message) => announced.push(message),
     );
+    prepared.announceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
     expect(announced).toEqual([]);
   });
 
@@ -133,8 +133,44 @@ describe('setup code issuance', () => {
     const ctx = await createApp();
     await claimOwner(ctx);
     const announced: string[] = [];
-    await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.runEffects, (message) => announced.push(message));
+    const prepared = await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.runEffects);
+    prepared.announceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
     expect(announced).toEqual([]);
+  });
+});
+
+describe('announcing the setup code', () => {
+  it('prints nothing until a server has bound — a PORT=0 instance has no usable URL before that', async () => {
+    const ctx = await createApp();
+    const announced: string[] = [];
+    const prepared = await prepareAuth({ ...REQUIRED_AUTH, PORT: 0 }, ctx.db, ctx.runEffects);
+    expect(announced).toEqual([]); // preparing issues the code but prints nothing
+
+    prepared.announceSetup('http://127.0.0.1:54321', (message) => announced.push(message));
+    expect(announced).toHaveLength(1);
+    expect(announced[0]).toContain('http://127.0.0.1:54321/ui/setup');
+    expect(announced[0]).not.toContain(':0/');
+  });
+
+  it('prints nothing at all if the server never bound (the optional sidecar failed)', async () => {
+    const ctx = await createApp();
+    const prepared = await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.runEffects);
+    // main.ts simply never calls announceSetup for a sidecar that is not listening; the code stays unprinted.
+    expect(prepared.announceSetup).toBeTypeOf('function');
+    expect(await ctx.db.all(sql`SELECT 1 FROM setup_codes`)).toHaveLength(1);
+  });
+
+  it('names PUBLIC_URL rather than the bind address when one is configured', async () => {
+    const ctx = await createApp();
+    const announced: string[] = [];
+    const prepared = await prepareAuth(
+      { ...REQUIRED_AUTH, PUBLIC_URL: 'https://fintrack.example.com' },
+      ctx.db,
+      ctx.runEffects,
+    );
+    prepared.announceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
+    expect(announced[0]).toContain('https://fintrack.example.com/ui/setup');
+    expect(announced[0]).not.toContain('127.0.0.1');
   });
 });
 

@@ -41,12 +41,15 @@ describe('withMigrationLock', () => {
   it('makes a second starter wait until the first has finished', async () => {
     const events: string[] = [];
     let releaseFirst: () => void = () => undefined;
+    let firstHoldsLock: () => void = () => undefined;
+    const acquired = new Promise<void>((resolve) => (firstHoldsLock = resolve));
     const first = withMigrationLock(dbFile, async () => {
       events.push('first:start');
+      firstHoldsLock();
       await new Promise<void>((resolve) => (releaseFirst = resolve));
       events.push('first:end');
     });
-    await tick();
+    await acquired; // the first callback is running, so it provably holds the lock
     const second = withMigrationLock(dbFile, async () => {
       events.push('second:start');
     });
@@ -72,11 +75,14 @@ describe('withMigrationLock', () => {
     const other = join(dir, 'other.db');
     const events: string[] = [];
     let release: () => void = () => undefined;
+    let holding: () => void = () => undefined;
+    const acquired = new Promise<void>((resolve) => (holding = resolve));
     const held = withMigrationLock(dbFile, async () => {
       events.push('a');
+      holding();
       await new Promise<void>((resolve) => (release = resolve));
     });
-    await tick();
+    await acquired;
     await withMigrationLock(other, async () => {
       events.push('b');
     });
