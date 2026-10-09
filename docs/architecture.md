@@ -312,9 +312,9 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     plaintext token exists in the cookie and the plaintext code in one stderr line, nowhere else — and are never
     logged (the Fastify logger redacts `cookie`, `set-cookie`, `authorization`). **Safety copy:** before a migration
     listed in `diplomat/db/migrations.ts`'s `DATA_REWRITING_MIGRATIONS` runs against a database that already has
-    applied migrations, `diplomat/db/safetyCopy.ts` checkpoints the WAL and copies the file to
-    `<DB_PATH>.pre-<migration>.bak` (mode `0600`, same encryption, path logged to stderr); a brand-new database gets
-    none, and a busy checkpoint aborts startup rather than migrate without a trustworthy copy. The copy and the migration run under a cross-process lock (`diplomat/db/migrationLock.ts`: an `EXCLUSIVE` transaction on a companion SQLite file `<DB_PATH>.migrate.lock` — OS-owned, so atomic and released when its holder dies), and "is it still pending?" is re-asked once the lock is held — so several stdio servers starting at once can neither interleave their copies nor back up an already-migrated file.
+    applied migrations, `diplomat/db/safetyCopy.ts` snapshots it with `VACUUM INTO` (one read transaction, so consistent even against a
+    concurrent writer; encrypted under the same key) to `<DB_PATH>.pre-<migration>.bak` (standalone, mode `0600`,
+    path logged to stderr); a brand-new database gets none. The copy and the migration run under a cross-process lock (`diplomat/db/migrationLock.ts`: an `EXCLUSIVE` transaction on a companion SQLite file `<DB_PATH>.migrate.lock` — OS-owned, so atomic and released when its holder dies), and "is it still pending?" is re-asked once the lock is held — so several stdio servers starting at once can neither interleave their copies nor back up an already-migrated file.
 
 ## Authentication (ADR-033)
 
@@ -325,7 +325,7 @@ Identity guards the **HTTP surface only** (`/api`, `/mcp`, `/ui`); stdio is trus
 
 | Variable | Rule |
 | --- | --- |
-| `FINTRACK_AUTH` | `AuthMode` (`required` \| `disabled`). Default `defaultAuthMode(HOST)`: loopback → `disabled`, else `required`. `disabled` with a non-loopback `HOST` is rejected. |
+| `FINTRACK_AUTH` | `AuthMode` (`required` \| `disabled`). Default `defaultAuthMode`: `disabled` only when the instance is not `isExposed` — a loopback `HOST` with no `PUBLIC_URL` and no `TRUST_PROXY` (other than `false`/`0`); else `required`. `disabled` on an exposed instance is rejected. |
 | `PUBLIC_URL` | Optional `http(s)` **origin** (`new URL(v).origin === v`: no path, no trailing slash; empty = unset). `https` → cookie `Secure`. A CSRF expected origin. |
 | `TRUST_PROXY` | Optional; `true`/`false`/hop count/address list → Fastify `trustProxy`. |
 

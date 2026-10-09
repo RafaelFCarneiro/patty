@@ -1,5 +1,4 @@
-import { createReadStream, createWriteStream, existsSync, readFileSync, renameSync } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
+import { closeSync, existsSync, openSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -51,17 +50,14 @@ const databaseFile = async (db: Db): Promise<string> => {
   return rows.find(({ name }) => name === MAIN_SCHEMA)?.file ?? '';
 };
 
-// TRUNCATE folds the WAL into the main file so a plain file copy is a complete snapshot. A busy
-// checkpoint means another connection is mid-transaction — copying then could miss committed pages,
-// so refuse to proceed rather than migrate with a safety copy that might be incomplete.
-const checkpointWal = async (db: Db): Promise<void> => {
-  const [result] = await db.all<{ busy: number }>(sql`PRAGMA wal_checkpoint(TRUNCATE)`);
-  if (result && result.busy !== 0) {
-    throw new Error(
-      'fintrack: cannot take the pre-migration backup — the database is busy (another FinTrack process is ' +
-        'writing). Stop the other process and retry.',
-    );
-  }
+// SQLite's own snapshot: `VACUUM INTO` copies the committed state in ONE read transaction, so it is consistent
+// even while another process keeps writing, and it carries the same encryption key (a plain file copy after a
+// WAL checkpoint cannot promise either — a running writer can commit, or auto-checkpoint, mid-copy). The target
+// must be empty or absent; creating it ourselves first, 0600, means it is never readable by anyone else.
+const snapshotTo = async (db: Db, destination: string): Promise<void> => {
+  rmSync(destination, { force: true });
+  closeSync(openSync(destination, 'wx', BACKUP_FILE_MODE));
+  await db.run(sql`VACUUM INTO ${destination}`);
 };
 
 /**
@@ -85,24 +81,22 @@ export const migrateWithSafetyCopy = async (
 };
 
 /**
- * Before applying a migration flagged as rewriting existing data (`DATA_REWRITING_MIGRATIONS`),
- * checkpoint the WAL and copy the database file to `<db>.pre-<tag>.bak`, logging the path to stderr
- * (never the key). A no-op for a brand-new database, an in-memory one, or when nothing flagged is
- * pending — so a second startup never writes a second backup.
+ * Before applying a migration flagged as rewriting existing data (`DATA_REWRITING_MIGRATIONS`), snapshot the
+ * database to `<db>.pre-<tag>.bak` (a standalone, consistent, still-encrypted file — no `-wal` needed to
+ * restore), logging the path to stderr (never the key). A no-op for a brand-new database, an in-memory one, or
+ * when nothing flagged is pending — so a second startup never writes a second backup.
  */
 export const backupBeforeRewriting = async (db: Db, migrationsFolder: string): Promise<string[]> => {
   const tags = await pendingRewritingTags(db, migrationsFolder);
   const dbFile = await databaseFile(db);
   if (tags.length === 0 || dbFile === '' || !existsSync(dbFile)) return [];
 
-  await checkpointWal(db);
   const copied: string[] = [];
   for (const tag of tags) {
     const destination = backupPath(dbFile, tag);
-    // Copy then rename: a crash mid-copy never leaves a truncated file under the final name. The file is
-    // created 0600 from the start (`mode`), so there is no moment it is readable by anyone else.
+    // Snapshot then rename: a crash mid-snapshot never leaves a truncated file under the final name.
     const partial = `${destination}${TEMP_SUFFIX}`;
-    await pipeline(createReadStream(dbFile), createWriteStream(partial, { mode: BACKUP_FILE_MODE }));
+    await snapshotTo(db, partial);
     renameSync(partial, destination);
     console.error(`fintrack: backed up the database before migration ${tag} → ${destination}`);
     copied.push(destination);

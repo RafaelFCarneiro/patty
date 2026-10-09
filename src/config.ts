@@ -25,8 +25,22 @@ export const EncryptionKey = z.string().regex(/^[0-9a-f]{64}$/i, 'must be a 64-c
 
 /** Auth default from the bind host (ADR-033 §1): loopback keeps today's zero-config behavior, anything
  *  reachable from elsewhere requires a session. */
-export const defaultAuthMode = (host: string): AuthMode =>
-  isLoopbackHost(host) ? AuthMode.enum.disabled : AuthMode.enum.required;
+/** Whether anything besides this machine can reach the instance: a non-loopback bind, or a reverse proxy
+ *  configured in front of it (`PUBLIC_URL` names its external origin; `TRUST_PROXY` says to believe it). A
+ *  proxy typically connects to a loopback bind, so `HOST` alone would call that instance private. */
+const NO_PROXY_HOPS = 0;
+
+export const isExposed = (env: {
+  HOST: string;
+  PUBLIC_URL?: string;
+  TRUST_PROXY?: boolean | number | string;
+}): boolean =>
+  !isLoopbackHost(env.HOST) ||
+  env.PUBLIC_URL !== undefined ||
+  (env.TRUST_PROXY !== undefined && env.TRUST_PROXY !== false && env.TRUST_PROXY !== NO_PROXY_HOPS);
+
+export const defaultAuthMode = (env: Parameters<typeof isExposed>[0]): AuthMode =>
+  isExposed(env) ? AuthMode.enum.required : AuthMode.enum.disabled;
 
 // An empty string (`PUBLIC_URL=` from a compose file or shell) means "unset", not "invalid".
 const optionalEnv = <T extends z.ZodTypeAny>(schema: T) =>
@@ -74,7 +88,8 @@ const Env = z
     // a wildcard bind is an explicit, visible opt-in (a container needs it; its port publish must stay
     // on the host's loopback — ADR-032).
     HOST: z.string().min(1).default(LOOPBACK_HOST),
-    // `required` makes every HTTP route demand a session; default derived from HOST (ADR-033 §1).
+    // `required` makes every HTTP route demand a session; default `required` when the instance is exposed — a
+    // non-loopback HOST, or a reverse proxy configured via PUBLIC_URL/TRUST_PROXY (ADR-033 §1).
     FINTRACK_AUTH: optionalEnv(AuthMode),
     // External origin of this instance behind a reverse proxy — the CSRF expected origin, and https
     // turns on the cookie `Secure` flag. Optional in Phase 1 (OAuth makes it mandatory in Phase 3).
@@ -99,13 +114,14 @@ const Env = z
     path: ['FINTRACK_DB_KEY_FILE'],
     message: 'FINTRACK_DB_KEY and FINTRACK_DB_KEY_FILE are both set — the key source is ambiguous; set only one',
   })
-  .refine((env) => !(env.FINTRACK_AUTH === AuthMode.enum.disabled && !isLoopbackHost(env.HOST)), {
+  .refine((env) => !(env.FINTRACK_AUTH === AuthMode.enum.disabled && isExposed(env)), {
     path: ['FINTRACK_AUTH'],
     message:
-      'FINTRACK_AUTH=disabled is only allowed on a loopback HOST (127.0.0.0/8, ::1, localhost) — the API would be ' +
-      'unauthenticated on a reachable interface. Remove FINTRACK_AUTH (it defaults to required here) or bind a loopback HOST.',
+      'FINTRACK_AUTH=disabled is only allowed on a loopback HOST (127.0.0.0/8, ::1, localhost) with no PUBLIC_URL ' +
+      'or TRUST_PROXY — the API would be unauthenticated to everyone who can reach it (directly or through a ' +
+      'reverse proxy). Remove FINTRACK_AUTH (it defaults to required here) or drop the exposure.',
   })
-  .transform((env) => ({ ...env, FINTRACK_AUTH: env.FINTRACK_AUTH ?? defaultAuthMode(env.HOST) }));
+  .transform((env) => ({ ...env, FINTRACK_AUTH: env.FINTRACK_AUTH ?? defaultAuthMode(env) }));
 
 export type Config = z.infer<typeof Env>;
 

@@ -16,13 +16,16 @@ Internals (hook, principal, tables): [`architecture.md`](architecture.md) § Aut
 |---|---|---|---|
 | `127.0.0.1` (default), `127.x.x.x`, `::1`, `localhost` | **disabled** | required | disabled |
 | `0.0.0.0`, `::`, a LAN IP, any other name | **required** | required | **startup error** |
+| any `HOST`, with `PUBLIC_URL` or `TRUST_PROXY` set | **required** | required | **startup error** |
 
 - **`disabled`** — every request acts as the owner, with no login. This is the npm default (`HOST=127.0.0.1`): the
   server is reachable only from the machine it runs on, exactly as before authentication existed.
 - **`required`** — every route except the [public surface](#the-public-surface) needs a session. This is the
   container's mode (`HOST=0.0.0.0`).
-- **`disabled` on a non-loopback `HOST` is refused at startup.** The API is never unauthenticated on an interface other
-  machines can reach.
+- **`disabled` is refused at startup whenever the instance is reachable by anyone else** — a non-loopback `HOST`, or
+  `PUBLIC_URL`/`TRUST_PROXY` set. A reverse proxy normally connects to a loopback bind, so `HOST=127.0.0.1` behind a
+  proxy would otherwise leave the whole internet-facing site logged in as the owner; naming the proxy (`PUBLIC_URL`, or
+  `TRUST_PROXY` other than `false`/`0`) turns authentication on by default instead.
 - **stdio is always trusted.** The MCP client spawns the process, so there is no network caller to authenticate;
   stdio acts as the owner whatever the mode. Authentication applies to the HTTP surface only.
 - With no HTTP surface running (`FINTRACK_HTTP=false` under stdio) there is nothing to protect and nothing is set up.
@@ -147,21 +150,22 @@ lock everyone out. Prefer a **hop count** (`TRUST_PROXY=1` for one proxy) or the
 ## Backups made before a migration
 
 Before applying a migration that **rewrites existing data** — Phase 1's owner insert is the first — startup
-checkpoints the WAL and copies the database file next to itself:
+snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 
 ```
 <DB_PATH>.pre-<migration>.bak        e.g.  ~/.fintrack/fintrack.db.pre-0018_auth_identity.bak
 ```
 
-- It is the same encrypted file under the same key, mode `0600`, so it adds no exposure — and no value without the key.
+- It is a consistent snapshot of everything committed at that moment — even if another process is writing —
+  and a standalone file (no `-wal`/`-shm` needed). It stays encrypted under the same key, mode `0600`, so it adds no
+  exposure — and no value without the key.
 - The path is logged to stderr (never the key). It is **not** made for a brand-new database, nor on later starts.
-- To roll back: stop FinTrack, put the `.bak` back as `fintrack.db` (delete any `-wal`/`-shm` beside it), and run the
-  previous release.
+- To roll back: stop FinTrack, put the `.bak` back as `fintrack.db` (delete the live `-wal`/`-shm` beside it), and run
+  the previous release.
 - Several FinTrack processes starting at once (multiple MCP clients) take turns on an OS-level lock
   (`<DB_PATH>.migrate.lock`, a tiny companion SQLite file), so exactly one takes the backup and migrates. The lock
   dies with its holder; the file itself is harmless and is left in place.
-- Delete the backup once you've confirmed the upgrade. A refused backup (the database is busy under another process) stops
-  startup rather than migrating without a safety copy.
+- Delete the backup once you've confirmed the upgrade.
 
 ## Threat model so far
 

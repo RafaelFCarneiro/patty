@@ -140,6 +140,42 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     expect(await domainDump(restored)).toEqual(beforeDump);
   });
 
+  it('snapshots committed rows another connection wrote that are still only in the WAL', async () => {
+    const legacy = await open();
+    await bootstrap(legacy, preAuthFolder);
+    await seedDomainData(legacy);
+    const otherProcess = await open();
+    await otherProcess.run(
+      sql`INSERT INTO accounts (id, name, type, initial_balance, currency, version) VALUES ('acc-late', 'Late', 'wallet', 5, 'USD', 0)`,
+    );
+
+    await bootstrap(legacy);
+
+    const restored = await openDatabase({ DB_PATH: backupPath(dbPath, AUTH_MIGRATION_TAG), FINTRACK_DB_KEY: TEST_KEY });
+    const ids = await restored.all<{ id: string }>(sql`SELECT id FROM accounts ORDER BY id`);
+    expect(ids.map(({ id }) => id)).toEqual(['acc-1', 'acc-2', 'acc-late']);
+  });
+
+  it('writes a standalone, encrypted backup: no sidecars, no temp file, unreadable without the key', async () => {
+    const legacy = await open();
+    await bootstrap(legacy, preAuthFolder);
+    await seedDomainData(legacy);
+    await bootstrap(legacy);
+
+    const backup = backupPath(dbPath, AUTH_MIGRATION_TAG);
+    expect(existsSync(`${backup}.tmp`)).toBe(false);
+    expect(existsSync(`${backup}-wal`)).toBe(false);
+    const alone = join(tmpDir, 'alone.db');
+    cpSync(backup, alone); // the main file only, as an operator restoring it would have
+    const restored = await openDatabase({ DB_PATH: alone, FINTRACK_DB_KEY: TEST_KEY });
+    expect((await restored.all(sql`SELECT 1 FROM accounts`)).length).toBe(2);
+    await expect(
+      openDatabase({ DB_PATH: alone, FINTRACK_DB_KEY: 'f'.repeat(64) }).then((db) =>
+        db.all(sql`SELECT 1 FROM accounts`),
+      ),
+    ).rejects.toThrow();
+  });
+
   it('keeps the owner and writes no second backup when startup runs again', async () => {
     const legacy = await open();
     await bootstrap(legacy, preAuthFolder);

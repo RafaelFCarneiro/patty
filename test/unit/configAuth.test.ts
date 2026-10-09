@@ -31,7 +31,7 @@ describe('FINTRACK_AUTH × HOST (ADR-033 §1)', () => {
     ['fintrack.lan', AuthMode.enum.required],
   ])('defaults HOST=%s to %s', (host, expected) => {
     expect(withEnv({ HOST: host }).FINTRACK_AUTH).toBe(expected);
-    expect(defaultAuthMode(host)).toBe(expected);
+    expect(defaultAuthMode({ HOST: host })).toBe(expected);
   });
 
   it('defaults to disabled when HOST is omitted (the npm/stdio zero-config case)', () => {
@@ -67,6 +67,38 @@ describe('FINTRACK_AUTH × HOST (ADR-033 §1)', () => {
 
   it('treats an empty FINTRACK_AUTH as unset', () => {
     expect(withEnv({ HOST: IPV4_WILDCARD_HOST, FINTRACK_AUTH: '' }).FINTRACK_AUTH).toBe('required');
+  });
+});
+
+describe('a reverse proxy in front makes the instance exposed even on a loopback bind', () => {
+  it('defaults to required when PUBLIC_URL names the external origin', () => {
+    expect(withEnv({ PUBLIC_URL: 'https://fintrack.example.com' }).FINTRACK_AUTH).toBe('required');
+  });
+
+  it.each(['true', '1', '2', 'loopback', '10.0.0.0/8'])('defaults to required when TRUST_PROXY=%s', (trust) => {
+    expect(withEnv({ TRUST_PROXY: trust }).FINTRACK_AUTH).toBe('required');
+  });
+
+  it.each(['false', '0'])('stays disabled when TRUST_PROXY=%s says there is no proxy to trust', (trust) => {
+    expect(withEnv({ TRUST_PROXY: trust }).FINTRACK_AUTH).toBe('disabled');
+  });
+
+  it('rejects FINTRACK_AUTH=disabled with a PUBLIC_URL, naming the proxy case', () => {
+    process.env['FINTRACK_AUTH'] = 'disabled';
+    process.env['PUBLIC_URL'] = 'https://fintrack.example.com';
+    expect(() => loadConfig()).toThrow(/PUBLIC_URL or TRUST_PROXY/);
+  });
+
+  it('rejects FINTRACK_AUTH=disabled with TRUST_PROXY set', () => {
+    process.env['FINTRACK_AUTH'] = 'disabled';
+    process.env['TRUST_PROXY'] = '1';
+    expect(() => loadConfig()).toThrow(/reverse proxy/);
+  });
+
+  it('still allows an explicit required', () => {
+    expect(withEnv({ PUBLIC_URL: 'https://fintrack.example.com', FINTRACK_AUTH: 'required' }).FINTRACK_AUTH).toBe(
+      'required',
+    );
   });
 });
 
