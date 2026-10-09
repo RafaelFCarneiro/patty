@@ -70,6 +70,8 @@ export const PAT_CLIENT_ID_PREFIX = 'pat:';
 /** Expiry choices offered when minting a token; `none` never expires. */
 export const TokenExpiry = z.enum(['none', '30', '90', '365']);
 export type TokenExpiry = z.infer<typeof TokenExpiry>;
+/** What the token form preselects. */
+export const DEFAULT_TOKEN_EXPIRY = TokenExpiry.enum['90'];
 export const TOKEN_EXPIRY_DAYS: Readonly<Record<TokenExpiry, number | null>> = {
   none: null,
   '30': 30,

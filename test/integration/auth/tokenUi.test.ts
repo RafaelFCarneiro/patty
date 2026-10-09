@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { AuthMode, OWNER_USER_ID } from '../../../src/models/auth.js';
+import { AuthMode, OWNER_USER_ID, TokenAccess } from '../../../src/models/auth.js';
+import { CreateTokenFormSchema } from '../../../src/wire/in/auth.js';
 import {
   authDepsOf,
   browserHeaders,
@@ -36,6 +37,26 @@ describe('/ui/access/tokens', () => {
     expect(res.body).toContain('No access tokens yet.');
     expect(res.body).toContain('name="access"');
     expect(res.body).toContain('name="expiry"');
+  });
+
+  it('offers exactly the access levels and expiries the form accepts, 90 days preselected', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const body = (await get(ctx, '/ui/access/tokens', cookie)).body;
+    const valuesOf = (select: string) =>
+      [...body.matchAll(new RegExp(`<select name="${select}">(.*?)</select>`, 'gs'))]
+        .flatMap(([, options]) => [...(options ?? '').matchAll(/<option value="([^"]+)"/g)])
+        .map(([, value]) => value);
+    expect(valuesOf('access')).toEqual([...TokenAccess.options]);
+    expect(valuesOf('expiry')).toEqual(['30', '90', '365', 'none']);
+    expect(body).toContain('<option value="90" selected>in 90 days</option>');
+    expect(body).toContain('<option value="none">never</option>');
+    for (const value of [...valuesOf('access')]) {
+      expect(CreateTokenFormSchema.shape.access.safeParse(value).success).toBe(true);
+    }
+    for (const value of valuesOf('expiry')) {
+      expect(CreateTokenFormSchema.shape.expiry.safeParse(value).success).toBe(true);
+    }
   });
 
   it('is locked down like the sign-in pages: CSP, no-store, no framing', async () => {

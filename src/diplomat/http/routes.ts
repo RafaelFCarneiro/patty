@@ -88,9 +88,9 @@ export const registerRoutes = (
   const authRequired = auth.mode === AuthMode.enum.required;
   registerUiRoutes(app, subscribeToChanges, {
     authControls: authRequired,
-    session: auth.mode === AuthMode.enum.required ? sessionRecheck(auth) : undefined,
+    session: authRequired ? sessionRecheck(auth) : undefined,
   });
-  if (auth.mode === AuthMode.enum.required) {
+  if (authRequired) {
     registerAuthRoutes(app, auth);
     registerTokenRoutes(app, auth);
     registerProtectedResourceMetadataRoutes(app, auth.publicUrl);

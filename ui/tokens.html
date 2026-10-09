@@ -29,20 +29,17 @@
         <label
           >Access
           <select name="access">
-            <option value="read">Read only — list and query, never change anything</option>
-            <option value="write">Read and write — can also record, edit and delete</option>
+            {{accessOptions}}
           </select>
         </label>
         <label
           >Expires
           <select name="expiry">
-            <option value="90">in 90 days</option>
-            <option value="30">in 30 days</option>
-            <option value="365">in 365 days</option>
-            <option value="none">never</option>
+            {{expiryOptions}}
           </select>
         </label>
-        <label>Your password
+        <label
+          >Your password
           <input name="password" type="password" autocomplete="current-password" required />
         </label>
         <p class="auth-hint">Asked again so that nothing running in a dashboard page can create a token on its own.</p>

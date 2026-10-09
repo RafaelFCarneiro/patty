@@ -173,7 +173,7 @@ Running from source instead (`npm run dev`)? Use port `3001` — this repo's own
 
 Use `127.0.0.1`, not `localhost` — VS Code's fetch can resolve `localhost` to IPv6 `::1`, and the backend binds loopback-only on IPv4 (`127.0.0.1`) by default (`HOST` is the explicit opt-in to anything else), deliberately not the `::`/`0.0.0.0` wildcard, so by default the REST/MCP surface is not reachable from other devices on the LAN (this API has no auth — a wildcard `HOST` removes that protection). `localhost` resolving to `::1` will fail to connect; `127.0.0.1` always works.
 
-### ChatGPT (HTTP mode, untested — requires tunnel)
+### ChatGPT (not connectable yet)
 
 ChatGPT's servers connect from the internet: needs a paid plan with Developer Mode (Settings → Apps → Advanced → Developer mode) and an HTTPS tunnel:
 
@@ -181,7 +181,7 @@ ChatGPT's servers connect from the internet: needs a paid plan with Developer Mo
 cloudflared tunnel --url http://127.0.0.1:51737   # → https://xxx.trycloudflare.com (:3001 from source)
 ```
 
-Add connector with URL `https://xxx.trycloudflare.com/mcp`, auth: none. ⚠️ The tunnel exposes the API to anyone with the URL — test only, kill the tunnel after. An auth-disabled loopback instance refuses a tunnel's non-loopback `Host`; a tunnel to the container still needs a bearer token, so a connector that cannot send a static header waits for OAuth (ADR-033 Phase 3).
+**Current limitation: FinTrack cannot be connected to ChatGPT yet.** An auth-disabled loopback instance (the npm default) refuses a tunnel's non-loopback `Host` with `403`, and an instance with authentication on (the container, or any `PUBLIC_URL`) needs `Authorization: Bearer ftk_…` on every `/mcp` request — a header this connector cannot send. It becomes possible once the OAuth authorization server lands (ADR-033 Phase 3). Don't expose FinTrack through a public tunnel in the meantime.
 
 ### Ollama (HTTP mode, untested — needs a bridge client)
 

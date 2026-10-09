@@ -20,8 +20,8 @@ import { AuthMode } from './models/auth.js';
  */
 const loadCredentialsModule = () => import('./diplomat/auth/credentials.js');
 
-/** The auth flows touch three entities and the shell adapts model→row for each exactly once, here,
- *  before the generic runner sees the batch (docs/write-path.md § From model to row). */
+/** The auth flows touch four entities (user, session, setup code, access token) and the shell adapts model→row
+ *  for each exactly once, here, before the generic runner sees the batch (docs/write-path.md § From model to row). */
 export const bindAuthRunEffects =
   (runEffects: RunEffects): RunEffects =>
   (flow) =>

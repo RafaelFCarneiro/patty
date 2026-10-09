@@ -1,5 +1,15 @@
+import * as R from 'remeda';
 import { hasScope } from '../../logic/auth.js';
-import { TOKEN_NAME_MAX_LENGTH, TokenStatus, WRITE_SCOPE, type AccessTokenSummary } from '../../models/auth.js';
+import {
+  DEFAULT_TOKEN_EXPIRY,
+  TOKEN_EXPIRY_DAYS,
+  TOKEN_NAME_MAX_LENGTH,
+  TokenAccess,
+  TokenExpiry,
+  TokenStatus,
+  WRITE_SCOPE,
+  type AccessTokenSummary,
+} from '../../models/auth.js';
 import { errorBlock, escapeHtml, fillTemplate } from './authPages.js';
 import { TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from './authPaths.js';
 import { readCached, UI_ROOT } from './uiFiles.js';
@@ -7,9 +17,36 @@ import { readCached, UI_ROOT } from './uiFiles.js';
 const TOKENS_TEMPLATE_PATH = `${UI_ROOT}/tokens.html`;
 const TOKEN_CREATED_TEMPLATE_PATH = `${UI_ROOT}/tokenCreated.html`;
 
-const NEVER = 'never';
 const NOT_YET = '—';
 const ISO_MINUTE_LENGTH = 16;
+
+// Typed by the enums, so a new access level or expiry cannot exist without a label here — and the <option> values
+// the form posts are the very values `CreateTokenFormSchema` accepts.
+const ACCESS_OPTION_LABEL: Readonly<Record<TokenAccess, string>> = {
+  read: 'Read only — list and query, never change anything',
+  write: 'Read and write — can also record, edit and delete',
+};
+
+const NO_EXPIRY_LABEL = 'never';
+
+const expiryLabel = (expiry: TokenExpiry): string => {
+  const days = TOKEN_EXPIRY_DAYS[expiry];
+  return days === null ? NO_EXPIRY_LABEL : `in ${days} days`;
+};
+
+const option = (value: string, label: string, selected = false): string =>
+  `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+
+const accessOptions = (): string =>
+  TokenAccess.options.map((access) => option(access, ACCESS_OPTION_LABEL[access])).join('');
+
+// Soonest first, "never" last; the default is preselected.
+const expiryOptions = (): string =>
+  R.pipe(
+    TokenExpiry.options,
+    R.sortBy((expiry) => TOKEN_EXPIRY_DAYS[expiry] ?? Number.POSITIVE_INFINITY),
+    R.map((expiry) => option(expiry, expiryLabel(expiry), expiry === DEFAULT_TOKEN_EXPIRY)),
+  ).join('');
 
 const SCOPE_LABEL = { read: 'read only', write: 'read + write' } as const;
 
@@ -33,7 +70,7 @@ const row = (token: AccessTokenSummary): string =>
   `<td>${accessOf(token)}</td>` +
   `<td>${when(token.createdAt, NOT_YET)}</td>` +
   `<td>${when(token.lastUsedAt, NOT_YET)}</td>` +
-  `<td>${when(token.expiresAt, NEVER)}</td>` +
+  `<td>${when(token.expiresAt, NO_EXPIRY_LABEL)}</td>` +
   `<td class="token-status-${token.status}">${token.status}</td>` +
   `<td>${revokeForm(token)}</td>` +
   '</tr>';
@@ -54,6 +91,8 @@ export const renderTokensPage = async (fields: {
     action: TOKENS_PATH,
     dashboards: UI_ROOT_PATH,
     nameMaxLength: String(TOKEN_NAME_MAX_LENGTH),
+    accessOptions: accessOptions(),
+    expiryOptions: expiryOptions(),
     tokens: table(fields.tokens),
     error: errorBlock(fields.error),
   });
