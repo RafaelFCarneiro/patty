@@ -28,8 +28,8 @@ const NO_PROXY_HOPS = 0;
 
 /** Whether anything besides this machine can reach the instance: a non-loopback bind, or a reverse proxy
  *  configured in front of it (`PUBLIC_URL` names its external origin; `TRUST_PROXY` says to believe it). A
- *  proxy typically connects to a loopback bind, so `HOST` alone would call that instance private. Used only to
- *  refuse `FINTRACK_AUTH=disabled` on such an instance — it no longer influences the default (ADR-034 §1). */
+ *  proxy typically connects to a loopback bind, so `HOST` alone would call that instance private. Only used to
+ *  refuse `FINTRACK_AUTH=disabled` on such an instance. */
 export const isExposed = (env: {
   HOST: string;
   PUBLIC_URL?: string;
@@ -81,11 +81,9 @@ const Env = z
       .optional(),
     FINTRACK_LOCALE: Locale.optional(),
     PORT: z.coerce.number().default(DEFAULT_PORT),
-    // Bind host for the HTTP surface. Loopback by default, so a wildcard bind is an explicit, visible
-    // opt-in (a container needs it; its port publish must stay on the host's loopback — ADR-032).
+    // Loopback by default: a wildcard bind is an explicit opt-in (a container needs it; ADR-032).
     HOST: z.string().min(1).default(LOOPBACK_HOST),
-    // `required` makes every HTTP route demand a session, and it is the default everywhere — a loopback
-    // install included (ADR-034 §1). `disabled` is an explicit, loopback-only opt-out for development/tests.
+    // `required` everywhere, loopback included; `disabled` is an explicit, loopback-only opt-out.
     FINTRACK_AUTH: z.preprocess(unsetWhenEmpty, AuthMode.default(DEFAULT_AUTH_MODE)),
     // External origin of this instance behind a reverse proxy — the CSRF expected origin, and https
     // turns on the cookie `Secure` flag. Optional in Phase 1 (OAuth makes it mandatory in Phase 3).

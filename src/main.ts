@@ -58,7 +58,6 @@ const { version } = require('../package.json') as { version: string };
  */
 const loadServerModule = () => import('./server.js');
 
-/** The command mode (`setup`, `auth …`) loads only when one of those is asked for — never on a server start. */
 const loadCliModule = () => import('./cli.js');
 
 // stderr only — stdout carries the MCP protocol on the stdio transport (ADR-007).
@@ -154,8 +153,7 @@ const main = async (): Promise<void> => {
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
     runEffectsSequence(engineContext, applierRegistry, items, flowFor, changeBus.publish);
 
-  // Sessions guard the HTTP surface only: stdio is spawned by the user and still acts as the owner (ADR-034 step 2
-  // changes that).
+  // Sessions guard the HTTP surface only: stdio is spawned by the user and acts as the owner.
   const { auth, issueAndAnnounceSetup } = await prepareAuth(config, db, boundRunEffects);
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {

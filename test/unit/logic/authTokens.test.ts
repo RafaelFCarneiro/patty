@@ -13,7 +13,6 @@ import {
   resourceOrigin,
   revokedToken,
   scopeOfTool,
-  SESSION_TOUCH_INTERVAL_MS,
   summarizeToken,
   tokenDisplayPrefix,
   tokenPrincipal,
@@ -30,6 +29,7 @@ import {
   UserRole,
   type AccessTokenEntity,
   type UserEntity,
+  SESSION_TOUCH_INTERVAL_MS,
 } from '../../../src/models/auth.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');

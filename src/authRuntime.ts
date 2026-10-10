@@ -34,8 +34,6 @@ export const bindAuthRunEffects =
   (flow) =>
     runEffects(() => flow().map(authAdapters.outcomeToDb));
 
-/** The appliers of the four auth entities — registered by every composition root that runs an auth flow (the
- *  server and the CLI), so the list exists once. */
 export const AUTH_APPLIERS: ApplierRegistry = {
   [USER_ENTITY_TAG]: userApplier,
   [SESSION_ENTITY_TAG]: sessionApplier,
@@ -43,7 +41,6 @@ export const AUTH_APPLIERS: ApplierRegistry = {
   [SETUP_CODE_ENTITY_TAG]: setupCodeApplier,
 };
 
-/** The identity deps over `db`. Loads argon2 on demand (`loadCredentialsModule`). */
 export const createAuthDeps = async (db: Db): Promise<AuthDeps> => {
   const { createSecrets } = await loadCredentialsModule();
   return {

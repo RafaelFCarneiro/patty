@@ -9,7 +9,6 @@ export type SessionsRepo = {
   findByTokenHash: (tokenHash: string) => Promise<SessionEntity | null>;
   /** Rows whose idle expiry has passed — `expiresAt` is an ISO string, which sorts chronologically. */
   listExpired: (nowIso: string) => Promise<SessionEntity[]>;
-  /** Every session of one user — what a password reset ends. */
   listByUser: (userId: string) => Promise<SessionEntity[]>;
 };
 

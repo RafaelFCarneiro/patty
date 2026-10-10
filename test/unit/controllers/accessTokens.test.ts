@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import type { AppError } from '../../../src/common/errors.js';
 import { authenticateToken, createToken, listTokens, revokeToken } from '../../../src/controllers/accessTokens.js';
 import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
-import { SESSION_TOUCH_INTERVAL_MS } from '../../../src/logic/auth.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
   authErrors,
@@ -14,6 +13,7 @@ import {
   UserRole,
   type AccessTokenEntity,
   type UserEntity,
+  SESSION_TOUCH_INTERVAL_MS,
 } from '../../../src/models/auth.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');

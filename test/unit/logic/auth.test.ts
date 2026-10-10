@@ -20,8 +20,6 @@ import {
   normalizeSetupCode,
   planOwnerClaim,
   preSessionCsrfVerdict,
-  SESSION_IDLE_TTL_MS,
-  SESSION_TOUCH_INTERVAL_MS,
   setupBanner,
   shouldIssueSetupCode,
   slidingExpiry,
@@ -39,6 +37,8 @@ import {
   type SessionEntity,
   type SetupCodeEntity,
   type UserEntity,
+  SESSION_IDLE_TTL_MS,
+  SESSION_TOUCH_INTERVAL_MS,
 } from '../../../src/models/auth.js';
 
 const NOW = new Date('2026-10-07T12:00:00.000Z');

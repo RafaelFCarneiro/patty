@@ -15,7 +15,6 @@ import {
   sessionPrincipal,
   normalizeSetupCode,
   revokedToken,
-  SETUP_CODE_TTL_MS,
   shouldIssueSetupCode,
   spentSetupCode,
   touched,
@@ -43,6 +42,7 @@ import {
   type SessionEntity,
   type StartedSession,
   type UserEntity,
+  SETUP_CODE_TTL_MS,
 } from '../models/auth.js';
 import type { AuthDeps } from './deps.js';
 
@@ -87,7 +87,6 @@ export const issueSetupCode = (
     return ok({ persist, response: { code, expiresAt } });
   });
 
-/** The owner row, provided nobody holds its credentials yet — the precondition of every claim path. */
 const unclaimedOwner = (deps: AuthDeps): ResultAsync<UserEntity, AppError> =>
   safeTry(async function* () {
     const owner = yield* okOr(await deps.users.findById(OWNER_USER_ID), authErrors.setupUnavailable);
@@ -128,10 +127,8 @@ export const claimOwner = (
   });
 
 /**
- * `fintrack auth setup` / `fintrack setup` (ADR-034 §5): the same owner claim as `claimOwner`, without a setup
- * code and without a session. Trust model: this is reachable only from the CLI, i.e. by someone who can open the
- * database with its key — who already controls the data, so a code would add nothing. A setup code still
- * outstanding is spent in the same batch, so it cannot claim anything afterwards.
+ * The CLI's owner claim: `claimOwner` without a setup code or a session. Reachable only by someone who can open the
+ * database with its key, who already controls the data. An outstanding setup code is spent in the same batch.
  */
 export const claimOwnerLocally = (
   deps: AuthDeps,
@@ -150,7 +147,6 @@ export const claimOwnerLocally = (
     return ok({ persist, response: { username: input.username } });
   });
 
-/** The user whose password is being reset: the named one, else the owner. Either way they must hold a login. */
 export const findResetTarget = (
   deps: AuthDeps,
   username: string | undefined,
@@ -164,12 +160,7 @@ export const findResetTarget = (
     return ok(yield* okOr(owner !== null && hasCredentials(owner) ? owner : null, authErrors.ownerUnclaimed));
   });
 
-/**
- * `fintrack auth reset-password` (ADR-034 §5): a new password for one user, and everything issued under the old
- * one is ended in the same batch — all of that user's sessions are deleted and all of their still-live access
- * tokens revoked (the rows are kept). Other users' rows are never read into the batch. Same CLI-only trust model
- * as `claimOwnerLocally`.
- */
+/** CLI-only, like `claimOwnerLocally`: a new password, plus the end of that user's sessions and live tokens. */
 export const resetPassword = (
   deps: AuthDeps,
   input: ResetPasswordInput,
@@ -253,7 +244,6 @@ export const pruneExpiredSessions = (deps: AuthDeps): ResultAsync<FlowOutcome<nu
     return ok({ persist: R.map(expired, removeSession), response: expired.length });
   });
 
-/** Read-only: who holds the owner's login — `null` while it is unclaimed. Drives the CLI's "already claimed". */
 export const claimedOwnerOf = async (deps: AuthDeps): Promise<ClaimedOwner | null> => {
   const owner = await deps.users.findById(OWNER_USER_ID);
   return owner !== null && hasCredentials(owner) ? { username: owner.username } : null;

@@ -4,7 +4,6 @@ import { normalizeUsername, UsernameSchema } from '../../models/auth.js';
 
 const OPTION_MAX_LENGTH = 256;
 
-/** The flags `fintrack setup` and `fintrack auth setup` accept (as `util.parseArgs` hands them over). */
 export const ClaimOptionsSchema = z
   .object({
     [PASSWORD_STDIN_FLAG]: z.boolean().default(false),
@@ -13,8 +12,7 @@ export const ClaimOptionsSchema = z
   .transform((flags) => ({ passwordStdin: flags[PASSWORD_STDIN_FLAG], username: flags.username }));
 export type ClaimOptions = z.infer<typeof ClaimOptionsSchema>;
 
-/** The flags `fintrack auth reset-password` accepts. `--user` only needs normalizing: an unknown name is a
- *  clear "no such user", not a validation failure. */
+/** `--user` is only normalized: an unknown name is a clear "no such user", not a validation failure. */
 export const ResetOptionsSchema = z
   .object({
     [PASSWORD_STDIN_FLAG]: z.boolean().default(false),

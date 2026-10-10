@@ -222,8 +222,6 @@ Examples:
 
 const findClient = (tool: string): ClientTool | undefined => TOOLS[tool.trim().toLowerCase()];
 
-/** Writes the client's config entry (idempotent merge). With no tool it prints the help; with an unknown one it
- *  says so and exits 1. */
 export const runSetup = (tool: string | undefined): void => {
   if (!tool) {
     // eslint-disable-next-line no-console -- CLI surface
@@ -244,12 +242,7 @@ export const runSetup = (tool: string | undefined): void => {
   console.log('Done.');
 };
 
-/**
- * The guided installer (ADR-034 §5): claim the owner first, then write the client config. `claimOwner` resolves
- * `true` when the owner has a login by the time it returns; on `false` (no terminal and no piped password, bad
- * input…) it has already said why, and no config is written. Help and an unknown tool never reach the claim.
- * Resolves the process exit code.
- */
+/** Claims the owner first and writes the client config only if that succeeded. Help and an unknown tool never claim. */
 export const runGuidedSetup = async (tool: string | undefined, claimOwner: () => Promise<boolean>): Promise<number> => {
   if (!tool || findClient(tool) === undefined) {
     runSetup(tool);

@@ -64,7 +64,6 @@ export const open = (): Terminal => {
   };
 };
 
-/** The piped password, minus its final newline. A terminal on stdin is refused rather than waited on. */
 export const readPasswordFromStdin = async (): Promise<string> => {
   if (isInteractive()) throw new Error(STDIN_IS_A_TERMINAL_MESSAGE);
   return (await text(process.stdin)).replace(TRAILING_NEWLINE, '');

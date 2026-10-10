@@ -18,10 +18,6 @@ const runSetupCommand = async (args: readonly string[], io: CliIo): Promise<numb
   return runGuidedSetup(client, () => ensureOwnerClaimed(io, parsed.options));
 };
 
-/**
- * The binary's command mode (`fintrack setup …`, `fintrack auth …`): everything that is a command rather than the
- * server. Loaded lazily by `main.ts` — only these commands pay for it. Resolves the process exit code.
- */
 export const runCli = async (args: readonly string[], io: CliIo = defaultCliIo()): Promise<number> => {
   const [command, ...rest] = args;
   try {

@@ -16,7 +16,6 @@ import {
   resetPassword,
 } from '../../../src/controllers/auth.js';
 import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
-import { SESSION_IDLE_TTL_MS, SESSION_TOUCH_INTERVAL_MS, SETUP_CODE_TTL_MS } from '../../../src/logic/auth.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
   ALL_SCOPES,
@@ -33,6 +32,9 @@ import {
   type SessionEntity,
   type SetupCodeEntity,
   type UserEntity,
+  SESSION_IDLE_TTL_MS,
+  SESSION_TOUCH_INTERVAL_MS,
+  SETUP_CODE_TTL_MS,
 } from '../../../src/models/auth.js';
 
 const NOW = new Date('2026-10-07T12:00:00.000Z');

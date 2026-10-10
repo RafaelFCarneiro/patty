@@ -38,7 +38,6 @@ const option = (value: string, label: string, selected = false): string =>
 const accessOptions = (): string =>
   TokenAccess.options.map((access) => option(access, ACCESS_OPTION_LABEL[access])).join('');
 
-// Soonest first; the default is preselected.
 const expiryOptions = (): string =>
   R.pipe(
     TokenExpiry.options,

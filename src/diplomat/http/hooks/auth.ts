@@ -9,9 +9,15 @@ import {
   hasScope,
   isLoopbackRequest,
   preSessionCsrfVerdict,
-  type CsrfRequest,
 } from '../../../logic/auth.js';
-import { AuthMode, authErrors, isUiPath, OWNER_PRINCIPAL, type Principal } from '../../../models/auth.js';
+import {
+  AuthMode,
+  authErrors,
+  isUiPath,
+  OWNER_PRINCIPAL,
+  type CsrfRequest,
+  type Principal,
+} from '../../../models/auth.js';
 import { safeNextPath } from '../../../wire/in/auth.js';
 import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from '../authPaths.js';
 import type { HttpAuth } from '../context.js';
