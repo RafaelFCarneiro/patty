@@ -4,7 +4,6 @@ import { PASSWORD_STDIN_FLAG } from '../../common/cli.js';
 import { PasswordSchema, TERMINAL_SETUP_COMMAND, UsernameSchema } from '../../models/auth.js';
 import type { Terminal } from './terminal.js';
 
-/** A bad answer is asked for again this many times in all; then the command gives up. */
 export const MAX_PROMPT_ATTEMPTS = 3;
 
 export const PROMPT_MESSAGES = {
@@ -19,7 +18,6 @@ export const PROMPT_MESSAGES = {
     `printf %s "$PASSWORD" | ${TERMINAL_SETUP_COMMAND} --username <name> --${PASSWORD_STDIN_FLAG}`,
 } as const;
 
-/** Where credentials can come from: a person at `terminal` (null when stdin is not one), or the piped password. */
 export type PromptIo = {
   terminal: Terminal | null;
   readPasswordFromStdin: () => Promise<string>;
@@ -39,7 +37,6 @@ const decode =
 const decodeUsername = decode(UsernameSchema);
 const decodePassword = decode(PasswordSchema);
 
-/** Runs `attempt`, telling the person why and trying again after a bad answer, up to `attemptsLeft` tries in all. */
 const withRetries = async <T>(
   terminal: Terminal,
   attempt: () => Promise<Answer<T>>,
@@ -54,7 +51,6 @@ const withRetries = async <T>(
 const askUsername = (terminal: Terminal): Promise<Answer<string>> =>
   withRetries(terminal, async () => decodeUsername(await terminal.ask(PROMPT_MESSAGES.username)));
 
-/** A new password, asked twice with no echo; a short or mismatched pair is asked for again. */
 const askNewPassword = (terminal: Terminal): Promise<Answer<string>> =>
   withRetries(terminal, async () => {
     const password = decodePassword(await terminal.askSecret(PROMPT_MESSAGES.password));
@@ -65,12 +61,10 @@ const askNewPassword = (terminal: Terminal): Promise<Answer<string>> =>
 
 const piped = async (io: PromptIo): Promise<Answer<string>> => decodePassword(await io.readPasswordFromStdin());
 
-/** Whether this run can obtain a password at all — checked before anything is written. */
 const canAskPassword = (io: PromptIo, options: Pick<NewCredentialsOptions, 'passwordStdin'>): boolean =>
   options.passwordStdin || io.terminal !== null;
 
-/** A new password: piped with `--password-stdin`, else asked twice at the terminal. Never hangs: with neither, it
- *  fails with instructions. */
+/** Never hangs: with no pipe and no terminal it fails with instructions. */
 export const collectNewPassword = async (
   io: PromptIo,
   options: Pick<NewCredentialsOptions, 'passwordStdin'>,
@@ -79,8 +73,12 @@ export const collectNewPassword = async (
   return io.terminal ? askNewPassword(io.terminal) : err(PROMPT_MESSAGES.noTerminal);
 };
 
-/** A username and a new password. With `--password-stdin` the username comes from `--username` (stdin is the
- *  password); otherwise both are asked at the terminal, the username unless it was given. */
+const collectUsername = async (io: PromptIo, options: NewCredentialsOptions): Promise<Answer<string>> => {
+  if (options.username !== undefined) return decodeUsername(options.username);
+  return io.terminal ? askUsername(io.terminal) : err(PROMPT_MESSAGES.noTerminal);
+};
+
+/** With `--password-stdin` stdin is only the password, so the username must come from `--username`. */
 export const collectNewCredentials = async (
   io: PromptIo,
   options: NewCredentialsOptions,
@@ -88,12 +86,7 @@ export const collectNewCredentials = async (
   if (options.passwordStdin && options.username === undefined) return err(PROMPT_MESSAGES.usernameRequiredWithStdin);
   if (!canAskPassword(io, options)) return err(PROMPT_MESSAGES.noTerminal);
 
-  const username =
-    options.username !== undefined
-      ? decodeUsername(options.username)
-      : io.terminal
-        ? await askUsername(io.terminal)
-        : err(PROMPT_MESSAGES.noTerminal);
+  const username = await collectUsername(io, options);
   if (username.isErr()) return err(username.error);
 
   const password = await collectNewPassword(io, options);

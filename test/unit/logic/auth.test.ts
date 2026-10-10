@@ -3,6 +3,7 @@ import {
   allowedOrigins,
   canLogin,
   claimedOwner,
+  claimRaceWinner,
   csrfVerdict,
   declaredOrigin,
   evaluateSession,
@@ -17,6 +18,7 @@ import {
   isUnsafeMethod,
   newSession,
   normalizeSetupCode,
+  planOwnerClaim,
   preSessionCsrfVerdict,
   SESSION_IDLE_TTL_MS,
   SESSION_TOUCH_INTERVAL_MS,
@@ -476,5 +478,18 @@ describe('owner credential helpers', () => {
     };
     const now = new Date('2026-10-07T12:00:00.000Z');
     expect(spentSetupCode(code, now)).toEqual({ ...code, usedAt: now.toISOString() });
+  });
+});
+
+describe('planOwnerClaim and claimRaceWinner', () => {
+  it('claims only while nobody holds the login', () => {
+    expect(planOwnerClaim(null)).toEqual({ kind: 'claim' });
+    expect(planOwnerClaim({ username: 'rafael' })).toEqual({ kind: 'skip', username: 'rafael' });
+  });
+
+  it('names a winner only for a setup_unavailable refusal with a holder', () => {
+    expect(claimRaceWinner(authErrors.setupUnavailable, { username: 'rafael' })).toEqual({ username: 'rafael' });
+    expect(claimRaceWinner(authErrors.setupUnavailable, null)).toBeNull();
+    expect(claimRaceWinner(authErrors.invalidCredentials, { username: 'rafael' })).toBeNull();
   });
 });

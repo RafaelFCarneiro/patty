@@ -5,46 +5,37 @@ import { AUTH_APPLIERS, bindAuthRunEffects, createAuthDeps } from './authRuntime
 import { formatAppError } from './common/errors.js';
 import { AuthSubcommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from './common/cli.js';
 import { loadConfig } from './config.js';
+import { claimRaceWinner, planOwnerClaim } from './logic/auth.js';
 import { claimedOwnerOf, claimOwnerLocally, findResetTarget, resetPassword } from './controllers/auth.js';
 import type { AuthDeps, RunEffects } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase } from './diplomat/db/driver.js';
 import { createEngineContext } from './diplomat/db/engine.js';
 import { collectNewCredentials, collectNewPassword, PROMPT_MESSAGES, type PromptIo } from './diplomat/cli/prompt.js';
-import {
-  isInteractive,
-  openTerminal,
-  printDiagnostic,
-  printResult,
-  readPasswordFromStdin,
-  type Terminal,
-} from './diplomat/cli/terminal.js';
-import { authErrors, PACKAGE_NAME, type PasswordReset } from './models/auth.js';
+import * as tty from './diplomat/cli/terminal.js';
+import { PACKAGE_NAME, type PasswordReset } from './models/auth.js';
 import { ClaimOptionsSchema, ResetOptionsSchema, type ClaimOptions, type ResetOptions } from './wire/in/cli.js';
 
 /**
- * The CLI's composition root for the auth commands (ADR-034 §5): it opens the database exactly as the server does
- * — same key resolution, same bootstrap and migrations, so the owner row exists — but starts neither HTTP nor stdio.
+ * Opens the database as the server does (same key, bootstrap and migrations) but starts neither HTTP nor stdio.
  * Trust model: whoever can open the database with its key already controls the data, so these commands ask for no
- * code or current password; they are reachable only by a person at a terminal on this machine.
+ * code or current password.
  */
-export type AuthShell = {
+export type Shell = {
   deps: AuthDeps;
   run: RunEffects;
   close: () => void;
 };
 
-/** Everything the commands do to the outside world, injected so they run against a test database and fake input. */
 export type CliIo = {
-  openShell: () => Promise<AuthShell>;
-  /** A prompt on the user's terminal, or `null` when stdin is not one. */
-  openTerminal: () => Terminal | null;
+  openShell: () => Promise<Shell>;
+  openTerminal: () => tty.Terminal | null;
   readPasswordFromStdin: () => Promise<string>;
   out: (line: string) => void;
   err: (line: string) => void;
 };
 
-const openAuthShell = async (): Promise<AuthShell> => {
+const openShell = async (): Promise<Shell> => {
   const db = await openDatabase(loadConfig());
   await bootstrap(db);
   const engineContext = createEngineContext(db);
@@ -56,11 +47,11 @@ const openAuthShell = async (): Promise<AuthShell> => {
 };
 
 export const defaultCliIo = (): CliIo => ({
-  openShell: openAuthShell,
-  openTerminal: () => (isInteractive() ? openTerminal() : null),
-  readPasswordFromStdin,
-  out: printResult,
-  err: printDiagnostic,
+  openShell,
+  openTerminal: () => (tty.isInteractive() ? tty.open() : null),
+  readPasswordFromStdin: tty.readPasswordFromStdin,
+  out: tty.printResult,
+  err: tty.printDiagnostic,
 });
 
 export const CLI_MESSAGES = {
@@ -87,7 +78,7 @@ Options:
   --${PASSWORD_STDIN_FLAG}   read the password from stdin instead of asking (scripted installs; stdin must not be a terminal)
 `.trimStart();
 
-const withShell = async <T>(io: CliIo, work: (shell: AuthShell) => Promise<T>): Promise<T> => {
+const withShell = async <T>(io: CliIo, work: (shell: Shell) => Promise<T>): Promise<T> => {
   const shell = await io.openShell();
   try {
     return await work(shell);
@@ -96,7 +87,6 @@ const withShell = async <T>(io: CliIo, work: (shell: AuthShell) => Promise<T>): 
   }
 };
 
-/** The prompt sources for one command: the terminal is opened only when the password is not piped, and closed. */
 const withPromptIo = async <T>(
   io: CliIo,
   options: { passwordStdin: boolean },
@@ -115,16 +105,12 @@ export const fail = (io: CliIo, reason: string): false => {
   return false;
 };
 
-/**
- * Claims the owner from the terminal if nobody holds its login yet (`auth setup`, and the first step of
- * `setup <client>`). `true` = the owner is claimed when this returns — by this call or before it — so the caller
- * may carry on; `false` = it is not, nothing was written, and the reason was reported.
- */
+/** `true` = the owner holds a login when this returns (claimed now or before); `false` = nothing was written. */
 export const ensureOwnerClaimed = (io: CliIo, options: ClaimOptions): Promise<boolean> =>
   withShell(io, async (shell) => {
-    const existing = await claimedOwnerOf(shell.deps);
-    if (existing) {
-      io.out(CLI_MESSAGES.alreadyClaimed(existing.username));
+    const plan = planOwnerClaim(await claimedOwnerOf(shell.deps));
+    if (plan.kind === 'skip') {
+      io.out(CLI_MESSAGES.alreadyClaimed(plan.username));
       return true;
     }
 
@@ -136,13 +122,10 @@ export const ensureOwnerClaimed = (io: CliIo, options: ClaimOptions): Promise<bo
       io.out(CLI_MESSAGES.ownerClaimed(claimed.value.username));
       return true;
     }
-    // Someone claimed it between the check above and the write: the end state is what the caller wanted.
-    if (claimed.error.code === authErrors.setupUnavailable.code) {
-      const winner = await claimedOwnerOf(shell.deps);
-      if (winner) {
-        io.out(CLI_MESSAGES.alreadyClaimed(winner.username));
-        return true;
-      }
+    const winner = claimRaceWinner(claimed.error, await claimedOwnerOf(shell.deps));
+    if (winner) {
+      io.out(CLI_MESSAGES.alreadyClaimed(winner.username));
+      return true;
     }
     return fail(io, formatAppError(claimed.error));
   });
@@ -185,7 +168,6 @@ const parseFlags = <T>(
       ? { positionals: parsed.positionals, options: decoded.data }
       : { error: decoded.error.issues[0]?.message ?? PROMPT_MESSAGES.invalidAnswer };
   } catch (cause) {
-    // `parseArgs` rejects an unknown flag or a flag missing its value with a message fit to show.
     return { error: cause instanceof Error ? cause.message : String(cause) };
   }
 };
@@ -193,12 +175,10 @@ const parseFlags = <T>(
 const CLAIM_FLAGS = { [PASSWORD_STDIN_FLAG]: { type: 'boolean' }, username: { type: 'string' } } as const;
 const RESET_FLAGS = { [PASSWORD_STDIN_FLAG]: { type: 'boolean' }, user: { type: 'string' } } as const;
 
-/** `setup`'s and `auth setup`'s flags; `setup` also takes the client as its one positional. */
 export const parseClaimArgs = (args: readonly string[]) => parseFlags(args, CLAIM_FLAGS, ClaimOptionsSchema);
 
 export const exitCodeOf = (succeeded: boolean): number => (succeeded ? EXIT_OK : EXIT_FAILURE);
 
-/** `fintrack auth <subcommand> …` — returns the process exit code. */
 export const runAuthCommand = async (args: readonly string[], io: CliIo): Promise<number> => {
   const [name, ...rest] = args;
   if (name === undefined) {

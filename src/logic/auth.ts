@@ -23,6 +23,7 @@ import {
   TOKEN_PREFIX,
   TokenStatus,
   WRITE_SCOPE,
+  type ClaimedOwner,
   type ClaimedUserEntity,
   type NewTokenSpec,
   type UserEntity,
@@ -92,6 +93,16 @@ export const spentSetupCode = (code: SetupCodeEntity, now: Date): SetupCodeEntit
   ...code,
   usedAt: now.toISOString(),
 });
+
+export type ClaimPlan = { kind: 'claim' } | { kind: 'skip'; username: string };
+
+/** Setup claims the owner only if nobody holds its login; otherwise there is nothing to ask or write. */
+export const planOwnerClaim = (claimed: ClaimedOwner | null): ClaimPlan =>
+  claimed === null ? { kind: 'claim' } : { kind: 'skip', username: claimed.username };
+
+/** A claim refused as `setup_unavailable` lost a race: whoever holds the login now (if anyone) is its winner. */
+export const claimRaceWinner = (error: { code: string }, holder: ClaimedOwner | null): ClaimedOwner | null =>
+  error.code === authErrors.setupUnavailable.code ? holder : null;
 
 /** Every way a login can fail is the same outcome — the caller cannot tell which. */
 export const canLogin = (user: UserEntity | null, passwordMatches: boolean): user is UserEntity =>
@@ -256,8 +267,7 @@ const MCP_TOOLS_CALL_METHOD = 'tools/call';
 
 /** `fintrack:write` implies `fintrack:read`; nothing else implies anything. */
 export const hasScope = (granted: readonly string[], required: Scope): boolean =>
-  granted.includes(required) ||
-  (required === READ_SCOPE && granted.includes(WRITE_SCOPE));
+  granted.includes(required) || (required === READ_SCOPE && granted.includes(WRITE_SCOPE));
 
 /** The default REST rule: reading methods need `read`, every other method needs `write`. Route definitions
  *  call this explicitly so each one's scope stays visible and reviewable (and a new method fails closed). */
@@ -283,9 +293,7 @@ export const requiredMcpScope = (body: unknown, toolScope: (name: string) => Sco
     const { method, params } = message as JsonRpcMessage;
     if (method !== MCP_TOOLS_CALL_METHOD) return false;
     const name = params?.name;
-    return (
-      typeof name !== 'string' || (toolScope(name) ?? WRITE_SCOPE) === WRITE_SCOPE
-    );
+    return typeof name !== 'string' || (toolScope(name) ?? WRITE_SCOPE) === WRITE_SCOPE;
   });
   return needsWrite ? WRITE_SCOPE : READ_SCOPE;
 };

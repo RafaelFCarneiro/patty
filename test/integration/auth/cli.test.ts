@@ -28,7 +28,7 @@ const NEW_PASSWORD = 'a brand new passphrase';
 
 type Harness = { io: CliIo; out: string[]; err: string[]; run: (...args: string[]) => Promise<number> };
 
-/** The CLI against the test app's own database — what `main.ts` wires with `openAuthShell`, minus the process. */
+/** The CLI against the test app's own database — what `main.ts` wires with `openShell`, minus the process. */
 const harness = (ctx: AppContext, input: { stdin?: string; terminal?: boolean } = {}): Harness => {
   const out: string[] = [];
   const err: string[] = [];
