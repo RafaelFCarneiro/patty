@@ -1,4 +1,4 @@
-import { PASSWORD_MIN_LENGTH } from '../../models/auth.js';
+import { PASSWORD_MIN_LENGTH, TERMINAL_SETUP_HINT } from '../../models/auth.js';
 import { LOGIN_PATH, SETUP_PATH, UI_APP_CSS_PATH } from './authPaths.js';
 import { readCached, UI_ROOT } from './uiFiles.js';
 
@@ -38,5 +38,6 @@ export const renderSetupPage = async (fields: { error?: string }): Promise<strin
     stylesheet: UI_APP_CSS_PATH,
     action: SETUP_PATH,
     passwordMinLength: String(PASSWORD_MIN_LENGTH),
+    terminalHint: escapeHtml(TERMINAL_SETUP_HINT),
     error: errorBlock(fields.error),
   });

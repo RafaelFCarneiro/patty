@@ -2,9 +2,11 @@ import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import { Id } from './id.js';
 
-/** Whether the HTTP surface demands a session. Derived from `HOST` unless set (ADR-033 §1). */
+/** Whether the HTTP surface demands a session. `disabled` is an explicit, loopback-only opt-out (ADR-034 §1). */
 export const AuthMode = z.enum(['required', 'disabled']);
 export type AuthMode = z.infer<typeof AuthMode>;
+/** What `FINTRACK_AUTH` means when unset — on every surface, loopback included (ADR-034 §1). */
+export const DEFAULT_AUTH_MODE = AuthMode.enum.required;
 
 export const UserRole = z.enum(['admin', 'member']);
 export type UserRole = z.infer<typeof UserRole>;
@@ -67,13 +69,13 @@ export const TOKEN_NAME_MAX_LENGTH = 80;
 /** The MCP `AuthInfo.clientId` of a request made with a personal access token: `pat:<token id>`. */
 export const PAT_CLIENT_ID_PREFIX = 'pat:';
 
-/** Expiry choices offered when minting a token; `none` never expires. */
-export const TokenExpiry = z.enum(['none', '30', '90', '365']);
+/** Expiry choices offered when minting a token (ADR-034 §6: there is no "never"). A row minted before that
+ *  decision may still hold a null `expires_at`; it keeps working until revoked, and is only ever read. */
+export const TokenExpiry = z.enum(['30', '90', '365']);
 export type TokenExpiry = z.infer<typeof TokenExpiry>;
 /** What the token form preselects. */
 export const DEFAULT_TOKEN_EXPIRY = TokenExpiry.enum['90'];
-export const TOKEN_EXPIRY_DAYS: Readonly<Record<TokenExpiry, number | null>> = {
-  none: null,
+export const TOKEN_EXPIRY_DAYS: Readonly<Record<TokenExpiry, number>> = {
   '30': 30,
   '90': 90,
   '365': 365,
@@ -151,6 +153,8 @@ export const UserEntitySchema = withPersistenceMeta(
   }),
 );
 export type UserEntity = z.infer<typeof UserEntitySchema>;
+/** A user who holds a login. */
+export type ClaimedUserEntity = UserEntity & { username: string; passwordHash: string };
 
 export const SessionEntitySchema = withPersistenceMeta(
   z.object({
@@ -209,7 +213,17 @@ export type CreateTokenInput = NewTokenSpec & { password: string };
 
 /** `username` is already normalized (`normalizeUsername`) — the schemas that produce these inputs do it. */
 export type LoginInput = { username: string; password: string };
-export type ClaimOwnerInput = { code: string; username: string; password: string };
+export type ClaimOwnerLocallyInput = { username: string; password: string };
+export type ClaimOwnerInput = ClaimOwnerLocallyInput & { code: string };
+
+/** `username` absent means the owner — the only user until ADR-033 Phase 4. */
+export type ResetPasswordInput = { username?: string; password: string };
+
+/** What the terminal claim reports back: who now owns the instance. Never a credential. */
+export type ClaimedOwner = { username: string };
+
+/** What a password reset reports: whose, and how much it ended. Never a credential. */
+export type PasswordReset = { username: string; sessionsEnded: number; tokensRevoked: number };
 
 /** A freshly started session — the plaintext token goes to the cookie and nowhere else. */
 export type StartedSession = { token: string; expiresAt: string };
@@ -222,6 +236,8 @@ export type AuthError =
   | { code: 'invalid_credentials' }
   | { code: 'invalid_setup_code' }
   | { code: 'setup_unavailable' }
+  | { code: 'unknown_user'; username: string }
+  | { code: 'owner_unclaimed' }
   | { code: 'rate_limited' }
   | { code: 'forbidden_origin'; hint: string }
   | { code: 'invalid_token' }
@@ -230,10 +246,16 @@ export type AuthError =
   | { code: 'session_required' }
   | { code: 'resource_metadata_unavailable'; hint: string };
 
+/** The terminal route to the same owner claim as `/ui/setup` — shown wherever the setup code is (ADR-034 §5). */
+export const TERMINAL_SETUP_COMMAND = 'npx @rafaelfcarneiro/fintrack auth setup';
+export const TERMINAL_SETUP_HINT = `or run \`${TERMINAL_SETUP_COMMAND}\` in a terminal`;
+
 export const AUTH_MESSAGES = {
   invalidCredentials: 'Invalid username or password.',
   invalidSetupCode: 'That setup code is not valid or has expired. Restart FinTrack to get a new one.',
   setupUnavailable: 'Setup has already been completed. Log in instead.',
+  unknownUser: 'No such user.',
+  ownerUnclaimed: `The owner has no login yet. Run \`${TERMINAL_SETUP_COMMAND}\` first.`,
   rateLimited: 'Too many attempts. Wait a few minutes and try again.',
   unauthenticated: 'Authentication required.',
   crossOrigin: 'Cross-origin request rejected.',
@@ -261,6 +283,9 @@ export const authErrors = {
   // Wrong, expired and already-used codes are indistinguishable by design.
   invalidSetupCode: { code: 'invalid_setup_code' } satisfies AuthError,
   setupUnavailable: { code: 'setup_unavailable' } satisfies AuthError,
+  // CLI-only: `auth reset-password --user` named nobody we know / the default owner has no login to reset.
+  unknownUser: (username: string): AuthError => ({ code: 'unknown_user', username }),
+  ownerUnclaimed: { code: 'owner_unclaimed' } satisfies AuthError,
   rateLimited: { code: 'rate_limited' } satisfies AuthError,
   // CSRF (ADR-033 §2): a cookie-authenticated unsafe request whose Origin is not ours.
   crossOrigin: { code: 'forbidden_origin', hint: AUTH_MESSAGES.crossOrigin } satisfies AuthError,

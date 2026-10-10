@@ -238,7 +238,7 @@ describe('token management is session-only', () => {
       method: 'POST',
       url: '/ui/access/tokens',
       headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded' },
-      payload: `password=${PASSWORD}&name=sneaky&access=write&expiry=none`,
+      payload: `password=${PASSWORD}&name=sneaky&access=write&expiry=30`,
     });
     const list = await ctx.app.inject({ method: 'GET', url: '/ui/access/tokens', headers });
     const revoke = await ctx.app.inject({ method: 'POST', url: `/ui/access/tokens/${reader.id}/revoke`, headers });

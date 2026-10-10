@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   allowedOrigins,
   canLogin,
+  claimedOwner,
   csrfVerdict,
   declaredOrigin,
   evaluateSession,
@@ -22,13 +23,16 @@ import {
   setupBanner,
   shouldIssueSetupCode,
   slidingExpiry,
+  spentSetupCode,
   touched,
+  withPasswordHash,
 } from '../../../src/logic/auth.js';
 import {
   AuthMode,
   authErrors,
   SESSION_ABSOLUTE_MAX_MS,
   OWNER_USER_ID,
+  TERMINAL_SETUP_HINT,
   UserRole,
   type SessionEntity,
   type SetupCodeEntity,
@@ -429,5 +433,48 @@ describe('setupBanner', () => {
     expect(banner).toContain('ABCD-EFGH-JKMN-PQRS-TVWX');
     expect(banner).toContain('http://127.0.0.1:51737/ui/setup');
     expect(banner).toContain('2026-10-07T12:30:00.000Z');
+  });
+
+  it('also names the terminal route, from the shared constant', () => {
+    const banner = setupBanner({ code: 'ABCD', setupUrl: 'http://127.0.0.1:51737/ui/setup', expiresAt: 'later' });
+    expect(banner).toContain(TERMINAL_SETUP_HINT);
+    expect(TERMINAL_SETUP_HINT).toBe('or run `npx @rafaelfcarneiro/fintrack auth setup` in a terminal');
+  });
+});
+
+describe('owner credential helpers', () => {
+  const owner = {
+    id: 'user-owner',
+    username: null,
+    passwordHash: null,
+    role: 'admin',
+    createdAt: '2026-10-07T12:00:00.000Z',
+    disabledAt: null,
+    version: 7,
+  } as const;
+
+  it('claimedOwner sets the login on the same row and keeps its version', () => {
+    const claimed = claimedOwner(owner, { username: 'rafael', passwordHash: 'hash' });
+    expect(claimed).toEqual({ ...owner, username: 'rafael', passwordHash: 'hash' });
+    expect(hasCredentials(claimed)).toBe(true);
+    expect(hasCredentials(owner)).toBe(false);
+  });
+
+  it('withPasswordHash replaces only the hash', () => {
+    const claimed = claimedOwner(owner, { username: 'rafael', passwordHash: 'old' });
+    expect(withPasswordHash(claimed, 'new')).toEqual({ ...claimed, passwordHash: 'new' });
+  });
+
+  it('spentSetupCode stamps usedAt and nothing else', () => {
+    const code = {
+      id: 'setup-code',
+      codeHash: 'h',
+      createdAt: 'c',
+      expiresAt: 'e',
+      usedAt: null,
+      version: 2,
+    };
+    const now = new Date('2026-10-07T12:00:00.000Z');
+    expect(spentSetupCode(code, now)).toEqual({ ...code, usedAt: now.toISOString() });
   });
 });

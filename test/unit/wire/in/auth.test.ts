@@ -123,8 +123,13 @@ describe('CreateTokenFormSchema', () => {
       expiry: '90',
       password: 'pw',
     });
-    const parsed = CreateTokenFormSchema.parse({ name: 'ci', access: 'read', expiry: 'none', password: 'pw' });
-    expect(parsed.expiry).toBe('none');
+  });
+
+  it('has no "never": a token without an expiry cannot be created (ADR-034 §6)', () => {
+    expect(
+      CreateTokenFormSchema.safeParse({ name: 'ci', access: 'read', expiry: 'none', password: 'pw' }).success,
+    ).toBe(false);
+    expect(CreateTokenFormSchema.shape.expiry.options).toEqual(['30', '90', '365']);
   });
 
   it.each([

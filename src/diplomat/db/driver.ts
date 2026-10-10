@@ -149,6 +149,12 @@ export const openDatabase = async (config: DbConfig): Promise<Db> => {
   return drizzle(client, { schema });
 };
 
+/** Releases the libSQL connection a short-lived process (the CLI) opened, so it can end by itself. Drizzle keeps
+ *  the client on `$client` at runtime without typing it on `LibSQLDatabase`. */
+export const closeDatabase = (db: Db): void => {
+  (db as Db & { $client?: ReturnType<typeof createClient> }).$client?.close();
+};
+
 /** Adapts libSQL Drizzle's `Db.transaction` to the effect engine's `TransactionRunner` port
  *  (ADR-030 Phase 1) — `diplomat/db/effects.ts`'s `runEffects`/`runEffectsSequence` call
  *  `runInTransaction` and never name `Db.transaction` directly; this is the one place, at the

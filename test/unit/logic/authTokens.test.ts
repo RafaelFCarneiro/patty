@@ -181,23 +181,22 @@ describe('new tokens', () => {
   });
 
   it('read access is the read scope; write access includes read', () => {
-    expect(newAccessToken({ ...fields, input: { name: 'n', access: 'read', expiry: 'none' } }, NOW).scopes).toEqual([
+    expect(newAccessToken({ ...fields, input: { name: 'n', access: 'read', expiry: '90' } }, NOW).scopes).toEqual([
       READ,
     ]);
-    expect(newAccessToken({ ...fields, input: { name: 'n', access: 'write', expiry: 'none' } }, NOW).scopes).toEqual([
+    expect(newAccessToken({ ...fields, input: { name: 'n', access: 'write', expiry: '90' } }, NOW).scopes).toEqual([
       READ,
       WRITE,
     ]);
   });
 
   it.each([
-    ['none', null],
     ['30', 30],
     ['90', 90],
     ['365', 365],
   ] as const)('expiry %s', (expiry, days) => {
     const created = newAccessToken({ ...fields, input: { name: 'n', access: 'read', expiry } }, NOW);
-    expect(created.expiresAt).toBe(days === null ? null : new Date(NOW.getTime() + days * DAY_MS).toISOString());
+    expect(created.expiresAt).toBe(new Date(NOW.getTime() + days * DAY_MS).toISOString());
     expect(created).toMatchObject({ lastUsedAt: null, revokedAt: null, createdAt: NOW.toISOString() });
   });
 });

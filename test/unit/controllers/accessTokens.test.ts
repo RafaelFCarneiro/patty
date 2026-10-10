@@ -106,11 +106,15 @@ describe('createToken', () => {
     expect(response.summary).toMatchObject({ id: 'new-id', status: 'active', prefix: 'ftk_AbCdEf' });
   });
 
-  it('gives a read-only token only the read scope and a non-expiring one no expiry', async () => {
+  it('gives a read-only token only the read scope, and every new token an expiry', async () => {
     const { persist } = await outcomeOf(
-      createToken(depsFor(), OWNER_USER_ID, { name: 'ro', access: 'read', expiry: 'none', password: PASSWORD }),
+      createToken(depsFor(), OWNER_USER_ID, { name: 'ro', access: 'read', expiry: '30', password: PASSWORD }),
     );
-    expect((persist[0] as { model: AccessTokenEntity }).model).toMatchObject({ scopes: [READ], expiresAt: null });
+    const thirtyDays = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    expect((persist[0] as { model: AccessTokenEntity }).model).toMatchObject({
+      scopes: [READ],
+      expiresAt: thirtyDays,
+    });
   });
 });
 
@@ -191,6 +195,17 @@ describe('authenticateToken', () => {
       via: PrincipalVia.enum.token,
       tokenId: 't1',
     });
+  });
+
+  it('keeps authenticating a legacy token with no expiry, until it is revoked', async () => {
+    const legacy = tokenRow({ expiresAt: null, lastUsedAt: NOW.toISOString() });
+    const farFuture = new Date(NOW.getTime() + 20 * 365 * 24 * 60 * 60 * 1000);
+    const { response } = await outcomeOf(authenticateToken(depsFor({ tokens: [legacy], now: farFuture }), hash));
+    expect(response).toMatchObject({ via: PrincipalVia.enum.token, tokenId: 't1' });
+
+    const revoked = tokenRow({ expiresAt: null, revokedAt: NOW.toISOString() });
+    const { response: afterRevoke } = await outcomeOf(authenticateToken(depsFor({ tokens: [revoked] }), hash));
+    expect(afterRevoke).toBeNull();
   });
 
   it('records first use, then throttles last_used_at like the session touch', async () => {

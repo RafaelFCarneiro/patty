@@ -19,9 +19,11 @@ import {
   TOKEN_ACCESS_SCOPES,
   TOKEN_DISPLAY_PREFIX_RANDOM_CHARS,
   TOKEN_EXPIRY_DAYS,
+  TERMINAL_SETUP_HINT,
   TOKEN_PREFIX,
   TokenStatus,
   WRITE_SCOPE,
+  type ClaimedUserEntity,
   type NewTokenSpec,
   type UserEntity,
 } from '../models/auth.js';
@@ -64,7 +66,8 @@ export const formatSetupCode = (raw: string): string =>
   (raw.match(new RegExp(`.{1,${SETUP_CODE_GROUP_SIZE}}`, 'g')) ?? []).join(SETUP_CODE_GROUP_SEPARATOR);
 
 /** The owner is "claimed" once it can log in; until then it is an owner row nobody can sign in as. */
-export const hasCredentials = (user: UserEntity): boolean => user.username !== null && user.passwordHash !== null;
+export const hasCredentials = (user: UserEntity): user is ClaimedUserEntity =>
+  user.username !== null && user.passwordHash !== null;
 
 export const isUnclaimed = (owner: UserEntity | null): boolean => owner !== null && !hasCredentials(owner);
 
@@ -74,6 +77,21 @@ export const shouldIssueSetupCode = (mode: AuthMode, owner: UserEntity | null): 
 
 export const isSetupCodeUsable = (code: SetupCodeEntity | null, now: Date): code is SetupCodeEntity =>
   code !== null && code.usedAt === null && millis(code.expiresAt) > now.getTime();
+
+/** The owner row with its credentials set — the one update both claim paths (`/ui/setup` and the terminal) make. */
+export const claimedOwner = (owner: UserEntity, fields: { username: string; passwordHash: string }): UserEntity => ({
+  ...owner,
+  ...fields,
+});
+
+/** Same user, new password — a reset never touches the username. */
+export const withPasswordHash = (user: UserEntity, passwordHash: string): UserEntity => ({ ...user, passwordHash });
+
+/** The setup code spent at `now` — so it cannot claim anything afterwards. */
+export const spentSetupCode = (code: SetupCodeEntity, now: Date): SetupCodeEntity => ({
+  ...code,
+  usedAt: now.toISOString(),
+});
 
 /** Every way a login can fail is the same outcome — the caller cannot tell which. */
 export const canLogin = (user: UserEntity | null, passwordMatches: boolean): user is UserEntity =>
@@ -225,7 +243,8 @@ export const setupBanner = (fields: { code: string; setupUrl: string; expiresAt:
     '│',
     `│     ${fields.code}`,
     '│',
-    `│ Open ${fields.setupUrl} and enter the code, then choose a username and password.`,
+    `│ Open ${fields.setupUrl} and enter the code, then choose a username and password,`,
+    `│ ${TERMINAL_SETUP_HINT}.`,
     `│ The code expires at ${fields.expiresAt} and is replaced by a new one on every restart.`,
     '└──────────────────────────────────────────────────────────────────────',
     '',
@@ -311,7 +330,7 @@ export const newAccessToken = (
     scopes: [...TOKEN_ACCESS_SCOPES[fields.input.access]],
     createdAt: now.toISOString(),
     lastUsedAt: null,
-    expiresAt: days === null ? null : toIso(now.getTime() + days * DAY_MS),
+    expiresAt: toIso(now.getTime() + days * DAY_MS),
     revokedAt: null,
   };
 };

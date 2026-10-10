@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { IPV4_WILDCARD_HOST, IPV6_WILDCARD_HOST, LOOPBACK_HOST } from '../../src/common/net.js';
-import { defaultAuthMode, loadConfig } from '../../src/config.js';
+import { loadConfig } from '../../src/config.js';
 import { AuthMode } from '../../src/models/auth.js';
 
 const ORIGINAL_ENV = { ...process.env };
@@ -19,26 +19,25 @@ const withEnv = (env: Record<string, string>) => {
   return loadConfig();
 };
 
-describe('FINTRACK_AUTH × HOST (ADR-033 §1)', () => {
+describe('FINTRACK_AUTH × HOST (ADR-034 §1)', () => {
   it.each([
-    [LOOPBACK_HOST, AuthMode.enum.disabled],
-    ['127.0.0.2', AuthMode.enum.disabled],
-    ['localhost', AuthMode.enum.disabled],
-    ['::1', AuthMode.enum.disabled],
-    [IPV4_WILDCARD_HOST, AuthMode.enum.required],
-    [IPV6_WILDCARD_HOST, AuthMode.enum.required],
-    ['192.168.1.10', AuthMode.enum.required],
-    ['fintrack.lan', AuthMode.enum.required],
-  ])('defaults HOST=%s to %s', (host, expected) => {
-    expect(withEnv({ HOST: host }).FINTRACK_AUTH).toBe(expected);
-    expect(defaultAuthMode({ HOST: host })).toBe(expected);
+    LOOPBACK_HOST,
+    '127.0.0.2',
+    'localhost',
+    '::1',
+    IPV4_WILDCARD_HOST,
+    IPV6_WILDCARD_HOST,
+    '192.168.1.10',
+    'fintrack.lan',
+  ])('defaults HOST=%s to required — loopback included', (host) => {
+    expect(withEnv({ HOST: host }).FINTRACK_AUTH).toBe(AuthMode.enum.required);
   });
 
-  it('defaults to disabled when HOST is omitted (the npm/stdio zero-config case)', () => {
-    expect(loadConfig().FINTRACK_AUTH).toBe(AuthMode.enum.disabled);
+  it('defaults to required when HOST is omitted (the npm/stdio install)', () => {
+    expect(loadConfig().FINTRACK_AUTH).toBe(AuthMode.enum.required);
   });
 
-  it('lets a loopback instance opt in to required', () => {
+  it('lets a loopback instance say required explicitly', () => {
     expect(withEnv({ FINTRACK_AUTH: 'required' }).FINTRACK_AUTH).toBe(AuthMode.enum.required);
   });
 
@@ -46,9 +45,12 @@ describe('FINTRACK_AUTH × HOST (ADR-033 §1)', () => {
     expect(withEnv({ HOST: IPV4_WILDCARD_HOST, FINTRACK_AUTH: 'required' }).FINTRACK_AUTH).toBe('required');
   });
 
-  it('allows disabled on a loopback host', () => {
-    expect(withEnv({ HOST: '127.0.0.1', FINTRACK_AUTH: 'disabled' }).FINTRACK_AUTH).toBe('disabled');
-  });
+  it.each([LOOPBACK_HOST, '127.0.0.2', 'localhost', '::1'])(
+    'still allows an explicit disabled on loopback HOST=%s',
+    (host) => {
+      expect(withEnv({ HOST: host, FINTRACK_AUTH: 'disabled' }).FINTRACK_AUTH).toBe('disabled');
+    },
+  );
 
   it.each([IPV4_WILDCARD_HOST, IPV6_WILDCARD_HOST, '192.168.1.10', 'fintrack.lan'])(
     'rejects FINTRACK_AUTH=disabled on non-loopback HOST=%s with an actionable message',
@@ -65,8 +67,8 @@ describe('FINTRACK_AUTH × HOST (ADR-033 §1)', () => {
     expect(() => loadConfig()).toThrow();
   });
 
-  it('treats an empty FINTRACK_AUTH as unset', () => {
-    expect(withEnv({ HOST: IPV4_WILDCARD_HOST, FINTRACK_AUTH: '' }).FINTRACK_AUTH).toBe('required');
+  it.each([undefined, IPV4_WILDCARD_HOST])('treats an empty FINTRACK_AUTH as unset (HOST=%s)', (host) => {
+    expect(withEnv({ ...(host ? { HOST: host } : {}), FINTRACK_AUTH: '' }).FINTRACK_AUTH).toBe('required');
   });
 });
 
@@ -79,8 +81,12 @@ describe('a reverse proxy in front makes the instance exposed even on a loopback
     expect(withEnv({ TRUST_PROXY: trust }).FINTRACK_AUTH).toBe('required');
   });
 
-  it.each(['false', '0'])('stays disabled when TRUST_PROXY=%s says there is no proxy to trust', (trust) => {
-    expect(withEnv({ TRUST_PROXY: trust }).FINTRACK_AUTH).toBe('disabled');
+  it.each(['false', '0'])('is required too when TRUST_PROXY=%s says there is no proxy to trust', (trust) => {
+    expect(withEnv({ TRUST_PROXY: trust }).FINTRACK_AUTH).toBe('required');
+  });
+
+  it('still allows disabled with TRUST_PROXY=false: no proxy means not exposed', () => {
+    expect(withEnv({ TRUST_PROXY: 'false', FINTRACK_AUTH: 'disabled' }).FINTRACK_AUTH).toBe('disabled');
   });
 
   it('rejects FINTRACK_AUTH=disabled with a PUBLIC_URL, naming the proxy case', () => {

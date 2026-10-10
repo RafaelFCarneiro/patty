@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 import { isLoopbackHost, LOOPBACK_HOST } from './common/net.js';
-import { AuthMode } from './models/auth.js';
+import { AuthMode, DEFAULT_AUTH_MODE } from './models/auth.js';
 import { Locale } from './models/locale.js';
 
 export const McpTransport = z.enum(['stdio', 'http']);
@@ -28,7 +28,8 @@ const NO_PROXY_HOPS = 0;
 
 /** Whether anything besides this machine can reach the instance: a non-loopback bind, or a reverse proxy
  *  configured in front of it (`PUBLIC_URL` names its external origin; `TRUST_PROXY` says to believe it). A
- *  proxy typically connects to a loopback bind, so `HOST` alone would call that instance private. */
+ *  proxy typically connects to a loopback bind, so `HOST` alone would call that instance private. Used only to
+ *  refuse `FINTRACK_AUTH=disabled` on such an instance — it no longer influences the default (ADR-034 §1). */
 export const isExposed = (env: {
   HOST: string;
   PUBLIC_URL?: string;
@@ -38,14 +39,9 @@ export const isExposed = (env: {
   env.PUBLIC_URL !== undefined ||
   (env.TRUST_PROXY !== undefined && env.TRUST_PROXY !== false && env.TRUST_PROXY !== NO_PROXY_HOPS);
 
-/** Auth default (ADR-033 §1): loopback with no proxy keeps today's zero-config behavior; anything
- *  reachable from elsewhere requires a session. */
-export const defaultAuthMode = (env: Parameters<typeof isExposed>[0]): AuthMode =>
-  isExposed(env) ? AuthMode.enum.required : AuthMode.enum.disabled;
-
 // An empty string (`PUBLIC_URL=` from a compose file or shell) means "unset", not "invalid".
-const optionalEnv = <T extends z.ZodTypeAny>(schema: T) =>
-  z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+const unsetWhenEmpty = (value: unknown): unknown => (value === '' ? undefined : value);
+const optionalEnv = <T extends z.ZodTypeAny>(schema: T) => z.preprocess(unsetWhenEmpty, schema.optional());
 
 // The external origin only — it is compared verbatim against the browser's `Origin` header (CSRF) and
 // decides the cookie `Secure` flag, so a path or trailing slash would make both silently wrong.
@@ -85,13 +81,12 @@ const Env = z
       .optional(),
     FINTRACK_LOCALE: Locale.optional(),
     PORT: z.coerce.number().default(DEFAULT_PORT),
-    // Bind host for the HTTP surface. Loopback by default: the API is unauthenticated (ADR-013), so
-    // a wildcard bind is an explicit, visible opt-in (a container needs it; its port publish must stay
-    // on the host's loopback — ADR-032).
+    // Bind host for the HTTP surface. Loopback by default, so a wildcard bind is an explicit, visible
+    // opt-in (a container needs it; its port publish must stay on the host's loopback — ADR-032).
     HOST: z.string().min(1).default(LOOPBACK_HOST),
-    // `required` makes every HTTP route demand a session; default `required` when the instance is exposed — a
-    // non-loopback HOST, or a reverse proxy configured via PUBLIC_URL/TRUST_PROXY (ADR-033 §1).
-    FINTRACK_AUTH: optionalEnv(AuthMode),
+    // `required` makes every HTTP route demand a session, and it is the default everywhere — a loopback
+    // install included (ADR-034 §1). `disabled` is an explicit, loopback-only opt-out for development/tests.
+    FINTRACK_AUTH: z.preprocess(unsetWhenEmpty, AuthMode.default(DEFAULT_AUTH_MODE)),
     // External origin of this instance behind a reverse proxy — the CSRF expected origin, and https
     // turns on the cookie `Secure` flag. Optional in Phase 1 (OAuth makes it mandatory in Phase 3).
     PUBLIC_URL: optionalEnv(PublicUrl),
@@ -120,9 +115,8 @@ const Env = z
     message:
       'FINTRACK_AUTH=disabled is only allowed on a loopback HOST (127.0.0.0/8, ::1, localhost) with no PUBLIC_URL ' +
       'or TRUST_PROXY — the API would be unauthenticated to everyone who can reach it (directly or through a ' +
-      'reverse proxy). Remove FINTRACK_AUTH (it defaults to required here) or drop the exposure.',
-  })
-  .transform((env) => ({ ...env, FINTRACK_AUTH: env.FINTRACK_AUTH ?? defaultAuthMode(env) }));
+      'reverse proxy). Remove FINTRACK_AUTH (it defaults to required) or drop the exposure.',
+  });
 
 export type Config = z.infer<typeof Env>;
 

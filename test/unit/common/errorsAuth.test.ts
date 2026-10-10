@@ -8,6 +8,8 @@ describe('auth errors', () => {
     [authErrors.invalidCredentials, 401, AUTH_MESSAGES.invalidCredentials],
     [authErrors.invalidSetupCode, 403, AUTH_MESSAGES.invalidSetupCode],
     [authErrors.setupUnavailable, 409, AUTH_MESSAGES.setupUnavailable],
+    [authErrors.unknownUser('nobody'), 404, AUTH_MESSAGES.unknownUser],
+    [authErrors.ownerUnclaimed, 409, AUTH_MESSAGES.ownerUnclaimed],
     [authErrors.rateLimited, 429, AUTH_MESSAGES.rateLimited],
     [authErrors.crossOrigin, 403, AUTH_MESSAGES.crossOrigin],
     [authErrors.unknownOrigin, 403, AUTH_MESSAGES.crossOriginUnknownOrigin],

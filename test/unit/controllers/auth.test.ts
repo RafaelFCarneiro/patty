@@ -4,16 +4,21 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AppError } from '../../../src/common/errors.js';
 import {
   authenticate,
+  claimedOwnerOf,
   claimOwner,
+  claimOwnerLocally,
+  findResetTarget,
   issueSetupCode,
   login,
   logout,
   ownerNeedsSetup,
   pruneExpiredSessions,
+  resetPassword,
 } from '../../../src/controllers/auth.js';
 import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
 import { SESSION_IDLE_TTL_MS, SESSION_TOUCH_INTERVAL_MS, SETUP_CODE_TTL_MS } from '../../../src/logic/auth.js';
 import {
+  ACCESS_TOKEN_ENTITY_TAG,
   ALL_SCOPES,
   AuthMode,
   authErrors,
@@ -24,6 +29,7 @@ import {
   SETUP_CODE_ID,
   USER_ENTITY_TAG,
   UserRole,
+  type AccessTokenEntity,
   type SessionEntity,
   type SetupCodeEntity,
   type UserEntity,
@@ -62,9 +68,15 @@ const claimedOwner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
   ...overrides,
 });
 
-type World = { users?: UserEntity[]; sessions?: SessionEntity[]; codes?: SetupCodeEntity[]; now?: Date };
+type World = {
+  users?: UserEntity[];
+  sessions?: SessionEntity[];
+  codes?: SetupCodeEntity[];
+  tokens?: AccessTokenEntity[];
+  now?: Date;
+};
 
-const depsFor = ({ users = [], sessions = [], codes = [], now = NOW }: World = {}): AuthDeps => {
+const depsFor = ({ users = [], sessions = [], codes = [], tokens = [], now = NOW }: World = {}): AuthDeps => {
   let ids = 0;
   return {
     users: {
@@ -74,8 +86,13 @@ const depsFor = ({ users = [], sessions = [], codes = [], now = NOW }: World = {
     sessions: {
       findByTokenHash: async (hash) => sessions.find((session) => session.tokenHash === hash) ?? null,
       listExpired: async (nowIso) => sessions.filter((session) => session.expiresAt <= nowIso),
+      listByUser: async (userId) => sessions.filter((session) => session.userId === userId),
     },
-    accessTokens: { findByTokenHash: async () => null, findById: async () => null, listByUser: async () => [] },
+    accessTokens: {
+      findByTokenHash: async (hash) => tokens.find((token) => token.tokenHash === hash) ?? null,
+      findById: async (userId, id) => tokens.find((token) => token.userId === userId && token.id === id) ?? null,
+      listByUser: async (userId) => tokens.filter((token) => token.userId === userId),
+    },
     setupCodes: {
       findByHash: async (hash) => codes.find((code) => code.codeHash === hash) ?? null,
       current: async () => codes.find((code) => code.id === SETUP_CODE_ID) ?? null,
@@ -344,5 +361,190 @@ describe('ownerNeedsSetup', () => {
   it('is true until the owner has credentials', async () => {
     expect(await ownerNeedsSetup(depsFor({ users: [unclaimedOwner()] }))).toBe(true);
     expect(await ownerNeedsSetup(depsFor({ users: [claimedOwner()] }))).toBe(false);
+  });
+});
+
+const OTHER_USER_ID = 'user-other';
+const otherUser = (): UserEntity => claimedOwner({ id: OTHER_USER_ID, username: 'ana', version: 3 });
+
+const tokenRow = (overrides: Partial<AccessTokenEntity> = {}): AccessTokenEntity => ({
+  id: 't1',
+  userId: OWNER_USER_ID,
+  name: 'laptop',
+  tokenHash: 'sha(ftk_T1)',
+  prefix: 'ftk_T1',
+  scopes: ['fintrack:read'],
+  createdAt: NOW.toISOString(),
+  lastUsedAt: null,
+  expiresAt: null,
+  revokedAt: null,
+  version: 2,
+  ...overrides,
+});
+
+describe('claimOwnerLocally (ADR-034 §5)', () => {
+  const input = { username: 'rafael', password: PASSWORD };
+
+  it('updates the EXISTING owner — same id, no new user row, no session — and reports only the username', async () => {
+    const { persist, response } = await outcomeOf(claimOwnerLocally(depsFor({ users: [unclaimedOwner()] }), input));
+
+    expect(opsOf(persist)).toEqual([`${PersistOp.enum.update}:${USER_ENTITY_TAG}`]);
+    const [userUpdate] = persist as Array<Persistable & { model: UserEntity }>;
+    expect(userUpdate?.model).toMatchObject({
+      id: OWNER_USER_ID,
+      username: 'rafael',
+      passwordHash: fakeHash(PASSWORD),
+      version: 0,
+    });
+    expect(persist.some((p) => p.entity === SESSION_ENTITY_TAG)).toBe(false);
+    expect(response).toEqual({ username: 'rafael' });
+  });
+
+  it('needs no setup code and stores the password only as a hash', async () => {
+    const { persist, response } = await outcomeOf(claimOwnerLocally(depsFor({ users: [unclaimedOwner()] }), input));
+    expect(JSON.stringify(persist)).not.toContain(PASSWORD);
+    expect(JSON.stringify(response)).not.toContain(PASSWORD);
+  });
+
+  it('spends an outstanding setup code in the same batch, so it cannot claim afterwards', async () => {
+    const { persist } = await outcomeOf(
+      claimOwnerLocally(depsFor({ users: [unclaimedOwner()], codes: [codeRow({ version: 4 })] }), input),
+    );
+    expect(opsOf(persist)).toEqual([
+      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
+      `${PersistOp.enum.update}:${SETUP_CODE_ENTITY_TAG}`,
+    ]);
+    const [, codeUpdate] = persist as Array<Persistable & { model: SetupCodeEntity }>;
+    expect(codeUpdate?.model).toMatchObject({ id: SETUP_CODE_ID, usedAt: NOW.toISOString(), version: 4 });
+  });
+
+  it('leaves an already-spent setup code alone', async () => {
+    const spent = codeRow({ usedAt: new Date(NOW.getTime() - 1).toISOString() });
+    const { persist } = await outcomeOf(
+      claimOwnerLocally(depsFor({ users: [unclaimedOwner()], codes: [spent] }), input),
+    );
+    expect(opsOf(persist)).toEqual([`${PersistOp.enum.update}:${USER_ENTITY_TAG}`]);
+  });
+
+  it('rejects an owner somebody already claimed, writing nothing', async () => {
+    const error = await errorOf(claimOwnerLocally(depsFor({ users: [claimedOwner()] }), input));
+    expect(error).toEqual(authErrors.setupUnavailable);
+  });
+
+  it('rejects when the owner row is missing rather than creating one', async () => {
+    expect(await errorOf(claimOwnerLocally(depsFor(), input))).toEqual(authErrors.setupUnavailable);
+  });
+
+  it('does not hash the password for an owner it will refuse', async () => {
+    const hashPassword = vi.spyOn(secrets, 'hashPassword');
+    await errorOf(claimOwnerLocally(depsFor({ users: [claimedOwner()] }), input));
+    expect(hashPassword).not.toHaveBeenCalled();
+    hashPassword.mockRestore();
+  });
+});
+
+describe('resetPassword (ADR-034 §5)', () => {
+  const NEW_PASSWORD = 'a brand new passphrase';
+
+  it('changes the hash, ends the user’s sessions and revokes their live tokens in one batch', async () => {
+    const deps = depsFor({
+      users: [claimedOwner()],
+      sessions: [sessionRow({ id: 's1' }), sessionRow({ id: 's2', tokenHash: 'sha(OTHER)' })],
+      tokens: [
+        tokenRow({ id: 't1' }),
+        tokenRow({ id: 't2', tokenHash: 'sha(ftk_T2)', expiresAt: '2030-01-01T00:00:00.000Z' }),
+      ],
+    });
+    const { persist, response } = await outcomeOf(resetPassword(deps, { password: NEW_PASSWORD }));
+
+    expect(opsOf(persist)).toEqual([
+      `${PersistOp.enum.update}:${USER_ENTITY_TAG}`,
+      `${PersistOp.enum.delete}:${SESSION_ENTITY_TAG}`,
+      `${PersistOp.enum.delete}:${SESSION_ENTITY_TAG}`,
+      `${PersistOp.enum.update}:${ACCESS_TOKEN_ENTITY_TAG}`,
+      `${PersistOp.enum.update}:${ACCESS_TOKEN_ENTITY_TAG}`,
+    ]);
+    const [userUpdate, , , tokenUpdate] = persist as Array<Persistable & { model: Record<string, unknown> }>;
+    expect(userUpdate?.model).toMatchObject({
+      id: OWNER_USER_ID,
+      username: 'rafael',
+      passwordHash: fakeHash(NEW_PASSWORD),
+    });
+    expect(tokenUpdate?.model).toMatchObject({ id: 't1', revokedAt: NOW.toISOString(), version: 2 });
+    expect(response).toEqual({ username: 'rafael', sessionsEnded: 2, tokensRevoked: 2 });
+    expect(JSON.stringify(persist)).not.toContain(NEW_PASSWORD);
+  });
+
+  it('touches nobody else: another user’s sessions and tokens stay out of the batch', async () => {
+    const deps = depsFor({
+      users: [claimedOwner(), otherUser()],
+      sessions: [sessionRow({ id: 'mine' }), sessionRow({ id: 'theirs', userId: OTHER_USER_ID, tokenHash: 'sha(X)' })],
+      tokens: [tokenRow({ id: 'mine' }), tokenRow({ id: 'theirs', userId: OTHER_USER_ID, tokenHash: 'sha(ftk_X)' })],
+    });
+    const { persist, response } = await outcomeOf(resetPassword(deps, { password: NEW_PASSWORD }));
+
+    const touchedIds = (persist as Array<Persistable & { model?: { id: string }; id?: string }>).map(
+      (p) => p.model?.id ?? p.id,
+    );
+    expect(touchedIds).toEqual([OWNER_USER_ID, 'mine', 'mine']);
+    expect(response).toMatchObject({ sessionsEnded: 1, tokensRevoked: 1 });
+  });
+
+  it('resets the named user, not the owner', async () => {
+    const deps = depsFor({ users: [claimedOwner(), otherUser()] });
+    const { persist, response } = await outcomeOf(resetPassword(deps, { username: 'ana', password: NEW_PASSWORD }));
+    expect(persist).toHaveLength(1);
+    expect(persist[0]).toMatchObject({
+      model: { id: OTHER_USER_ID, username: 'ana', passwordHash: fakeHash(NEW_PASSWORD), version: 3 },
+    });
+    expect(response.username).toBe('ana');
+  });
+
+  it('keeps already-revoked tokens as they are and does not count them', async () => {
+    const revoked = tokenRow({ revokedAt: '2026-10-01T00:00:00.000Z' });
+    const { persist, response } = await outcomeOf(
+      resetPassword(depsFor({ users: [claimedOwner()], tokens: [revoked] }), { password: NEW_PASSWORD }),
+    );
+    expect(opsOf(persist)).toEqual([`${PersistOp.enum.update}:${USER_ENTITY_TAG}`]);
+    expect(response.tokensRevoked).toBe(0);
+  });
+
+  it('answers unknown_user for a name nobody holds, writing nothing', async () => {
+    const error = await errorOf(
+      resetPassword(depsFor({ users: [claimedOwner()] }), { username: 'nobody', password: NEW_PASSWORD }),
+    );
+    expect(error).toEqual(authErrors.unknownUser('nobody'));
+  });
+
+  it.each([
+    ['an unclaimed owner', [unclaimedOwner()]],
+    ['no owner row', []],
+  ])('points the default target at `auth setup` when there is %s', async (_label, users) => {
+    expect(await errorOf(resetPassword(depsFor({ users }), { password: NEW_PASSWORD }))).toEqual(
+      authErrors.ownerUnclaimed,
+    );
+  });
+
+  it('does not hash a password for a user it cannot find', async () => {
+    const hashPassword = vi.spyOn(secrets, 'hashPassword');
+    await errorOf(resetPassword(depsFor(), { username: 'nobody', password: NEW_PASSWORD }));
+    expect(hashPassword).not.toHaveBeenCalled();
+    hashPassword.mockRestore();
+  });
+});
+
+describe('findResetTarget', () => {
+  it('resolves the owner by default and a named user by username', async () => {
+    const deps = depsFor({ users: [claimedOwner(), otherUser()] });
+    expect((await findResetTarget(deps, undefined))._unsafeUnwrap().id).toBe(OWNER_USER_ID);
+    expect((await findResetTarget(deps, 'ana'))._unsafeUnwrap().id).toBe(OTHER_USER_ID);
+  });
+});
+
+describe('claimedOwnerOf', () => {
+  it('names the owner once claimed and is null before', async () => {
+    expect(await claimedOwnerOf(depsFor({ users: [unclaimedOwner()] }))).toBeNull();
+    expect(await claimedOwnerOf(depsFor())).toBeNull();
+    expect(await claimedOwnerOf(depsFor({ users: [claimedOwner()] }))).toEqual({ username: 'rafael' });
   });
 });

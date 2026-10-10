@@ -189,7 +189,7 @@ const TOOLS: Readonly<Record<string, ClientTool>> = {
 };
 
 const HELP = `
-Usage: npx ${PACKAGE_SPEC} setup <tool>
+Usage: npx ${PACKAGE_SPEC} setup <tool> [--username <name>] [--password-stdin]
 
 Available tools:
   claude-code      Claude Code CLI      (~/.claude/mcp.json)
@@ -199,6 +199,14 @@ Available tools:
   antigravity      Google Antigravity   (~/.gemini/config/mcp_config.json)
   codex            OpenAI Codex         (prints the config snippet to paste)
 
+FinTrack requires a login. The first time, setup asks you to choose the owner's username and password
+(typed twice, never echoed), then writes the client's config. Re-running it is safe: an owner that already
+has a login is left alone.
+
+Options:
+  --username <name>  the owner's username (required with --password-stdin)
+  --password-stdin   read the password from stdin instead of asking — for scripted installs
+
 Examples:
   npx ${PACKAGE_SPEC} setup claude-code
   npx ${PACKAGE_SPEC} setup copilot
@@ -207,9 +215,13 @@ Examples:
 `.trimStart();
 
 // ---------------------------------------------------------------------------
-// Entry point
+// Entry points
 // ---------------------------------------------------------------------------
 
+const findClient = (tool: string): ClientTool | undefined => TOOLS[tool.trim().toLowerCase()];
+
+/** Writes the client's config entry (idempotent merge). With no tool it prints the help; with an unknown one it
+ *  says so and exits 1. */
 export const runSetup = (tool: string | undefined): void => {
   if (!tool) {
     // eslint-disable-next-line no-console -- CLI surface
@@ -217,7 +229,7 @@ export const runSetup = (tool: string | undefined): void => {
     process.exit(0);
   }
 
-  const client = TOOLS[tool.trim().toLowerCase()];
+  const client = findClient(tool);
   if (!client) {
     console.error(`fintrack setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`);
     process.exit(1);
@@ -228,4 +240,20 @@ export const runSetup = (tool: string | undefined): void => {
   client.run();
   // eslint-disable-next-line no-console -- CLI surface
   console.log('Done.');
+};
+
+/**
+ * The guided installer (ADR-034 §5): claim the owner first, then write the client config. `claimOwner` resolves
+ * `true` when the owner has a login by the time it returns; on `false` (no terminal and no piped password, bad
+ * input…) it has already said why, and no config is written. Help and an unknown tool never reach the claim.
+ * Resolves the process exit code.
+ */
+export const runGuidedSetup = async (tool: string | undefined, claimOwner: () => Promise<boolean>): Promise<number> => {
+  if (!tool || findClient(tool) === undefined) {
+    runSetup(tool);
+    return 0;
+  }
+  if (!(await claimOwner())) return 1;
+  runSetup(tool);
+  return 0;
 };
