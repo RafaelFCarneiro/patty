@@ -3,7 +3,7 @@ import type { ZodType, ZodTypeDef } from 'zod';
 import { runEffects } from '@rfc0/effect-runner';
 import { AUTH_APPLIERS, bindAuthRunEffects, createAuthDeps } from './authRuntime.js';
 import { formatAppError } from './common/errors.js';
-import { AuthSubcommand } from './common/cli.js';
+import { AuthSubcommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from './common/cli.js';
 import { loadConfig } from './config.js';
 import { claimedOwnerOf, claimOwnerLocally, findResetTarget, resetPassword } from './controllers/auth.js';
 import type { AuthDeps, RunEffects } from './controllers/deps.js';
@@ -19,11 +19,8 @@ import {
   readPasswordFromStdin,
   type Terminal,
 } from './diplomat/cli/terminal.js';
-import { authErrors, type PasswordReset } from './models/auth.js';
+import { authErrors, PACKAGE_NAME, type PasswordReset } from './models/auth.js';
 import { ClaimOptionsSchema, ResetOptionsSchema, type ClaimOptions, type ResetOptions } from './wire/in/cli.js';
-
-export const EXIT_OK = 0;
-export const EXIT_FAILURE = 1;
 
 /**
  * The CLI's composition root for the auth commands (ADR-034 §5): it opens the database exactly as the server does
@@ -78,16 +75,16 @@ export const CLI_MESSAGES = {
 } as const;
 
 export const AUTH_HELP = `
-Usage: npx @rafaelfcarneiro/fintrack auth <command>
+Usage: npx ${PACKAGE_NAME} auth <command>
 
 Commands:
   setup            Choose the owner's username and password (once; claims the existing owner, never creates a user)
   reset-password   Choose a new password and end every session and access token of that user
 
 Options:
-  --username <name>  (setup) the owner's username — required with --password-stdin
+  --username <name>  (setup) the owner's username — required with --${PASSWORD_STDIN_FLAG}
   --user <name>      (reset-password) whose password; default: the owner
-  --password-stdin   read the password from stdin instead of asking (scripted installs; stdin must not be a terminal)
+  --${PASSWORD_STDIN_FLAG}   read the password from stdin instead of asking (scripted installs; stdin must not be a terminal)
 `.trimStart();
 
 const withShell = async <T>(io: CliIo, work: (shell: AuthShell) => Promise<T>): Promise<T> => {
@@ -142,8 +139,10 @@ export const ensureOwnerClaimed = (io: CliIo, options: ClaimOptions): Promise<bo
     // Someone claimed it between the check above and the write: the end state is what the caller wanted.
     if (claimed.error.code === authErrors.setupUnavailable.code) {
       const winner = await claimedOwnerOf(shell.deps);
-      if (winner) io.out(CLI_MESSAGES.alreadyClaimed(winner.username));
-      return winner !== null;
+      if (winner) {
+        io.out(CLI_MESSAGES.alreadyClaimed(winner.username));
+        return true;
+      }
     }
     return fail(io, formatAppError(claimed.error));
   });
@@ -191,8 +190,8 @@ const parseFlags = <T>(
   }
 };
 
-const CLAIM_FLAGS = { 'password-stdin': { type: 'boolean' }, username: { type: 'string' } } as const;
-const RESET_FLAGS = { 'password-stdin': { type: 'boolean' }, user: { type: 'string' } } as const;
+const CLAIM_FLAGS = { [PASSWORD_STDIN_FLAG]: { type: 'boolean' }, username: { type: 'string' } } as const;
+const RESET_FLAGS = { [PASSWORD_STDIN_FLAG]: { type: 'boolean' }, user: { type: 'string' } } as const;
 
 /** `setup`'s and `auth setup`'s flags; `setup` also takes the client as its one positional. */
 export const parseClaimArgs = (args: readonly string[]) => parseFlags(args, CLAIM_FLAGS, ClaimOptionsSchema);

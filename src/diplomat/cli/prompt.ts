@@ -1,5 +1,6 @@
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType, ZodTypeDef } from 'zod';
+import { PASSWORD_STDIN_FLAG } from '../../common/cli.js';
 import { PasswordSchema, TERMINAL_SETUP_COMMAND, UsernameSchema } from '../../models/auth.js';
 import type { Terminal } from './terminal.js';
 
@@ -12,10 +13,10 @@ export const PROMPT_MESSAGES = {
   confirmation: 'Confirm password: ',
   passwordsDiffer: 'The two passwords differ.',
   invalidAnswer: 'That is not valid.',
-  usernameRequiredWithStdin: '--password-stdin needs --username <name>: stdin carries only the password.',
+  usernameRequiredWithStdin: `--${PASSWORD_STDIN_FLAG} needs --username <name>: stdin carries only the password.`,
   noTerminal:
     'There is no terminal to ask for a password. Run this in a terminal, or pipe the password in: ' +
-    `printf %s "$PASSWORD" | ${TERMINAL_SETUP_COMMAND} --username <name> --password-stdin`,
+    `printf %s "$PASSWORD" | ${TERMINAL_SETUP_COMMAND} --username <name> --${PASSWORD_STDIN_FLAG}`,
 } as const;
 
 /** Where credentials can come from: a person at `terminal` (null when stdin is not one), or the piped password. */

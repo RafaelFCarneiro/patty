@@ -1,12 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from './common/cli.js';
+import { PACKAGE_NAME } from './models/auth.js';
 
 // ---------------------------------------------------------------------------
 // Shared MCP entry shapes
 // ---------------------------------------------------------------------------
 
-const PACKAGE_SPEC = '@rafaelfcarneiro/fintrack@latest';
+const PACKAGE_SPEC = `${PACKAGE_NAME}@latest`;
 
 export const resolveConfigObject = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -57,7 +59,7 @@ const warnInvalidConfig = (path: string): void => {
 const exitReadConfig = (path: string, error: unknown): never => {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`fintrack setup: failed to read ${path}: ${message}`);
-  process.exit(1);
+  process.exit(EXIT_FAILURE);
 };
 
 export const readJsonOrEmpty = (path: string): Record<string, unknown> => {
@@ -91,7 +93,7 @@ const writeJson = (path: string, data: unknown): void => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`fintrack setup: failed to write ${path}: ${message}`);
-    process.exit(1);
+    process.exit(EXIT_FAILURE);
   }
 };
 
@@ -189,7 +191,7 @@ const TOOLS: Readonly<Record<string, ClientTool>> = {
 };
 
 const HELP = `
-Usage: npx ${PACKAGE_SPEC} setup <tool> [--username <name>] [--password-stdin]
+Usage: npx ${PACKAGE_SPEC} setup <tool> [--username <name>] [--${PASSWORD_STDIN_FLAG}]
 
 Available tools:
   claude-code      Claude Code CLI      (~/.claude/mcp.json)
@@ -204,8 +206,8 @@ FinTrack requires a login. The first time, setup asks you to choose the owner's 
 has a login is left alone.
 
 Options:
-  --username <name>  the owner's username (required with --password-stdin)
-  --password-stdin   read the password from stdin instead of asking — for scripted installs
+  --username <name>  the owner's username (required with --${PASSWORD_STDIN_FLAG})
+  --${PASSWORD_STDIN_FLAG}   read the password from stdin instead of asking — for scripted installs
 
 Examples:
   npx ${PACKAGE_SPEC} setup claude-code
@@ -226,13 +228,13 @@ export const runSetup = (tool: string | undefined): void => {
   if (!tool) {
     // eslint-disable-next-line no-console -- CLI surface
     console.log(HELP);
-    process.exit(0);
+    process.exit(EXIT_OK);
   }
 
   const client = findClient(tool);
   if (!client) {
     console.error(`fintrack setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`);
-    process.exit(1);
+    process.exit(EXIT_FAILURE);
   }
 
   // eslint-disable-next-line no-console -- CLI surface
@@ -251,9 +253,9 @@ export const runSetup = (tool: string | undefined): void => {
 export const runGuidedSetup = async (tool: string | undefined, claimOwner: () => Promise<boolean>): Promise<number> => {
   if (!tool || findClient(tool) === undefined) {
     runSetup(tool);
-    return 0;
+    return EXIT_OK;
   }
-  if (!(await claimOwner())) return 1;
+  if (!(await claimOwner())) return EXIT_FAILURE;
   runSetup(tool);
-  return 0;
+  return EXIT_OK;
 };

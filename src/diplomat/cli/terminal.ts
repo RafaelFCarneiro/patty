@@ -1,5 +1,6 @@
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
+import { PASSWORD_STDIN_FLAG } from '../../common/cli.js';
 import { text } from 'node:stream/consumers';
 
 /** What the CLI needs from a person at a keyboard — kept apart from `node:readline` so the prompting rules in
@@ -15,8 +16,7 @@ export type Terminal = {
 };
 
 export const PROMPT_ABORTED_MESSAGE = 'cancelled';
-export const STDIN_IS_A_TERMINAL_MESSAGE =
-  '--password-stdin expects the password piped or redirected in, but stdin is a terminal';
+export const STDIN_IS_A_TERMINAL_MESSAGE = `--${PASSWORD_STDIN_FLAG} expects the password piped or redirected in, but stdin is a terminal`;
 
 const TRAILING_NEWLINE = /\r?\n$/;
 const SIGINT_EXIT_CODE = 130;

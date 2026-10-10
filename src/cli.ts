@@ -1,5 +1,4 @@
 import {
-  EXIT_FAILURE,
   CLI_MESSAGES,
   defaultCliIo,
   ensureOwnerClaimed,
@@ -9,7 +8,7 @@ import {
   exitCodeOf,
   type CliIo,
 } from './authCli.js';
-import { CliCommand } from './common/cli.js';
+import { CliCommand, EXIT_FAILURE } from './common/cli.js';
 import { runGuidedSetup } from './setup.js';
 
 const runSetupCommand = async (args: readonly string[], io: CliIo): Promise<number> => {

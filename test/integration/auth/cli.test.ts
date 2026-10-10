@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
-import { AUTH_HELP, CLI_MESSAGES, EXIT_FAILURE, EXIT_OK, runAuthCommand, type CliIo } from '../../../src/authCli.js';
+import { AUTH_HELP, CLI_MESSAGES, runAuthCommand, type CliIo } from '../../../src/authCli.js';
+import { EXIT_FAILURE, EXIT_OK } from '../../../src/common/cli.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
 import { PROMPT_MESSAGES } from '../../../src/diplomat/cli/prompt.js';
 import { accessTokens, sessions, users } from '../../../src/diplomat/db/schema.js';
@@ -275,6 +276,18 @@ describe('fintrack auth reset-password', () => {
     expect(await run('reset-password')).toBe(EXIT_FAILURE);
     expect(err.join('\n')).toContain(PROMPT_MESSAGES.noTerminal);
     expect(await ownerRows(ctx)).toEqual(before);
+  });
+});
+
+describe('fintrack auth setup (a lost race)', () => {
+  it('reports the failure, not silence, when the owner cannot be claimed and nobody holds the login', async () => {
+    const ctx = await createApp();
+    await ctx.db.run(sql`DELETE FROM setup_codes`);
+    await ctx.db.run(sql`DELETE FROM users`);
+    const { run, err } = harness(ctx, { stdin: PASSWORD });
+
+    expect(await run('setup', '--username', USERNAME, '--password-stdin')).toBe(EXIT_FAILURE);
+    expect(err.join('\n')).toContain('setup_unavailable');
   });
 });
 

@@ -247,7 +247,9 @@ export type AuthError =
   | { code: 'resource_metadata_unavailable'; hint: string };
 
 /** The terminal route to the same owner claim as `/ui/setup` — shown wherever the setup code is (ADR-034 §5). */
-export const TERMINAL_SETUP_COMMAND = 'npx @rafaelfcarneiro/fintrack auth setup';
+/** The published package's name — every command we tell a person to run is built from it. */
+export const PACKAGE_NAME = '@rafaelfcarneiro/fintrack';
+export const TERMINAL_SETUP_COMMAND = `npx ${PACKAGE_NAME} auth setup`;
 export const TERMINAL_SETUP_HINT = `or run \`${TERMINAL_SETUP_COMMAND}\` in a terminal`;
 
 export const AUTH_MESSAGES = {

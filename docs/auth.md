@@ -185,7 +185,7 @@ It asks for the new password twice, no echo (or `--password-stdin`), then in **o
 - **revokes every still-live access token** of that user (`revoked_at` is set and the rows are kept, so the list still
   shows what existed).
 
-It prints how many sessions ended and tokens were revoked. Other users' rows are never touched. An unknown `--user` is a
+It prints how many sessions ended and tokens were revoked. A session created by a login in the instant between the command reading the user's sessions and committing is not ended by that run; run it again if the server was busy. Other users' rows are never touched. An unknown `--user` is a
 clear error before any password is asked; an unclaimed owner is pointed at `auth setup`.
 
 ## Personal access tokens
