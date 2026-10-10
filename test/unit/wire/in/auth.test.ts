@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LANDING_PATH, normalizeUsername } from '../../../../src/models/auth.js';
-import { LoginFormSchema, NextQuerySchema, safeNextPath, SetupFormSchema } from '../../../../src/wire/in/auth.js';
+import {
+  CreateTokenFormSchema,
+  LoginFormSchema,
+  NextQuerySchema,
+  safeNextPath,
+  SetupFormSchema,
+} from '../../../../src/wire/in/auth.js';
 
 describe('normalizeUsername', () => {
   it('trims and lower-cases so the UNIQUE index is case-insensitive', () => {
@@ -106,5 +112,31 @@ describe('NextQuerySchema', () => {
     expect(NextQuerySchema.parse({ next: '/ui/budget' }).next).toBe('/ui/budget');
     expect(NextQuerySchema.parse({}).next).toBe(DEFAULT_LANDING_PATH);
     expect(NextQuerySchema.parse({ next: 'https://evil.example' }).next).toBe(DEFAULT_LANDING_PATH);
+  });
+});
+
+describe('CreateTokenFormSchema', () => {
+  it('accepts a named token with an access level and an expiry, trimming the name', () => {
+    expect(CreateTokenFormSchema.parse({ name: '  laptop ', access: 'write', expiry: '90', password: 'pw' })).toEqual({
+      name: 'laptop',
+      access: 'write',
+      expiry: '90',
+      password: 'pw',
+    });
+    const parsed = CreateTokenFormSchema.parse({ name: 'ci', access: 'read', expiry: 'none', password: 'pw' });
+    expect(parsed.expiry).toBe('none');
+  });
+
+  it.each([
+    [{ name: '', access: 'read', expiry: '30', password: 'pw' }],
+    [{ name: '   ', access: 'read', expiry: '30', password: 'pw' }],
+    [{ name: 'x'.repeat(81), access: 'read', expiry: '30', password: 'pw' }],
+    [{ name: 'x', access: 'admin', expiry: '30', password: 'pw' }],
+    [{ name: 'x', access: 'read', expiry: '7', password: 'pw' }],
+    [{ name: 'x', access: 'read' }],
+    [{ name: 'x', access: 'read', expiry: '30' }], // no password
+    [{ name: 'x', access: 'read', expiry: '30', password: '' }],
+  ])('rejects %j', (body) => {
+    expect(CreateTokenFormSchema.safeParse(body).success).toBe(false);
   });
 });

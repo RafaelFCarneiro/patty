@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
-import { AuthMode } from '../../models/auth.js';
+import { AuthMode, READ_SCOPE } from '../../models/auth.js';
 import { DISABLED_AUTH, type HttpAuth, type HttpContext } from './context.js';
 import { buildOpenApiDocument, mountRoutes, type RouteDefinition } from './openapi.js';
 import { CACHE_CONTROL_NO_CACHE } from './respond.js';
@@ -21,6 +21,8 @@ import { tagRoutes } from './routes/tag.js';
 import { transactionRoutes } from './routes/transaction.js';
 import { transferRoutes } from './routes/transfer.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerTokenRoutes } from './routes/tokens.js';
+import { registerProtectedResourceMetadataRoutes } from './routes/wellKnown.js';
 import { registerUiRoutes, type SessionRecheck } from './routes/ui.js';
 import { resolvePrincipal } from './session.js';
 
@@ -85,14 +87,18 @@ export const registerRoutes = (
 
   const authRequired = auth.mode === AuthMode.enum.required;
   registerUiRoutes(app, subscribeToChanges, {
-    logoutControl: authRequired,
-    session: auth.mode === AuthMode.enum.required ? sessionRecheck(auth) : undefined,
+    authControls: authRequired,
+    session: authRequired ? sessionRecheck(auth) : undefined,
   });
-  if (authRequired) registerAuthRoutes(app, auth);
+  if (authRequired) {
+    registerAuthRoutes(app, auth);
+    registerTokenRoutes(app, auth);
+    registerProtectedResourceMetadataRoutes(app, auth.publicUrl);
+  }
 
   // Built from the same list just mounted; excluded from its own document by design.
   const openApiDocument = buildOpenApiDocument(definitions, version);
-  app.get('/api/openapi.json', async (_req, reply) =>
+  app.get('/api/openapi.json', { config: { scope: READ_SCOPE } }, async (_req, reply) =>
     reply.header('cache-control', CACHE_CONTROL_NO_CACHE).send(openApiDocument),
   );
 };

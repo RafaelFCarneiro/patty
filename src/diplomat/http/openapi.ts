@@ -7,6 +7,7 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { OpenAPIObject } from 'openapi3-ts/oas30';
 import { z } from 'zod';
+import type { Scope } from '../../models/auth.js';
 
 /**
  * OpenAPI machinery shared by every REST route. routes.ts builds ONE array of route
@@ -24,7 +25,12 @@ extendZodWithOpenApi(z);
 
 export type HttpMethod = 'get' | 'post' | 'patch' | 'delete';
 export type RouteHandler = (req: FastifyRequest, reply: FastifyReply) => unknown;
-export type RouteMeta = Omit<RouteConfig, 'method' | 'path'> & { method: HttpMethod; path: string };
+export type RouteMeta = Omit<RouteConfig, 'method' | 'path'> & {
+  method: HttpMethod;
+  path: string;
+  /** The scope a caller needs (ADR-033 §3) — enforced by the auth hook from the matched route's config. */
+  scope: Scope;
+};
 export type RouteDefinition = RouteMeta & { handler: RouteHandler };
 
 // Route definitions write paths in Fastify's `:param` syntax (the only form Fastify accepts);
@@ -32,19 +38,20 @@ export type RouteDefinition = RouteMeta & { handler: RouteHandler };
 const toOpenApiPath = (fastifyPath: string): string => fastifyPath.replace(/:([A-Za-z]+)/g, '{$1}');
 
 export const mountRoutes = (app: FastifyInstance, definitions: RouteDefinition[]): void => {
-  for (const { method, path, handler } of definitions) {
+  for (const { method, path, scope, handler } of definitions) {
+    const options = { config: { scope } };
     switch (method) {
       case 'get':
-        app.get(path, handler);
+        app.get(path, options, handler);
         break;
       case 'post':
-        app.post(path, handler);
+        app.post(path, options, handler);
         break;
       case 'patch':
-        app.patch(path, handler);
+        app.patch(path, options, handler);
         break;
       case 'delete':
-        app.delete(path, handler);
+        app.delete(path, options, handler);
         break;
       default: {
         const _exhaustive: never = method;
@@ -56,7 +63,7 @@ export const mountRoutes = (app: FastifyInstance, definitions: RouteDefinition[]
 
 export const buildOpenApiDocument = (definitions: RouteDefinition[], version: string): OpenAPIObject => {
   const registry = new OpenAPIRegistry();
-  for (const { handler: _handler, ...meta } of definitions) {
+  for (const { handler: _handler, scope: _scope, ...meta } of definitions) {
     registry.registerPath({ ...meta, path: toOpenApiPath(meta.path) });
   }
 

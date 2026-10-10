@@ -5,6 +5,9 @@ import {
   PASSWORD_MAX_LENGTH,
   PasswordSchema,
   isUiPath,
+  TOKEN_NAME_MAX_LENGTH,
+  TokenAccess,
+  TokenExpiry,
   UsernameSchema,
 } from '../../models/auth.js';
 
@@ -49,3 +52,12 @@ export type SetupForm = z.infer<typeof SetupFormSchema>;
 
 /** The query string of /ui/login and /ui/setup — where to go afterwards. */
 export const NextQuerySchema = z.object({ next: NextPathSchema });
+
+/** `POST /ui/access/tokens`: what the token form submits. */
+export const CreateTokenFormSchema = z.object({
+  name: z.string().trim().min(1, 'Give the token a name.').max(TOKEN_NAME_MAX_LENGTH),
+  access: TokenAccess,
+  expiry: TokenExpiry,
+  password: z.string().min(1, 'Enter your password to create a token.').max(PASSWORD_MAX_LENGTH),
+});
+export type CreateTokenForm = z.infer<typeof CreateTokenFormSchema>;

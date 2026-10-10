@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FinTrack — access tokens</title>
+    <link rel="stylesheet" href="{{stylesheet}}" />
+  </head>
+  <body>
+    <main class="auth-card tokens-card">
+      <h1>Access tokens</h1>
+      <p class="auth-lede">
+        Personal access tokens let scripts and MCP clients call <code>/api</code> and <code>/mcp</code> with
+        <code>Authorization: Bearer ftk_…</code>. <a href="{{dashboards}}">Back to the dashboards</a>
+      </p>
+      {{error}} {{tokens}}
+      <h2>Create a token</h2>
+      <form class="auth-form" method="post" action="{{action}}">
+        <label
+          >Name
+          <input
+            name="name"
+            maxlength="{{nameMaxLength}}"
+            autocomplete="off"
+            placeholder="Claude Desktop on my laptop"
+            required
+          />
+        </label>
+        <label
+          >Access
+          <select name="access">
+            {{accessOptions}}
+          </select>
+        </label>
+        <label
+          >Expires
+          <select name="expiry">
+            {{expiryOptions}}
+          </select>
+        </label>
+        <label
+          >Your password
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <p class="auth-hint">Asked again so that nothing running in a dashboard page can create a token on its own.</p>
+        <button type="submit">Create token</button>
+      </form>
+    </main>
+  </body>
+</html>

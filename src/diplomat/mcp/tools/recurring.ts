@@ -6,6 +6,7 @@ import * as recurringAdapters from '../../../adapters/recurring.js';
 import { outcomeToDb } from '../../../adapters/transactions.js';
 import type { McpContext } from '../context.js';
 import { fromResult, json } from '../respond.js';
+import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerRecurringTools = (server: McpServer, ctx: McpContext): void => {
   const { deps, runEffects } = ctx;
@@ -13,6 +14,7 @@ export const registerRecurringTools = (server: McpServer, ctx: McpContext): void
   server.registerTool(
     'create_recurring',
     {
+      annotations: MUTATING,
       title: 'Create recurring rule',
       description:
         'Create a recurring transaction rule (salary, rent, subscription). Materialized by apply_due_recurring, ' +
@@ -29,13 +31,19 @@ export const registerRecurringTools = (server: McpServer, ctx: McpContext): void
 
   server.registerTool(
     'list_recurring',
-    { title: 'List recurring rules', description: 'List all recurring rules with next due dates.', inputSchema: {} },
+    {
+      annotations: READ_ONLY,
+      title: 'List recurring rules',
+      description: 'List all recurring rules with next due dates.',
+      inputSchema: {},
+    },
     async () => json(await listRecurring(deps)),
   );
 
   server.registerTool(
     'apply_due_recurring',
     {
+      annotations: MUTATING,
       title: 'Apply due recurring rules',
       description:
         'Materialize transactions for every rule due on/before `through` (default: today). ' +

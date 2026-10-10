@@ -109,6 +109,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve the base image
+        id: base
+        uses: ./.github/actions/base-image
+
       - name: Image tags and labels
         id: meta
         uses: docker/metadata-action@v5
@@ -128,7 +132,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: VERSION=${{ needs.release.outputs.version }}
+          build-args: |
+            VERSION=${{ needs.release.outputs.version }}
+            NODE_IMAGE=${{ steps.base.outputs.image }}
           provenance: mode=max
           sbom: true
           cache-from: type=gha

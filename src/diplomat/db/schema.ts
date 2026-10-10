@@ -11,7 +11,7 @@ import {
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import { UserRole } from '../../models/auth.js';
+import { type Scope, UserRole } from '../../models/auth.js';
 import { BudgetPeriod } from '../../models/budget.js';
 import { DashboardSource } from '../../models/dashboard.js';
 import { Locale, LocaleSource } from '../../models/locale.js';
@@ -275,6 +275,23 @@ export const sessions = sqliteTable('sessions', {
   createdAt: text('created_at').notNull(),
   lastSeenAt: text('last_seen_at').notNull(),
   expiresAt: text('expires_at').notNull(),
+  version: integer('version').notNull().default(0),
+});
+
+// Only sha256(token) is stored; `prefix` is display-only. `scopes` is a JSON array of the `Scope` enum.
+export const accessTokens = sqliteTable('access_tokens', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  prefix: text('prefix').notNull(),
+  scopes: text('scopes', { mode: 'json' }).$type<Scope[]>().notNull(),
+  createdAt: text('created_at').notNull(),
+  lastUsedAt: text('last_used_at'),
+  expiresAt: text('expires_at'),
+  revokedAt: text('revoked_at'),
   version: integer('version').notNull().default(0),
 });
 

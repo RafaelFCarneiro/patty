@@ -14,6 +14,7 @@ import {
 } from '../../../models/correlations.js';
 import type { McpContext } from '../context.js';
 import { fromResult } from '../respond.js';
+import { READ_ONLY } from '../annotations.js';
 
 export const registerCorrelationsTools = (server: McpServer, ctx: McpContext): void => {
   const { deps } = ctx;
@@ -21,6 +22,7 @@ export const registerCorrelationsTools = (server: McpServer, ctx: McpContext): v
   server.registerTool(
     'find_correlations',
     {
+      annotations: READ_ONLY,
       title: 'Find correlations',
       description:
         'Analysis tool over spending patterns, discriminated by `analysis` (Feature Design 016). ' +

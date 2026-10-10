@@ -14,6 +14,7 @@ import { DeletedOut } from '../../../wire/out/common.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, invalidQueryResponse, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
 
 const CATEGORIES_TAG = 'Categories';
 
@@ -22,6 +23,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/categories',
       tags: [CATEGORIES_TAG],
       summary: 'List categories',
@@ -30,6 +32,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/categories',
       tags: [CATEGORIES_TAG],
       summary: 'Create category',
@@ -45,6 +48,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/sub-categories',
       tags: [CATEGORIES_TAG],
       summary: 'List sub-categories',
@@ -58,6 +62,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/sub-categories',
       tags: [CATEGORIES_TAG],
       summary: 'Create sub-category',
@@ -77,6 +82,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'delete',
+      scope: WRITE_SCOPE,
       path: '/api/categories/:name',
       tags: [CATEGORIES_TAG],
       summary: 'Delete category',
@@ -90,6 +96,7 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'delete',
+      scope: WRITE_SCOPE,
       path: '/api/sub-categories/:name',
       tags: [CATEGORIES_TAG],
       summary: 'Delete sub-category',

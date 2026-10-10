@@ -7,6 +7,7 @@ import * as wireInTransactions from '../../../wire/in/transactions.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, idParam, notFound404, parse, send, validation422 } from '../respond.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
 
 const TRANSACTIONS_TAG = 'Transactions';
 
@@ -15,6 +16,7 @@ export const transactionRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'post',
+      scope: WRITE_SCOPE,
       path: '/api/transactions/:id/confirm',
       tags: [TRANSACTIONS_TAG],
       summary: 'Confirm (clear) a pending transaction',
@@ -38,6 +40,7 @@ export const transactionRoutes = (ctx: HttpContext): RouteDefinition[] => {
     },
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/transactions',
       tags: [TRANSACTIONS_TAG],
       summary: 'Search transactions',

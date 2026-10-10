@@ -7,6 +7,7 @@ import { CreateBudgetSchema, UpdateBudgetSchema } from '../../../wire/in/budgets
 import * as budgetAdapters from '../../../adapters/budgets.js';
 import type { McpContext } from '../context.js';
 import { fromResult, json } from '../respond.js';
+import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerBudgetTools = (server: McpServer, ctx: McpContext): void => {
   const { deps, runEffects } = ctx;
@@ -14,6 +15,7 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
   server.registerTool(
     'create_budget',
     {
+      annotations: MUTATING,
       title: 'Create budget',
       description:
         'Create a recurring monthly spending limit on a category or sub-category, in one currency ' +
@@ -33,6 +35,7 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
   server.registerTool(
     'update_budget',
     {
+      annotations: MUTATING,
       title: 'Update budget',
       description: "Update a budget's limit and/or period, identified by its id (from create_budget/list_budgets).",
       inputSchema: UpdateBudgetSchema.shape,
@@ -46,6 +49,7 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
   server.registerTool(
     'delete_budget',
     {
+      annotations: MUTATING,
       title: 'Delete budget',
       description: 'Delete a budget by id. Idempotent — deleting an already-absent id is not an error.',
       inputSchema: { id: z.string().min(1).describe('Budget id') },
@@ -59,6 +63,7 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
   server.registerTool(
     'list_budgets',
     {
+      annotations: READ_ONLY,
       title: 'List budgets',
       description: 'List all budgets (the limits themselves, no spend) — use get_budget_status for spend-vs-limit.',
       inputSchema: {},
@@ -69,6 +74,7 @@ export const registerBudgetTools = (server: McpServer, ctx: McpContext): void =>
   server.registerTool(
     'get_budget_status',
     {
+      annotations: READ_ONLY,
       title: 'Get budget status',
       description:
         'Spend-vs-limit for every budget in a month (Feature Design 015 phase 2, measurement revised by ' +

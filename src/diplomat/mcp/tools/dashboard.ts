@@ -5,6 +5,7 @@ import { RenameDashboardSchema, SaveDashboardSchema } from '../../../models/dash
 import * as dashboardAdapters from '../../../adapters/dashboards.js';
 import type { McpContext } from '../context.js';
 import { fromResult, json } from '../respond.js';
+import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerDashboardTools = (server: McpServer, ctx: McpContext): void => {
   const { deps, runEffects } = ctx;
@@ -12,6 +13,7 @@ export const registerDashboardTools = (server: McpServer, ctx: McpContext): void
   server.registerTool(
     'save_dashboard',
     {
+      annotations: MUTATING,
       title: 'Save dashboard',
       description:
         'Create or override a named dashboard: a content FRAGMENT you author (sections + an inline ' +
@@ -36,6 +38,7 @@ export const registerDashboardTools = (server: McpServer, ctx: McpContext): void
   server.registerTool(
     'list_dashboards',
     {
+      annotations: READ_ONLY,
       title: 'List dashboards',
       description: 'List saved dashboards by name and last-updated time (HTML content omitted).',
       inputSchema: {},
@@ -46,6 +49,7 @@ export const registerDashboardTools = (server: McpServer, ctx: McpContext): void
   server.registerTool(
     'delete_dashboard',
     {
+      annotations: MUTATING,
       title: 'Delete dashboard',
       description: 'Delete a dashboard by name. Idempotent — deleting an already-absent name is not an error.',
       inputSchema: { name: z.string().min(1).describe('Dashboard name') },
@@ -59,6 +63,7 @@ export const registerDashboardTools = (server: McpServer, ctx: McpContext): void
   server.registerTool(
     'rename_dashboard',
     {
+      annotations: MUTATING,
       title: 'Rename dashboard',
       description:
         'Rename a dashboard, preserving its content and identity. GET /api/dashboards/:newName serves it ' +

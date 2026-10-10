@@ -12,6 +12,7 @@ import { CreateCategorySchema, CreateSubCategorySchema } from '../../../wire/in/
 import * as categoryAdapters from '../../../adapters/categories.js';
 import type { McpContext } from '../context.js';
 import { fromResult, json } from '../respond.js';
+import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerCategoryTools = (server: McpServer, ctx: McpContext): void => {
   const { deps, runEffects } = ctx;
@@ -19,6 +20,7 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
   server.registerTool(
     'create_category',
     {
+      annotations: MUTATING,
       title: 'Create category',
       description: 'Create a category. Prefer existing categories (list_categories) before creating new ones.',
       inputSchema: CreateCategorySchema.shape,
@@ -32,6 +34,7 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
   server.registerTool(
     'list_categories',
     {
+      annotations: READ_ONLY,
       title: 'List categories',
       description: 'List all categories. Names are resolved to the active locale for default categories.',
       inputSchema: {},
@@ -42,6 +45,7 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
   server.registerTool(
     'create_sub_category',
     {
+      annotations: MUTATING,
       title: 'Create sub-category',
       description:
         'Create a sub-category under an existing category. Sub-categories inherit the kind (expense/income/both) ' +
@@ -57,6 +61,7 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
   server.registerTool(
     'list_sub_categories',
     {
+      annotations: READ_ONLY,
       title: 'List sub-categories',
       description: 'List all sub-categories, optionally filtered by parent category id.',
       inputSchema: {
@@ -69,6 +74,7 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
   server.registerTool(
     'delete_category',
     {
+      annotations: MUTATING,
       title: 'Delete category',
       description:
         'Delete a category by name. Blocked if any transactions, recurring rules, or sub-categories reference it — ' +
@@ -85,6 +91,7 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
   server.registerTool(
     'delete_sub_category',
     {
+      annotations: MUTATING,
       title: 'Delete sub-category',
       description:
         'Delete a sub-category by name. Blocked if any transactions, recurring rules, ' +

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Smoke-test a built FinTrack image the way compose.yaml runs it: key as a mounted file, read-only
 # root + tmpfs /tmp, /data on a volume, published on host loopback only (ADR-032), with sessions required
-# (ADR-033): the setup code is read from the container log and claims the owner.
+# (ADR-033): the setup code is read from the container log and claims the owner, and personal access tokens
+# (created through the session) authenticate /api and /mcp.
 # Usage: scripts/docker-smoke.sh [image]   (default: fintrack:ci)
 set -euo pipefail
 
@@ -110,6 +111,59 @@ echo "== create an account"
 [ "$(authed_code -X POST "$BASE/api/accounts" -H 'Content-Type: application/json' -d '{"name":"Smoke"}')" = "201" ] \
   || fail "account creation not 201"
 
+echo "== personal access tokens: minted through the session, shown once, usable as a bearer on /api and /mcp"
+TOKEN_PATTERN='ftk_[A-Za-z0-9_-]{43}'
+mint_token() { # name, access (read|write) -> prints the plaintext token
+  authed -fsS -X POST "$BASE/ui/access/tokens" \
+    --data-urlencode "password=$SMOKE_PASSWORD" --data-urlencode "name=$1" --data-urlencode "access=$2" --data-urlencode "expiry=30" | grep -oE "$TOKEN_PATTERN" | head -n1
+}
+WRITE_TOKEN="$(mint_token smoke-writer write)"
+READ_TOKEN="$(mint_token smoke-reader read)"
+[ -n "$WRITE_TOKEN" ] && [ -n "$READ_TOKEN" ] && [ "$WRITE_TOKEN" != "$READ_TOKEN" ] || fail "could not mint tokens"
+authed -fsS "$BASE/ui/access/tokens" | grep -F "$READ_TOKEN" >/dev/null && fail "the token plaintext is listed after creation"
+READER_ID="$(authed -fsS "$BASE/ui/access/tokens" | grep -oE '/ui/access/tokens/[0-9a-f-]{36}/revoke' | head -n1 | cut -d/ -f5)"
+[ -n "$READER_ID" ] || fail "no revoke link for the newest token"
+
+HEADERS_FILE="$WORKDIR/headers"
+MCP_JSON=(-H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream')
+# A bearer request carries no cookie and no Origin: the token is the only credential.
+mcp_status() { # token, json body -> HTTP status; response headers in $HEADERS_FILE, body in $WORKDIR/body
+  curl -sS -o "$WORKDIR/body" -D "$HEADERS_FILE" -w '%{http_code}' -X POST "$BASE/mcp" "${MCP_JSON[@]}" \
+    -H "Authorization: Bearer $1" -d "$2"
+}
+CALL_LIST='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_accounts","arguments":{}}}'
+CALL_CREATE='{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"create_account","arguments":{"name":"ViaMcp","type":"checking","currency":"USD"}}}'
+
+[ "$(mcp_status "$READ_TOKEN" "$INIT")" = "200" ] && grep '"result"' "$WORKDIR/body" >/dev/null || fail "/mcp initialize with a read token failed"
+[ "$(mcp_status "$READ_TOKEN" "$CALL_LIST")" = "200" ] && grep -F 'Smoke' "$WORKDIR/body" >/dev/null || fail "a read tool with a read token failed"
+[ "$(mcp_status "$READ_TOKEN" "$CALL_CREATE")" = "403" ] || fail "a write tool with a read token was not 403"
+grep -i '^www-authenticate:.*error="insufficient_scope".*scope="fintrack:write"' "$HEADERS_FILE" >/dev/null \
+  || fail "403 lacks the insufficient_scope challenge"
+[ "$(mcp_status "$WRITE_TOKEN" "$CALL_CREATE")" = "200" ] || fail "a write tool with a write token failed"
+authed -fsS "$BASE/api/accounts" | grep '"ViaMcp"' >/dev/null || fail "the write token's account is missing"
+[ "$(http_code -H "Authorization: Bearer $READ_TOKEN" "$BASE/api/accounts")" = "200" ] || fail "REST GET with a read token not 200"
+[ "$(http_code -X POST -H "Authorization: Bearer $READ_TOKEN" -H 'Content-Type: application/json' -d '{"name":"No"}' "$BASE/api/accounts")" = "403" ] \
+  || fail "REST POST with a read token was not 403"
+[ "$(http_code -H "Authorization: Bearer $READ_TOKEN" "$BASE/ui/access/tokens")" = "303" ] || fail "a bearer token reached /ui/access/tokens"
+[ "$(authed_code -X POST "$BASE/ui/access/tokens" --data-urlencode "password=wrong wrong wrong" --data-urlencode "name=x" --data-urlencode "access=write" --data-urlencode "expiry=30")" = "403" ] \
+  || fail "creating a token without the right password was not refused"
+
+echo "== a bad bearer never falls back to the session cookie"
+[ "$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -H "Origin: $BASE" -H 'Authorization: Bearer ftk_nope' "$BASE/api/status")" = "401" ] \
+  || fail "a bad bearer fell back to the cookie"
+
+echo "== no credential: 401 with a resource_metadata URL that resolves"
+[ "$(curl -sS -o /dev/null -D "$HEADERS_FILE" -w '%{http_code}' -X POST "$BASE/mcp" "${MCP_JSON[@]}" -d "$INIT")" = "401" ] \
+  || fail "/mcp without a credential was not 401"
+METADATA_URL="$(grep -i '^www-authenticate:' "$HEADERS_FILE" | grep -oE 'resource_metadata="[^"]+"' | cut -d'"' -f2)"
+[ -n "$METADATA_URL" ] || fail "the 401 challenge names no resource_metadata"
+curl -fsS "$METADATA_URL" | grep '"resource"' | grep '/mcp"' >/dev/null || fail "resource_metadata $METADATA_URL does not resolve to the MCP resource"
+
+echo "== revoking a token ends it at once"
+[ "$(authed_code -X POST "$BASE/ui/access/tokens/$READER_ID/revoke")" = "303" ] || fail "revoke did not redirect"
+[ "$(mcp_status "$READ_TOKEN" "$INIT")" = "401" ] || fail "a revoked token still works"
+grep -i '^www-authenticate:.*error="invalid_token"' "$HEADERS_FILE" >/dev/null || fail "revoked token lacks the invalid_token challenge"
+
 echo "== setup is closed once claimed"
 [ "$(http_code -X POST "$BASE/ui/setup" -H "Origin: $BASE" --data-urlencode "code=$SETUP_CODE" \
   --data-urlencode "username=other" --data-urlencode "password=$SMOKE_PASSWORD")" = "409" ] \
@@ -121,6 +175,7 @@ wait_healthy
 BASE="$(base_url)"
 [ "$(setup_banner_count)" = "1" ] || fail "a restart printed another setup code"
 [ "$(authed_code "$BASE/api/status")" = "200" ] || fail "session did not survive restart"
+[ "$(mcp_status "$WRITE_TOKEN" "$INIT")" = "200" ] || fail "an access token did not survive restart"
 authed -fS "$BASE/api/accounts" | grep '"Smoke"' >/dev/null || fail "account did not survive restart"
 LOGIN_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' -H "Origin: $BASE" -X POST "$BASE/ui/login" \
   --data-urlencode "username=$SMOKE_USER" --data-urlencode "password=$SMOKE_PASSWORD")"
@@ -131,12 +186,12 @@ echo "== only /data is writable"
 if docker exec "$NAME" sh -c 'touch /var/tmp/probe 2>/dev/null'; then fail "root filesystem is writable"; fi
 docker exec "$NAME" sh -c 'touch /data/.probe && rm /data/.probe' || fail "/data is not writable"
 
-echo "== key, password and session token never leak into logs, env or volume"
+echo "== key, password, session token and access tokens never leak into logs, env or volume"
 # `grep -q` would exit early and SIGPIPE the producer, which pipefail reports as "no match".
 if docker logs "$NAME" 2>&1 | grep "$KEY_VALUE" >/dev/null; then fail "key found in container logs"; fi
 if docker inspect "$NAME" | grep "$KEY_VALUE" >/dev/null; then fail "key found in container config"; fi
 if docker run --rm -v "$VOLUME":/data --entrypoint grep "$IMAGE" -rqF "$KEY_VALUE" /data; then fail "key found on the data volume"; fi
-for SECRET in "$SMOKE_PASSWORD" "$SESSION_TOKEN"; do
+for SECRET in "$SMOKE_PASSWORD" "$SESSION_TOKEN" "$WRITE_TOKEN" "$READ_TOKEN"; do
   if docker logs "$NAME" 2>&1 | grep -F "$SECRET" >/dev/null; then fail "a credential was logged"; fi
   if docker run --rm -v "$VOLUME":/data --entrypoint grep "$IMAGE" -rqF "$SECRET" /data; then fail "a plaintext credential is on the data volume"; fi
 done

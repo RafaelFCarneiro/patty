@@ -8,6 +8,26 @@ Contract for the MCP server at `POST /mcp` (streamable HTTP, stateless). All too
 - **Dates**: `YYYY-MM-DD`.
 - **Localized labels**: read views include `*Label` fields — localized display labels for fixed enum values, resolved at read time via the active locale (Design 006). The enum value itself (`type`, `status`, `kind`, `period`) is stable identity; the `*Label` is derived display only. Switching locale reflows all labels with no migration. See per-tool details below.
 
+## Scopes per tool
+
+Over HTTP with authentication `required`, `/mcp` takes an `Authorization: Bearer ftk_…` personal access token (or a session
+cookie), and every tool needs a scope ([`auth.md`](auth.md#scopes)). A tool's scope derives from its
+`annotations.readOnlyHint`: `true` → `fintrack:read`, otherwise `fintrack:write` (which includes read). A read-only token
+that calls a write tool gets HTTP `403` with `WWW-Authenticate: Bearer error="insufficient_scope",
+scope="fintrack:write", …` before the tool runs. Resources (`fintrack://…`) and prompts need `fintrack:read`. Over stdio
+there is no token: the caller is the trusted owner and may call everything.
+
+The split is pinned by a unit test (`test/unit/diplomat/mcp/scopes.test.ts`), so reclassifying a tool is a reviewed diff.
+
+| Scope | Tools |
+|---|---|
+| `fintrack:read` (`readOnlyHint: true`) | `aggregate_spending`, `find_correlations`, `get_account_balances`, `get_bill`, `get_budget_status`, `get_preferences`, `get_spending_summary`, `get_status`, `list_accounts`, `list_budgets`, `list_categories`, `list_credit_cards`, `list_dashboards`, `list_exchange_rates`, `list_recurring`, `list_sub_categories`, `list_tags`, `search_transactions` |
+| `fintrack:write` (`readOnlyHint: false`) | `add_account_expense`, `add_account_income`, `add_card_purchase`, `apply_due_recurring`, `confirm_transaction`, `create_account`, `create_budget`, `create_category`, `create_credit_card`, `create_recurring`, `create_sub_category`, `create_tag`, `create_transfer`, `delete_account`, `delete_account_transaction`, `delete_budget`, `delete_card_transaction`, `delete_category`, `delete_credit_card`, `delete_dashboard`, `delete_sub_category`, `delete_tag`, `import_account_statement`, `import_card_statement`, `pay_bill`, `rename_dashboard`, `revert_bill_payment`, `save_dashboard`, `set_base_currency`, `set_exchange_rate`, `set_exchange_rates`, `set_locale`, `update_account`, `update_account_transaction`, `update_budget`, `update_card_transaction`, `update_credit_card` |
+
+Error codes added by token authentication (HTTP only, not tool results): `invalid_token` (`401`), `insufficient_scope`
+(`403`, carries the `scope` needed). Inside a tool call a scope failure (defence in depth) comes back as a tool error
+`{ "error": { "code": "insufficient_scope", "scope": "fintrack:write" } }`.
+
 ## Transaction write basics
 
 These rules are shared by every transaction-creating tool below (`add_card_purchase`, `add_account_expense`, `add_account_income`, `import_card_statement`, `import_account_statement`) and are stated once here rather than repeated per tool.

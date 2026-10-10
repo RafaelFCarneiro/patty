@@ -57,7 +57,7 @@ afterEach(() => {
 type Row = Record<string, unknown>;
 
 // drizzle's bookkeeping, sqlite internals, the FTS shadow tables, and the tables this migration adds.
-const EXCLUDED_TABLES = /^(__drizzle|sqlite_|transactions_fts|users$|sessions$|setup_codes$)/;
+const EXCLUDED_TABLES = /^(__drizzle|sqlite_|transactions_fts|users$|sessions$|access_tokens$|setup_codes$)/;
 
 /** Every table outside the auth ones and drizzle's bookkeeping, fully dumped and ordered — the database's
  *  domain content, to compare byte-for-byte before and after the migration. */
@@ -123,6 +123,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     expect([await balanceOf(legacy, 'acc-1'), await balanceOf(legacy, 'acc-2')]).toEqual(beforeBalances);
     expect(beforeBalances).toEqual([957.5, 250.5]);
     expect(await legacy.all(sql`SELECT * FROM sessions`)).toEqual([]);
+    expect(await legacy.all(sql`SELECT * FROM access_tokens`)).toEqual([]);
     expect(await legacy.all(sql`SELECT * FROM setup_codes`)).toEqual([]);
   });
 

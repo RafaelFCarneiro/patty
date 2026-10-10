@@ -1,12 +1,22 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { ownerNeedsSetup } from '../../../controllers/auth.js';
-import { csrfVerdict, isLoopbackRequest, preSessionCsrfVerdict, type CsrfRequest } from '../../../logic/auth.js';
-import { AuthMode, authErrors, isUiPath, OWNER_PRINCIPAL } from '../../../models/auth.js';
+import {
+  acceptsBearer,
+  credentialOf,
+  csrfVerdict,
+  defaultScopeForMethod,
+  hasScope,
+  isLoopbackRequest,
+  preSessionCsrfVerdict,
+  type CsrfRequest,
+} from '../../../logic/auth.js';
+import { AuthMode, authErrors, isUiPath, OWNER_PRINCIPAL, type Principal } from '../../../models/auth.js';
 import { safeNextPath } from '../../../wire/in/auth.js';
 import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from '../authPaths.js';
 import type { HttpAuth } from '../context.js';
-import { resolvePrincipal } from '../session.js';
+import { rejectWithChallenge } from '../bearer.js';
+import { resolveBearerPrincipal, resolvePrincipal, type Resolution } from '../session.js';
 
 /**
  * The auth hook (ADR-033 §1, §2, §6): an inbound-edge request interceptor — read the headers, route pattern and
@@ -15,8 +25,12 @@ import { resolvePrincipal } from '../session.js';
  * route (ordering is wiring), so it also guards a request no route matches.
  *   - auth `disabled` (loopback)  → the owner — but only for a request that names a loopback `Host` (and
  *     `Origin`, if sent): anything else is a DNS-rebound or cross-site page and gets 403 on every route;
- *   - auth `required`             → the session cookie's user; no session → 401 JSON (`/api`, `/mcp`,
- *     anything not under `/ui`) or a redirect to setup/login (`/ui`). Only `PUBLIC_ROUTES` skip this.
+ *   - auth `required`             → on `/api` and `/mcp` an `Authorization` header is AUTHORITATIVE: it must be
+ *     `Bearer ftk_…` and valid, and the cookie is then ignored — a bad bearer never falls back to a session, and a
+ *     bearer request carries no ambient credential, so it skips the CSRF check. Otherwise (no header, or a `/ui`
+ *     path, where a bearer is never accepted) the session cookie's user. No credential → 401 + a Bearer challenge
+ *     (anything not under `/ui`) or a redirect to setup/login (`/ui`). The principal's scopes are then checked
+ *     against the matched route's declared scope. Only `PUBLIC_ROUTES` skip all of this.
  * stdio never reaches this hook: it is trusted and acts as the owner too (`OWNER_PRINCIPAL`).
  */
 
@@ -61,15 +75,44 @@ export const registerAuthHook = (app: FastifyInstance, auth: HttpAuth): void => 
   const { deps, publicUrl } = auth;
 
   const rejectUnauthenticated = async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply> => {
-    if (!isUiPath(pathOf(req.url))) return reject(reply, authErrors.unauthenticated);
+    if (!isUiPath(pathOf(req.url))) return rejectWithChallenge(req, reply, publicUrl, authErrors.unauthenticated);
     const target = (await ownerNeedsSetup(deps)) ? SETUP_PATH : loginRedirectTarget(req);
     return reply.redirect(target, SEE_OTHER);
+  };
+
+  // A route's declared scope (RouteDefinition.scope); a route that declares none falls back to the method rule.
+  const requiredScope = (req: FastifyRequest) => req.routeOptions.config?.scope ?? defaultScopeForMethod(req.method);
+
+  const admit = (req: FastifyRequest, reply: FastifyReply, principal: Principal): FastifyReply | undefined => {
+    const required = requiredScope(req);
+    if (!hasScope(principal.scopes, required)) {
+      return rejectWithChallenge(req, reply, publicUrl, authErrors.insufficientScope(required));
+    }
+    req.principal = principal;
+    return undefined;
+  };
+
+  const authenticateBearer = async (req: FastifyRequest, reply: FastifyReply, token: string | null) => {
+    if (token === null) return rejectWithChallenge(req, reply, publicUrl, authErrors.invalidToken);
+    const resolved: Resolution = await resolveBearerPrincipal(auth, token);
+    if ('failure' in resolved) return reject(reply, resolved.failure);
+    if (resolved.principal === null) return rejectWithChallenge(req, reply, publicUrl, authErrors.invalidToken);
+    return admit(req, reply, resolved.principal);
   };
 
   app.addHook('onRequest', async (req, reply) => {
     if (isPublicRoute(req.routeOptions.url, req.method)) {
       const verdict = preSessionCsrfVerdict(csrfInput(req, publicUrl));
       return verdict ? reject(reply, verdict) : undefined;
+    }
+
+    // Decide from the route the router actually matched (it decodes `/%61pi/…` to `/api/…`); the raw path only
+    // for a request no route matched, where the answer is a 404 or a 401 anyway.
+    if (acceptsBearer(req.routeOptions.url ?? pathOf(req.url))) {
+      const credential = credentialOf(req.headers.authorization);
+      if (credential.kind !== 'none') {
+        return authenticateBearer(req, reply, credential.kind === 'bearer' ? credential.token : null);
+      }
     }
 
     const resolved = await resolvePrincipal(auth, req);
@@ -79,7 +122,6 @@ export const registerAuthHook = (app: FastifyInstance, auth: HttpAuth): void => 
     // Cookie-authenticated, so unsafe methods (including POST /mcp) must come from our own origin.
     const verdict = csrfVerdict(csrfInput(req, publicUrl));
     if (verdict) return reject(reply, verdict);
-    req.principal = resolved.principal;
-    return undefined;
+    return admit(req, reply, resolved.principal);
   });
 };

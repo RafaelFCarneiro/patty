@@ -96,3 +96,58 @@ export const registeredRoutes = async (ctx: AppContext): Promise<RegisteredRoute
 
 /** A registered route pattern with its parameters filled in, so it can be requested. */
 export const concreteUrl = (url: string): string => url.replace(/:[A-Za-z]+/g, 'x').replace('*', 'x');
+
+/** What a browser at the loopback publish sends with a form POST: the matching Host and Origin, plus the session. */
+export const browserHeaders = (cookie: string): Record<string, string> => ({
+  ...FORM_HEADERS,
+  host: LOOPBACK_HOST,
+  origin: LOOPBACK_ORIGIN,
+  cookie,
+});
+
+const SECRET_PATTERN = /data-testid="token-secret">(ftk_[A-Za-z0-9_-]+)</;
+
+export type MintedToken = { token: string; id: string };
+
+/** Mint a token as the person at `/ui/access/tokens` does; read the plaintext off the one page that shows it. */
+export const mintToken = async (
+  ctx: AppContext,
+  cookie: string,
+  fields: { name?: string; access?: 'read' | 'write'; expiry?: 'none' | '30' | '90' | '365' } = {},
+): Promise<MintedToken> => {
+  const res = await ctx.app.inject({
+    method: 'POST',
+    url: '/ui/access/tokens',
+    headers: browserHeaders(cookie),
+    payload: formBody({
+      password: PASSWORD,
+      name: fields.name ?? 'test token',
+      access: fields.access ?? 'write',
+      expiry: fields.expiry ?? '90',
+    }),
+  });
+  const token = SECRET_PATTERN.exec(res.body)?.[1];
+  if (res.statusCode !== 200 || !token) throw new Error(`token creation failed: ${res.statusCode} ${res.body}`);
+  const stored = await authDepsOf(ctx).accessTokens.findByTokenHash(authDepsOf(ctx).secrets.hashSecret(token));
+  if (!stored) throw new Error('the minted token was not stored');
+  return { token, id: stored.id };
+};
+
+export const bearer = (token: string): Record<string, string> => ({ authorization: `Bearer ${token}` });
+
+export const MCP_HEADERS = {
+  'content-type': 'application/json',
+  accept: 'application/json, text/event-stream',
+} as const;
+export const INITIALIZE_REQUEST = {
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '0' } },
+} as const;
+export const toolCall = (name: string, args: Record<string, unknown> = {}, id = 2) => ({
+  jsonrpc: '2.0',
+  id,
+  method: 'tools/call',
+  params: { name, arguments: args },
+});

@@ -29,13 +29,14 @@ import { tagApplier, tagsRepo } from './diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from './diplomat/db/repos/transactions.js';
 import { transactionTagApplier } from './diplomat/db/repos/transactionTags.js';
 import { healthRepo } from './diplomat/db/repos/health.js';
+import { accessTokenApplier } from './diplomat/db/repos/accessTokens.js';
 import { sessionApplier } from './diplomat/db/repos/sessions.js';
 import { setupCodeApplier } from './diplomat/db/repos/setupCodes.js';
 import { userApplier } from './diplomat/db/repos/users.js';
 import type { HttpAuth } from './diplomat/http/context.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { ACCOUNT_ENTITY_TAG } from './models/account.js';
-import { SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from './models/auth.js';
+import { ACCESS_TOKEN_ENTITY_TAG, SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from './models/auth.js';
 import { BILL_ENTITY_TAG } from './models/bill.js';
 import { BUDGET_ENTITY_TAG } from './models/budget.js';
 import { CATEGORY_ENTITY_TAG } from './models/category.js';
@@ -147,6 +148,7 @@ const main = async (): Promise<void> => {
     [SETTINGS_ENTITY_TAG]: settingsApplier,
     [USER_ENTITY_TAG]: userApplier,
     [SESSION_ENTITY_TAG]: sessionApplier,
+    [ACCESS_TOKEN_ENTITY_TAG]: accessTokenApplier,
     [SETUP_CODE_ENTITY_TAG]: setupCodeApplier,
   };
 

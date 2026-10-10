@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { claimOwner, login, logout, ownerNeedsSetup } from '../../../controllers/auth.js';
 import { httpStatus, type AppError } from '../../../common/errors.js';
@@ -8,30 +8,14 @@ import { LoginFormSchema, NextQuerySchema, SetupFormSchema } from '../../../wire
 import { renderLoginPage, renderSetupPage } from '../authPages.js';
 import { LOGIN_PATH, LOGOUT_PATH, SEE_OTHER, SETUP_PATH } from '../authPaths.js';
 import type { AuthRoutesContext } from '../context.js';
-import { HTML_CONTENT_TYPE } from '../uiFiles.js';
+import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../formPages.js';
 import { clearedSessionCookie, readCookie, SESSION_COOKIE_NAME, sessionCookie } from '../cookies.js';
 import { createAttemptLimiter } from '../rateLimiter.js';
 
-const FORM_BODY_LIMIT_BYTES = 8 * 1024;
-const FORM_CONTENT_TYPE = 'application/x-www-form-urlencoded';
 const statusOf = (error: AppError): number => httpStatus(error);
 const RATE_LIMITED_STATUS = statusOf(authErrors.rateLimited);
 // An unparsable form is the same "validation" failure every other boundary reports.
 const INVALID_FORM_STATUS = statusOf(validation([]));
-
-// The sign-in pages are tiny, self-contained and framed by nobody: lock everything down (no scripts, no
-// third-party loads, no embedding) and never let a proxy or the back button keep a copy.
-const PAGE_HEADERS = {
-  'cache-control': 'no-store',
-  'content-security-policy':
-    "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
-  'x-frame-options': 'DENY',
-  'x-content-type-options': 'nosniff',
-  'referrer-policy': 'same-origin',
-} as const;
-
-const page = (reply: FastifyReply, status: number, html: string): FastifyReply =>
-  reply.status(status).headers(PAGE_HEADERS).type(HTML_CONTENT_TYPE).send(html);
 
 const messageFor = (e: AppError): string => {
   switch (e.code) {
@@ -50,11 +34,6 @@ const messageFor = (e: AppError): string => {
 
 const nextFrom = (query: unknown): string => NextQuerySchema.safeParse(query).data?.next ?? DEFAULT_LANDING_PATH;
 
-// An urlencoded body is only parsed on these routes — never app-wide, so `/api` keeps rejecting it.
-const parseFormBody = (_req: FastifyRequest, body: string, done: (err: Error | null, value?: unknown) => void) => {
-  done(null, Object.fromEntries(new URLSearchParams(body)));
-};
-
 /**
  * `/ui/login`, `/ui/setup`, `/ui/logout` (ADR-033 §2). Browser-facing HTML, not part of the `/api` JSON
  * contract, so — like `routes/ui.ts` — these are not `RouteDefinition`s. Thin: parse the form, throttle,
@@ -68,11 +47,7 @@ export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext)
     reply.header('set-cookie', sessionCookie(started.token, ctx.secureCookie)).redirect(next, SEE_OTHER);
 
   void app.register(async (scope) => {
-    scope.addContentTypeParser(
-      FORM_CONTENT_TYPE,
-      { parseAs: 'string', bodyLimit: FORM_BODY_LIMIT_BYTES },
-      parseFormBody,
-    );
+    addFormParser(scope);
     const formRoute = { bodyLimit: FORM_BODY_LIMIT_BYTES };
 
     scope.get(LOGIN_PATH, async (req, reply) =>

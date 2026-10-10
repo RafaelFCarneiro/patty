@@ -10,6 +10,7 @@ import {
   isSetupCodeUsable,
   isUnclaimed,
   newSession,
+  sessionPrincipal,
   normalizeSetupCode,
   SETUP_CODE_TTL_MS,
   shouldIssueSetupCode,
@@ -147,7 +148,7 @@ export const authenticate = (deps: AuthDeps, tokenHash: string): ResultAsync<Flo
     const persist: Persistable[] = verdict.touch
       ? [persistence.update({ entity: SESSION_ENTITY_TAG, model: touched(session, now) })]
       : [];
-    return ok({ persist, response: { userId: user.id, role: user.role } });
+    return ok({ persist, response: sessionPrincipal(user) });
   });
 
 /** Startup housekeeping: delete every session past its expiry. */

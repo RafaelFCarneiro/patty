@@ -6,6 +6,7 @@ import { ConfirmTransactionSchema, SearchTransactionsSchema, TransactionSortFiel
 import { outcomeToDb } from '../../../adapters/transactions.js';
 import type { McpContext } from '../context.js';
 import { fromResult } from '../respond.js';
+import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerTransactionTools = (server: McpServer, ctx: McpContext): void => {
   const { deps, runEffects } = ctx;
@@ -13,6 +14,7 @@ export const registerTransactionTools = (server: McpServer, ctx: McpContext): vo
   server.registerTool(
     'confirm_transaction',
     {
+      annotations: MUTATING,
       title: 'Confirm (clear) a pending transaction',
       description:
         'Mark a pending transaction as effective (cleared). ' +
@@ -32,6 +34,7 @@ export const registerTransactionTools = (server: McpServer, ctx: McpContext): vo
   server.registerTool(
     'search_transactions',
     {
+      annotations: READ_ONLY,
       title: 'Search transactions',
       description:
         'Search transactions by period (month/year or from/to), type (including transfers), ' +

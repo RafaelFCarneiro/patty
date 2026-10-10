@@ -1,0 +1,43 @@
+name: Resolve the container base image
+description: >
+  Picks the image the Dockerfile builds FROM: the GHCR mirror of the Docker Hub base image when it exists (Docker Hub
+  rate-limits anonymous pulls from shared runners — HTTP 429), else the Docker Hub image itself. Needs the repository
+  checked out and docker/setup-buildx-action already run.
+
+inputs:
+  token:
+    description: Token with read access to this repository's packages
+    default: ${{ github.token }}
+
+outputs:
+  image:
+    description: The image reference to pass to the build as NODE_IMAGE
+    value: ${{ steps.pick.outputs.image }}
+
+runs:
+  using: composite
+  steps:
+    - name: Log in to ghcr.io
+      continue-on-error: true # a failed login only means the mirror may be unreadable; the fallback below covers it
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.token }}
+
+    - name: Pick the base image
+      id: pick
+      shell: bash
+      env:
+        OWNER: ${{ github.repository_owner }}
+      run: |
+        # The Dockerfile's own default is the single source of truth for which image (and tag) to mirror.
+        upstream="$(sed -n 's/^ARG NODE_IMAGE=//p' Dockerfile)"
+        mirror="ghcr.io/${OWNER,,}/node-mirror:${upstream#node:}"
+        if docker buildx imagetools inspect "$mirror" >/dev/null 2>&1; then
+          echo "::notice::Building FROM the GHCR mirror $mirror"
+          echo "image=$mirror" >> "$GITHUB_OUTPUT"
+        else
+          echo "::notice::No readable mirror at $mirror — building FROM Docker Hub ($upstream)"
+          echo "image=$upstream" >> "$GITHUB_OUTPUT"
+        fi

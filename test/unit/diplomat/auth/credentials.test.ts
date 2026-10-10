@@ -3,11 +3,13 @@ import {
   createSecrets,
   hashPassword,
   hashSecret,
+  randomAccessToken,
   randomSetupCode,
   randomToken,
   verifyPassword,
 } from '../../../../src/diplomat/auth/credentials.js';
 import { normalizeSetupCode } from '../../../../src/logic/auth.js';
+import { TOKEN_PREFIX } from '../../../../src/models/auth.js';
 
 describe('passwords', () => {
   it('hashes with argon2id at the OWASP first-choice parameters', async () => {
@@ -55,5 +57,21 @@ describe('tokens and codes', () => {
   it('hashes secrets with sha256 hex, deterministically', () => {
     expect(hashSecret('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
     expect(hashSecret('abc')).toBe(hashSecret('abc'));
+  });
+});
+
+describe('randomAccessToken', () => {
+  it('is ftk_ + 32 random bytes, base64url — greppable and unguessable', () => {
+    const token = randomAccessToken();
+    expect(token.startsWith(TOKEN_PREFIX)).toBe(true);
+    expect(token.slice(TOKEN_PREFIX.length)).toMatch(/^[A-Za-z0-9_-]{43}$/); // 32 bytes → 43 base64url chars
+  });
+
+  it('never repeats', () => {
+    expect(new Set(Array.from({ length: 50 }, randomAccessToken)).size).toBe(50);
+  });
+
+  it('is the one createSecrets hands the controllers', async () => {
+    expect((await createSecrets()).randomAccessToken().startsWith(TOKEN_PREFIX)).toBe(true);
   });
 });

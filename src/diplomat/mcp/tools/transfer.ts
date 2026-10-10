@@ -5,6 +5,7 @@ import { CreateTransferSchema } from '../../../wire/in/accounts.js';
 import { outcomeToDb } from '../../../adapters/transactions.js';
 import type { McpContext } from '../context.js';
 import { fromResult } from '../respond.js';
+import { MUTATING } from '../annotations.js';
 
 export const registerTransferTools = (server: McpServer, ctx: McpContext): void => {
   const { deps, runEffects } = ctx;
@@ -12,6 +13,7 @@ export const registerTransferTools = (server: McpServer, ctx: McpContext): void 
   server.registerTool(
     'create_transfer',
     {
+      annotations: MUTATING,
       title: 'Transfer between accounts',
       description:
         'Move value between two accounts (e.g. conta corrente → investimentos). Creates a transaction ' +

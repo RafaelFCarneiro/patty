@@ -5,6 +5,7 @@ import { McpTransport, type Config } from './config.js';
 import { issueSetupCode, pruneExpiredSessions } from './controllers/auth.js';
 import type { AuthDeps, RunEffects } from './controllers/deps.js';
 import type { Db } from './diplomat/db/driver.js';
+import { accessTokensRepo } from './diplomat/db/repos/accessTokens.js';
 import { sessionsRepo } from './diplomat/db/repos/sessions.js';
 import { setupCodesRepo } from './diplomat/db/repos/setupCodes.js';
 import { usersRepo } from './diplomat/db/repos/users.js';
@@ -19,8 +20,8 @@ import { AuthMode } from './models/auth.js';
  */
 const loadCredentialsModule = () => import('./diplomat/auth/credentials.js');
 
-/** The auth flows touch three entities and the shell adapts model→row for each exactly once, here,
- *  before the generic runner sees the batch (docs/write-path.md § From model to row). */
+/** The auth flows touch four entities (user, session, setup code, access token) and the shell adapts model→row
+ *  for each exactly once, here, before the generic runner sees the batch (docs/write-path.md § From model to row). */
 export const bindAuthRunEffects =
   (runEffects: RunEffects): RunEffects =>
   (flow) =>
@@ -63,6 +64,7 @@ export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEff
   const deps: AuthDeps = {
     users: usersRepo(db),
     sessions: sessionsRepo(db),
+    accessTokens: accessTokensRepo(db),
     setupCodes: setupCodesRepo(db),
     clock: () => new Date(),
     newId: () => randomUUID(),

@@ -19,10 +19,10 @@ const PLACEHOLDER = /\{\{(\w+)\}\}/g;
 
 /** Substitutes `{{name}}` placeholders. Values are inserted verbatim, so callers pass only constants or
  *  `escapeHtml`'d text; an unknown placeholder becomes empty rather than leaking its name. */
-const fillTemplate = (template: string, values: Readonly<Record<string, string>>): string =>
+export const fillTemplate = (template: string, values: Readonly<Record<string, string>>): string =>
   template.replace(PLACEHOLDER, (_match, name: string) => values[name] ?? '');
 
-const errorBlock = (message: string | undefined): string =>
+export const errorBlock = (message: string | undefined): string =>
   message === undefined ? '' : `<p class="auth-error" role="alert">${escapeHtml(message)}</p>`;
 
 export const renderLoginPage = async (fields: { next: string; error?: string }): Promise<string> =>

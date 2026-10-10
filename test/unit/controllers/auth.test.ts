@@ -14,8 +14,10 @@ import {
 import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
 import { SESSION_IDLE_TTL_MS, SESSION_TOUCH_INTERVAL_MS, SETUP_CODE_TTL_MS } from '../../../src/logic/auth.js';
 import {
+  ALL_SCOPES,
   AuthMode,
   authErrors,
+  PrincipalVia,
   OWNER_USER_ID,
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
@@ -37,6 +39,7 @@ const secrets: AuthSecrets = {
   hashPassword: async (password) => fakeHash(password),
   verifyPassword: async (hash, password) => hash === fakeHash(password),
   randomToken: () => 'TOKEN',
+  randomAccessToken: () => 'ftk_TOKEN',
   randomSetupCode: () => 'ABCDEFGHJKMNPQRSTVWX',
   hashSecret: (secret) => `sha(${secret})`,
   dummyPasswordHash: fakeHash('never-typed'),
@@ -72,6 +75,7 @@ const depsFor = ({ users = [], sessions = [], codes = [], now = NOW }: World = {
       findByTokenHash: async (hash) => sessions.find((session) => session.tokenHash === hash) ?? null,
       listExpired: async (nowIso) => sessions.filter((session) => session.expiresAt <= nowIso),
     },
+    accessTokens: { findByTokenHash: async () => null, findById: async () => null, listByUser: async () => [] },
     setupCodes: {
       findByHash: async (hash) => codes.find((code) => code.codeHash === hash) ?? null,
       current: async () => codes.find((code) => code.id === SETUP_CODE_ID) ?? null,
@@ -280,7 +284,12 @@ describe('authenticate', () => {
       authenticate(depsFor({ users, sessions: [sessionRow()] }), 'sha(TOKEN)'),
     );
     expect(persist).toEqual([]);
-    expect(response).toEqual({ userId: OWNER_USER_ID, role: UserRole.enum.admin });
+    expect(response).toEqual({
+      userId: OWNER_USER_ID,
+      role: UserRole.enum.admin,
+      scopes: [...ALL_SCOPES],
+      via: PrincipalVia.enum.session,
+    });
   });
 
   it('slides a stale session forward with a version-guarded update', async () => {

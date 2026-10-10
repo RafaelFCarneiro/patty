@@ -6,7 +6,16 @@ import { DISABLED_AUTH, type HttpAuth } from '../../../../../src/diplomat/http/c
 import { SESSION_COOKIE_NAME } from '../../../../../src/diplomat/http/cookies.js';
 import { registerAuthHook } from '../../../../../src/diplomat/http/hooks/auth.js';
 import { conflict } from '../../../../../src/models/error.js';
-import { AUTH_MESSAGES, AuthMode, OWNER_PRINCIPAL, OWNER_USER_ID, UserRole } from '../../../../../src/models/auth.js';
+import {
+  ALL_SCOPES,
+  AUTH_MESSAGES,
+  AuthMode,
+  OWNER_PRINCIPAL,
+  OWNER_USER_ID,
+  type Principal,
+  PrincipalVia,
+  UserRole,
+} from '../../../../../src/models/auth.js';
 
 // The hook only translates: headers/route/cookie in, 401 / 403 / redirect / principal out. The decisions are
 // unit-tested in test/unit/logic/auth.test.ts; the whole stack is covered by test/integration/auth/*.
@@ -26,8 +35,15 @@ const build = async (auth: HttpAuth): Promise<FastifyInstance> => {
   return app;
 };
 
+const sessionPrincipalOf = (userId: string, role: UserRole): Principal => ({
+  userId,
+  role,
+  scopes: [...ALL_SCOPES],
+  via: PrincipalVia.enum.session,
+});
+
 const unclaimedOwner = { id: OWNER_USER_ID, username: null, passwordHash: null };
-const required = (principal: { userId: string; role: UserRole } | null | 'fails', ownerUnclaimed = true): HttpAuth => ({
+const required = (principal: Principal | null | 'fails', ownerUnclaimed = true): HttpAuth => ({
   mode: AuthMode.enum.required,
   secureCookie: false,
   deps: {
@@ -84,7 +100,7 @@ describe('registerAuthHook — auth required', () => {
   });
 
   it('sets the resolved principal for a valid session', async () => {
-    const principal = { userId: 'u1', role: UserRole.enum.member };
+    const principal = sessionPrincipalOf('u1', UserRole.enum.member);
     const app = await build(required(principal));
     const res = await app.inject({ method: 'GET', url: '/api/probe', headers: withSession });
     expect(res.json()).toEqual({ principal });
@@ -98,7 +114,7 @@ describe('registerAuthHook — auth required', () => {
   });
 
   it('refuses a cookie-authenticated cross-origin write with 403 and lets a same-origin one through', async () => {
-    const principal = { userId: 'u1', role: UserRole.enum.admin };
+    const principal = sessionPrincipalOf('u1', UserRole.enum.admin);
     const app = await build(required(principal));
     const base = { ...withSession, host: '127.0.0.1:51737' };
     const crossSite = await app.inject({

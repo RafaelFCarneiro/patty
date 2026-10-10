@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 import { PUBLIC_ROUTES } from '../../../src/diplomat/http/authPaths.js';
-import { AuthMode, OWNER_PRINCIPAL, UserRole } from '../../../src/models/auth.js';
+import { ALL_SCOPES, AuthMode, OWNER_PRINCIPAL, PrincipalVia, UserRole } from '../../../src/models/auth.js';
 import {
   claimOwner,
   FORM_HEADERS,
@@ -100,7 +100,12 @@ describe('auth hook — required mode', () => {
     ctx.registerOn(probe);
     probe.get('/__principal', async (req) => req.principal ?? null);
     const res = await probe.inject({ method: 'GET', url: '/__principal', headers: { cookie } });
-    expect(res.json()).toEqual({ userId: OWNER_PRINCIPAL.userId, role: UserRole.enum.admin });
+    expect(res.json()).toEqual({
+      userId: OWNER_PRINCIPAL.userId,
+      role: UserRole.enum.admin,
+      scopes: [...ALL_SCOPES],
+      via: PrincipalVia.enum.session,
+    });
     await probe.close();
   });
 });

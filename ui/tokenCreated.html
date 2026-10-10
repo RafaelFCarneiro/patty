@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FinTrack — token created</title>
+    <link rel="stylesheet" href="{{stylesheet}}" />
+  </head>
+  <body>
+    <main class="auth-card tokens-card">
+      <h1>Token created</h1>
+      <p class="auth-lede">“{{name}}” — {{access}}.</p>
+      <p class="auth-warning" role="alert">
+        Copy it now: you won't see this token again. FinTrack keeps only a hash of it.
+      </p>
+      <p class="token-secret" data-testid="token-secret">{{token}}</p>
+      <p class="auth-hint">
+        Select the whole token (a triple-click does it), copy it, then send it as
+        <code>Authorization: Bearer &lt;token&gt;</code>. Lose it and you'll revoke it and create another.
+      </p>
+      <p><a href="{{tokensPath}}">Back to your tokens</a></p>
+    </main>
+  </body>
+</html>

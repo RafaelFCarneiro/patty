@@ -55,8 +55,10 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | `diplomat/*` | `controllers/`, `adapters/`, `models/`, wire schemas, runtime clients |
 | `diplomat/http`, `server.ts` → `@rfc0/effect-runner` | **Type-only**: the `ChangeBus` type (`['subscribe']`) for the SSE route's parameter; the bound bus is built in the composition root (`main.ts`) and passed in, never constructed inside `diplomat/*`. |
 | `diplomat/db` | Same base `diplomat/*` rule, **plus** `@rfc0/effect-runner` — it is the SQLite adapter implementing the port the package's engine defines (`versionedTableApplier` builds an `EntityApplier`; `driver.ts`'s `createTransactionRunner` implements `TransactionRunner`; `sqliteErrors.ts`'s `isSqliteBusy` implements `IsTransientContention`). Imports the package, never the reverse. |
-| `diplomat/auth/credentials.ts` | `controllers/deps.ts` (type-only: the `AuthSecrets` shape it implements), `@node-rs/argon2`, `node:crypto` — the real hashing/randomness behind the injected `AuthSecrets`. Loaded lazily (`authRuntime.ts`) so a run with auth disabled never loads the native argon2 module. |
+| `diplomat/auth/credentials.ts` | `controllers/deps.ts` (type-only: the `AuthSecrets` shape it implements), `models/auth.ts` (`TOKEN_PREFIX`), `@node-rs/argon2`, `node:crypto` — the real hashing/randomness behind the injected `AuthSecrets`. Loaded lazily (`authRuntime.ts`) so a run with auth disabled never loads the native argon2 module. |
 | `src/authRuntime.ts` (composition root) | Joins `diplomat/db/repos`, `diplomat/http` (public routes, `HttpAuth`) and `diplomat/auth` to `controllers/auth.ts` — wiring that imports more than one `diplomat/*` submodule, so it lives outside them (like `server.ts`/`main.ts`). `diplomat/http` never imports it. |
+| `diplomat/mcp/route.ts` → `diplomat/http/{bearer,principal}.ts` | **Documented exception**: `POST /mcp` is also an authorization point, so its route reads the request's `principal` (type-only), answers a short token with the same `rejectWithChallenge` the auth hook uses (`bearer.ts`, so the two can never word a `WWW-Authenticate` differently) and names the read scope for its route config (`READ_SCOPE`, `models/auth.ts`). Decisions stay in `logic/auth.ts`. |
+| `diplomat/http` → `logic/auth.ts`, `diplomat/mcp` → `logic/auth.ts` | **Documented exception**: the edges may call the pure *edge decisions* in `logic/auth.ts` — credential parsing, scopes (`hasScope`, `requiredMcpScope`, `scopeOfTool`), challenges (`bearerChallenge`, `resourceOrigin`), the metadata document (`protectedResourceMetadata`) — because they decide at the boundary what to read from headers and body and never touch I/O. Everything else stays behind a controller. |
 | `diplomat/http/hooks/` | The base `diplomat/*` rule, which in practice also allows the pure `logic/` predicates a route module may call (`routes/currencyRates.ts` does too) — no I/O. `hooks/` holds cross-cutting request interceptors (today `hooks/auth.ts`), registered by `server.ts` before any route; `routes/` holds the per-domain handlers. |
 | `diplomat/db/seed/` | `models/` (types and runtime enums) — nothing outside `diplomat/db` imports `seed/` |
 | `diplomat/mcp` → `diplomat/http/{routes,openapi}.ts` | **Documented exception**: `buildRouteDefinitions`/`buildOpenApiDocument` are deterministic, no-business-logic wire-schema-driven builders (their only module-scope effect is a one-time, idempotent `extendZodWithOpenApi(z)` zod-prototype patch) reused verbatim by both the REST route and the `fintrack://openapi` MCP resource — including under stdio transport, which never touches Fastify — so the two surfaces can't drift (ADR-013 Phase A). |
@@ -185,6 +187,10 @@ users               (id PK, username UNIQUE? — stored normalized (trimmed, NFK
                      role: admin|member, created_at, disabled_at?, version)
 sessions            (id PK, user_id FK→users ON DELETE CASCADE, token_hash UNIQUE — sha256 of the cookie
                      token, never the token — created_at, last_seen_at, expires_at, version)
+access_tokens       (id PK, user_id FK→users ON DELETE CASCADE, name, token_hash UNIQUE — sha256 of the `ftk_…`
+                     token, never the token — prefix (`ftk_` + first 6 chars of the random part, display only),
+                     scopes JSON array of `Scope` (`fintrack:read`|`fintrack:write`), created_at, last_used_at?,
+                     expires_at?, revoked_at? (the row is kept on revoke), version)
 setup_codes         (id PK — the single fixed row `SETUP_CODE_ID`, replaced in place on each issue, code_hash UNIQUE — sha256, never the code — created_at, expires_at, used_at?,
                      version)
 
@@ -309,8 +315,8 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
     (`OWNER_PRINCIPAL`). `controllers/auth.ts`'s `claimOwner` is the only flow that gives it credentials and emits
     an `update` of the owner — **no flow inserts a `user`**, so no path can create a second, empty user a database's
     data doesn't belong to. A setup code exists only while auth is `required` AND the owner has no credentials.
-    **Secrets are stored only as hashes:** passwords as argon2id, session tokens and setup codes as sha256 — the
-    plaintext token exists in the cookie and the plaintext code in one stderr line, nowhere else — and are never
+    **Secrets are stored only as hashes:** passwords as argon2id, session tokens, access tokens (`ftk_…`) and setup codes as sha256 — the
+    plaintext session token exists in the cookie, a plaintext access token on the one page that shows it at creation, and the plaintext code in one stderr line, nowhere else — and are never
     logged (the Fastify logger redacts `cookie`, `set-cookie`, `authorization`). **Safety copy:** before a migration
     listed in `diplomat/db/migrations.ts`'s `DATA_REWRITING_MIGRATIONS` runs against a database that already has
     applied migrations, `diplomat/db/safetyCopy.ts` snapshots it with `VACUUM INTO` while holding SQLite's write lock — `migrationBarrier.ts`'s `applyPendingMigrationsHolding` applies the pending migrations in that same `BEGIN IMMEDIATE` transaction (mirroring drizzle's libsql migrator and its `__drizzle_migrations` rows), so no other writer — even a process on an older release — can commit between the snapshot and the migration and be missing from the backup. The snapshot is written, encrypted under the same key, to `<DB_PATH>.pre-<migration>.bak` (standalone, mode `0600`,
@@ -334,30 +340,69 @@ CSRF origin check.
 
 **The hook and the principal.** `diplomat/http/hooks/auth.ts`'s `registerAuthHook` adds one `onRequest` hook on the root
 Fastify instance, **before any route** (`server.ts`'s `registerHttpApp` — ordering is wiring), so it also guards a request no route matched. It
-sets `req.principal` (`{ userId, role }`, `models/auth.ts`; typed in `diplomat/http/principal.ts`):
+sets `req.principal` (`models/auth.ts`'s `Principal` = `{ userId, role, scopes, via, tokenId? }`; typed in `diplomat/http/principal.ts`).
+`scopes` is a list of `Scope` (`fintrack:read`, `fintrack:write`; write implies read — `logic/auth.ts`'s `hasScope`); `via` is
+`session | token | owner` (`PrincipalVia`):
 
-- auth `disabled` → `OWNER_PRINCIPAL`, but only for a request that passes `logic/auth.ts`'s `isLoopbackRequest` (a loopback `Host`, and a loopback `Origin` if one is sent — the DNS-rebinding/cross-site guard; otherwise `403 forbidden_origin` on every route). No auth routes are registered;
-- auth `required` → `controllers/auth.ts`'s `authenticate(tokenHash)` on the `fintrack_session` cookie. No valid
-  session → `401` JSON `{ error: { code: 'unauthenticated' } }` for `/api`, `/mcp` and anything outside `/ui`, or a
-  `303` to `/ui/setup` (owner unclaimed) / `/ui/login?next=…` for `/ui`.
+- auth `disabled` → `OWNER_PRINCIPAL` (every scope, `via: owner`), but only for a request that passes `logic/auth.ts`'s `isLoopbackRequest` (a loopback `Host`, and a loopback `Origin` if one is sent — the DNS-rebinding/cross-site guard; otherwise `403 forbidden_origin` on every route). The `Authorization` header is ignored. No auth, token or metadata routes are registered;
+- auth `required`, on `/api` and `/mcp` (`logic/auth.ts`'s `acceptsBearer`), **an `Authorization` header is authoritative** (`credentialOf`): it must be `Bearer ftk_…`, and `controllers/accessTokens.ts`'s `authenticateToken(sha256(token))` must find an unrevoked, unexpired token whose owner can log in — principal with the *token's* scopes, `via: token`. Anything else (another scheme, an unknown/revoked/expired token) is `401 invalid_token`, and **the cookie is never consulted** — a bad bearer does not fall back to a session. A bearer-authenticated request skips the CSRF check (no ambient credential);
+- auth `required`, otherwise (no header, or any `/ui` path, where a bearer is never accepted) → `controllers/auth.ts`'s `authenticate(tokenHash)` on the `fintrack_session` cookie (every scope, `via: session`). No credential → `401` JSON `{ error: { code: 'unauthenticated' } }` **with a Bearer challenge** for `/api`, `/mcp` and anything outside `/ui`, or a `303` to `/ui/setup` (owner unclaimed) / `/ui/login?next=…` for `/ui`.
+
+After authentication the hook checks **scope** against the matched route: `req.routeOptions.config.scope` (declared by `RouteDefinition.scope`, put into the Fastify route config by `mountRoutes`), falling back to `logic/auth.ts`'s `defaultScopeForMethod` (GET/HEAD → read, else write) for a route that declares none, so an undeclared non-GET route fails closed (every shipped route declares its scope, pinned by a unit test). A short principal gets `403 insufficient_scope`. Whether a request may carry a bearer is decided from the route the router matched (`req.routeOptions.url`; the router decodes `/%61pi/…`), falling back to the raw path only for a request no route matched.
 
 The only exemptions are `PUBLIC_ROUTES` (`diplomat/http/authPaths.ts`), matched on the route's **registered pattern +
 method** (`req.routeOptions.url`), never the raw URL: `GET|HEAD /api/health`, `GET|HEAD|POST /ui/login`,
-`GET|HEAD|POST /ui/setup`, `GET|HEAD /ui/assets/app.css`. A path with no route is protected. An integration test
+`GET|HEAD|POST /ui/setup`, `GET|HEAD /ui/assets/app.css`, and the two Protected Resource Metadata routes. A path with no route is protected. An integration test
 enumerates every route Fastify registers (an `onRoute` listener attached before registration) and asserts each one
-outside the list is rejected without a session. Controllers do not take the principal: the instance has one user.
+outside the list is rejected without a credential (and, outside `/ui`, with a challenge). Controllers do not take the principal yet: the instance has one user.
 
-**CSRF.** After authentication, an unsafe method carrying the session cookie must declare (`Origin`, else `Referer`)
+**Scopes — two sources, one rule.** REST: every `RouteDefinition` has a required `scope` (`READ_SCOPE`/`WRITE_SCOPE`,
+`models/auth.ts`); a unit test pins each to `defaultScopeForMethod`. MCP: every `registerTool` call declares
+`annotations.readOnlyHint` (`diplomat/mcp/annotations.ts`'s `READ_ONLY`/`MUTATING`); `logic/auth.ts`'s `scopeOfTool` derives
+the scope from it (`true` → read, anything else → write) and `diplomat/mcp/scopes.ts`'s `guardToolScopes` is the one place
+that reads it: it wraps `server.registerTool`, **throws if a tool lacks a boolean hint**, records name → scope
+(`toolScopesOf`), and wraps each callback to re-check `extra.authInfo.scopes`. Resources and prompts are read. `POST /mcp`
+enforces twice: its route is declared `read` for the hook, a `preHandler` reads the parsed JSON-RPC body
+(`logic/auth.ts`'s `requiredMcpScope`: any `tools/call` of a write tool — or of a tool it cannot place — in a message or batch
+needs `write`) and answers `403 insufficient_scope` before any tool runs; the handler then hands the principal to the SDK
+transport as `req.raw.auth` (`diplomat/mcp/authInfo.ts`'s `AuthInfo`: `token` = the access-token *id*, `clientId`
+`pat:<id>` / `session` / `owner`, `scopes`), and each tool re-checks it (defence in depth; over HTTP a missing `authInfo`
+is refused, over stdio — trusted, no `authInfo` — it is allowed). A unit test builds the whole MCP server and lists the
+read/write split.
+
+**Challenges** (RFC 6750 §3, MCP authorization): `logic/auth.ts`'s `bearerChallenge` is the only place a `WWW-Authenticate`
+value is built; `diplomat/http/bearer.ts`'s `rejectWithChallenge` resolves only the origin (`PUBLIC_URL`, else the loopback
+request's own origin, else `resource_metadata` is omitted) and is shared by the hook and the MCP route. No credential →
+`Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp", scope="fintrack:read fintrack:write"`;
+`invalid_token` → `error` + `resource_metadata`; `insufficient_scope` → `error` + `scope` + `resource_metadata`.
+
+**Protected Resource Metadata** (RFC 9728): `routes/wellKnown.ts` serves the same document at
+`/.well-known/oauth-protected-resource/mcp` (path-inserted form for resource `<origin>/mcp`) and
+`/.well-known/oauth-protected-resource` (the bare URL names the same `<origin>/mcp` resource; RFC 9728 §3.3 strictness applies to the path-inserted URL clients derive from the resource) — `{ resource, scopes_supported, bearer_methods_supported: ['header'], resource_name }`,
+no `authorization_servers` until an authorization server exists. Both are public, mounted only when auth is `required`; with
+neither `PUBLIC_URL` nor a loopback `Host` the answer is `404 resource_metadata_unavailable`.
+
+**Access tokens.** `controllers/accessTokens.ts` — `createToken` (mints `AuthSecrets.randomAccessToken()` = `TOKEN_PREFIX` +
+32 random bytes base64url; persists the sha256 and the display prefix; the plaintext is only in the flow's response),
+`listTokens` (metadata + `status`, never a hash), `revokeToken` (sets `revoked_at`, idempotent, `unknown_token` for an id that
+is not the caller's), `authenticateToken` (`logic/auth.ts`'s `evaluateToken` verdict; `last_used_at` rewritten at most every
+`SESSION_TOUCH_INTERVAL_MS`). Expiry choices are `TOKEN_EXPIRY_DAYS` (none/30/90/365). The pages are `routes/tokens.ts`
+(`GET|POST /ui/access/tokens` — creation re-asks the login password (step-up) and shares the login attempt limiter — and `POST /ui/access/tokens/:id/revoke`; server-rendered by `tokenPages.ts`, same CSP/no-store headers as the
+sign-in pages through `formPages.ts`) — **session-only**: browser HTML behind the cookie and the CSRF check, never reachable
+with a bearer (the hook does not accept one on `/ui`, and each route also insists on `via: session`). There is no `/api` or MCP
+way to manage tokens. The shell's sidebar links to the page only when auth is `required` (the `AUTH_CONTROLS_MARKER`, next to logout).
+
+**CSRF.** After authentication, an unsafe method authenticated by the session cookie (not a bearer) must declare (`Origin`, else `Referer`)
 an origin in `allowedOrigins(PUBLIC_URL, Host)` — `PUBLIC_URL`, plus the request's own origin when its `Host` is
 loopback; otherwise `403 forbidden_origin`. Public `POST`s are checked when the browser declares an origin. The hook
 only reads the headers and translates; the decisions are pure functions in `logic/auth.ts` (`csrfVerdict`,
-`preSessionCsrfVerdict`, `allowedOrigins`, `isLoopbackRequest`).
+`preSessionCsrfVerdict`, `allowedOrigins`, `isLoopbackRequest`, plus `credentialOf`, `hasScope`, `evaluateToken`, `bearerChallenge`).
 
 **Flows** (`controllers/auth.ts`, rules in `logic/auth.ts`, all through `runEffects`):
 `issueSetupCode` (startup), `claimOwner` (`POST /ui/setup`), `login`, `logout`, `authenticate` (every request;
-writes nothing unless the session is stale, `SESSION_TOUCH_INTERVAL_MS`), `pruneExpiredSessions` (startup).
+writes nothing unless the session is stale, `SESSION_TOUCH_INTERVAL_MS`), `pruneExpiredSessions` (startup), and `controllers/accessTokens.ts`'s `createToken`/`revokeToken`/`authenticateToken` (above).
 Hashing, randomness and the clock are injected (`AuthDeps.secrets`, `clock`, `newId`); `diplomat/auth/credentials.ts`
-supplies argon2id (OWASP first-choice parameters, named constants) and sha256. `adapters/auth.ts` adapts the three
+supplies argon2id (OWASP first-choice parameters, named constants), the session/access-token/setup-code randomness and sha256. `adapters/auth.ts` adapts the four
 auth entities' batches once, in `authRuntime.ts`'s `bindAuthRunEffects`; their appliers are plain
 `versionedTableApplier`s registered at the composition root. The login/setup/logout pages and routes are
 `diplomat/http/routes/auth.ts` (urlencoded body parsing lives only in that route scope, so `/api` keeps refusing it),
@@ -376,6 +421,8 @@ requires a session. The container `HEALTHCHECK` is `/api/health`.
 
 55 MCP tools (contract: `docs/mcp-tools.md`), most mirrored as REST routes, both thin over the same controllers — `list_budgets`/`get_budget_status` (Feature Design 015) now have REST parity (`GET /api/budgets`, `GET /api/budgets/status`); `create_budget`/`update_budget`/`delete_budget` and `find_correlations` (Feature Design 016) are MCP-only for now, no REST mirror yet. `set/list_exchange_rates` and `set_base_currency` (ADR-026 Phase 2) have full REST parity (`GET`/`POST /api/exchange-rates`, `POST /api/exchange-rates/bulk`, `GET /api/preferences`, `POST /api/settings/base-currency`). Client connections: `docs/mcp-clients.md`.
 
+**Scopes:** every tool declares `annotations.readOnlyHint` and needs `fintrack:read` (read-only) or `fintrack:write` over HTTP (`docs/mcp-tools.md` § Scopes per tool); stdio is trusted and unrestricted.
+
 **Transport:** controlled by `MCP_TRANSPORT` (zod enum, `config.ts`). Default is **`stdio`** — the client spawns the process; no port, no Fastify. Set `MCP_TRANSPORT=http` to start the Fastify server (REST + streamable HTTP MCP on `PORT`). Both transports connect the same `buildMcpServer(deps, version)` core; no domain code moves. (ADR-007)
 
 ## Diplomat edge organization (ADR-025)
@@ -391,7 +438,7 @@ matching its controller; the entrypoint (`server.ts`/`routes.ts`) never inlines 
 still a domain, mirroring its single-file controller (`controllers/aggregate.ts`/`summary.ts`). `resources.ts`
 (`registerResources`) and `prompts.ts` (`registerPrompts`) stay single cross-domain modules — few enough, and
 cross-cutting enough, not to warrant per-domain splitting. `respond.ts` holds the shared response helpers
-(`json`, `jsonError`, `fromResult`, `jsonResource`); `context.ts` defines `McpContext` (`{ deps, version,
+(`json`, `jsonError`, `fromResult`, `jsonResource`); `annotations.ts` (`READ_ONLY`/`MUTATING`), `scopes.ts` (`guardToolScopes`, `toolScopesOf`) and `authInfo.ts` carry the per-tool scope; `context.ts` defines `McpContext` (`{ deps, version,
 runEffects, runEffectsSequence, resetLocale }`), built once in `server.ts` and passed to every register call so
 no module carries the full parameter list. `server.ts` reduces to construction + aggregation: build the server,
 build `ctx`, call each `register…` once.
@@ -409,7 +456,7 @@ runEffects, runEffectsSequence }`), built once in `routes.ts` and passed to ever
 `GET /ui/:name`, and `GET /ui/assets/{app.css,app.js,money.js}` — browser-facing HTML/asset routes, not
 `RouteDefinition`s (no OpenAPI entry) — are mounted by `routes/ui.ts`'s `registerUiRoutes(app)`, called from
 `registerRoutes` alongside `mountRoutes` (ADR-027 Phase 1; see § Dashboards / `/ui` surface). `routes/auth.ts`'s `registerAuthRoutes` (the `/ui/login`, `/ui/setup`, `/ui/logout` pages — browser HTML like `routes/ui.ts`,
-no OpenAPI entry; mounted only when auth is `required`) is called from `registerRoutes` too. `routes.ts`
+no OpenAPI entry; mounted only when auth is `required`) is called from `registerRoutes` too, as are `routes/tokens.ts`'s `registerTokenRoutes` (`/ui/access/tokens` pages, session-only) and `routes/wellKnown.ts`'s `registerProtectedResourceMetadataRoutes` (both likewise only when auth is `required`). `routes.ts`
 reduces to construction + aggregation: `buildRouteDefinitions` concatenates every domain's array into the one
 list `mountRoutes`/`buildOpenApiDocument` consume (§ OpenAPI contract), and `registerRoutes` mounts it, the UI
 shell/asset routes, and `/api/openapi.json`.
@@ -428,7 +475,7 @@ In the default **stdio** transport, the HTTP server (REST + streamable HTTP MCP,
 
 ## Distribution: container image
 
-Besides the npm package, the repo ships an image (`Dockerfile`, `compose.yaml`; published to `ghcr.io/rafaelfcarneiro/fintrack`, multi-arch, tagged like the npm version plus `latest`). Image defaults: `MCP_TRANSPORT=http`, `HOST=0.0.0.0`, `PORT=51737`, `DB_PATH=/data/fintrack.db`, `NODE_ENV=production`; runs as the non-root `node` user behind `tini`; `/data` (a volume) is the only writable path, the root filesystem is mountable read-only (`compose.yaml` does) with `/tmp` as tmpfs. The encryption key is never in the image or the volume: it arrives as a file (`FINTRACK_DB_KEY_FILE`, a Docker secret), and startup fails fast without a key source. The healthcheck is `GET /api/health` (public; `db: ok` is required). `HOST=0.0.0.0` makes auth `required`: the first start prints a one-time setup code to the container log, and `/ui/setup` claims the owner (§ Authentication). Exactly one container per volume (SQLite, in-process change bus and scheduler). Every shipped example still publishes the port on host loopback only (`127.0.0.1:51737:51737`): the container speaks plain HTTP, and `/mcp` accepts only a session cookie, which MCP clients do not carry. `src/` is identical for npm and container runs; the build/publish pipeline is in `docs/releasing.md`.
+Besides the npm package, the repo ships an image (`Dockerfile`, `compose.yaml`; published to `ghcr.io/rafaelfcarneiro/fintrack`, multi-arch, tagged like the npm version plus `latest`). Image defaults: `MCP_TRANSPORT=http`, `HOST=0.0.0.0`, `PORT=51737`, `DB_PATH=/data/fintrack.db`, `NODE_ENV=production`; runs as the non-root `node` user behind `tini`; `/data` (a volume) is the only writable path, the root filesystem is mountable read-only (`compose.yaml` does) with `/tmp` as tmpfs. The encryption key is never in the image or the volume: it arrives as a file (`FINTRACK_DB_KEY_FILE`, a Docker secret), and startup fails fast without a key source. CI and release build `FROM` a GHCR mirror of the Docker Hub base image (falling back to Docker Hub when it is unavailable — `docs/releasing.md` § Base-image mirror), because Docker Hub rate-limits anonymous pulls from shared runners. The healthcheck is `GET /api/health` (public; `db: ok` is required). `HOST=0.0.0.0` makes auth `required`: the first start prints a one-time setup code to the container log, and `/ui/setup` claims the owner (§ Authentication). Exactly one container per volume (SQLite, in-process change bus and scheduler). Every shipped example still publishes the port on host loopback only (`127.0.0.1:51737:51737`): the container speaks plain HTTP. MCP clients and scripts authenticate `/mcp` and `/api` with a personal access token (`Authorization: Bearer ftk_…`, § Authentication). `src/` is identical for npm and container runs; the build/publish pipeline is in `docs/releasing.md`.
 
 ## OpenAPI contract (ADR-013 Phase A)
 
@@ -489,4 +536,4 @@ shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-0
 - ADR-030: extract the effect engine into a DB-agnostic core behind an explicit adapter port — delivers ADR-029 Phase 3 at the agreed 3a scope, SQLite stays the sole adapter (Postgres/3b is its own future ADR); refines/extends ADR-021/022/023 (accepted; Phase 1 — the port seam in place, still inside `diplomat/db`: `TransactionRunner`/`isTransientContention` injected in place of a direct `Db`/`isSqliteBusy` dependency, `runEffects`/`runEffectsSequence`/`EntityApplier`/`ApplierRegistry`/`ReadBack` generic over an opaque `Tx`, behavior-preserving — complete; Phase 2 — relocated the driver-free core and the `Persistable`/`PersistenceMeta` data contract to `src/effects/`, decoupled the engine from FinTrack's error taxonomy (generic over an injected `conflictError` factory), `diplomat/db` is now the SQLite adapter (`versionedTableApplier`), lint-enforced dependency isolation — complete; Phase 3 (repo/package lift-out) — delivered by ADR-031; 3b (Postgres adapter) — deferred, own ADR)
 - ADR-031: the effect engine lives in its own repository and is consumed as the published `@rfc0/effect-runner` package (MIT, npmjs.com, semver-governed port) — FinTrack keeps only the SQLite adapter (`diplomat/db`) (accepted; complete)
 - ADR-032: Docker distribution — container image on GHCR, HTTP transport by default, SQLite on a volume; `HOST`, `FINTRACK_DB_KEY_FILE`, fail-fast key resolution and lazy keychain import (accepted; Phase 1 — container-ready runtime — complete, Phase 2 — image/CI/publish — complete)
-- ADR-033: authentication and multi-user — identity (owner row by migration, password login, sessions, setup code), personal access tokens, in-process OAuth 2.1 AS for MCP, per-user tenancy; phased (accepted; Phase 1 — identity: owner row, sessions, setup code, UI login, auth mode, minimal public surface — complete; Phases 2–4 pending)
+- ADR-033: authentication and multi-user — identity (owner row by migration, password login, sessions, setup code), personal access tokens, in-process OAuth 2.1 AS for MCP, per-user tenancy; phased (accepted; Phase 1 — identity: owner row, sessions, setup code, UI login, auth mode, minimal public surface — complete; Phase 2 — personal access tokens, scopes, challenges, Protected Resource Metadata — complete; Phases 3–4 pending)

@@ -4,6 +4,7 @@ import { SummaryQuerySchema } from '../../../wire/in/summary.js';
 import type { HttpContext } from '../context.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
 import { parse, validation422 } from '../respond.js';
+import { READ_SCOPE } from '../../../models/auth.js';
 
 const SUMMARY_TAG = 'Summary';
 
@@ -12,6 +13,7 @@ export const summaryRoutes = (ctx: HttpContext): RouteDefinition[] => {
   return [
     {
       method: 'get',
+      scope: READ_SCOPE,
       path: '/api/summary',
       tags: [SUMMARY_TAG],
       summary: 'Get spending summary',

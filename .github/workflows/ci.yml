@@ -55,17 +55,39 @@ jobs:
           path: coverage/
           retention-days: 30
 
+  # Runs the image build + smoke test only when something the image is built from changed (see
+  # scripts/container-files-changed.sh); otherwise every step below is skipped and the check still reports success.
+  # The build is FROM the GHCR mirror of the base image when it exists (.github/actions/base-image), because Docker
+  # Hub answers 429 to anonymous pulls from shared runners.
   docker:
     name: Docker image
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      packages: read # pull the base-image mirror
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the base commit must be present to diff against
+
+      - name: Did anything the image is built from change?
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: echo "container=$(scripts/container-files-changed.sh "$BASE_SHA")" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
+        if: steps.changes.outputs.container == 'true'
+
+      - name: Resolve the base image
+        id: base
+        if: steps.changes.outputs.container == 'true'
+        uses: ./.github/actions/base-image
 
       - name: Build image (linux/amd64, no push)
+        if: steps.changes.outputs.container == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -73,8 +95,10 @@ jobs:
           load: true
           push: false
           tags: fintrack:ci
+          build-args: NODE_IMAGE=${{ steps.base.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Smoke test
+        if: steps.changes.outputs.container == 'true'
         run: scripts/docker-smoke.sh fintrack:ci

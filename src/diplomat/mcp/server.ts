@@ -5,6 +5,7 @@ import { buildRouteDefinitions } from '../http/routes.js';
 import type { McpContext } from './context.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
+import { guardToolScopes, type ScopeGuardOptions } from './scopes.js';
 import { registerAccountTools } from './tools/account.js';
 import { registerAggregateTools } from './tools/aggregate.js';
 import { registerBudgetTools } from './tools/budget.js';
@@ -29,8 +30,10 @@ export const buildMcpServer = (
   runEffects: RunEffects,
   runEffectsSequence: RunEffectsSequence,
   resetLocale: () => void,
+  scopeGuard: ScopeGuardOptions = { requireAuthInfo: false },
 ): McpServer => {
   const server = new McpServer({ name: 'fintrack', version });
+  guardToolScopes(server, scopeGuard);
   const ctx: McpContext = { deps, version, runEffects, runEffectsSequence, resetLocale };
 
   registerPrompts(server, ctx);
