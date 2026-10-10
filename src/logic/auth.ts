@@ -25,6 +25,7 @@ import {
   WRITE_SCOPE,
   type ClaimedOwner,
   type ClaimedUserEntity,
+  type ClaimPlan,
   type NewTokenSpec,
   type UserEntity,
 } from '../models/auth.js';
@@ -93,8 +94,6 @@ export const spentSetupCode = (code: SetupCodeEntity, now: Date): SetupCodeEntit
   ...code,
   usedAt: now.toISOString(),
 });
-
-export type ClaimPlan = { kind: 'claim' } | { kind: 'skip'; username: string };
 
 /** Setup claims the owner only if nobody holds its login; otherwise there is nothing to ask or write. */
 export const planOwnerClaim = (claimed: ClaimedOwner | null): ClaimPlan =>

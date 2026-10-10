@@ -222,6 +222,9 @@ export type ResetPasswordInput = { username?: string; password: string };
 /** What the terminal claim reports back: who now owns the instance. Never a credential. */
 export type ClaimedOwner = { username: string };
 
+/** Whether setup has an owner to claim, or finds one already holding the login. */
+export type ClaimPlan = { kind: 'claim' } | { kind: 'skip'; username: string };
+
 /** What a password reset reports: whose, and how much it ended. Never a credential. */
 export type PasswordReset = { username: string; sessionsEnded: number; tokensRevoked: number };
 
