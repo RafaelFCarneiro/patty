@@ -1,14 +1,16 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   isInteractive,
   readPasswordFromStdin,
   STDIN_IS_A_TERMINAL_MESSAGE,
 } from '../../../../src/diplomat/cli/terminal.js';
 
-const setStdinTty = (isTTY: boolean | undefined) =>
-  vi.spyOn(process.stdin, 'isTTY', 'get').mockReturnValue(isTTY as boolean);
+const originalIsTty = process.stdin.isTTY;
+const setStdinTty = (isTTY: boolean | undefined): void => {
+  Object.defineProperty(process.stdin, 'isTTY', { value: isTTY, configurable: true, writable: true });
+};
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => setStdinTty(originalIsTty));
 
 describe('readPasswordFromStdin', () => {
   it('refuses a terminal on stdin instead of waiting for typed input', async () => {
