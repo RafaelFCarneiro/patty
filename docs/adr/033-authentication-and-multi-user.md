@@ -35,6 +35,12 @@ phases (see below). Local npm behavior stays zero-config.
 
 ### 1. Auth mode and exposure
 
+> **Revised by [ADR-034](034-local-auth-and-stdio-sign-in.md).** The exposure-derived default below (loopback means
+> `disabled`) no longer holds: `FINTRACK_AUTH` now defaults to `required` for every run, loopback included, and `disabled`
+> is only an explicit opt-out. The exposure rule survives as validation only: `disabled` on an exposed instance is still a
+> startup error. The "stdio is trusted / `FINTRACK_USER`" bullet below is superseded too: stdio signs in (ADR-034 §2) and
+> `FINTRACK_USER` is dropped.
+
 - New setting **`FINTRACK_AUTH`**, either `required` or `disabled`.
   - The default is derived from **exposure**, not the bind address alone. An instance is *exposed* when `HOST` is
     not loopback, or when a reverse proxy is configured in front of it (`PUBLIC_URL` is set, or `TRUST_PROXY` is
@@ -43,7 +49,7 @@ phases (see below). Local npm behavior stays zero-config.
   - `disabled` on an exposed instance is a **startup error**: the API is never unauthenticated to anyone who can
     reach it, directly or through a proxy.
   - The npm sidecar (loopback, no proxy) keeps today's zero-config behavior. The container (`HOST=0.0.0.0`)
-    requires auth by default.
+    requires auth by default. *(ADR-034: the npm sidecar requires it too.)*
   - With auth `disabled`, only requests that say they are for this machine are answered: the `Host` header must
     name a loopback host, and an `Origin`, if sent, must be a loopback origin (any port, so tools such as MCP
     Inspector keep working). Anything else is `403 forbidden_origin`. This closes DNS rebinding and cross-site
@@ -53,7 +59,8 @@ phases (see below). Local npm behavior stays zero-config.
   by migration on every database, fresh or existing (§7).
 - **stdio is trusted** (spec-aligned). It acts as the default user, or as `FINTRACK_USER` (a username) once an
   instance has more than one user. With several users and no `FINTRACK_USER`, startup fails with an actionable
-  message.
+  message. *(Superseded by ADR-034 §2: a stdio session signs in; there is no `FINTRACK_USER`. Until ADR-034 step 2
+  lands, stdio still acts as the owner.)*
 - **HTTPS beyond loopback.** FinTrack does not terminate TLS. Non-loopback exposure goes through a reverse
   proxy (Caddy or Traefik, for example). A new **`PUBLIC_URL`** setting (the external `https://` origin) is
   required when auth is `required` and OAuth is on. It is the OAuth issuer and the MCP canonical resource URI,
@@ -253,7 +260,7 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
 
 - **New tables:** `users`, `sessions`, `access_tokens`, `setup_codes`, and the OAuth tables (clients, auth
   codes, refresh-token families). Tenancy adds `user_id` across user-owned tables plus composite uniques.
-- **New config:** `FINTRACK_AUTH`, `PUBLIC_URL`, `FINTRACK_USER`, and the trust-proxy setting. These are
+- **New config:** `FINTRACK_AUTH`, `PUBLIC_URL`, `FINTRACK_USER` (dropped by ADR-034), and the trust-proxy setting. These are
   validated together; the invalid combinations above are startup errors.
 - **Every controller signature gains the principal.** This is mechanical but wide, and the tenancy phase is the
   largest change since the write-path conversion.
@@ -289,8 +296,8 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
    - Ships: `user_id` on every user-owned table, backfilled to the owner, with the safety copy and the
      post-migration integrity check (§7); the principal threaded
      through every controller and repo; resolvers scoped per user; per-user idempotency uniqueness; the
-     settings split; a per-user change bus and scheduler; `FINTRACK_USER` for stdio; admin user management
-     unlocked.
+     settings split; a per-user change bus and scheduler; stdio identity comes from ADR-034's sign-in (so
+     `FINTRACK_USER` is dropped); admin user management unlocked.
    - Ships: `fintrack key export`, and the npm→Docker move guide in `docs/auth.md` (§7).
    - Tests:
      - a cross-user isolation suite that hits every read and write path as user B against user A's ids and

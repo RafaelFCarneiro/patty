@@ -219,9 +219,9 @@ or 365 days. Existing never-expiring tokens keep working until revoked, and the 
 ## Action Items
 
 1. [x] Review/accept this ADR (accepted 2026-10-10).
-2. [ ] Step 1 — auth on by default, terminal setup and reset, PAT expiry.
+2. [x] Step 1 — auth on by default, terminal setup and reset, PAT expiry (branch `feat/auth-default-and-cli`).
 3. [ ] Step 2 — stdio browser sign-in with chosen expiry.
-4. [ ] Update ADR-033 §1 and its Phase 4 notes to point here.
+4. [x] Update ADR-033 §1 and its Phase 4 notes to point here (done with step 1).
 
 Both steps are feature-sized and security-sensitive. Each gets the DoD verification subagent plus a
 `security-review` pass. The verifier is charged with:

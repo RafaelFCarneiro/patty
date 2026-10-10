@@ -39,7 +39,7 @@ COPY drizzle ./drizzle
 COPY ui ./ui
 COPY skills ./skills
 
-# HOST=0.0.0.0 makes FINTRACK_AUTH default to `required` (ADR-033): every route but /api/health, /ui/login and
+# FINTRACK_AUTH defaults to `required` everywhere (ADR-033, ADR-034), and cannot be `disabled` at HOST=0.0.0.0: every route but /api/health, /ui/login and
 # /ui/setup needs a session; the first start prints a one-time setup code to the log to claim the owner.
 ENV NODE_ENV=production \
     MCP_TRANSPORT=http \

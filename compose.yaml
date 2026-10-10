@@ -32,7 +32,7 @@ services:
       - fintrack_db_key
     environment:
       FINTRACK_DB_KEY_FILE: /run/secrets/fintrack_db_key
-      # FINTRACK_AUTH defaults to `required` here (HOST=0.0.0.0) and cannot be `disabled`. Behind a reverse proxy
+      # FINTRACK_AUTH defaults to `required` (as everywhere) and cannot be `disabled` here (HOST=0.0.0.0). Behind a reverse proxy
       # also set PUBLIC_URL (https://your.host) and TRUST_PROXY — see docs/auth.md.
     restart: unless-stopped
     # Hardening: the only writable paths are /data (volume) and /tmp (tmpfs).

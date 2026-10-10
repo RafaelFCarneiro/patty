@@ -92,7 +92,7 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   because a bill `update` needs `paymentTransactionId: undefined` (leave the column unchanged) to differ from
   `null` (clear it) — an asymmetry the uniform factory can't express.
 - **Exception — the auth flows (ADR-033) are adapted once at the composition root.** `login`/`claimOwner`/
-  `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions` and the access-token flows (`createToken`/
+  `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions`, the CLI's `claimOwnerLocally`/`resetPassword` (`authCli.ts` binds its own runner the same way) and the access-token flows (`createToken`/
   `revokeToken`/`authenticateToken`, `controllers/accessTokens.ts`) are run from several shell sites (the auth hook,
   the sign-in and token routes, startup), none of which is "the" handler, and a single batch can mix three entities
   (`claimOwner`: user + setup code + session). So `adapters/auth.ts`'s `outcomeToDb` (the four entities'
@@ -182,7 +182,9 @@ and its failure isolation) is the package's to document — see the pointer abov
   concurrent-first-issue race — it is rethrown as `VersionConflict` and the retry updates the winner's row in place
   rather than silently no-oping (a lost insert would leave a process printing a code that was never stored).
   `claimOwner` emits only an owner `update`, a setup-code `update` (consumed) and a session `insert` — never a user
-  `insert`; `authenticate` writes nothing unless the session is stale (`SESSION_TOUCH_INTERVAL_MS`) or must be
+  `insert`; the CLI's `claimOwnerLocally` emits the same owner `update` (one shared `claimedOwner`) plus a consuming setup-code `update`
+  only when a code is still outstanding, and no session; `resetPassword` emits the user's hash `update`, a session `delete` per
+  session of that user and a `revoked_at` `update` per live access token of that user, in one batch; `authenticate` writes nothing unless the session is stale (`SESSION_TOUCH_INTERVAL_MS`) or must be
   deleted. The token flows: `createToken` emits one `access_token` `insert` (hash + display prefix; the plaintext
   exists only in the flow's response), `revokeToken` one version-guarded `update` setting `revoked_at` (nothing when
   already revoked — idempotent), and `authenticateToken` writes nothing unless `last_used_at` is stale
