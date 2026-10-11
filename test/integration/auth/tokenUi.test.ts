@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { accessTokens } from '../../../src/diplomat/db/schema.js';
 import { describe, expect, it } from 'vitest';
 import { AuthMode, OWNER_USER_ID, TokenAccess } from '../../../src/models/auth.js';
 import { CreateTokenFormSchema } from '../../../src/wire/in/auth.js';
@@ -48,9 +49,9 @@ describe('/ui/access/tokens', () => {
         .flatMap(([, options]) => [...(options ?? '').matchAll(/<option value="([^"]+)"/g)])
         .map(([, value]) => value);
     expect(valuesOf('access')).toEqual([...TokenAccess.options]);
-    expect(valuesOf('expiry')).toEqual(['30', '90', '365', 'none']);
+    expect(valuesOf('expiry')).toEqual(['30', '90', '365']);
     expect(body).toContain('<option value="90" selected>in 90 days</option>');
-    expect(body).toContain('<option value="none">never</option>');
+    expect(body).not.toContain('value="none"');
     for (const value of [...valuesOf('access')]) {
       expect(CreateTokenFormSchema.shape.access.safeParse(value).success).toBe(true);
     }
@@ -106,15 +107,14 @@ describe('/ui/access/tokens', () => {
     expect(rows).not.toContain(token);
   });
 
-  it('expiry choices: none, 30, 90 and 365 days', async () => {
+  it('expiry choices: 30, 90 and 365 days', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
     const expiries: Record<string, string | null> = {};
-    for (const expiry of ['none', '30', '90', '365'] as const) {
+    for (const expiry of ['30', '90', '365'] as const) {
       const { id } = await mintToken(ctx, cookie, { name: `exp-${expiry}`, expiry });
       expiries[expiry] = (await authDepsOf(ctx).accessTokens.findById(OWNER_USER_ID, id))?.expiresAt ?? null;
     }
-    expect(expiries.none).toBeNull();
     const days = (iso: string | null) => Math.round((Date.parse(iso ?? '') - Date.now()) / 86_400_000);
     expect([days(expiries['30'] ?? null), days(expiries['90'] ?? null), days(expiries['365'] ?? null)]).toEqual([
       30, 90, 365,
@@ -129,7 +129,7 @@ describe('/ui/access/tokens', () => {
       method: 'POST',
       url: '/ui/access/tokens',
       headers: browserHeaders(cookie),
-      payload: formBody({ password: PASSWORD, name, access: 'read', expiry: 'none' }),
+      payload: formBody({ password: PASSWORD, name, access: 'read', expiry: '30' }),
     });
     const list = await get(ctx, '/ui/access/tokens', cookie);
     for (const body of [created.body, list.body]) {
@@ -145,6 +145,9 @@ describe('/ui/access/tokens', () => {
       formBody({ password: PASSWORD, name: '', access: 'read', expiry: '30' }),
       formBody({ password: PASSWORD, name: 'x', access: 'root', expiry: '30' }),
       formBody({ password: PASSWORD, name: 'x', access: 'read', expiry: '7' }),
+      // "never" is gone for new tokens (ADR-034 §6) — over the wire as well as in the form.
+      formBody({ password: PASSWORD, name: 'x', access: 'read', expiry: 'none' }),
+      formBody({ password: PASSWORD, name: 'x', access: 'read' }),
       formBody({ password: PASSWORD, access: 'read', expiry: '30' }),
     ]) {
       const res = await ctx.app.inject({
@@ -157,6 +160,38 @@ describe('/ui/access/tokens', () => {
       expect(res.body).toContain('auth-error');
     }
     expect(await authDepsOf(ctx).accessTokens.listByUser(OWNER_USER_ID)).toEqual([]);
+  });
+
+  it('keeps a legacy never-expiring token working and labelled, while new ones always expire', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const deps = authDepsOf(ctx);
+    const legacy = 'ftk_legacyTokenMintedBeforeAdr034Ends';
+    const now = new Date().toISOString();
+    await ctx.db.insert(accessTokens).values({
+      id: 'legacy-token',
+      userId: OWNER_USER_ID,
+      name: 'old script',
+      tokenHash: deps.secrets.hashSecret(legacy),
+      prefix: legacy.slice(0, 10),
+      scopes: ['fintrack:read'],
+      createdAt: now,
+      expiresAt: null,
+    });
+    const fresh = await mintToken(ctx, cookie, { name: 'new script' });
+
+    const api = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/status',
+      headers: { host: LOOPBACK_HOST, authorization: `Bearer ${legacy}` },
+    });
+    expect(api.statusCode).toBe(200);
+
+    const list = await get(ctx, '/ui/access/tokens', cookie);
+    expect(list.body).toContain('No expiry (legacy)');
+    expect(list.body.match(/No expiry \(legacy\)/g)).toHaveLength(1);
+    const stored = await deps.accessTokens.findById(OWNER_USER_ID, fresh.id);
+    expect(stored?.expiresAt).not.toBeNull();
   });
 
   it('revokes with a POST, keeps the row listed as revoked, and revoking again is harmless', async () => {
@@ -202,7 +237,7 @@ describe('/ui/access/tokens', () => {
       method: 'POST',
       url: '/ui/access/tokens',
       headers: evil,
-      payload: formBody({ password: PASSWORD, name: 'x', access: 'write', expiry: 'none' }),
+      payload: formBody({ password: PASSWORD, name: 'x', access: 'write', expiry: '30' }),
     });
     const revoke = await ctx.app.inject({ method: 'POST', url: `/ui/access/tokens/${id}/revoke`, headers: evil });
     expect([mint.statusCode, revoke.statusCode]).toEqual([403, 403]);

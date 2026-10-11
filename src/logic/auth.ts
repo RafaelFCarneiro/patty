@@ -1,5 +1,21 @@
 import { HTTP_SCHEME_PREFIX, hostnameOfHostHeader, isLoopbackHost } from '../common/net.js';
 import {
+  BEARER_HEADER,
+  BEARER_METHOD_HEADER,
+  BEARER_SCHEME,
+  DAY_MS,
+  MAX_TOKEN_LENGTH,
+  MCP_TOOLS_CALL_METHOD,
+  NON_ALPHANUMERIC,
+  OPAQUE_ORIGIN,
+  READ_METHODS,
+  RESOURCE_NAME,
+  SAFE_METHODS,
+  SESSION_IDLE_TTL_MS,
+  SESSION_TOUCH_INTERVAL_MS,
+  SETUP_CODE_GROUP_SEPARATOR,
+  SETUP_CODE_GROUP_SIZE,
+  WEB_PROTOCOLS,
   type AccessTokenEntity,
   type AccessTokenSummary,
   ALL_SCOPES,
@@ -19,31 +35,23 @@ import {
   TOKEN_ACCESS_SCOPES,
   TOKEN_DISPLAY_PREFIX_RANDOM_CHARS,
   TOKEN_EXPIRY_DAYS,
+  TERMINAL_SETUP_HINT,
   TOKEN_PREFIX,
   TokenStatus,
   WRITE_SCOPE,
+  type ClaimedOwner,
+  type ClaimedUserEntity,
+  type ChallengeableError,
+  type ClaimPlan,
+  type Credential,
+  type CsrfRequest,
+  type JsonRpcMessage,
+  type SessionVerdict,
+  type TokenFields,
+  type TokenVerdict,
   type NewTokenSpec,
   type UserEntity,
 } from '../models/auth.js';
-
-const SECOND_MS = 1000;
-const MINUTE_MS = 60 * SECOND_MS;
-const DAY_MS = 24 * 60 * MINUTE_MS;
-
-/** A session dies after this long without being seen (sliding)… */
-export const SESSION_IDLE_TTL_MS = 7 * DAY_MS;
-/** `last_seen_at`/`expires_at` are rewritten at most this often — not on every request. */
-export const SESSION_TOUCH_INTERVAL_MS = 5 * MINUTE_MS;
-export const SETUP_CODE_TTL_MS = 30 * MINUTE_MS;
-
-const SETUP_CODE_GROUP_SIZE = 4;
-const SETUP_CODE_GROUP_SEPARATOR = '-';
-const NON_ALPHANUMERIC = /[^A-Za-z0-9]/g;
-
-const READ_METHODS = ['GET', 'HEAD'];
-const SAFE_METHODS: ReadonlySet<string> = new Set([...READ_METHODS, 'OPTIONS']);
-const OPAQUE_ORIGIN = 'null';
-const WEB_PROTOCOLS: ReadonlySet<string> = new Set(['http:', 'https:']);
 
 const millis = (iso: string): number => Date.parse(iso);
 const toIso = (millisSinceEpoch: number): string => new Date(millisSinceEpoch).toISOString();
@@ -64,7 +72,8 @@ export const formatSetupCode = (raw: string): string =>
   (raw.match(new RegExp(`.{1,${SETUP_CODE_GROUP_SIZE}}`, 'g')) ?? []).join(SETUP_CODE_GROUP_SEPARATOR);
 
 /** The owner is "claimed" once it can log in; until then it is an owner row nobody can sign in as. */
-export const hasCredentials = (user: UserEntity): boolean => user.username !== null && user.passwordHash !== null;
+export const hasCredentials = (user: UserEntity): user is ClaimedUserEntity =>
+  user.username !== null && user.passwordHash !== null;
 
 export const isUnclaimed = (owner: UserEntity | null): boolean => owner !== null && !hasCredentials(owner);
 
@@ -74,6 +83,25 @@ export const shouldIssueSetupCode = (mode: AuthMode, owner: UserEntity | null): 
 
 export const isSetupCodeUsable = (code: SetupCodeEntity | null, now: Date): code is SetupCodeEntity =>
   code !== null && code.usedAt === null && millis(code.expiresAt) > now.getTime();
+
+export const claimedOwner = (owner: UserEntity, fields: { username: string; passwordHash: string }): UserEntity => ({
+  ...owner,
+  ...fields,
+});
+
+export const withPasswordHash = (user: UserEntity, passwordHash: string): UserEntity => ({ ...user, passwordHash });
+
+export const spentSetupCode = (code: SetupCodeEntity, now: Date): SetupCodeEntity => ({
+  ...code,
+  usedAt: now.toISOString(),
+});
+
+export const planOwnerClaim = (claimed: ClaimedOwner | null): ClaimPlan =>
+  claimed === null ? { kind: 'claim' } : { kind: 'skip', username: claimed.username };
+
+/** A claim refused as `setup_unavailable` lost a race: whoever holds the login now (if anyone) is its winner. */
+export const claimRaceWinner = (error: { code: string }, holder: ClaimedOwner | null): ClaimedOwner | null =>
+  error.code === authErrors.setupUnavailable.code ? holder : null;
 
 /** Every way a login can fail is the same outcome — the caller cannot tell which. */
 export const canLogin = (user: UserEntity | null, passwordMatches: boolean): user is UserEntity =>
@@ -112,8 +140,6 @@ export const sessionPrincipal = (user: UserEntity): Principal => ({
   scopes: [...ALL_SCOPES],
   via: PrincipalVia.enum.session,
 });
-
-export type SessionVerdict = { kind: 'invalid' } | { kind: 'valid'; touch: boolean };
 
 export const evaluateSession = (session: SessionEntity, user: UserEntity | null, now: Date): SessionVerdict =>
   isSessionExpired(session, now) || user === null || !hasCredentials(user) || user.disabledAt !== null
@@ -155,15 +181,6 @@ export const allowedOrigins = (publicUrl: string | undefined, hostHeader: string
       ? [`${HTTP_SCHEME_PREFIX}${hostHeader}`]
       : [];
   return [...(publicUrl === undefined ? [] : [publicUrl]), ...ownLoopbackOrigin];
-};
-
-/** Everything the same-origin (CSRF) decision reads from a request. */
-export type CsrfRequest = {
-  method: string;
-  publicUrl: string | undefined;
-  host: string | undefined;
-  origin: string | undefined;
-  referer: string | undefined;
 };
 
 /**
@@ -225,7 +242,8 @@ export const setupBanner = (fields: { code: string; setupUrl: string; expiresAt:
     '│',
     `│     ${fields.code}`,
     '│',
-    `│ Open ${fields.setupUrl} and enter the code, then choose a username and password.`,
+    `│ Open ${fields.setupUrl} and enter the code, then choose a username and password,`,
+    `│ ${TERMINAL_SETUP_HINT}.`,
     `│ The code expires at ${fields.expiresAt} and is replaced by a new one on every restart.`,
     '└──────────────────────────────────────────────────────────────────────',
     '',
@@ -233,12 +251,9 @@ export const setupBanner = (fields: { code: string; setupUrl: string; expiresAt:
 
 // ─── Scopes ────────────────────────────────────────────────────────────────
 
-const MCP_TOOLS_CALL_METHOD = 'tools/call';
-
 /** `fintrack:write` implies `fintrack:read`; nothing else implies anything. */
 export const hasScope = (granted: readonly string[], required: Scope): boolean =>
-  granted.includes(required) ||
-  (required === READ_SCOPE && granted.includes(WRITE_SCOPE));
+  granted.includes(required) || (required === READ_SCOPE && granted.includes(WRITE_SCOPE));
 
 /** The default REST rule: reading methods need `read`, every other method needs `write`. Route definitions
  *  call this explicitly so each one's scope stays visible and reviewable (and a new method fails closed). */
@@ -249,8 +264,6 @@ export const defaultScopeForMethod = (method: string): Scope =>
  *  read-only needs `write`. */
 export const scopeOfTool = (readOnlyHint: boolean | undefined): Scope =>
   readOnlyHint === true ? READ_SCOPE : WRITE_SCOPE;
-
-type JsonRpcMessage = { method?: unknown; params?: { name?: unknown } | null };
 
 /**
  * The scope a POST /mcp body needs: `write` if any message is a `tools/call` of a write tool (or of a tool
@@ -264,20 +277,12 @@ export const requiredMcpScope = (body: unknown, toolScope: (name: string) => Sco
     const { method, params } = message as JsonRpcMessage;
     if (method !== MCP_TOOLS_CALL_METHOD) return false;
     const name = params?.name;
-    return (
-      typeof name !== 'string' || (toolScope(name) ?? WRITE_SCOPE) === WRITE_SCOPE
-    );
+    return typeof name !== 'string' || (toolScope(name) ?? WRITE_SCOPE) === WRITE_SCOPE;
   });
   return needsWrite ? WRITE_SCOPE : READ_SCOPE;
 };
 
 // ─── Bearer credentials (personal access tokens) ───────────────────────────
-
-const BEARER_SCHEME = 'Bearer';
-const BEARER_HEADER = new RegExp(`^${BEARER_SCHEME}[ \\t]+(\\S+)$`, 'i');
-const MAX_TOKEN_LENGTH = 256;
-
-export type Credential = { kind: 'none' } | { kind: 'bearer'; token: string } | { kind: 'malformed' };
 
 /** The `Authorization` header is authoritative when present: it must be `Bearer ftk_…`. Anything else
  *  (another scheme, no token, a token that is not ours) is `malformed` — never a reason to try the cookie. */
@@ -311,13 +316,10 @@ export const newAccessToken = (
     scopes: [...TOKEN_ACCESS_SCOPES[fields.input.access]],
     createdAt: now.toISOString(),
     lastUsedAt: null,
-    expiresAt: days === null ? null : toIso(now.getTime() + days * DAY_MS),
+    expiresAt: toIso(now.getTime() + days * DAY_MS),
     revokedAt: null,
   };
 };
-
-/** A token's fields before it has been written (no `version` yet). */
-type TokenFields = Omit<AccessTokenEntity, 'version'>;
 
 export const tokenStatus = (token: TokenFields, now: Date): TokenStatus =>
   token.revokedAt !== null
@@ -325,6 +327,12 @@ export const tokenStatus = (token: TokenFields, now: Date): TokenStatus =>
     : token.expiresAt !== null && now.getTime() >= millis(token.expiresAt)
       ? TokenStatus.enum.expired
       : TokenStatus.enum.active;
+
+/** Active: not revoked and not past its expiry. */
+export const isLiveToken =
+  (now: Date) =>
+  (token: TokenFields): boolean =>
+    tokenStatus(token, now) === TokenStatus.enum.active;
 
 /** The token as the list shows it — never the hash. */
 export const summarizeToken = (token: TokenFields, now: Date): AccessTokenSummary => ({
@@ -339,8 +347,6 @@ export const summarizeToken = (token: TokenFields, now: Date): AccessTokenSummar
   revokedAt: token.revokedAt,
   status: tokenStatus(token, now),
 });
-
-export type TokenVerdict = { kind: 'invalid' } | { kind: 'valid'; touch: boolean };
 
 /** Unknown, revoked, expired, or belonging to an owner who is unclaimed/disabled → invalid. `last_used_at` is
  *  rewritten at most every `SESSION_TOUCH_INTERVAL_MS`, like a session's. */
@@ -375,11 +381,6 @@ export const tokenPrincipal = (token: AccessTokenEntity, user: UserEntity): Prin
 });
 
 // ─── Challenges (RFC 6750 §3, MCP authorization §"Error Handling") ──────────
-
-export type ChallengeableError = Extract<
-  AuthError,
-  { code: 'unauthenticated' | 'invalid_token' | 'insufficient_scope' }
->;
 
 const quoted = (value: string): string => `"${value.replace(/["\\]/g, '\\$&')}"`;
 const param = (name: string, value: string): string => `${name}=${quoted(value)}`;
@@ -416,9 +417,6 @@ export const bearerChallenge = (error: ChallengeableError, metadataUrl: string |
 };
 
 // ─── Protected Resource Metadata (RFC 9728) ────────────────────────────────
-
-const RESOURCE_NAME = 'FinTrack';
-const BEARER_METHOD_HEADER = 'header';
 
 /**
  * The metadata document for resource `<origin>/mcp`. `authorization_servers` is OPTIONAL in RFC 9728 and is

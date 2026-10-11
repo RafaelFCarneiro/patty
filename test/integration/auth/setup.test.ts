@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { issueSetupCode } from '../../../src/controllers/auth.js';
 import { prepareAuth } from '../../../src/authRuntime.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
-import { AuthMode, OWNER_USER_ID } from '../../../src/models/auth.js';
+import { AuthMode, OWNER_USER_ID, TERMINAL_SETUP_HINT } from '../../../src/models/auth.js';
 import { REQUIRED_AUTH } from '../app-builder.js';
 import {
   authDepsOf,
@@ -293,5 +293,12 @@ describe('POST /ui/setup', () => {
     expect(res.body).toContain('name="code"');
     expect(res.headers['content-security-policy']).toContain("default-src 'none'");
     expect(res.headers['cache-control']).toBe('no-store');
+  });
+
+  it('tells the person, on the setup page and in the startup banner, that the terminal can claim it too', async () => {
+    const ctx = await createApp();
+    const page = await ctx.app.inject({ method: 'GET', url: '/ui/setup' });
+    expect(page.body).toContain(TERMINAL_SETUP_HINT);
+    expect(ctx.announced.join('\n')).toContain(TERMINAL_SETUP_HINT);
   });
 });

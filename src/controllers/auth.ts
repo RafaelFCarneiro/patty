@@ -5,19 +5,25 @@ import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
 import {
   canLogin,
+  claimedOwner,
   evaluateSession,
   formatSetupCode,
+  hasCredentials,
+  isLiveToken,
   isSetupCodeUsable,
   isUnclaimed,
   newSession,
   sessionPrincipal,
   normalizeSetupCode,
-  SETUP_CODE_TTL_MS,
+  revokedToken,
   shouldIssueSetupCode,
+  spentSetupCode,
   touched,
+  withPasswordHash,
 } from '../logic/auth.js';
 import * as persistence from '../logic/persistence.js';
 import {
+  ACCESS_TOKEN_ENTITY_TAG,
   authErrors,
   OWNER_USER_ID,
   SESSION_ENTITY_TAG,
@@ -25,12 +31,19 @@ import {
   SETUP_CODE_ID,
   USER_ENTITY_TAG,
   type AuthMode,
+  type ClaimedOwner,
+  type ClaimedUserEntity,
   type ClaimOwnerInput,
+  type ClaimOwnerLocallyInput,
   type IssuedSetupCode,
   type LoginInput,
+  type PasswordReset,
   type Principal,
+  type ResetPasswordInput,
   type SessionEntity,
   type StartedSession,
+  type UserEntity,
+  SETUP_CODE_TTL_MS,
 } from '../models/auth.js';
 import type { AuthDeps } from './deps.js';
 
@@ -75,6 +88,19 @@ export const issueSetupCode = (
     return ok({ persist, response: { code, expiresAt } });
   });
 
+const unclaimedOwner = (deps: AuthDeps): ResultAsync<UserEntity, AppError> =>
+  safeTry(async function* () {
+    const owner = yield* okOr(await deps.users.findById(OWNER_USER_ID), authErrors.setupUnavailable);
+    yield* guard(isUnclaimed(owner), authErrors.setupUnavailable);
+    return ok(owner);
+  });
+
+const claimOwnerUpdate = (owner: UserEntity, input: ClaimOwnerLocallyInput, passwordHash: string): Persistable =>
+  persistence.update({
+    entity: USER_ENTITY_TAG,
+    model: claimedOwner(owner, { username: input.username, passwordHash }),
+  });
+
 /**
  * `/ui/setup`: the setup code claims the EXISTING owner row — sets its username and password — and
  * starts its first session. It emits an `update` of the owner and never an `insert` of any user, so
@@ -85,8 +111,7 @@ export const claimOwner = (
   input: ClaimOwnerInput,
 ): ResultAsync<FlowOutcome<StartedSession>, AppError> =>
   safeTry(async function* () {
-    const owner = yield* okOr(await deps.users.findById(OWNER_USER_ID), authErrors.setupUnavailable);
-    yield* guard(isUnclaimed(owner), authErrors.setupUnavailable);
+    const owner = yield* unclaimedOwner(deps);
 
     const now = deps.clock();
     const stored = await deps.setupCodes.findByHash(deps.secrets.hashSecret(normalizeSetupCode(input.code)));
@@ -95,14 +120,76 @@ export const claimOwner = (
     const passwordHash = await deps.secrets.hashPassword(input.password);
     const { persistable: sessionInsert, started } = startSession(deps, owner.id, now);
     const persist: Persistable[] = [
-      persistence.update({
-        entity: USER_ENTITY_TAG,
-        model: { ...owner, username: input.username, passwordHash },
-      }),
-      persistence.update({ entity: SETUP_CODE_ENTITY_TAG, model: { ...code, usedAt: now.toISOString() } }),
+      claimOwnerUpdate(owner, input, passwordHash),
+      persistence.update({ entity: SETUP_CODE_ENTITY_TAG, model: spentSetupCode(code, now) }),
       sessionInsert,
     ];
     return ok({ persist, response: started });
+  });
+
+/**
+ * The CLI's owner claim: `claimOwner` without a setup code or a session. Reachable only by someone who can open the
+ * database with its key, who already controls the data. An outstanding setup code is spent in the same batch.
+ */
+export const claimOwnerLocally = (
+  deps: AuthDeps,
+  input: ClaimOwnerLocallyInput,
+): ResultAsync<FlowOutcome<ClaimedOwner>, AppError> =>
+  safeTry(async function* () {
+    const owner = yield* unclaimedOwner(deps);
+
+    const now = deps.clock();
+    const outstanding = await deps.setupCodes.current();
+    const spent = outstanding !== null && outstanding.usedAt === null ? [spentSetupCode(outstanding, now)] : [];
+    const persist: Persistable[] = [
+      claimOwnerUpdate(owner, input, await deps.secrets.hashPassword(input.password)),
+      ...spent.map((code) => persistence.update({ entity: SETUP_CODE_ENTITY_TAG, model: code })),
+    ];
+    return ok({ persist, response: { username: input.username } });
+  });
+
+export const findResetTarget = (
+  deps: AuthDeps,
+  username: string | undefined,
+): ResultAsync<ClaimedUserEntity, AppError> =>
+  safeTry(async function* () {
+    if (username !== undefined) {
+      const named = await deps.users.findByUsername(username);
+      return ok(yield* okOr(named !== null && hasCredentials(named) ? named : null, authErrors.unknownUser(username)));
+    }
+    const owner = await deps.users.findById(OWNER_USER_ID);
+    return ok(yield* okOr(owner !== null && hasCredentials(owner) ? owner : null, authErrors.ownerUnclaimed));
+  });
+
+/** CLI-only, like `claimOwnerLocally`: a new password, plus the end of that user's sessions and live tokens. */
+export const resetPassword = (
+  deps: AuthDeps,
+  input: ResetPasswordInput,
+): ResultAsync<FlowOutcome<PasswordReset>, AppError> =>
+  safeTry(async function* () {
+    const user = yield* findResetTarget(deps, input.username);
+
+    const now = deps.clock();
+    const sessions = await deps.sessions.listByUser(user.id);
+    const liveTokens = R.filter(await deps.accessTokens.listByUser(user.id), isLiveToken(now));
+    const persist: Persistable[] = [
+      persistence.update({
+        entity: USER_ENTITY_TAG,
+        model: withPasswordHash(user, await deps.secrets.hashPassword(input.password)),
+      }),
+      ...R.map(sessions, removeSession),
+      ...R.map(liveTokens, (token) =>
+        persistence.update({ entity: ACCESS_TOKEN_ENTITY_TAG, model: revokedToken(token, now) }),
+      ),
+    ];
+    return ok({
+      persist,
+      response: {
+        username: user.username,
+        sessionsEnded: sessions.length,
+        tokensRevoked: liveTokens.length,
+      },
+    });
   });
 
 /** `/ui/login`: verifies against the real hash — or the dummy one for an unknown/unclaimed/disabled
@@ -157,6 +244,11 @@ export const pruneExpiredSessions = (deps: AuthDeps): ResultAsync<FlowOutcome<nu
     const expired = await deps.sessions.listExpired(deps.clock().toISOString());
     return ok({ persist: R.map(expired, removeSession), response: expired.length });
   });
+
+export const claimedOwnerOf = async (deps: AuthDeps): Promise<ClaimedOwner | null> => {
+  const owner = await deps.users.findById(OWNER_USER_ID);
+  return owner !== null && hasCredentials(owner) ? { username: owner.username } : null;
+};
 
 /** Read-only: does the owner still need claiming? Drives the setup-vs-login redirect. */
 export const ownerNeedsSetup = async (deps: AuthDeps): Promise<boolean> =>

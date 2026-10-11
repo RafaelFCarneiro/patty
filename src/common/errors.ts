@@ -67,6 +67,10 @@ export const formatAppError = (e: AppError): string => {
       return `${e.code}: ${AUTH_MESSAGES.invalidSetupCode}`;
     case 'setup_unavailable':
       return `${e.code}: ${AUTH_MESSAGES.setupUnavailable}`;
+    case 'unknown_user':
+      return `${e.code}: ${AUTH_MESSAGES.unknownUser} (${e.username})`;
+    case 'owner_unclaimed':
+      return `${e.code}: ${AUTH_MESSAGES.ownerUnclaimed}`;
     case 'rate_limited':
       return `${e.code}: ${AUTH_MESSAGES.rateLimited}`;
     case 'forbidden_origin':
@@ -99,6 +103,7 @@ export const httpStatus = (e: AppError): number => {
     case 'unknown_dashboard':
     case 'unknown_budget':
     case 'unknown_token':
+    case 'unknown_user':
     case 'resource_metadata_unavailable':
       return 404;
     case 'unauthenticated':
@@ -121,6 +126,7 @@ export const httpStatus = (e: AppError): number => {
     case 'in_use':
     case 'conflict':
     case 'setup_unavailable':
+    case 'owner_unclaimed':
       return 409;
     case 'category_kind_mismatch':
     case 'not_expense_category':

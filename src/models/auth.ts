@@ -2,9 +2,11 @@ import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import { Id } from './id.js';
 
-/** Whether the HTTP surface demands a session. Derived from `HOST` unless set (ADR-033 §1). */
+/** Whether the HTTP surface demands a session. `disabled` is an explicit, loopback-only opt-out. */
 export const AuthMode = z.enum(['required', 'disabled']);
 export type AuthMode = z.infer<typeof AuthMode>;
+/** What `FINTRACK_AUTH` means when unset — on every surface, loopback included. */
+export const DEFAULT_AUTH_MODE = AuthMode.enum.required;
 
 export const UserRole = z.enum(['admin', 'member']);
 export type UserRole = z.infer<typeof UserRole>;
@@ -37,7 +39,33 @@ export const ACCESS_TOKEN_ENTITY_TAG = 'access_token';
  *  never leave two valid codes — the loser of the race retries into an update. */
 export const SETUP_CODE_ID = 'setup-code';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const SECOND_MS = 1000;
+const MINUTE_MS = 60 * SECOND_MS;
+export const DAY_MS = 24 * 60 * MINUTE_MS;
+
+/** A session dies after this long without being seen (sliding)… */
+export const SESSION_IDLE_TTL_MS = 7 * DAY_MS;
+/** `last_seen_at`/`expires_at` are rewritten at most this often — not on every request. */
+export const SESSION_TOUCH_INTERVAL_MS = 5 * MINUTE_MS;
+export const SETUP_CODE_TTL_MS = 30 * MINUTE_MS;
+
+export const SETUP_CODE_GROUP_SIZE = 4;
+export const SETUP_CODE_GROUP_SEPARATOR = '-';
+export const NON_ALPHANUMERIC = /[^A-Za-z0-9]/g;
+
+export const READ_METHODS = ['GET', 'HEAD'];
+export const SAFE_METHODS: ReadonlySet<string> = new Set([...READ_METHODS, 'OPTIONS']);
+export const OPAQUE_ORIGIN = 'null';
+export const WEB_PROTOCOLS: ReadonlySet<string> = new Set(['http:', 'https:']);
+
+export const MCP_TOOLS_CALL_METHOD = 'tools/call';
+
+export const BEARER_SCHEME = 'Bearer';
+export const BEARER_HEADER = new RegExp(`^${BEARER_SCHEME}[ \\t]+(\\S+)$`, 'i');
+export const MAX_TOKEN_LENGTH = 256;
+
+export const RESOURCE_NAME = 'FinTrack';
+export const BEARER_METHOD_HEADER = 'header';
 /** A session never outlives this, however active — also the browser cookie's lifetime (the server's sliding
  *  idle expiry decides validity; the cookie just must not expire before the server would). */
 export const SESSION_ABSOLUTE_MAX_MS = 30 * DAY_MS;
@@ -67,13 +95,12 @@ export const TOKEN_NAME_MAX_LENGTH = 80;
 /** The MCP `AuthInfo.clientId` of a request made with a personal access token: `pat:<token id>`. */
 export const PAT_CLIENT_ID_PREFIX = 'pat:';
 
-/** Expiry choices offered when minting a token; `none` never expires. */
-export const TokenExpiry = z.enum(['none', '30', '90', '365']);
+/** Expiry choices for a new token — there is no "never". A legacy row may still hold a null `expires_at`. */
+export const TokenExpiry = z.enum(['30', '90', '365']);
 export type TokenExpiry = z.infer<typeof TokenExpiry>;
 /** What the token form preselects. */
 export const DEFAULT_TOKEN_EXPIRY = TokenExpiry.enum['90'];
-export const TOKEN_EXPIRY_DAYS: Readonly<Record<TokenExpiry, number | null>> = {
-  none: null,
+export const TOKEN_EXPIRY_DAYS: Readonly<Record<TokenExpiry, number>> = {
   '30': 30,
   '90': 90,
   '365': 365,
@@ -151,6 +178,7 @@ export const UserEntitySchema = withPersistenceMeta(
   }),
 );
 export type UserEntity = z.infer<typeof UserEntitySchema>;
+export type ClaimedUserEntity = UserEntity & { username: string; passwordHash: string };
 
 export const SessionEntitySchema = withPersistenceMeta(
   z.object({
@@ -209,7 +237,17 @@ export type CreateTokenInput = NewTokenSpec & { password: string };
 
 /** `username` is already normalized (`normalizeUsername`) — the schemas that produce these inputs do it. */
 export type LoginInput = { username: string; password: string };
-export type ClaimOwnerInput = { code: string; username: string; password: string };
+export type ClaimOwnerLocallyInput = { username: string; password: string };
+export type ClaimOwnerInput = ClaimOwnerLocallyInput & { code: string };
+
+/** `username` absent means the owner — the only user until ADR-033 Phase 4. */
+export type ResetPasswordInput = { username?: string; password: string };
+
+export type ClaimedOwner = { username: string };
+
+export type ClaimPlan = { kind: 'claim' } | { kind: 'skip'; username: string };
+
+export type PasswordReset = { username: string; sessionsEnded: number; tokensRevoked: number };
 
 /** A freshly started session — the plaintext token goes to the cookie and nowhere else. */
 export type StartedSession = { token: string; expiresAt: string };
@@ -217,11 +255,34 @@ export type StartedSession = { token: string; expiresAt: string };
 /** A setup code issued at startup — the plaintext goes to stderr once and nowhere else. */
 export type IssuedSetupCode = { code: string; expiresAt: string };
 
+/** Whether a session or token is still good, and whether its `last_seen`/`last_used` is stale enough to rewrite. */
+export type SessionVerdict = { kind: 'invalid' } | { kind: 'valid'; touch: boolean };
+export type TokenVerdict = SessionVerdict;
+
+/** Everything the same-origin (CSRF) decision reads from a request. */
+export type CsrfRequest = {
+  method: string;
+  publicUrl: string | undefined;
+  host: string | undefined;
+  origin: string | undefined;
+  referer: string | undefined;
+};
+
+/** The one JSON-RPC message shape `requiredMcpScope` looks at. */
+export type JsonRpcMessage = { method?: unknown; params?: { name?: unknown } | null };
+
+export type Credential = { kind: 'none' } | { kind: 'bearer'; token: string } | { kind: 'malformed' };
+
+/** A token's fields before it has been written (no `version` yet). */
+export type TokenFields = Omit<AccessTokenEntity, 'version'>;
+
 export type AuthError =
   | { code: 'unauthenticated' }
   | { code: 'invalid_credentials' }
   | { code: 'invalid_setup_code' }
   | { code: 'setup_unavailable' }
+  | { code: 'unknown_user'; username: string }
+  | { code: 'owner_unclaimed' }
   | { code: 'rate_limited' }
   | { code: 'forbidden_origin'; hint: string }
   | { code: 'invalid_token' }
@@ -230,10 +291,17 @@ export type AuthError =
   | { code: 'session_required' }
   | { code: 'resource_metadata_unavailable'; hint: string };
 
+/** The terminal route to the same owner claim as `/ui/setup` — shown wherever the setup code is. */
+export const PACKAGE_NAME = '@rafaelfcarneiro/fintrack';
+export const TERMINAL_SETUP_COMMAND = `npx ${PACKAGE_NAME} auth setup`;
+export const TERMINAL_SETUP_HINT = `or run \`${TERMINAL_SETUP_COMMAND}\` in a terminal`;
+
 export const AUTH_MESSAGES = {
   invalidCredentials: 'Invalid username or password.',
   invalidSetupCode: 'That setup code is not valid or has expired. Restart FinTrack to get a new one.',
   setupUnavailable: 'Setup has already been completed. Log in instead.',
+  unknownUser: 'No such user.',
+  ownerUnclaimed: `The owner has no login yet. Run \`${TERMINAL_SETUP_COMMAND}\` first.`,
   rateLimited: 'Too many attempts. Wait a few minutes and try again.',
   unauthenticated: 'Authentication required.',
   crossOrigin: 'Cross-origin request rejected.',
@@ -261,6 +329,8 @@ export const authErrors = {
   // Wrong, expired and already-used codes are indistinguishable by design.
   invalidSetupCode: { code: 'invalid_setup_code' } satisfies AuthError,
   setupUnavailable: { code: 'setup_unavailable' } satisfies AuthError,
+  unknownUser: (username: string): AuthError => ({ code: 'unknown_user', username }),
+  ownerUnclaimed: { code: 'owner_unclaimed' } satisfies AuthError,
   rateLimited: { code: 'rate_limited' } satisfies AuthError,
   // CSRF (ADR-033 §2): a cookie-authenticated unsafe request whose Origin is not ours.
   crossOrigin: { code: 'forbidden_origin', hint: AUTH_MESSAGES.crossOrigin } satisfies AuthError,
@@ -279,3 +349,8 @@ export const authErrors = {
     hint: AUTH_MESSAGES.prmNeedsOrigin,
   } satisfies AuthError,
 };
+
+export type ChallengeableError = Extract<
+  AuthError,
+  { code: 'unauthenticated' | 'invalid_token' | 'insufficient_scope' }
+>;

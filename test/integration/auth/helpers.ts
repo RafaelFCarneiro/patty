@@ -113,7 +113,7 @@ export type MintedToken = { token: string; id: string };
 export const mintToken = async (
   ctx: AppContext,
   cookie: string,
-  fields: { name?: string; access?: 'read' | 'write'; expiry?: 'none' | '30' | '90' | '365' } = {},
+  fields: { name?: string; access?: 'read' | 'write'; expiry?: '30' | '90' | '365' } = {},
 ): Promise<MintedToken> => {
   const res = await ctx.app.inject({
     method: 'POST',

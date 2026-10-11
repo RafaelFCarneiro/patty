@@ -27,12 +27,10 @@ const ACCESS_OPTION_LABEL: Readonly<Record<TokenAccess, string>> = {
   write: 'Read and write — can also record, edit and delete',
 };
 
-const NO_EXPIRY_LABEL = 'never';
+// Only a token minted before ADR-034 §6 can have no expiry; it still works until revoked, and the list says so.
+const LEGACY_NO_EXPIRY_LABEL = 'No expiry (legacy)';
 
-const expiryLabel = (expiry: TokenExpiry): string => {
-  const days = TOKEN_EXPIRY_DAYS[expiry];
-  return days === null ? NO_EXPIRY_LABEL : `in ${days} days`;
-};
+const expiryLabel = (expiry: TokenExpiry): string => `in ${TOKEN_EXPIRY_DAYS[expiry]} days`;
 
 const option = (value: string, label: string, selected = false): string =>
   `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
@@ -40,11 +38,10 @@ const option = (value: string, label: string, selected = false): string =>
 const accessOptions = (): string =>
   TokenAccess.options.map((access) => option(access, ACCESS_OPTION_LABEL[access])).join('');
 
-// Soonest first, "never" last; the default is preselected.
 const expiryOptions = (): string =>
   R.pipe(
     TokenExpiry.options,
-    R.sortBy((expiry) => TOKEN_EXPIRY_DAYS[expiry] ?? Number.POSITIVE_INFINITY),
+    R.sortBy((expiry) => TOKEN_EXPIRY_DAYS[expiry]),
     R.map((expiry) => option(expiry, expiryLabel(expiry), expiry === DEFAULT_TOKEN_EXPIRY)),
   ).join('');
 
@@ -70,7 +67,7 @@ const row = (token: AccessTokenSummary): string =>
   `<td>${accessOf(token)}</td>` +
   `<td>${when(token.createdAt, NOT_YET)}</td>` +
   `<td>${when(token.lastUsedAt, NOT_YET)}</td>` +
-  `<td>${when(token.expiresAt, NO_EXPIRY_LABEL)}</td>` +
+  `<td>${when(token.expiresAt, LEGACY_NO_EXPIRY_LABEL)}</td>` +
   `<td class="token-status-${token.status}">${token.status}</td>` +
   `<td>${revokeForm(token)}</td>` +
   '</tr>';

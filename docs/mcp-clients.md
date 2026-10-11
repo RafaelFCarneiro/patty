@@ -181,7 +181,7 @@ ChatGPT's servers connect from the internet: needs a paid plan with Developer Mo
 cloudflared tunnel --url http://127.0.0.1:51737   # → https://xxx.trycloudflare.com (:3001 from source)
 ```
 
-**Current limitation: FinTrack cannot be connected to ChatGPT yet.** An auth-disabled loopback instance (the npm default) refuses a tunnel's non-loopback `Host` with `403`, and an instance with authentication on (the container, or any `PUBLIC_URL`) needs `Authorization: Bearer ftk_…` on every `/mcp` request — a header this connector cannot send. It becomes possible once the OAuth authorization server lands (ADR-033 Phase 3). Don't expose FinTrack through a public tunnel in the meantime.
+**Current limitation: FinTrack cannot be connected to ChatGPT yet.** An auth-disabled loopback instance (an explicit `FINTRACK_AUTH=disabled`) refuses a tunnel's non-loopback `Host` with `403`, and an instance with authentication on (the container, or any `PUBLIC_URL`) needs `Authorization: Bearer ftk_…` on every `/mcp` request — a header this connector cannot send. It becomes possible once the OAuth authorization server lands (ADR-033 Phase 3). Don't expose FinTrack through a public tunnel in the meantime.
 
 ### Ollama (HTTP mode, untested — needs a bridge client)
 

@@ -52,7 +52,7 @@ describe('a bearer token can never reach token management', () => {
         method: 'POST',
         url,
         headers: form,
-        payload: 'password=x&name=evil&access=write&expiry=none',
+        payload: 'password=x&name=evil&access=write&expiry=30',
       }),
       await ctx.app.inject({ method: 'POST', url: url.replace('tokens', `tokens/${victim.id}/revoke`), headers: form }),
     ];
@@ -104,7 +104,7 @@ describe('a script running in the dashboard origin cannot mint itself a token', 
     const before = await authDepsOf(ctx).accessTokens.listByUser(OWNER_USER_ID);
 
     for (const password of [undefined, '', 'not the password']) {
-      const fields: Record<string, string> = { name: 'from-script', access: 'write', expiry: 'none' };
+      const fields: Record<string, string> = { name: 'from-script', access: 'write', expiry: '30' };
       if (password !== undefined) fields.password = password;
       const res = await ctx.app.inject({
         method: 'POST',
@@ -125,7 +125,7 @@ describe('a script running in the dashboard origin cannot mint itself a token', 
       method: 'POST',
       url: '/ui/access/tokens',
       headers: browserHeaders(cookie),
-      payload: formBody({ password: 'nope nope nope', name: 'x', access: 'read', expiry: 'none' }),
+      payload: formBody({ password: 'nope nope nope', name: 'x', access: 'read', expiry: '30' }),
     });
     expect(wrong.statusCode).toBe(403);
     expect(wrong.body).toContain('That password is not correct.');
@@ -140,7 +140,7 @@ describe('a script running in the dashboard origin cannot mint itself a token', 
         method: 'POST',
         url: '/ui/access/tokens',
         headers: browserHeaders(cookie),
-        payload: formBody({ password: 'guess guess guess', name: 'x', access: 'read', expiry: 'none' }),
+        payload: formBody({ password: 'guess guess guess', name: 'x', access: 'read', expiry: '30' }),
       });
     const statuses: number[] = [];
     for (let attempt = 0; attempt < 6; attempt += 1) statuses.push((await guess()).statusCode);
@@ -151,7 +151,7 @@ describe('a script running in the dashboard origin cannot mint itself a token', 
       method: 'POST',
       url: '/ui/access/tokens',
       headers: browserHeaders(cookie),
-      payload: formBody({ password: PASSWORD, name: 'x', access: 'read', expiry: 'none' }),
+      payload: formBody({ password: PASSWORD, name: 'x', access: 'read', expiry: '30' }),
     });
     expect(right.statusCode).toBe(429);
   });

@@ -45,6 +45,8 @@ FinTrack publishes privately to **GitHub Packages**. Create a GitHub token with 
 
 Run the setup command for your agent — it downloads FinTrack, writes the correct config, and exits. No server to start separately; the client manages that automatically from this point on.
 
+FinTrack requires a login, even on your own machine. **The first time, `setup` asks you to choose the owner's username and password** (the password twice, never echoed; 12+ characters) before it writes the config. Afterwards it just says who the owner is and carries on. Log in to the dashboard (`/ui`) with them. Upgrading from an earlier version? Run `setup` (or `auth setup`) once: it claims your existing data's owner, and nothing is copied or lost. Forgot the password: `npx @rafaelfcarneiro/fintrack@latest auth reset-password`. Scripted installs: `printf %s "$PASSWORD" | npx @rafaelfcarneiro/fintrack@latest setup claude-code --username me --password-stdin`. Details: [`docs/auth.md`](docs/auth.md#first-setup).
+
 ```bash
 npx @rafaelfcarneiro/fintrack@latest setup claude-code      # Claude Code CLI
 npx @rafaelfcarneiro/fintrack@latest setup claude-desktop   # Claude Desktop
@@ -59,7 +61,7 @@ Run without a tool name to list all options and the config file each one writes:
 npx @rafaelfcarneiro/fintrack@latest setup
 ```
 
-The setup command is safe to re-run — it merges idempotently, preserving any existing config keys.
+The setup command is safe to re-run — it skips the login step once the owner is claimed and merges idempotently, preserving any existing config keys. With no terminal and no `--password-stdin` it stops with instructions *before* writing any config.
 If the target config file exists but is empty/invalid (or has a non-object JSON root), setup recovers automatically by replacing that root with a valid object.
 
 ### 3 — Restart your client and start chatting
@@ -83,7 +85,7 @@ Restart the AI client (or reload the window for VS Code), then talk to your fina
 
 Prefer the `setup` command above. If you need to configure manually or use HTTP mode, see [`docs/mcp-clients.md`](docs/mcp-clients.md) for per-client JSON snippets, ChatGPT, Ollama, port details, and debugging.
 
-**HTTP mode quick-start** — start the server explicitly, then connect by URL:
+**HTTP mode quick-start** — start the server explicitly, then connect by URL. Authentication is on: claim the owner first (`setup`/`auth setup`), log in at `/ui`, and send a [personal access token](docs/auth.md#personal-access-tokens) (`Authorization: Bearer ftk_…`) from your client — or, for development only, `FINTRACK_AUTH=disabled` (loopback only) turns the login off:
 
 ```bash
 MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack@latest   # published package → :51737

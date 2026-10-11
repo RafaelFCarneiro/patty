@@ -5,18 +5,25 @@ import { McpTransport, type Config } from './config.js';
 import { issueSetupCode, pruneExpiredSessions } from './controllers/auth.js';
 import type { AuthDeps, RunEffects } from './controllers/deps.js';
 import type { Db } from './diplomat/db/driver.js';
-import { accessTokensRepo } from './diplomat/db/repos/accessTokens.js';
-import { sessionsRepo } from './diplomat/db/repos/sessions.js';
-import { setupCodesRepo } from './diplomat/db/repos/setupCodes.js';
-import { usersRepo } from './diplomat/db/repos/users.js';
+import type { ApplierRegistry } from './diplomat/db/effects.js';
+import { accessTokenApplier, accessTokensRepo } from './diplomat/db/repos/accessTokens.js';
+import { sessionApplier, sessionsRepo } from './diplomat/db/repos/sessions.js';
+import { setupCodeApplier, setupCodesRepo } from './diplomat/db/repos/setupCodes.js';
+import { userApplier, usersRepo } from './diplomat/db/repos/users.js';
 import { SETUP_PATH } from './diplomat/http/authPaths.js';
 import { DISABLED_AUTH, type HttpAuth } from './diplomat/http/context.js';
 import { setupBanner } from './logic/auth.js';
-import { AuthMode } from './models/auth.js';
+import {
+  ACCESS_TOKEN_ENTITY_TAG,
+  AuthMode,
+  SESSION_ENTITY_TAG,
+  SETUP_CODE_ENTITY_TAG,
+  USER_ENTITY_TAG,
+} from './models/auth.js';
 
 /**
  * Lazily imports the credential primitives so `@node-rs/argon2`'s native module is never loaded unless
- * sessions can exist — a loopback stdio run (auth disabled) starts exactly as it did before ADR-033.
+ * an auth flow can run — an explicit `FINTRACK_AUTH=disabled` stdio run starts exactly as it did before ADR-033.
  */
 const loadCredentialsModule = () => import('./diplomat/auth/credentials.js');
 
@@ -26,6 +33,26 @@ export const bindAuthRunEffects =
   (runEffects: RunEffects): RunEffects =>
   (flow) =>
     runEffects(() => flow().map(authAdapters.outcomeToDb));
+
+export const AUTH_APPLIERS: ApplierRegistry = {
+  [USER_ENTITY_TAG]: userApplier,
+  [SESSION_ENTITY_TAG]: sessionApplier,
+  [ACCESS_TOKEN_ENTITY_TAG]: accessTokenApplier,
+  [SETUP_CODE_ENTITY_TAG]: setupCodeApplier,
+};
+
+export const createAuthDeps = async (db: Db): Promise<AuthDeps> => {
+  const { createSecrets } = await loadCredentialsModule();
+  return {
+    users: usersRepo(db),
+    sessions: sessionsRepo(db),
+    accessTokens: accessTokensRepo(db),
+    setupCodes: setupCodesRepo(db),
+    clock: () => new Date(),
+    newId: () => randomUUID(),
+    secrets: await createSecrets(),
+  };
+};
 
 const isSecureOrigin = (publicUrl: string | undefined): boolean => publicUrl?.startsWith('https://') ?? false;
 
@@ -60,16 +87,7 @@ export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEff
     return { auth: DISABLED_AUTH, issueAndAnnounceSetup: NO_SETUP_TO_ISSUE };
   }
 
-  const { createSecrets } = await loadCredentialsModule();
-  const deps: AuthDeps = {
-    users: usersRepo(db),
-    sessions: sessionsRepo(db),
-    accessTokens: accessTokensRepo(db),
-    setupCodes: setupCodesRepo(db),
-    clock: () => new Date(),
-    newId: () => randomUUID(),
-    secrets: await createSecrets(),
-  };
+  const deps = await createAuthDeps(db);
   const run = bindAuthRunEffects(runEffects);
 
   const pruned = await run(() => pruneExpiredSessions(deps));

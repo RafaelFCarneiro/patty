@@ -3,8 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { SESSION_TOUCH_INTERVAL_MS } from '../../../src/logic/auth.js';
-import { AuthMode, MCP_PRM_PATH, OWNER_USER_ID } from '../../../src/models/auth.js';
+import { AuthMode, MCP_PRM_PATH, OWNER_USER_ID, SESSION_TOUCH_INTERVAL_MS } from '../../../src/models/auth.js';
 import {
   authDepsOf,
   bearer,
@@ -238,7 +237,7 @@ describe('token management is session-only', () => {
       method: 'POST',
       url: '/ui/access/tokens',
       headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded' },
-      payload: `password=${PASSWORD}&name=sneaky&access=write&expiry=none`,
+      payload: `password=${PASSWORD}&name=sneaky&access=write&expiry=30`,
     });
     const list = await ctx.app.inject({ method: 'GET', url: '/ui/access/tokens', headers });
     const revoke = await ctx.app.inject({ method: 'POST', url: `/ui/access/tokens/${reader.id}/revoke`, headers });

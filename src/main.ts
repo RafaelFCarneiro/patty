@@ -2,14 +2,15 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
-import { prepareAuth } from './authRuntime.js';
+import { AUTH_APPLIERS, prepareAuth } from './authRuntime.js';
+import { CliCommand } from './common/cli.js';
 import { httpOrigin, isPortInUse, portInUseMessage } from './common/net.js';
 import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
-import { createTransactionRunner, openDatabase } from './diplomat/db/driver.js';
+import { openDatabase } from './diplomat/db/driver.js';
+import { createEngineContext } from './diplomat/db/engine.js';
 import type { ApplierRegistry } from './diplomat/db/effects.js';
-import { isSqliteBusy } from './diplomat/db/sqliteErrors.js';
 import { createChangeBus, runEffects, runEffectsSequence, type ChangeBus } from '@rfc0/effect-runner';
 import { createLocaleResolver } from './diplomat/db/localeCache.js';
 import { accountApplier, accountsRepo } from './diplomat/db/repos/accounts.js';
@@ -29,21 +30,15 @@ import { tagApplier, tagsRepo } from './diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from './diplomat/db/repos/transactions.js';
 import { transactionTagApplier } from './diplomat/db/repos/transactionTags.js';
 import { healthRepo } from './diplomat/db/repos/health.js';
-import { accessTokenApplier } from './diplomat/db/repos/accessTokens.js';
-import { sessionApplier } from './diplomat/db/repos/sessions.js';
-import { setupCodeApplier } from './diplomat/db/repos/setupCodes.js';
-import { userApplier } from './diplomat/db/repos/users.js';
 import type { HttpAuth } from './diplomat/http/context.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { ACCOUNT_ENTITY_TAG } from './models/account.js';
-import { ACCESS_TOKEN_ENTITY_TAG, SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from './models/auth.js';
 import { BILL_ENTITY_TAG } from './models/bill.js';
 import { BUDGET_ENTITY_TAG } from './models/budget.js';
 import { CATEGORY_ENTITY_TAG } from './models/category.js';
 import { CREDIT_CARD_ENTITY_TAG } from './models/creditCard.js';
 import { CURRENCY_RATE_ENTITY_TAG } from './models/currencyRate.js';
 import { DASHBOARD_ENTITY_TAG } from './models/dashboard.js';
-import { conflict } from './models/error.js';
 import { SETTINGS_ENTITY_TAG } from './models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from './models/merchant.js';
 import { RECURRING_ENTITY_TAG } from './models/recurring.js';
@@ -62,6 +57,8 @@ const { version } = require('../package.json') as { version: string };
  * Isolated here as one named function instead of an inline import() at each call site.
  */
 const loadServerModule = () => import('./server.js');
+
+const loadCliModule = () => import('./cli.js');
 
 // stderr only — stdout carries the MCP protocol on the stdio transport (ADR-007).
 const reportChangeError = (cause: unknown): void => {
@@ -94,9 +91,10 @@ const maybeStartSidecar = async (
 };
 
 const main = async (): Promise<void> => {
-  if (process.argv[2] === 'setup') {
-    const { runSetup } = await import('./setup.js');
-    runSetup(process.argv[3]);
+  if (CliCommand.safeParse(process.argv[2]).success) {
+    const { runCli } = await loadCliModule();
+    // Not process.exit: let the event loop drain, so everything the command printed has been flushed.
+    process.exitCode = await runCli(process.argv.slice(2));
     return;
   }
 
@@ -146,24 +144,16 @@ const main = async (): Promise<void> => {
     [RECURRING_ENTITY_TAG]: recurringRuleApplier,
     [DASHBOARD_ENTITY_TAG]: dashboardApplier,
     [SETTINGS_ENTITY_TAG]: settingsApplier,
-    [USER_ENTITY_TAG]: userApplier,
-    [SESSION_ENTITY_TAG]: sessionApplier,
-    [ACCESS_TOKEN_ENTITY_TAG]: accessTokenApplier,
-    [SETUP_CODE_ENTITY_TAG]: setupCodeApplier,
+    ...AUTH_APPLIERS,
   };
 
   const changeBus = createChangeBus({ onError: reportChangeError });
-  const engineContext = {
-    runner: createTransactionRunner(db),
-    isTransientContention: isSqliteBusy,
-    conflictError: () => conflict,
-    onPublishError: reportChangeError,
-  };
+  const engineContext = createEngineContext(db, reportChangeError);
   const boundRunEffects: RunEffects = (flow) => runEffects(engineContext, applierRegistry, flow, changeBus.publish);
   const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
     runEffectsSequence(engineContext, applierRegistry, items, flowFor, changeBus.publish);
 
-  // Sessions guard the HTTP surface only: stdio is spawned by the user and acts as the owner (ADR-033 §1).
+  // Sessions guard the HTTP surface only: stdio is spawned by the user and acts as the owner.
   const { auth, issueAndAnnounceSetup } = await prepareAuth(config, db, boundRunEffects);
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {

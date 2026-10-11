@@ -5,23 +5,31 @@ and what that does and doesn't protect. Decisions and rationale: [ADR-033](adr/0
 Internals (hook, principal, tables): [`architecture.md`](architecture.md) § Authentication.
 The flows as diagrams (startup, setup, login, the auth hook, logout/SSE, existing databases): [`auth-flows.md`](auth-flows.md).
 
-> **Status: Phase 2 of 4.** This release ships the identity foundation — exactly **one user** (the *owner*), password
-> login, sessions, the setup code — and **personal access tokens**: `Authorization: Bearer ftk_…` for `/api` and
-> `/mcp`, with read/write scopes. MCP OAuth (Phase 3) and multiple users with per-user data (Phase 4) come later — see
+> **Status: Phase 2 of 4, plus [ADR-034](adr/034-local-auth-and-stdio-sign-in.md) step 1.** This release ships the
+> identity foundation — exactly **one user** (the *owner*), password login, sessions, the setup code — and **personal
+> access tokens**: `Authorization: Bearer ftk_…` for `/api` and `/mcp`, with read/write scopes. **Authentication is now on by
+> default, on every install** — a local npm one included — and the owner is claimed in the terminal during
+> `setup` ([First setup](#first-setup)). The stdio channel still acts as the owner (its browser sign-in is ADR-034
+> step 2). MCP OAuth (Phase 3) and multiple users with per-user data (Phase 4) come later — see
 > [What comes next](#what-comes-next).
 
 ## Auth modes
 
-`FINTRACK_AUTH` is `required` or `disabled`. Leave it unset and it follows `HOST`:
+`FINTRACK_AUTH` is `required` or `disabled`. **Unset, it is `required` — everywhere**, the loopback sidecar of a local
+npm/stdio install included (ADR-034 §1). `disabled` is an explicit opt-out for development and tests, and only
+possible on a loopback bind:
 
-| `HOST` (bind address) | `FINTRACK_AUTH` unset | `FINTRACK_AUTH=required` | `FINTRACK_AUTH=disabled` |
+| Situation | `FINTRACK_AUTH` unset | `FINTRACK_AUTH=required` | `FINTRACK_AUTH=disabled` |
 |---|---|---|---|
-| `127.0.0.1` (default), `127.x.x.x`, `::1`, `localhost` | **disabled** | required | disabled |
-| `0.0.0.0`, `::`, a LAN IP, any other name | **required** | required | **startup error** |
+| `HOST` loopback (`127.0.0.1` default, `127.x.x.x`, `::1`, `localhost`), no `PUBLIC_URL`/`TRUST_PROXY` | **required** | required | allowed (explicit, loopback-only) |
+| `HOST` `0.0.0.0`, `::`, a LAN IP, any other name | **required** | required | **startup error** |
 | any `HOST`, with `PUBLIC_URL` or `TRUST_PROXY` set | **required** | required | **startup error** |
 
-- **`disabled`** — every request acts as the owner, with no login. This is the npm default (`HOST=127.0.0.1`): the
-  server is reachable only from the machine it runs on, exactly as before authentication existed. **It only answers
+- **`required`** — every route except the [public surface](#the-public-surface) needs a credential: a session on
+  `/ui`, a session *or* an [access token](#personal-access-tokens) on `/api` and `/mcp`. The first time, the owner has no
+  login yet: [claim it](#first-setup) in the terminal, or with the [setup code](#the-setup-code) in the browser.
+- **`disabled`** — every request acts as the owner, with no login: any program on your machine can read and write
+  your finances through `127.0.0.1`. Use it for development and tests, not as a way to avoid the login. **It only answers
   requests that say they are for this machine:** the `Host` header must name a loopback host (`127.0.0.1:port`,
   `localhost:port`, `[::1]:port` — a missing or malformed one is refused, and so is anything that is not a bare
   `host[:port]` such as `x@127.0.0.1` or `127.0.0.1/x`), and an `Origin` header, if the client sends
@@ -33,22 +41,19 @@ The flows as diagrams (startup, setup, login, the auth hook, logout/SSE, existin
   which turns authentication on.
 - **`disabled` ignores `Authorization` headers entirely** — every request already acts as the owner with every scope,
   so there is nothing for a token to add (and no token pages or resource metadata are served).
-- **`required`** — every route except the [public surface](#the-public-surface) needs a credential: a session on
-  `/ui`, a session *or* an [access token](#personal-access-tokens) on `/api` and `/mcp`. This is the container's mode
-  (`HOST=0.0.0.0`).
 - **`disabled` is refused at startup whenever the instance is reachable by anyone else** — a non-loopback `HOST`, or
   `PUBLIC_URL`/`TRUST_PROXY` set. A reverse proxy normally connects to a loopback bind, so `HOST=127.0.0.1` behind a
-  proxy would otherwise leave the whole internet-facing site logged in as the owner; naming the proxy (`PUBLIC_URL`, or
-  `TRUST_PROXY` other than `false`/`0`) turns authentication on by default instead.
-- **stdio is always trusted.** The MCP client spawns the process, so there is no network caller to authenticate;
-  stdio acts as the owner whatever the mode. Authentication applies to the HTTP surface only.
+  proxy would otherwise leave the whole internet-facing site logged in as the owner.
+- **stdio still acts as the owner** whatever the mode: the MCP client spawns the process, so there is no network caller
+  to authenticate. Authentication applies to the HTTP surface only *in this release*; making a stdio session sign in is
+  [ADR-034 step 2](adr/034-local-auth-and-stdio-sign-in.md#2-a-stdio-session-must-sign-in).
 - With no HTTP surface running (`FINTRACK_HTTP=false` under stdio) there is nothing to protect and nothing is set up.
 
 ## Settings
 
 | Variable | Meaning |
 |---|---|
-| `FINTRACK_AUTH` | `required` \| `disabled`. Default derived from `HOST`, above. |
+| `FINTRACK_AUTH` | `required` \| `disabled`. Default `required`, on every surface; `disabled` is loopback-only. See [Auth modes](#auth-modes). |
 | `PUBLIC_URL` | The external **origin** users type, e.g. `https://fintrack.example.com` — no path, no trailing slash. Optional. `https` turns on the cookie `Secure` flag; it is also the origin the [CSRF check](#csrf) expects. Phase 3 (OAuth) will require it. |
 | `TRUST_PROXY` | Passed to Fastify's `trustProxy`: `true`, a hop count (`1`), or trusted addresses/CIDRs (`loopback,10.0.0.0/8`). Set it behind a reverse proxy so [login rate limiting](#brute-force-protection) sees each client's real IP instead of the proxy's. |
 
@@ -61,16 +66,55 @@ There is **exactly one owner**, and every path leads to it.
 - A migration inserts the owner row — a stable id, role `admin`, **no username or password** — on **every** database,
   fresh or existing. It touches no other table; your accounts, transactions, budgets and settings are unchanged.
 - The owner *is* the "default user": stdio, and requests in `disabled` mode, act as it.
-- **Setup claims the owner; it never creates a user.** `/ui/setup` sets the existing owner's username and password.
-  There is no code path that inserts a second user, so a database that already holds your data can never end up with
-  an empty account the data doesn't belong to.
+- **Setup claims the owner; it never creates a user.** `/ui/setup` and `fintrack auth setup` both set the existing
+  owner's username and password. There is no code path that inserts a second user, so a database that already holds your
+  data can never end up with an empty account the data doesn't belong to.
 
-**An existing database (for example, one built up over stdio) therefore keeps all its data.** Run it with
-authentication on, claim the owner with the [setup code](#the-setup-code), and log in to the data you already have.
-Nothing is copied or migrated.
+**An existing database (for example, one built up over stdio) therefore keeps all its data.** Upgrade, claim the owner
+once ([First setup](#first-setup)), and log in to the data you already have. Nothing is copied or migrated.
 
 > Moving an npm/stdio database into the Docker volume (and exporting its keychain key) is a Phase 4 deliverable
 > (`fintrack key export`). Until then, claiming works on a database file the container can already open.
+
+## First setup
+
+Every database starts with an unclaimed owner, so every new local install claims it once. It is folded into the
+command you already run to connect a client:
+
+```bash
+npx @rafaelfcarneiro/fintrack@latest setup claude-code     # or claude-desktop, copilot, antigravity, codex
+```
+
+In order, it:
+
+1. **Claims the owner**, if nobody holds its login yet. It asks for a **username**, then a **password** twice, with no
+   echo (a bad answer is asked again, three tries at most; the rules are the ones `/ui/setup` applies — a password of at
+   least 12 characters, no other rules). If the owner is already claimed it says so in one line and skips the step.
+2. **Writes the client's config entry** exactly as before: an idempotent merge that keeps your other keys.
+
+`fintrack auth setup` is just step 1, for when the client is already configured (an upgrade, a second machine's
+config…). Run either as often as you like.
+
+```bash
+npx @rafaelfcarneiro/fintrack@latest auth setup
+```
+
+- **Scripted installs.** With no terminal there is nothing to ask, so the command fails with instructions —
+  *before* it writes any config — instead of hanging. Give it the username and pipe the password in:
+  `printf %s "$PASSWORD" | npx @rafaelfcarneiro/fintrack@latest setup claude-code --username rafael --password-stdin`
+  (stdin must be a pipe or a file, not a terminal).
+- **An upgrade keeps its data.** Authentication is now on by default, so after upgrading the browser dashboard
+  (`/ui`) asks for a login. Run `auth setup` (or `setup <client>` again) **once**: it claims the existing owner, and the
+  accounts and transactions you already have are what you see after logging in. Nothing is copied or migrated, and a
+  pre-migration backup is still made where a migration rewrites data (see [Backups](#backups-made-before-a-migration)).
+- **It never creates a user and never starts a session.** The claim updates the one owner row, spends any setup code still
+  outstanding in the same write (so it cannot claim anything afterwards), and does not log you in: sign in at `/ui/login`.
+- **Why a terminal, and why no code.** These commands open the database with its key from the OS keychain (or
+  `FINTRACK_DB_KEY_FILE`/`FINTRACK_DB_KEY`) and neither start HTTP nor stdio. Whoever can do that already controls the
+  data, so a code or a current password would add nothing — the terminal is the proof. A sign-in *link* must never itself
+  grant access, and a setup code must never pass through a chat.
+- **The Docker setup code is unchanged** — the container prints it; open `/ui/setup`.
+- The password is never printed or logged and is stored only as an argon2id hash.
 
 ## The setup code
 
@@ -85,7 +129,8 @@ cannot replace the code you were shown (stdout carries the MCP protocol, so it i
 │
 │     7QXM-4RTC-HK2V-N8WP-D3ZB
 │
-│ Open http://127.0.0.1:51737/ui/setup and enter the code, then choose a username and password.
+│ Open http://127.0.0.1:51737/ui/setup and enter the code, then choose a username and password,
+│ or run `npx @rafaelfcarneiro/fintrack auth setup` in a terminal.
 ```
 
 ```bash
@@ -93,11 +138,13 @@ docker compose logs fintrack        # Docker
 ```
 
 - Open `/ui/setup`, enter the code, choose a **username** and a **password** (at least 12 characters, no other
-  rules — a long passphrase is best). You are logged in straight away.
+  rules — a long passphrase is best). You are logged in straight away. The page and the banner both also name the
+  terminal route, [`auth setup`](#first-setup): a stdio-spawned process's stderr lands in the client's log files, where
+  the code is hard to find.
 - The code is 100 random bits, valid for **30 minutes**, and **single use**. Only its SHA-256 is stored; the plaintext
   exists in the log line and nowhere else.
 - **A restart while still unclaimed prints a fresh code and invalidates the previous one** (there is only ever one code, replaced in place — even if two processes start together, only the last one stored works). Lost the code? Restart.
-- Once the owner is claimed, no code is issued, `/ui/setup` redirects to login and a POST to it is refused (`409`).
+- Once the owner is claimed — by the code or from the terminal — no code is issued, `/ui/setup` redirects to login and a POST to it is refused (`409`).
 - No code is printed in `disabled` mode.
 
 Without the code nobody can claim an exposed instance: there is no window in which "whoever gets there first" wins.
@@ -122,6 +169,25 @@ Without the code nobody can claim an exposed instance: there is no window in whi
   `/ui`; anything else lands on `/ui`.
 - A disabled user (Phase 4) or a deleted session is rejected on the next request.
 
+## Reset a password
+
+There is no recovery email; recovery is a terminal command, trusted the same way as [`auth setup`](#first-setup):
+
+```bash
+npx @rafaelfcarneiro/fintrack@latest auth reset-password            # the owner (the only user for now)
+npx @rafaelfcarneiro/fintrack@latest auth reset-password --user ana # a named user (Phase 4)
+```
+
+It asks for the new password twice, no echo (or `--password-stdin`), then in **one write**:
+
+- replaces that user's password hash;
+- **deletes every session** of that user (their browsers are logged out on the next request);
+- **revokes every still-live access token** of that user (`revoked_at` is set and the rows are kept, so the list still
+  shows what existed).
+
+It prints how many sessions ended and tokens were revoked. A session created by a login in the instant between the command reading the user's sessions and committing is not ended by that run; run it again if the server was busy. Other users' rows are never touched. An unknown `--user` is a
+clear error before any password is asked; an unclaimed owner is pointed at `auth setup`.
+
 ## Personal access tokens
 
 A personal access token (PAT) lets a script or an MCP client that cannot open a browser call `/api` and `/mcp`.
@@ -134,13 +200,15 @@ Create and revoke them at **`/ui/access/tokens`** (the key icon in the dashboard
   and a display prefix (`ftk_` + the first 6 characters) so you can tell tokens apart in the list. Lose it and you
   revoke it and create another. The plaintext is never logged: request logs redact `Authorization`, and nothing else
   receives it.
-- **Name, access, expiry, and your password.** Access is *read only* or *read and write* (see [Scopes](#scopes)). Expiry is *never*, 30,
-  90 or 365 days — the form defaults to 90. Creating a token asks for your **login password again**: a dashboard can
+- **Name, access, expiry, and your password.** Access is *read only* or *read and write* (see [Scopes](#scopes)). Expiry is 30,
+  90 or 365 days — the form defaults to 90, and there is **no "never"** (ADR-034 §6). Creating a token asks for your **login password again**: a dashboard can
   contain a script (a write-scoped client may save one with `save_dashboard`) that runs in the dashboard's origin with
   your session cookie, but it does not know your password, so it cannot mint itself a token. A wrong password is `403` and
   counts toward the same [login rate limit](#brute-force-protection).
 - **Listed with:** name, prefix, access, created, **last used**, expires and status (`active`, `expired`, `revoked`).
   `last used` is rewritten at most every 5 minutes, like a session's activity.
+- **Legacy tokens.** A token created before ADR-034 may have no expiry. It keeps working until it is revoked, and the
+  list shows it as **"No expiry (legacy)"** — revoke it and mint a new one when convenient. New tokens always expire.
 - **Revoke** sets `revoked_at` and keeps the row, so you can still see what existed; it takes effect on the very next
   request. Revoking twice is harmless.
 - A token stops working when it is revoked, when it expires, or if its owner can no longer log in.
@@ -287,6 +355,9 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 **Protects against**
 
 - Another machine on your network reading or writing your finances (required mode is forced off loopback).
+- **Other local programs and local web apps using the HTTP surface** (a script, a dev server on another port): with the
+  default `required`, `127.0.0.1:51737` is behind the same login as everything else — a program on your machine needs a
+  session or an access token, not just a connection (ADR-034 §1).
 - A web page you visit reaching an auth-disabled instance on `127.0.0.1` — through DNS rebinding or a cross-site
   request (loopback-only `Host`/`Origin`).
 - A hostile web page driving your logged-in browser (SameSite + Origin check; forms and JSON alike).
@@ -309,16 +380,20 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
   therefore make your *browser* act as you — read your data and call `/api` with your session — whenever you open that
   dashboard. The password prompt on token creation stops it minting a lasting credential, nothing more; treat write access
   to dashboards as access to your logged-in browser, and review a dashboard before opening one an agent wrote.
-- **Anyone who can read your files.** The database key and the volume together decrypt everything; authentication
-  guards the network surface, not the disk. Back up the key and the volume together, and protect both.
-- **Other local programs and local web apps, with auth `disabled` on loopback.** A web page from another *site* can
+- **Anyone who can read your files, or run FinTrack as you.** The database key and the volume together decrypt everything;
+  authentication guards the network surface, not the disk. The `auth` commands are trusted for exactly this reason: they
+  open the database with its key, so whoever can run them already holds the data. On one OS account, a program that can run
+  FinTrack can read the key and the database directly, so the login separates *people and network callers*, not your own
+  account's processes. The stdio channel is likewise still trusted in this release (ADR-034 step 2 changes that). Back up
+  the key and the volume together, and protect both.
+- **Other local programs and local web apps, with auth explicitly `disabled` on loopback.** A web page from another *site* can
   no longer reach it (the `Host`/`Origin` rule above), but any program running as any user on your machine can still
   connect to `127.0.0.1` and act as the owner. That includes a web app served from `localhost` on a *different port*
   (a dev server, a local tool): its `Origin` is loopback, which is accepted on purpose so MCP Inspector
   (`http://localhost:6274`) works. FinTrack sends no CORS headers, so such a page cannot read responses, and a
   JSON write is stopped by the browser's preflight — but a simple, body-less cross-origin `POST` is not. That is
-  today's behavior and the reason `disabled` is loopback-only; turn on `FINTRACK_AUTH=required` if that matters to
-  you.
+  today's behavior and the reason `disabled` is loopback-only; it is why `disabled` is
+  an explicit opt-out and not the default.
 - **Eavesdropping.** FinTrack serves plain HTTP. Across a network, put a TLS-terminating reverse proxy in front
   (and set `PUBLIC_URL`/`TRUST_PROXY`); Phase 3 documents and supports that deployment.
 - **Username lockout.** Because failures are counted per submitted username, someone who can reach the login page can
@@ -330,9 +405,12 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 
 ## What comes next
 
-Phase 1 (identity) and Phase 2 (personal access tokens, scopes, Protected Resource Metadata) are done.
+Phase 1 (identity) and Phase 2 (personal access tokens, scopes, Protected Resource Metadata) are done, and
+[ADR-034](adr/034-local-auth-and-stdio-sign-in.md) step 1 (authentication on by default, the terminal owner claim and
+password reset, no never-expiring tokens) with them.
 
-| Phase | Adds |
+| Step / phase | Adds |
 |---|---|
+| ADR-034 step 2 — stdio sign-in | A stdio session signs in through the browser with an expiry the user chooses (`/ui/connect`, `fintrack login`/`logout`, `/ui/access` listing); stdio stops acting as the owner. |
 | 3 — MCP OAuth | An in-process OAuth 2.1 authorization server so OAuth-capable MCP clients can connect; the documented reverse-proxy + TLS deployment supersedes the loopback-only publish rule. |
-| 4 — multi-user | `user_id` on every user-owned table (backfilled to the owner), per-user scoping, `FINTRACK_USER` for stdio, admin user management, and `fintrack key export` + the npm→Docker move guide. |
+| 4 — multi-user | `user_id` on every user-owned table (backfilled to the owner), per-user scoping, stdio identity from ADR-034's sign-in (there is no `FINTRACK_USER`), admin user management, and `fintrack key export` + the npm→Docker move guide. |

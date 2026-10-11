@@ -13,10 +13,10 @@ import {
   resourceOrigin,
   revokedToken,
   scopeOfTool,
-  SESSION_TOUCH_INTERVAL_MS,
   summarizeToken,
   tokenDisplayPrefix,
   tokenPrincipal,
+  isLiveToken,
   tokenStatus,
   usedToken,
 } from '../../../src/logic/auth.js';
@@ -30,6 +30,7 @@ import {
   UserRole,
   type AccessTokenEntity,
   type UserEntity,
+  SESSION_TOUCH_INTERVAL_MS,
 } from '../../../src/models/auth.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
@@ -181,24 +182,33 @@ describe('new tokens', () => {
   });
 
   it('read access is the read scope; write access includes read', () => {
-    expect(newAccessToken({ ...fields, input: { name: 'n', access: 'read', expiry: 'none' } }, NOW).scopes).toEqual([
+    expect(newAccessToken({ ...fields, input: { name: 'n', access: 'read', expiry: '90' } }, NOW).scopes).toEqual([
       READ,
     ]);
-    expect(newAccessToken({ ...fields, input: { name: 'n', access: 'write', expiry: 'none' } }, NOW).scopes).toEqual([
+    expect(newAccessToken({ ...fields, input: { name: 'n', access: 'write', expiry: '90' } }, NOW).scopes).toEqual([
       READ,
       WRITE,
     ]);
   });
 
   it.each([
-    ['none', null],
     ['30', 30],
     ['90', 90],
     ['365', 365],
   ] as const)('expiry %s', (expiry, days) => {
     const created = newAccessToken({ ...fields, input: { name: 'n', access: 'read', expiry } }, NOW);
-    expect(created.expiresAt).toBe(days === null ? null : new Date(NOW.getTime() + days * DAY_MS).toISOString());
+    expect(created.expiresAt).toBe(new Date(NOW.getTime() + days * DAY_MS).toISOString());
     expect(created).toMatchObject({ lastUsedAt: null, revokedAt: null, createdAt: NOW.toISOString() });
+  });
+});
+
+describe('isLiveToken', () => {
+  it('is true only for a token that is neither revoked nor past its expiry (a legacy null expiry counts)', () => {
+    const live = isLiveToken(NOW);
+    expect(live(token())).toBe(true);
+    expect(live(token({ expiresAt: new Date(NOW.getTime() + 1).toISOString() }))).toBe(true);
+    expect(live(token({ expiresAt: NOW.toISOString() }))).toBe(false);
+    expect(live(token({ revokedAt: NOW.toISOString() }))).toBe(false);
   });
 });
 

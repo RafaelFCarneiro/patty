@@ -1,23 +1,25 @@
-# Authentication flows (ADR-033 Phases 1–2)
+# Authentication flows (ADR-033 Phases 1–2, ADR-034 step 1)
 
 These diagrams show the flows as built: who takes part in each one and what happens at each step.
 The operator guide is [`auth.md`](auth.md); the decision record is
-[`adr/033-authentication-and-multi-user.md`](adr/033-authentication-and-multi-user.md).
+[`adr/033-authentication-and-multi-user.md`](adr/033-authentication-and-multi-user.md) and
+[`adr/034-local-auth-and-stdio-sign-in.md`](adr/034-local-auth-and-stdio-sign-in.md).
 
 **Participants** (each name matches a source file):
 
 | Participant | Where | Role |
 |---|---|---|
-| Config | `src/config.ts` | Decides the auth mode from `HOST` / `PUBLIC_URL` / `TRUST_PROXY` / `FINTRACK_AUTH` |
+| Config | `src/config.ts` | Reads `FINTRACK_AUTH` (default `required`) and refuses `disabled` on an exposed instance (`HOST` / `PUBLIC_URL` / `TRUST_PROXY`) |
 | Bootstrap | `src/diplomat/db/bootstrap.ts`, `safetyCopy.ts`, `migrationLock.ts` | Migrations, the owner row, the pre-migration backup |
-| AuthRuntime | `src/authRuntime.ts` | Builds the identity deps, prunes sessions, issues and prints the setup code |
+| AuthRuntime | `src/authRuntime.ts` | Builds the identity deps (shared with the CLI), prunes sessions, issues and prints the setup code |
+| Cli | `src/cli.ts`, `src/authCli.ts`, `src/diplomat/cli/{prompt,terminal}.ts` | `fintrack setup [client]`, `fintrack auth setup`, `fintrack auth reset-password`: opens the database like the server (no HTTP, no stdio), prompts with no echo, runs the controller flows |
 | AuthHook | `src/diplomat/http/hooks/auth.ts` — `registerAuthHook` (decisions in `src/logic/auth.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, credential precedence (bearer vs. cookie), session/token resolution, the CSRF check, the route-scope check, challenges and redirects |
 | Bearer | `src/diplomat/http/bearer.ts` | Builds the `WWW-Authenticate` response (`logic/auth.ts`'s `bearerChallenge`; only the origin is resolved at the edge) — shared by the hook and the MCP route |
 | AuthRoutes | `src/diplomat/http/routes/auth.ts` | `/ui/setup`, `/ui/login`, `/ui/logout`: form parsing, rate limiting, cookies |
 | TokenRoutes | `src/diplomat/http/routes/tokens.ts` | `/ui/access/tokens`, `/ui/access/tokens/:id/revoke`: session-only token pages |
 | WellKnown | `src/diplomat/http/routes/wellKnown.ts` | The two Protected Resource Metadata (RFC 9728) routes |
 | McpRoute | `src/diplomat/mcp/route.ts`, `scopes.ts` | `POST /mcp`: per-tool scope pre-check on the JSON-RPC body, `req.auth` for the transport, per-tool re-check |
-| Controller | `src/controllers/auth.ts`, `src/controllers/accessTokens.ts` | `issueSetupCode`, `claimOwner`, `login`, `logout`, `authenticate`; `createToken`, `listTokens`, `revokeToken`, `authenticateToken`; returns `{ persist, response }` |
+| Controller | `src/controllers/auth.ts`, `src/controllers/accessTokens.ts` | `issueSetupCode`, `claimOwner`, `claimOwnerLocally`, `resetPassword`, `login`, `logout`, `authenticate`; `createToken`, `listTokens`, `revokeToken`, `authenticateToken`; returns `{ persist, response }` |
 | Logic | `src/logic/auth.ts` | Pure rules: expiry, the sliding window, "can log in", origin comparison, scopes, the token verdict, credential parsing, challenges, the metadata document |
 | Secrets | `src/diplomat/auth/credentials.ts` | argon2id, CSPRNG session tokens, access tokens (`ftk_…`) and codes, sha256 |
 | Runner | `@rfc0/effect-runner` via `runEffects` | Applies the persistables in one transaction (optimistic versions, retries) |
@@ -32,20 +34,17 @@ flowchart TD
     A[Process starts] --> B[Config: parse env]
     B --> C{FINTRACK_AUTH set?}
     C -- yes --> D[Use it]
-    C -- no --> E{Exposed?<br/>non-loopback HOST<br/>or PUBLIC_URL<br/>or TRUST_PROXY}
-    E -- yes --> F[required]
-    E -- no --> G[disabled]
-    D --> H{disabled AND exposed?}
+    C -- no --> F[required<br/>the default on EVERY surface,<br/>loopback included]
+    D --> H{disabled AND exposed?<br/>non-loopback HOST<br/>or PUBLIC_URL<br/>or TRUST_PROXY}
     H -- yes --> X[[Startup error:<br/>no unauthenticated exposure]]
     H -- no --> I
     F --> I
-    G --> I
     I[Open DB with key<br/>file → env → keychain] --> J{Data-rewriting migration pending<br/>on an existing DB?}
     J -- yes --> K[Take the OS-level migration lock<br/>VACUUM INTO db.pre-0018_auth_identity.bak<br/>under SQLite's write lock<br/>encrypted, 0600<br/>migrations applied in the same transaction]
     J -- no --> L
     K --> L[Migrations applied<br/>0018 inserts the OWNER row:<br/>id user-owner, admin, no credentials]
     L --> M{Mode required<br/>AND an HTTP surface?}
-    M -- no --> N[Every HTTP request acts as the owner<br/>stdio acts as the owner]
+    M -- no --> N[Every HTTP request acts as the owner<br/>only an explicit disabled, loopback-only<br/>stdio acts as the owner]
     M -- yes --> O[Load argon2, build the identity deps<br/>prune expired sessions]
     O --> P[Bind HTTP]
     P --> Q{Bound successfully?}
@@ -53,7 +52,7 @@ flowchart TD
     Q -- yes --> S{Owner unclaimed?}
     S -- no --> T[Ready: login required]
     S -- yes --> U[Generate a 100-bit code<br/>store only its sha256 in the single setup_codes row<br/>expires in 30 min, replaces any older code]
-    U --> V[Print the banner to STDERR once<br/>docker compose logs]
+    U --> V[Print the banner to STDERR once<br/>docker compose logs · a stdio client's log file<br/>names /ui/setup AND npx … auth setup]
 ```
 
 ## 2. First-time setup: claiming the owner
@@ -95,6 +94,75 @@ sequenceDiagram
     Run-->>Routes: the plaintext token (in memory only)
     Routes->>Routes: clear the IP strike, reset the username
     Routes-->>Op: 303 → /ui + Set-Cookie fintrack_session (HttpOnly, SameSite=Lax, Secure on https)
+```
+
+## 2b. First setup from the terminal
+
+`fintrack setup <client>` and `fintrack auth setup` (ADR-034 §5). The CLI is a process of its own: it opens the database
+with the same key resolution and migrations as the server, but starts neither HTTP nor stdio. Nothing here is typed into a
+chat, and no sign-in link or setup code is involved.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Op as Operator (terminal)
+    participant Cli as Cli (setup / auth setup)
+    participant DB as Database (key from keychain / file / env)
+    participant Ctl as Controller.claimOwnerLocally
+    participant Run as Runner
+    participant Cfg as Client config file
+
+    Op->>Cli: npx @rafaelfcarneiro/fintrack setup claude-code
+    Cli->>Cli: unknown client or no client? help or error, nothing else happens
+    Cli->>DB: open + bootstrap (migrations, so the owner row exists)
+    Cli->>DB: owner already claimed?
+    alt claimed
+        Cli-->>Op: one line: who owns it. Skip the claim (exit 0 for auth setup)
+    else unclaimed
+        alt stdin is a terminal
+            Cli->>Op: Username, then Password twice (no echo, 3 tries each, same rules as /ui/setup)
+        else --username + --password-stdin
+            Op->>Cli: password piped on stdin
+        else no terminal and no --password-stdin
+            Cli-->>Op: instructions on stderr, exit 1 — before the claim and the config write
+        end
+        Cli->>Ctl: runEffects(claimOwnerLocally)
+        Ctl->>DB: read the owner — still unclaimed? (else setup_unavailable = already claimed)
+        Ctl->>Ctl: argon2id(password)
+        Ctl-->>Run: persist: UPDATE owner (username, hash) + UPDATE the outstanding setup code as used
+        Run->>DB: one transaction, versioned. No user INSERT, no session
+        Cli-->>Op: Owner claimed (never the password)
+    end
+    opt setup <client> only
+        Cli->>Cfg: merge the fintrack entry (idempotent, other keys kept)
+        Cli-->>Op: restart your client
+    end
+```
+
+### Reset a password
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Op as Operator (terminal)
+    participant Cli as Cli (auth reset-password)
+    participant Ctl as Controller.resetPassword
+    participant Run as Runner
+    participant DB
+
+    Op->>Cli: auth reset-password [--user ana]
+    Cli->>DB: find the target (default: the owner, who must have a login)
+    alt unknown user, or unclaimed owner
+        Cli-->>Op: clear error on stderr, exit 1 — no password asked
+    else found
+        Op->>Cli: new password (twice, no echo) or --password-stdin
+        Cli->>Ctl: runEffects(resetPassword)
+        Ctl->>DB: that user's sessions and live access tokens
+        Ctl-->>Run: persist: UPDATE user (hash) + DELETE each session + UPDATE each live token (revoked_at)
+        Run->>DB: one transaction, versioned
+        Cli-->>Op: sessions ended: N · tokens revoked: M
+    end
+    Note over DB: other users' rows are never read into the batch
 ```
 
 ## 3. Login
@@ -271,9 +339,14 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    subgraph L1["Local npm: loopback, no PUBLIC_URL or TRUST_PROXY, only loopback Host/Origin answered"]
-      S1[MCP client] -- stdio, trusted --> O1((Owner, all scopes))
-      B1[Browser /ui, /api] -- auth disabled, Authorization ignored --> O1
+    subgraph L1["Local npm: loopback, auth required by default"]
+      S1[MCP client] -- "stdio — still trusted in this step<br/>(ADR-034 step 2 adds a sign-in)" --> O1((Owner, all scopes))
+      B1[Browser /ui] -- "needs a login<br/>session cookie + Origin check" --> O1
+      C1["Script / client over HTTP<br/>Authorization: Bearer ftk_…"] -- "access token, no CSRF check" --> O1
+      P1[Any other local program] -. "no credential: 401 / redirect to login" .-> X1[rejected]
+    end
+    subgraph L1D["Local, explicit FINTRACK_AUTH=disabled (development, tests)"]
+      B1D[Browser /ui, /api] -- "loopback Host/Origin only<br/>Authorization ignored" --> O1D((Owner, all scopes))
     end
     subgraph L2["Docker or exposed: auth required"]
       B2[Browser] -- session cookie + Origin check --> O2((Owner))
@@ -292,12 +365,15 @@ sequenceDiagram
     participant You as You (stdio, npm)
     participant FT as FinTrack (new version)
     participant DB as ~/.fintrack/fintrack.db
+    participant Cli as setup / auth setup
 
     You->>FT: first start after upgrading
     FT->>DB: migration 0018 pending on an existing DB?
     FT->>DB: VACUUM INTO fintrack.db.pre-0018_auth_identity.bak under SQLite's write lock (encrypted, same key)
     FT->>DB: migrations applied in the same transaction: create users / sessions / setup_codes + INSERT the owner (no credentials)
     Note over DB: no domain table touched — accounts, transactions … unchanged
-    FT-->>You: loopback → auth disabled → everything acts as the owner (same behavior as before)
-    Note over You,DB: Later (Docker / auth required): setup code → /ui/setup CLAIMS this owner → same data
+    FT-->>You: auth is required by default, so /ui asks for a login, and the sidecar prints a setup code and the `auth setup` hint to stderr. stdio keeps working as the owner
+    You->>Cli: npx @rafaelfcarneiro/fintrack setup <client>  (or auth setup) — once
+    Cli->>DB: UPDATE the existing owner row with your username and password hash (never an INSERT of a user)
+    Note over You,DB: log in at /ui — it is the same database, so the same data. Nothing was copied or migrated
 ```

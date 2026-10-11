@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -223,5 +223,92 @@ describe('runSetup', () => {
 
     expect(logSpy).toHaveBeenCalledWith('  Fully quit and reopen Claude Desktop to apply.');
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Cmd+Q'));
+  });
+});
+
+describe('runGuidedSetup (claim the owner, then write the config)', () => {
+  let originalCwd = '';
+  let homeDir = '';
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (originalCwd) process.chdir(originalCwd);
+    if (homeDir) rmSync(homeDir, { recursive: true, force: true });
+    vi.doUnmock('node:os');
+    vi.resetModules();
+  });
+
+  const loadWithHome = async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    originalCwd = process.cwd();
+    process.chdir(homeDir);
+    vi.resetModules();
+    vi.doMock('node:os', () => ({ homedir: () => homeDir }));
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    return import('../../src/setup.js');
+  };
+
+  const claudeCodeConfig = () => join(homeDir, '.claude', 'mcp.json');
+
+  it('claims first and then writes the client config', async () => {
+    const { runGuidedSetup } = await loadWithHome();
+    const order: string[] = [];
+    const claim = vi.fn(async () => {
+      order.push(existsSync(claudeCodeConfig()) ? 'config-first' : 'claim');
+      return true;
+    });
+
+    expect(await runGuidedSetup('claude-code', claim)).toBe(0);
+
+    expect(order).toEqual(['claim']);
+    expect(JSON.parse(readFileSync(claudeCodeConfig(), 'utf8'))).toEqual({ mcpServers: { fintrack: STDIO_ENTRY } });
+  });
+
+  it('writes no config at all when the claim fails (no terminal, bad input…)', async () => {
+    const { runGuidedSetup } = await loadWithHome();
+    expect(await runGuidedSetup('claude-code', async () => false)).toBe(1);
+    expect(existsSync(claudeCodeConfig())).toBe(false);
+  });
+
+  it('is safe to re-run: the claim step may skip, and the config merges idempotently', async () => {
+    const { runGuidedSetup } = await loadWithHome();
+    mkdirSync(join(homeDir, '.claude'), { recursive: true });
+    writeFileSync(claudeCodeConfig(), JSON.stringify({ mcpServers: { other: { command: 'x' } }, theme: 'dark' }));
+
+    await runGuidedSetup('claude-code', async () => true);
+    const once = readFileSync(claudeCodeConfig(), 'utf8');
+    await runGuidedSetup('claude-code', async () => true);
+
+    expect(readFileSync(claudeCodeConfig(), 'utf8')).toBe(once);
+    expect(JSON.parse(once)).toEqual({
+      mcpServers: { other: { command: 'x' }, fintrack: STDIO_ENTRY },
+      theme: 'dark',
+    });
+  });
+
+  it.each([[undefined, 0], ['no-such-tool', 1]] as const)(
+    'never claims for help or an unknown tool (%s)',
+    async (tool, exitCode) => {
+      const { runGuidedSetup } = await loadWithHome();
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
+        throw new Error(`process.exit:${code}`);
+      }) as typeof process.exit);
+      const claim = vi.fn(async () => true);
+
+      await expect(runGuidedSetup(tool, claim)).rejects.toThrow(`process.exit:${exitCode}`);
+      expect(claim).not.toHaveBeenCalled();
+    },
+  );
+
+  it('documents the owner login and the scripted flags in the help', async () => {
+    const { runSetup } = await loadWithHome();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
+      throw new Error(`process.exit:${code}`);
+    }) as typeof process.exit);
+    expect(() => runSetup(undefined)).toThrow('process.exit:0');
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('--password-stdin'));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('--username'));
   });
 });
