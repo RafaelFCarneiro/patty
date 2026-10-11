@@ -9,6 +9,7 @@ import {
   evaluateSession,
   formatSetupCode,
   hasCredentials,
+  isLiveToken,
   isSetupCodeUsable,
   isUnclaimed,
   newSession,
@@ -170,7 +171,7 @@ export const resetPassword = (
 
     const now = deps.clock();
     const sessions = await deps.sessions.listByUser(user.id);
-    const liveTokens = R.filter(await deps.accessTokens.listByUser(user.id), (token) => token.revokedAt === null);
+    const liveTokens = R.filter(await deps.accessTokens.listByUser(user.id), isLiveToken(now));
     const persist: Persistable[] = [
       persistence.update({
         entity: USER_ENTITY_TAG,

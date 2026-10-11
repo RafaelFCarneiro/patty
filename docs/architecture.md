@@ -421,7 +421,7 @@ session, and any outstanding code spent in the same batch; a claimed owner → `
 claimed"); `auth reset-password` runs `resetPassword` (the user's hash `update`, a `remove` per session of that user, a
 `revoked_at` `update` per live token of that user — one batch, other users' rows never read in). Trust model: reachable only
 by someone who can open the database with its key. `setup.ts`'s `runGuidedSetup(tool, claimOwner)` claims first and writes the
-client config only if the claim succeeded; with no terminal and no `--password-stdin` it fails before writing anything.
+client config only if the claim succeeded; with no terminal and no `--password-stdin` it fails before claiming the owner or writing the client config (the database has been opened and migrated by then).
 `diplomat/cli/prompt.ts` asks the password twice with no echo (`node:readline`, a muted output stream), three tries; a TTY is
 required unless the password is piped (`--password-stdin`, with `--username`) and stdin is never read when it is a terminal.
 Results go to stdout, prompts and errors to stderr; nothing prints a password.

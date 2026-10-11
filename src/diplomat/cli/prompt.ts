@@ -1,7 +1,7 @@
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType, ZodTypeDef } from 'zod';
 import { PASSWORD_STDIN_FLAG } from '../../common/cli.js';
-import { PasswordSchema, TERMINAL_SETUP_COMMAND, UsernameSchema } from '../../models/auth.js';
+import { PasswordSchema, UsernameSchema } from '../../models/auth.js';
 import type { Terminal } from './terminal.js';
 
 export const MAX_PROMPT_ATTEMPTS = 3;
@@ -14,8 +14,8 @@ export const PROMPT_MESSAGES = {
   invalidAnswer: 'That is not valid.',
   usernameRequiredWithStdin: `--${PASSWORD_STDIN_FLAG} needs --username <name>: stdin carries only the password.`,
   noTerminal:
-    'There is no terminal to ask for a password. Run this in a terminal, or pipe the password in: ' +
-    `printf %s "$PASSWORD" | ${TERMINAL_SETUP_COMMAND} --username <name> --${PASSWORD_STDIN_FLAG}`,
+    'There is no terminal to ask for a password. Run this command in a terminal, or pipe the password in on ' +
+    `stdin with --${PASSWORD_STDIN_FLAG} (choosing the owner's login also needs --username <name>).`,
 } as const;
 
 export type PromptIo = {

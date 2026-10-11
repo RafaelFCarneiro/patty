@@ -8,11 +8,11 @@ import {
   exitCodeOf,
   type CliIo,
 } from './authCli.js';
-import { CliCommand, EXIT_FAILURE } from './common/cli.js';
+import { CliCommand, EXIT_FAILURE, SETUP_POSITIONALS } from './common/cli.js';
 import { runGuidedSetup } from './setup.js';
 
 const runSetupCommand = async (args: readonly string[], io: CliIo): Promise<number> => {
-  const parsed = parseClaimArgs(args);
+  const parsed = parseClaimArgs(args, SETUP_POSITIONALS);
   if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
   const [client] = parsed.positionals;
   return runGuidedSetup(client, () => ensureOwnerClaimed(io, parsed.options));

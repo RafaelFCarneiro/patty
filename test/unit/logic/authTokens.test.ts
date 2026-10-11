@@ -16,6 +16,7 @@ import {
   summarizeToken,
   tokenDisplayPrefix,
   tokenPrincipal,
+  isLiveToken,
   tokenStatus,
   usedToken,
 } from '../../../src/logic/auth.js';
@@ -198,6 +199,16 @@ describe('new tokens', () => {
     const created = newAccessToken({ ...fields, input: { name: 'n', access: 'read', expiry } }, NOW);
     expect(created.expiresAt).toBe(new Date(NOW.getTime() + days * DAY_MS).toISOString());
     expect(created).toMatchObject({ lastUsedAt: null, revokedAt: null, createdAt: NOW.toISOString() });
+  });
+});
+
+describe('isLiveToken', () => {
+  it('is true only for a token that is neither revoked nor past its expiry (a legacy null expiry counts)', () => {
+    const live = isLiveToken(NOW);
+    expect(live(token())).toBe(true);
+    expect(live(token({ expiresAt: new Date(NOW.getTime() + 1).toISOString() }))).toBe(true);
+    expect(live(token({ expiresAt: NOW.toISOString() }))).toBe(false);
+    expect(live(token({ revokedAt: NOW.toISOString() }))).toBe(false);
   });
 });
 

@@ -3,7 +3,7 @@ import type { ZodType, ZodTypeDef } from 'zod';
 import { runEffects } from '@rfc0/effect-runner';
 import { AUTH_APPLIERS, bindAuthRunEffects, createAuthDeps } from './authRuntime.js';
 import { formatAppError } from './common/errors.js';
-import { AuthSubcommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from './common/cli.js';
+import { AUTH_POSITIONALS, AuthSubcommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from './common/cli.js';
 import { loadConfig } from './config.js';
 import { claimRaceWinner, planOwnerClaim } from './logic/auth.js';
 import { claimedOwnerOf, claimOwnerLocally, findResetTarget, resetPassword } from './controllers/auth.js';
@@ -63,6 +63,7 @@ export const CLI_MESSAGES = {
   tokensRevoked: (count: number) => `Access tokens revoked: ${count}`,
   resetting: (username: string) => `Choose a new password for "${username}".`,
   failure: (reason: string) => `fintrack: ${reason}`,
+  unexpectedArgument: (argument: string) => `unexpected argument "${argument}"`,
 } as const;
 
 export const AUTH_HELP = `
@@ -160,9 +161,12 @@ const parseFlags = <T>(
   args: readonly string[],
   options: ParseArgsConfig['options'],
   schema: ZodType<T, ZodTypeDef, unknown>,
+  maxPositionals: number,
 ): { positionals: string[]; options: T } | { error: string } => {
   try {
     const parsed = parseArgs({ args: [...args], options, allowPositionals: true, strict: true });
+    const extra = parsed.positionals[maxPositionals];
+    if (extra !== undefined) return { error: CLI_MESSAGES.unexpectedArgument(extra) };
     const decoded = schema.safeParse(parsed.values);
     return decoded.success
       ? { positionals: parsed.positionals, options: decoded.data }
@@ -175,7 +179,8 @@ const parseFlags = <T>(
 const CLAIM_FLAGS = { [PASSWORD_STDIN_FLAG]: { type: 'boolean' }, username: { type: 'string' } } as const;
 const RESET_FLAGS = { [PASSWORD_STDIN_FLAG]: { type: 'boolean' }, user: { type: 'string' } } as const;
 
-export const parseClaimArgs = (args: readonly string[]) => parseFlags(args, CLAIM_FLAGS, ClaimOptionsSchema);
+export const parseClaimArgs = (args: readonly string[], maxPositionals: number) =>
+  parseFlags(args, CLAIM_FLAGS, ClaimOptionsSchema, maxPositionals);
 
 export const exitCodeOf = (succeeded: boolean): number => (succeeded ? EXIT_OK : EXIT_FAILURE);
 
@@ -193,11 +198,11 @@ export const runAuthCommand = async (args: readonly string[], io: CliIo): Promis
   }
 
   if (subcommand.data === AuthSubcommand.enum.setup) {
-    const parsed = parseClaimArgs(rest);
+    const parsed = parseClaimArgs(rest, AUTH_POSITIONALS);
     if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
     return exitCodeOf(await ensureOwnerClaimed(io, parsed.options));
   }
-  const parsed = parseFlags(rest, RESET_FLAGS, ResetOptionsSchema);
+  const parsed = parseFlags(rest, RESET_FLAGS, ResetOptionsSchema, AUTH_POSITIONALS);
   if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
   return exitCodeOf(await resetUserPassword(io, parsed.options));
 };

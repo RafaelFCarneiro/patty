@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
-import { AUTH_HELP, CLI_MESSAGES, runAuthCommand, type CliIo } from '../../../src/authCli.js';
-import { EXIT_FAILURE, EXIT_OK } from '../../../src/common/cli.js';
+import { AUTH_HELP, CLI_MESSAGES, parseClaimArgs, runAuthCommand, type CliIo } from '../../../src/authCli.js';
+import { AUTH_POSITIONALS, EXIT_FAILURE, EXIT_OK, SETUP_POSITIONALS } from '../../../src/common/cli.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
 import { PROMPT_MESSAGES } from '../../../src/diplomat/cli/prompt.js';
 import { accessTokens, sessions, users } from '../../../src/diplomat/db/schema.js';
@@ -305,12 +305,32 @@ describe('fintrack auth (arguments)', () => {
     [['setup', '--username'], 'username'],
     [['setup', '--username', 'a b', '--password-stdin'], 'username'],
     [['reset-password', '--username', 'x'], 'username'],
+    [['reset-password', 'ana'], 'unexpected argument "ana"'],
+    [['setup', 'claude-code'], 'unexpected argument "claude-code"'],
+    [['reset-password', '--user', '   ', '--password-stdin'], 'at least 1'],
   ])('rejects %j without touching the database', async (args, mention) => {
     const ctx = await createApp();
     const { run, err } = harness(ctx, { stdin: PASSWORD });
     expect(await run(...args)).toBe(EXIT_FAILURE);
     expect(err.join('\n')).toContain(mention);
     expect((await ownerRows(ctx))[0]).toMatchObject({ username: null, password_hash: null });
+  });
+});
+
+describe('positional arguments', () => {
+  it('lets `setup` take one client and refuses a second', () => {
+    expect(parseClaimArgs(['claude-code', '--password-stdin'], SETUP_POSITIONALS)).toMatchObject({
+      positionals: ['claude-code'],
+    });
+    expect(parseClaimArgs(['claude-code', 'extra'], SETUP_POSITIONALS)).toEqual({
+      error: CLI_MESSAGES.unexpectedArgument('extra'),
+    });
+  });
+
+  it('refuses any positional for the auth subcommands', () => {
+    expect(parseClaimArgs(['anything'], AUTH_POSITIONALS)).toEqual({
+      error: CLI_MESSAGES.unexpectedArgument('anything'),
+    });
   });
 });
 

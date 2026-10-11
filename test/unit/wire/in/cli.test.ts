@@ -31,7 +31,7 @@ describe('ResetOptionsSchema', () => {
     expect(ResetOptionsSchema.parse({ user: 'a' }).user).toBe('a');
   });
 
-  it('rejects an empty --user', () => {
-    expect(ResetOptionsSchema.safeParse({ user: '' }).success).toBe(false);
+  it.each(['', '   ', '\t\n'])('rejects an empty or whitespace-only --user (%j)', (user) => {
+    expect(ResetOptionsSchema.safeParse({ user }).success).toBe(false);
   });
 });

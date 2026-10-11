@@ -16,7 +16,7 @@ export type ClaimOptions = z.infer<typeof ClaimOptionsSchema>;
 export const ResetOptionsSchema = z
   .object({
     [PASSWORD_STDIN_FLAG]: z.boolean().default(false),
-    user: z.string().min(1).max(OPTION_MAX_LENGTH).transform(normalizeUsername).optional(),
+    user: z.string().transform(normalizeUsername).pipe(z.string().min(1).max(OPTION_MAX_LENGTH)).optional(),
   })
   .transform((flags) => ({ passwordStdin: flags[PASSWORD_STDIN_FLAG], user: flags.user }));
 export type ResetOptions = z.infer<typeof ResetOptionsSchema>;

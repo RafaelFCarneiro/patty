@@ -106,6 +106,8 @@ describe('collectNewCredentials without a terminal', () => {
     const result = await collectNewCredentials(io, { passwordStdin: false });
     expect(result._unsafeUnwrapErr()).toBe(PROMPT_MESSAGES.noTerminal);
     expect(PROMPT_MESSAGES.noTerminal).toContain('--password-stdin');
+    // The same words serve `auth setup`, `setup <client>` and `auth reset-password`: no command is hard-coded.
+    expect(PROMPT_MESSAGES.noTerminal).not.toContain('auth setup');
     expect(io.readPasswordFromStdin).not.toHaveBeenCalled();
   });
 

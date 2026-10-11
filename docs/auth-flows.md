@@ -124,7 +124,7 @@ sequenceDiagram
         else --username + --password-stdin
             Op->>Cli: password piped on stdin
         else no terminal and no --password-stdin
-            Cli-->>Op: instructions on stderr, exit 1 — BEFORE any write, config included
+            Cli-->>Op: instructions on stderr, exit 1 — before the claim and the config write
         end
         Cli->>Ctl: runEffects(claimOwnerLocally)
         Ctl->>DB: read the owner — still unclaimed? (else setup_unavailable = already claimed)

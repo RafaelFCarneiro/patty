@@ -328,6 +328,12 @@ export const tokenStatus = (token: TokenFields, now: Date): TokenStatus =>
       ? TokenStatus.enum.expired
       : TokenStatus.enum.active;
 
+/** Active: not revoked and not past its expiry. */
+export const isLiveToken =
+  (now: Date) =>
+  (token: TokenFields): boolean =>
+    tokenStatus(token, now) === TokenStatus.enum.active;
+
 /** The token as the list shows it — never the hash. */
 export const summarizeToken = (token: TokenFields, now: Date): AccessTokenSummary => ({
   id: token.id,

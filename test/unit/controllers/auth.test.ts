@@ -502,6 +502,19 @@ describe('resetPassword (ADR-034 §5)', () => {
     expect(response.username).toBe('ana');
   });
 
+  it('leaves an already-expired token alone: it is not live, so it is neither revoked nor counted', async () => {
+    const expired = tokenRow({ expiresAt: new Date(NOW.getTime() - 1).toISOString() });
+    const live = tokenRow({ id: 't2', tokenHash: 'sha(ftk_T2)', expiresAt: new Date(NOW.getTime() + 1).toISOString() });
+    const { persist, response } = await outcomeOf(
+      resetPassword(depsFor({ users: [claimedOwner()], tokens: [expired, live] }), { password: NEW_PASSWORD }),
+    );
+    const revokedIds = (persist as Array<Persistable & { model: { id: string } }>)
+      .filter((p) => p.entity === ACCESS_TOKEN_ENTITY_TAG)
+      .map((p) => p.model.id);
+    expect(revokedIds).toEqual(['t2']);
+    expect(response.tokensRevoked).toBe(1);
+  });
+
   it('keeps already-revoked tokens as they are and does not count them', async () => {
     const revoked = tokenRow({ revokedAt: '2026-10-01T00:00:00.000Z' });
     const { persist, response } = await outcomeOf(
