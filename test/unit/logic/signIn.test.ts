@@ -463,6 +463,14 @@ describe('signInOrigin — what origin a stdio sign-in link may name', () => {
     expect(signInOrigin(base)).toBe('http://127.0.0.1:51737');
   });
 
+  it('names no non-loopback host without PUBLIC_URL — its POSTs would fail the CSRF origin check', () => {
+    expect(signInOrigin({ ...base, host: '0.0.0.0' })).toBeNull();
+    expect(signInOrigin({ ...base, host: 'fintrack.lan', boundOrigin: 'http://fintrack.lan:51737' })).toBeNull();
+    expect(signInOrigin({ ...base, host: '0.0.0.0', publicUrl: 'https://fin.example.com' })).toBe(
+      'https://fin.example.com',
+    );
+  });
+
   it('never names a port-0 address before the sidecar has bound: that is no listener at all', () => {
     expect(signInOrigin({ ...base, port: 0 })).toBeNull();
     expect(signInOrigin({ ...base, port: 0, boundOrigin: 'http://127.0.0.1:54321' })).toBe('http://127.0.0.1:54321');

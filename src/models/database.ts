@@ -1,4 +1,4 @@
-import { NPX_COMMAND, PACKAGE_NAME } from './auth.js';
+import { NPX_COMMAND, PACKAGE_NAME } from './package.js';
 
 /** `npm ls -g` is the check for the stale global install that made an old build run in the first place. */
 export const STALE_GLOBAL_CHECK_COMMAND = `npm ls -g ${PACKAGE_NAME}`;

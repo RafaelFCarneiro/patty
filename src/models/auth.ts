@@ -2,6 +2,9 @@ import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import { validation } from './error.js';
 import { Id } from './id.js';
+import { NPX_COMMAND } from './package.js';
+
+export { NPX_COMMAND, PACKAGE_NAME, PACKAGE_SPEC } from './package.js';
 
 /** Whether the HTTP surface demands a session. `disabled` is an explicit, loopback-only opt-out. */
 export const AuthMode = z.enum(['required', 'disabled']);
@@ -445,11 +448,6 @@ export type AuthError =
   | { code: 'resource_metadata_unavailable'; hint: string };
 
 /** The terminal route to the same owner claim as `/ui/setup` — shown wherever the setup code is. */
-export const PACKAGE_NAME = '@rafaelfcarneiro/fintrack';
-/** Every command FinTrack prints or documents is `@latest`-pinned: without a version `npx` prefers an installed
- *  (possibly stale, global) copy over the registry's. Built from this one constant, never re-typed. */
-export const PACKAGE_SPEC = `${PACKAGE_NAME}@latest`;
-export const NPX_COMMAND = `npx ${PACKAGE_SPEC}`;
 export const TERMINAL_SETUP_COMMAND = `${NPX_COMMAND} auth setup`;
 export const TERMINAL_SETUP_HINT = `or run \`${TERMINAL_SETUP_COMMAND}\` in a terminal`;
 

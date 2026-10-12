@@ -1,19 +1,13 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
+import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
 import { ownerGate } from '../../../src/diplomat/mcp/gate.js';
 import { buildMcpServer } from '../../../src/diplomat/mcp/server.js';
 import { createStdioSession } from '../../../src/diplomat/mcp/stdioSession.js';
-import {
-  authDepsOf,
-  answerConnect,
-  claimOwner,
-  memoryStore,
-  useAuthApp,
-  SIGN_IN_ORIGIN,
-} from './helpers.js';
+import { authDepsOf, answerConnect, claimOwner, memoryStore, useAuthApp, SIGN_IN_ORIGIN } from './helpers.js';
 import type { AppContext } from '../app-builder.js';
 
 const createApp = useAuthApp();
@@ -111,7 +105,7 @@ describe('MCP over stdio — signed out', () => {
       expect(result.isError, call.name).toBe(true);
       expect(textOf(result), call.name).toContain('not signed in');
     }
-    expect(await ctx.db.all((await import('drizzle-orm')).sql`SELECT 1 FROM tags`)).toEqual([]);
+    expect(await ctx.db.all(sql`SELECT 1 FROM tags`)).toEqual([]);
   });
 
   it('refuses to read a resource, with the instructions in the error', async () => {
@@ -192,9 +186,7 @@ describe('MCP over stdio — after approval', () => {
     await answerConnect(ctx, cookie, /code=([0-9A-Z]{4}-[0-9A-Z]{4})/.exec(asked)![1]!, { decision: 'approve' });
     expect((await client.callTool({ name: 'get_status', arguments: {} })).isError).toBeFalsy();
 
-    await ctx.db.run(
-      (await import('drizzle-orm')).sql`UPDATE access_tokens SET revoked_at = ${new Date().toISOString()}`,
-    );
+    await ctx.db.run(sql`UPDATE access_tokens SET revoked_at = ${new Date().toISOString()}`);
 
     const again = await client.callTool({ name: 'get_status', arguments: {} });
     expect(again.isError).toBe(true);

@@ -596,7 +596,8 @@ export const isTokenShaped = (raw: string): boolean => raw.startsWith(TOKEN_PREF
  * The origin a stdio session's sign-in link names, or `null` when it cannot honestly name one (the message then says to
  * use `login` or `FINTRACK_TOKEN`): `PUBLIC_URL`; else the sidecar this process bound; else the configured `HOST:PORT`,
  * where another FinTrack process may own the port and serve `/ui/connect` from the same database — but never a port-0
- * address, which names no listener at all.
+ * address, which names no listener at all. Without `PUBLIC_URL`, a non-loopback host is never named either: the page's
+ * cookie-authenticated POSTs trust only `PUBLIC_URL` or a loopback `Host` (CSRF), so that link could not complete.
  */
 export const signInOrigin = (fields: {
   httpEnabled: boolean;
@@ -607,6 +608,7 @@ export const signInOrigin = (fields: {
 }): string | null => {
   if (!fields.httpEnabled) return null;
   if (fields.publicUrl !== undefined) return fields.publicUrl;
+  if (!isLoopbackHost(fields.host)) return null;
   if (fields.boundOrigin !== null) return fields.boundOrigin;
   return fields.port === 0 ? null : httpOrigin(fields.host, fields.port);
 };

@@ -32,7 +32,7 @@ Commands:
   logout           Revoke the saved sign-in and remove it from the keychain
   auth <command>   Owner login: setup, reset-password
 
-Run a command with no arguments for its own help. With no command at all, FinTrack runs as an MCP server (stdio).
+The setup and auth commands print their own help when run with no arguments. With no command at all, FinTrack runs as an MCP server (stdio).
 `.trimStart();
 
 const runSetupCommand = async (args: readonly string[], io: CliIo): Promise<number> => {

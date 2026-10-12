@@ -16,6 +16,7 @@ import {
   claimOwner,
   LOOPBACK_ORIGIN,
   memoryStore,
+  mintToken,
   useAuthApp,
   type MemoryStore,
 } from './helpers.js';
@@ -309,7 +310,6 @@ describe('fintrack logout', () => {
 
   it('does not revoke a personal access token someone put in the keychain — only a stdio sign-in', async () => {
     const r = await rig();
-    const { mintToken } = await import('./helpers.js');
     const { token } = await mintToken(r.ctx, r.cookie, { name: 'script' });
     r.storeFor('default').save(token);
     await runLogout([], r.io);
