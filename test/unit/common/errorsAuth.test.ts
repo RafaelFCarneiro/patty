@@ -13,6 +13,7 @@ describe('auth errors', () => {
     [authErrors.rateLimited, 429, AUTH_MESSAGES.rateLimited],
     [authErrors.crossOrigin, 403, AUTH_MESSAGES.crossOrigin],
     [authErrors.unknownOrigin, 403, AUTH_MESSAGES.crossOriginUnknownOrigin],
+    [authErrors.invalidGrant, 404, AUTH_MESSAGES.invalidGrant],
   ];
 
   it.each(CASES)('maps %j to HTTP %i', (error, status) => {

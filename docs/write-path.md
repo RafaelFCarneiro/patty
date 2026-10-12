@@ -93,9 +93,9 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   `null` (clear it) — an asymmetry the uniform factory can't express.
 - **Exception — the auth flows (ADR-033) are adapted once at the composition root.** `login`/`claimOwner`/
   `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions`, the CLI's `claimOwnerLocally`/`resetPassword` (`authCli.ts` binds its own runner the same way) and the access-token flows (`createToken`/
-  `revokeToken`/`authenticateToken`, `controllers/accessTokens.ts`) are run from several shell sites (the auth hook,
+  `revokeToken`/`revokeSignInByHash`/`authenticateToken`, `controllers/accessTokens.ts`) and the stdio sign-in flows (`startGrant`/`approveGrant`/`denyGrant`/`redeemGrant`/`pruneExpiredGrants`, `controllers/grants.ts`) are run from several shell sites (the auth hook,
   the sign-in and token routes, startup), none of which is "the" handler, and a single batch can mix three entities
-  (`claimOwner`: user + setup code + session). So `adapters/auth.ts`'s `outcomeToDb` (the four entities'
+  (`claimOwner`: user + setup code + session). So `adapters/auth.ts`'s `outcomeToDb` (the five entities'
   `entityDbAdapter` pairs applied in turn — each rewrites only its own tag) is applied in `authRuntime.ts`'s
   `bindAuthRunEffects`, which wraps the shell's `RunEffects` once: `runEffects(() => flow().map(outcomeToDb))`.
   Every auth call site then holds that bound runner, never the raw one. Still exactly once, still outside
@@ -175,9 +175,9 @@ and its failure isolation) is the package's to document — see the pointer abov
   (`outcomeFor(TRANSACTION_TAG_ENTITY_TAG, outcomes).applied`) — not the transaction's. (Full reasoning:
   ADR-023 decision 3 / step 3.)
 
-- **Auth entities** (`user`, `session`, `setup_code`, `access_token`;
-  `diplomat/db/repos/{users,sessions,setupCodes,accessTokens}.ts`). `userApplier`, `sessionApplier` and
-  `accessTokenApplier` are plain `versionedTableApplier`s. `setupCodeApplier` wraps `insert` the way
+- **Auth entities** (`user`, `session`, `setup_code`, `access_token`, `client_grant`;
+  `diplomat/db/repos/{users,sessions,setupCodes,accessTokens,clientGrants}.ts`). `userApplier`, `sessionApplier`,
+  `accessTokenApplier` and `clientGrantApplier` are plain `versionedTableApplier`s. `setupCodeApplier` wraps `insert` the way
   `settingsApplier` does: `setup_codes` holds ONE fixed row (`SETUP_CODE_ID`), so an id collision on insert is the
   concurrent-first-issue race — it is rethrown as `VersionConflict` and the retry updates the winner's row in place
   rather than silently no-oping (a lost insert would leave a process printing a code that was never stored).
@@ -189,6 +189,13 @@ and its failure isolation) is the package's to document — see the pointer abov
   exists only in the flow's response), `revokeToken` one version-guarded `update` setting `revoked_at` (nothing when
   already revoked — idempotent), and `authenticateToken` writes nothing unless `last_used_at` is stale
   (`SESSION_TOUCH_INTERVAL_MS`); a concurrent touch loses the version race and the retry re-reads a fresh row.
+  The stdio sign-in flows (ADR-034): `startGrant` emits one `client_grant` `insert` (hashes only; the device code is in the
+  response); `approveGrant`/`denyGrant` one version-guarded `update` of the pending grant (approval writes the approver, scopes,
+  duration and `approved_at`); `redeemGrant` emits, for an approved grant, an `access_token` `insert` (`kind: stdio`) **and** the
+  grant's `redeemed` `update` in ONE batch — the version guard on that `update` is what makes the device code single-use: a
+  second redeem built from the same stale read cannot commit, and the engine's retry re-reads a spent grant — plus, for an
+  approved grant past its window, the `expired` `update` that settles it (terminal, written once); `pruneExpiredGrants` one
+  `delete` per unredeemed grant past its window.
 
 ### Outcomes and responses
 

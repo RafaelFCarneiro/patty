@@ -7,6 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { McpTransport } from '../../../src/config.js';
+import { AuthMode } from '../../../src/models/auth.js';
 import { callTool } from './helpers.js';
 
 // Fixed 64-char hex key — never touches the OS keychain
@@ -34,6 +35,8 @@ beforeAll(async () => {
       // (ADR-013 Decision 7), so it must be explicitly disabled here to avoid an unrelated,
       // unnecessary port bind in the test suite.
       FINTRACK_HTTP: 'false',
+      // Sign-in over stdio is covered by stdioSignIn.test.ts; this file exercises the tool surface itself.
+      FINTRACK_AUTH: AuthMode.enum.disabled,
       DB_PATH: dbPath,
       FINTRACK_DB_KEY: TEST_KEY,
     },

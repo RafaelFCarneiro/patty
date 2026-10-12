@@ -1,9 +1,16 @@
-import { API_PATH_PREFIX, MCP_PATH, MCP_PRM_PATH, PRM_WELL_KNOWN_PATH, UI_ROOT_PATH } from '../../models/auth.js';
+import {
+  API_PATH_PREFIX,
+  CONNECT_PATH,
+  MCP_PATH,
+  MCP_PRM_PATH,
+  PRM_WELL_KNOWN_PATH,
+  UI_ROOT_PATH,
+} from '../../models/auth.js';
 
 /** Route paths of the HTTP surface that authentication itself needs to name — one home, so the auth
  *  hook, the auth routes, the UI routes and the health route can never disagree on a literal. */
 export const HEALTH_PATH = '/api/health';
-export { API_PATH_PREFIX, MCP_PATH, MCP_PRM_PATH, PRM_WELL_KNOWN_PATH, UI_ROOT_PATH };
+export { API_PATH_PREFIX, CONNECT_PATH, MCP_PATH, MCP_PRM_PATH, PRM_WELL_KNOWN_PATH, UI_ROOT_PATH };
 // Two segments on purpose: `/ui/:name` is the one-segment dashboard namespace, and a dashboard may be named anything
 // (including `tokens`), so token management must live outside it.
 export const TOKENS_PATH = `${UI_ROOT_PATH}/access/tokens`;

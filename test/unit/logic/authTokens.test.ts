@@ -28,6 +28,7 @@ import {
   Scope,
   TokenStatus,
   UserRole,
+  AccessTokenKind,
   type AccessTokenEntity,
   type UserEntity,
   SESSION_TOUCH_INTERVAL_MS,
@@ -53,6 +54,9 @@ const owner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
 const token = (overrides: Partial<AccessTokenEntity> = {}): AccessTokenEntity => ({
   id: 't1',
   userId: OWNER_USER_ID,
+  kind: AccessTokenKind.enum.pat,
+  clientName: null,
+  profile: null,
   name: 'laptop',
   tokenHash: 'sha(ftk_x)',
   prefix: 'ftk_abcdef',

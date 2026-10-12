@@ -9,6 +9,7 @@ import type { Db } from './driver.js';
 import { HTML_FILE_EXTENSION, listDefaultDashboardFiles } from './repos/dashboards.js';
 import { categories, currencies, dashboards, merchantCategory, merchants } from './schema.js';
 import { migrateWithSafetyCopy } from './safetyCopy.js';
+import { assertDatabaseNotAhead } from './versionGuard.js';
 import { CURRENCIES } from './seed/currencies.js';
 import { CATEGORIES } from './seed/categories.js';
 import { DEFAULT_MERCHANT_RULES } from './seed/merchantRules.js';
@@ -100,9 +101,11 @@ const seedMerchantRules = async (db: Db): Promise<void> => {
 // Bootstrap
 // ---------------------------------------------------------------------------
 
-/** Idempotent: applies pending migrations (after a safety copy, if one rewrites existing data) then
- *  upserts seed data. Safe on every boot. */
+/** Idempotent: refuses a database a newer build has migrated, then applies pending migrations (after a safety copy,
+ *  if one rewrites existing data) and upserts seed data. Safe on every boot. The guard comes first — before the
+ *  copy, the migrations and the seeding — so an older build writes nothing to a database it does not understand. */
 export const bootstrap = async (db: Db, migrationsFolder = DEFAULT_MIGRATIONS_FOLDER): Promise<void> => {
+  await assertDatabaseNotAhead(db, migrationsFolder);
   await migrateWithSafetyCopy(db, migrationsFolder, () => migrate(db, { migrationsFolder }));
   await seedCurrencies(db);
   await seedCategories(db);

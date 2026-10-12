@@ -89,12 +89,12 @@ Because the package is private on GitHub Packages, npm needs a token to download
 3. Run it:
 
    ```bash
-   npx @rafaelfcarneiro/fintrack          # one-off
-   # or
+   npx @rafaelfcarneiro/fintrack@latest          # one-off
+   # or (a global install is NOT refreshed by `npx` — see "Why a build refuses an older database" below)
    npm install -g @rafaelfcarneiro/fintrack && fintrack
    ```
 
-By default this starts a **stdio MCP server** — the client spawns it directly (no port, no URL). See `docs/mcp-clients.md` for client config. To start in HTTP mode instead (REST + streamable HTTP MCP on port 51737): `MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack`. The package only replaces the clone + `npm run dev` step with a single command; the encrypted database at `<home directory>/.fintrack/fintrack.db` (key in the OS keychain; set `FINTRACK_DB_KEY` for headless) is otherwise identical.
+By default this starts a **stdio MCP server** — the client spawns it directly (no port, no URL). See `docs/mcp-clients.md` for client config. To start in HTTP mode instead (REST + streamable HTTP MCP on port 51737): `MCP_TRANSPORT=http npx @rafaelfcarneiro/fintrack@latest`. The package only replaces the clone + `npm run dev` step with a single command; the encrypted database at `<home directory>/.fintrack/fintrack.db` (key in the OS keychain; set `FINTRACK_DB_KEY` for headless) is otherwise identical.
 
 ## Updating to a new version
 
@@ -115,6 +115,25 @@ npm ls -g @rafaelfcarneiro/fintrack   # confirm installed version
 Upgrades are safe to run anytime: the database migrates itself forward on the next start
 (`bootstrap()` applies any pending Drizzle migrations idempotently), and your `<home directory>/.fintrack/fintrack.db` is untouched
 otherwise. You'll see new releases on the repo's **Releases** page with auto-generated notes.
+
+## Why a build refuses an older database (the version guard)
+
+`bootstrap()` — and so the server and every command that opens the database — first compares the database's newest applied migration
+(`__drizzle_migrations.created_at`, i.e. the journal entry's `when`) with the newest entry in the migrations journal **this build ships**. If the
+database is ahead, the process exits non-zero with `databaseAheadMessage` (`models/database.ts`) before it takes the safety copy, migrates, seeds or writes anything
+(`diplomat/db/versionGuard.ts`, rule in `logic/migration.ts`).
+
+It exists because of a field incident: running `auth setup` through an **unpinned** `npx` (no `@latest`) resolved to a **stale global install**. That build did not know `auth setup`, started as a
+server, and failed inside an old seed against the newer schema. No data was harmed, but neither half should be possible: every printed command is now `@latest`-pinned
+(`NPX_COMMAND`), and an older build now refuses instead of seeding into a schema it does not know.
+
+Consequences for releases:
+
+- **The guard only protects builds that include it.** A build released before it has no guard, so a stale copy of *that* generation can still run against a newer database
+  — hence the `@latest` pinning, and the global-install check `npm ls -g @rafaelfcarneiro/fintrack` in the message.
+- **Journal `when` values must only grow.** Drizzle stamps each applied migration with its journal entry's `when`; the guard reads that as "newer". Generate migrations in order
+  (`drizzle-kit generate`), never hand-edit an earlier entry's `when` upwards past a later one, and never rebase a migration to an earlier timestamp than one already released.
+- A migration that was released and then dropped from the journal leaves databases "ahead" of every later build — treat a released migration as permanent (add a new one to undo it).
 
 ## Dependency upgrades — `drizzle-orm`, `drizzle-kit`, `@libsql/client`
 
@@ -148,7 +167,7 @@ The `stdio` transport itself has **no port concerns for the MCP connection** —
 If you run several servers in HTTP mode, give each its own port:
 
 ```bash
-MCP_TRANSPORT=http PORT=3007 npx @rafaelfcarneiro/fintrack
+MCP_TRANSPORT=http PORT=3007 npx @rafaelfcarneiro/fintrack@latest
 # then point the client at http://127.0.0.1:3007/mcp
 ```
 

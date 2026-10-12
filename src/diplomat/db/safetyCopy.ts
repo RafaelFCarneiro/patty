@@ -12,6 +12,10 @@ const TEMP_SUFFIX = '.tmp';
 
 const JournalSchema = z.object({ entries: z.array(z.object({ tag: z.string(), when: z.number() })) });
 
+/** The migrations this build ships, in journal order. */
+export const readJournal = (migrationsFolder: string) =>
+  JournalSchema.parse(JSON.parse(readFileSync(join(migrationsFolder, 'meta', '_journal.json'), 'utf8'))).entries;
+
 /** Where the pre-migration copy of `dbFile` goes (ADR-033 §7) — next to the database, same encrypted
  *  bytes under the same key, so it adds no new exposure. */
 export const backupPath = (dbFile: string, migrationTag: string): string => `${dbFile}.pre-${migrationTag}.bak`;
@@ -19,7 +23,7 @@ export const backupPath = (dbFile: string, migrationTag: string): string => `${d
 const MAIN_SCHEMA = 'main';
 
 // `undefined` = the migrator has never run here (nothing in the file worth protecting).
-const lastAppliedMillis = async (db: Db): Promise<number | undefined> => {
+export const lastAppliedMillis = async (db: Db): Promise<number | undefined> => {
   const [table] = await db.all<{ name: string }>(
     sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${MIGRATIONS_TABLE}`,
   );
@@ -36,10 +40,7 @@ const lastAppliedMillis = async (db: Db): Promise<number | undefined> => {
 export const pendingRewritingTags = async (db: Db, migrationsFolder: string): Promise<string[]> => {
   const lastApplied = await lastAppliedMillis(db);
   if (lastApplied === undefined) return [];
-  const journal = JournalSchema.parse(
-    JSON.parse(readFileSync(join(migrationsFolder, 'meta', '_journal.json'), 'utf8')),
-  );
-  return journal.entries
+  return readJournal(migrationsFolder)
     .filter(({ when }) => when > lastApplied)
     .map(({ tag }) => tag)
     .filter((tag) => DATA_REWRITING_MIGRATIONS.includes(tag));

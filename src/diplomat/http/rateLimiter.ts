@@ -53,6 +53,8 @@ const MINUTE_MS = 60_000;
 export const LOGIN_ATTEMPT_WINDOW_MS = 15 * MINUTE_MS;
 export const MAX_FAILURES_PER_IP = 20;
 export const MAX_FAILURES_PER_USERNAME = 5;
+/** Failed `/ui/connect` code lookups (unknown, expired or already-answered codes) per client IP in that window. */
+export const MAX_CODE_LOOKUP_FAILURES_PER_IP = 10;
 
 const ipKey = (ip: string): string => `ip:${ip}`;
 const usernameKey = (username: string): string => `username:${username}`;

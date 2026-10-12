@@ -1,4 +1,4 @@
-# Authentication flows (ADR-033 Phases 1–2, ADR-034 step 1)
+# Authentication flows (ADR-033 Phases 1–2, ADR-034 steps 1–2)
 
 These diagrams show the flows as built: who takes part in each one and what happens at each step.
 The operator guide is [`auth.md`](auth.md); the decision record is
@@ -10,20 +10,25 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 | Participant | Where | Role |
 |---|---|---|
 | Config | `src/config.ts` | Reads `FINTRACK_AUTH` (default `required`) and refuses `disabled` on an exposed instance (`HOST` / `PUBLIC_URL` / `TRUST_PROXY`) |
+| VersionGuard | `src/diplomat/db/versionGuard.ts` (rule: `src/logic/migration.ts`) | First thing `bootstrap` does: refuses a database a newer build has migrated, before anything is copied, migrated, seeded or written |
 | Bootstrap | `src/diplomat/db/bootstrap.ts`, `safetyCopy.ts`, `migrationLock.ts` | Migrations, the owner row, the pre-migration backup |
-| AuthRuntime | `src/authRuntime.ts` | Builds the identity deps (shared with the CLI), prunes sessions, issues and prints the setup code |
-| Cli | `src/cli.ts`, `src/authCli.ts`, `src/diplomat/cli/{prompt,terminal}.ts` | `fintrack setup [client]`, `fintrack auth setup`, `fintrack auth reset-password`: opens the database like the server (no HTTP, no stdio), prompts with no echo, runs the controller flows |
+| AuthRuntime | `src/authRuntime.ts` | Builds the identity deps (shared with the CLI and the stdio session), prunes sessions and expired sign-in requests, issues and prints the setup code |
+| Cli | `src/cli.ts`, `src/authCli.ts`, `src/loginCli.ts`, `src/diplomat/cli/{prompt,terminal}.ts` | `fintrack setup [client]`, `auth setup`, `auth reset-password`, `login`, `logout`: opens the database like the server (no stdio), prompts with no echo, runs the controller flows; an unknown command prints the usage and exits non-zero |
+| SignInServer | `src/signInServer.ts` | Where `login` sends the browser: a FinTrack already answering `/api/health` on `HOST:PORT`, else a temporary loopback app for the length of the login |
+| StdioSession | `src/diplomat/mcp/stdioSession.ts`, `gate.ts`, `scopes.ts` | The stdio channel's identity: resolves the credential per call (`FINTRACK_TOKEN` → keychain → none), asks for a sign-in, polls, saves; the scope guard asks it who is calling |
+| SignInStore | `src/diplomat/auth/signInStore.ts` | The OS keychain entry `signin:<profile>:<dbId>` of a saved sign-in |
 | AuthHook | `src/diplomat/http/hooks/auth.ts` — `registerAuthHook` (decisions in `src/logic/auth.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, credential precedence (bearer vs. cookie), session/token resolution, the CSRF check, the route-scope check, challenges and redirects |
 | Bearer | `src/diplomat/http/bearer.ts` | Builds the `WWW-Authenticate` response (`logic/auth.ts`'s `bearerChallenge`; only the origin is resolved at the edge) — shared by the hook and the MCP route |
 | AuthRoutes | `src/diplomat/http/routes/auth.ts` | `/ui/setup`, `/ui/login`, `/ui/logout`: form parsing, rate limiting, cookies |
-| TokenRoutes | `src/diplomat/http/routes/tokens.ts` | `/ui/access/tokens`, `/ui/access/tokens/:id/revoke`: session-only token pages |
+| TokenRoutes | `src/diplomat/http/routes/tokens.ts` | `/ui/access/tokens`, `/ui/access/tokens/:id/revoke`: session-only token pages (personal access tokens and stdio sign-ins) |
+| ConnectRoutes | `src/diplomat/http/routes/connect.ts` | `/ui/connect`: the session-only consent page for a stdio / `login` sign-in; throttles failed code lookups |
 | WellKnown | `src/diplomat/http/routes/wellKnown.ts` | The two Protected Resource Metadata (RFC 9728) routes |
 | McpRoute | `src/diplomat/mcp/route.ts`, `scopes.ts` | `POST /mcp`: per-tool scope pre-check on the JSON-RPC body, `req.auth` for the transport, per-tool re-check |
-| Controller | `src/controllers/auth.ts`, `src/controllers/accessTokens.ts` | `issueSetupCode`, `claimOwner`, `claimOwnerLocally`, `resetPassword`, `login`, `logout`, `authenticate`; `createToken`, `listTokens`, `revokeToken`, `authenticateToken`; returns `{ persist, response }` |
-| Logic | `src/logic/auth.ts` | Pure rules: expiry, the sliding window, "can log in", origin comparison, scopes, the token verdict, credential parsing, challenges, the metadata document |
-| Secrets | `src/diplomat/auth/credentials.ts` | argon2id, CSPRNG session tokens, access tokens (`ftk_…`) and codes, sha256 |
+| Controller | `src/controllers/auth.ts`, `accessTokens.ts`, `grants.ts` | `issueSetupCode`, `claimOwner`, `claimOwnerLocally`, `resetPassword`, `login`, `logout`, `authenticate`; `createToken`, `listTokens`, `revokeToken`, `revokeSignInByHash`, `authenticateToken`; `startGrant`, `findConsent`, `approveGrant`, `denyGrant`, `redeemGrant`, `pruneExpiredGrants`; returns `{ persist, response }` |
+| Logic | `src/logic/auth.ts` | Pure rules: expiry, the sliding window, "can log in", origin comparison, scopes, the token verdict, credential parsing, challenges, the metadata document; the grant transitions, `signInExpiry`, the consent pre-selection, `redeemPlan`, the not-signed-in message |
+| Secrets | `src/diplomat/auth/credentials.ts` | argon2id, CSPRNG session tokens, access tokens (`ftk_…`), setup / user / device codes, sha256 |
 | Runner | `@rfc0/effect-runner` via `runEffects` | Applies the persistables in one transaction (optimistic versions, retries) |
-| DB | `users`, `sessions`, `setup_codes`, `access_tokens` | Stores only hashes, never a token or code in plaintext |
+| DB | `users`, `sessions`, `setup_codes`, `access_tokens`, `client_grants` | Stores only hashes, never a token or code in plaintext |
 
 ---
 
@@ -39,14 +44,21 @@ flowchart TD
     H -- yes --> X[[Startup error:<br/>no unauthenticated exposure]]
     H -- no --> I
     F --> I
-    I[Open DB with key<br/>file → env → keychain] --> J{Data-rewriting migration pending<br/>on an existing DB?}
+    I[Open DB with key<br/>file → env → keychain] --> VG{"Version guard: the DB's newest applied<br/>migration newer than this build's journal?"}
+    VG -- yes --> XV[["Exit 1: this build is older than your database<br/>update with npx … @latest · npm ls -g<br/>nothing copied, migrated, seeded or written"]]
+    VG -- "no (equal, behind, or a fresh DB)" --> J{Data-rewriting migration pending<br/>on an existing DB?}
     J -- yes --> K[Take the OS-level migration lock<br/>VACUUM INTO db.pre-0018_auth_identity.bak<br/>under SQLite's write lock<br/>encrypted, 0600<br/>migrations applied in the same transaction]
     J -- no --> L
     K --> L[Migrations applied<br/>0018 inserts the OWNER row:<br/>id user-owner, admin, no credentials]
-    L --> M{Mode required<br/>AND an HTTP surface?}
-    M -- no --> N[Every HTTP request acts as the owner<br/>only an explicit disabled, loopback-only<br/>stdio acts as the owner]
-    M -- yes --> O[Load argon2, build the identity deps<br/>prune expired sessions]
-    O --> P[Bind HTTP]
+    L --> M{Mode required?}
+    M -- "no: an explicit disabled, loopback-only" --> N[Every HTTP request AND the stdio channel<br/>act as the owner]
+    M -- yes --> O[Load argon2, build the identity deps<br/>prune expired sessions and unanswered sign-in requests]
+    O --> OS{Transport stdio?}
+    OS -- yes --> OT[The stdio session is created:<br/>it acts as nobody until it holds a credential — diagram 9]
+    OS -- no --> OH
+    OT --> OH{HTTP surface on?}
+    OH -- "no: FINTRACK_HTTP=false" --> RS[Ready: stdio only<br/>sign in with FINTRACK_TOKEN or login]
+    OH -- yes --> P[Bind HTTP]
     P --> Q{Bound successfully?}
     Q -- no --> R[No setup code issued<br/>the process that owns the port keeps its own]
     Q -- yes --> S{Owner unclaimed?}
@@ -112,7 +124,7 @@ sequenceDiagram
     participant Run as Runner
     participant Cfg as Client config file
 
-    Op->>Cli: npx @rafaelfcarneiro/fintrack setup claude-code
+    Op->>Cli: npx @rafaelfcarneiro/fintrack@latest setup claude-code
     Cli->>Cli: unknown client or no client? help or error, nothing else happens
     Cli->>DB: open + bootstrap (migrations, so the owner row exists)
     Cli->>DB: owner already claimed?
@@ -134,8 +146,10 @@ sequenceDiagram
         Cli-->>Op: Owner claimed (never the password)
     end
     opt setup <client> only
-        Cli->>Cfg: merge the fintrack entry (idempotent, other keys kept)
+        Cli->>Cfg: merge the fintrack entry (idempotent, other keys kept, FINTRACK_PROFILE in env only for a non-default --profile)
         Cli-->>Op: restart your client
+        Cli->>Op: Sign in this client now? [Y/n]  (no terminal: a one-line hint, skipped)
+        Note over Cli,Op: yes runs the login flow of diagram 10 for the client's profile — a failure never fails the setup
     end
 ```
 
@@ -243,7 +257,7 @@ flowchart TD
     A["/api or /mcp request<br/>with an Authorization header"] --> B{"Header is exactly<br/>Bearer ftk_… ?"}
     B -- "no: another scheme, empty,<br/>not our prefix" --> X1["401 invalid_token<br/>WWW-Authenticate: Bearer error=invalid_token, resource_metadata<br/>the cookie is NOT tried"]
     B -- yes --> C[sha256 token → access_tokens row → user]
-    C --> D{"Row exists, not revoked,<br/>not expired,<br/>owner claimed and enabled?"}
+    C --> D{"Row exists, not revoked,<br/>not expired,<br/>owner claimed and enabled,<br/>kind admitted here (a personal access<br/>token; a stdio sign-in is stdio-only)?"}
     D -- no --> X1
     D -- yes --> E{"last_used_at older<br/>than 5 min?"}
     E -- yes --> F[UPDATE last_used_at — version-guarded] --> G
@@ -255,7 +269,7 @@ flowchart TD
     I -- yes --> J["preHandler: read the JSON-RPC body<br/>(each message of a batch)<br/>tools/call of a write tool?<br/>unknown tool counts as write"]
     J -- "needs write, token has read only" --> X2
     J -- ok --> K["req.raw.auth = AuthInfo<br/>(token id, clientId pat:id, scopes)"]
-    K --> L["tool wrapper re-checks<br/>extra.authInfo.scopes against the tool's readOnlyHint scope<br/>(no authInfo over HTTP = refused)"]
+    K --> L["scope guard asks the HTTP PrincipalGate (authInfoGate):<br/>extra.authInfo.scopes against the tool's readOnlyHint scope,<br/>or read for a resource / prompt (no authInfo = refused)"]
     L -- short --> X3["tool error insufficient_scope — the tool never runs"]
     L -- ok --> M[Tool runs]
 ```
@@ -323,7 +337,7 @@ sequenceDiagram
             SSE-->>U: end the stream
         end
     end
-    Note over SSE: auth writes (user / session / setup_code) are filtered out of change events
+    Note over SSE: auth writes (user / session / setup_code / access_token / client_grant) are filtered out of change events
 
     U->>Hook: POST /ui/logout (cookie + same Origin)
     Hook->>Routes: authenticated + CSRF ok
@@ -340,13 +354,14 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph L1["Local npm: loopback, auth required by default"]
-      S1[MCP client] -- "stdio — still trusted in this step<br/>(ADR-034 step 2 adds a sign-in)" --> O1((Owner, all scopes))
+      S1[MCP client] -- "stdio — signs in first (diagram 8):<br/>FINTRACK_TOKEN, a saved sign-in, or a browser approval" --> O1((Owner, with the scopes<br/>the approval granted))
       B1[Browser /ui] -- "needs a login<br/>session cookie + Origin check" --> O1
       C1["Script / client over HTTP<br/>Authorization: Bearer ftk_…"] -- "access token, no CSRF check" --> O1
       P1[Any other local program] -. "no credential: 401 / redirect to login" .-> X1[rejected]
     end
     subgraph L1D["Local, explicit FINTRACK_AUTH=disabled (development, tests)"]
       B1D[Browser /ui, /api] -- "loopback Host/Origin only<br/>Authorization ignored" --> O1D((Owner, all scopes))
+      S1D[MCP client over stdio] -- "no sign-in" --> O1D
     end
     subgraph L2["Docker or exposed: auth required"]
       B2[Browser] -- session cookie + Origin check --> O2((Owner))
@@ -372,8 +387,152 @@ sequenceDiagram
     FT->>DB: VACUUM INTO fintrack.db.pre-0018_auth_identity.bak under SQLite's write lock (encrypted, same key)
     FT->>DB: migrations applied in the same transaction: create users / sessions / setup_codes + INSERT the owner (no credentials)
     Note over DB: no domain table touched — accounts, transactions … unchanged
-    FT-->>You: auth is required by default, so /ui asks for a login, and the sidecar prints a setup code and the `auth setup` hint to stderr. stdio keeps working as the owner
-    You->>Cli: npx @rafaelfcarneiro/fintrack setup <client>  (or auth setup) — once
+    FT-->>You: auth is required by default, so /ui asks for a login, and the sidecar prints a setup code and the `auth setup` hint to stderr. The first stdio tool call answers "not signed in" (with the setup hint while the owner is unclaimed)
+    You->>Cli: npx @rafaelfcarneiro/fintrack@latest setup <client>  (or auth setup) — once
     Cli->>DB: UPDATE the existing owner row with your username and password hash (never an INSERT of a user)
-    Note over You,DB: log in at /ui — it is the same database, so the same data. Nothing was copied or migrated
+    Note over You,DB: log in at /ui — it is the same database, so the same data. Nothing was copied or migrated. Then approve the client's sign-in link once (diagram 8)
+```
+
+## 8. stdio sign-in (device flow)
+
+ADR-034 §3. Three parties and one database: the stdio **process** (spawned by the client), the person's **browser**, and
+FinTrack's HTTP surface (this process's sidecar, or another FinTrack process's on the same port — the grant is a database row, so
+either works). Nothing secret travels in a URL or a tool result: the link carries the **user code** only, and the **device
+code** that redeems it never leaves the asking process.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor P as Person (browser)
+    participant C as MCP client
+    participant S as StdioSession
+    participant G as Controller (grants)
+    participant R as ConnectRoutes
+    participant DB
+
+    C->>S: tools/call (any tool) — or resources/read, prompts/get
+    S->>S: no credential (diagram 9) → ask
+    S->>G: runEffects(startGrant {client name + version from initialize, profile, channel stdio})
+    G->>G: device code = 256 random bits (returned once) · user code = 8 Crockford symbols, free among pending grants
+    G->>DB: INSERT client_grant {sha256(device code), user code, status pending, expires in 10 min}
+    G-->>S: device code (kept in memory) + ABCD-EFGH
+    S-->>C: isError result: "FinTrack: not signed in. Open ORIGIN/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH."
+    Note over C,S: the next calls reuse the SAME pending request until it is answered or expires
+
+    P->>R: GET /ui/connect?code=ABCD-EFGH
+    R->>R: no session? → 303 /ui/login?next=…the same link… and back after login
+    R->>R: failed lookups per IP are throttled (429)
+    R->>G: findConsent(user, code)
+    G-->>R: pending and unexpired only — client (as reported), profile, time, pre-selection: asker's hint, else your last choice, else read-only / 24 h
+    alt unknown, expired or already answered
+        R-->>P: the same neutral page for all three
+    else
+        R-->>P: consent page (CSP, no-store): client name, code, warning, access, duration, Approve / Deny
+    end
+    P->>R: POST /ui/connect {code, decision, access, duration} (cookie + same Origin)
+    R->>G: runEffects(approveGrant | denyGrant) — session principal only
+    G->>DB: UPDATE grant → approved (approver = this session's user, scopes, duration, approved_at) | denied
+
+    loop every 2 s, and on each gated call
+        S->>G: runEffects(redeemGrant {device code})
+        alt still pending
+            G-->>S: pending
+        else approved
+            G->>DB: INSERT access_token {kind stdio, client, profile, scopes, expires_at = approved_at + duration, hash} + UPDATE grant → redeemed — ONE batch
+            G-->>S: signed_in + the token (plaintext, once)
+            opt duration is not "this session only"
+                S->>S: save the token to the keychain (signin:profile:dbId)
+            end
+            S-->>C: the waiting call proceeds
+        else denied / expired / already redeemed
+            G-->>S: terminal — the pending request is dropped and the next gated call starts a fresh one
+        end
+    end
+```
+
+## 9. stdio credential resolution, expiry and re-sign-in
+
+Every gated request (tool call, resource read, prompt get) runs this. `initialize` and the list requests never do. The
+credential is re-validated through the same `authenticateToken` the HTTP edge uses, so revocation and expiry take effect on
+the **next call**; a failed lookup is "could not check", never a sign-out.
+
+```mermaid
+flowchart TD
+    A[Gated stdio request] --> B{Auth disabled?}
+    B -- "yes (explicit)" --> Z["Owner, all scopes — no session exists"]
+    B -- no --> C{FINTRACK_TOKEN set?}
+    C -- yes --> D{"Shaped like ftk_… and valid?<br/>not revoked, not expired,<br/>owner enabled"}
+    D -- yes --> G["principal: the token's scopes, via stdio"]
+    D -- no --> E["Error: FINTRACK_TOKEN is not a valid access token<br/>NEVER a fallback to the keychain, never echoed"]
+    C -- no --> H{"Credential held in memory<br/>(this process's sign-in)?"}
+    H -- yes --> I{Still valid?}
+    I -- yes --> G
+    I -- "no: revoked / expired / user disabled" --> J["Forget it. A saved one is deleted from the keychain<br/>only if the keychain still holds THIS credential;<br/>a 'this session only' one never touched it"]
+    H -- no --> K{"Saved sign-in in the keychain for<br/>this profile and database?"}
+    J --> K
+    K -- yes --> L{Still valid?}
+    L -- yes --> G
+    L -- no --> M[Delete the keychain entry]
+    K -- no --> N
+    M --> N{"HTTP dashboard available?<br/>(FINTRACK_HTTP not false)"}
+    N -- no --> O["Not signed in: use fintrack login<br/>or set FINTRACK_TOKEN (no link)"]
+    N -- yes --> Q{"A pending request of ours<br/>still open?"}
+    Q -- yes --> R[Poll it once: redeem]
+    Q -- no --> T[startGrant — diagram 8]
+    R -- approved --> U[Adopt the token — save to the keychain unless 'this session only'] --> G
+    R -- still pending --> V["Not signed in: the same link and code"]
+    R -- "denied / expired" --> T
+    T --> V
+    G --> W{"Scope covers the request?<br/>read for resources, prompts and read-only tools"}
+    W -- yes --> Y[Runs]
+    W -- no --> X["tool error insufficient_scope<br/>(a resource / prompt: a JSON-RPC error)"]
+    Y --> AA["On shutdown: a 'this session only' sign-in is revoked (best effort;<br/>the 12-hour cap covers a crash)"]
+```
+
+## 10. `fintrack login` and `logout`
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Op as Operator (terminal + browser)
+    participant Cli as Cli (login / logout)
+    participant SS as SignInServer
+    participant G as Controller (grants)
+    participant K as SignInStore (keychain)
+    participant DB
+
+    Op->>Cli: login [--profile p] [--duration d] [--scope s]
+    Cli->>DB: open + bootstrap (the version guard runs first)
+    Cli->>Cli: auth disabled? owner unclaimed? → say so, exit 1
+    Cli->>SS: where is /ui/connect?
+    alt a FinTrack answers /api/health on HOST:PORT
+        SS-->>Cli: that origin
+    else none
+        SS->>SS: start a temporary loopback app (authentication required) — closed when the login ends
+        SS-->>Cli: its origin
+    end
+    Cli->>G: startGrant {fintrack login, version, profile, channel cli, hint scope + duration}
+    Cli-->>Op: Open ORIGIN/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH. Waiting… (Ctrl-C cancels)
+    Note over Op,DB: the person approves in the browser as in diagram 8 — "this session only" is not offered to a cli request
+    loop every 2 s
+        Cli->>G: redeemGrant
+    end
+    G-->>Cli: signed_in + token
+    Cli->>K: save signin:profile:dbId
+    alt the keychain refuses
+        Cli->>G: revoke the sign-in again, exit 1
+    else saved
+        Cli-->>Op: Signed in on profile "p" (read|write) until DATE — never the token
+    end
+    Note over Cli: denied / expired → exit 1 · Ctrl-C → "Cancelled." and exit 130 · the temporary server and the database are closed either way
+
+    Op->>Cli: logout [--profile p]
+    Cli->>K: load the profile's saved sign-in
+    alt nothing saved
+        Cli-->>Op: Not signed in on profile "p" (exit 0)
+    else saved
+        Cli->>G: revokeSignInByHash — revoked_at on a stdio sign-in, a no-op for anything else
+        Cli->>K: delete the entry
+        Cli-->>Op: Signed out of profile "p"
+    end
 ```

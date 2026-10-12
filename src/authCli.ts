@@ -2,18 +2,21 @@ import { parseArgs, type ParseArgsConfig } from 'node:util';
 import type { ZodType, ZodTypeDef } from 'zod';
 import { runEffects } from '@rfc0/effect-runner';
 import { AUTH_APPLIERS, bindAuthRunEffects, createAuthDeps } from './authRuntime.js';
+import { version } from './common/buildVersion.js';
 import { formatAppError } from './common/errors.js';
 import { AUTH_POSITIONALS, AuthSubcommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from './common/cli.js';
 import { loadConfig } from './config.js';
-import { claimRaceWinner, planOwnerClaim } from './logic/auth.js';
+import { claimRaceWinner, dbIdOf, keychainAccount, planOwnerClaim } from './logic/auth.js';
 import { claimedOwnerOf, claimOwnerLocally, findResetTarget, resetPassword } from './controllers/auth.js';
-import type { AuthDeps, RunEffects } from './controllers/deps.js';
+import type { AuthDeps, RunEffects, SignInStore } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase } from './diplomat/db/driver.js';
 import { createEngineContext } from './diplomat/db/engine.js';
 import { collectNewCredentials, collectNewPassword, PROMPT_MESSAGES, type PromptIo } from './diplomat/cli/prompt.js';
 import * as tty from './diplomat/cli/terminal.js';
-import { PACKAGE_NAME, type PasswordReset } from './models/auth.js';
+import { keychainSignInStore } from './diplomat/auth/signInStore.js';
+import { AuthMode, NPX_COMMAND, type PasswordReset } from './models/auth.js';
+import type { SignInServer } from './signInServer.js';
 import { ClaimOptionsSchema, ResetOptionsSchema, type ClaimOptions, type ResetOptions } from './wire/in/cli.js';
 
 /**
@@ -25,6 +28,14 @@ export type Shell = {
   deps: AuthDeps;
   run: RunEffects;
   close: () => void;
+  /** `false` under an explicit `FINTRACK_AUTH=disabled`: stdio acts as the owner, so there is nothing to sign in to. */
+  authRequired: boolean;
+  /** `FINTRACK_PROFILE` — the profile `login`/`logout` act on unless `--profile` says otherwise. */
+  defaultProfile: string;
+  /** The keychain entry of a profile's saved sign-in, for this database. */
+  store: (profile: string) => SignInStore;
+  /** Where `/ui/connect` is served while a login waits: the running server, else a temporary one. */
+  startServer: () => Promise<SignInServer>;
 };
 
 export type CliIo = {
@@ -33,17 +44,54 @@ export type CliIo = {
   readPasswordFromStdin: () => Promise<string>;
   out: (line: string) => void;
   err: (line: string) => void;
+  /** This build's version, reported to the approver as the requesting client's. */
+  version: string;
+  /** Resolves after `ms`, or as soon as `signal` aborts. */
+  wait: (ms: number, signal: AbortSignal) => Promise<void>;
+  /** Aborts on Ctrl-C. Installed only when asked for, so commands that do not wait keep the default behavior. */
+  interruptSignal: () => AbortSignal;
 };
 
 const openShell = async (): Promise<Shell> => {
-  const db = await openDatabase(loadConfig());
-  await bootstrap(db);
+  const config = loadConfig();
+  const db = await openDatabase(config);
+  try {
+    await bootstrap(db);
+  } catch (cause) {
+    closeDatabase(db);
+    throw cause;
+  }
   const engineContext = createEngineContext(db);
+  const deps = await createAuthDeps(db);
+  const dbId = dbIdOf(deps.secrets.hashSecret(config.DB_PATH));
   return {
-    deps: await createAuthDeps(db),
+    deps,
     run: bindAuthRunEffects((flow) => runEffects(engineContext, AUTH_APPLIERS, flow)),
     close: () => closeDatabase(db),
+    authRequired: config.FINTRACK_AUTH === AuthMode.enum.required,
+    defaultProfile: config.FINTRACK_PROFILE,
+    store: (profile) => keychainSignInStore(keychainAccount(profile, dbId)),
+    startServer: async () => (await import('./signInServer.js')).startSignInServer(config, db),
   };
+};
+
+const waitOrAbort = (ms: number, signal: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+
+const interruptSignal = (): AbortSignal => {
+  const controller = new AbortController();
+  process.once('SIGINT', () => controller.abort());
+  return controller.signal;
 };
 
 export const defaultCliIo = (): CliIo => ({
@@ -52,6 +100,9 @@ export const defaultCliIo = (): CliIo => ({
   readPasswordFromStdin: tty.readPasswordFromStdin,
   out: tty.printResult,
   err: tty.printDiagnostic,
+  version,
+  wait: waitOrAbort,
+  interruptSignal,
 });
 
 export const CLI_MESSAGES = {
@@ -67,7 +118,7 @@ export const CLI_MESSAGES = {
 } as const;
 
 export const AUTH_HELP = `
-Usage: npx ${PACKAGE_NAME} auth <command>
+Usage: ${NPX_COMMAND} auth <command>
 
 Commands:
   setup            Choose the owner's username and password (once; claims the existing owner, never creates a user)
@@ -79,7 +130,7 @@ Options:
   --${PASSWORD_STDIN_FLAG}   read the password from stdin instead of asking (scripted installs; stdin must not be a terminal)
 `.trimStart();
 
-const withShell = async <T>(io: CliIo, work: (shell: Shell) => Promise<T>): Promise<T> => {
+export const withShell = async <T>(io: CliIo, work: (shell: Shell) => Promise<T>): Promise<T> => {
   const shell = await io.openShell();
   try {
     return await work(shell);
@@ -157,7 +208,7 @@ const resetUserPassword = (io: CliIo, options: ResetOptions): Promise<boolean> =
     return true;
   });
 
-const parseFlags = <T>(
+export const parseFlags = <T>(
   args: readonly string[],
   options: ParseArgsConfig['options'],
   schema: ZodType<T, ZodTypeDef, unknown>,

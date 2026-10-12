@@ -2,13 +2,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from './common/cli.js';
-import { PACKAGE_NAME } from './models/auth.js';
+import { DEFAULT_PROFILE, NPX_COMMAND, PACKAGE_SPEC, PROFILE_ENV_VAR } from './models/auth.js';
 
 // ---------------------------------------------------------------------------
 // Shared MCP entry shapes
 // ---------------------------------------------------------------------------
-
-const PACKAGE_SPEC = `${PACKAGE_NAME}@latest`;
 
 export const resolveConfigObject = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -23,6 +21,14 @@ export const VSCODE_ENTRY = {
   command: 'npx',
   args: ['-y', PACKAGE_SPEC],
 } as const;
+
+/** A client config entry that signs in as `profile`: `FINTRACK_PROFILE` is added to its `env` only when the profile
+ *  is not the default, so an ordinary install writes exactly the entry it always did (ADR-034 §5.2). */
+export const withProfile = <E extends Record<string, unknown>>(
+  entry: E,
+  profile: string,
+): E | (E & { env: Record<string, string> }) =>
+  profile === DEFAULT_PROFILE ? entry : { ...entry, env: { [PROFILE_ENV_VAR]: profile } };
 
 // ---------------------------------------------------------------------------
 // Pure config merge helpers (testable without FS)
@@ -118,43 +124,43 @@ const claudeDesktopConfigPath = (): string => {
 // Per-client setup handlers
 // ---------------------------------------------------------------------------
 
-const setupClaudeCode = (): void => {
+const setupClaudeCode = (profile: string): void => {
   const configPath = join(home, '.claude', 'mcp.json');
-  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), STDIO_ENTRY));
+  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), withProfile(STDIO_ENTRY, profile)));
   // eslint-disable-next-line no-console -- CLI surface
   console.log(`  Updated: ${configPath}`);
   // eslint-disable-next-line no-console -- CLI surface
   console.log('  Verify with: claude mcp list');
 };
 
-const setupClaudeDesktop = (): void => {
+const setupClaudeDesktop = (profile: string): void => {
   const configPath = claudeDesktopConfigPath();
-  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), STDIO_ENTRY));
+  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), withProfile(STDIO_ENTRY, profile)));
   // eslint-disable-next-line no-console -- CLI surface
   console.log(`  Updated: ${configPath}`);
   // eslint-disable-next-line no-console -- CLI surface
   console.log('  Fully quit and reopen Claude Desktop to apply.');
 };
 
-const setupCopilot = (): void => {
+const setupCopilot = (profile: string): void => {
   const configPath = join(process.cwd(), '.vscode', 'mcp.json');
-  writeJson(configPath, mergeServersKey(readJsonOrEmpty(configPath), VSCODE_ENTRY));
+  writeJson(configPath, mergeServersKey(readJsonOrEmpty(configPath), withProfile(VSCODE_ENTRY, profile)));
   // eslint-disable-next-line no-console -- CLI surface
   console.log(`  Updated: ${configPath}`);
   // eslint-disable-next-line no-console -- CLI surface
   console.log('  Reload VS Code window (Cmd/Ctrl+Shift+P → "Developer: Reload Window") to apply.');
 };
 
-const setupAntigravity = (): void => {
+const setupAntigravity = (profile: string): void => {
   const configPath = join(home, '.gemini', 'config', 'mcp_config.json');
-  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), STDIO_ENTRY));
+  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), withProfile(STDIO_ENTRY, profile)));
   // eslint-disable-next-line no-console -- CLI surface
   console.log(`  Updated: ${configPath}`);
   // eslint-disable-next-line no-console -- CLI surface
   console.log('  Reopen Antigravity or type /mcp in the CLI to refresh.');
 };
 
-const setupCodex = (): void => {
+const setupCodex = (profile: string): void => {
   // Codex CLI MCP configuration path and format is not yet stable.
   // Print the snippet and let the user place it manually.
   // eslint-disable-next-line no-console -- CLI surface
@@ -164,7 +170,7 @@ const setupCodex = (): void => {
     "mcpServers": {
       "fintrack": {
         "command": "npx",
-        "args": ["-y", "${PACKAGE_SPEC}"]
+        "args": ["-y", "${PACKAGE_SPEC}"]${profile === DEFAULT_PROFILE ? '' : `,\n        "env": { "${PROFILE_ENV_VAR}": "${profile}" }`}
       }
     }
   }
@@ -178,7 +184,7 @@ const setupCodex = (): void => {
 
 interface ClientTool {
   readonly label: string;
-  readonly run: () => void;
+  readonly run: (profile: string) => void;
 }
 
 const TOOLS: Readonly<Record<string, ClientTool>> = {
@@ -191,7 +197,7 @@ const TOOLS: Readonly<Record<string, ClientTool>> = {
 };
 
 const HELP = `
-Usage: npx ${PACKAGE_SPEC} setup <tool> [--username <name>] [--${PASSWORD_STDIN_FLAG}]
+Usage: ${NPX_COMMAND} setup <tool> [--username <name>] [--${PASSWORD_STDIN_FLAG}] [--profile <name>]
 
 Available tools:
   claude-code      Claude Code CLI      (~/.claude/mcp.json)
@@ -202,18 +208,19 @@ Available tools:
   codex            OpenAI Codex         (prints the config snippet to paste)
 
 FinTrack requires a login. The first time, setup asks you to choose the owner's username and password
-(typed twice, never echoed), then writes the client's config. Re-running it is safe: an owner that already
-has a login is left alone.
+(typed twice, never echoed), writes the client's config, then offers to sign that client in. Re-running it is safe: an
+owner that already has a login is left alone.
 
 Options:
   --username <name>  the owner's username (required with --${PASSWORD_STDIN_FLAG})
   --${PASSWORD_STDIN_FLAG}   read the password from stdin instead of asking — for scripted installs
+  --profile <name>   sign this client in as a separate profile (adds ${PROFILE_ENV_VAR} to its config); default: ${DEFAULT_PROFILE}
 
 Examples:
-  npx ${PACKAGE_SPEC} setup claude-code
-  npx ${PACKAGE_SPEC} setup copilot
-  npx ${PACKAGE_SPEC} setup vscode
-  npx ${PACKAGE_SPEC} setup antigravity
+  ${NPX_COMMAND} setup claude-code
+  ${NPX_COMMAND} setup copilot
+  ${NPX_COMMAND} setup vscode
+  ${NPX_COMMAND} setup antigravity
 `.trimStart();
 
 // ---------------------------------------------------------------------------
@@ -222,7 +229,7 @@ Examples:
 
 const findClient = (tool: string): ClientTool | undefined => TOOLS[tool.trim().toLowerCase()];
 
-export const runSetup = (tool: string | undefined): void => {
+export const runSetup = (tool: string | undefined, profile: string = DEFAULT_PROFILE): void => {
   if (!tool) {
     // eslint-disable-next-line no-console -- CLI surface
     console.log(HELP);
@@ -237,18 +244,25 @@ export const runSetup = (tool: string | undefined): void => {
 
   // eslint-disable-next-line no-console -- CLI surface
   console.log(`Setting up FinTrack MCP for ${client.label}...`);
-  client.run();
+  client.run(profile);
   // eslint-disable-next-line no-console -- CLI surface
   console.log('Done.');
 };
 
-/** Claims the owner first and writes the client config only if that succeeded. Help and an unknown tool never claim. */
-export const runGuidedSetup = async (tool: string | undefined, claimOwner: () => Promise<boolean>): Promise<number> => {
+/** Claims the owner first, writes the client config only if that succeeded, then offers to sign the client in
+ *  (ADR-034 §5.3). Help and an unknown tool never claim. */
+export const runGuidedSetup = async (
+  tool: string | undefined,
+  claimOwner: () => Promise<boolean>,
+  signIn: (profile: string) => Promise<void> = async () => undefined,
+  profile: string = DEFAULT_PROFILE,
+): Promise<number> => {
   if (!tool || findClient(tool) === undefined) {
-    runSetup(tool);
+    runSetup(tool, profile);
     return EXIT_OK;
   }
   if (!(await claimOwner())) return EXIT_FAILURE;
-  runSetup(tool);
+  runSetup(tool, profile);
+  await signIn(profile);
   return EXIT_OK;
 };

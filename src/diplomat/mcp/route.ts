@@ -8,6 +8,7 @@ import { authErrors, MCP_PATH, READ_SCOPE } from '../../models/auth.js';
 import { rejectWithChallenge } from '../http/bearer.js';
 import '../http/principal.js';
 import { authInfoOf } from './authInfo.js';
+import { authInfoGate } from './gate.js';
 import { buildMcpServer } from './server.js';
 import { toolScopesOf } from './scopes.js';
 
@@ -30,7 +31,7 @@ export const registerMcpRoute = (
   resetLocale: () => void,
   publicUrl?: string,
 ): void => {
-  const scopeGuard = { requireAuthInfo: true };
+  const scopeGuard = { gate: authInfoGate };
   // Built once, only to learn which scope each tool needs; the per-request server below is identical.
   const catalog = buildMcpServer(deps, version, runEffects, runEffectsSequence, resetLocale, scopeGuard);
   const toolScopes = toolScopesOf(catalog);

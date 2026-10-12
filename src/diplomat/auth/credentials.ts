@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { hash, verify } from '@node-rs/argon2';
 import type { AuthSecrets } from '../../controllers/deps.js';
-import { TOKEN_PREFIX } from '../../models/auth.js';
+import { TOKEN_PREFIX, USER_CODE_LENGTH } from '../../models/auth.js';
 
 // OWASP Password Storage Cheat Sheet, first-choice argon2id parameters. `@node-rs/argon2` defaults to
 // argon2id when no algorithm is given (its `Algorithm` enum is not available at runtime to import).
@@ -20,7 +20,7 @@ const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
 
 // Crockford base32: 32 symbols with no I, L, O or U, so a code survives being read aloud or retyped.
-// 20 symbols = 100 bits. 32 divides 256, so `byte & 31` is unbiased.
+// A setup code is 20 symbols (100 bits), a sign-in user code 8 (40 bits). 32 divides 256, so `byte & 31` is unbiased.
 const SETUP_CODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const SETUP_CODE_LENGTH = 20;
 const SETUP_CODE_SYMBOL_MASK = SETUP_CODE_ALPHABET.length - 1;
@@ -39,11 +39,17 @@ export const verifyPassword = async (storedHash: string, password: string): Prom
 export const randomToken = (): string => randomBytes(TOKEN_BYTES).toString(TOKEN_ENCODING);
 
 /** `ftk_` + 32 random bytes, base64url — the prefix keeps a leaked token greppable (ADR-033 §3). */
-export const randomAccessToken = (): string =>
-  `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString(TOKEN_ENCODING)}`;
+export const randomAccessToken = (): string => `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString(TOKEN_ENCODING)}`;
 
-export const randomSetupCode = (): string =>
-  Array.from(randomBytes(SETUP_CODE_LENGTH), (byte) => SETUP_CODE_ALPHABET[byte & SETUP_CODE_SYMBOL_MASK]).join('');
+const randomCode = (length: number): string =>
+  Array.from(randomBytes(length), (byte) => SETUP_CODE_ALPHABET[byte & SETUP_CODE_SYMBOL_MASK]).join('');
+
+export const randomSetupCode = (): string => randomCode(SETUP_CODE_LENGTH);
+
+/** Short enough to type, valid only while pending (10 min) and single-use — the device code is the real secret. */
+export const randomUserCode = (): string => randomCode(USER_CODE_LENGTH);
+
+export const randomDeviceCode = (): string => randomBytes(TOKEN_BYTES).toString(TOKEN_ENCODING);
 
 export const hashSecret = (secret: string): string => createHash(HASH_ALGORITHM).update(secret).digest(HASH_ENCODING);
 
@@ -55,6 +61,8 @@ export const createSecrets = async (): Promise<AuthSecrets> => ({
   randomToken,
   randomAccessToken,
   randomSetupCode,
+  randomUserCode,
+  randomDeviceCode,
   hashSecret,
   dummyPasswordHash: await hashPassword(randomToken()),
 });

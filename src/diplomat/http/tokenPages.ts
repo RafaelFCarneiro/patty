@@ -1,6 +1,7 @@
 import * as R from 'remeda';
 import { hasScope } from '../../logic/auth.js';
 import {
+  AccessTokenKind,
   DEFAULT_TOKEN_EXPIRY,
   TOKEN_EXPIRY_DAYS,
   TOKEN_NAME_MAX_LENGTH,
@@ -72,6 +73,26 @@ const row = (token: AccessTokenSummary): string =>
   `<td>${revokeForm(token)}</td>` +
   '</tr>';
 
+const signInRow = (signIn: AccessTokenSummary): string =>
+  '<tr>' +
+  // The client name is whatever the spawning program reported about itself.
+  `<td>${escapeHtml(signIn.clientName ?? signIn.name)}</td>` +
+  `<td>${escapeHtml(signIn.profile ?? '')}</td>` +
+  `<td>${accessOf(signIn)}</td>` +
+  `<td>${when(signIn.createdAt, NOT_YET)}</td>` +
+  `<td>${when(signIn.expiresAt, LEGACY_NO_EXPIRY_LABEL)}</td>` +
+  `<td>${when(signIn.lastUsedAt, NOT_YET)}</td>` +
+  `<td class="token-status-${signIn.status}">${signIn.status}</td>` +
+  `<td>${revokeForm(signIn)}</td>` +
+  '</tr>';
+
+const signInsTable = (signIns: readonly AccessTokenSummary[]): string =>
+  signIns.length === 0
+    ? '<p class="auth-hint">No Claude sign-ins yet.</p>'
+    : '<div class="tokens-scroll"><table class="tokens-table"><thead><tr>' +
+      '<th>Client</th><th>Profile</th><th>Access</th><th>Approved</th><th>Expires</th><th>Last used</th><th>Status</th><th></th>' +
+      `</tr></thead><tbody>${signIns.map(signInRow).join('')}</tbody></table></div>`;
+
 const table = (tokens: readonly AccessTokenSummary[]): string =>
   tokens.length === 0
     ? '<p class="auth-hint">No access tokens yet.</p>'
@@ -90,7 +111,8 @@ export const renderTokensPage = async (fields: {
     nameMaxLength: String(TOKEN_NAME_MAX_LENGTH),
     accessOptions: accessOptions(),
     expiryOptions: expiryOptions(),
-    tokens: table(fields.tokens),
+    tokens: table(R.filter(fields.tokens, (token) => token.kind === AccessTokenKind.enum.pat)),
+    signIns: signInsTable(R.filter(fields.tokens, (token) => token.kind === AccessTokenKind.enum.stdio)),
     error: errorBlock(fields.error),
   });
 

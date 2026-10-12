@@ -11,7 +11,15 @@ import {
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import { type Scope, UserRole } from '../../models/auth.js';
+import {
+  AccessTokenKind,
+  GrantChannel,
+  GrantStatus,
+  type Scope,
+  type SignInDuration,
+  type TokenAccess,
+  UserRole,
+} from '../../models/auth.js';
 import { BudgetPeriod } from '../../models/budget.js';
 import { DashboardSource } from '../../models/dashboard.js';
 import { Locale, LocaleSource } from '../../models/locale.js';
@@ -278,12 +286,17 @@ export const sessions = sqliteTable('sessions', {
   version: integer('version').notNull().default(0),
 });
 
-// Only sha256(token) is stored; `prefix` is display-only. `scopes` is a JSON array of the `Scope` enum.
+// Only sha256(token) is stored; `prefix` is display-only. `scopes` is a JSON array of the `Scope` enum. `kind` says
+// what minted it — a person at the token page (`pat`) or a stdio sign-in (`stdio`, ADR-034), which also records the
+// client that asked and the profile it signs in.
 export const accessTokens = sqliteTable('access_tokens', {
   id: text('id').primaryKey(),
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: AccessTokenKind.options }).notNull().default(AccessTokenKind.enum.pat),
+  clientName: text('client_name'),
+  profile: text('profile'),
   name: text('name').notNull(),
   tokenHash: text('token_hash').notNull().unique(),
   prefix: text('prefix').notNull(),
@@ -303,3 +316,35 @@ export const setupCodes = sqliteTable('setup_codes', {
   usedAt: text('used_at'),
   version: integer('version').notNull().default(0),
 });
+
+// ADR-034 §3: a pending/answered stdio (or `fintrack login`) sign-in. Only sha256(device code) is stored — the
+// plaintext lives in the asking process. The user code is unique among PENDING grants only, so a finished one
+// never blocks a fresh code; `user_id` is set by the approval and is whoever approved.
+export const clientGrants = sqliteTable(
+  'client_grants',
+  {
+    id: text('id').primaryKey(),
+    deviceCodeHash: text('device_code_hash').notNull().unique(),
+    userCode: text('user_code').notNull(),
+    clientName: text('client_name').notNull(),
+    clientVersion: text('client_version').notNull(),
+    profile: text('profile').notNull(),
+    channel: text('channel', { enum: GrantChannel.options }).notNull().default(GrantChannel.enum.stdio),
+    hintAccess: text('hint_access').$type<TokenAccess>(),
+    hintDuration: text('hint_duration').$type<SignInDuration>(),
+    status: text('status', { enum: GrantStatus.options }).notNull().default(GrantStatus.enum.pending),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    scopes: text('scopes', { mode: 'json' }).$type<Scope[]>(),
+    duration: text('duration').$type<SignInDuration>(),
+    createdAt: text('created_at').notNull(),
+    approvedAt: text('approved_at'),
+    expiresAt: text('expires_at').notNull(),
+    version: integer('version').notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex('client_grants_pending_user_code')
+      .on(table.userCode)
+      .where(sql`${table.status} = ${sql.raw(`'${GrantStatus.enum.pending}'`)}`),
+    index('client_grants_user_code_idx').on(table.userCode),
+  ],
+);

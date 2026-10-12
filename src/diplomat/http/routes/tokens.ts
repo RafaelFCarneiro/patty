@@ -1,28 +1,21 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import type { z } from 'zod';
 import { createToken, listTokens, revokeToken } from '../../../controllers/accessTokens.js';
 import { httpStatus } from '../../../common/errors.js';
-import { AUTH_MESSAGES, authErrors, PrincipalVia } from '../../../models/auth.js';
+import { AUTH_MESSAGES, authErrors } from '../../../models/auth.js';
 import { validation } from '../../../models/error.js';
 import { CreateTokenFormSchema } from '../../../wire/in/auth.js';
 import { SEE_OTHER, TOKEN_REVOKE_PATH, TOKENS_PATH } from '../authPaths.js';
 import type { AuthRoutesContext } from '../context.js';
 import { addFormParser, FORM_BODY_LIMIT_BYTES, page } from '../formPages.js';
 import { createAttemptLimiter } from '../rateLimiter.js';
+import { requireSession } from '../session.js';
 import { renderTokenCreatedPage, renderTokensPage } from '../tokenPages.js';
 
 const INVALID_FORM_STATUS = httpStatus(validation([]));
 // A wrong step-up password is a refused action inside a valid session, not a missing credential.
 const STEP_UP_REFUSED_STATUS = httpStatus(authErrors.sessionRequired);
 const RATE_LIMITED_STATUS = httpStatus(authErrors.rateLimited);
-
-// The hook only authenticates a bearer on /api and /mcp, so a token should never reach these pages — but "a token
-// can never mint or widen another token" is too important to rest on path routing alone, so each route also
-// insists on a browser session.
-const requireSession = async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> =>
-  req.principal?.via === PrincipalVia.enum.session
-    ? undefined
-    : reply.status(httpStatus(authErrors.sessionRequired)).send({ error: authErrors.sessionRequired });
 
 const firstIssue = (error: z.ZodError): string => error.issues[0]?.message ?? AUTH_MESSAGES.tryAgain;
 

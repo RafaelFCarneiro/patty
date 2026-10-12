@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../../../src/controllers/deps.js';
 import { authInfoOf } from '../../../../src/diplomat/mcp/authInfo.js';
-import { guardToolScopes, toolScopesOf } from '../../../../src/diplomat/mcp/scopes.js';
+import { authInfoGate, ownerGate, type PrincipalGate } from '../../../../src/diplomat/mcp/gate.js';
+import { guardScopes, toolScopesOf } from '../../../../src/diplomat/mcp/scopes.js';
 import { buildMcpServer } from '../../../../src/diplomat/mcp/server.js';
 import { OWNER_PRINCIPAL, PrincipalVia, Scope, UserRole } from '../../../../src/models/auth.js';
 
@@ -16,15 +17,15 @@ const registeredTools = (server: McpServer): Registered =>
 
 const textOf = (result: { content: unknown }): string => JSON.stringify(result.content);
 
-describe('guardToolScopes', () => {
-  const guarded = (requireAuthInfo: boolean) => {
+describe('guardScopes', () => {
+  const guarded = (gate: PrincipalGate) => {
     const server = new McpServer({ name: 'test', version: '0' });
-    guardToolScopes(server, { requireAuthInfo });
+    guardScopes(server, { gate });
     return server;
   };
 
   it('refuses to register a tool that does not declare readOnlyHint', () => {
-    const server = guarded(false);
+    const server = guarded(ownerGate);
     expect(() =>
       server.registerTool('undeclared', { title: 'x', inputSchema: {} }, async () => ({ content: [] })),
     ).toThrow(/undeclared.*readOnlyHint/);
@@ -34,14 +35,14 @@ describe('guardToolScopes', () => {
   });
 
   it('derives each tool’s scope from its readOnlyHint', () => {
-    const server = guarded(false);
+    const server = guarded(ownerGate);
     server.registerTool('reads', { annotations: { readOnlyHint: true } }, async () => ({ content: [] }));
     server.registerTool('writes', { annotations: { readOnlyHint: false } }, async () => ({ content: [] }));
     expect(Object.fromEntries(toolScopesOf(server))).toEqual({ reads: READ, writes: WRITE });
   });
 
   it('runs the tool for a principal whose scopes cover it — with and without an input schema', async () => {
-    const server = guarded(true);
+    const server = guarded(authInfoGate);
     const withInput = vi.fn(async (args: { n: number }) => ({
       content: [{ type: 'text' as const, text: `n=${args.n}` }],
     }));
@@ -62,7 +63,7 @@ describe('guardToolScopes', () => {
   });
 
   it('answers insufficient_scope and never runs a write tool for a read-only token', async () => {
-    const server = guarded(true);
+    const server = guarded(authInfoGate);
     const run = vi.fn(async () => ({ content: [] }));
     server.registerTool('writes', { annotations: { readOnlyHint: false }, inputSchema: {} }, run);
     const readOnly = authInfoOf({
@@ -81,15 +82,15 @@ describe('guardToolScopes', () => {
   });
 
   it('lets a write token call a read tool (write implies read)', async () => {
-    const server = guarded(true);
+    const server = guarded(authInfoGate);
     server.registerTool('reads', { annotations: { readOnlyHint: true } }, async () => ({ content: [] }));
     const writer = authInfoOf({ ...OWNER_PRINCIPAL, scopes: [WRITE], via: PrincipalVia.enum.token, tokenId: 't2' });
     expect((await registeredTools(server).reads!.handler({ authInfo: writer })).isError).toBeUndefined();
   });
 
-  it('over HTTP, fails closed when no authInfo reached the tool; over stdio, trusts the absence', async () => {
-    const http = guarded(true);
-    const stdio = guarded(false);
+  it('over HTTP fails closed when no authInfo reached the tool; as the trusted owner it ignores that', async () => {
+    const http = guarded(authInfoGate);
+    const stdio = guarded(ownerGate);
     const run = vi.fn(async () => ({ content: [] }));
     for (const server of [http, stdio]) {
       server.registerTool('writes', { annotations: { readOnlyHint: false }, inputSchema: {} }, run);
@@ -156,6 +157,7 @@ describe('every registered MCP tool declares its scope', () => {
     (() => undefined) as unknown as RunEffects,
     (() => undefined) as unknown as RunEffectsSequence,
     () => undefined,
+    { gate: ownerGate },
   );
   const scopes = toolScopesOf(server);
   const names = [...scopes.keys()].sort();

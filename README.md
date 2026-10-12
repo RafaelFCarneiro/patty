@@ -61,12 +61,14 @@ Run without a tool name to list all options and the config file each one writes:
 npx @rafaelfcarneiro/fintrack@latest setup
 ```
 
-The setup command is safe to re-run — it skips the login step once the owner is claimed and merges idempotently, preserving any existing config keys. With no terminal and no `--password-stdin` it stops with instructions *before* writing any config.
+After writing the config, `setup` offers to **sign that client in now** (a browser approval — see step 3). The setup command is safe to re-run — it skips the login step once the owner is claimed and merges idempotently, preserving any existing config keys. With no terminal and no `--password-stdin` it stops with instructions *before* writing any config.
+
+> **Always use `@latest`.** `npx` with no version prefers an *installed* copy over the registry's, so a stale global install can run an old build. Every command here is pinned; check for a stale global copy with `npm ls -g @rafaelfcarneiro/fintrack`. An older build also refuses to run against a database a newer one has migrated, and says how to update.
 If the target config file exists but is empty/invalid (or has a non-object JSON root), setup recovers automatically by replacing that root with a valid object.
 
 ### 3 — Restart your client and start chatting
 
-Restart the AI client (or reload the window for VS Code), then talk to your finances naturally. See [Sample usage](#sample-usage) below.
+Restart the AI client (or reload the window for VS Code). **The install flow ends with a sign-in:** a stdio session acts as nobody until you approve it. If you did not sign in during `setup`, Claude's first request shows a link and a code (`FinTrack: not signed in. Open …/ui/connect?code=ABCD-EFGH …`): open it, log in, check the code, choose read-only or read-and-write and how long it lasts (this session only, 24 hours, 7 days or 30 days), and approve. From then on a restart of the client is silently signed in until it expires; you can list and revoke sign-ins at `/ui/access/tokens`. From a terminal: `npx @rafaelfcarneiro/fintrack@latest login` / `logout`; for headless clients set `FINTRACK_TOKEN`. Details: [`docs/auth.md`](docs/auth.md#signing-in-claude-stdio). Then talk to your finances naturally. See [Sample usage](#sample-usage) below.
 
 > **Updating:** re-run the same setup command. `npx` with `@latest` always fetches the newest published version.
 

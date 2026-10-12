@@ -85,6 +85,8 @@ export const formatAppError = (e: AppError): string => {
       return `${e.code}: ${e.hint}`;
     case 'session_required':
       return `${e.code}: ${AUTH_MESSAGES.sessionRequired}`;
+    case 'invalid_grant':
+      return `${e.code}: ${AUTH_MESSAGES.invalidGrant}`;
     default: {
       const _exhaustive: never = e;
       throw new Error(`unmapped error code: ${JSON.stringify(_exhaustive)}`);
@@ -104,6 +106,7 @@ export const httpStatus = (e: AppError): number => {
     case 'unknown_budget':
     case 'unknown_token':
     case 'unknown_user':
+    case 'invalid_grant':
     case 'resource_metadata_unavailable':
       return 404;
     case 'unauthenticated':

@@ -24,11 +24,13 @@ import { transactionTagApplier } from '../../src/diplomat/db/repos/transactionTa
 import { healthRepo } from '../../src/diplomat/db/repos/health.js';
 import { createLocaleResolver } from '../../src/diplomat/db/localeCache.js';
 import { accessTokenApplier } from '../../src/diplomat/db/repos/accessTokens.js';
+import { clientGrantApplier } from '../../src/diplomat/db/repos/clientGrants.js';
 import { sessionApplier } from '../../src/diplomat/db/repos/sessions.js';
 import { setupCodeApplier } from '../../src/diplomat/db/repos/setupCodes.js';
 import { userApplier } from '../../src/diplomat/db/repos/users.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
+  CLIENT_GRANT_ENTITY_TAG,
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
   USER_ENTITY_TAG,
@@ -148,6 +150,7 @@ export const buildApp = async (opts?: {
     [USER_ENTITY_TAG]: userApplier,
     [SESSION_ENTITY_TAG]: sessionApplier,
     [ACCESS_TOKEN_ENTITY_TAG]: accessTokenApplier,
+    [CLIENT_GRANT_ENTITY_TAG]: clientGrantApplier,
     [SETUP_CODE_ENTITY_TAG]: setupCodeApplier,
   };
   const changeBus = createChangeBus({ onError: opts?.onChangeError });

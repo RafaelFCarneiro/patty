@@ -5,13 +5,13 @@ and what that does and doesn't protect. Decisions and rationale: [ADR-033](adr/0
 Internals (hook, principal, tables): [`architecture.md`](architecture.md) § Authentication.
 The flows as diagrams (startup, setup, login, the auth hook, logout/SSE, existing databases): [`auth-flows.md`](auth-flows.md).
 
-> **Status: Phase 2 of 4, plus [ADR-034](adr/034-local-auth-and-stdio-sign-in.md) step 1.** This release ships the
+> **Status: Phase 2 of 4, plus [ADR-034](adr/034-local-auth-and-stdio-sign-in.md) steps 1 and 2.** This release ships the
 > identity foundation — exactly **one user** (the *owner*), password login, sessions, the setup code — and **personal
-> access tokens**: `Authorization: Bearer ftk_…` for `/api` and `/mcp`, with read/write scopes. **Authentication is now on by
-> default, on every install** — a local npm one included — and the owner is claimed in the terminal during
-> `setup` ([First setup](#first-setup)). The stdio channel still acts as the owner (its browser sign-in is ADR-034
-> step 2). MCP OAuth (Phase 3) and multiple users with per-user data (Phase 4) come later — see
-> [What comes next](#what-comes-next).
+> access tokens**: `Authorization: Bearer ftk_…` for `/api` and `/mcp`, with read/write scopes. **Authentication is on by
+> default, on every install** — a local npm one included: the owner is claimed in the terminal during
+> `setup` ([First setup](#first-setup)), and **a stdio session signs in too**, through the browser, for a duration the
+> person chooses ([Signing in Claude (stdio)](#signing-in-claude-stdio)). MCP OAuth (Phase 3) and multiple users with
+> per-user data (Phase 4) come later — see [What comes next](#what-comes-next).
 
 ## Auth modes
 
@@ -44,16 +44,19 @@ possible on a loopback bind:
 - **`disabled` is refused at startup whenever the instance is reachable by anyone else** — a non-loopback `HOST`, or
   `PUBLIC_URL`/`TRUST_PROXY` set. A reverse proxy normally connects to a loopback bind, so `HOST=127.0.0.1` behind a
   proxy would otherwise leave the whole internet-facing site logged in as the owner.
-- **stdio still acts as the owner** whatever the mode: the MCP client spawns the process, so there is no network caller
-  to authenticate. Authentication applies to the HTTP surface only *in this release*; making a stdio session sign in is
-  [ADR-034 step 2](adr/034-local-auth-and-stdio-sign-in.md#2-a-stdio-session-must-sign-in).
-- With no HTTP surface running (`FINTRACK_HTTP=false` under stdio) there is nothing to protect and nothing is set up.
+- **stdio signs in** under `required` ([below](#signing-in-claude-stdio)): the process is spawned by whichever program the
+  user pointed at it, so until it holds a credential every tool call, resource read and prompt answers "not signed in".
+  Under an explicit `disabled` it acts as the owner, like every other request.
+- With no HTTP surface running (`FINTRACK_HTTP=false` under stdio) there are no sessions or pages to protect, but the stdio
+  channel still needs its sign-in — by `FINTRACK_TOKEN` or `fintrack login` (the browser link needs the dashboard).
 
 ## Settings
 
 | Variable | Meaning |
 |---|---|
 | `FINTRACK_AUTH` | `required` \| `disabled`. Default `required`, on every surface; `disabled` is loopback-only. See [Auth modes](#auth-modes). |
+| `FINTRACK_PROFILE` | Which saved stdio sign-in this process uses (`default` if unset; letters, digits, `.` `_` `-`). Two client configs on one machine can sign in as two users. See [Profiles](#profiles). |
+| `FINTRACK_TOKEN` | A personal access token a stdio process signs in with, instead of the browser flow — for headless use and clients that should never prompt. See [`FINTRACK_TOKEN`](#fintrack_token). |
 | `PUBLIC_URL` | The external **origin** users type, e.g. `https://fintrack.example.com` — no path, no trailing slash. Optional. `https` turns on the cookie `Secure` flag; it is also the origin the [CSRF check](#csrf) expects. Phase 3 (OAuth) will require it. |
 | `TRUST_PROXY` | Passed to Fastify's `trustProxy`: `true`, a hop count (`1`), or trusted addresses/CIDRs (`loopback,10.0.0.0/8`). Set it behind a reverse proxy so [login rate limiting](#brute-force-protection) sees each client's real IP instead of the proxy's. |
 
@@ -90,7 +93,11 @@ In order, it:
 1. **Claims the owner**, if nobody holds its login yet. It asks for a **username**, then a **password** twice, with no
    echo (a bad answer is asked again, three tries at most; the rules are the ones `/ui/setup` applies — a password of at
    least 12 characters, no other rules). If the owner is already claimed it says so in one line and skips the step.
-2. **Writes the client's config entry** exactly as before: an idempotent merge that keeps your other keys.
+2. **Writes the client's config entry** exactly as before: an idempotent merge that keeps your other keys. With
+   `--profile work` the entry also gets `"env": { "FINTRACK_PROFILE": "work" }` (nothing is added for the default profile).
+3. **Offers to sign that client in now** — "Sign in this client now? [Y/n]" — by running [`login`](#login-and-logout) for the
+   client's profile. Declining, or having no terminal, skips it with a one-line hint; the client's first tool call will show a
+   sign-in link anyway. A denied or cancelled sign-in never fails the setup that wrote the config.
 
 `fintrack auth setup` is just step 1, for when the client is already configured (an upgrade, a second machine's
 config…). Run either as often as you like.
@@ -99,6 +106,11 @@ config…). Run either as often as you like.
 npx @rafaelfcarneiro/fintrack@latest auth setup
 ```
 
+- **Always `@latest`.** `npx` with no version **prefers an installed copy** over the registry's, so an unpinned command can run
+  a stale global install. Every command FinTrack prints, and every one in these docs, is pinned
+  (`npx @rafaelfcarneiro/fintrack@latest …`). Check for a stale global copy with `npm ls -g @rafaelfcarneiro/fintrack` and
+  remove it with `npm rm -g @rafaelfcarneiro/fintrack`. An older build refuses to run against a database a newer one has
+  migrated — see [Refusing an older build](#refusing-an-older-build).
 - **Scripted installs.** With no terminal there is nothing to ask, so the command fails with instructions —
   *before* it writes any config — instead of hanging. Give it the username and pipe the password in:
   `printf %s "$PASSWORD" | npx @rafaelfcarneiro/fintrack@latest setup claude-code --username rafael --password-stdin`
@@ -130,7 +142,7 @@ cannot replace the code you were shown (stdout carries the MCP protocol, so it i
 │     7QXM-4RTC-HK2V-N8WP-D3ZB
 │
 │ Open http://127.0.0.1:51737/ui/setup and enter the code, then choose a username and password,
-│ or run `npx @rafaelfcarneiro/fintrack auth setup` in a terminal.
+│ or run `npx @rafaelfcarneiro/fintrack@latest auth setup` in a terminal.
 ```
 
 ```bash
@@ -169,6 +181,108 @@ Without the code nobody can claim an exposed instance: there is no window in whi
   `/ui`; anything else lands on `/ui`.
 - A disabled user (Phase 4) or a deleted session is rejected on the next request.
 
+## Signing in Claude (stdio)
+
+A stdio server is started by a client — Claude Desktop, Claude Code, Copilot — that you pointed at it, and several programs
+on a machine can do the same. So a stdio session **acts as nobody until it signs in**, and the sign-in is something *you* grant
+in the browser, for as long as *you* choose. (The MCP spec says a stdio server should take its credentials from the environment
+and should not run the HTTP authorization flow; a URL-mode elicitation is explicitly not for authorizing the user to the server.
+So the sign-in happens outside the protocol, and what it produces is read from the keychain or the environment on later starts.)
+
+### What you see
+
+1. Claude's first tool call (or resource read, or prompt) returns an ordinary error:
+   *FinTrack: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.*
+   (`initialize` and the tool/resource/prompt **lists** still work, so the client can show the server.) While the owner is
+   unclaimed it adds: *Owner not set up yet? Run `npx @rafaelfcarneiro/fintrack@latest setup`.* With `FINTRACK_HTTP=false` there is no
+   page to link to, so it says to use `npx @rafaelfcarneiro/fintrack@latest login` or `FINTRACK_TOKEN` instead.
+2. You open the link. If you are not logged in you log in first and land on the same page. The page shows **the client's name and
+   version ("reported by the client"), the profile, when it asked, and the code** — confirm the code is the one Claude showed —
+   and the warning *Only approve if you just asked a Claude session on this machine to connect.*
+3. You choose **access** (read only, or read and write) and **how long** (below), then **Approve** or **Deny**. The form is
+   pre-selected with what you chose last time for this client and profile (read-only for 24 hours the first time).
+4. Claude's next call goes through. The process polls for the approval every 2 seconds, so a sign-in you approved is picked up
+   even before the next call.
+
+### How long it lasts
+
+| Choice | Behavior |
+|---|---|
+| **This Claude session only** | Kept in the process's memory, **never written to the keychain**. Revoked when the process exits (best effort); capped at **12 hours** in case the process died without cleaning up. The next Claude session asks again. Not offered for `fintrack login`. |
+| **24 hours** (default) | Saved in the OS keychain for the profile; expires 24 h after you approved. |
+| **7 days** | Saved in the keychain. |
+| **30 days** (the maximum) | Saved in the keychain. |
+
+- **Expiry is absolute**, counted from your approval; using the sign-in never extends it. When it ends, the next call shows a fresh link.
+- A restart of the client needs no new approval while a saved sign-in is still valid ("silently signed in").
+- **Every sign-in is visible and revocable** at [`/ui/access/tokens`](#personal-access-tokens) — a "Claude sign-ins" table (client,
+  profile, access, approved, expires, last used) beside your personal access tokens. Revoking takes effect on that client's **next call**: the
+  stdio process re-validates its credential on every tool call, resource read and prompt get, and deletes a saved credential that
+  turns out invalid.
+- A sign-in is a token (`kind: stdio`), authenticated, listed and revoked through the same code as a personal access token. It is accepted only on the
+  stdio channel: presented as a bearer on `/api` or `/mcp` it is `401`.
+- A read-only sign-in that calls a write tool gets the usual `insufficient_scope` error. A pending request lives 10 minutes and works once.
+
+### Where the credential comes from
+
+In this order, and only the first that applies:
+
+1. **`FINTRACK_TOKEN`** — see [below](#fintrack_token). If it is set and invalid, the server says so; it **never falls back** to a saved sign-in.
+2. **A saved sign-in** in the OS keychain: service `fintrack`, account `signin:<profile>:<dbId>`, where `dbId` is the first 12 hex characters of the SHA-256 of the
+   absolute database path — so a development database and a production one never share a sign-in.
+3. **None** → "not signed in", as above.
+
+### Profiles
+
+`FINTRACK_PROFILE` (default `default`) names the saved sign-in. Give each client config its own profile and each signs in separately
+(`setup --profile work` writes it into the client's `env`; `login --profile work` signs it in; `logout --profile work` signs it out).
+Today they all act as the one owner; the profile is what lets them be different users after multi-user (ADR-033 Phase 4).
+
+### `FINTRACK_TOKEN`
+
+Put a [personal access token](#personal-access-tokens) in the client's environment for headless use — CI, scripts, a config that should never prompt:
+
+```json
+{ "mcpServers": { "fintrack": { "command": "npx", "args": ["-y", "@rafaelfcarneiro/fintrack@latest"], "env": { "FINTRACK_TOKEN": "ftk_…" } } } }
+```
+
+Its scopes and expiry apply as they would over HTTP. An **empty** `FINTRACK_TOKEN` counts as unset (a config template that expands a missing variable to nothing falls through to the keychain and the browser sign-in, not to the strict token path). The token is validated on every call, so revoking it takes effect on the next one. A malformed, unknown,
+revoked or expired token gets a clear error — never a silent fallback to the keychain — and the token is never echoed. Prefer the browser sign-in where you can: it keeps the secret in the keychain rather than in a JSON file that syncs and gets shared.
+
+### `login` and `logout`
+
+```bash
+npx @rafaelfcarneiro/fintrack@latest login [--profile <p>] [--duration 24h|7d|30d] [--scope read|write]
+npx @rafaelfcarneiro/fintrack@latest logout [--profile <p>]
+```
+
+`login` runs the same flow from a terminal: it prints the link and the code, waits for you to approve, and saves the result to the keychain profile (if the keychain
+refuses, it revokes the sign-in again rather than leave a secret nothing can find). `--duration` and `--scope` only **pre-select** the page; you still choose. It needs
+the dashboard to be reachable: if a FinTrack server answers on `HOST:PORT` it uses that one, otherwise it **starts a temporary loopback server for the length of the
+login** (authentication required) and closes it afterwards. Ctrl-C cancels cleanly (exit 130). Under `FINTRACK_AUTH=disabled` there is nothing to sign in to and it says so.
+`logout` revokes the profile's saved sign-in and deletes the keychain entry; with nothing saved it says so and succeeds.
+
+### Phishing and its limits
+
+On a multi-user instance, user A could send user B the link and hope B approves it, handing A's client B's data. The defences are layered: the page needs **B's own login**;
+it shows the **code**, which must match what the client displayed, plus the client's name and the time, with an explicit warning; the link and code **grant nothing by
+themselves** (only a logged-in person's approval does, and it binds to *that* person); and a request expires in 10 minutes and can be redeemed once. The URL
+carries only the user code; the device code that redeems it never leaves the process that asked, and only its hash is stored.
+
+What none of this does: see [the limit on your own OS account](#threat-model-so-far) below.
+
+## Refusing an older build
+
+A stale `npx` or global install once resolved an unpinned command to an old build, which did not know `auth setup`, started as a server, and failed against a newer
+schema. Two things now make that impossible. Every command is pinned to `@latest` (above), and **every entrypoint that opens the database** — the server (stdio/HTTP), the sidecar and every
+command (`setup`, `auth …`, `login`, `logout`) — first compares the database's newest applied migration with the newest this build ships. If the database is ahead it exits
+non-zero with this, before it copies, migrates, seeds or writes anything:
+
+> fintrack: this build (v1.2.3) is older than your database (it has migrations this version doesn't know). Update with `npx @rafaelfcarneiro/fintrack@latest`, or check for a stale global install: `npm ls -g @rafaelfcarneiro/fintrack`.
+
+A fresh database, or one at or behind the build, proceeds as always. The guard protects only builds that include it (see [`releasing.md`](releasing.md)).
+Unknown commands (`fintrack bogus`, `fintrack auth bogus`) print the usage and exit non-zero — they never fall through to starting a server.
+
 ## Reset a password
 
 There is no recovery email; recovery is a terminal command, trusted the same way as [`auth setup`](#first-setup):
@@ -205,7 +319,7 @@ Create and revoke them at **`/ui/access/tokens`** (the key icon in the dashboard
   contain a script (a write-scoped client may save one with `save_dashboard`) that runs in the dashboard's origin with
   your session cookie, but it does not know your password, so it cannot mint itself a token. A wrong password is `403` and
   counts toward the same [login rate limit](#brute-force-protection).
-- **Listed with:** name, prefix, access, created, **last used**, expires and status (`active`, `expired`, `revoked`).
+- **Listed with:** name, prefix, access, created, **last used**, expires and status (`active`, `expired`, `revoked`). The same page lists your [stdio sign-ins](#signing-in-claude-stdio) in a separate table, with the same revoke.
   `last used` is rewritten at most every 5 minutes, like a session's activity.
 - **Legacy tokens.** A token created before ADR-034 may have no expiry. It keeps working until it is revoked, and the
   list shows it as **"No expiry (legacy)"** — revoke it and mint a new one when convenient. New tokens always expire.
@@ -238,7 +352,7 @@ On `/ui` the header is ignored: a bearer there is just "no credential", so the r
 | `fintrack:read` | `GET`/`HEAD` on `/api`; every MCP tool marked read-only; MCP resources and prompts; `initialize`, `tools/list`, `ping`. |
 | `fintrack:write` | Everything else on `/api` and every other MCP tool — and, by implication, everything `read` allows. |
 
-A session and the trusted owner (stdio, auth `disabled`) hold both scopes.
+A session and the trusted owner (auth `disabled`) hold both scopes; a stdio sign-in holds the scopes its approver chose.
 
 - **REST:** every route definition declares its scope (`RouteDefinition.scope`); the rule is *`GET`/`HEAD` → read,
   every other method → write*, pinned by a unit test. The auth hook compares the token's scopes with the matched route's.
@@ -369,6 +483,12 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 - A leaked database yielding usable access tokens (only SHA-256 is stored; the plaintext is shown once).
 - A read-only token doing anything but reading (REST route scope, MCP tool scope checked at the edge and again in the tool).
 - One token minting or widening another (token management is session-only).
+- **A program that merely runs a FinTrack stdio server in your name** (a client config you did not write, a script that spawns it): it gets "not signed in" until *you* approve a
+  request in the browser, for the scopes and duration you pick, and you can revoke it any time at `/ui/access/tokens`.
+- **A sign-in link used as a lure** (the phishing defence, [above](#phishing-and-its-limits)): the link and code grant nothing by themselves, approval needs your own login
+  and binds to you, the page names the client and the code, and a request lives 10 minutes and works once.
+- A stolen stdio sign-in being replayed over HTTP (it is accepted on the stdio channel only), and a "this session only" sign-in outliving its process (revoked at exit, capped at 12 hours).
+- An old or global `npx` build running against a newer database ([Refusing an older build](#refusing-an-older-build)).
 
 **Does not protect against**
 
@@ -384,8 +504,9 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
   authentication guards the network surface, not the disk. The `auth` commands are trusted for exactly this reason: they
   open the database with its key, so whoever can run them already holds the data. On one OS account, a program that can run
   FinTrack can read the key and the database directly, so the login separates *people and network callers*, not your own
-  account's processes. The stdio channel is likewise still trusted in this release (ADR-034 step 2 changes that). Back up
-  the key and the volume together, and protect both.
+  account's processes. **The stdio sign-in does not change that**: it separates *which user, which scopes and for how long* a
+  client acts *through FinTrack*; a program running as your OS account can still read the keychain entry (and the database key beside it), or start FinTrack with
+  `FINTRACK_AUTH=disabled` against your database. It is not a wall against your own OS account. Back up the key and the volume together, and protect both.
 - **Other local programs and local web apps, with auth explicitly `disabled` on loopback.** A web page from another *site* can
   no longer reach it (the `Host`/`Origin` rule above), but any program running as any user on your machine can still
   connect to `127.0.0.1` and act as the owner. That includes a web app served from `localhost` on a *different port*
@@ -406,11 +527,10 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
 ## What comes next
 
 Phase 1 (identity) and Phase 2 (personal access tokens, scopes, Protected Resource Metadata) are done, and
-[ADR-034](adr/034-local-auth-and-stdio-sign-in.md) step 1 (authentication on by default, the terminal owner claim and
-password reset, no never-expiring tokens) with them.
+[ADR-034](adr/034-local-auth-and-stdio-sign-in.md) steps 1 and 2 with them (authentication on by default, the terminal owner claim and
+password reset, no never-expiring tokens; the stdio browser sign-in with a chosen expiry, `login`/`logout`, the startup version guard).
 
 | Step / phase | Adds |
 |---|---|
-| ADR-034 step 2 — stdio sign-in | A stdio session signs in through the browser with an expiry the user chooses (`/ui/connect`, `fintrack login`/`logout`, `/ui/access` listing); stdio stops acting as the owner. |
 | 3 — MCP OAuth | An in-process OAuth 2.1 authorization server so OAuth-capable MCP clients can connect; the documented reverse-proxy + TLS deployment supersedes the loopback-only publish rule. |
 | 4 — multi-user | `user_id` on every user-owned table (backfilled to the owner), per-user scoping, stdio identity from ADR-034's sign-in (there is no `FINTRACK_USER`), admin user management, and `fintrack key export` + the npm→Docker move guide. |

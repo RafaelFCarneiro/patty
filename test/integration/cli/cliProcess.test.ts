@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
@@ -9,6 +10,11 @@ import { verifyPassword } from '../../../src/diplomat/auth/credentials.js';
 import { closeDatabase, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { PROMPT_MESSAGES } from '../../../src/diplomat/cli/prompt.js';
 import { STDIO_ENTRY } from '../../../src/setup.js';
+import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
+import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
+import { LOGIN_MESSAGES } from '../../../src/loginCli.js';
+import { USAGE } from '../../../src/cli.js';
+import { databaseAheadMessage } from '../../../src/models/database.js';
 
 /**
  * The real binary, as a script or an installer runs it: a child process with a piped (non-TTY) stdin, its own
@@ -152,5 +158,116 @@ describe('fintrack auth reset-password (the binary)', () => {
     const result = fintrack(['auth', 'reset-password', '--user', 'ghost', '--password-stdin'], NEW_PASSWORD);
     expect(result.exit).toBe(1);
     expect(result.stderr).toContain('ghost');
+  });
+});
+
+describe('fintrack setup <client> — the sign-in step (the binary)', () => {
+  it('without a terminal skips the offer with a one-line hint naming the pinned login command (exit 0)', () => {
+    const result = fintrack(['setup', 'claude-code', '--username', 'rafael', '--password-stdin'], PASSWORD);
+    expect(result.exit).toBe(0);
+    expect(result.stdout).toContain(LOGIN_MESSAGES.skippedNoTerminal('default'));
+    expect(result.stdout).toContain('npx @rafaelfcarneiro/fintrack@latest login --profile default');
+  });
+
+  it('with --profile writes FINTRACK_PROFILE into the client entry and names that profile in the hint', () => {
+    const result = fintrack(
+      ['setup', 'claude-code', '--username', 'rafael', '--password-stdin', '--profile', 'work'],
+      PASSWORD,
+    );
+    expect(result.exit).toBe(0);
+    expect(JSON.parse(readFileSync(claudeCodeConfig(), 'utf8'))).toEqual({
+      mcpServers: { fintrack: { ...STDIO_ENTRY, env: { FINTRACK_PROFILE: 'work' } } },
+    });
+    expect(result.stdout).toContain(LOGIN_MESSAGES.skippedNoTerminal('work'));
+  });
+});
+
+describe('unknown commands never start a server (the binary)', () => {
+  it.each([
+    ['bogus'],
+    ['auth', 'bogus'],
+    ['--bogus'],
+    ['setup', 'claude-code', '--bogus'],
+    ['login', 'stray'],
+    ['logout', '--duration', '24h'],
+  ])('fintrack %s exits non-zero with usage', (...args) => {
+    const result = fintrack(args);
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toMatch(/fintrack: |Usage:/);
+  });
+
+  it('prints the usage for an unknown command, naming the pinned command', () => {
+    const result = fintrack(['bogus']);
+    expect(result.stderr).toContain('unknown command "bogus"');
+    expect(result.stderr).toContain(USAGE.trim());
+    expect(result.stderr).toContain('npx @rafaelfcarneiro/fintrack@latest');
+  });
+
+  it('prints the usage and exits 0 for help', () => {
+    for (const flag of ['--help', '-h', 'help']) {
+      const result = fintrack([flag]);
+      expect(result.exit, flag).toBe(0);
+      expect(result.stdout).toContain('Usage:');
+    }
+  });
+
+  it('does not open the database for any of them', () => {
+    fintrack(['bogus']);
+    fintrack(['auth', 'bogus']);
+    expect(existsSync(dbPath)).toBe(false);
+  });
+});
+
+describe('an older build against a newer database (the binary)', () => {
+  const AHEAD = databaseAheadMessage('0.0.0-development');
+
+  const aheadDatabase = async () => {
+    const db = await openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: KEY });
+    try {
+      await bootstrap(db);
+      await db.run(
+        sql`INSERT INTO ${sql.identifier(MIGRATIONS_TABLE)} (hash, created_at) VALUES ('from-the-future', ${Date.now() + 10 * 365 * 24 * 3600 * 1000})`,
+      );
+      await db.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`);
+    } finally {
+      closeDatabase(db);
+    }
+  };
+
+  const fingerprint = () => ({
+    size: statSync(dbPath).size,
+    mtimeMs: statSync(dbPath).mtimeMs,
+    sha256: createHash('sha256').update(readFileSync(dbPath)).digest('hex'),
+  });
+
+  it.each([
+    [['auth', 'setup', '--username', 'rafael', '--password-stdin'], PASSWORD],
+    [['auth', 'reset-password', '--password-stdin'], NEW_PASSWORD],
+    [['setup', 'claude-code', '--username', 'rafael', '--password-stdin'], PASSWORD],
+    [['login'], ''],
+    [['logout'], ''],
+  ] as const)('fintrack %s exits non-zero with the version-guard message and changes nothing', async (args, stdin) => {
+    await aheadDatabase();
+    const before = fingerprint();
+
+    const result = fintrack([...args], stdin);
+
+    expect(result.exit).toBe(1);
+    expect(result.stderr).toContain(AHEAD);
+    expect(result.stderr).not.toContain('    at '); // a diagnosis, not a stack trace
+    expect(fingerprint()).toEqual(before);
+    expect(existsSync(claudeCodeConfig())).toBe(false);
+  });
+
+  it('refuses to start as a server too (stdio), with the same message and nothing written', async () => {
+    await aheadDatabase();
+    const before = fingerprint();
+
+    const result = fintrack([]);
+
+    expect(result.exit).toBe(1);
+    expect(result.stderr).toContain(AHEAD);
+    expect(fingerprint()).toEqual(before);
   });
 });

@@ -34,6 +34,37 @@ npx @rafaelfcarneiro/fintrack@latest setup
 
 The client spawns FinTrack directly. No server to start separately; no port conflicts.
 
+### What you see on the first call (signing in)
+
+FinTrack requires a login, and a stdio session signs in too. Right after `setup` (which offers to do it) or after you restart the client,
+the first tool call answers with an ordinary error that holds a link and a code:
+
+> FinTrack: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.
+
+Open the link (log in first if asked), check the code matches, choose read-only or read-and-write and **how long** — this Claude session only,
+24 hours (the default), 7 days or 30 days — and approve. Claude's next call goes through, and a restart of the client needs no new approval until
+the sign-in expires or you revoke it (`/ui/access/tokens`). Tool, resource and prompt **lists** work before you sign in, so the client can show the server.
+The same flow from a terminal: `npx @rafaelfcarneiro/fintrack@latest login` / `logout`. Details: [`auth.md`](auth.md#signing-in-claude-stdio).
+
+Two optional variables go in the client's `env`:
+
+| Variable | Use |
+|---|---|
+| `FINTRACK_PROFILE` | Names the saved sign-in (default `default`). Give two client configs two profiles and each signs in separately. `setup <client> --profile work` writes it for you. |
+| `FINTRACK_TOKEN` | A [personal access token](auth.md#personal-access-tokens) to sign in with instead of the browser — for headless use or a client that must never prompt. If it is set and invalid the server says so; it never falls back to a saved sign-in. |
+
+```json
+"mcpServers": {
+  "fintrack": {
+    "command": "npx",
+    "args": ["-y", "@rafaelfcarneiro/fintrack@latest"],
+    "env": { "FINTRACK_PROFILE": "work" }
+  }
+}
+```
+
+With `FINTRACK_HTTP=false` there is no dashboard to open, so the message says to use `login` or `FINTRACK_TOKEN` instead. The saved sign-in lives in your OS keychain (never in the config file).
+
 ### Claude Desktop ✅
 
 In `~/Library/Application Support/Claude/claude_desktop_config.json`, add a top-level `mcpServers` key (newer builds keep app preferences in the same file — don't remove them):
@@ -240,10 +271,10 @@ out of the process list's arguments):
 `mcp-remote` also accepts `--header-file <path>` (one `Name: value` per line) to keep the credential out of the
 configuration entirely.
 
-If a client cannot send a custom header at all, connect it over stdio instead (the npm sections above): stdio is trusted
-and needs no token.
+If a client cannot send a custom header at all, connect it over stdio instead (the npm sections above): stdio signs in through
+the browser (or with `FINTRACK_TOKEN`) rather than with a header.
 
-The `npx @rafaelfcarneiro/fintrack setup <tool>` command writes stdio configs only; for the container, edit the config by hand as above.
+The `npx @rafaelfcarneiro/fintrack@latest setup <tool>` command writes stdio configs only; for the container, edit the config by hand as above.
 
 ---
 

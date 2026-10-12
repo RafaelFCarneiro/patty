@@ -1,54 +1,23 @@
 #!/usr/bin/env node
-import { randomUUID } from 'node:crypto';
-import { createRequire } from 'node:module';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AddressInfo } from 'node:net';
-import { AUTH_APPLIERS, prepareAuth } from './authRuntime.js';
-import { CliCommand } from './common/cli.js';
+import { prepareAuth } from './authRuntime.js';
+import { version } from './common/buildVersion.js';
 import { httpOrigin, isPortInUse, portInUseMessage } from './common/net.js';
 import { loadConfig, McpTransport, type Config } from './config.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
+import { keychainSignInStore } from './diplomat/auth/signInStore.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
 import { openDatabase } from './diplomat/db/driver.js';
-import { createEngineContext } from './diplomat/db/engine.js';
-import type { ApplierRegistry } from './diplomat/db/effects.js';
-import { createChangeBus, runEffects, runEffectsSequence, type ChangeBus } from '@rfc0/effect-runner';
-import { createLocaleResolver } from './diplomat/db/localeCache.js';
-import { accountApplier, accountsRepo } from './diplomat/db/repos/accounts.js';
-import { billApplier, billsRepo } from './diplomat/db/repos/bills.js';
-import { budgetApplier, budgetsRepo } from './diplomat/db/repos/budgets.js';
-import { categoriesRepo, categoryApplier } from './diplomat/db/repos/categories.js';
-import { subCategoriesRepo } from './diplomat/db/repos/subCategories.js';
-import { correlationsRepo } from './diplomat/db/repos/correlations.js';
-import { creditCardApplier, creditCardsRepo } from './diplomat/db/repos/creditCards.js';
-import { currenciesRepo } from './diplomat/db/repos/currencies.js';
-import { currencyRateApplier, currencyRatesRepo } from './diplomat/db/repos/currencyRates.js';
-import { dashboardApplier, dashboardsRepo } from './diplomat/db/repos/dashboards.js';
-import { merchantApplier, merchantCategoryApplier, merchantsRepo } from './diplomat/db/repos/merchants.js';
-import { recurringRepo, recurringRuleApplier } from './diplomat/db/repos/recurring.js';
-import { settingsApplier, settingsRepo } from './diplomat/db/repos/settings.js';
-import { tagApplier, tagsRepo } from './diplomat/db/repos/tags.js';
-import { transactionApplier, transactionsRepo } from './diplomat/db/repos/transactions.js';
-import { transactionTagApplier } from './diplomat/db/repos/transactionTags.js';
-import { healthRepo } from './diplomat/db/repos/health.js';
+import { DatabaseAheadError } from './diplomat/db/versionGuard.js';
 import type { HttpAuth } from './diplomat/http/context.js';
+import { ownerGate } from './diplomat/mcp/gate.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
-import { ACCOUNT_ENTITY_TAG } from './models/account.js';
-import { BILL_ENTITY_TAG } from './models/bill.js';
-import { BUDGET_ENTITY_TAG } from './models/budget.js';
-import { CATEGORY_ENTITY_TAG } from './models/category.js';
-import { CREDIT_CARD_ENTITY_TAG } from './models/creditCard.js';
-import { CURRENCY_RATE_ENTITY_TAG } from './models/currencyRate.js';
-import { DASHBOARD_ENTITY_TAG } from './models/dashboard.js';
-import { SETTINGS_ENTITY_TAG } from './models/locale.js';
-import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from './models/merchant.js';
-import { RECURRING_ENTITY_TAG } from './models/recurring.js';
-import { TAG_ENTITY_TAG } from './models/tag.js';
-import { TRANSACTION_ENTITY_TAG } from './models/transaction.js';
-import { TRANSACTION_TAG_ENTITY_TAG } from './models/transactionTag.js';
+import { createStdioSession } from './diplomat/mcp/stdioSession.js';
+import { dbIdOf, keychainAccount } from './logic/auth.js';
+import { createRuntime } from './runtime.js';
+import type { ChangeBus } from '@rfc0/effect-runner';
 import type { HttpSidecar } from './server.js';
-
-const require = createRequire(import.meta.url);
-const { version } = require('../package.json') as { version: string };
 
 /**
  * Lazily imports the HTTP composition module (server.ts) so Fastify — and the whole REST /
@@ -59,11 +28,6 @@ const { version } = require('../package.json') as { version: string };
 const loadServerModule = () => import('./server.js');
 
 const loadCliModule = () => import('./cli.js');
-
-// stderr only — stdout carries the MCP protocol on the stdio transport (ADR-007).
-const reportChangeError = (cause: unknown): void => {
-  console.error('[fintrack] change notification failed:', cause);
-};
 
 const maybeStartSidecar = async (
   deps: Deps,
@@ -91,7 +55,8 @@ const maybeStartSidecar = async (
 };
 
 const main = async (): Promise<void> => {
-  if (CliCommand.safeParse(process.argv[2]).success) {
+  // Any argument is a command: an unknown one is a usage error, never a reason to start a server.
+  if (process.argv.length > 2) {
     const { runCli } = await loadCliModule();
     // Not process.exit: let the event loop drain, so everything the command printed has been flushed.
     process.exitCode = await runCli(process.argv.slice(2));
@@ -103,67 +68,40 @@ const main = async (): Promise<void> => {
   const db = await openDatabase(config);
   await bootstrap(db);
 
-  const settingsR = settingsRepo(db);
-  const localeResolver = createLocaleResolver(settingsR, config.FINTRACK_LOCALE);
+  const runtime = createRuntime(db, config);
+  const { deps, runEffects: boundRunEffects, runEffectsSequence: boundRunEffectsSequence, resetLocale } = runtime;
 
-  const deps: Deps = {
-    accounts: accountsRepo(db),
-    bills: billsRepo(db),
-    budgets: budgetsRepo(db),
-    categories: categoriesRepo(db),
-    subCategories: subCategoriesRepo(db),
-    correlations: correlationsRepo(db),
-    creditCards: creditCardsRepo(db),
-    currencies: currenciesRepo(db),
-    currencyRates: currencyRatesRepo(db),
-    dashboards: dashboardsRepo(db),
-    health: healthRepo(db),
-    merchants: merchantsRepo(db),
-    recurring: recurringRepo(db),
-    settings: settingsR,
-    tags: tagsRepo(db),
-    transactions: transactionsRepo(db),
-    clock: () => new Date(),
-    newId: () => randomUUID(),
-    locale: localeResolver.locale,
-    rateStaleness: { fiatHours: config.FIAT_RATE_STALE_HOURS, cryptoHours: config.CRYPTO_RATE_STALE_HOURS },
-  };
-
-  const applierRegistry: ApplierRegistry = {
-    [ACCOUNT_ENTITY_TAG]: accountApplier,
-    [TRANSACTION_ENTITY_TAG]: transactionApplier,
-    [TRANSACTION_TAG_ENTITY_TAG]: transactionTagApplier,
-    [MERCHANT_ENTITY_TAG]: merchantApplier,
-    [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
-    [BILL_ENTITY_TAG]: billApplier,
-    [BUDGET_ENTITY_TAG]: budgetApplier,
-    [TAG_ENTITY_TAG]: tagApplier,
-    [CATEGORY_ENTITY_TAG]: categoryApplier,
-    [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
-    [CURRENCY_RATE_ENTITY_TAG]: currencyRateApplier,
-    [RECURRING_ENTITY_TAG]: recurringRuleApplier,
-    [DASHBOARD_ENTITY_TAG]: dashboardApplier,
-    [SETTINGS_ENTITY_TAG]: settingsApplier,
-    ...AUTH_APPLIERS,
-  };
-
-  const changeBus = createChangeBus({ onError: reportChangeError });
-  const engineContext = createEngineContext(db, reportChangeError);
-  const boundRunEffects: RunEffects = (flow) => runEffects(engineContext, applierRegistry, flow, changeBus.publish);
-  const boundRunEffectsSequence: RunEffectsSequence = (items, flowFor) =>
-    runEffectsSequence(engineContext, applierRegistry, items, flowFor, changeBus.publish);
-
-  // Sessions guard the HTTP surface only: stdio is spawned by the user and acts as the owner.
-  const { auth, issueAndAnnounceSetup } = await prepareAuth(config, db, boundRunEffects);
+  // Sessions guard the HTTP surface; the stdio channel signs in too (ADR-034), unless auth is explicitly disabled.
+  const prepared = await prepareAuth(config, db, boundRunEffects);
+  const { auth, issueAndAnnounceSetup } = prepared;
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
-    const server = await connectStdio(
-      deps,
-      version,
-      boundRunEffects,
-      boundRunEffectsSequence,
-      localeResolver.resetLocale,
-    );
+    // Where the sign-in link points: the sidecar this process bound, else the configured address (another FinTrack
+    // process owns the port and serves /ui/connect from the same database), else nowhere when HTTP is off.
+    let boundOrigin: string | null = null;
+    const signInOrigin = (): string | null =>
+      config.FINTRACK_HTTP ? (config.PUBLIC_URL ?? boundOrigin ?? httpOrigin(config.HOST, config.PORT)) : null;
+
+    // The connected server reports who spawned it (`initialize`'s clientInfo); the session asks only when it needs to.
+    const connected: { server?: McpServer } = {};
+    const session = prepared.stdio
+      ? createStdioSession({
+          deps: prepared.stdio.deps,
+          run: prepared.stdio.run,
+          profile: config.FINTRACK_PROFILE,
+          envToken: config.FINTRACK_TOKEN,
+          store: keychainSignInStore(
+            keychainAccount(config.FINTRACK_PROFILE, dbIdOf(prepared.stdio.deps.secrets.hashSecret(config.DB_PATH))),
+          ),
+          origin: signInOrigin,
+          clientInfo: () => connected.server?.server.getClientVersion(),
+        })
+      : undefined;
+
+    const server = await connectStdio(deps, version, boundRunEffects, boundRunEffectsSequence, resetLocale, {
+      gate: session ? () => session.resolve() : ownerGate,
+    });
+    connected.server = server;
 
     // A bind failure inside startHttpSidecar is caught there and is never fatal — the stdio
     const sidecar = await maybeStartSidecar(
@@ -171,8 +109,8 @@ const main = async (): Promise<void> => {
       version,
       boundRunEffects,
       boundRunEffectsSequence,
-      localeResolver.resetLocale,
-      changeBus.subscribe,
+      resetLocale,
+      runtime.changeBus.subscribe,
       config,
       auth,
     );
@@ -180,7 +118,8 @@ const main = async (): Promise<void> => {
     // bind (another process owns the port and has announced its own code) this process must not replace that
     // code with one nobody sees.
     if (sidecar?.listening) {
-      await issueAndAnnounceSetup(httpOrigin(config.HOST, (sidecar.app.server.address() as AddressInfo).port));
+      boundOrigin = httpOrigin(config.HOST, (sidecar.app.server.address() as AddressInfo).port);
+      await issueAndAnnounceSetup(boundOrigin);
     }
 
     // 'close' commonly follows 'end' on stdin, and a client can also send SIGINT/SIGTERM around
@@ -192,6 +131,8 @@ const main = async (): Promise<void> => {
       void Promise.allSettled([
         server.close().catch((err: unknown) => console.error(err)),
         sidecar?.listening ? sidecar.app.close().catch((err: unknown) => console.error(err)) : Promise.resolve(),
+        // A "this session only" sign-in ends with the session (best effort — its 12-hour cap covers a crash).
+        session?.close(),
       ]).finally(() => process.exit(0));
     };
     process.once('SIGINT', shutdown);
@@ -211,8 +152,8 @@ const main = async (): Promise<void> => {
     version,
     boundRunEffects,
     boundRunEffectsSequence,
-    localeResolver.resetLocale,
-    changeBus.subscribe,
+    resetLocale,
+    runtime.changeBus.subscribe,
     { auth, trustProxy: config.TRUST_PROXY },
   );
 
@@ -243,6 +184,7 @@ main().catch((e: unknown) => {
     console.error(portInUseMessage(e));
     process.exit(1);
   }
-  console.error(e);
+  // Already a complete, actionable diagnosis — a stack trace would only bury it.
+  console.error(e instanceof DatabaseAheadError ? e.message : e);
   process.exit(1);
 });

@@ -5,7 +5,7 @@ import { AUTH_POSITIONALS, EXIT_FAILURE, EXIT_OK, SETUP_POSITIONALS } from '../.
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
 import { PROMPT_MESSAGES } from '../../../src/diplomat/cli/prompt.js';
 import { accessTokens, sessions, users } from '../../../src/diplomat/db/schema.js';
-import { OWNER_USER_ID, UserRole } from '../../../src/models/auth.js';
+import { DEFAULT_PROFILE, OWNER_USER_ID, UserRole } from '../../../src/models/auth.js';
 import type { AppContext } from '../app-builder.js';
 import {
   authDepsOf,
@@ -15,6 +15,7 @@ import {
   formBody,
   LOOPBACK_HOST,
   LOOPBACK_ORIGIN,
+  memoryStore,
   mintToken,
   PASSWORD,
   sessionCookieOf,
@@ -33,11 +34,22 @@ const harness = (ctx: AppContext, input: { stdin?: string; terminal?: boolean } 
   const out: string[] = [];
   const err: string[] = [];
   const io: CliIo = {
-    openShell: async () => ({ deps: authDepsOf(ctx), run: bindAuthRunEffects(ctx.runEffects), close: () => undefined }),
+    openShell: async () => ({
+      deps: authDepsOf(ctx),
+      run: bindAuthRunEffects(ctx.runEffects),
+      close: () => undefined,
+      authRequired: true,
+      defaultProfile: DEFAULT_PROFILE,
+      store: () => memoryStore(),
+      startServer: async () => ({ origin: LOOPBACK_ORIGIN, close: async () => undefined }),
+    }),
     openTerminal: () => null,
     readPasswordFromStdin: async () => input.stdin ?? '',
     out: (line) => out.push(line),
     err: (line) => err.push(line),
+    version: '0.0.0-test',
+    wait: async () => undefined,
+    interruptSignal: () => new AbortController().signal,
   };
   return { io, out, err, run: (...args) => runAuthCommand(args, io) };
 };
