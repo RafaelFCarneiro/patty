@@ -402,6 +402,8 @@ describe('/ui/access/tokens lists stdio sign-ins next to the tokens', () => {
     expect(body).not.toContain('Claude <Desktop>');
     expect(body).toMatch(/<td>default<\/td>/);
     expect(body).toContain('read + write');
+    expect(body).toContain('<th>Signed in</th>'); // the token's creation is the redemption, not the approval
+    expect(body).not.toContain('<th>Approved</th>');
     expect(body).toContain('token-status-active');
     expect(body).toMatch(/\/ui\/access\/tokens\/[^/]+\/revoke/);
     expect(body).toContain('No access tokens yet.'); // the PAT table is separate and empty

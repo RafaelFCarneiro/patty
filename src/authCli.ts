@@ -52,6 +52,9 @@ export type CliIo = {
   interruptSignal: () => AbortSignal;
 };
 
+/** Lazy: only `login` serves a page, so the other commands never load the server composition. */
+const loadSignInServerModule = () => import('./signInServer.js');
+
 const openShell = async (): Promise<Shell> => {
   const config = loadConfig();
   const db = await openDatabase(config);
@@ -71,7 +74,7 @@ const openShell = async (): Promise<Shell> => {
     authRequired: config.FINTRACK_AUTH === AuthMode.enum.required,
     defaultProfile: config.FINTRACK_PROFILE,
     store: (profile) => keychainSignInStore(keychainAccount(profile, dbId)),
-    startServer: async () => (await import('./signInServer.js')).startSignInServer(config, db),
+    startServer: async () => (await loadSignInServerModule()).startSignInServer(config, db),
   };
 };
 

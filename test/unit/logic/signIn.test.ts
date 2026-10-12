@@ -22,6 +22,7 @@ import {
   redeemedGrant,
   redeemPlan,
   signInExpiry,
+  signInOrigin,
   summarizeToken,
   tokenAdmitsVia,
   tokenPrincipal,
@@ -441,5 +442,29 @@ describe('grantRequestOf never exposes secrets', () => {
     const request = grantRequestOf(pendingGrant());
     expect(JSON.stringify(request)).not.toContain('sha(device)');
     expect(request).not.toHaveProperty('deviceCodeHash');
+  });
+});
+
+describe('signInOrigin — what origin a stdio sign-in link may name', () => {
+  const base = { httpEnabled: true, publicUrl: undefined, boundOrigin: null, host: '127.0.0.1', port: 51737 };
+
+  it('names no origin when there is no HTTP server', () => {
+    expect(signInOrigin({ ...base, httpEnabled: false, publicUrl: 'https://fin.example.com' })).toBeNull();
+  });
+
+  it('prefers PUBLIC_URL, then the origin the sidecar bound', () => {
+    expect(signInOrigin({ ...base, publicUrl: 'https://fin.example.com', boundOrigin: 'http://127.0.0.1:1' })).toBe(
+      'https://fin.example.com',
+    );
+    expect(signInOrigin({ ...base, boundOrigin: 'http://127.0.0.1:54321' })).toBe('http://127.0.0.1:54321');
+  });
+
+  it('falls back to the configured address when the sidecar could not bind — another FinTrack may own the port', () => {
+    expect(signInOrigin(base)).toBe('http://127.0.0.1:51737');
+  });
+
+  it('never names a port-0 address before the sidecar has bound: that is no listener at all', () => {
+    expect(signInOrigin({ ...base, port: 0 })).toBeNull();
+    expect(signInOrigin({ ...base, port: 0, boundOrigin: 'http://127.0.0.1:54321' })).toBe('http://127.0.0.1:54321');
   });
 });

@@ -41,7 +41,7 @@ export const clientGrantsRepo = (db: Db): ClientGrantsRepo => ({
           eq(clientGrants.status, GrantStatus.enum.redeemed),
         ),
       )
-      .orderBy(desc(clientGrants.createdAt))
+      .orderBy(desc(clientGrants.approvedAt))
       .limit(1);
     return row ? clientGrantAdapters.dbToModel(row) : null;
   },

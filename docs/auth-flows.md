@@ -14,7 +14,7 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 | Bootstrap | `src/diplomat/db/bootstrap.ts`, `safetyCopy.ts`, `migrationLock.ts` | Migrations, the owner row, the pre-migration backup |
 | AuthRuntime | `src/authRuntime.ts` | Builds the identity deps (shared with the CLI and the stdio session), prunes sessions and expired sign-in requests, issues and prints the setup code |
 | Cli | `src/cli.ts`, `src/authCli.ts`, `src/loginCli.ts`, `src/diplomat/cli/{prompt,terminal}.ts` | `fintrack setup [client]`, `auth setup`, `auth reset-password`, `login`, `logout`: opens the database like the server (no stdio), prompts with no echo, runs the controller flows; an unknown command prints the usage and exits non-zero |
-| SignInServer | `src/signInServer.ts` | Where `login` sends the browser: a FinTrack already answering `/api/health` on `HOST:PORT`, else a temporary loopback app for the length of the login |
+| SignInServer | `src/signInServer.ts` | Where `login` sends the browser: always a temporary loopback app of the login's own process, on a free port, for the length of the login |
 | StdioSession | `src/diplomat/mcp/stdioSession.ts`, `gate.ts`, `scopes.ts` | The stdio channel's identity: resolves the credential per call (`FINTRACK_TOKEN` → keychain → none), asks for a sign-in, polls, saves; the scope guard asks it who is calling |
 | SignInStore | `src/diplomat/auth/signInStore.ts` | The OS keychain entry `signin:<profile>:<dbId>` of a saved sign-in |
 | AuthHook | `src/diplomat/http/hooks/auth.ts` — `registerAuthHook` (decisions in `src/logic/auth.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, credential precedence (bearer vs. cookie), session/token resolution, the CSRF check, the route-scope check, challenges and redirects |
@@ -505,12 +505,8 @@ sequenceDiagram
     Cli->>DB: open + bootstrap (the version guard runs first)
     Cli->>Cli: auth disabled? owner unclaimed? → say so, exit 1
     Cli->>SS: where is /ui/connect?
-    alt a FinTrack answers /api/health on HOST:PORT
-        SS-->>Cli: that origin
-    else none
-        SS->>SS: start a temporary loopback app (authentication required) — closed when the login ends
-        SS-->>Cli: its origin
-    end
+    SS->>SS: start a temporary app on a free LOOPBACK port (authentication required, same database) — closed when the login ends
+    SS-->>Cli: its origin (a server already running on HOST:PORT is not reused: it may have opened another database)
     Cli->>G: startGrant {fintrack login, version, profile, channel cli, hint scope + duration}
     Cli-->>Op: Open ORIGIN/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH. Waiting… (Ctrl-C cancels)
     Note over Op,DB: the person approves in the browser as in diagram 8 — "this session only" is not offered to a cli request

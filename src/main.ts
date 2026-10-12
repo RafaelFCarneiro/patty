@@ -14,7 +14,7 @@ import type { HttpAuth } from './diplomat/http/context.js';
 import { ownerGate } from './diplomat/mcp/gate.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
 import { createStdioSession } from './diplomat/mcp/stdioSession.js';
-import { dbIdOf, keychainAccount } from './logic/auth.js';
+import { dbIdOf, keychainAccount, signInOrigin } from './logic/auth.js';
 import { createRuntime } from './runtime.js';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import type { HttpSidecar } from './server.js';
@@ -76,11 +76,16 @@ const main = async (): Promise<void> => {
   const { auth, issueAndAnnounceSetup } = prepared;
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
-    // Where the sign-in link points: the sidecar this process bound, else the configured address (another FinTrack
-    // process owns the port and serves /ui/connect from the same database), else nowhere when HTTP is off.
+    // Where the sign-in link points (decided in `logic/auth.ts`); the sidecar binds after the session exists.
     let boundOrigin: string | null = null;
-    const signInOrigin = (): string | null =>
-      config.FINTRACK_HTTP ? (config.PUBLIC_URL ?? boundOrigin ?? httpOrigin(config.HOST, config.PORT)) : null;
+    const linkOrigin = (): string | null =>
+      signInOrigin({
+        httpEnabled: config.FINTRACK_HTTP,
+        publicUrl: config.PUBLIC_URL,
+        boundOrigin,
+        host: config.HOST,
+        port: config.PORT,
+      });
 
     // The connected server reports who spawned it (`initialize`'s clientInfo); the session asks only when it needs to.
     const connected: { server?: McpServer } = {};
@@ -93,7 +98,7 @@ const main = async (): Promise<void> => {
           store: keychainSignInStore(
             keychainAccount(config.FINTRACK_PROFILE, dbIdOf(prepared.stdio.deps.secrets.hashSecret(config.DB_PATH))),
           ),
-          origin: signInOrigin,
+          origin: linkOrigin,
           clientInfo: () => connected.server?.server.getClientVersion(),
         })
       : undefined;

@@ -216,7 +216,7 @@ So the sign-in happens outside the protocol, and what it produces is read from t
 - **Expiry is absolute**, counted from your approval; using the sign-in never extends it. When it ends, the next call shows a fresh link.
 - A restart of the client needs no new approval while a saved sign-in is still valid ("silently signed in").
 - **Every sign-in is visible and revocable** at [`/ui/access/tokens`](#personal-access-tokens) — a "Claude sign-ins" table (client,
-  profile, access, approved, expires, last used) beside your personal access tokens. Revoking takes effect on that client's **next call**: the
+  profile, access, signed in, expires, last used) beside your personal access tokens. Revoking takes effect on that client's **next call**: the
   stdio process re-validates its credential on every tool call, resource read and prompt get, and deletes a saved credential that
   turns out invalid.
 - A sign-in is a token (`kind: stdio`), authenticated, listed and revoked through the same code as a personal access token. It is accepted only on the
@@ -258,8 +258,8 @@ npx @rafaelfcarneiro/fintrack@latest logout [--profile <p>]
 
 `login` runs the same flow from a terminal: it prints the link and the code, waits for you to approve, and saves the result to the keychain profile (if the keychain
 refuses, it revokes the sign-in again rather than leave a secret nothing can find). `--duration` and `--scope` only **pre-select** the page; you still choose. It needs
-the dashboard to be reachable: if a FinTrack server answers on `HOST:PORT` it uses that one, otherwise it **starts a temporary loopback server for the length of the
-login** (authentication required) and closes it afterwards. Ctrl-C cancels cleanly (exit 130). Under `FINTRACK_AUTH=disabled` there is nothing to sign in to and it says so.
+no dashboard to be running: it **starts a temporary server of its own on a free loopback port for the length of the
+login** (authentication required, the same database) and closes it afterwards — it never reuses a server already on `HOST:PORT`, which may have opened a different database. Ctrl-C cancels cleanly (exit 130). Under `FINTRACK_AUTH=disabled` there is nothing to sign in to and it says so.
 `logout` revokes the profile's saved sign-in and deletes the keychain entry; with nothing saved it says so and succeeds.
 
 ### Phishing and its limits

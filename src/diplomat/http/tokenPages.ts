@@ -90,7 +90,7 @@ const signInsTable = (signIns: readonly AccessTokenSummary[]): string =>
   signIns.length === 0
     ? '<p class="auth-hint">No Claude sign-ins yet.</p>'
     : '<div class="tokens-scroll"><table class="tokens-table"><thead><tr>' +
-      '<th>Client</th><th>Profile</th><th>Access</th><th>Approved</th><th>Expires</th><th>Last used</th><th>Status</th><th></th>' +
+      '<th>Client</th><th>Profile</th><th>Access</th><th>Signed in</th><th>Expires</th><th>Last used</th><th>Status</th><th></th>' +
       `</tr></thead><tbody>${signIns.map(signInRow).join('')}</tbody></table></div>`;
 
 const table = (tokens: readonly AccessTokenSummary[]): string =>

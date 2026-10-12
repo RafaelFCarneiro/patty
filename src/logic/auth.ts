@@ -1,5 +1,5 @@
 import * as R from 'remeda';
-import { HTTP_SCHEME_PREFIX, hostnameOfHostHeader, isLoopbackHost } from '../common/net.js';
+import { HTTP_SCHEME_PREFIX, hostnameOfHostHeader, httpOrigin, isLoopbackHost } from '../common/net.js';
 import {
   BEARER_HEADER,
   BEARER_METHOD_HEADER,
@@ -591,6 +591,25 @@ export const keychainAccount = (profile: string, dbId: string): string =>
 
 /** `FINTRACK_TOKEN` must look like one of ours before it is even looked up. */
 export const isTokenShaped = (raw: string): boolean => raw.startsWith(TOKEN_PREFIX) && raw.length <= MAX_TOKEN_LENGTH;
+
+/**
+ * The origin a stdio session's sign-in link names, or `null` when it cannot honestly name one (the message then says to
+ * use `login` or `FINTRACK_TOKEN`): `PUBLIC_URL`; else the sidecar this process bound; else the configured `HOST:PORT`,
+ * where another FinTrack process may own the port and serve `/ui/connect` from the same database — but never a port-0
+ * address, which names no listener at all.
+ */
+export const signInOrigin = (fields: {
+  httpEnabled: boolean;
+  publicUrl: string | undefined;
+  boundOrigin: string | null;
+  host: string;
+  port: number;
+}): string | null => {
+  if (!fields.httpEnabled) return null;
+  if (fields.publicUrl !== undefined) return fields.publicUrl;
+  if (fields.boundOrigin !== null) return fields.boundOrigin;
+  return fields.port === 0 ? null : httpOrigin(fields.host, fields.port);
+};
 
 export const connectUrl = (origin: string, userCode: string): string =>
   `${origin}${CONNECT_PATH}?${CONNECT_CODE_PARAM}=${userCode}`;

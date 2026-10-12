@@ -418,7 +418,7 @@ lifted from the keychain is not also a key to `/api` and `/mcp`). Expiry choices
 (`GET|POST /ui/access/tokens` — creation re-asks the login password (step-up) and shares the login attempt limiter — and `POST /ui/access/tokens/:id/revoke`; server-rendered by `tokenPages.ts`, same CSP/no-store headers as the
 sign-in pages through `formPages.ts`) — **session-only**: browser HTML behind the cookie and the CSRF check, never reachable
 with a bearer (the hook does not accept one on `/ui`, and each route also insists on `via: session`). There is no `/api` or MCP
-way to manage tokens. The same page lists stdio sign-ins (`kind: stdio`: client as reported, profile, access, approved, expires, last used) in a table of their own, with the same revoke. The shell's sidebar links to the page only when auth is `required` (the `AUTH_CONTROLS_MARKER`, next to logout).
+way to manage tokens. The same page lists stdio sign-ins (`kind: stdio`: client as reported, profile, access, signed in, expires, last used) in a table of their own, with the same revoke. The shell's sidebar links to the page only when auth is `required` (the `AUTH_CONTROLS_MARKER`, next to logout).
 
 **CSRF.** After authentication, an unsafe method authenticated by the session cookie (not a bearer) must declare (`Origin`, else `Referer`)
 an origin in `allowedOrigins(PUBLIC_URL, Host)` — `PUBLIC_URL`, plus the request's own origin when its `Host` is
@@ -484,8 +484,7 @@ holds a credential — except under an explicit `FINTRACK_AUTH=disabled`, where 
   warning; the radios come from the enums. An unknown, expired or answered code is the same neutral `invalid_grant` page.
 - *Terminal:* `src/loginCli.ts` — `fintrack login [--profile] [--duration] [--scope]` runs the same grant over the `cli` channel (flags only pre-select the page), polls, and keeps
   the result in the keychain profile (revoking it again if the keychain refuses); `fintrack logout [--profile]` revokes the saved sign-in (`revokeSignInByHash`) and deletes the entry, idempotently;
-  `setup`'s last step offers the same flow for the client's profile. `src/signInServer.ts` answers "where is `/ui/connect`": a FinTrack already answering `/api/health` on `HOST:PORT`, else a temporary
-  loopback app (`buildHttpApp`, auth required) for the duration of the login. The shared repos/appliers/runner assembly is `src/runtime.ts`'s `createRuntime` (also what `main.ts` uses).
+  `setup`'s last step offers the same flow for the client's profile. `src/signInServer.ts` starts the temporary loopback app (`buildHttpApp`, auth required, a free `LOOPBACK_HOST` port) that serves `/ui/connect` for the duration of the login — never a server already on `HOST:PORT`, which a healthy `/api/health` does not prove opened this database. The shared repos/appliers/runner assembly is `src/runtime.ts`'s `createRuntime` (also what `main.ts` uses).
 
 **Startup order** (`main.ts`, and every command that opens the database): `openDatabase` → `bootstrap` = **version guard** (`diplomat/db/versionGuard.ts`'s `assertDatabaseNotAhead`:
 the database's newest applied migration, `safetyCopy.ts`'s `lastAppliedMillis`, against the newest this build's journal ships — `logic/migration.ts`'s `isDatabaseAhead`; a database that is ahead throws

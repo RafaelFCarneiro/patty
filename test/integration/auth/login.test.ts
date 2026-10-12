@@ -288,6 +288,25 @@ describe('fintrack logout', () => {
     expect(r.storeFor('default').saved()).toBeNull();
   });
 
+  it('does not delete a newer sign-in another process saved while it was revoking', async () => {
+    const r = await signedInRig();
+    const store = r.storeFor('default');
+    const newer = 'ftk_saved-by-another-process';
+    const load = store.load.bind(store);
+    let loads = 0;
+    store.load = async () => {
+      loads += 1;
+      const token = await load();
+      if (loads === 1) await store.save(newer); // another `login` lands between our read and our delete
+      return token;
+    };
+
+    expect(await runLogout([], r.io)).toBe(EXIT_OK);
+
+    expect(store.saved()).toBe(newer);
+    expect(store.calls.clear).toBe(0);
+  });
+
   it('does not revoke a personal access token someone put in the keychain — only a stdio sign-in', async () => {
     const r = await rig();
     const { mintToken } = await import('./helpers.js');
@@ -386,16 +405,20 @@ describe('startSignInServer — where `fintrack login` sends the browser', () =>
     };
   };
 
-  it('uses a FinTrack server that already answers on HOST:PORT, and leaves it running', async () => {
+  it('does not reuse a FinTrack already running on HOST:PORT — it may have opened another database', async () => {
     const running = await createApp();
     await running.app.listen({ port: 0, host: '127.0.0.1' });
     const port = (running.app.server.address() as AddressInfo).port;
+    const mine = await createApp();
 
-    const server = await startSignInServer(await configFor(port), running.db);
-
-    expect(server.origin).toBe(`http://127.0.0.1:${port}`);
-    await server.close();
-    expect((await fetch(`${server.origin}/api/health`)).status).toBe(200);
+    const server = await startSignInServer(await configFor(port), mine.db);
+    try {
+      expect(server.origin).not.toBe(`http://127.0.0.1:${port}`);
+      expect((await fetch(`${server.origin}/api/health`)).status).toBe(200);
+    } finally {
+      await server.close();
+    }
+    expect((await fetch(`http://127.0.0.1:${port}/api/health`)).status).toBe(200); // the other one is untouched
   });
 
   it('serves /ui/connect itself, from a temporary loopback app with authentication required', async () => {
@@ -415,22 +438,14 @@ describe('startSignInServer — where `fintrack login` sends the browser', () =>
     await expect(fetch(`${server.origin}/api/health`)).rejects.toThrow();
   });
 
-  it('falls back to a free port when something that is not FinTrack holds the configured one', async () => {
-    const { createServer } = await import('node:http');
-    const squatter = createServer((_req, res) => res.end('not fintrack'));
-    await new Promise<void>((resolve) => squatter.listen(0, '127.0.0.1', resolve));
-    const taken = (squatter.address() as AddressInfo).port;
+  it('binds loopback only, whatever HOST is configured, and builds its origin from that', async () => {
     const ctx = await createApp();
+    const server = await startSignInServer({ ...(await configFor(0)), HOST: '0.0.0.0' }, ctx.db);
     try {
-      const server = await startSignInServer(await configFor(taken), ctx.db);
-      try {
-        expect(server.origin).not.toBe(`http://127.0.0.1:${taken}`);
-        expect((await fetch(`${server.origin}/api/health`)).status).toBe(200);
-      } finally {
-        await server.close();
-      }
+      expect(server.origin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect((await fetch(`${server.origin}/api/health`)).status).toBe(200);
     } finally {
-      await new Promise((resolve) => squatter.close(resolve));
+      await server.close();
     }
   });
 });

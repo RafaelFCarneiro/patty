@@ -159,7 +159,8 @@ export const runLogout = async (args: readonly string[], io: CliIo): Promise<num
     }
     const revoked = await shell.run(() => revokeSignInByHash(shell.deps, shell.deps.secrets.hashSecret(token)));
     if (revoked.isErr()) return exitCodeOf(fail(io, formatAppError(revoked.error)));
-    await store.clear();
+    // Another process may have saved a newer sign-in since `load()`: only remove the entry if it is still this one.
+    if ((await store.load()) === token) await store.clear();
     io.out(LOGIN_MESSAGES.signedOut(profile));
     return EXIT_OK;
   });

@@ -417,6 +417,24 @@ describe('findConsent — what the consent page shows and pre-selects', () => {
     });
   });
 
+  it('remembers the most recently APPROVED choice, not the most recently requested', async () => {
+    const w = await world();
+    const older = await start(w); // requested first…
+    const newer = await start(w); // …requested second
+    await w.run(() => approveGrant(w.deps, w.session, { userCode: newer.userCode, access: 'read', duration: '7d' }));
+    await w.run(() => redeemGrant(w.deps, newer.deviceCode));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    // …but the OLDER request is approved last, so it is the person's latest completed choice.
+    await w.run(() => approveGrant(w.deps, w.session, { userCode: older.userCode, access: 'write', duration: '30d' }));
+    await w.run(() => redeemGrant(w.deps, older.deviceCode));
+
+    const next = await start(w);
+    expect((await findConsent(w.deps, OWNER_USER_ID, next.userCode))?.choice).toEqual({
+      access: 'write',
+      duration: '30d',
+    });
+  });
+
   it('does not remember an approval that was never redeemed, or a denial', async () => {
     const w = await world();
     const approvedOnly = await start(w);
