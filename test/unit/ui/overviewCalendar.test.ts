@@ -91,7 +91,8 @@ const loadOverviewSandbox = () => {
 
   vm.createContext(sandbox);
   vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });
-  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) => `${currency} ${value}`;
+  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) =>
+    `${currency} ${value}`;
   // formatCurrencyNoSymbol (the calendar cell's own formatter) reads currency metadata directly
   // off window.__fintrackCurrencies rather than through formatMoney — BTC's real 8 decimals here
   // is what lets the tests below tell "this flow correctly resolved to BTC" apart from "it fell

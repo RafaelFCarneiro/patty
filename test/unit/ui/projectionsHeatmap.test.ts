@@ -118,7 +118,8 @@ const loadProjectionsSandbox = () => {
 
   vm.createContext(sandbox);
   vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });
-  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) => `${currency} ${value}`;
+  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) =>
+    `${currency} ${value}`;
 
   const script = extractFragmentScript(readFileSync(PROJECTIONS_HTML_PATH, 'utf-8'));
   vm.runInContext(script, sandbox, { filename: PROJECTIONS_HTML_PATH });
@@ -236,7 +237,7 @@ describe('renderHeatMap (ui/dashboards/projections.html)', () => {
     expect(foot).toContain('BRL 100 / USD 5');
   });
 
-  it("scales a cell's color intensity against its OWN currency's max, never a cross-currency blend", () => {
+  it('scales a cell\'s color intensity against its OWN currency\'s max, never a cross-currency blend', () => {
     // Regression test: comparing a 0.0001 BTC cell's raw units directly against a 1000 BRL cell's
     // would always crush BTC toward the opacity floor. A lone BTC cell (nothing else to compare it
     // against in its own currency) must render at full intensity (background alpha 1, i.e. no
@@ -268,7 +269,7 @@ describe('renderProjectionLineChart (ui/dashboards/projections.html, via renderH
   const rentTx = (overrides: Partial<Tx>): Tx =>
     tx({ categoryId: 'cat-rent', categoryName: 'Aluguel', type: 'income', ...overrides });
 
-  it("renders only the representative currency's monthly totals, excluding every other currency", () => {
+  it('renders only the representative currency\'s monthly totals, excluding every other currency', () => {
     const { sandbox } = loadProjectionsSandbox();
     sandbox.categories = [{ id: 'cat-rent', name: 'Aluguel', kind: 'income' }];
     sandbox.projectionMonths = [SEPT_2026, OCT_2026];

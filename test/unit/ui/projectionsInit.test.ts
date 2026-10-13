@@ -131,7 +131,8 @@ const loadProjectionsSandboxWithControllableStatus = () => {
 
   vm.createContext(sandbox);
   vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });
-  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) => `${currency} ${value}`;
+  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) =>
+    `${currency} ${value}`;
 
   const script = extractFragmentScript(readFileSync(PROJECTIONS_HTML_PATH, 'utf-8'));
   vm.runInContext(script, sandbox, { filename: PROJECTIONS_HTML_PATH });

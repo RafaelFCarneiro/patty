@@ -38,11 +38,12 @@ export const DB_ID_LENGTH = 12;
 
 /** The OS keychain could not be read — as opposed to holding nothing. A locked or missing keychain must not look like
  *  "not signed in" to a command that is about to tell a person they are signed out. */
-export type KeychainFailure = { code: 'keychain_unavailable'; reason: string };
+export const KeychainFailureCode = z.enum(['keychain_unavailable']);
+export type KeychainFailure = { code: typeof KeychainFailureCode.enum.keychain_unavailable; reason: string };
 
 export const keychainFailures = {
   unavailable: (cause: unknown): KeychainFailure => ({
-    code: 'keychain_unavailable',
+    code: KeychainFailureCode.enum.keychain_unavailable,
     reason: reasonOf(cause),
   }),
 };

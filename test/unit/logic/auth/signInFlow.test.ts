@@ -389,10 +389,10 @@ describe('the keychain, and what to do once it has been looked at', () => {
 });
 
 describe('a keychain that cannot be read where it must be', () => {
-  it.each([cli, stdio])('ends the attempt with the keychain_unavailable report and nothing else', (config) => {
+  it.each([cli, stdio])('ends the attempt with the keychain_unreadable report and nothing else', (config) => {
     expect(nextStep(IDLE, { kind: O.saved_unreadable }, config)).toEqual({
       state: { kind: S.failed },
-      effects: [present({ kind: P.keychain_unavailable })],
+      effects: [present({ kind: P.keychain_unreadable })],
     });
   });
 });

@@ -116,7 +116,8 @@ const loadComparativeSandbox = () => {
 
   vm.createContext(sandbox);
   vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });
-  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) => `${currency} ${value}`;
+  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) =>
+    `${currency} ${value}`;
 
   const script = extractFragmentScript(readFileSync(COMPARATIVE_HTML_PATH, 'utf-8'));
   vm.runInContext(script, sandbox, { filename: COMPARATIVE_HTML_PATH });
@@ -262,7 +263,7 @@ describe('renderCategoryColumns sort/percentage (ui/dashboards/comparative.html)
 });
 
 describe('renderComparativeCharts (ui/dashboards/comparative.html)', () => {
-  it("renders only the representative currency's series, excluding every other currency", () => {
+  it('renders only the representative currency\'s series, excluding every other currency', () => {
     const { sandbox } = loadComparativeSandbox();
     withMonth(sandbox);
     sandbox.allTransactions = [

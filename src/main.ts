@@ -10,11 +10,14 @@ const loadCliModule = () => import('./composition/cli.js');
 const loadStdioModule = () => import('./composition/stdio.js');
 const loadHttpModule = () => import('./composition/http.js');
 
+/** The exit status of a process that could not start. */
+const EXIT_FAILURE = 1;
+
 /** A database a newer build has migrated: the complete diagnosis, no stack trace, exit 1. */
 const refuseIfAhead = (started: Result<void, DatabaseAhead>): void => {
   if (started.isOk()) return;
   console.error(databaseAheadMessage(started.error.version));
-  process.exit(1);
+  process.exit(EXIT_FAILURE);
 };
 
 const main = async (): Promise<void> => {
@@ -38,9 +41,9 @@ const main = async (): Promise<void> => {
 main().catch((e: unknown) => {
   if (isPortInUse(e)) {
     console.error(portInUseMessage(e));
-    process.exit(1);
+    process.exit(EXIT_FAILURE);
   }
-  // Already a complete, actionable diagnosis — a stack trace would only bury it.
+  // Only unexpected errors get here (a refused start is a Result, handled above): the stack is the diagnosis.
   console.error(e);
-  process.exit(1);
+  process.exit(EXIT_FAILURE);
 });

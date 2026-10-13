@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DatabaseAheadCode } from '../../../src/models/database.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
@@ -44,7 +45,7 @@ describe('the version guard is re-checked before seeding', () => {
       `\n--> statement-breakpoint\nINSERT INTO "${MIGRATIONS_TABLE}" (hash, created_at) VALUES ('newer-build', ${Date.now() + FAR_FUTURE_MS});`,
     );
 
-    expect((await bootstrap(db, folder))._unsafeUnwrapErr().code).toBe('database_ahead');
+    expect((await bootstrap(db, folder))._unsafeUnwrapErr().code).toBe(DatabaseAheadCode.enum.database_ahead);
 
     expect(await db.all(sql`SELECT 1 FROM currencies`)).toEqual([]); // never seeded
   });

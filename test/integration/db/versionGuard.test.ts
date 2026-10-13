@@ -9,7 +9,7 @@ import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
 import { checkDatabaseNotAhead } from '../../../src/diplomat/db/versionGuard.js';
-import { databaseAheadMessage, databaseErrors } from '../../../src/models/database.js';
+import { DatabaseAheadCode, databaseAheadMessage, databaseErrors } from '../../../src/models/database.js';
 
 const TEST_KEY = 'f'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -100,7 +100,7 @@ describe('the version guard (ADR-034 §7)', () => {
   it('refuses an older build several migrations behind just the same', async () => {
     const db = await open();
     await bootstrap(db);
-    expect((await bootstrap(db, olderBuild(5)))._unsafeUnwrapErr().code).toBe('database_ahead');
+    expect((await bootstrap(db, olderBuild(5)))._unsafeUnwrapErr().code).toBe(DatabaseAheadCode.enum.database_ahead);
   });
 
   it('runs before the safety copy: no backup is made even though this build would have wanted one', async () => {

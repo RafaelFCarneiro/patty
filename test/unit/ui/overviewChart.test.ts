@@ -96,7 +96,8 @@ const loadOverviewSandbox = () => {
 
   vm.createContext(sandbox);
   vm.runInContext(readFileSync(MONEY_JS_PATH, 'utf-8'), sandbox, { filename: MONEY_JS_PATH });
-  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) => `${currency} ${value}`;
+  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) =>
+    `${currency} ${value}`;
 
   const script = extractFragmentScript(readFileSync(OVERVIEW_HTML_PATH, 'utf-8'));
   vm.runInContext(script, sandbox, { filename: OVERVIEW_HTML_PATH });
@@ -108,7 +109,7 @@ type Tx = { type: 'income' | 'expense' | 'transfer'; amount: number; currency?: 
 const tx = (overrides: Partial<Tx>): Tx => ({ type: 'expense', amount: 0, ...overrides });
 
 describe('renderCategoryChart (ui/dashboards/overview.html)', () => {
-  it("renders only the representative currency's categories, excluding every other currency", () => {
+  it('renders only the representative currency\'s categories, excluding every other currency', () => {
     const { sandbox } = loadOverviewSandbox();
     sandbox.allTransactions = [
       tx({ amount: 1000, currency: 'BRL', categoryName: 'Mercado' }),

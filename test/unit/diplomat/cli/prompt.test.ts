@@ -7,7 +7,7 @@ import {
   PROMPT_MESSAGES,
   type PromptIo,
 } from '../../../../src/diplomat/cli/prompt.js';
-import { promptEnded, type PromptEnded, type Terminal } from '../../../../src/diplomat/cli/terminal.js';
+import { invalidAnswer, promptEnded, type PromptEnded, type Terminal } from '../../../../src/diplomat/cli/terminal.js';
 import { PASSWORD_MIN_LENGTH } from '../../../../src/models/auth/password.js';
 
 const GOOD_PASSWORD = 'correct horse battery staple';
@@ -77,7 +77,7 @@ describe('collectNewCredentials at a terminal', () => {
     const bad = Array.from({ length: MAX_PROMPT_ATTEMPTS }, () => 'x');
     const { terminal, told } = scriptedTerminal({ visible: bad });
     const result = await collectNewCredentials(ioFor(terminal), { passwordStdin: false });
-    expect(result._unsafeUnwrapErr()).toBe('username must be at least 3 characters');
+    expect(result._unsafeUnwrapErr()).toEqual(invalidAnswer('username must be at least 3 characters'));
     expect(told).toHaveLength(MAX_PROMPT_ATTEMPTS - 1);
   });
 
@@ -96,7 +96,7 @@ describe('collectNewCredentials at a terminal', () => {
     const pairs = Array.from({ length: MAX_PROMPT_ATTEMPTS }, () => [GOOD_PASSWORD, `${GOOD_PASSWORD}!`]).flat();
     const { terminal, told } = scriptedTerminal({ visible: ['rafael'], secret: pairs });
     const result = await collectNewCredentials(ioFor(terminal), { passwordStdin: false });
-    expect(result._unsafeUnwrapErr()).toBe(PROMPT_MESSAGES.passwordsDiffer);
+    expect(result._unsafeUnwrapErr()).toEqual(invalidAnswer(PROMPT_MESSAGES.passwordsDiffer));
     expect(told).toEqual(Array.from({ length: MAX_PROMPT_ATTEMPTS - 1 }, () => PROMPT_MESSAGES.passwordsDiffer));
   });
 });
@@ -105,7 +105,7 @@ describe('collectNewCredentials without a terminal', () => {
   it('fails with instructions, never reading stdin, with no terminal and no --password-stdin', async () => {
     const io = ioFor(null);
     const result = await collectNewCredentials(io, { passwordStdin: false });
-    expect(result._unsafeUnwrapErr()).toBe(PROMPT_MESSAGES.noTerminal);
+    expect(result._unsafeUnwrapErr()).toEqual(invalidAnswer(PROMPT_MESSAGES.noTerminal));
     expect(PROMPT_MESSAGES.noTerminal).toContain('--password-stdin');
     // The same words serve `auth setup`, `setup <client>` and `auth reset-password`: no command is hard-coded.
     expect(PROMPT_MESSAGES.noTerminal).not.toContain('auth setup');
@@ -121,14 +121,16 @@ describe('collectNewCredentials without a terminal', () => {
   it('needs --username with --password-stdin, because stdin carries only the password', async () => {
     const io = ioFor(null, GOOD_PASSWORD);
     const result = await collectNewCredentials(io, { passwordStdin: true });
-    expect(result._unsafeUnwrapErr()).toBe(PROMPT_MESSAGES.usernameRequiredWithStdin);
+    expect(result._unsafeUnwrapErr()).toEqual(invalidAnswer(PROMPT_MESSAGES.usernameRequiredWithStdin));
     expect(io.readPasswordFromStdin).not.toHaveBeenCalled();
   });
 
   it('validates a piped password like a typed one, without retrying (stdin cannot be re-read)', async () => {
     const io = ioFor(null, 'short');
     const result = await collectNewCredentials(io, { passwordStdin: true, username: 'rafael' });
-    expect(result._unsafeUnwrapErr()).toBe(`password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+    expect(result._unsafeUnwrapErr()).toEqual(
+      invalidAnswer(`password must be at least ${PASSWORD_MIN_LENGTH} characters`),
+    );
     expect(io.readPasswordFromStdin).toHaveBeenCalledTimes(1);
   });
 
@@ -151,8 +153,8 @@ describe('collectNewPassword', () => {
   });
 
   it('fails with instructions when it has nothing to ask', async () => {
-    expect((await collectNewPassword(ioFor(null), { passwordStdin: false }))._unsafeUnwrapErr()).toBe(
-      PROMPT_MESSAGES.noTerminal,
+    expect((await collectNewPassword(ioFor(null), { passwordStdin: false }))._unsafeUnwrapErr()).toEqual(
+      invalidAnswer(PROMPT_MESSAGES.noTerminal),
     );
   });
 });
@@ -169,14 +171,14 @@ describe('a prompt that ends (Ctrl-C, Ctrl-D)', () => {
 
   it.each(['interrupted', 'cancelled'] as const)('is %s: reported as the error, never retried', async (how) => {
     const result = await collectNewCredentials(ioFor(endingTerminal(how, [])), { passwordStdin: false });
-    expect(result._unsafeUnwrapErr()).toEqual({ code: 'prompt_ended', how });
+    expect(result._unsafeUnwrapErr()).toEqual(promptEnded(how));
   });
 
   it('ends the password step the same way, after the username was given', async () => {
     const result = await collectNewCredentials(ioFor(endingTerminal('interrupted', ['rafael'])), {
       passwordStdin: false,
     });
-    expect(result._unsafeUnwrapErr()).toEqual({ code: 'prompt_ended', how: 'interrupted' });
+    expect(result._unsafeUnwrapErr()).toEqual(promptEnded('interrupted'));
   });
 
   it('is not an invalid answer: nothing is told to the person', async () => {

@@ -2,7 +2,7 @@ import { err, errAsync, ok, safeTry, type Result, type ResultAsync } from 'never
 import type { ZodType, ZodTypeDef } from 'zod';
 import { PASSWORD_STDIN_FLAG } from '../../wire/in/cli.js';
 import { PasswordSchema, UsernameSchema } from '../../models/auth/password.js';
-import type { PromptEnded, Terminal } from './terminal.js';
+import { invalidAnswer, PromptFailureCode, type InvalidAnswer, type PromptEnded, type Terminal } from './terminal.js';
 
 export const MAX_PROMPT_ATTEMPTS = 3;
 
@@ -26,11 +26,12 @@ export type PromptIo = {
 export type NewCredentialsOptions = { passwordStdin: boolean; username?: string };
 
 /** A decoded answer, or why it is not valid. */
-type Answer<T> = Result<T, string>;
+type Answer<T> = Result<T, InvalidAnswer>;
 
 /** Why asking failed: an answer that is not valid (its message), or the prompt ended before one came. */
-export type PromptFailure = string | PromptEnded;
-export const isPromptEnded = (failure: PromptFailure): failure is PromptEnded => typeof failure !== 'string';
+export type PromptFailure = InvalidAnswer | PromptEnded;
+export const isPromptEnded = (failure: PromptFailure): failure is PromptEnded =>
+  failure.code === PromptFailureCode.enum.prompt_ended;
 
 type Asked<T> = ResultAsync<T, PromptFailure>;
 
@@ -38,7 +39,9 @@ const decode =
   <T>(schema: ZodType<T, ZodTypeDef, string>) =>
   (raw: string): Answer<T> => {
     const parsed = schema.safeParse(raw);
-    return parsed.success ? ok(parsed.data) : err(parsed.error.issues[0]?.message ?? PROMPT_MESSAGES.invalidAnswer);
+    return parsed.success
+      ? ok(parsed.data)
+      : err(invalidAnswer(parsed.error.issues[0]?.message ?? PROMPT_MESSAGES.invalidAnswer));
   };
 
 const decodeUsername = decode(UsernameSchema);
@@ -48,7 +51,7 @@ const decodePassword = decode(PasswordSchema);
 const withRetries = <T>(terminal: Terminal, attempt: () => Asked<T>, attemptsLeft = MAX_PROMPT_ATTEMPTS): Asked<T> =>
   attempt().orElse((failure) => {
     if (isPromptEnded(failure) || attemptsLeft <= 1) return errAsync(failure);
-    terminal.tell(failure);
+    terminal.tell(failure.message);
     return withRetries(terminal, attempt, attemptsLeft - 1);
   });
 
@@ -60,7 +63,7 @@ const askNewPassword = (terminal: Terminal): Asked<string> =>
     safeTry(async function* () {
       const password = yield* terminal.askSecret(PROMPT_MESSAGES.password).andThen(decodePassword);
       const confirmation = yield* terminal.askSecret(PROMPT_MESSAGES.confirmation);
-      return confirmation === password ? ok(password) : err(PROMPT_MESSAGES.passwordsDiffer);
+      return confirmation === password ? ok(password) : err(invalidAnswer(PROMPT_MESSAGES.passwordsDiffer));
     }),
   );
 
@@ -76,7 +79,7 @@ export const collectNewPassword = async (
   options: Pick<NewCredentialsOptions, 'passwordStdin'>,
 ): Promise<Result<string, PromptFailure>> => {
   if (options.passwordStdin) return piped(io);
-  return io.terminal ? askNewPassword(io.terminal) : err(PROMPT_MESSAGES.noTerminal);
+  return io.terminal ? askNewPassword(io.terminal) : err(invalidAnswer(PROMPT_MESSAGES.noTerminal));
 };
 
 const collectUsername = async (
@@ -84,7 +87,7 @@ const collectUsername = async (
   options: NewCredentialsOptions,
 ): Promise<Result<string, PromptFailure>> => {
   if (options.username !== undefined) return decodeUsername(options.username);
-  return io.terminal ? askUsername(io.terminal) : err(PROMPT_MESSAGES.noTerminal);
+  return io.terminal ? askUsername(io.terminal) : err(invalidAnswer(PROMPT_MESSAGES.noTerminal));
 };
 
 /** With `--password-stdin` stdin is only the password, so the username must come from `--username`. */
@@ -92,8 +95,9 @@ export const collectNewCredentials = async (
   io: PromptIo,
   options: NewCredentialsOptions,
 ): Promise<Result<{ username: string; password: string }, PromptFailure>> => {
-  if (options.passwordStdin && options.username === undefined) return err(PROMPT_MESSAGES.usernameRequiredWithStdin);
-  if (!canAskPassword(io, options)) return err(PROMPT_MESSAGES.noTerminal);
+  if (options.passwordStdin && options.username === undefined)
+    return err(invalidAnswer(PROMPT_MESSAGES.usernameRequiredWithStdin));
+  if (!canAskPassword(io, options)) return err(invalidAnswer(PROMPT_MESSAGES.noTerminal));
 
   const username = await collectUsername(io, options);
   if (username.isErr()) return err(username.error);

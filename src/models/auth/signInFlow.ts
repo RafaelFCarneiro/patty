@@ -224,7 +224,7 @@ export const PresentationKind = z.enum([
   'signed_out',
   'not_signed_in',
   'logout_failed',
-  'keychain_unavailable',
+  'keychain_unreadable',
 ]);
 export type PresentationKind = z.infer<typeof PresentationKind>;
 
@@ -253,7 +253,7 @@ export type Presentation =
   | { kind: typeof PresentationKind.enum.signed_out; profile: string }
   | { kind: typeof PresentationKind.enum.not_signed_in; profile: string }
   | { kind: typeof PresentationKind.enum.logout_failed; reason: string }
-  | { kind: typeof PresentationKind.enum.keychain_unavailable };
+  | { kind: typeof PresentationKind.enum.keychain_unreadable };
 
 /** What one observation does to the state, and what the shell must do about it, in order. */
 export type SignInStep = { state: SignInState; effects: SignInEffect[] };

@@ -75,7 +75,7 @@ export const failed = (io: CliIo, reason: string): number => exitCodeOf(fail(io,
 /** What a failed prompt answers: an invalid answer is a failure with its message; Ctrl-C is the interrupted exit
  *  (the terminal has already said its newline); Ctrl-D reads as "cancelled", a failure. */
 export const exitCodeOfPrompt = (io: CliIo, failure: PromptFailure): number => {
-  if (!isPromptEnded(failure)) return failed(io, failure);
+  if (!isPromptEnded(failure)) return failed(io, failure.message);
   return failure.how === PromptEnd.enum.interrupted ? EXIT_INTERRUPTED : failed(io, PROMPT_ABORTED_MESSAGE);
 };
 

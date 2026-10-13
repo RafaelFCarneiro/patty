@@ -8,8 +8,17 @@ import { text } from 'node:stream/consumers';
 /** How a prompt ended without an answer: Ctrl-C, or the input closing (Ctrl-D). */
 export const PromptEnd = z.enum(['interrupted', 'cancelled']);
 export type PromptEnd = z.infer<typeof PromptEnd>;
-export type PromptEnded = { code: 'prompt_ended'; how: PromptEnd };
-export const promptEnded = (how: PromptEnd): PromptEnded => ({ code: 'prompt_ended', how });
+/** Why asking a person failed: the prompt ended before an answer came, or the answer is not valid. */
+export const PromptFailureCode = z.enum(['prompt_ended', 'invalid_answer']);
+export type PromptFailureCode = z.infer<typeof PromptFailureCode>;
+
+export type PromptEnded = { code: typeof PromptFailureCode.enum.prompt_ended; how: PromptEnd };
+export const promptEnded = (how: PromptEnd): PromptEnded => ({ code: PromptFailureCode.enum.prompt_ended, how });
+export type InvalidAnswer = { code: typeof PromptFailureCode.enum.invalid_answer; message: string };
+export const invalidAnswer = (message: string): InvalidAnswer => ({
+  code: PromptFailureCode.enum.invalid_answer,
+  message,
+});
 
 /** A person at a keyboard, apart from `node:readline` so `prompt.ts` is testable without a pseudo-terminal. */
 export type Terminal = {

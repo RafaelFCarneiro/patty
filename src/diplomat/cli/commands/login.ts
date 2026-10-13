@@ -109,7 +109,7 @@ const render = (io: CliIo, presentation: Presentation): void => {
       return io.out(LOGIN_MESSAGES.signedOut(presentation.profile));
     case P.not_signed_in:
       return io.out(LOGIN_MESSAGES.notSignedIn(presentation.profile));
-    case P.keychain_unavailable:
+    case P.keychain_unreadable:
       return io.err(CLI_MESSAGES.failure(LOGIN_MESSAGES.keychainUnavailable));
     case P.logout_failed:
       return io.err(CLI_MESSAGES.failure(presentation.reason));

@@ -432,7 +432,7 @@ export const nextStep = (state: SignInState, observation: SignInObservation, con
     case O.saved_loaded:
       return onSavedLoaded(state, observation, config);
     case O.saved_unreadable:
-      return step({ kind: S.failed }, present({ kind: P.keychain_unavailable }));
+      return step({ kind: S.failed }, present({ kind: P.keychain_unreadable }));
     case O.saved_cleared:
       return onSavedCleared(state, observation, config);
     case O.owner_checked:

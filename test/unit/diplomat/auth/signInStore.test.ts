@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { KEYCHAIN_SERVICE } from '../../../../src/models/auth/signIn.js';
+import { KEYCHAIN_SERVICE, KeychainFailureCode } from '../../../../src/models/auth/signIn.js';
 
 const keyring = vi.hoisted(() => {
   const state = { password: null as string | null, constructed: [] as Array<[string, string]>, failing: false };
@@ -60,7 +60,7 @@ describe('keychainSignInStore', () => {
     const store = keychainSignInStore(ACCOUNT, () => undefined);
     expect((await store.load())._unsafeUnwrap()).toBeNull();
     keyring.state.failing = true;
-    expect((await store.load())._unsafeUnwrapErr()).toMatchObject({ code: 'keychain_unavailable' });
+    expect((await store.load())._unsafeUnwrapErr().code).toBe(KeychainFailureCode.enum.keychain_unavailable);
   });
 
   it('reports a keychain that refuses a write — without the secret — and says it did not save', async () => {

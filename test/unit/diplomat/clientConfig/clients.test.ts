@@ -1,6 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ClientConfigFailureCode } from '../../../../src/models/clientConfig.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readJsonOrEmpty } from '../../../../src/diplomat/clientConfig/clients.js';
 
@@ -26,7 +27,7 @@ describe('readJsonOrEmpty', () => {
 
     const failure = readJsonOrEmpty(configPath)._unsafeUnwrapErr();
 
-    expect(failure).toMatchObject({ code: 'read_failed', path: configPath, warnings: [] });
+    expect(failure).toMatchObject({ code: ClientConfigFailureCode.enum.read_failed, path: configPath, warnings: [] });
     expect(failure.reason).toMatch(/^EISDIR:/);
     expect(exitSpy).not.toHaveBeenCalled(); // it reports; the setup command decides what to do
   });
@@ -121,7 +122,10 @@ describe('what each client reports', () => {
     const { clientConfigs, log, error } = await withHome();
     mkdirSync(join(home, '.claude', 'mcp.json'), { recursive: true }); // a directory where the file should be
     const failure = clientConfigs.find('claude-code')!.run('default')._unsafeUnwrapErr();
-    expect(failure).toMatchObject({ code: 'read_failed', path: join(home, '.claude', 'mcp.json') });
+    expect(failure).toMatchObject({
+      code: ClientConfigFailureCode.enum.read_failed,
+      path: join(home, '.claude', 'mcp.json'),
+    });
     expect(failure.reason).toMatch(/EISDIR/);
     expect(log).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
@@ -134,7 +138,7 @@ describe('what each client reports', () => {
     writeFileSync(file, '[]', 'utf8');
     chmodSync(file, 0o444);
     const failure = clientConfigs.find('claude-code')!.run('default')._unsafeUnwrapErr();
-    expect(failure).toMatchObject({ code: 'write_failed', path: file });
+    expect(failure).toMatchObject({ code: ClientConfigFailureCode.enum.write_failed, path: file });
     expect(failure.warnings).toEqual([expect.stringContaining('does not contain a JSON object at the root')]);
   });
 
