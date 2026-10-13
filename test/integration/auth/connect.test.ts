@@ -318,7 +318,7 @@ describe('POST /ui/connect', () => {
     expect(res.body).not.toContain('close this tab');
   });
 
-  it('says "close this tab", not a dashboard link, for a `fintrack login` request (its server is temporary)', async () => {
+  it('says "close this tab", not a dashboard link, for a `fintrack login` request', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
     const started = await bindAuthRunEffects(ctx.runEffects)(() =>
