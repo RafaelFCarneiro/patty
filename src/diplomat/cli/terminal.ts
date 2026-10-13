@@ -1,7 +1,6 @@
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 import { PASSWORD_STDIN_FLAG } from '../../wire/in/cli.js';
-import { EXIT_INTERRUPTED } from './io.js';
 import { text } from 'node:stream/consumers';
 
 /** A person at a keyboard, apart from `node:readline` so `prompt.ts` is testable without a pseudo-terminal. */
@@ -13,6 +12,14 @@ export type Terminal = {
 };
 
 export const PROMPT_ABORTED_MESSAGE = 'cancelled';
+
+/** Ctrl-C at a prompt: the prompt is closed and the newline written; the command ends with `EXIT_INTERRUPTED`. */
+export class PromptInterruptedError extends Error {
+  constructor() {
+    super('interrupted');
+    this.name = 'PromptInterruptedError';
+  }
+}
 export const STDIN_IS_A_TERMINAL_MESSAGE = `--${PASSWORD_STDIN_FLAG} expects the password piped or redirected in, but stdin is a terminal`;
 
 const TRAILING_NEWLINE = /\r?\n$/;
@@ -27,9 +34,11 @@ export const printDiagnostic = (line: string): void => {
 
 export const isInteractive = (): boolean => process.stdin.isTTY === true;
 
-/** Prompts on stderr; a secret answer is swallowed by a muted stream. Ctrl-C exits; Ctrl-D rejects the question. */
+/** Prompts on stderr; a secret answer is swallowed by a muted stream. Ctrl-C rejects the question as interrupted,
+ *  Ctrl-D as cancelled. */
 export const open = (): Terminal => {
   let muted = false;
+  let interrupted = false;
   const output = new Writable({
     write: (chunk: Buffer, encoding, callback) => {
       if (!muted) process.stderr.write(chunk, encoding);
@@ -38,13 +47,13 @@ export const open = (): Terminal => {
   });
   const lines = createInterface({ input: process.stdin, output, terminal: true });
   const closed = new Promise<never>((_resolve, reject) => {
-    lines.once('close', () => reject(new Error(PROMPT_ABORTED_MESSAGE)));
+    lines.once('close', () => reject(interrupted ? new PromptInterruptedError() : new Error(PROMPT_ABORTED_MESSAGE)));
   });
   closed.catch(() => undefined);
   lines.once('SIGINT', () => {
+    interrupted = true;
     lines.close();
     process.stderr.write('\n');
-    process.exit(EXIT_INTERRUPTED);
   });
 
   return {
@@ -56,7 +65,7 @@ export const open = (): Terminal => {
         return await Promise.race([answer, closed]);
       } finally {
         muted = false;
-        process.stderr.write('\n');
+        if (!interrupted) process.stderr.write('\n');
       }
     },
     tell: printDiagnostic,

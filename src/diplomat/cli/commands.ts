@@ -4,8 +4,9 @@ import { NPX_COMMAND } from '../../models/package.js';
 import { runAuthCommand } from './commands/auth.js';
 import { runLogin, runLogout } from './commands/login.js';
 import { runSetupCommand } from './commands/setup.js';
-import { EXIT_FAILURE, EXIT_OK, type CliIo } from './io.js';
+import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_OK, type CliIo } from './io.js';
 import { CLI_MESSAGES } from './messages.js';
+import { PromptInterruptedError } from './terminal.js';
 
 const HELP_ARGUMENTS: readonly string[] = ['help', '--help', '-h'];
 
@@ -55,6 +56,8 @@ export const runCli = async (args: readonly string[], io: CliIo): Promise<number
   try {
     return await runKnownCommand(known.data, rest, io);
   } catch (cause) {
+    // Ctrl-C at a prompt: the terminal has already said its newline.
+    if (cause instanceof PromptInterruptedError) return EXIT_INTERRUPTED;
     io.err(
       cause instanceof DatabaseAheadError
         ? cause.message

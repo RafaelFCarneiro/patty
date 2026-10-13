@@ -34,6 +34,7 @@ import {
   type Shell,
 } from '../io.js';
 import { CLI_MESSAGES } from '../messages.js';
+import { PromptInterruptedError } from '../terminal.js';
 
 export const LOGIN_MESSAGES = {
   authDisabled: `${AUTH_ENV_VAR}=disabled: stdio acts as the owner, so there is nothing to sign in to. Remove it to use sign-ins.`,
@@ -204,8 +205,9 @@ export const offerSignIn = async (io: CliIo, profile: string): Promise<void> => 
   let declined = true;
   try {
     declined = ANSWERED_NO.test(await terminal.ask(LOGIN_MESSAGES.offer));
-  } catch {
-    // Ctrl-D at the question: treated as "not now".
+  } catch (cause) {
+    // Ctrl-C ends the command; Ctrl-D at the question is treated as "not now".
+    if (cause instanceof PromptInterruptedError) throw cause;
   } finally {
     terminal.close();
   }

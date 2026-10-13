@@ -2,11 +2,22 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ClientConfigs } from '../../../../../src/controllers/deps.js';
 import { runSetup as runSetupFor } from '../../../../../src/diplomat/cli/commands/setup.js';
 import { clientConfigs } from '../../../../../src/diplomat/clientConfig/clients.js';
 import { STDIO_ENTRY, VSCODE_ENTRY } from '../../../../../src/diplomat/clientConfig/merge.js';
 
-const runSetup = (tool: string | undefined, profile?: string): number => runSetupFor(clientConfigs, tool, profile);
+/** The I/O `setup` prints through, captured. */
+const captureIo = (clients: ClientConfigs) => {
+  const out: string[] = [];
+  const err: string[] = [];
+  return { out, err, io: { out: (line: string) => out.push(line), err: (line: string) => err.push(line), clients } };
+};
+
+const runSetup = (tool: string | undefined, profile?: string) => {
+  const captured = captureIo(clientConfigs);
+  return { exit: runSetupFor(captured.io, tool, profile), out: captured.out, err: captured.err };
+};
 
 /** The setup command bound to the real client config files — imported fresh, so a test that mocks `node:os` first
  *  gets its home directory. */
@@ -14,14 +25,17 @@ const importSetup = async () => {
   const { runSetup: run, runGuidedSetup: runGuided } =
     await import('../../../../../src/diplomat/cli/commands/setup.js');
   const { clientConfigs: clients } = await import('../../../../../src/diplomat/clientConfig/clients.js');
+  const { io, out, err } = captureIo(clients);
   return {
-    runSetup: (tool: string | undefined, profile?: string): number => run(clients, tool, profile),
+    out,
+    err,
+    runSetup: (tool: string | undefined, profile?: string): number => run(io, tool, profile),
     runGuidedSetup: (
       tool: string | undefined,
       claimOwner: () => Promise<boolean>,
       signIn?: (profile: string) => Promise<void>,
       profile?: string,
-    ) => runGuided(clients, tool, claimOwner, signIn, profile),
+    ) => runGuided(io, tool, claimOwner, signIn, profile),
   };
 };
 
@@ -39,14 +53,12 @@ describe('runSetup', () => {
 
   it('documents the vscode alias in help output', () => {
     const vscodeAliasHelp = 'vscode           VS Code / GitHub Copilot    (alias for copilot)';
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
-      throw new Error(`process.exit:${code}`);
-    }) as typeof process.exit);
+    const { exit, out, err } = runSetup(undefined);
 
-    expect(() => runSetup(undefined)).toThrow('process.exit:0');
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining(vscodeAliasHelp));
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('setup vscode'));
+    expect(exit).toBe(0);
+    expect(out).toEqual([expect.stringContaining(vscodeAliasHelp)]);
+    expect(out[0]).toContain('setup vscode');
+    expect(err).toEqual([]);
   });
 
   it('prints a platform-agnostic Claude Desktop restart instruction', async () => {
@@ -60,7 +72,7 @@ describe('runSetup', () => {
     const { runSetup: runSetupWithMockedHome } = await importSetup();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-    runSetupWithMockedHome('claude-desktop');
+    expect(runSetupWithMockedHome('claude-desktop')).toBe(0);
 
     expect(logSpy).toHaveBeenCalledWith('  Fully quit and reopen Claude Desktop to apply.');
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Cmd+Q'));
@@ -131,26 +143,20 @@ describe('runGuidedSetup (claim the owner, then write the config)', () => {
     [undefined, 0],
     ['no-such-tool', 1],
   ] as const)('never claims for help or an unknown tool (%s)', async (tool, exitCode) => {
-    const { runGuidedSetup } = await loadWithHome();
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
-      throw new Error(`process.exit:${code}`);
-    }) as typeof process.exit);
+    const { runGuidedSetup, err } = await loadWithHome();
     const claim = vi.fn(async () => true);
 
-    await expect(runGuidedSetup(tool, claim)).rejects.toThrow(`process.exit:${exitCode}`);
+    expect(await runGuidedSetup(tool, claim)).toBe(exitCode);
     expect(claim).not.toHaveBeenCalled();
+    expect(existsSync(claudeCodeConfig())).toBe(false);
+    expect(err.length > 0).toBe(exitCode === 1);
   });
 
   it('documents the owner login and the scripted flags in the help', async () => {
-    const { runSetup } = await loadWithHome();
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
-      throw new Error(`process.exit:${code}`);
-    }) as typeof process.exit);
-    expect(() => runSetup(undefined)).toThrow('process.exit:0');
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('--password-stdin'));
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('--username'));
+    const { runSetup, out } = await loadWithHome();
+    expect(runSetup(undefined)).toBe(0);
+    expect(out.join('\n')).toContain('--password-stdin');
+    expect(out.join('\n')).toContain('--username');
   });
 });
 
@@ -251,24 +257,16 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
     ['no-such-tool', 1],
   ] as const)('does not offer a sign-in for help or an unknown tool (%s)', async (tool, exitCode) => {
     const { runGuidedSetup } = await loadWithHome();
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
-      throw new Error(`process.exit:${code}`);
-    }) as typeof process.exit);
     const signIn = vi.fn(async () => undefined);
-    await expect(runGuidedSetup(tool, async () => true, signIn)).rejects.toThrow(`process.exit:${exitCode}`);
+    expect(await runGuidedSetup(tool, async () => true, signIn)).toBe(exitCode);
     expect(signIn).not.toHaveBeenCalled();
   });
 
   it('documents --profile and the pinned command in the help', async () => {
-    const { runSetup } = await loadWithHome();
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
-      throw new Error(`process.exit:${code}`);
-    }) as typeof process.exit);
-    expect(() => runSetup(undefined)).toThrow('process.exit:0');
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('--profile <name>'));
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('npx @rafaelfcarneiro/fintrack@latest setup'));
+    const { runSetup, out } = await loadWithHome();
+    expect(runSetup(undefined)).toBe(0);
+    expect(out.join('\n')).toContain('--profile <name>');
+    expect(out.join('\n')).toContain('npx @rafaelfcarneiro/fintrack@latest setup');
   });
 });
 
@@ -290,21 +288,43 @@ describe('runGuidedSetup — a client config that cannot be read or written', ()
     process.chdir(homeDir);
     vi.resetModules();
     vi.doMock('node:os', () => ({ homedir: () => homeDir }));
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const exit = vi.spyOn(process, 'exit');
     const configPath = join(homeDir, '.claude', 'mcp.json');
     mkdirSync(configPath, { recursive: true }); // a directory where the file should be: reading it fails (EISDIR)
-    const { runGuidedSetup } = await importSetup();
+    const { runGuidedSetup, out, err } = await importSetup();
     const signIn = vi.fn(async () => undefined);
 
     expect(await runGuidedSetup('claude-code', async () => true, signIn)).toBe(1);
 
-    expect(error).toHaveBeenCalledTimes(1);
-    expect(error.mock.calls[0]?.[0]).toMatch(/^fintrack setup: failed to read .*mcp\.json: EISDIR:/);
-    expect(log).toHaveBeenCalledWith('Setting up FinTrack MCP for Claude Code (CLI)...');
-    expect(log).not.toHaveBeenCalledWith('Done.');
+    expect(err).toHaveLength(1);
+    expect(err[0]).toMatch(/^fintrack setup: failed to read .*mcp\.json: EISDIR:/);
+    expect(out).toEqual(['Setting up FinTrack MCP for Claude Code (CLI)...']);
     expect(signIn).not.toHaveBeenCalled();
     expect(exit).not.toHaveBeenCalled();
+  });
+});
+
+describe('runSetup — help and an unknown tool', () => {
+  it('help prints on out and is EXIT_OK; it touches nothing and never ends the process', () => {
+    const exit = vi.spyOn(process, 'exit');
+    const { exit: code, out, err } = runSetup(undefined);
+    expect(code).toBe(0);
+    expect(out).toHaveLength(1);
+    expect(err).toEqual([]);
+    expect(exit).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it('an unknown tool prints the message on err and is EXIT_FAILURE, without ending the process', () => {
+    const exit = vi.spyOn(process, 'exit');
+    const { exit: code, out, err } = runSetup('no-such-tool');
+    expect(code).toBe(1);
+    expect(out).toEqual([]);
+    expect(err).toEqual([
+      'fintrack setup: unknown tool "no-such-tool"\n\nRun without arguments to see available tools.',
+    ]);
+    expect(exit).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 });

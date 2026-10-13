@@ -3,6 +3,7 @@ import { AUTH_APPLIERS, bindAuthRunEffects, createAuthDeps } from './auth.js';
 import { version } from '../common/buildVersion.js';
 import { loadConfig } from '../config.js';
 import { clientConfigs } from '../diplomat/clientConfig/clients.js';
+import { runCli } from '../diplomat/cli/commands.js';
 import { type CliIo, type Shell } from '../diplomat/cli/io.js';
 import * as tty from '../diplomat/cli/terminal.js';
 import { bootstrap } from '../diplomat/db/bootstrap.js';
@@ -59,7 +60,7 @@ const interruptSignal = (): AbortSignal => {
   return controller.signal;
 };
 
-export const defaultCliIo = (): CliIo => ({
+const defaultCliIo = (): CliIo => ({
   openShell,
   openTerminal: () => (tty.isInteractive() ? tty.open() : null),
   readPasswordFromStdin: tty.readPasswordFromStdin,
@@ -70,3 +71,6 @@ export const defaultCliIo = (): CliIo => ({
   interruptSignal,
   clients: clientConfigs,
 });
+
+/** The command line, ready to run: the router bound to the real terminal, database, keychain and config files. */
+export const runCommandLine = (args: readonly string[]): Promise<number> => runCli(args, defaultCliIo());

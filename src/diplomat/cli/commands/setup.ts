@@ -1,5 +1,4 @@
 import { ClientConfigError } from '../../../common/clientConfig.js';
-import type { ClientConfigs } from '../../../controllers/deps.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../../models/auth/signIn.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import { PASSWORD_STDIN_FLAG, SETUP_POSITIONALS, SetupOptionsSchema } from '../../../wire/in/cli.js';
@@ -40,54 +39,48 @@ Examples:
   ${NPX_COMMAND} setup antigravity
 `.trimStart();
 
-/** Writes the client's configuration. A configuration file that cannot be read or written is reported on stderr and
- *  answered with `EXIT_FAILURE`; help and an unknown tool end the process, as they always have. */
-export const runSetup = (
-  clients: ClientConfigs,
-  tool: string | undefined,
-  profile: string = DEFAULT_PROFILE,
-): number => {
+/** What `setup` needs of the I/O: where to print, and the client config files. */
+type SetupIo = Pick<CliIo, 'out' | 'err' | 'clients'>;
+
+/** Writes the client's configuration and answers the exit code: help is `EXIT_OK`, an unknown tool or a configuration
+ *  file that cannot be read or written is reported on stderr and is `EXIT_FAILURE`. */
+export const runSetup = (io: SetupIo, tool: string | undefined, profile: string = DEFAULT_PROFILE): number => {
   if (!tool) {
-    // eslint-disable-next-line no-console -- CLI surface
-    console.log(HELP);
-    process.exit(EXIT_OK);
+    io.out(HELP);
+    return EXIT_OK;
   }
 
-  const client = clients.find(tool);
+  const client = io.clients.find(tool);
   if (!client) {
-    console.error(`fintrack setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`);
-    process.exit(EXIT_FAILURE);
+    io.err(`fintrack setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`);
+    return EXIT_FAILURE;
   }
 
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log(`Setting up FinTrack MCP for ${client.label}...`);
+  io.out(`Setting up FinTrack MCP for ${client.label}...`);
   try {
     client.run(profile);
   } catch (cause) {
     if (!(cause instanceof ClientConfigError)) throw cause;
-    console.error(cause.message);
+    io.err(cause.message);
     return EXIT_FAILURE;
   }
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log('Done.');
+  io.out('Done.');
   return EXIT_OK;
 };
 
 /** Claims the owner first, writes the client config only if that succeeded, then offers to sign the client in
  *  (ADR-034 §5.3). Help and an unknown tool never claim. */
 export const runGuidedSetup = async (
-  clients: ClientConfigs,
+  io: SetupIo,
   tool: string | undefined,
   claimOwner: () => Promise<boolean>,
   signIn: (profile: string) => Promise<void> = async () => undefined,
   profile: string = DEFAULT_PROFILE,
 ): Promise<number> => {
-  if (!tool || clients.find(tool) === undefined) {
-    runSetup(clients, tool, profile);
-    return EXIT_OK;
-  }
+  if (!tool || io.clients.find(tool) === undefined) return runSetup(io, tool, profile);
   if (!(await claimOwner())) return EXIT_FAILURE;
-  if (runSetup(clients, tool, profile) !== EXIT_OK) return EXIT_FAILURE;
+  const written = runSetup(io, tool, profile);
+  if (written !== EXIT_OK) return written;
   await signIn(profile);
   return EXIT_OK;
 };
@@ -97,7 +90,7 @@ export const runSetupCommand = async (args: readonly string[], io: CliIo): Promi
   if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
   const [client] = parsed.positionals;
   return runGuidedSetup(
-    io.clients,
+    io,
     client,
     () => ensureOwnerClaimed(io, parsed.options),
     (profile) => offerSignIn(io, profile),

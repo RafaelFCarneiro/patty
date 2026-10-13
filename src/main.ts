@@ -5,18 +5,16 @@ import { loadConfig, McpTransport } from './config.js';
 
 // Each flow is a composition module, loaded only when it runs: the CLI never pays for a server, a stdio start never
 // loads Fastify (the stdio module loads it itself only when the sidecar is on), and an HTTP start never loads the CLI.
-const loadCliModule = () => import('./diplomat/cli/commands.js');
-const loadCliCompositionModule = () => import('./composition/cli.js');
+const loadCliModule = () => import('./composition/cli.js');
 const loadStdioModule = () => import('./composition/stdio.js');
 const loadHttpModule = () => import('./composition/http.js');
 
 const main = async (): Promise<void> => {
   // Any argument is a command: an unknown one is a usage error, never a reason to start a server.
   if (process.argv.length > 2) {
-    const { runCli } = await loadCliModule();
-    const { defaultCliIo } = await loadCliCompositionModule();
+    const { runCommandLine } = await loadCliModule();
     // Not process.exit: let the event loop drain, so everything the command printed has been flushed.
-    process.exitCode = await runCli(process.argv.slice(2), defaultCliIo());
+    process.exitCode = await runCommandLine(process.argv.slice(2));
     return;
   }
 
