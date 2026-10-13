@@ -7,7 +7,7 @@ import { versionedTableApplier } from '../effects.js';
 
 export type UsersRepo = {
   findById: (id: string) => Promise<UserEntity | null>;
-  /** `username` must already be normalized (`logic/auth.ts`'s `normalizeUsername`). */
+  /** `username` must already be normalized (`models/auth/password.ts`'s `normalizeUsername`). */
   findByUsername: (username: string) => Promise<UserEntity | null>;
 };
 

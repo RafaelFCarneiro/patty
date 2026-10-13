@@ -81,7 +81,7 @@ const main = async (): Promise<void> => {
   const { auth, issueAndAnnounceSetup } = prepared;
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
-    // The page the sign-in link may name from what is known here (decided in `logic/auth.ts`); with none, the
+    // The page the sign-in link may name from what is known here (decided in `logic/auth/origin.ts`); with none, the
     // session serves `/ui/connect` itself from a temporary server on this database. The sidecar binds later.
     let boundOrigin: string | null = null;
     const linkOrigin = (): string | null =>

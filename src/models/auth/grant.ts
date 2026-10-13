@@ -110,6 +110,7 @@ export type RedeemResult =
   | { kind: Exclude<RedeemKind, typeof RedeemKind.enum.signed_in> }
   | ({ kind: typeof RedeemKind.enum.signed_in } & SignedIn);
 
-/** What `logic/auth.ts`'s `redeemPlan` decides before anything is written: the four non-minting answers, or `mint`. */
+/** What `logic/auth/grant.ts`'s `redeemPlan` decides before anything is written: the four non-minting answers, or
+ *  `mint`. */
 export const RedeemPlanKind = z.enum(['pending', 'denied', 'expired', 'invalid', 'mint']);
 export type RedeemPlanKind = z.infer<typeof RedeemPlanKind>;

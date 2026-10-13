@@ -135,7 +135,7 @@ describe('authInfoOf', () => {
 });
 
 // A reclassification of any tool is a reviewed diff of THESE lists — not a silent drift. Tools read their
-// scope from `annotations.readOnlyHint`, the single source (`logic/auth.ts`'s `scopeOfTool`).
+// scope from `annotations.readOnlyHint`, the single source (`logic/auth/scope.ts`'s `scopeOfTool`).
 const READ_TOOLS = [
   'aggregate_spending',
   'find_correlations',

@@ -92,7 +92,7 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   because a bill `update` needs `paymentTransactionId: undefined` (leave the column unchanged) to differ from
   `null` (clear it) — an asymmetry the uniform factory can't express.
 - **Exception — the auth flows (ADR-033) are adapted once at the composition root.** `login`/`claimOwner`/
-  `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions`, the CLI's `claimOwnerLocally`/`resetPassword` (`authCli.ts` binds its own runner the same way) and the access-token flows (`createToken`/
+  `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions`, the CLI's `claimOwnerLocally`/`resetPassword` (`cliShell.ts` binds its own runner the same way) and the access-token flows (`createToken`/
   `revokeToken`/`revokeSignInByHash`/`authenticateToken`, `controllers/accessTokens.ts`) and the stdio sign-in flows (`startGrant`/`approveGrant`/`denyGrant`/`redeemGrant`/`pruneExpiredGrants`, `controllers/grants.ts`) are run from several shell sites (the auth hook,
   the sign-in and token routes, startup), none of which is "the" handler, and a single batch can mix three entities
   (`claimOwner`: user + setup code + session). So `adapters/auth.ts`'s `outcomeToDb` (the five entities'

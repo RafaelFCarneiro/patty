@@ -8,7 +8,7 @@ const WWW_AUTHENTICATE = 'www-authenticate';
 
 /**
  * Reject a request with a Bearer challenge (RFC 6750 §3, MCP authorization): the status follows the error, the
- * `WWW-Authenticate` value is built in one place (`logic/auth.ts`'s `bearerChallenge`) and only its origin is
+ * `WWW-Authenticate` value is built in one place (`logic/auth/bearer.ts`'s `bearerChallenge`) and only its origin is
  * resolved here, from `PUBLIC_URL` or the request's own loopback host. Shared by the auth hook and the MCP route's
  * per-tool scope check so the two can never word a challenge differently.
  */

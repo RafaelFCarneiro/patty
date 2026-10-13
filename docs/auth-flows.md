@@ -13,19 +13,22 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 | VersionGuard | `src/diplomat/db/versionGuard.ts` (rule: `src/logic/migration.ts`) | First thing `bootstrap` does: refuses a database a newer build has migrated, before anything is copied, migrated, seeded or written |
 | Bootstrap | `src/diplomat/db/bootstrap.ts`, `safetyCopy.ts`, `migrationJournal.ts`, `migrationLock.ts` | Migrations, the owner row, the pre-migration backup |
 | AuthRuntime | `src/authRuntime.ts` | Builds the identity deps (shared with the CLI and the stdio session), prunes sessions and expired sign-in requests, issues and prints the setup code |
-| Cli | `src/cli.ts`, `src/authCli.ts`, `src/loginCli.ts`, `src/diplomat/cli/{prompt,terminal}.ts` | `fintrack setup [client]`, `auth setup`, `auth reset-password`, `login`, `logout`: opens the database like the server (no stdio), prompts with no echo, runs the controller flows; an unknown command prints the usage and exits non-zero |
-| SignInServer | `src/signInServer.ts` | Where `login` sends the browser: always a temporary loopback app of the login's own process, on a free port, for the length of the login |
-| StdioSession | `src/diplomat/mcp/stdioSession.ts`, `gate.ts`, `scopes.ts` | The stdio channel's identity: resolves the credential per call (`FINTRACK_TOKEN` → keychain → none), asks for a sign-in, polls, saves; the scope guard asks it who is calling |
+| Cli | `src/diplomat/cli/commands.ts` (router), `commands/{auth,login,setup}.ts` (handlers), `io.ts`, `messages.ts`, `prompt.ts`, `terminal.ts`; composed in `src/cliShell.ts` | `fintrack setup [client]`, `auth setup`, `auth reset-password`, `login`, `logout`: opens the database like the server (no stdio), prompts with no echo, runs the controller flows or the sign-in protocol through the injected interpreter, prints what the protocol presents; an unknown command prints the usage and exits non-zero |
+| SignInServer | `src/signInServer.ts` | Where `login` sends the browser — and a stdio session whose sidecar names no page: always a temporary loopback app of the asking process, on a free port, for the length of the request |
+| ClientConfig | `src/diplomat/clientConfig/{merge,clients}.ts` | The MCP clients' own config files `setup` writes (Claude Code, Claude Desktop, VS Code, Antigravity, Codex): pure merge helpers, file reads and writes |
+| SignInFlow | `src/logic/auth/signInFlow.ts` (data: `src/models/auth/signInFlow.ts`) | The sign-in protocol as a pure state machine, `nextStep(state, observation, config)` → new state + effects: every rule of a stdio sign-in and of `login`, decided once (diagram 11) |
+| SignInInterpreter | `src/signInInterpreter.ts` (port: `SignInInterpreter` in `src/controllers/deps.ts`) | The one executor of those effects — through `startGrant`, `redeemGrant`, `authenticateToken`, `revokeSignInByHash`, the keychain store and a page — built at the composition root and injected into both edges; it executes and reports, it decides nothing |
+| StdioSession | `src/diplomat/mcp/stdioSession.ts`, `gate.ts`, `scopes.ts` | The stdio channel's identity edge: feeds one observation per gated request (and per poll tick) to the interpreter, keeps the state, runs the poll timer while a request is open, and turns what the protocol said into the answer; the scope guard asks it who is calling |
 | SignInStore | `src/diplomat/auth/signInStore.ts` | The OS keychain entry `signin:<profile>:<dbId>` of a saved sign-in |
-| AuthHook | `src/diplomat/http/hooks/auth.ts` — `registerAuthHook` (decisions in `src/logic/auth.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, credential precedence (bearer vs. cookie), session/token resolution, the CSRF check, the route-scope check, challenges and redirects |
-| Bearer | `src/diplomat/http/bearer.ts` | Builds the `WWW-Authenticate` response (`logic/auth.ts`'s `bearerChallenge`; only the origin is resolved at the edge) — shared by the hook and the MCP route |
+| AuthHook | `src/diplomat/http/hooks/auth.ts` — `registerAuthHook` (decisions in `src/logic/auth/{origin,bearer,scope,token}.ts`) | The `onRequest` hook: the loopback Host/Origin guard (auth disabled), the public allowlist, credential precedence (bearer vs. cookie), session/token resolution, the CSRF check, the route-scope check, challenges and redirects |
+| Bearer | `src/diplomat/http/bearer.ts` | Builds the `WWW-Authenticate` response (`logic/auth/bearer.ts`'s `bearerChallenge`; only the origin is resolved at the edge) — shared by the hook and the MCP route |
 | AuthRoutes | `src/diplomat/http/routes/auth.ts` | `/ui/setup`, `/ui/login`, `/ui/logout`: form parsing, rate limiting, cookies |
 | TokenRoutes | `src/diplomat/http/routes/tokens.ts` | `/ui/access/tokens`, `/ui/access/tokens/:id/revoke`: session-only token pages (personal access tokens and stdio sign-ins) |
 | ConnectRoutes | `src/diplomat/http/routes/connect.ts` | `/ui/connect`: the session-only consent page for a stdio / `login` sign-in; throttles failed code lookups |
 | WellKnown | `src/diplomat/http/routes/wellKnown.ts` | The two Protected Resource Metadata (RFC 9728) routes |
 | McpRoute | `src/diplomat/mcp/route.ts`, `scopes.ts` | `POST /mcp`: per-tool scope pre-check on the JSON-RPC body, `req.auth` for the transport, per-tool re-check |
 | Controller | `src/controllers/auth.ts`, `accessTokens.ts`, `grants.ts` | `issueSetupCode`, `claimOwner`, `claimOwnerLocally`, `resetPassword`, `login`, `logout`, `authenticate`; `createToken`, `listTokens`, `revokeToken`, `revokeSignInByHash`, `authenticateToken`; `startGrant`, `findConsent`, `approveGrant`, `denyGrant`, `redeemGrant`, `pruneExpiredGrants`; returns `{ persist, response }` |
-| Logic | `src/logic/auth.ts` | Pure rules: expiry, the sliding window, "can log in", origin comparison, scopes, the token verdict, credential parsing, challenges, the metadata document; the grant transitions, `signInExpiry`, the consent pre-selection, `redeemPlan`, the not-signed-in message |
+| Logic | `src/logic/auth/*.ts` — `owner`, `password`, `session`, `token`, `scope`, `bearer`, `origin`, `grant`, `keychain`, `signInFlow`, `message` | Pure rules: expiry, the sliding window, "can log in", origin comparison, scopes, the token verdict, credential parsing, challenges, the metadata document; the grant transitions, `signInExpiry`, the consent pre-selection, `redeemPlan`, the not-signed-in message, and the sign-in protocol |
 | Secrets | `src/diplomat/auth/credentials.ts` | argon2id, CSPRNG session tokens, access tokens (`ftk_…`), setup / user / device codes, sha256 |
 | Runner | `@rfc0/effect-runner` via `runEffects` | Applies the persistables in one transaction (optimistic versions, retries) |
 | DB | `users`, `sessions`, `setup_codes`, `access_tokens`, `client_grants` | Stores only hashes, never a token or code in plaintext |
@@ -535,3 +538,48 @@ sequenceDiagram
         Cli-->>Op: Signed out of profile "p"
     end
 ```
+
+The effects in diagrams 8–10 are executed by the interpreter; what to do next is decided by `nextStep`, shown in diagram 11.
+
+## 11. The sign-in protocol: states and observations
+
+ADR-034. The stdio session and `fintrack login` are two presenters over ONE protocol: `nextStep(state, observation, config)` in
+`logic/auth/signInFlow.ts` is pure and returns the next state and the effects to run; `src/signInInterpreter.ts` runs them and feeds
+each answer back as the next observation. The stdio session feeds `requested` (one per gated call), `ticked` (its poll timer while a request
+is open) and `closed`; `login` feeds `login_requested` then `ticked`, or `interrupted` after Ctrl-C; `logout` feeds `logout_requested`. For a stdio
+session a denied or expired request returns to `idle` (the next gated call asks afresh); for `login` it ends the attempt in a terminal state.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> signed_in: saved sign-in checked ok
+    idle --> pending: grant_started
+    idle --> failed: login refused - auth disabled, owner unclaimed, no page, or grant_failed
+    pending --> pending: ticked, redeemed pending - login waits, stdio shows the same instructions
+    pending --> signed_in: redeemed signed_in and saved ok - or session only, or keychain refused on stdio and held in memory
+    pending --> signed_in: saved sign-in checked ok - the request stays open behind it
+    pending --> idle: stdio only - redeemed denied or expired, page released, next call asks afresh
+    pending --> denied: login only - redeemed denied
+    pending --> expired: login only - redeemed expired or invalid
+    pending --> cancelled: login only - interrupted
+    pending --> failed: login only - redeemed error, or keychain refused and the sign-in revoked
+    signed_in --> signed_in: requested, held credential checked ok
+    signed_in --> idle: held credential invalid, or closed holding a memory-only credential
+    denied --> [*]
+    expired --> [*]
+    cancelled --> [*]
+    failed --> [*]
+```
+
+The rules are decided once, in `nextStep`:
+
+| Rule | Where it shows |
+|---|---|
+| An environment token (`FINTRACK_TOKEN`) is the only credential: a malformed or invalid one is refused, never replaced by the keychain or a new request | `requested` with an env token → `check_credential(env)` only |
+| A saved credential found invalid is cleared from the keychain only if the keychain still holds it | `clear_saved_if(token)` — the interpreter loads, compares and clears |
+| "This session only" never reaches the keychain | `redeemed(signed_in)` with duration `session` → held `ephemeral`, no `save_credential` |
+| A keychain that refuses the sign-in: `login` takes it back, stdio keeps it in memory and revokes it at close | `saved(ok: false)` → `revoke_credential(keychain_refused)` (cli) / `ephemeral` (stdio) |
+| An unreadable keychain is "nothing saved" for a session that can ask in the browser, but `logout` must not claim a sign-out it could not check | `load_saved(tolerateUnreadable)` |
+| Denied or expired ends the attempt | terminal state (`login`) / back to `idle` (stdio) |
+| An unexpected failure is "could not check", never a sign-out | `errored` → `present(cannot_verify)`, state unchanged |
+

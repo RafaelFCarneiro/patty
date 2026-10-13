@@ -8,6 +8,9 @@
 > `Not started` · `In progress` · `Done` · `Blocked`. The implementing PR updates this line (→ `In progress`
 > when work starts, → `Done` on merge); use `Blocked` with a one-line reason if stuck.
 
+> **Where it lives now:** the `setup` module this design describes is `src/diplomat/cli/commands/setup.ts` (the command) and
+> `src/diplomat/clientConfig/` (the merge helpers and the file writes); the text below keeps the original design's names.
+
 ## Context
 
 Connecting FinTrack's MCP server to an AI client requires editing a JSON config file whose

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** What a credential may do (ADR-033 §3). `fintrack:write` implies `fintrack:read` — see `logic/auth.ts`'s
+/** What a credential may do (ADR-033 §3). `fintrack:write` implies `fintrack:read` — see `logic/auth/scope.ts`'s
  *  `hasScope`. The values are the OAuth scope strings clients see in challenges and metadata. */
 export const Scope = z.enum(['fintrack:read', 'fintrack:write']);
 export type Scope = z.infer<typeof Scope>;

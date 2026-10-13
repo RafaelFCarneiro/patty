@@ -1,3 +1,4 @@
+import * as R from 'remeda';
 import { GrantChannel, RedeemKind, type SignedIn } from '../../models/auth/grant.js';
 import { STDIO_MESSAGES } from '../../models/auth/message.js';
 import { WRITE_SCOPE } from '../../models/auth/scope.js';
@@ -313,11 +314,13 @@ const adopted = (signedIn: SignedIn, ephemeral: boolean, then: Continuation, con
 const onRedeemed = (state: SignInState, observation: Observed<typeof O.redeemed>, config: SignInConfig) => {
   const { result, then } = observation;
   switch (result.kind) {
-    case RedeemKind.enum.signed_in:
+    case RedeemKind.enum.signed_in: {
+      const signedIn: SignedIn = R.omit(result, ['kind']);
       // "This session only" never reaches the keychain.
-      return persistsToKeychain(result.duration)
-        ? ask(state, { kind: E.save_credential, signedIn: result, then })
-        : adopted(result, true, then, config);
+      return persistsToKeychain(signedIn.duration)
+        ? ask(state, { kind: E.save_credential, signedIn, then })
+        : adopted(signedIn, true, then, config);
+    }
     case REDEEM_ERROR_KIND:
       return config.channel === CHANNEL.cli
         ? ended(S.failed, failedWith(result.error))
