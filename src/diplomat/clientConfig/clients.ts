@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { ok, Result } from 'neverthrow';
+import * as R from 'remeda';
 import type { ClientConfig, ClientConfigs, ClientSetupReport } from '../../controllers/deps.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/signIn.js';
 import { clientConfigFailures, type ClientConfigFailure } from '../../models/clientConfig.js';
@@ -24,15 +25,13 @@ const INVALID_ROOT_MESSAGE = 'does not contain a JSON object at the root';
 const invalidConfigWarning = (path: string): string =>
   `fintrack setup: ${path} ${INVALID_ROOT_MESSAGE} — replacing it during setup.`;
 
-const asCause = (cause: unknown): unknown => cause;
-
 // The throwing system calls, wrapped once: everything below this block is Results.
-const readText = Result.fromThrowable((path: string) => readFileSync(path, 'utf8'), asCause);
+const readText = Result.fromThrowable((path: string) => readFileSync(path, 'utf8'), R.identity());
 const writeText = Result.fromThrowable((path: string, text: string) => {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, text, 'utf8');
-}, asCause);
-const parseJson = Result.fromThrowable((text: string): unknown => JSON.parse(text), asCause);
+}, R.identity());
+const parseJson = Result.fromThrowable((text: string): unknown => JSON.parse(text), R.identity());
 
 type ConfigRead = { config: Record<string, unknown>; warnings: string[] };
 

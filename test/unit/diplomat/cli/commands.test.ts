@@ -53,6 +53,29 @@ describe('a prompt that ends', () => {
   });
 });
 
+describe('a prompt that ends in the auth commands', () => {
+  it.each([
+    ['interrupted', EXIT_INTERRUPTED, []],
+    ['cancelled', EXIT_FAILURE, ['fintrack: cancelled']],
+  ] as const)('auth setup and auth reset-password: %s → exit %i', async (how, code, expectedErr) => {
+    for (const args of [
+      ['auth', 'setup'],
+      ['auth', 'reset-password'],
+    ]) {
+      const { io, err } = rig(endedTerminal(how));
+      if (args[1] === 'reset-password') {
+        io.openShell = () =>
+          okAsync({
+            deps: { users: { findById: async () => ({ id: 'user-owner', username: 'rafael', version: 1 }) } },
+            close: () => undefined,
+          } as unknown as Shell);
+      }
+      expect(await runCli(args, io), args.join(' ')).toBe(code);
+      expect(err, args.join(' ')).toEqual(expectedErr);
+    }
+  });
+});
+
 describe('a database a newer build has migrated', () => {
   it('says the one message on stderr and fails, for every command that opens the database', async () => {
     for (const args of [['auth', 'setup'], ['login'], ['logout'], ['setup', 'claude-code']]) {

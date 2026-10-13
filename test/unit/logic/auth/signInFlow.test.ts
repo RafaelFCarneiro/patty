@@ -388,6 +388,15 @@ describe('the keychain, and what to do once it has been looked at', () => {
   });
 });
 
+describe('a keychain that cannot be read where it must be', () => {
+  it.each([cli, stdio])('ends the attempt with the keychain_unavailable report and nothing else', (config) => {
+    expect(nextStep(IDLE, { kind: O.saved_unreadable }, config)).toEqual({
+      state: { kind: S.failed },
+      effects: [present({ kind: P.keychain_unavailable })],
+    });
+  });
+});
+
 describe('opening a page and starting the request', () => {
   const rows: Row[] = [
     row(
@@ -970,6 +979,7 @@ describe('the shape every step keeps', () => {
     { kind: O.interrupted },
     { kind: O.closed },
     { kind: O.errored },
+    { kind: O.saved_unreadable },
     ...Object.values(SOURCE).flatMap((source) => results.map((result) => checked(source, 'ftk_x', result))),
     ...Object.values(LoadPurpose.enum).flatMap((purpose) =>
       ['ftk_x', null].map((token) => ({ kind: O.saved_loaded, purpose, token }) as SignInObservation),
