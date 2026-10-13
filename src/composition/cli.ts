@@ -1,15 +1,15 @@
 import { runEffects } from '@rfc0/effect-runner';
-import { AUTH_APPLIERS, bindAuthRunEffects, createAuthDeps } from './authRuntime.js';
-import { version } from './common/buildVersion.js';
-import { loadConfig } from './config.js';
-import { clientConfigs } from './diplomat/clientConfig/clients.js';
-import { type CliIo, type Shell } from './diplomat/cli/io.js';
-import * as tty from './diplomat/cli/terminal.js';
-import { bootstrap } from './diplomat/db/bootstrap.js';
-import { closeDatabase, openDatabase } from './diplomat/db/driver.js';
-import { createEngineContext } from './diplomat/db/engine.js';
-import { AuthMode } from './models/auth/mode.js';
-import { createSignInFor } from './signInWiring.js';
+import { AUTH_APPLIERS, bindAuthRunEffects, createAuthDeps } from './auth.js';
+import { version } from '../common/buildVersion.js';
+import { loadConfig } from '../config.js';
+import { clientConfigs } from '../diplomat/clientConfig/clients.js';
+import { type CliIo, type Shell } from '../diplomat/cli/io.js';
+import * as tty from '../diplomat/cli/terminal.js';
+import { bootstrap } from '../diplomat/db/bootstrap.js';
+import { closeDatabase, openDatabase } from '../diplomat/db/driver.js';
+import { createEngineContext } from '../diplomat/db/engine.js';
+import { AuthMode } from '../models/auth/mode.js';
+import { createSignInFor } from './signIn/wiring.js';
 
 /**
  * Composition root of the command mode (`setup`, `auth …`, `login`, `logout`): the one place that joins the database,

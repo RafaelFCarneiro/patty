@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
-import { bindAuthRunEffects } from '../../../src/authRuntime.js';
+import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import { authenticateToken } from '../../../src/controllers/accessTokens.js';
 import type { AuthDeps } from '../../../src/controllers/deps.js';
 import {

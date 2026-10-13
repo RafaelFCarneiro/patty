@@ -113,7 +113,7 @@ export type SignInHooks = {
  * The imperative shell's capability to run the sign-in protocol (`logic/auth/signInFlow.ts` decides, this executes).
  * `drive` feeds one observation and runs the effects it leads to — each answer fed straight back — until nothing is
  * left to do, then returns the state. Not a controller (it executes effects, which controllers never do), and built at
- * the composition root (`src/signInInterpreter.ts`) like `RunEffects`, so no edge imports another.
+ * the composition root (`src/composition/signIn/interpreter.ts`) like `RunEffects`, so no edge imports another.
  */
 export type SignInInterpreter = {
   drive: (

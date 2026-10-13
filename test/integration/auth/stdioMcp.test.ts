@@ -3,11 +3,11 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
-import { bindAuthRunEffects } from '../../../src/authRuntime.js';
+import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import { ownerGate } from '../../../src/diplomat/mcp/gate.js';
 import { buildMcpServer } from '../../../src/diplomat/mcp/server.js';
 import { createStdioSession } from '../../../src/diplomat/mcp/stdioSession.js';
-import { createSignInInterpreter } from '../../../src/signInInterpreter.js';
+import { createSignInInterpreter } from '../../../src/composition/signIn/interpreter.js';
 import { authDepsOf, answerConnect, claimOwner, memoryStore, useAuthApp, SIGN_IN_ORIGIN } from './helpers.js';
 import type { AppContext } from '../app-builder.js';
 

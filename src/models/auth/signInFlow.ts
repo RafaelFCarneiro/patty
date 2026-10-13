@@ -6,7 +6,8 @@ import type { TokenAccess } from './token.js';
 /**
  * The sign-in protocol, as data (ADR-034): where a stdio session or a `fintrack login` stands (`SignInState`), what it
  * has just learned (`SignInObservation`) and what the shell is asked to do about it (`SignInEffect`). The decisions are
- * `logic/auth/signInFlow.ts`'s `nextStep`; `src/signInInterpreter.ts` only executes effects and reports what happened.
+ * `logic/auth/signInFlow.ts`'s `nextStep`; `src/composition/signIn/interpreter.ts` only executes effects and reports
+ * what happened.
  */
 
 export const SignInStateKind = z.enum(['idle', 'pending', 'signed_in', 'denied', 'expired', 'cancelled', 'failed']);

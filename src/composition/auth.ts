@@ -1,34 +1,36 @@
 import { randomUUID } from 'node:crypto';
-import * as authAdapters from './adapters/auth.js';
-import { formatAppError } from './common/errors.js';
-import { McpTransport, type Config } from './config.js';
-import { issueSetupCode, pruneExpiredSessions } from './controllers/auth.js';
-import { pruneExpiredGrants } from './controllers/grants.js';
-import type { AuthDeps, RunEffects } from './controllers/deps.js';
-import type { Db } from './diplomat/db/driver.js';
-import type { ApplierRegistry } from './diplomat/db/effects.js';
-import { accessTokenApplier, accessTokensRepo } from './diplomat/db/repos/accessTokens.js';
-import { clientGrantApplier, clientGrantsRepo } from './diplomat/db/repos/clientGrants.js';
-import { sessionApplier, sessionsRepo } from './diplomat/db/repos/sessions.js';
-import { setupCodeApplier, setupCodesRepo } from './diplomat/db/repos/setupCodes.js';
-import { userApplier, usersRepo } from './diplomat/db/repos/users.js';
-import { SETUP_PATH } from './diplomat/http/authPaths.js';
-import { DISABLED_AUTH, type HttpAuth } from './diplomat/http/context.js';
-import { setupBanner } from './logic/auth/message.js';
+import * as authAdapters from '../adapters/auth.js';
+import { formatAppError } from '../common/errors.js';
+import { McpTransport, type Config } from '../config.js';
+import { issueSetupCode, pruneExpiredSessions } from '../controllers/auth.js';
+import { pruneExpiredGrants } from '../controllers/grants.js';
+import type { AuthDeps, RunEffects, SignInInterpreter } from '../controllers/deps.js';
+import type { RuntimeConfig } from './runtime.js';
+import { createSignInFor } from './signIn/wiring.js';
+import type { Db } from '../diplomat/db/driver.js';
+import type { ApplierRegistry } from '../diplomat/db/effects.js';
+import { accessTokenApplier, accessTokensRepo } from '../diplomat/db/repos/accessTokens.js';
+import { clientGrantApplier, clientGrantsRepo } from '../diplomat/db/repos/clientGrants.js';
+import { sessionApplier, sessionsRepo } from '../diplomat/db/repos/sessions.js';
+import { setupCodeApplier, setupCodesRepo } from '../diplomat/db/repos/setupCodes.js';
+import { userApplier, usersRepo } from '../diplomat/db/repos/users.js';
+import { SETUP_PATH } from '../diplomat/http/authPaths.js';
+import { DISABLED_AUTH, type HttpAuth } from '../diplomat/http/context.js';
+import { setupBanner } from '../logic/auth/message.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
   CLIENT_GRANT_ENTITY_TAG,
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
   USER_ENTITY_TAG,
-} from './models/auth/entity.js';
-import { AuthMode } from './models/auth/mode.js';
+} from '../models/auth/entity.js';
+import { AuthMode } from '../models/auth/mode.js';
 
 /**
  * Lazily imports the credential primitives so `@node-rs/argon2`'s native module is never loaded unless
  * an auth flow can run — an explicit `FINTRACK_AUTH=disabled` stdio run starts exactly as it did before ADR-033.
  */
-const loadCredentialsModule = () => import('./diplomat/auth/credentials.js');
+const loadCredentialsModule = () => import('../diplomat/auth/credentials.js');
 
 /** The auth flows touch five entities (user, session, setup code, access token, client grant) and the shell
  *  adapts model→row for each exactly once, here, before the generic runner sees the batch
@@ -62,9 +64,18 @@ export const createAuthDeps = async (db: Db): Promise<AuthDeps> => {
 
 const isSecureOrigin = (publicUrl: string | undefined): boolean => publicUrl?.startsWith('https://') ?? false;
 
+/** What auth needs of the config — including what a sign-in needs to serve its temporary page on this database. */
 export type AuthConfig = Pick<
   Config,
-  'FINTRACK_AUTH' | 'PUBLIC_URL' | 'HOST' | 'PORT' | 'MCP_TRANSPORT' | 'FINTRACK_HTTP'
+  | 'FINTRACK_AUTH'
+  | 'PUBLIC_URL'
+  | 'HOST'
+  | 'PORT'
+  | 'MCP_TRANSPORT'
+  | 'FINTRACK_HTTP'
+  | 'DB_PATH'
+  | 'TRUST_PROXY'
+  | keyof RuntimeConfig
 >;
 
 /** Whether anything will serve HTTP in this run — sessions only matter if so. */
@@ -81,9 +92,11 @@ export const httpSurfaceEnabled = (config: Pick<AuthConfig, 'MCP_TRANSPORT' | 'F
  */
 export type PreparedAuth = {
   auth: HttpAuth;
-  /** What the stdio channel signs in with. Present whenever authentication is required and the transport is stdio —
-   *  even with `FINTRACK_HTTP=false`, where there is no HTTP surface but the stdio session still needs a login. */
-  stdio: { deps: AuthDeps; run: RunEffects } | null;
+  /** What the stdio channel signs in with: the sign-in interpreter of a profile, given the origin of the page this
+   *  process can name (the bound sidecar's, or none). Present whenever authentication is required and the
+   *  transport is stdio — even with `FINTRACK_HTTP=false`, where there is no HTTP surface but the stdio session
+   *  still needs a login. */
+  stdio: { signIn: (profile: string, origin: () => string | null) => SignInInterpreter } | null;
   /** While the owner is unclaimed, issue a fresh setup code and print it to STDERR (stdout carries stdio MCP),
    *  naming the origin the server really bound. A no-op once claimed, in `disabled` mode, or with no HTTP. */
   issueAndAnnounceSetup: (boundOrigin: string, announce?: (message: string) => void) => Promise<void>;
@@ -108,7 +121,13 @@ export const prepareAuth = async (config: AuthConfig, db: Db, runEffects: RunEff
   const run = bindAuthRunEffects(runEffects);
   await housekeeping(run, deps);
 
-  const stdio = config.MCP_TRANSPORT === McpTransport.enum.stdio ? { deps, run } : null;
+  const stdio: PreparedAuth['stdio'] =
+    config.MCP_TRANSPORT === McpTransport.enum.stdio
+      ? {
+          signIn: (profile, origin) =>
+            createSignInFor({ config, db, deps, run }, { profile, origin, canServePage: config.FINTRACK_HTTP }),
+        }
+      : null;
   if (!httpSurfaceEnabled(config)) return { auth: DISABLED_AUTH, stdio, issueAndAnnounceSetup: NO_SETUP_TO_ISSUE };
 
   return {

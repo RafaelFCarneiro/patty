@@ -1,7 +1,7 @@
 import { Writable } from 'node:stream';
 import Fastify, { type InjectOptions } from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { httpLoggerOptions } from '../../src/server.js';
+import { httpLoggerOptions } from '../../src/composition/http.js';
 
 describe('request logging (ADR-033 §2)', () => {
   const SECRET = 'SECRETTOKEN';

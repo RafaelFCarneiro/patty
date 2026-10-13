@@ -4,8 +4,8 @@ import { AUTH_HELP, parseClaimArgs, runAuthCommand } from '../../../src/diplomat
 import type { CliIo } from '../../../src/diplomat/cli/io.js';
 import { CLI_MESSAGES } from '../../../src/diplomat/cli/messages.js';
 import { AUTH_POSITIONALS, EXIT_FAILURE, EXIT_OK, SETUP_POSITIONALS } from '../../../src/common/cli.js';
-import { bindAuthRunEffects } from '../../../src/authRuntime.js';
-import { createSignInInterpreter } from '../../../src/signInInterpreter.js';
+import { bindAuthRunEffects } from '../../../src/composition/auth.js';
+import { createSignInInterpreter } from '../../../src/composition/signIn/interpreter.js';
 import { PROMPT_MESSAGES } from '../../../src/diplomat/cli/prompt.js';
 import { accessTokens, sessions, users } from '../../../src/diplomat/db/schema.js';
 import { OWNER_USER_ID, UserRole } from '../../../src/models/auth/owner.js';

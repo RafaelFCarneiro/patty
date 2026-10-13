@@ -4,7 +4,7 @@ import { errAsync } from 'neverthrow';
 import { KeychainUnavailableError } from '../../../src/common/keychain.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { CliIo, Shell } from '../../../src/diplomat/cli/io.js';
-import { bindAuthRunEffects } from '../../../src/authRuntime.js';
+import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_OK } from '../../../src/common/cli.js';
 import { loadConfig } from '../../../src/config.js';
 import type { Terminal } from '../../../src/diplomat/cli/terminal.js';
@@ -13,8 +13,8 @@ import { conflict } from '../../../src/models/error.js';
 import { AUTH_MESSAGES } from '../../../src/models/auth/message.js';
 import { GRANT_POLL_INTERVAL_MS } from '../../../src/models/auth/signIn.js';
 import { NPX_COMMAND } from '../../../src/models/package.js';
-import { createSignInInterpreter } from '../../../src/signInInterpreter.js';
-import { startSignInServer } from '../../../src/signInServer.js';
+import { createSignInInterpreter } from '../../../src/composition/signIn/interpreter.js';
+import { startSignInServer } from '../../../src/composition/signIn/server.js';
 import type { AppContext } from '../app-builder.js';
 import {
   authDepsOf,

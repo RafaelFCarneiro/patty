@@ -92,11 +92,11 @@ engine wiring, appliers, outcomes, and the per-flow notes.
   because a bill `update` needs `paymentTransactionId: undefined` (leave the column unchanged) to differ from
   `null` (clear it) — an asymmetry the uniform factory can't express.
 - **Exception — the auth flows (ADR-033) are adapted once at the composition root.** `login`/`claimOwner`/
-  `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions`, the CLI's `claimOwnerLocally`/`resetPassword` (`cliShell.ts` binds its own runner the same way) and the access-token flows (`createToken`/
+  `logout`/`authenticate`/`issueSetupCode`/`pruneExpiredSessions`, the CLI's `claimOwnerLocally`/`resetPassword` (`composition/cli.ts` binds its own runner the same way) and the access-token flows (`createToken`/
   `revokeToken`/`revokeSignInByHash`/`authenticateToken`, `controllers/accessTokens.ts`) and the stdio sign-in flows (`startGrant`/`approveGrant`/`denyGrant`/`redeemGrant`/`pruneExpiredGrants`, `controllers/grants.ts`) are run from several shell sites (the auth hook,
   the sign-in and token routes, startup), none of which is "the" handler, and a single batch can mix three entities
   (`claimOwner`: user + setup code + session). So `adapters/auth.ts`'s `outcomeToDb` (the five entities'
-  `entityDbAdapter` pairs applied in turn — each rewrites only its own tag) is applied in `authRuntime.ts`'s
+  `entityDbAdapter` pairs applied in turn — each rewrites only its own tag) is applied in `composition/auth.ts`'s
   `bindAuthRunEffects`, which wraps the shell's `RunEffects` once: `runEffects(() => flow().map(outcomeToDb))`.
   Every auth call site then holds that bound runner, never the raw one. Still exactly once, still outside
   `diplomat/db`; the controllers are unchanged (`{ persist, response }`).
@@ -106,7 +106,7 @@ engine wiring, appliers, outcomes, and the per-flow notes.
 The engine's behavior (retry, version guard, idempotency, empty batches, `runEffectsSequence`, change publication
 and its failure isolation) is the package's to document — see the pointer above. FinTrack only does the following:
 
-- **Composition-root binding** (`main.ts`, `test/integration/app-builder.ts`). The `EngineContext` is bound to the
+- **Composition-root binding** (`composition/runtime.ts`, `test/integration/app-builder.ts`). The `EngineContext` is bound to the
   SQLite adapter and FinTrack's own error: `diplomat/db/driver.ts`'s `createTransactionRunner(db)` is `runner`,
   `diplomat/db/sqliteErrors.ts`'s `isSqliteBusy` is `isTransientContention` (`SQLITE_BUSY` and
   `SQLITE_BUSY_SNAPSHOT`, matched on the driver error's base `.code`; `busy_timeout` in `driver.ts` absorbs the
@@ -114,7 +114,7 @@ and its failure isolation) is the package's to document — see the pointer abov
 - **The `ApplierRegistry`** is assembled once there, one `EntityApplier` per FinTrack entity tag.
 - **Typed `Tx`.** `diplomat/db/effects.ts` re-exports the package's `EntityApplier`/`ApplierRegistry`/`ReadBack`
   specialized with FinTrack's own `Tx`.
-- **Change bus.** `main.ts` calls `createChangeBus({ onError })` once, passes `changeBus.publish` to
+- **Change bus.** `composition/runtime.ts` calls `createChangeBus({ onError })` once, passes `changeBus.publish` to
   `runEffects`/`runEffectsSequence`, hands `changeBus.subscribe` to the HTTP sidecar (SSE, `docs/ui.md`), and wires
   one shared stderr reporter (`reportChangeError`) as both the bus `onError` and the context's `onPublishError`.
   stderr only — stdout carries the stdio MCP protocol (ADR-007).

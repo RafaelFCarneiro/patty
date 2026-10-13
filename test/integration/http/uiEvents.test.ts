@@ -25,7 +25,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Proves forceCloseConnections (server.ts) actually works — without it this would hang on any
+  // Proves forceCloseConnections (composition/http.ts) actually works — without it this would hang on any
   // /ui/events connection this suite left open.
   await app.close();
   if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });

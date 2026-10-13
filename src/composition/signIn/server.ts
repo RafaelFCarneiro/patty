@@ -1,15 +1,15 @@
 import type { AddressInfo } from 'node:net';
-import { prepareAuth } from './authRuntime.js';
-import { version } from './common/buildVersion.js';
-import { httpOrigin, LOCALHOST_NAME } from './common/net.js';
-import { McpTransport, type Config } from './config.js';
-import type { SignInServer } from './controllers/deps.js';
-import type { Db } from './diplomat/db/driver.js';
-import { AuthMode } from './models/auth/mode.js';
-import { createRuntime } from './runtime.js';
+import { prepareAuth, type AuthConfig } from '../auth.js';
+import { version } from '../../common/buildVersion.js';
+import { httpOrigin, LOCALHOST_NAME } from '../../common/net.js';
+import { McpTransport } from '../../config.js';
+import type { SignInServer } from '../../controllers/deps.js';
+import type { Db } from '../../diplomat/db/driver.js';
+import { AuthMode } from '../../models/auth/mode.js';
+import { createRuntime } from '../runtime.js';
 
 /** Lazy: Fastify and the whole route table load only when a login actually needs to serve the consent page. */
-const loadServerModule = () => import('./server.js');
+const loadServerModule = () => import('../http.js');
 
 /**
  * Where the browser goes when a sign-in has no honest page of its own to name — `fintrack login` (ADR-034 §6), and a
@@ -18,7 +18,7 @@ const loadServerModule = () => import('./server.js');
  * `HOST:PORT` is deliberately not reused: a healthy `/api/health` proves it is FinTrack, not that it opened this
  * database, and a grant written here would never validate there.
  */
-export const startSignInServer = async (config: Config, db: Db): Promise<SignInServer> => {
+export const startSignInServer = async (config: AuthConfig, db: Db): Promise<SignInServer> => {
   const runtime = createRuntime(db, config);
   const { auth } = await prepareAuth(
     {

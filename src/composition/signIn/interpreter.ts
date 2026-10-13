@@ -1,7 +1,7 @@
-import { KeychainUnavailableError } from './common/keychain.js';
-import { formatAppError } from './common/errors.js';
-import { authenticateToken, revokeSignInByHash } from './controllers/accessTokens.js';
-import { ownerNeedsSetup } from './controllers/auth.js';
+import { KeychainUnavailableError } from '../../common/keychain.js';
+import { formatAppError } from '../../common/errors.js';
+import { authenticateToken, revokeSignInByHash } from '../../controllers/accessTokens.js';
+import { ownerNeedsSetup } from '../../controllers/auth.js';
 import type {
   AuthDeps,
   RunEffects,
@@ -9,12 +9,12 @@ import type {
   SignInInterpreter,
   SignInServer,
   SignInStore,
-} from './controllers/deps.js';
-import { redeemGrant, startGrant } from './controllers/grants.js';
-import { CheckKind, EffectKind, ObservationKind, REDEEM_ERROR_KIND } from './models/auth/signInFlow.js';
-import type { CheckResult, SignInEffect, SignInObservation } from './models/auth/signInFlow.js';
-import { nextStep } from './logic/auth/signInFlow.js';
-import { PrincipalVia } from './models/auth/principal.js';
+} from '../../controllers/deps.js';
+import { redeemGrant, startGrant } from '../../controllers/grants.js';
+import { CheckKind, EffectKind, ObservationKind, REDEEM_ERROR_KIND } from '../../models/auth/signInFlow.js';
+import type { CheckResult, SignInEffect, SignInObservation } from '../../models/auth/signInFlow.js';
+import { nextStep } from '../../logic/auth/signInFlow.js';
+import { PrincipalVia } from '../../models/auth/principal.js';
 
 /**
  * The shell side of the sign-in protocol. `logic/auth/signInFlow.ts` decides; this runs the effects it describes with
