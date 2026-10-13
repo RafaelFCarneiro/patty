@@ -63,6 +63,7 @@ const outcomeOf = (presentation: Presentation | undefined): GateOutcome => {
           ownerUnclaimed: presentation.ownerUnclaimed,
         }),
       );
+    // Everything else — including nothing at all — is "could not check"; only terminal lines say more.
     default:
       return notSignedIn(STDIO_MESSAGES.cannotVerify);
   }

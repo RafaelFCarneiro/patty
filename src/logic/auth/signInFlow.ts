@@ -79,6 +79,7 @@ const withoutHeld = (state: SignInState): SignInState => {
 
 // ─── Step helpers ───────────────────────────────────────────────────────────
 
+const CLOSE_PAGE: SignInEffect = { kind: E.close_page };
 const present = (presentation: Presentation): SignInEffect => ({ kind: E.present, presentation });
 const step = (state: SignInState, ...effects: SignInEffect[]): SignInStep => ({ state, effects });
 const tell = (state: SignInState, presentation: Presentation): SignInStep => step(state, present(presentation));
@@ -86,7 +87,7 @@ const ask = (state: SignInState, effect: SignInEffect): SignInStep => step(state
 
 /** An attempt ends: the page it served is released first, then the person is told. */
 const ended = (kind: typeof S.denied | typeof S.expired | typeof S.cancelled | typeof S.failed, what: Presentation) =>
-  step({ kind }, { kind: E.close_page }, present(what));
+  step({ kind }, CLOSE_PAGE, present(what));
 
 const failedWith = (reason: string): Presentation => ({ kind: P.failed, reason });
 
@@ -267,7 +268,7 @@ const onGrantStarted = (state: SignInState, observation: Observed<typeof O.grant
 
 const onGrantFailed = (state: SignInState, observation: Observed<typeof O.grant_failed>, config: SignInConfig) =>
   config.channel === CHANNEL.stdio
-    ? step(state, { kind: E.close_page }, present({ kind: P.cannot_verify }))
+    ? step(state, CLOSE_PAGE, present({ kind: P.cannot_verify }))
     : ended(S.failed, failedWith(observation.error));
 
 const onOwnerChecked = (state: SignInState, observation: Observed<typeof O.owner_checked>) => {
@@ -290,10 +291,9 @@ const onOwnerChecked = (state: SignInState, observation: Observed<typeof O.owner
 /** The request is spent (answered or out of time): a stdio session is back to asking, `login` has its outcome. */
 const gone = (state: SignInState, then: Continuation): SignInStep => {
   const next = withoutPending(state);
-  const release: SignInEffect = { kind: E.close_page };
   return then === Continuation.enum.ask
-    ? step(next, release, { kind: E.name_page, purpose: PagePurpose.enum.new_request })
-    : step(next, release);
+    ? step(next, CLOSE_PAGE, { kind: E.name_page, purpose: PagePurpose.enum.new_request })
+    : step(next, CLOSE_PAGE);
 };
 
 /** Still waiting for a person (or the lookup failed, which a stdio session treats the same). */
@@ -306,11 +306,10 @@ const stillPending = (state: SignInState, config: SignInConfig, then: Continuati
 const adopted = (signedIn: SignedIn, ephemeral: boolean, then: Continuation, config: SignInConfig): SignInStep => {
   const held: HeldSignIn = { token: signedIn.token, principal: signedIn.principal, ephemeral };
   const next: SignInState = { kind: S.signed_in, held, pending: null };
-  const release: SignInEffect = { kind: E.close_page };
   if (config.channel === CHANNEL.cli) {
     return step(
       next,
-      release,
+      CLOSE_PAGE,
       present({
         kind: P.signed_in,
         profile: config.profile,
@@ -320,8 +319,8 @@ const adopted = (signedIn: SignedIn, ephemeral: boolean, then: Continuation, con
     );
   }
   return then === Continuation.enum.ask
-    ? step(next, release, present({ kind: P.granted, principal: signedIn.principal }))
-    : step(next, release);
+    ? step(next, CLOSE_PAGE, present({ kind: P.granted, principal: signedIn.principal }))
+    : step(next, CLOSE_PAGE);
 };
 
 const onRedeemed = (state: SignInState, observation: Observed<typeof O.redeemed>, config: SignInConfig) => {
@@ -399,11 +398,14 @@ const onInterrupted = (state: SignInState): SignInStep =>
 /** Shutdown: stop asking, release the page, and take back a credential that lives in memory only. */
 const onClosed = (state: SignInState): SignInStep => {
   const base = withoutPending(state);
-  const release: SignInEffect = { kind: E.close_page };
   if (base.kind === S.signed_in && base.held.ephemeral) {
-    return step(IDLE, release, { kind: E.revoke_credential, token: base.held.token, reason: RevokeReason.enum.close });
+    return step(IDLE, CLOSE_PAGE, {
+      kind: E.revoke_credential,
+      token: base.held.token,
+      reason: RevokeReason.enum.close,
+    });
   }
-  return step(base, release);
+  return step(base, CLOSE_PAGE);
 };
 
 /** What happens next, given what was just seen. Total: an observation the state has no use for changes nothing. */

@@ -13,7 +13,7 @@ import { OWNER_PRINCIPAL, type Principal, PrincipalVia } from '../../../../../sr
 import { ALL_SCOPES } from '../../../../../src/models/auth/scope.js';
 
 // The hook only translates: headers/route/cookie in, 401 / 403 / redirect / principal out. The decisions are
-// unit-tested in test/unit/logic/auth.test.ts; the whole stack is covered by test/integration/auth/*.
+// unit-tested in test/unit/logic/auth/*; the whole stack is covered by test/integration/auth/*.
 const apps: FastifyInstance[] = [];
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
