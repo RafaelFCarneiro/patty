@@ -90,7 +90,7 @@ Because the package is private on GitHub Packages, npm needs a token to download
 
    ```bash
    npx @rafaelfcarneiro/fintrack@latest          # one-off
-   # or (a global install is NOT refreshed by `npx` — see "Why a build refuses an older database" below)
+   # or (a global install is NOT refreshed by `npx` — see "Why an older build refuses a newer database" below)
    npm install -g @rafaelfcarneiro/fintrack && fintrack
    ```
 
@@ -116,7 +116,7 @@ Upgrades are safe to run anytime: the database migrates itself forward on the ne
 (`bootstrap()` applies any pending Drizzle migrations idempotently), and your `<home directory>/.fintrack/fintrack.db` is untouched
 otherwise. You'll see new releases on the repo's **Releases** page with auto-generated notes.
 
-## Why a build refuses an older database (the version guard)
+## Why an older build refuses a newer database (the version guard)
 
 `bootstrap()` — and so the server and every command that opens the database — first compares the database's newest applied migration
 (`__drizzle_migrations.created_at`, i.e. the journal entry's `when`) with the newest entry in the migrations journal **this build ships**. If the

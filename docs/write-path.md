@@ -177,7 +177,11 @@ and its failure isolation) is the package's to document — see the pointer abov
 
 - **Auth entities** (`user`, `session`, `setup_code`, `access_token`, `client_grant`;
   `diplomat/db/repos/{users,sessions,setupCodes,accessTokens,clientGrants}.ts`). `userApplier`, `sessionApplier`,
-  `accessTokenApplier` and `clientGrantApplier` are plain `versionedTableApplier`s. `setupCodeApplier` wraps `insert` the way
+  and `accessTokenApplier` are plain `versionedTableApplier`s. `clientGrantApplier` is one too, except that its `insert`
+  rethrows a unique-constraint violation as `VersionConflict`: `user_code` is unique among PENDING grants (a partial index),
+  so two requests drawing the same free code at once collide there, and the retry re-runs `startGrant`, whose
+  `freshUserCode` sees the committed row and draws another code (the shape `tagApplier` uses for `tags.name`).
+  `setupCodeApplier` wraps `insert` the way
   `settingsApplier` does: `setup_codes` holds ONE fixed row (`SETUP_CODE_ID`), so an id collision on insert is the
   concurrent-first-issue race — it is rethrown as `VersionConflict` and the retry updates the winner's row in place
   rather than silently no-oping (a lost insert would leave a process printing a code that was never stored).
