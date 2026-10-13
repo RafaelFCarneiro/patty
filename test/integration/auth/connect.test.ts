@@ -310,6 +310,31 @@ describe('POST /ui/connect', () => {
     expect(res.headers['cache-control']).toBe('no-store');
   });
 
+  it('keeps the dashboards link for a stdio request, whose sidecar stays up', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const res = await answerConnect(ctx, cookie, await requestCode(ctx), { decision: 'approve' });
+    expect(res.body).toContain('Back to the dashboards');
+    expect(res.body).not.toContain('close this tab');
+  });
+
+  it('says "close this tab", not a dashboard link, for a `fintrack login` request (its server is temporary)', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const started = await bindAuthRunEffects(ctx.runEffects)(() =>
+      startGrant(authDepsOf(ctx), {
+        client: { name: 'fintrack login', version: '0' },
+        profile: 'default',
+        channel: GrantChannel.enum.cli,
+      }),
+    );
+    const code = started._unsafeUnwrap().userCode;
+    const approved = await answerConnect(ctx, cookie, code, { decision: 'approve' });
+    expect(approved.statusCode).toBe(200);
+    expect(approved.body).toContain('You can close this tab.');
+    expect(approved.body).not.toContain('Back to the dashboards');
+  });
+
   it('denies, and says so', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);

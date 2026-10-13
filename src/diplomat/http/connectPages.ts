@@ -1,5 +1,5 @@
 import * as R from 'remeda';
-import { SignInDuration, TokenAccess, type GrantChoice, type GrantRequest } from '../../models/auth.js';
+import { GrantChannel, SignInDuration, TokenAccess, type GrantChoice, type GrantRequest } from '../../models/auth.js';
 import { durationAllowedFor } from '../../logic/auth.js';
 import { errorBlock, escapeHtml, fillTemplate } from './authPages.js';
 import { CONNECT_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from './authPaths.js';
@@ -62,10 +62,23 @@ export const renderConnectPage = async (fields: {
     error: errorBlock(fields.error),
   });
 
-export const renderConnectResultPage = async (fields: { heading: string; message: string }): Promise<string> =>
+const CLOSE_TAB_HINT = 'You can close this tab.';
+
+// A `fintrack login` request is served by a temporary server that closes as soon as the sign-in is picked up, so a
+// link back to its dashboards would be dead moments later; every other page keeps it.
+const nextStep = (channel: GrantChannel | undefined): string =>
+  channel === GrantChannel.enum.cli
+    ? `<p>${CLOSE_TAB_HINT}</p>`
+    : `<p><a href="${UI_ROOT_PATH}">Back to the dashboards</a></p>`;
+
+export const renderConnectResultPage = async (fields: {
+  heading: string;
+  message: string;
+  channel?: GrantChannel;
+}): Promise<string> =>
   fillTemplate(await readCached(CONNECT_RESULT_TEMPLATE_PATH), {
     stylesheet: UI_APP_CSS_PATH,
     heading: escapeHtml(fields.heading),
     message: escapeHtml(fields.message),
-    dashboards: UI_ROOT_PATH,
+    next: nextStep(fields.channel),
   });

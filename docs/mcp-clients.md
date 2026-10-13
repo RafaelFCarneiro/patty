@@ -42,8 +42,8 @@ the first tool call answers with an ordinary error that holds a link and a code:
 > FinTrack: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.
 
 Open the link (log in first if asked), check the code matches, choose read-only or read-and-write and **how long** — this Claude session only,
-24 hours (the default), 7 days or 30 days — and approve. Claude's next call goes through, and a restart of the client needs no new approval until
-the sign-in expires or you revoke it (`/ui/access/tokens`). Tool, resource and prompt **lists** work before you sign in, so the client can show the server.
+24 hours (the default), 7 days or 30 days — and approve. Claude's next call goes through, and a restart of the client needs no new approval while a **saved** sign-in (24 hours, 7 days, 30 days) is
+still valid and not revoked (`/ui/access/tokens`); "this Claude session only" lives in memory, ends with the process, and asks again on the next start. Tool, resource and prompt **lists** work before you sign in, so the client can show the server.
 The same flow from a terminal: `npx @rafaelfcarneiro/fintrack@latest login` / `logout`. Details: [`auth.md`](auth.md#signing-in-claude-stdio).
 
 Two optional variables go in the client's `env`:

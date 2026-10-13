@@ -112,6 +112,19 @@ describe('startGrant', () => {
     expect(second._unsafeUnwrap().userCode).toBe('BBBB-BBBB');
   });
 
+  it('turns a concurrently drawn duplicate code into a retryable conflict, not a raw constraint error', async () => {
+    const w = await world();
+    const sameCode = { ...w.deps, secrets: { ...w.deps.secrets, randomUserCode: () => 'AAAAAAAA' } };
+    // Two requests that both saw 'AAAAAAAA' as free (as two racing processes would)…
+    const first = (await startGrant(sameCode, STDIO_REQUEST))._unsafeUnwrap();
+    const second = (await startGrant(sameCode, STDIO_REQUEST))._unsafeUnwrap();
+
+    expect((await w.run(() => okAsync(first))).isOk()).toBe(true);
+    // …the loser hits the partial unique index; the engine sees a VersionConflict (retry), never a thrown SQLite error.
+    expect((await w.run(() => okAsync(second)))._unsafeUnwrapErr()).toEqual(conflict);
+    expect(await w.ctx.db.all(sql`SELECT 1 FROM client_grants`)).toHaveLength(1);
+  });
+
   it('fails instead of looping if it can never draw a free user code', async () => {
     const w = await world();
     const stuck = { ...w.deps, secrets: { ...w.deps.secrets, randomUserCode: () => 'AAAAAAAA' } };

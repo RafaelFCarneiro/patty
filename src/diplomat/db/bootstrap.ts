@@ -107,6 +107,9 @@ const seedMerchantRules = async (db: Db): Promise<void> => {
 export const bootstrap = async (db: Db, migrationsFolder = DEFAULT_MIGRATIONS_FOLDER): Promise<void> => {
   await assertDatabaseNotAhead(db, migrationsFolder);
   await migrateWithSafetyCopy(db, migrationsFolder, () => migrate(db, { migrationsFolder }));
+  // A newer build may have migrated between the first check and now (both starting at once): look again right before
+  // the first seed write, so an older build never seeds into a schema it does not know.
+  await assertDatabaseNotAhead(db, migrationsFolder);
   await seedCurrencies(db);
   await seedCategories(db);
   await seedMerchantRules(db);

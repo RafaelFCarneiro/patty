@@ -3,7 +3,8 @@ import * as clientGrantAdapters from '../../../adapters/clientGrants.js';
 import { GrantStatus, type ClientGrantEntity } from '../../../models/auth.js';
 import type { Db } from '../driver.js';
 import { clientGrants } from '../schema.js';
-import { versionedTableApplier } from '../effects.js';
+import { isUniqueConstraintViolation } from '../sqliteErrors.js';
+import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
 
 export type ClientGrantsRepo = {
   findByDeviceCodeHash: (deviceCodeHash: string) => Promise<ClientGrantEntity | null>;
@@ -55,4 +56,19 @@ export const clientGrantsRepo = (db: Db): ClientGrantsRepo => ({
   },
 });
 
-export const clientGrantApplier = versionedTableApplier(clientGrants);
+const versionedClientGrantApplier = versionedTableApplier(clientGrants);
+
+/** `user_code` is unique among PENDING grants: two grants drawing the same free code at once collide on that index,
+ *  which `onConflictDoNothing` (scoped to `id`) does not swallow. Rethrown as `VersionConflict`, so the engine rolls
+ *  back and re-runs `startGrant`, whose `freshUserCode` then sees the committed row and draws another code. */
+export const clientGrantApplier: EntityApplier = {
+  ...versionedClientGrantApplier,
+  insert: async (tx, model, idempotencyKey) => {
+    try {
+      return await versionedClientGrantApplier.insert(tx, model, idempotencyKey);
+    } catch (cause) {
+      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
+      throw cause;
+    }
+  },
+};

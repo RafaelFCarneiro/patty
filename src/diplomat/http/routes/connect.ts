@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { approveGrant, denyGrant, findConsent } from '../../../controllers/grants.js';
-import { AUTH_MESSAGES, authErrors, CONNECT_CODE_PARAM } from '../../../models/auth.js';
+import { AUTH_MESSAGES, authErrors, CONNECT_CODE_PARAM, type GrantChannel } from '../../../models/auth.js';
 import { validation } from '../../../models/error.js';
 import { ConnectDecision, ConnectFormSchema, ConnectQuerySchema } from '../../../wire/in/auth.js';
 import { CONNECT_PATH } from '../authPaths.js';
@@ -45,8 +45,13 @@ export const registerConnectRoutes = (app: FastifyInstance, ctx: AuthRoutesConte
     now: Date.now,
   });
 
-  const result = async (reply: FastifyReply, status: number, heading: string, message: string) =>
-    page(reply, status, await renderConnectResultPage({ heading, message }));
+  const result = async (
+    reply: FastifyReply,
+    status: number,
+    heading: string,
+    message: string,
+    channel?: GrantChannel,
+  ) => page(reply, status, await renderConnectResultPage({ heading, message, channel }));
 
   const invalid = (reply: FastifyReply, ip: string) => {
     lookups.recordFailure(ip);
@@ -81,14 +86,17 @@ export const registerConnectRoutes = (app: FastifyInstance, ctx: AuthRoutesConte
 
       const { decision, code, access, duration } = parsed.data;
       const principal = req.principal!;
+      const consent = await findConsent(ctx.deps, principal.userId, code);
+      if (consent === null) return invalid(reply, req.ip);
+      const { channel } = consent.request;
       const answered =
         decision === ConnectDecision.enum.approve
           ? await ctx.runEffects(() => approveGrant(ctx.deps, principal, { userCode: code, access, duration }))
           : await ctx.runEffects(() => denyGrant(ctx.deps, principal, code));
       if (answered.isErr()) return failed(reply, req.ip, answered.error);
       return decision === ConnectDecision.enum.approve
-        ? result(reply, OK_STATUS, HEADINGS.approved, MESSAGES.approved)
-        : result(reply, OK_STATUS, HEADINGS.denied, MESSAGES.denied);
+        ? result(reply, OK_STATUS, HEADINGS.approved, MESSAGES.approved, channel)
+        : result(reply, OK_STATUS, HEADINGS.denied, MESSAGES.denied, channel);
     });
   });
 };
