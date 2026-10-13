@@ -1,4 +1,3 @@
-import { AUTH_POSITIONALS, AuthSubcommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from '../../../common/cli.js';
 import { formatAppError } from '../../../common/errors.js';
 import {
   claimOwnerLocally,
@@ -9,8 +8,16 @@ import {
 } from '../../../controllers/auth.js';
 import { type PasswordReset } from '../../../models/auth/password.js';
 import { NPX_COMMAND } from '../../../models/package.js';
-import { ClaimOptionsSchema, ResetOptionsSchema, type ClaimOptions, type ResetOptions } from '../../../wire/in/cli.js';
-import { exitCodeOf, fail, parseFlags, withShell, type CliIo } from '../io.js';
+import {
+  AUTH_POSITIONALS,
+  AuthSubcommand,
+  ClaimOptionsSchema,
+  PASSWORD_STDIN_FLAG,
+  ResetOptionsSchema,
+  type ClaimOptions,
+  type ResetOptions,
+} from '../../../wire/in/cli.js';
+import { EXIT_FAILURE, EXIT_OK, exitCodeOf, fail, parseFlags, withShell, type CliIo } from '../io.js';
 import { CLI_MESSAGES } from '../messages.js';
 import { collectNewCredentials, collectNewPassword, type PromptIo } from '../prompt.js';
 

@@ -1,6 +1,6 @@
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType, ZodTypeDef } from 'zod';
-import { PASSWORD_STDIN_FLAG } from '../../common/cli.js';
+import { PASSWORD_STDIN_FLAG } from '../../wire/in/cli.js';
 import { PasswordSchema, UsernameSchema } from '../../models/auth/password.js';
 import type { Terminal } from './terminal.js';
 

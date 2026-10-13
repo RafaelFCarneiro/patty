@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { EXIT_FAILURE } from '../../common/cli.js';
+import { ClientConfigError } from '../../common/clientConfig.js';
 import type { ClientConfig, ClientConfigs } from '../../controllers/deps.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/signIn.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
@@ -24,11 +24,10 @@ const warnInvalidConfig = (path: string): void => {
   console.error(`fintrack setup: ${path} ${INVALID_ROOT_MESSAGE} — replacing it during setup.`);
 };
 
-const exitReadConfig = (path: string, error: unknown): never => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`fintrack setup: failed to read ${path}: ${message}`);
-  process.exit(EXIT_FAILURE);
-};
+const failedToRead = (path: string, error: unknown): ClientConfigError =>
+  new ClientConfigError(
+    `fintrack setup: failed to read ${path}: ${error instanceof Error ? error.message : String(error)}`,
+  );
 
 export const readJsonOrEmpty = (path: string): Record<string, unknown> => {
   if (!existsSync(path)) return {};
@@ -37,7 +36,7 @@ export const readJsonOrEmpty = (path: string): Record<string, unknown> => {
   try {
     content = readFileSync(path, 'utf8');
   } catch (error) {
-    return exitReadConfig(path, error);
+    throw failedToRead(path, error);
   }
 
   try {
@@ -60,8 +59,7 @@ const writeJson = (path: string, data: unknown): void => {
     writeFileSync(path, JSON.stringify(data, null, 2) + '\n', 'utf8');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`fintrack setup: failed to write ${path}: ${message}`);
-    process.exit(EXIT_FAILURE);
+    throw new ClientConfigError(`fintrack setup: failed to write ${path}: ${message}`);
   }
 };
 

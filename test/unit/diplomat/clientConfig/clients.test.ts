@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ClientConfigError } from '../../../../src/common/clientConfig.js';
 import { readJsonOrEmpty } from '../../../../src/diplomat/clientConfig/clients.js';
 
 const escapeForRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -24,16 +25,13 @@ describe('readJsonOrEmpty', () => {
     const configPath = join(tempDir, 'config.json');
     mkdirSync(configPath);
 
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
-      throw new Error(`process.exit:${code}`);
-    }) as typeof process.exit);
+    const exitSpy = vi.spyOn(process, 'exit');
 
-    expect(() => readJsonOrEmpty(configPath)).toThrow('process.exit:1');
-    expect(errorSpy).toHaveBeenCalledTimes(1);
-    expect(errorSpy.mock.calls[0]?.[0]).toMatch(
+    expect(() => readJsonOrEmpty(configPath)).toThrow(ClientConfigError);
+    expect(() => readJsonOrEmpty(configPath)).toThrow(
       new RegExp(`^fintrack setup: failed to read ${escapeForRegExp(configPath)}: EISDIR:`),
     );
+    expect(exitSpy).not.toHaveBeenCalled(); // it reports; the setup command decides what to do
   });
 
   it('treats an empty file as an empty object', () => {

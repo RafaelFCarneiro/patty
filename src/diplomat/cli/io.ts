@@ -1,10 +1,14 @@
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import type { ZodType, ZodTypeDef } from 'zod';
-import { EXIT_FAILURE, EXIT_OK } from '../../common/cli.js';
 import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter } from '../../controllers/deps.js';
 import { CLI_MESSAGES } from './messages.js';
 import { PROMPT_MESSAGES } from './prompt.js';
 import type { Terminal } from './terminal.js';
+
+export const EXIT_OK = 0;
+export const EXIT_FAILURE = 1;
+/** The conventional status of a process stopped by Ctrl-C (128 + SIGINT). */
+export const EXIT_INTERRUPTED = 130;
 
 /**
  * Opens the database as the server does (same key, bootstrap and migrations) but starts neither HTTP nor stdio.

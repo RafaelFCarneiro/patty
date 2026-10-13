@@ -5,7 +5,7 @@ import { KeychainUnavailableError } from '../../../src/common/keychain.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { CliIo, Shell } from '../../../src/diplomat/cli/io.js';
 import { bindAuthRunEffects } from '../../../src/composition/auth.js';
-import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_OK } from '../../../src/common/cli.js';
+import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_OK } from '../../../src/diplomat/cli/io.js';
 import { loadConfig } from '../../../src/config.js';
 import type { Terminal } from '../../../src/diplomat/cli/terminal.js';
 import { LOGIN_MESSAGES, offerSignIn, runLogin, runLogout } from '../../../src/diplomat/cli/commands/login.js';

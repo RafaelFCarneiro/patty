@@ -1,10 +1,10 @@
 import { DatabaseAheadError } from '../../common/databaseAhead.js';
-import { CliCommand, EXIT_FAILURE, EXIT_OK } from '../../common/cli.js';
+import { CliCommand } from '../../wire/in/cli.js';
 import { NPX_COMMAND } from '../../models/package.js';
 import { runAuthCommand } from './commands/auth.js';
 import { runLogin, runLogout } from './commands/login.js';
 import { runSetupCommand } from './commands/setup.js';
-import type { CliIo } from './io.js';
+import { EXIT_FAILURE, EXIT_OK, type CliIo } from './io.js';
 import { CLI_MESSAGES } from './messages.js';
 
 const HELP_ARGUMENTS: readonly string[] = ['help', '--help', '-h'];

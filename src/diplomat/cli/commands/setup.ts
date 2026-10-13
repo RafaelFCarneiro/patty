@@ -1,9 +1,9 @@
-import { EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG, SETUP_POSITIONALS } from '../../../common/cli.js';
+import { ClientConfigError } from '../../../common/clientConfig.js';
 import type { ClientConfigs } from '../../../controllers/deps.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../../models/auth/signIn.js';
 import { NPX_COMMAND } from '../../../models/package.js';
-import { SetupOptionsSchema } from '../../../wire/in/cli.js';
-import { exitCodeOf, fail, parseFlags, type CliIo } from '../io.js';
+import { PASSWORD_STDIN_FLAG, SETUP_POSITIONALS, SetupOptionsSchema } from '../../../wire/in/cli.js';
+import { EXIT_FAILURE, EXIT_OK, exitCodeOf, fail, parseFlags, type CliIo } from '../io.js';
 import { ensureOwnerClaimed } from './auth.js';
 import { offerSignIn } from './login.js';
 
@@ -40,7 +40,13 @@ Examples:
   ${NPX_COMMAND} setup antigravity
 `.trimStart();
 
-export const runSetup = (clients: ClientConfigs, tool: string | undefined, profile: string = DEFAULT_PROFILE): void => {
+/** Writes the client's configuration. A configuration file that cannot be read or written is reported on stderr and
+ *  answered with `EXIT_FAILURE`; help and an unknown tool end the process, as they always have. */
+export const runSetup = (
+  clients: ClientConfigs,
+  tool: string | undefined,
+  profile: string = DEFAULT_PROFILE,
+): number => {
   if (!tool) {
     // eslint-disable-next-line no-console -- CLI surface
     console.log(HELP);
@@ -55,9 +61,16 @@ export const runSetup = (clients: ClientConfigs, tool: string | undefined, profi
 
   // eslint-disable-next-line no-console -- CLI surface
   console.log(`Setting up FinTrack MCP for ${client.label}...`);
-  client.run(profile);
+  try {
+    client.run(profile);
+  } catch (cause) {
+    if (!(cause instanceof ClientConfigError)) throw cause;
+    console.error(cause.message);
+    return EXIT_FAILURE;
+  }
   // eslint-disable-next-line no-console -- CLI surface
   console.log('Done.');
+  return EXIT_OK;
 };
 
 /** Claims the owner first, writes the client config only if that succeeded, then offers to sign the client in
@@ -74,7 +87,7 @@ export const runGuidedSetup = async (
     return EXIT_OK;
   }
   if (!(await claimOwner())) return EXIT_FAILURE;
-  runSetup(clients, tool, profile);
+  if (runSetup(clients, tool, profile) !== EXIT_OK) return EXIT_FAILURE;
   await signIn(profile);
   return EXIT_OK;
 };

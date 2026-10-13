@@ -1,6 +1,7 @@
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
-import { EXIT_INTERRUPTED, PASSWORD_STDIN_FLAG } from '../../common/cli.js';
+import { PASSWORD_STDIN_FLAG } from '../../wire/in/cli.js';
+import { EXIT_INTERRUPTED } from './io.js';
 import { text } from 'node:stream/consumers';
 
 /** A person at a keyboard, apart from `node:readline` so `prompt.ts` is testable without a pseudo-terminal. */

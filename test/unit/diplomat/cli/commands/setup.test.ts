@@ -6,7 +6,7 @@ import { runSetup as runSetupFor } from '../../../../../src/diplomat/cli/command
 import { clientConfigs } from '../../../../../src/diplomat/clientConfig/clients.js';
 import { STDIO_ENTRY, VSCODE_ENTRY } from '../../../../../src/diplomat/clientConfig/merge.js';
 
-const runSetup = (tool: string | undefined, profile?: string): void => runSetupFor(clientConfigs, tool, profile);
+const runSetup = (tool: string | undefined, profile?: string): number => runSetupFor(clientConfigs, tool, profile);
 
 /** The setup command bound to the real client config files — imported fresh, so a test that mocks `node:os` first
  *  gets its home directory. */
@@ -15,7 +15,7 @@ const importSetup = async () => {
     await import('../../../../../src/diplomat/cli/commands/setup.js');
   const { clientConfigs: clients } = await import('../../../../../src/diplomat/clientConfig/clients.js');
   return {
-    runSetup: (tool: string | undefined, profile?: string): void => run(clients, tool, profile),
+    runSetup: (tool: string | undefined, profile?: string): number => run(clients, tool, profile),
     runGuidedSetup: (
       tool: string | undefined,
       claimOwner: () => Promise<boolean>,
@@ -269,5 +269,42 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
     expect(() => runSetup(undefined)).toThrow('process.exit:0');
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('--profile <name>'));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('npx @rafaelfcarneiro/fintrack@latest setup'));
+  });
+});
+
+describe('runGuidedSetup — a client config that cannot be read or written', () => {
+  let originalCwd = '';
+  let homeDir = '';
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (originalCwd) process.chdir(originalCwd);
+    if (homeDir) rmSync(homeDir, { recursive: true, force: true });
+    vi.doUnmock('node:os');
+    vi.resetModules();
+  });
+
+  it('prints the message on stderr and answers exit code 1, with no sign-in offered and no process.exit', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    originalCwd = process.cwd();
+    process.chdir(homeDir);
+    vi.resetModules();
+    vi.doMock('node:os', () => ({ homedir: () => homeDir }));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const exit = vi.spyOn(process, 'exit');
+    const configPath = join(homeDir, '.claude', 'mcp.json');
+    mkdirSync(configPath, { recursive: true }); // a directory where the file should be: reading it fails (EISDIR)
+    const { runGuidedSetup } = await importSetup();
+    const signIn = vi.fn(async () => undefined);
+
+    expect(await runGuidedSetup('claude-code', async () => true, signIn)).toBe(1);
+
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error.mock.calls[0]?.[0]).toMatch(/^fintrack setup: failed to read .*mcp\.json: EISDIR:/);
+    expect(log).toHaveBeenCalledWith('Setting up FinTrack MCP for Claude Code (CLI)...');
+    expect(log).not.toHaveBeenCalledWith('Done.');
+    expect(signIn).not.toHaveBeenCalled();
+    expect(exit).not.toHaveBeenCalled();
   });
 });

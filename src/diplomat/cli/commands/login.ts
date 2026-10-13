@@ -1,5 +1,4 @@
 import { type ParseArgsConfig } from 'node:util';
-import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_OK, SIGN_IN_POSITIONALS } from '../../../common/cli.js';
 import type { SignInHooks } from '../../../controllers/deps.js';
 import { GrantChannel } from '../../../models/auth/grant.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
@@ -17,8 +16,23 @@ import {
 } from '../../../models/auth/signInFlow.js';
 import { type TokenAccess } from '../../../models/auth/token.js';
 import { NPX_COMMAND } from '../../../models/package.js';
-import { LoginOptionsSchema, LogoutOptionsSchema, type LoginOptions } from '../../../wire/in/cli.js';
-import { exitCodeOf, fail, parseFlags, withShell, type CliIo, type Shell } from '../io.js';
+import {
+  LoginOptionsSchema,
+  LogoutOptionsSchema,
+  SIGN_IN_POSITIONALS,
+  type LoginOptions,
+} from '../../../wire/in/cli.js';
+import {
+  EXIT_FAILURE,
+  EXIT_INTERRUPTED,
+  EXIT_OK,
+  exitCodeOf,
+  fail,
+  parseFlags,
+  withShell,
+  type CliIo,
+  type Shell,
+} from '../io.js';
 import { CLI_MESSAGES } from '../messages.js';
 
 export const LOGIN_MESSAGES = {
