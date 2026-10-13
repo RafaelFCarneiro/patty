@@ -1,8 +1,11 @@
 import { sql } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
-import { AUTH_HELP, CLI_MESSAGES, parseClaimArgs, runAuthCommand, type CliIo } from '../../../src/authCli.js';
+import { AUTH_HELP, parseClaimArgs, runAuthCommand } from '../../../src/diplomat/cli/commands/auth.js';
+import type { CliIo } from '../../../src/diplomat/cli/io.js';
+import { CLI_MESSAGES } from '../../../src/diplomat/cli/messages.js';
 import { AUTH_POSITIONALS, EXIT_FAILURE, EXIT_OK, SETUP_POSITIONALS } from '../../../src/common/cli.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
+import { createSignInInterpreter } from '../../../src/signInInterpreter.js';
 import { PROMPT_MESSAGES } from '../../../src/diplomat/cli/prompt.js';
 import { accessTokens, sessions, users } from '../../../src/diplomat/db/schema.js';
 import { OWNER_USER_ID, UserRole } from '../../../src/models/auth/owner.js';
@@ -41,8 +44,14 @@ const harness = (ctx: AppContext, input: { stdin?: string; terminal?: boolean } 
       close: () => undefined,
       authRequired: true,
       defaultProfile: DEFAULT_PROFILE,
-      store: () => memoryStore(),
-      startServer: async () => ({ origin: LOOPBACK_ORIGIN, close: async () => undefined }),
+      signIn: () =>
+        createSignInInterpreter({
+          deps: authDepsOf(ctx),
+          run: bindAuthRunEffects(ctx.runEffects),
+          store: memoryStore(),
+          origin: () => null,
+          startPage: async () => ({ origin: LOOPBACK_ORIGIN, close: async () => undefined }),
+        }),
     }),
     openTerminal: () => null,
     readPasswordFromStdin: async () => input.stdin ?? '',
@@ -51,6 +60,7 @@ const harness = (ctx: AppContext, input: { stdin?: string; terminal?: boolean } 
     version: '0.0.0-test',
     wait: async () => undefined,
     interruptSignal: () => new AbortController().signal,
+    clients: { find: () => undefined },
   };
   return { io, out, err, run: (...args) => runAuthCommand(args, io) };
 };

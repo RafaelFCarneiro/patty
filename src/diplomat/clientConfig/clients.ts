@@ -1,57 +1,18 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from './common/cli.js';
-import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from './models/auth/signIn.js';
-import { NPX_COMMAND, PACKAGE_SPEC } from './models/package.js';
-
-// ---------------------------------------------------------------------------
-// Shared MCP entry shapes
-// ---------------------------------------------------------------------------
-
-export const resolveConfigObject = (value: unknown): Record<string, unknown> | null =>
-  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-
-export const STDIO_ENTRY = {
-  command: 'npx',
-  args: ['-y', PACKAGE_SPEC],
-} as const;
-
-export const VSCODE_ENTRY = {
-  type: 'stdio',
-  command: 'npx',
-  args: ['-y', PACKAGE_SPEC],
-} as const;
-
-/** A client config entry that signs in as `profile`: `FINTRACK_PROFILE` is added to its `env` only when the profile
- *  is not the default, so an ordinary install writes exactly the entry it always did (ADR-034 §5.2). */
-export const withProfile = <E extends Record<string, unknown>>(
-  entry: E,
-  profile: string,
-): E | (E & { env: Record<string, string> }) =>
-  profile === DEFAULT_PROFILE ? entry : { ...entry, env: { [PROFILE_ENV_VAR]: profile } };
-
-// ---------------------------------------------------------------------------
-// Pure config merge helpers (testable without FS)
-// ---------------------------------------------------------------------------
-
-/** Merges `{ mcpServers: { fintrack: entry } }` into an existing config object. */
-export const mergeMcpServersKey = (
-  existing: Record<string, unknown>,
-  entry: Record<string, unknown>,
-): Record<string, unknown> => {
-  const servers = resolveConfigObject(existing['mcpServers']) ?? {};
-  return { ...existing, mcpServers: { ...servers, fintrack: entry } };
-};
-
-/** Merges `{ servers: { fintrack: entry } }` into an existing config object (VS Code shape). */
-export const mergeServersKey = (
-  existing: Record<string, unknown>,
-  entry: Record<string, unknown>,
-): Record<string, unknown> => {
-  const servers = resolveConfigObject(existing['servers']) ?? {};
-  return { ...existing, servers: { ...servers, fintrack: entry } };
-};
+import { EXIT_FAILURE } from '../../common/cli.js';
+import type { ClientConfig, ClientConfigs } from '../../controllers/deps.js';
+import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/signIn.js';
+import { PACKAGE_SPEC } from '../../models/package.js';
+import {
+  mergeMcpServersKey,
+  mergeServersKey,
+  resolveConfigObject,
+  STDIO_ENTRY,
+  VSCODE_ENTRY,
+  withProfile,
+} from './merge.js';
 
 // ---------------------------------------------------------------------------
 // FS helpers
@@ -180,15 +141,10 @@ const setupCodex = (profile: string): void => {
 };
 
 // ---------------------------------------------------------------------------
-// Tool registry
+// Client registry
 // ---------------------------------------------------------------------------
 
-interface ClientTool {
-  readonly label: string;
-  readonly run: (profile: string) => void;
-}
-
-const TOOLS: Readonly<Record<string, ClientTool>> = {
+const TOOLS: Readonly<Record<string, ClientConfig>> = {
   'claude-code': { label: 'Claude Code (CLI)', run: setupClaudeCode },
   'claude-desktop': { label: 'Claude Desktop', run: setupClaudeDesktop },
   copilot: { label: 'VS Code / GitHub Copilot', run: setupCopilot },
@@ -197,73 +153,6 @@ const TOOLS: Readonly<Record<string, ClientTool>> = {
   codex: { label: 'OpenAI Codex', run: setupCodex },
 };
 
-const HELP = `
-Usage: ${NPX_COMMAND} setup <tool> [--username <name>] [--${PASSWORD_STDIN_FLAG}] [--profile <name>]
+const findClient = (tool: string): ClientConfig | undefined => TOOLS[tool.trim().toLowerCase()];
 
-Available tools:
-  claude-code      Claude Code CLI      (~/.claude/mcp.json)
-  claude-desktop   Claude Desktop       (OS-specific config path)
-  copilot          VS Code / GitHub Copilot    (.vscode/mcp.json in current directory)
-  vscode           VS Code / GitHub Copilot    (alias for copilot)
-  antigravity      Google Antigravity   (~/.gemini/config/mcp_config.json)
-  codex            OpenAI Codex         (prints the config snippet to paste)
-
-FinTrack requires a login. The first time, setup asks you to choose the owner's username and password
-(typed twice, never echoed), writes the client's config, then offers to sign that client in. Re-running it is safe: an
-owner that already has a login is left alone.
-
-Options:
-  --username <name>  the owner's username (required with --${PASSWORD_STDIN_FLAG})
-  --${PASSWORD_STDIN_FLAG}   read the password from stdin instead of asking — for scripted installs
-  --profile <name>   sign this client in as a separate profile (adds ${PROFILE_ENV_VAR} to its config); default: ${DEFAULT_PROFILE}
-
-Examples:
-  ${NPX_COMMAND} setup claude-code
-  ${NPX_COMMAND} setup copilot
-  ${NPX_COMMAND} setup vscode
-  ${NPX_COMMAND} setup antigravity
-`.trimStart();
-
-// ---------------------------------------------------------------------------
-// Entry points
-// ---------------------------------------------------------------------------
-
-const findClient = (tool: string): ClientTool | undefined => TOOLS[tool.trim().toLowerCase()];
-
-export const runSetup = (tool: string | undefined, profile: string = DEFAULT_PROFILE): void => {
-  if (!tool) {
-    // eslint-disable-next-line no-console -- CLI surface
-    console.log(HELP);
-    process.exit(EXIT_OK);
-  }
-
-  const client = findClient(tool);
-  if (!client) {
-    console.error(`fintrack setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`);
-    process.exit(EXIT_FAILURE);
-  }
-
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log(`Setting up FinTrack MCP for ${client.label}...`);
-  client.run(profile);
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log('Done.');
-};
-
-/** Claims the owner first, writes the client config only if that succeeded, then offers to sign the client in
- *  (ADR-034 §5.3). Help and an unknown tool never claim. */
-export const runGuidedSetup = async (
-  tool: string | undefined,
-  claimOwner: () => Promise<boolean>,
-  signIn: (profile: string) => Promise<void> = async () => undefined,
-  profile: string = DEFAULT_PROFILE,
-): Promise<number> => {
-  if (!tool || findClient(tool) === undefined) {
-    runSetup(tool, profile);
-    return EXIT_OK;
-  }
-  if (!(await claimOwner())) return EXIT_FAILURE;
-  runSetup(tool, profile);
-  await signIn(profile);
-  return EXIT_OK;
-};
+export const clientConfigs: ClientConfigs = { find: findClient };

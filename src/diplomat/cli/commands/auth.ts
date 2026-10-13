@@ -1,0 +1,116 @@
+import { AUTH_POSITIONALS, AuthSubcommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from '../../../common/cli.js';
+import { formatAppError } from '../../../common/errors.js';
+import { claimedOwnerOf, claimOwnerLocally, findResetTarget, resetPassword } from '../../../controllers/auth.js';
+import { claimRaceWinner, planOwnerClaim } from '../../../logic/auth/owner.js';
+import { type PasswordReset } from '../../../models/auth/password.js';
+import { NPX_COMMAND } from '../../../models/package.js';
+import { ClaimOptionsSchema, ResetOptionsSchema, type ClaimOptions, type ResetOptions } from '../../../wire/in/cli.js';
+import { exitCodeOf, fail, parseFlags, withShell, type CliIo } from '../io.js';
+import { CLI_MESSAGES } from '../messages.js';
+import { collectNewCredentials, collectNewPassword, type PromptIo } from '../prompt.js';
+
+export const AUTH_HELP = `
+Usage: ${NPX_COMMAND} auth <command>
+
+Commands:
+  setup            Choose the owner's username and password (once; claims the existing owner, never creates a user)
+  reset-password   Choose a new password and end every session and access token of that user
+
+Options:
+  --username <name>  (setup) the owner's username — required with --${PASSWORD_STDIN_FLAG}
+  --user <name>      (reset-password) whose password; default: the owner
+  --${PASSWORD_STDIN_FLAG}   read the password from stdin instead of asking (scripted installs; stdin must not be a terminal)
+`.trimStart();
+
+const withPromptIo = async <T>(
+  io: CliIo,
+  options: { passwordStdin: boolean },
+  work: (promptIo: PromptIo) => Promise<T>,
+): Promise<T> => {
+  const terminal = options.passwordStdin ? null : io.openTerminal();
+  try {
+    return await work({ terminal, readPasswordFromStdin: io.readPasswordFromStdin });
+  } finally {
+    terminal?.close();
+  }
+};
+
+/** `true` = the owner holds a login when this returns (claimed now or before); `false` = nothing was written. */
+export const ensureOwnerClaimed = (io: CliIo, options: ClaimOptions): Promise<boolean> =>
+  withShell(io, async (shell) => {
+    const plan = planOwnerClaim(await claimedOwnerOf(shell.deps));
+    if (plan.kind === 'skip') {
+      io.out(CLI_MESSAGES.alreadyClaimed(plan.username));
+      return true;
+    }
+
+    const credentials = await withPromptIo(io, options, (promptIo) => collectNewCredentials(promptIo, options));
+    if (credentials.isErr()) return fail(io, credentials.error);
+
+    const claimed = await shell.run(() => claimOwnerLocally(shell.deps, credentials.value));
+    if (claimed.isOk()) {
+      io.out(CLI_MESSAGES.ownerClaimed(claimed.value.username));
+      return true;
+    }
+    const winner = claimRaceWinner(claimed.error, await claimedOwnerOf(shell.deps));
+    if (winner) {
+      io.out(CLI_MESSAGES.alreadyClaimed(winner.username));
+      return true;
+    }
+    return fail(io, formatAppError(claimed.error));
+  });
+
+const reportReset = (io: CliIo, reset: PasswordReset): void => {
+  io.out(CLI_MESSAGES.passwordReset(reset));
+  io.out(CLI_MESSAGES.sessionsEnded(reset.sessionsEnded));
+  io.out(CLI_MESSAGES.tokensRevoked(reset.tokensRevoked));
+};
+
+const resetUserPassword = (io: CliIo, options: ResetOptions): Promise<boolean> =>
+  withShell(io, async (shell) => {
+    // Resolve the user before asking for anything: a typo'd `--user` should not cost a typed password.
+    const target = await findResetTarget(shell.deps, options.user);
+    if (target.isErr()) return fail(io, formatAppError(target.error));
+
+    const password = await withPromptIo(io, options, (promptIo) => {
+      promptIo.terminal?.tell(CLI_MESSAGES.resetting(target.value.username));
+      return collectNewPassword(promptIo, options);
+    });
+    if (password.isErr()) return fail(io, password.error);
+
+    const reset = await shell.run(() =>
+      resetPassword(shell.deps, { username: options.user, password: password.value }),
+    );
+    if (reset.isErr()) return fail(io, formatAppError(reset.error));
+    reportReset(io, reset.value);
+    return true;
+  });
+
+const CLAIM_FLAGS = { [PASSWORD_STDIN_FLAG]: { type: 'boolean' }, username: { type: 'string' } } as const;
+const RESET_FLAGS = { [PASSWORD_STDIN_FLAG]: { type: 'boolean' }, user: { type: 'string' } } as const;
+
+export const parseClaimArgs = (args: readonly string[], maxPositionals: number) =>
+  parseFlags(args, CLAIM_FLAGS, ClaimOptionsSchema, maxPositionals);
+
+export const runAuthCommand = async (args: readonly string[], io: CliIo): Promise<number> => {
+  const [name, ...rest] = args;
+  if (name === undefined) {
+    io.out(AUTH_HELP);
+    return EXIT_OK;
+  }
+  const subcommand = AuthSubcommand.safeParse(name);
+  if (!subcommand.success) {
+    io.err(CLI_MESSAGES.failure(`unknown auth command "${name}"`));
+    io.err(AUTH_HELP);
+    return EXIT_FAILURE;
+  }
+
+  if (subcommand.data === AuthSubcommand.enum.setup) {
+    const parsed = parseClaimArgs(rest, AUTH_POSITIONALS);
+    if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
+    return exitCodeOf(await ensureOwnerClaimed(io, parsed.options));
+  }
+  const parsed = parseFlags(rest, RESET_FLAGS, ResetOptionsSchema, AUTH_POSITIONALS);
+  if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
+  return exitCodeOf(await resetUserPassword(io, parsed.options));
+};

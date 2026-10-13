@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
-import { DatabaseAheadError, assertDatabaseNotAhead } from '../../../src/diplomat/db/versionGuard.js';
+import { DatabaseAheadError } from '../../../src/common/databaseAhead.js';
+import { assertDatabaseNotAhead } from '../../../src/diplomat/db/versionGuard.js';
 import { databaseAheadMessage } from '../../../src/models/database.js';
 
 const TEST_KEY = 'f'.repeat(64);

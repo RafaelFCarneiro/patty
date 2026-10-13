@@ -1,0 +1,186 @@
+import { KeychainUnavailableError } from './common/keychain.js';
+import { formatAppError } from './common/errors.js';
+import { authenticateToken, revokeSignInByHash } from './controllers/accessTokens.js';
+import { ownerNeedsSetup } from './controllers/auth.js';
+import type {
+  AuthDeps,
+  RunEffects,
+  SignInHooks,
+  SignInInterpreter,
+  SignInServer,
+  SignInStore,
+} from './controllers/deps.js';
+import { redeemGrant, startGrant } from './controllers/grants.js';
+import {
+  ASKING_EFFECT_KINDS,
+  CheckKind,
+  EffectKind,
+  ObservationKind,
+  REDEEM_ERROR_KIND,
+} from './models/auth/signInFlow.js';
+import type { CheckResult, SignInEffect, SignInObservation } from './models/auth/signInFlow.js';
+import { nextStep } from './logic/auth/signInFlow.js';
+import { PrincipalVia } from './models/auth/principal.js';
+
+/**
+ * The shell side of the sign-in protocol. `logic/auth/signInFlow.ts` decides; this runs the effects it describes with
+ * the existing controllers (through `run`), the keychain (`store`) and — for the page a person approves on — either the
+ * origin the process can already name or a temporary server it starts on demand. It executes and reports; it never
+ * chooses between outcomes, so there is no sign-in rule in this file to test twice.
+ */
+export type SignInInterpreterOptions = {
+  deps: AuthDeps;
+  /** Already adapted model→row (`bindAuthRunEffects`). */
+  run: RunEffects;
+  store: SignInStore;
+  /** The origin of a page this process can honestly name for `/ui/connect` — `PUBLIC_URL`, or the sidecar it bound — or
+   *  `null`. Asked at use, because the sidecar binds after the interpreter exists. */
+  origin: () => string | null;
+  /** How to serve `/ui/connect` when `origin()` names nothing: a temporary app of this process, on this database.
+   *  Absent when there is no HTTP at all (`FINTRACK_HTTP=false`). */
+  startPage?: (() => Promise<SignInServer>) | undefined;
+};
+
+const E = EffectKind.enum;
+const O = ObservationKind.enum;
+
+export const createSignInInterpreter = (options: SignInInterpreterOptions): SignInInterpreter => {
+  const { deps, run, store } = options;
+  let temporary: SignInServer | null = null;
+
+  // A temporary page, once started, is the page its pending request was announced at, so it is named first.
+  const namedOrigin = (): string | null => temporary?.origin ?? options.origin();
+
+  const openPage = async (): Promise<string | null> => {
+    const named = namedOrigin();
+    if (named !== null || options.startPage === undefined) return named;
+    temporary = await options.startPage();
+    return temporary.origin;
+  };
+
+  const closePage = async (): Promise<void> => {
+    const server = temporary;
+    temporary = null;
+    await server?.close().catch(() => undefined);
+  };
+
+  // An unreadable keychain is `KeychainUnavailableError`: whether it counts as "nothing saved" is the protocol's call
+  // (`tolerateUnreadable`); any other failure is not ours to swallow.
+  const loadSaved = (tolerateUnreadable: boolean): Promise<string | null> =>
+    store.load().catch((cause: unknown) => {
+      return tolerateUnreadable && cause instanceof KeychainUnavailableError ? null : Promise.reject(cause);
+    });
+
+  const checkResult = async (token: string): Promise<CheckResult> => {
+    const result = await run(() => authenticateToken(deps, deps.secrets.hashSecret(token), PrincipalVia.enum.stdio));
+    if (result.isErr()) return { kind: CheckKind.enum.failure };
+    return result.value === null
+      ? { kind: CheckKind.enum.invalid }
+      : { kind: CheckKind.enum.ok, principal: result.value };
+  };
+
+  // Whatever goes wrong creating the request — an Err or a throw — the page it would have served is closed again:
+  // with no pending request there is nothing left to retire it.
+  const startedGrant = async (effect: Extract<SignInEffect, { kind: typeof E.start_grant }>) => {
+    const started = await run(() => startGrant(deps, effect.input)).then(
+      (result) => result,
+      async (cause: unknown) => {
+        await closePage();
+        throw cause;
+      },
+    );
+    return started.isErr()
+      ? ({ kind: O.grant_failed, error: formatAppError(started.error) } satisfies SignInObservation)
+      : ({
+          kind: O.grant_started,
+          deviceCode: started.value.deviceCode,
+          userCode: started.value.userCode,
+          origin: effect.origin,
+        } satisfies SignInObservation);
+  };
+
+  const perform = async (effect: SignInEffect, hooks: SignInHooks): Promise<SignInObservation | undefined> => {
+    switch (effect.kind) {
+      case E.check_credential:
+        return {
+          kind: O.credential_checked,
+          source: effect.source,
+          token: effect.token,
+          result: await checkResult(effect.token),
+        };
+      case E.load_saved:
+        return { kind: O.saved_loaded, purpose: effect.purpose, token: await loadSaved(effect.tolerateUnreadable) };
+      case E.clear_saved_if:
+        if ((await loadSaved(effect.tolerateUnreadable)) === effect.token) await store.clear();
+        return { kind: O.saved_cleared, next: effect.next };
+      case E.save_credential:
+        return {
+          kind: O.saved,
+          then: effect.then,
+          signedIn: effect.signedIn,
+          ok: await store.save(effect.signedIn.token),
+        };
+      case E.revoke_credential: {
+        const revoked = await run(() => revokeSignInByHash(deps, deps.secrets.hashSecret(effect.token)));
+        return {
+          kind: O.revoked,
+          reason: effect.reason,
+          token: effect.token,
+          ok: revoked.isOk(),
+          error: revoked.isErr() ? formatAppError(revoked.error) : null,
+        };
+      }
+      case E.open_page:
+        return { kind: O.page_opened, purpose: effect.purpose, origin: await openPage() };
+      case E.name_page:
+        return { kind: O.page_named, origin: namedOrigin() };
+      case E.start_grant:
+        return startedGrant(effect);
+      case E.redeem_grant: {
+        const redeemed = await run(() => redeemGrant(deps, effect.deviceCode));
+        return {
+          kind: O.redeemed,
+          then: effect.then,
+          result: redeemed.isErr()
+            ? { kind: REDEEM_ERROR_KIND, error: formatAppError(redeemed.error) }
+            : redeemed.value,
+        };
+      }
+      case E.check_owner:
+        return {
+          kind: O.owner_checked,
+          purpose: effect.purpose,
+          unclaimed: await ownerNeedsSetup(deps),
+          origin: effect.origin,
+        };
+      case E.close_page:
+        await closePage();
+        return undefined;
+      case E.wait:
+        await hooks.wait(effect.ms);
+        return undefined;
+      case E.present:
+        hooks.present(effect.presentation);
+        return undefined;
+    }
+  };
+
+  const drive: SignInInterpreter['drive'] = async (state, observation, config, hooks) => {
+    let current = state;
+    let next: SignInObservation | undefined = observation;
+    while (next !== undefined) {
+      const step = nextStep(current, next, config);
+      current = step.state;
+      hooks.progress(current);
+      next = undefined;
+      for (const effect of step.effects) {
+        const answer = await perform(effect, hooks);
+        // An asking effect is the last of its step: its answer is the next observation.
+        if (ASKING_EFFECT_KINDS.has(effect.kind)) next = answer;
+      }
+    }
+    return current;
+  };
+
+  return { drive, release: closePage };
+};

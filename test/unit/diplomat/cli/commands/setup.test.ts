@@ -2,188 +2,28 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  mergeMcpServersKey,
-  mergeServersKey,
-  readJsonOrEmpty,
-  resolveConfigObject,
-  runSetup,
-  STDIO_ENTRY,
-  VSCODE_ENTRY,
-  withProfile,
-} from '../../src/setup.js';
+import { runSetup as runSetupFor } from '../../../../../src/diplomat/cli/commands/setup.js';
+import { clientConfigs } from '../../../../../src/diplomat/clientConfig/clients.js';
+import { STDIO_ENTRY, VSCODE_ENTRY } from '../../../../../src/diplomat/clientConfig/merge.js';
 
-const escapeForRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const runSetup = (tool: string | undefined, profile?: string): void => runSetupFor(clientConfigs, tool, profile);
 
-describe('mergeMcpServersKey', () => {
-  it('adds fintrack entry to an empty config', () => {
-    const result = mergeMcpServersKey({}, { ...STDIO_ENTRY });
-    expect(result).toEqual({ mcpServers: { fintrack: STDIO_ENTRY } });
-  });
-
-  it('preserves existing mcpServers entries', () => {
-    const existing = { mcpServers: { other: { command: 'other-cmd', args: [] } } };
-    const result = mergeMcpServersKey(existing, { ...STDIO_ENTRY });
-    expect(result.mcpServers).toEqual({
-      other: { command: 'other-cmd', args: [] },
-      fintrack: STDIO_ENTRY,
-    });
-  });
-
-  it('overwrites an existing fintrack entry (idempotent)', () => {
-    const existing = { mcpServers: { fintrack: { command: 'old', args: [] } } };
-    const result = mergeMcpServersKey(existing, { ...STDIO_ENTRY });
-    expect((result.mcpServers as Record<string, unknown>)['fintrack']).toEqual(STDIO_ENTRY);
-  });
-
-  it('preserves top-level keys unrelated to mcpServers', () => {
-    const existing = { someAppPreference: true, mcpServers: {} };
-    const result = mergeMcpServersKey(existing, { ...STDIO_ENTRY });
-    expect(result['someAppPreference']).toBe(true);
-  });
-
-  it('treats a non-object mcpServers value as empty', () => {
-    const existing = { mcpServers: 'corrupt' };
-    const result = mergeMcpServersKey(existing, { ...STDIO_ENTRY });
-    expect(result).toEqual({ mcpServers: { fintrack: STDIO_ENTRY } });
-  });
-
-  it('treats an array mcpServers value as empty', () => {
-    const existing = { mcpServers: [] };
-    const result = mergeMcpServersKey(existing, { ...STDIO_ENTRY });
-    expect(result).toEqual({ mcpServers: { fintrack: STDIO_ENTRY } });
-  });
-});
-
-describe('mergeServersKey', () => {
-  it('adds fintrack entry under servers key (VS Code shape)', () => {
-    const result = mergeServersKey({}, { ...VSCODE_ENTRY });
-    expect(result).toEqual({ servers: { fintrack: VSCODE_ENTRY } });
-  });
-
-  it('preserves existing servers entries', () => {
-    const existing = { servers: { other: { type: 'stdio', command: 'x', args: [] } } };
-    const result = mergeServersKey(existing, { ...VSCODE_ENTRY });
-    expect(result.servers).toEqual({
-      other: { type: 'stdio', command: 'x', args: [] },
-      fintrack: VSCODE_ENTRY,
-    });
-  });
-
-  it('overwrites an existing fintrack entry (idempotent)', () => {
-    const existing = { servers: { fintrack: { type: 'stdio', command: 'old', args: [] } } };
-    const result = mergeServersKey(existing, { ...VSCODE_ENTRY });
-    expect((result.servers as Record<string, unknown>)['fintrack']).toEqual(VSCODE_ENTRY);
-  });
-
-  it('preserves top-level keys unrelated to servers', () => {
-    const existing = { inputs: [], servers: {} };
-    const result = mergeServersKey(existing, { ...VSCODE_ENTRY });
-    expect(result['inputs']).toEqual([]);
-  });
-
-  it('treats a non-object servers value as empty', () => {
-    const existing = { servers: null };
-    const result = mergeServersKey(existing, { ...VSCODE_ENTRY });
-    expect(result).toEqual({ servers: { fintrack: VSCODE_ENTRY } });
-  });
-
-  it('treats an array servers value as empty', () => {
-    const existing = { servers: [] };
-    const result = mergeServersKey(existing, { ...VSCODE_ENTRY });
-    expect(result).toEqual({ servers: { fintrack: VSCODE_ENTRY } });
-  });
-});
-
-describe('resolveConfigObject', () => {
-  it('returns plain objects', () => {
-    const config = { mcpServers: {} };
-    expect(resolveConfigObject(config)).toBe(config);
-  });
-
-  it.each([null, [], 'config'])('rejects non-object config roots: %j', (value) => {
-    expect(resolveConfigObject(value)).toBeNull();
-  });
-});
-
-describe('readJsonOrEmpty', () => {
-  let tempDir = '';
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    if (tempDir) rmSync(tempDir, { recursive: true, force: true });
-  });
-
-  it('returns an empty object when the file does not exist', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
-    expect(readJsonOrEmpty(join(tempDir, 'missing.json'))).toEqual({});
-  });
-
-  it('reports the underlying file read failure message', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
-    const configPath = join(tempDir, 'config.json');
-    mkdirSync(configPath);
-
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(process, 'exit').mockImplementation(((code?: number | string | null) => {
-      throw new Error(`process.exit:${code}`);
-    }) as typeof process.exit);
-
-    expect(() => readJsonOrEmpty(configPath)).toThrow('process.exit:1');
-    expect(errorSpy).toHaveBeenCalledTimes(1);
-    expect(errorSpy.mock.calls[0]?.[0]).toMatch(
-      new RegExp(`^fintrack setup: failed to read ${escapeForRegExp(configPath)}: EISDIR:`),
-    );
-  });
-
-  it('treats an empty file as an empty object', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
-    const configPath = join(tempDir, 'config.json');
-    writeFileSync(configPath, '', 'utf8');
-
-    expect(readJsonOrEmpty(configPath)).toEqual({});
-  });
-
-  it('falls back to an empty object for malformed JSON content', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
-    const configPath = join(tempDir, 'config.json');
-    writeFileSync(configPath, '{ invalid-json', 'utf8');
-
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-
-    expect(readJsonOrEmpty(configPath)).toEqual({});
-    expect(errorSpy).toHaveBeenCalledWith(
-      `fintrack setup: ${configPath} does not contain a JSON object at the root — replacing it during setup.`,
-    );
-  });
-
-  it('falls back to an empty object for non-object JSON roots', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
-    const configPath = join(tempDir, 'config.json');
-    writeFileSync(configPath, '[]', 'utf8');
-
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-
-    expect(readJsonOrEmpty(configPath)).toEqual({});
-    expect(errorSpy).toHaveBeenCalledWith(
-      `fintrack setup: ${configPath} does not contain a JSON object at the root — replacing it during setup.`,
-    );
-  });
-});
-
-describe('STDIO_ENTRY', () => {
-  it('uses npx with the published package', () => {
-    expect(STDIO_ENTRY.command).toBe('npx');
-    expect(STDIO_ENTRY.args).toEqual(['-y', '@rafaelfcarneiro/fintrack@latest']);
-  });
-});
-
-describe('VSCODE_ENTRY', () => {
-  it('includes type:stdio required by VS Code', () => {
-    expect(VSCODE_ENTRY.type).toBe('stdio');
-    expect(VSCODE_ENTRY.command).toBe('npx');
-  });
-});
+/** The setup command bound to the real client config files — imported fresh, so a test that mocks `node:os` first
+ *  gets its home directory. */
+const importSetup = async () => {
+  const { runSetup: run, runGuidedSetup: runGuided } =
+    await import('../../../../../src/diplomat/cli/commands/setup.js');
+  const { clientConfigs: clients } = await import('../../../../../src/diplomat/clientConfig/clients.js');
+  return {
+    runSetup: (tool: string | undefined, profile?: string): void => run(clients, tool, profile),
+    runGuidedSetup: (
+      tool: string | undefined,
+      claimOwner: () => Promise<boolean>,
+      signIn?: (profile: string) => Promise<void>,
+      profile?: string,
+    ) => runGuided(clients, tool, claimOwner, signIn, profile),
+  };
+};
 
 describe('runSetup', () => {
   let originalCwd = '';
@@ -217,7 +57,7 @@ describe('runSetup', () => {
     vi.resetModules();
     vi.doMock('node:os', () => ({ homedir: () => homeDir }));
 
-    const { runSetup: runSetupWithMockedHome } = await import('../../src/setup.js');
+    const { runSetup: runSetupWithMockedHome } = await importSetup();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
     runSetupWithMockedHome('claude-desktop');
@@ -246,7 +86,7 @@ describe('runGuidedSetup (claim the owner, then write the config)', () => {
     vi.resetModules();
     vi.doMock('node:os', () => ({ homedir: () => homeDir }));
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    return import('../../src/setup.js');
+    return importSetup();
   };
 
   const claudeCodeConfig = () => join(homeDir, '.claude', 'mcp.json');
@@ -314,18 +154,6 @@ describe('runGuidedSetup (claim the owner, then write the config)', () => {
   });
 });
 
-describe('withProfile (ADR-034 §5.2)', () => {
-  it('leaves an ordinary install’s entry exactly as it always was', () => {
-    expect(withProfile(STDIO_ENTRY, 'default')).toBe(STDIO_ENTRY);
-    expect(withProfile(VSCODE_ENTRY, 'default')).toBe(VSCODE_ENTRY);
-  });
-
-  it('adds FINTRACK_PROFILE to the entry’s env only for a non-default profile, keeping the rest', () => {
-    expect(withProfile(STDIO_ENTRY, 'work')).toEqual({ ...STDIO_ENTRY, env: { FINTRACK_PROFILE: 'work' } });
-    expect(withProfile(VSCODE_ENTRY, 'work')).toEqual({ ...VSCODE_ENTRY, env: { FINTRACK_PROFILE: 'work' } });
-  });
-});
-
 describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
   let originalCwd = '';
   let homeDir = '';
@@ -345,7 +173,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
     vi.resetModules();
     vi.doMock('node:os', () => ({ homedir: () => homeDir }));
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    return import('../../src/setup.js');
+    return importSetup();
   };
 
   const claudeCodeConfig = () => join(homeDir, '.claude', 'mcp.json');

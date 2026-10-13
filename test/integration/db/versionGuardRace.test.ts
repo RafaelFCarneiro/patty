@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
-import { DatabaseAheadError } from '../../../src/diplomat/db/versionGuard.js';
+import { DatabaseAheadError } from '../../../src/common/databaseAhead.js';
 
 /**
  * Two builds starting together: the older one passes the guard, the newer one then commits a migration, and the older

@@ -7,6 +7,7 @@ import { bindAuthRunEffects } from '../../../src/authRuntime.js';
 import { ownerGate } from '../../../src/diplomat/mcp/gate.js';
 import { buildMcpServer } from '../../../src/diplomat/mcp/server.js';
 import { createStdioSession } from '../../../src/diplomat/mcp/stdioSession.js';
+import { createSignInInterpreter } from '../../../src/signInInterpreter.js';
 import { authDepsOf, answerConnect, claimOwner, memoryStore, useAuthApp, SIGN_IN_ORIGIN } from './helpers.js';
 import type { AppContext } from '../app-builder.js';
 
@@ -21,12 +22,14 @@ afterEach(async () => {
 const connectStdioClient = async (ctx: AppContext, options: { owner?: boolean; envToken?: string } = {}) => {
   const store = memoryStore();
   const session = createStdioSession({
-    deps: authDepsOf(ctx),
-    run: bindAuthRunEffects(ctx.runEffects),
+    signIn: createSignInInterpreter({
+      deps: authDepsOf(ctx),
+      run: bindAuthRunEffects(ctx.runEffects),
+      store,
+      origin: () => SIGN_IN_ORIGIN,
+    }),
     profile: 'default',
     envToken: options.envToken,
-    store,
-    origin: () => SIGN_IN_ORIGIN,
     clientInfo: () => mcp?.server.getClientVersion(),
   });
   const mcp = buildMcpServer(ctx.deps, ctx.version, ctx.runEffects, ctx.runEffectsSequence, () => undefined, {

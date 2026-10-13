@@ -1,25 +1,11 @@
-import {
-  CLI_MESSAGES,
-  defaultCliIo,
-  ensureOwnerClaimed,
-  fail,
-  parseFlags,
-  runAuthCommand,
-  exitCodeOf,
-  type CliIo,
-} from './authCli.js';
-import { CliCommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG, SETUP_POSITIONALS } from './common/cli.js';
-import { DatabaseAheadError } from './diplomat/db/versionGuard.js';
-import { offerSignIn, runLogin, runLogout } from './loginCli.js';
-import { NPX_COMMAND } from './models/package.js';
-import { runGuidedSetup } from './setup.js';
-import { SetupOptionsSchema } from './wire/in/cli.js';
-
-const SETUP_FLAGS = {
-  [PASSWORD_STDIN_FLAG]: { type: 'boolean' },
-  username: { type: 'string' },
-  profile: { type: 'string' },
-} as const;
+import { DatabaseAheadError } from '../../common/databaseAhead.js';
+import { CliCommand, EXIT_FAILURE, EXIT_OK } from '../../common/cli.js';
+import { NPX_COMMAND } from '../../models/package.js';
+import { runAuthCommand } from './commands/auth.js';
+import { runLogin, runLogout } from './commands/login.js';
+import { runSetupCommand } from './commands/setup.js';
+import type { CliIo } from './io.js';
+import { CLI_MESSAGES } from './messages.js';
 
 const HELP_ARGUMENTS: readonly string[] = ['help', '--help', '-h'];
 
@@ -34,18 +20,6 @@ Commands:
 
 The setup and auth commands print their own help when run with no arguments. With no command at all, FinTrack runs as an MCP server (stdio).
 `.trimStart();
-
-const runSetupCommand = async (args: readonly string[], io: CliIo): Promise<number> => {
-  const parsed = parseFlags(args, SETUP_FLAGS, SetupOptionsSchema, SETUP_POSITIONALS);
-  if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
-  const [client] = parsed.positionals;
-  return runGuidedSetup(
-    client,
-    () => ensureOwnerClaimed(io, parsed.options),
-    (profile) => offerSignIn(io, profile),
-    parsed.options.profile,
-  );
-};
 
 const runKnownCommand = (command: CliCommand, rest: readonly string[], io: CliIo): Promise<number> => {
   switch (command) {
@@ -66,7 +40,7 @@ const runKnownCommand = (command: CliCommand, rest: readonly string[], io: CliIo
 
 /** Every argument is a command: an unknown one prints the usage and fails — it never falls through to starting a
  *  server, which is what an old or stale build once did with `auth setup`. */
-export const runCli = async (args: readonly string[], io: CliIo = defaultCliIo()): Promise<number> => {
+export const runCli = async (args: readonly string[], io: CliIo): Promise<number> => {
   const [command, ...rest] = args;
   if (command === undefined || HELP_ARGUMENTS.includes(command)) {
     io.out(USAGE);

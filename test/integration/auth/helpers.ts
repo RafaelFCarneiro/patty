@@ -6,6 +6,7 @@ import { afterEach } from 'vitest';
 import type { AuthDeps } from '../../../src/controllers/deps.js';
 import type { SignInServer, SignInStore } from '../../../src/controllers/deps.js';
 import { loadConfig } from '../../../src/config.js';
+import { createSignInInterpreter } from '../../../src/signInInterpreter.js';
 import { startSignInServer } from '../../../src/signInServer.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
 import { createStdioSession, type StdioSession } from '../../../src/diplomat/mcp/stdioSession.js';
@@ -252,15 +253,18 @@ export const stdioSessionFor = (
 ): { session: StdioSession; store: MemoryStore } => {
   const store = options.store ?? memoryStore();
   const base = authDepsOf(ctx);
-  const session = createStdioSession({
+  const signIn = createSignInInterpreter({
     deps: { ...base, clock: options.clock ?? base.clock },
     run: options.run ?? bindAuthRunEffects(ctx.runEffects),
-    profile: 'default',
-    envToken: options.envToken,
     store,
     origin: () => (options.origin === undefined ? SIGN_IN_ORIGIN : options.origin),
+    startPage: options.temporaryServer,
+  });
+  const session = createStdioSession({
+    signIn,
+    profile: 'default',
+    envToken: options.envToken,
     clientInfo: () => options.clientInfo ?? { name: 'Claude Desktop', version: '1.0.0' },
-    temporaryServer: options.temporaryServer,
   });
   return { session, store };
 };

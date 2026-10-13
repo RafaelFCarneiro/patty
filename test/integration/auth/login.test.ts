@@ -3,16 +3,17 @@ import { sql } from 'drizzle-orm';
 import { errAsync } from 'neverthrow';
 import { KeychainUnavailableError } from '../../../src/common/keychain.js';
 import { describe, expect, it, vi } from 'vitest';
-import type { CliIo, Shell } from '../../../src/authCli.js';
+import type { CliIo, Shell } from '../../../src/diplomat/cli/io.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
 import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_OK } from '../../../src/common/cli.js';
 import { loadConfig } from '../../../src/config.js';
 import type { Terminal } from '../../../src/diplomat/cli/terminal.js';
-import { LOGIN_MESSAGES, offerSignIn, runLogin, runLogout } from '../../../src/loginCli.js';
+import { LOGIN_MESSAGES, offerSignIn, runLogin, runLogout } from '../../../src/diplomat/cli/commands/login.js';
 import { conflict } from '../../../src/models/error.js';
 import { AUTH_MESSAGES } from '../../../src/models/auth/message.js';
 import { GRANT_POLL_INTERVAL_MS } from '../../../src/models/auth/signIn.js';
 import { NPX_COMMAND } from '../../../src/models/package.js';
+import { createSignInInterpreter } from '../../../src/signInInterpreter.js';
 import { startSignInServer } from '../../../src/signInServer.js';
 import type { AppContext } from '../app-builder.js';
 import {
@@ -52,14 +53,24 @@ const rig = async (setup: Setup = {}) => {
   };
   const interrupt = new AbortController();
   const server = { origin: LOOPBACK_ORIGIN, close: vi.fn(async () => undefined) };
-  const shell: Shell = {
+  const startServer = vi.fn(async () => server);
+  const shell: Shell & { startServer: typeof startServer } = {
     deps: authDepsOf(ctx),
     run: bindAuthRunEffects(ctx.runEffects),
     close: vi.fn(),
     authRequired: setup.authRequired ?? true,
     defaultProfile: setup.defaultProfile ?? 'default',
-    store: storeFor,
-    startServer: vi.fn(async () => server),
+    // The sign-in interpreter a real shell builds, over this rig's store and server; `run` is read at use, so a test
+    // can swap `shell.run` after the fact.
+    signIn: (profile) =>
+      createSignInInterpreter({
+        deps: shell.deps,
+        run: (flow) => shell.run(flow),
+        store: storeFor(profile),
+        origin: () => null,
+        startPage: startServer,
+      }),
+    startServer,
   };
   const waits: number[] = [];
   const io: CliIo = {
@@ -76,6 +87,7 @@ const rig = async (setup: Setup = {}) => {
       if (signal.aborted) return;
     },
     interruptSignal: () => interrupt.signal,
+    clients: { find: () => undefined },
   };
   return { ctx, cookie, out, err, io, shell, server, stores, storeFor, waits, interrupt };
 };

@@ -9,7 +9,7 @@ import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js
 import { keychainSignInStore } from './diplomat/auth/signInStore.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
 import { openDatabase } from './diplomat/db/driver.js';
-import { DatabaseAheadError } from './diplomat/db/versionGuard.js';
+import { DatabaseAheadError } from './common/databaseAhead.js';
 import type { HttpAuth } from './diplomat/http/context.js';
 import { ownerGate } from './diplomat/mcp/gate.js';
 import { connectStdio } from './diplomat/mcp/stdio.js';
@@ -17,6 +17,7 @@ import { createStdioSession } from './diplomat/mcp/stdioSession.js';
 import { dbIdOf, keychainAccount } from './logic/auth/keychain.js';
 import { signInOrigin } from './logic/auth/origin.js';
 import { createRuntime } from './runtime.js';
+import { createSignInInterpreter } from './signInInterpreter.js';
 import { startSignInServer } from './signInServer.js';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import type { HttpSidecar } from './server.js';
@@ -29,7 +30,8 @@ import type { HttpSidecar } from './server.js';
  */
 const loadServerModule = () => import('./server.js');
 
-const loadCliModule = () => import('./cli.js');
+const loadCliModule = () => import('./diplomat/cli/commands.js');
+const loadCliShellModule = () => import('./cliShell.js');
 
 const maybeStartSidecar = async (
   deps: Deps,
@@ -60,8 +62,9 @@ const main = async (): Promise<void> => {
   // Any argument is a command: an unknown one is a usage error, never a reason to start a server.
   if (process.argv.length > 2) {
     const { runCli } = await loadCliModule();
+    const { defaultCliIo } = await loadCliShellModule();
     // Not process.exit: let the event loop drain, so everything the command printed has been flushed.
-    process.exitCode = await runCli(process.argv.slice(2));
+    process.exitCode = await runCli(process.argv.slice(2), defaultCliIo());
     return;
   }
 
@@ -91,17 +94,22 @@ const main = async (): Promise<void> => {
 
     // The connected server reports who spawned it (`initialize`'s clientInfo); the session asks only when it needs to.
     const connected: { server?: McpServer } = {};
-    const session = prepared.stdio
-      ? createStdioSession({
+    const signIn = prepared.stdio
+      ? createSignInInterpreter({
           deps: prepared.stdio.deps,
           run: prepared.stdio.run,
-          profile: config.FINTRACK_PROFILE,
-          envToken: config.FINTRACK_TOKEN,
           store: keychainSignInStore(
             keychainAccount(config.FINTRACK_PROFILE, dbIdOf(prepared.stdio.deps.secrets.hashSecret(config.DB_PATH))),
           ),
           origin: linkOrigin,
-          temporaryServer: config.FINTRACK_HTTP ? () => startSignInServer(config, db) : undefined,
+          startPage: config.FINTRACK_HTTP ? () => startSignInServer(config, db) : undefined,
+        })
+      : undefined;
+    const session = signIn
+      ? createStdioSession({
+          signIn,
+          profile: config.FINTRACK_PROFILE,
+          envToken: config.FINTRACK_TOKEN,
           clientInfo: () => connected.server?.server.getClientVersion(),
         })
       : undefined;

@@ -1,17 +1,9 @@
 import * as R from 'remeda';
 import { version } from '../../common/buildVersion.js';
+import { DatabaseAheadError } from '../../common/databaseAhead.js';
 import { isDatabaseAhead } from '../../logic/migration.js';
-import { databaseAheadMessage } from '../../models/database.js';
 import type { Db } from './driver.js';
 import { lastAppliedMillis, readJournal } from './migrationJournal.js';
-
-/** Thrown by `assertDatabaseNotAhead`; an entrypoint prints `message` as is (it is already a complete diagnosis). */
-export class DatabaseAheadError extends Error {
-  constructor(version: string) {
-    super(databaseAheadMessage(version));
-    this.name = 'DatabaseAheadError';
-  }
-}
 
 /**
  * Refuses to go on when the database's newest applied migration is newer than the newest this build ships — a
