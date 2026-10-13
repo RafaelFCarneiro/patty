@@ -35,7 +35,8 @@ export const printDiagnostic = (line: string): void => {
 export const isInteractive = (): boolean => process.stdin.isTTY === true;
 
 /** Prompts on stderr; a secret answer is swallowed by a muted stream. Ctrl-C rejects the question as interrupted,
- *  Ctrl-D as cancelled. */
+ *  Ctrl-D as cancelled. Ctrl-C between prompts takes effect at the next prompt: a step already running (hashing, a
+ *  claim) finishes — deliberately, so no write is cut in half. */
 export const open = (): Terminal => {
   let muted = false;
   let interrupted = false;

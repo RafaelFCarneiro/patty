@@ -12,7 +12,9 @@ const SETUP_FLAGS = {
   profile: { type: 'string' },
 } as const;
 
-const HELP = `
+/** What `setup` says. The help text is also printed for `fintrack setup` with no tool. */
+export const SETUP_MESSAGES = {
+  help: `
 Usage: ${NPX_COMMAND} setup <tool> [--username <name>] [--${PASSWORD_STDIN_FLAG}] [--profile <name>]
 
 Available tools:
@@ -37,7 +39,12 @@ Examples:
   ${NPX_COMMAND} setup copilot
   ${NPX_COMMAND} setup vscode
   ${NPX_COMMAND} setup antigravity
-`.trimStart();
+`.trimStart(),
+  unknownTool: (tool: string) =>
+    `fintrack setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`,
+  settingUp: (label: string) => `Setting up FinTrack MCP for ${label}...`,
+  done: 'Done.',
+} as const;
 
 /** What `setup` needs of the I/O: where to print, and the client config files. */
 type SetupIo = Pick<CliIo, 'out' | 'err' | 'clients'>;
@@ -46,25 +53,28 @@ type SetupIo = Pick<CliIo, 'out' | 'err' | 'clients'>;
  *  file that cannot be read or written is reported on stderr and is `EXIT_FAILURE`. */
 export const runSetup = (io: SetupIo, tool: string | undefined, profile: string = DEFAULT_PROFILE): number => {
   if (!tool) {
-    io.out(HELP);
+    io.out(SETUP_MESSAGES.help);
     return EXIT_OK;
   }
 
   const client = io.clients.find(tool);
   if (!client) {
-    io.err(`fintrack setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`);
+    io.err(SETUP_MESSAGES.unknownTool(tool));
     return EXIT_FAILURE;
   }
 
-  io.out(`Setting up FinTrack MCP for ${client.label}...`);
+  io.out(SETUP_MESSAGES.settingUp(client.label));
   try {
-    client.run(profile);
+    const report = client.run(profile);
+    report.warnings.forEach((warning) => io.err(warning));
+    report.lines.forEach((line) => io.out(line));
   } catch (cause) {
     if (!(cause instanceof ClientConfigError)) throw cause;
+    cause.warnings.forEach((warning) => io.err(warning));
     io.err(cause.message);
     return EXIT_FAILURE;
   }
-  io.out('Done.');
+  io.out(SETUP_MESSAGES.done);
   return EXIT_OK;
 };
 

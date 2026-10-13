@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { ClientConfigError } from '../../common/clientConfig.js';
-import type { ClientConfig, ClientConfigs } from '../../controllers/deps.js';
+import type { ClientConfig, ClientConfigs, ClientSetupReport } from '../../controllers/deps.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/signIn.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
 import {
@@ -20,17 +20,17 @@ import {
 
 const INVALID_ROOT_MESSAGE = 'does not contain a JSON object at the root';
 
-const warnInvalidConfig = (path: string): void => {
-  console.error(`fintrack setup: ${path} ${INVALID_ROOT_MESSAGE} — replacing it during setup.`);
-};
+const invalidConfigWarning = (path: string): string =>
+  `fintrack setup: ${path} ${INVALID_ROOT_MESSAGE} — replacing it during setup.`;
 
 const failedToRead = (path: string, error: unknown): ClientConfigError =>
   new ClientConfigError(
     `fintrack setup: failed to read ${path}: ${error instanceof Error ? error.message : String(error)}`,
   );
 
-export const readJsonOrEmpty = (path: string): Record<string, unknown> => {
-  if (!existsSync(path)) return {};
+/** The config object in the file — `{}` for a missing, empty or unusable one, the last with a warning. */
+export const readJsonOrEmpty = (path: string): { config: Record<string, unknown>; warnings: string[] } => {
+  if (!existsSync(path)) return { config: {}, warnings: [] };
 
   let content: string;
   try {
@@ -41,15 +41,13 @@ export const readJsonOrEmpty = (path: string): Record<string, unknown> => {
 
   try {
     const trimmedContent = content.trim();
-    if (!trimmedContent) return {};
+    if (!trimmedContent) return { config: {}, warnings: [] };
 
     const config = resolveConfigObject(JSON.parse(trimmedContent));
-    if (config) return config;
-    warnInvalidConfig(path);
-    return {};
+    if (config) return { config, warnings: [] };
+    return { config: {}, warnings: [invalidConfigWarning(path)] };
   } catch {
-    warnInvalidConfig(path);
-    return {};
+    return { config: {}, warnings: [invalidConfigWarning(path)] };
   }
 };
 
@@ -84,47 +82,60 @@ const claudeDesktopConfigPath = (): string => {
 // Per-client setup handlers
 // ---------------------------------------------------------------------------
 
-const setupClaudeCode = (profile: string): void => {
-  const configPath = join(home, '.claude', 'mcp.json');
-  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), withProfile(STDIO_ENTRY, profile)));
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log(`  Updated: ${configPath}`);
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log('  Verify with: claude mcp list');
+/** Reads the client's file, merges the FinTrack entry in, writes it back, and reports. */
+const writeEntry = (
+  configPath: string,
+  merge: (existing: Record<string, unknown>, entry: Record<string, unknown>) => Record<string, unknown>,
+  entry: Record<string, unknown>,
+  next: string,
+): ClientSetupReport => {
+  const { config, warnings } = readJsonOrEmpty(configPath);
+  try {
+    writeJson(configPath, merge(config, entry));
+  } catch (cause) {
+    // What was raised while reading is still owed to the person, ahead of the failure.
+    throw cause instanceof ClientConfigError ? new ClientConfigError(cause.message, warnings) : cause;
+  }
+  return { warnings, lines: [`  Updated: ${configPath}`, next] };
 };
 
-const setupClaudeDesktop = (profile: string): void => {
-  const configPath = claudeDesktopConfigPath();
-  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), withProfile(STDIO_ENTRY, profile)));
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log(`  Updated: ${configPath}`);
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log('  Fully quit and reopen Claude Desktop to apply.');
-};
+const setupClaudeCode = (profile: string): ClientSetupReport =>
+  writeEntry(
+    join(home, '.claude', 'mcp.json'),
+    mergeMcpServersKey,
+    withProfile(STDIO_ENTRY, profile),
+    '  Verify with: claude mcp list',
+  );
 
-const setupCopilot = (profile: string): void => {
-  const configPath = join(process.cwd(), '.vscode', 'mcp.json');
-  writeJson(configPath, mergeServersKey(readJsonOrEmpty(configPath), withProfile(VSCODE_ENTRY, profile)));
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log(`  Updated: ${configPath}`);
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log('  Reload VS Code window (Cmd/Ctrl+Shift+P → "Developer: Reload Window") to apply.');
-};
+const setupClaudeDesktop = (profile: string): ClientSetupReport =>
+  writeEntry(
+    claudeDesktopConfigPath(),
+    mergeMcpServersKey,
+    withProfile(STDIO_ENTRY, profile),
+    '  Fully quit and reopen Claude Desktop to apply.',
+  );
 
-const setupAntigravity = (profile: string): void => {
-  const configPath = join(home, '.gemini', 'config', 'mcp_config.json');
-  writeJson(configPath, mergeMcpServersKey(readJsonOrEmpty(configPath), withProfile(STDIO_ENTRY, profile)));
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log(`  Updated: ${configPath}`);
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log('  Reopen Antigravity or type /mcp in the CLI to refresh.');
-};
+const setupCopilot = (profile: string): ClientSetupReport =>
+  writeEntry(
+    join(process.cwd(), '.vscode', 'mcp.json'),
+    mergeServersKey,
+    withProfile(VSCODE_ENTRY, profile),
+    '  Reload VS Code window (Cmd/Ctrl+Shift+P → "Developer: Reload Window") to apply.',
+  );
 
-const setupCodex = (profile: string): void => {
-  // Codex CLI MCP configuration path and format is not yet stable.
-  // Print the snippet and let the user place it manually.
-  // eslint-disable-next-line no-console -- CLI surface
-  console.log(`  Codex CLI: add the following to your MCP config file:
+const setupAntigravity = (profile: string): ClientSetupReport =>
+  writeEntry(
+    join(home, '.gemini', 'config', 'mcp_config.json'),
+    mergeMcpServersKey,
+    withProfile(STDIO_ENTRY, profile),
+    '  Reopen Antigravity or type /mcp in the CLI to refresh.',
+  );
+
+// Codex CLI MCP configuration path and format is not yet stable: describe the snippet and let the user place it.
+const setupCodex = (profile: string): ClientSetupReport => ({
+  warnings: [],
+  lines: [
+    `  Codex CLI: add the following to your MCP config file:
 
   {
     "mcpServers": {
@@ -135,8 +146,9 @@ const setupCodex = (profile: string): void => {
     }
   }
 
-  Refer to the Codex CLI docs for the exact config file location.`);
-};
+  Refer to the Codex CLI docs for the exact config file location.`,
+  ],
+});
 
 // ---------------------------------------------------------------------------
 // Client registry

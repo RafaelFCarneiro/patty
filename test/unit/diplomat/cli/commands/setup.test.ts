@@ -69,13 +69,12 @@ describe('runSetup', () => {
     vi.resetModules();
     vi.doMock('node:os', () => ({ homedir: () => homeDir }));
 
-    const { runSetup: runSetupWithMockedHome } = await importSetup();
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { runSetup: runSetupWithMockedHome, out } = await importSetup();
 
     expect(runSetupWithMockedHome('claude-desktop')).toBe(0);
 
-    expect(logSpy).toHaveBeenCalledWith('  Fully quit and reopen Claude Desktop to apply.');
-    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Cmd+Q'));
+    expect(out).toContain('  Fully quit and reopen Claude Desktop to apply.');
+    expect(out.join('\n')).not.toContain('Cmd+Q');
   });
 });
 
@@ -97,7 +96,6 @@ describe('runGuidedSetup (claim the owner, then write the config)', () => {
     process.chdir(homeDir);
     vi.resetModules();
     vi.doMock('node:os', () => ({ homedir: () => homeDir }));
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     return importSetup();
   };
 
@@ -178,7 +176,6 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
     process.chdir(homeDir);
     vi.resetModules();
     vi.doMock('node:os', () => ({ homedir: () => homeDir }));
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     return importSetup();
   };
 
@@ -213,8 +210,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
   });
 
   it('puts the profile in the VS Code entry and in the Codex snippet too', async () => {
-    const { runGuidedSetup } = await loadWithHome();
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { runGuidedSetup, out } = await loadWithHome();
 
     await runGuidedSetup(
       'copilot',
@@ -232,7 +228,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
       async () => undefined,
       'work',
     );
-    expect(log.mock.calls.flat().join('\n')).toContain('"env": { "FINTRACK_PROFILE": "work" }');
+    expect(out.join('\n')).toContain('"env": { "FINTRACK_PROFILE": "work" }');
   });
 
   it('writes no env at all for the default profile', async () => {
@@ -288,7 +284,6 @@ describe('runGuidedSetup — a client config that cannot be read or written', ()
     process.chdir(homeDir);
     vi.resetModules();
     vi.doMock('node:os', () => ({ homedir: () => homeDir }));
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const exit = vi.spyOn(process, 'exit');
     const configPath = join(homeDir, '.claude', 'mcp.json');
     mkdirSync(configPath, { recursive: true }); // a directory where the file should be: reading it fails (EISDIR)
@@ -326,5 +321,55 @@ describe('runSetup — help and an unknown tool', () => {
     ]);
     expect(exit).not.toHaveBeenCalled();
     vi.restoreAllMocks();
+  });
+});
+
+describe('runGuidedSetup — everything a successful setup prints, in order', () => {
+  let originalCwd = '';
+  let homeDir = '';
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (originalCwd) process.chdir(originalCwd);
+    if (homeDir) rmSync(homeDir, { recursive: true, force: true });
+    vi.doUnmock('node:os');
+    vi.resetModules();
+  });
+
+  it('says Setting up…, Updated…, the next step, then Done. — all on out, nothing on err', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    originalCwd = process.cwd();
+    process.chdir(homeDir);
+    vi.resetModules();
+    vi.doMock('node:os', () => ({ homedir: () => homeDir }));
+    const log = vi.spyOn(console, 'log');
+    const { runGuidedSetup, out, err } = await importSetup();
+
+    expect(await runGuidedSetup('claude-code', async () => true)).toBe(0);
+
+    expect(out).toEqual([
+      'Setting up FinTrack MCP for Claude Code (CLI)...',
+      `  Updated: ${join(homeDir, '.claude', 'mcp.json')}`,
+      '  Verify with: claude mcp list',
+      'Done.',
+    ]);
+    expect(err).toEqual([]);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('puts a replaced-config warning on err, ahead of the lines on out', async () => {
+    homeDir = mkdtempSync(join(tmpdir(), 'fintrack-setup-'));
+    originalCwd = process.cwd();
+    process.chdir(homeDir);
+    vi.resetModules();
+    vi.doMock('node:os', () => ({ homedir: () => homeDir }));
+    mkdirSync(join(homeDir, '.claude'), { recursive: true });
+    writeFileSync(join(homeDir, '.claude', 'mcp.json'), '[]', 'utf8');
+    const { runGuidedSetup, out, err } = await importSetup();
+
+    expect(await runGuidedSetup('claude-code', async () => true)).toBe(0);
+
+    expect(err).toEqual([expect.stringMatching(/mcp\.json does not contain a JSON object at the root/)]);
+    expect(out).toHaveLength(4);
   });
 });

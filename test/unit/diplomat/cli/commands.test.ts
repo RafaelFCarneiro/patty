@@ -32,7 +32,7 @@ const rig = () => {
     version: '0.0.0-test',
     wait: async () => undefined,
     interruptSignal: () => new AbortController().signal,
-    clients: { find: () => ({ label: 'Stub', run: () => undefined }) },
+    clients: { find: () => ({ label: 'Stub', run: () => ({ warnings: [], lines: [] }) }) },
   };
   return { io, out, err, shellClosed: () => shellClosed };
 };

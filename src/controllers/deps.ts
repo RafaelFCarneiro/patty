@@ -87,11 +87,20 @@ export type SignInStore = {
 /** Where the consent page is served while a sign-in waits: a temporary server this process started on its own. */
 export type SignInServer = { origin: string; close: () => Promise<void> };
 
+/** What writing a client's configuration has to tell the person — never printed by the adapter itself. */
+export type ClientSetupReport = {
+  /** Printed first, on stderr: something was off in the file and has been replaced. */
+  warnings: readonly string[];
+  /** Printed after, on stdout, in order: what was written and what to do next. */
+  lines: readonly string[];
+};
+
 /** One MCP client whose configuration file `setup` knows how to write. */
 export type ClientConfig = {
   label: string;
-  /** Writes (or prints) the entry that runs FinTrack as `profile` for this client. */
-  run: (profile: string) => void;
+  /** Writes the entry that runs FinTrack as `profile` for this client (or, for one that cannot be written, describes
+   *  how to), and reports. Throws `ClientConfigError` when a file cannot be read or written. */
+  run: (profile: string) => ClientSetupReport;
 };
 
 /** The clients `setup` can configure — the config files of Claude Code, Claude Desktop, VS Code…, behind one lookup. */
