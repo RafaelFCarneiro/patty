@@ -1,3 +1,4 @@
+import * as R from 'remeda';
 import { HTTP_SCHEME_PREFIX, hostnameOfHostHeader, isLoopbackHost } from '../common/net.js';
 import {
   BEARER_HEADER,
@@ -16,6 +17,7 @@ import {
   SETUP_CODE_GROUP_SEPARATOR,
   SETUP_CODE_GROUP_SIZE,
   WEB_PROTOCOLS,
+  AccessTokenKind,
   type AccessTokenEntity,
   type AccessTokenSummary,
   ALL_SCOPES,
@@ -28,19 +30,40 @@ import {
   type Principal,
   PrincipalVia,
   READ_SCOPE,
+  RedeemPlanKind,
   type Scope,
   SESSION_ABSOLUTE_MAX_MS,
   type SessionEntity,
   type SetupCodeEntity,
   TOKEN_ACCESS_SCOPES,
+  TokenAccess,
   TOKEN_DISPLAY_PREFIX_RANDOM_CHARS,
   TOKEN_EXPIRY_DAYS,
   TERMINAL_SETUP_HINT,
   TOKEN_PREFIX,
   TokenStatus,
   WRITE_SCOPE,
+  CLIENT_GRANT_TTL_MS,
+  CONNECT_CODE_PARAM,
+  CONNECT_PATH,
+  DB_ID_LENGTH,
+  DEFAULT_SIGN_IN_DURATION,
+  GrantChannel,
+  GrantStatus,
+  MAX_SIGN_IN_DURATION_MS,
+  SIGN_IN_ACCOUNT_PREFIX,
+  SIGN_IN_DURATION_MS,
+  SignInDuration,
+  SESSION_ONLY_LABEL,
+  STDIO_MESSAGES,
+  UNKNOWN_CLIENT_NAME,
+  TOKEN_NAME_MAX_LENGTH,
   type ClaimedOwner,
   type ClaimedUserEntity,
+  type ClientGrantEntity,
+  type GrantChoice,
+  type GrantRequest,
+  type StartGrantInput,
   type ChallengeableError,
   type ClaimPlan,
   type Credential,
@@ -103,9 +126,13 @@ export const planOwnerClaim = (claimed: ClaimedOwner | null): ClaimPlan =>
 export const claimRaceWinner = (error: { code: string }, holder: ClaimedOwner | null): ClaimedOwner | null =>
   error.code === authErrors.setupUnavailable.code ? holder : null;
 
+/** A user who holds credentials and has not been disabled — the only kind anything is minted for. */
+export const isActiveUser = (user: UserEntity | null): user is ClaimedUserEntity =>
+  user !== null && hasCredentials(user) && user.disabledAt === null;
+
 /** Every way a login can fail is the same outcome — the caller cannot tell which. */
 export const canLogin = (user: UserEntity | null, passwordMatches: boolean): user is UserEntity =>
-  user !== null && passwordMatches && hasCredentials(user) && user.disabledAt === null;
+  passwordMatches && isActiveUser(user);
 
 // ─── Sessions ──────────────────────────────────────────────────────────────
 
@@ -314,6 +341,9 @@ export const newAccessToken = (
     tokenHash: fields.tokenHash,
     prefix: fields.prefix,
     scopes: [...TOKEN_ACCESS_SCOPES[fields.input.access]],
+    kind: AccessTokenKind.enum.pat,
+    clientName: null,
+    profile: null,
     createdAt: now.toISOString(),
     lastUsedAt: null,
     expiresAt: toIso(now.getTime() + days * DAY_MS),
@@ -341,6 +371,9 @@ export const summarizeToken = (token: TokenFields, now: Date): AccessTokenSummar
   name: token.name,
   prefix: token.prefix,
   scopes: token.scopes,
+  kind: token.kind,
+  clientName: token.clientName,
+  profile: token.profile,
   createdAt: token.createdAt,
   lastUsedAt: token.lastUsedAt,
   expiresAt: token.expiresAt,
@@ -348,10 +381,21 @@ export const summarizeToken = (token: TokenFields, now: Date): AccessTokenSummar
   status: tokenStatus(token, now),
 });
 
-/** Unknown, revoked, expired, or belonging to an owner who is unclaimed/disabled → invalid. `last_used_at` is
- *  rewritten at most every `SESSION_TOUCH_INTERVAL_MS`, like a session's. */
-export const evaluateToken = (token: AccessTokenEntity | null, user: UserEntity | null, now: Date): TokenVerdict =>
+/** A personal access token works on every surface; a stdio sign-in only where it was issued (the stdio session),
+ *  so a copy lifted from the keychain is not also a key to `/api` and `/mcp` (ADR-034 §3). */
+export const tokenAdmitsVia = (token: Pick<AccessTokenEntity, 'kind'>, via: PrincipalVia): boolean =>
+  token.kind === AccessTokenKind.enum.pat || via === PrincipalVia.enum.stdio;
+
+/** Unknown, revoked, expired, not meant for this surface, or belonging to an owner who is unclaimed/disabled →
+ *  invalid. `last_used_at` is rewritten at most every `SESSION_TOUCH_INTERVAL_MS`, like a session's. */
+export const evaluateToken = (
+  token: AccessTokenEntity | null,
+  user: UserEntity | null,
+  now: Date,
+  via: PrincipalVia = PrincipalVia.enum.token,
+): TokenVerdict =>
   token === null ||
+  !tokenAdmitsVia(token, via) ||
   tokenStatus(token, now) !== TokenStatus.enum.active ||
   user === null ||
   !hasCredentials(user) ||
@@ -372,13 +416,251 @@ export const revokedToken = (token: AccessTokenEntity, now: Date): AccessTokenEn
   revokedAt: now.toISOString(),
 });
 
-export const tokenPrincipal = (token: AccessTokenEntity, user: UserEntity): Principal => ({
+export const tokenPrincipal = (
+  token: Pick<AccessTokenEntity, 'id' | 'scopes'>,
+  user: UserEntity,
+  via: PrincipalVia = PrincipalVia.enum.token,
+): Principal => ({
   userId: user.id,
   role: user.role,
   scopes: token.scopes,
-  via: PrincipalVia.enum.token,
+  via,
   tokenId: token.id,
 });
+
+// ─── Stdio sign-in (ADR-034) ───────────────────────────────────────────────
+
+/** What a person typed vs. what was shown: a user code is normalized exactly like a setup code. */
+export const normalizeUserCode = normalizeSetupCode;
+/** `ABCDEFGH` → `ABCD-EFGH`. */
+export const formatUserCode = formatSetupCode;
+
+/** Absolute from approval, never from use, and never past the 30-day maximum. */
+export const signInExpiry = (approvedAt: string, duration: SignInDuration): string =>
+  toIso(millis(approvedAt) + Math.min(SIGN_IN_DURATION_MS[duration], MAX_SIGN_IN_DURATION_MS));
+
+/** `session` lives in the stdio process's memory only; every other duration is saved to the keychain. */
+export const persistsToKeychain = (duration: SignInDuration): boolean => duration !== SignInDuration.enum.session;
+
+/** Whether this grant's asker may be handed a sign-in of this duration. */
+export const durationAllowedFor = (channel: GrantChannel, duration: SignInDuration): boolean =>
+  channel === GrantChannel.enum.stdio || duration !== SignInDuration.enum.session;
+
+export const newGrant = (
+  fields: { id: string; deviceCodeHash: string; userCode: string; input: StartGrantInput },
+  now: Date,
+): Omit<ClientGrantEntity, 'version'> => ({
+  id: fields.id,
+  deviceCodeHash: fields.deviceCodeHash,
+  userCode: fields.userCode,
+  clientName: fields.input.client.name,
+  clientVersion: fields.input.client.version,
+  profile: fields.input.profile,
+  channel: fields.input.channel,
+  hintAccess: fields.input.hint?.access ?? null,
+  hintDuration: fields.input.hint?.duration ?? null,
+  status: GrantStatus.enum.pending,
+  userId: null,
+  scopes: null,
+  duration: null,
+  createdAt: now.toISOString(),
+  approvedAt: null,
+  expiresAt: toIso(now.getTime() + CLIENT_GRANT_TTL_MS),
+});
+
+const isGrantExpired = (grant: ClientGrantEntity, now: Date): boolean => now.getTime() >= millis(grant.expiresAt);
+
+/** A request still waiting for a person: pending and inside its window. */
+export const isAnswerable = (grant: ClientGrantEntity | null, now: Date): grant is ClientGrantEntity =>
+  grant !== null && grant.status === GrantStatus.enum.pending && !isGrantExpired(grant, now);
+
+export const grantRequestOf = (grant: ClientGrantEntity): GrantRequest => ({
+  userCode: formatUserCode(grant.userCode),
+  clientName: grant.clientName,
+  clientVersion: grant.clientVersion,
+  profile: grant.profile,
+  channel: grant.channel,
+  createdAt: grant.createdAt,
+  expiresAt: grant.expiresAt,
+});
+
+export const approvedGrant = (
+  grant: ClientGrantEntity,
+  fields: { userId: string; scopes: readonly Scope[]; duration: SignInDuration },
+  now: Date,
+): ClientGrantEntity => ({
+  ...grant,
+  status: GrantStatus.enum.approved,
+  userId: fields.userId,
+  scopes: [...fields.scopes],
+  duration: fields.duration,
+  approvedAt: now.toISOString(),
+});
+
+export const deniedGrant = (grant: ClientGrantEntity): ClientGrantEntity => ({
+  ...grant,
+  status: GrantStatus.enum.denied,
+});
+
+export const redeemedGrant = (grant: ClientGrantEntity): ClientGrantEntity => ({
+  ...grant,
+  status: GrantStatus.enum.redeemed,
+});
+
+export const expiredGrant = (grant: ClientGrantEntity): ClientGrantEntity => ({
+  ...grant,
+  status: GrantStatus.enum.expired,
+});
+
+/** What the consent form pre-selects: the asker's hint, else this user's last choice for this client, else the
+ *  defaults (read-only, 24 hours). A hint of `session` is dropped for a grant that may not have one. */
+export const consentChoice = (
+  grant: ClientGrantEntity,
+  last: Pick<ClientGrantEntity, 'scopes' | 'duration'> | null,
+): GrantChoice => {
+  const lastAccess = last?.scopes
+    ? last.scopes.includes(WRITE_SCOPE)
+      ? TokenAccess.enum.write
+      : TokenAccess.enum.read
+    : undefined;
+  const duration = R.pipe(
+    [grant.hintDuration, last?.duration],
+    R.filter(
+      (candidate): candidate is SignInDuration => candidate != null && durationAllowedFor(grant.channel, candidate),
+    ),
+    R.first(),
+  );
+  return {
+    access: grant.hintAccess ?? lastAccess ?? TokenAccess.enum.read,
+    duration: duration ?? DEFAULT_SIGN_IN_DURATION,
+  };
+};
+
+/** What redeeming a device code means for this grant right now. `settle` is the expired row to write back, when
+ *  the window has just run out on a grant that was still open. */
+export type RedeemPlan =
+  | { kind: typeof RedeemPlanKind.enum.invalid }
+  | { kind: typeof RedeemPlanKind.enum.pending }
+  | { kind: typeof RedeemPlanKind.enum.denied }
+  | { kind: typeof RedeemPlanKind.enum.expired; settle: ClientGrantEntity | null }
+  | {
+      kind: typeof RedeemPlanKind.enum.mint;
+      grant: ClientGrantEntity & { userId: string; scopes: Scope[]; duration: SignInDuration; approvedAt: string };
+    };
+
+export const redeemPlan = (grant: ClientGrantEntity | null, now: Date): RedeemPlan => {
+  if (grant === null || grant.status === GrantStatus.enum.redeemed) return { kind: RedeemPlanKind.enum.invalid };
+  if (grant.status === GrantStatus.enum.denied) return { kind: RedeemPlanKind.enum.denied };
+  if (grant.status === GrantStatus.enum.expired) return { kind: RedeemPlanKind.enum.expired, settle: null };
+  if (isGrantExpired(grant, now)) return { kind: RedeemPlanKind.enum.expired, settle: expiredGrant(grant) };
+  if (grant.status === GrantStatus.enum.pending) return { kind: RedeemPlanKind.enum.pending };
+  const { userId, scopes, duration, approvedAt } = grant;
+  return userId !== null && scopes !== null && duration !== null && approvedAt !== null
+    ? { kind: RedeemPlanKind.enum.mint, grant: { ...grant, userId, scopes, duration, approvedAt } }
+    : { kind: RedeemPlanKind.enum.invalid };
+};
+
+/** The sign-in token a redeemed grant becomes. Its expiry is the approval time plus the chosen duration. */
+export const newStdioSignIn = (
+  fields: {
+    id: string;
+    tokenHash: string;
+    prefix: string;
+    grant: Extract<RedeemPlan, { kind: typeof RedeemPlanKind.enum.mint }>['grant'];
+  },
+  now: Date,
+) => ({
+  id: fields.id,
+  userId: fields.grant.userId,
+  kind: AccessTokenKind.enum.stdio,
+  clientName: fields.grant.clientName,
+  profile: fields.grant.profile,
+  name: `${fields.grant.clientName} (${fields.grant.profile})`.slice(0, TOKEN_NAME_MAX_LENGTH),
+  tokenHash: fields.tokenHash,
+  prefix: fields.prefix,
+  scopes: fields.grant.scopes,
+  createdAt: now.toISOString(),
+  lastUsedAt: null,
+  expiresAt: signInExpiry(fields.grant.approvedAt, fields.grant.duration),
+  revokedAt: null,
+});
+
+/** The keychain account of a saved sign-in. `dbId` is the first characters of sha256(absolute DB path), so a
+ *  development database and a production one never share a saved sign-in. */
+export const dbIdOf = (dbPathHash: string): string => dbPathHash.slice(0, DB_ID_LENGTH);
+export const keychainAccount = (profile: string, dbId: string): string =>
+  [SIGN_IN_ACCOUNT_PREFIX, profile, dbId].join(':');
+
+/** `FINTRACK_TOKEN` must look like one of ours before it is even looked up. */
+export const isTokenShaped = (raw: string): boolean => raw.startsWith(TOKEN_PREFIX) && raw.length <= MAX_TOKEN_LENGTH;
+
+/**
+ * The origin a stdio session's sign-in link may name from what it already knows, or `null`: `PUBLIC_URL`, else the
+ * sidecar THIS process bound. Never a configured `HOST:PORT` it did not bind — whatever listens there may have opened a
+ * different database, so a grant written here would never validate there — and, without `PUBLIC_URL`, never a
+ * non-loopback host either: the page's cookie-authenticated POSTs trust only `PUBLIC_URL` or a loopback `Host` (CSRF).
+ * `null` with HTTP enabled means "serve it yourself" (the session starts a temporary server of its own); with HTTP off
+ * there is no page at all and the message says to use `login` or `FINTRACK_TOKEN`.
+ */
+export const signInOrigin = (fields: {
+  httpEnabled: boolean;
+  publicUrl: string | undefined;
+  boundOrigin: string | null;
+  host: string;
+}): string | null => {
+  if (!fields.httpEnabled) return null;
+  if (fields.publicUrl !== undefined) return fields.publicUrl;
+  return isLoopbackHost(fields.host) ? fields.boundOrigin : null;
+};
+
+/** What the consent form remembers a redeemed grant under: one slot per user, profile and client. */
+const consentMemoryKey = (grant: ClientGrantEntity): string =>
+  JSON.stringify([grant.userId, grant.profile, grant.clientName]);
+
+const newestApproval = (grants: readonly ClientGrantEntity[]): ClientGrantEntity | undefined =>
+  R.firstBy(grants, [(grant) => grant.approvedAt ?? '', 'desc'], [(grant) => grant.id, 'desc']);
+
+/**
+ * The redeemed grants that no longer matter: every one except the newest approval per user, profile and client — that
+ * one is the consent form's "last choice" (`lastRedeemed` picks it by the same rule). Pending and approved grants are
+ * not candidates at all; the caller only ever offers redeemed ones.
+ */
+export const supersededGrants = (redeemed: readonly ClientGrantEntity[]): ClientGrantEntity[] =>
+  R.pipe(
+    redeemed,
+    R.groupBy(consentMemoryKey),
+    R.values(),
+    R.filter(R.isDefined),
+    R.flatMap((group) => {
+      const kept = newestApproval(group);
+      return group.filter((grant) => grant.id !== kept?.id);
+    }),
+  );
+
+/** The label of the "this session only" duration for the client that is asking: "This Claude Desktop session only". */
+export const sessionOnlyLabel = (clientName: string): string =>
+  clientName === UNKNOWN_CLIENT_NAME ? SESSION_ONLY_LABEL.unnamed : SESSION_ONLY_LABEL.named(clientName);
+
+export const connectUrl = (origin: string, userCode: string): string =>
+  `${origin}${CONNECT_PATH}?${CONNECT_CODE_PARAM}=${userCode}`;
+
+/**
+ * The text of the tool/resource/prompt error a signed-out stdio session answers with. The link carries the user
+ * code only; nothing here — and nothing a caller can pass in — is a secret.
+ */
+export const notSignedInMessage = (fields: {
+  /** The origin serving `/ui/connect`, or `null` when no HTTP server is involved (`FINTRACK_HTTP=false`). */
+  origin: string | null;
+  /** The code as displayed (`ABCD-EFGH`). */
+  userCode: string | null;
+  ownerUnclaimed: boolean;
+}): string => {
+  const base =
+    fields.origin !== null && fields.userCode !== null
+      ? STDIO_MESSAGES.notSignedIn(connectUrl(fields.origin, fields.userCode), fields.userCode)
+      : STDIO_MESSAGES.notSignedInWithoutHttp;
+  return fields.ownerUnclaimed ? `${base}${STDIO_MESSAGES.ownerUnclaimedHint}` : base;
+};
 
 // ─── Challenges (RFC 6750 §3, MCP authorization §"Error Handling") ──────────
 

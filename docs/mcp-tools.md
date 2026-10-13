@@ -14,8 +14,11 @@ Over HTTP with authentication `required`, `/mcp` takes an `Authorization: Bearer
 cookie), and every tool needs a scope ([`auth.md`](auth.md#scopes)). A tool's scope derives from its
 `annotations.readOnlyHint`: `true` → `fintrack:read`, otherwise `fintrack:write` (which includes read). A read-only token
 that calls a write tool gets HTTP `403` with `WWW-Authenticate: Bearer error="insufficient_scope",
-scope="fintrack:write", …` before the tool runs. Resources (`fintrack://…`) and prompts need `fintrack:read`. Over stdio
-there is no token: the caller is the trusted owner and may call everything.
+scope="fintrack:write", …` before the tool runs. Resources (`fintrack://…`) and prompts need `fintrack:read`. Over stdio the caller is the
+signed-in credential — a `FINTRACK_TOKEN` or a saved browser sign-in, each with its own scopes ([`auth.md`](auth.md#signing-in-claude-stdio)):
+a read-only one that calls a write tool gets the same `insufficient_scope` tool error, and a session with **no** credential gets an
+ordinary error result, `FinTrack: not signed in. Open <origin>/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.`, from every
+tool, resource read and prompt get (the lists and `initialize` still work). Only an explicit `FINTRACK_AUTH=disabled` makes stdio the trusted owner.
 
 The split is pinned by a unit test (`test/unit/diplomat/mcp/scopes.test.ts`), so reclassifying a tool is a reviewed diff.
 

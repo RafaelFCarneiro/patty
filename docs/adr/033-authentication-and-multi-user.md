@@ -59,8 +59,7 @@ phases (see below). Local npm behavior stays zero-config.
   by migration on every database, fresh or existing (§7).
 - **stdio is trusted** (spec-aligned). It acts as the default user, or as `FINTRACK_USER` (a username) once an
   instance has more than one user. With several users and no `FINTRACK_USER`, startup fails with an actionable
-  message. *(Superseded by ADR-034 §2: a stdio session signs in; there is no `FINTRACK_USER`. Until ADR-034 step 2
-  lands, stdio still acts as the owner.)*
+  message. *(Superseded by ADR-034 §2: a stdio session signs in; there is no `FINTRACK_USER`.)*
 - **HTTPS beyond loopback.** FinTrack does not terminate TLS. Non-loopback exposure goes through a reverse
   proxy (Caddy or Traefik, for example). A new **`PUBLIC_URL`** setting (the external `https://` origin) is
   required when auth is `required` and OAuth is on. It is the OAuth issuer and the MCP canonical resource URI,

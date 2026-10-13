@@ -1,10 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { IPV4_WILDCARD_HOST, IPV6_WILDCARD_HOST, LOOPBACK_HOST } from '../../src/common/net.js';
 import { loadConfig } from '../../src/config.js';
-import { AuthMode } from '../../src/models/auth.js';
+import { AuthMode, DEFAULT_PROFILE } from '../../src/models/auth.js';
 
 const ORIGINAL_ENV = { ...process.env };
-const AUTH_VARS = ['FINTRACK_AUTH', 'PUBLIC_URL', 'TRUST_PROXY', 'HOST', 'FINTRACK_DB_KEY', 'FINTRACK_DB_KEY_FILE'];
+const AUTH_VARS = [
+  'FINTRACK_AUTH',
+  'FINTRACK_PROFILE',
+  'FINTRACK_TOKEN',
+  'PUBLIC_URL',
+  'TRUST_PROXY',
+  'HOST',
+  'FINTRACK_DB_KEY',
+  'FINTRACK_DB_KEY_FILE',
+];
 
 beforeEach(() => {
   AUTH_VARS.forEach((name) => delete process.env[name]);
@@ -149,5 +158,35 @@ describe('TRUST_PROXY', () => {
     ['10.0.0.0/8,172.16.0.0/12', '10.0.0.0/8,172.16.0.0/12'],
   ])('parses %s for Fastify', (raw, expected) => {
     expect(withEnv({ TRUST_PROXY: raw }).TRUST_PROXY).toBe(expected);
+  });
+});
+
+describe('FINTRACK_PROFILE and FINTRACK_TOKEN (ADR-034 §2)', () => {
+  it('defaults the profile to "default" and leaves the token unset', () => {
+    const config = loadConfig();
+    expect(config.FINTRACK_PROFILE).toBe(DEFAULT_PROFILE);
+    expect(config.FINTRACK_TOKEN).toBeUndefined();
+  });
+
+  it('treats an empty value like an unset one', () => {
+    const config = withEnv({ FINTRACK_PROFILE: '', FINTRACK_TOKEN: '' });
+    expect(config.FINTRACK_PROFILE).toBe(DEFAULT_PROFILE);
+    expect(config.FINTRACK_TOKEN).toBeUndefined();
+  });
+
+  it('accepts a named profile', () => {
+    expect(withEnv({ FINTRACK_PROFILE: 'work.laptop-2' }).FINTRACK_PROFILE).toBe('work.laptop-2');
+  });
+
+  it.each(['has space', 'colon:inside', 'a/b', 'x'.repeat(65)])(
+    'rejects the profile %j, which could not name a keychain account',
+    (profile) => {
+      expect(() => withEnv({ FINTRACK_PROFILE: profile })).toThrow();
+    },
+  );
+
+  it('carries FINTRACK_TOKEN through untouched — judging it is the stdio session’s job, per call', () => {
+    expect(withEnv({ FINTRACK_TOKEN: 'ftk_whatever' }).FINTRACK_TOKEN).toBe('ftk_whatever');
+    expect(withEnv({ FINTRACK_TOKEN: 'not-a-token' }).FINTRACK_TOKEN).toBe('not-a-token');
   });
 });

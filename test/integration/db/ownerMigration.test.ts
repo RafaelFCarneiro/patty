@@ -57,7 +57,8 @@ afterEach(() => {
 type Row = Record<string, unknown>;
 
 // drizzle's bookkeeping, sqlite internals, the FTS shadow tables, and the tables this migration adds.
-const EXCLUDED_TABLES = /^(__drizzle|sqlite_|transactions_fts|users$|sessions$|access_tokens$|setup_codes$)/;
+const EXCLUDED_TABLES =
+  /^(__drizzle|sqlite_|transactions_fts|users$|sessions$|access_tokens$|setup_codes$|client_grants$)/;
 
 /** Every table outside the auth ones and drizzle's bookkeeping, fully dumped and ordered — the database's
  *  domain content, to compare byte-for-byte before and after the migration. */

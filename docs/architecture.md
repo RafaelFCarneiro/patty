@@ -56,9 +56,13 @@ If any generic concept is ambiguous, this file is the source of truth for implem
 | `diplomat/http`, `server.ts` → `@rfc0/effect-runner` | **Type-only**: the `ChangeBus` type (`['subscribe']`) for the SSE route's parameter; the bound bus is built in the composition root (`main.ts`) and passed in, never constructed inside `diplomat/*`. |
 | `diplomat/db` | Same base `diplomat/*` rule, **plus** `@rfc0/effect-runner` — it is the SQLite adapter implementing the port the package's engine defines (`versionedTableApplier` builds an `EntityApplier`; `driver.ts`'s `createTransactionRunner` implements `TransactionRunner`; `sqliteErrors.ts`'s `isSqliteBusy` implements `IsTransientContention`). Imports the package, never the reverse. |
 | `diplomat/auth/credentials.ts` | `controllers/deps.ts` (type-only: the `AuthSecrets` shape it implements), `models/auth.ts` (`TOKEN_PREFIX`), `@node-rs/argon2`, `node:crypto` — the real hashing/randomness behind the injected `AuthSecrets`. Loaded lazily (`authRuntime.ts`) so a run with auth disabled never loads the native argon2 module. |
+| `diplomat/auth/signInStore.ts` | `controllers/deps.ts` (type-only: the `SignInStore` port it implements), `models/auth.ts` (`KEYCHAIN_SERVICE`), `@napi-rs/keyring` (loaded lazily, like `diplomat/db/driver.ts` loads it for the database key). The only place a saved stdio sign-in touches the OS keychain. |
+| `diplomat/mcp/stdioSession.ts`, `gate.ts`, `scopes.ts` | The base `diplomat/*` rule — `controllers/accessTokens.ts`/`grants.ts`/`auth.ts` (through the injected `AuthDeps` and `RunEffects`), `logic/auth.ts` (which message, which scope, whether a duration is kept in the keychain — the decisions), `wire/in/auth.ts` (`clientInfoOf`) and the `SignInStore` port from `controllers/deps.ts`. `stdioSession.ts` is the stdio channel's identity: it sequences I/O and holds the in-memory credential and the pending request; it decides nothing. |
+| `diplomat/db/versionGuard.ts` | `diplomat/db/migrationJournal.ts` (`lastAppliedMillis`, `readJournal` — the one module that knows both what a build ships and what a database applied; `safetyCopy.ts` uses it too), `logic/migration.ts` (`isDatabaseAhead`), `models/database.ts` (the message). Read-only; `bootstrap` calls it before anything is copied, migrated or seeded. |
 | `diplomat/cli/` | The base `diplomat/*` rule, **plus** `models/auth.ts`' `UsernameSchema`/`PasswordSchema` (the answers a person types are decoded with the very schemas `/ui/setup` uses). `terminal.ts` is the only place that touches `node:readline` and stdin/stdout for prompting; `prompt.ts` holds the retry/confirmation rules over an injected `Terminal`, so they are tested without a pseudo-terminal. |
-| `src/cli.ts`, `src/authCli.ts`, `src/setup.ts` (composition roots) | The command mode of the binary (`setup`, `auth …`), loaded lazily by `main.ts` and never on a server start. `authCli.ts` joins `diplomat/db` (open + bootstrap), `authRuntime.ts` (`AUTH_APPLIERS`, `createAuthDeps`, `bindAuthRunEffects`), `controllers/auth.ts` and `diplomat/cli` — wiring across several `diplomat/*` submodules, so it lives outside them; `setup.ts` stays free of the database (the claim step is injected into `runGuidedSetup`). |
-| `src/authRuntime.ts` (composition root) | Joins `diplomat/db/repos`, `diplomat/http` (public routes, `HttpAuth`) and `diplomat/auth` to `controllers/auth.ts` — wiring that imports more than one `diplomat/*` submodule, so it lives outside them (like `server.ts`/`main.ts`). `diplomat/http` never imports it. |
+| `src/cli.ts`, `src/authCli.ts`, `src/loginCli.ts`, `src/signInServer.ts`, `src/setup.ts` (composition roots) | The command mode of the binary (`setup`, `auth …`, `login`, `logout`), loaded lazily by `main.ts` and never on a server start. `authCli.ts` joins `diplomat/db` (open + bootstrap), `diplomat/auth` (the keychain store), `authRuntime.ts` (`AUTH_APPLIERS`, `createAuthDeps`, `bindAuthRunEffects`), `controllers/auth.ts` and `diplomat/cli` — wiring across several `diplomat/*` submodules, so it lives outside them; `loginCli.ts` runs the grant flows of `controllers/grants.ts` over that shell; `signInServer.ts` is the one place that decides which HTTP server serves `/ui/connect` (and may start a temporary `buildHttpApp`); `setup.ts` stays free of the database (the claim and sign-in steps are injected into `runGuidedSetup`). |
+| `src/runtime.ts` (composition root) | Assembles the repos (`Deps`), the applier registry and the change bus over an open `Db` — shared by `main.ts` and `signInServer.ts`. |
+| `src/authRuntime.ts` (composition root) | `prepareAuth` returns the HTTP `auth` plus the stdio channel's identity deps. Joins `diplomat/db/repos`, `diplomat/http` (public routes, `HttpAuth`) and `diplomat/auth` to `controllers/auth.ts` — wiring that imports more than one `diplomat/*` submodule, so it lives outside them (like `server.ts`/`main.ts`). `diplomat/http` never imports it. |
 | `diplomat/mcp/route.ts` → `diplomat/http/{bearer,principal}.ts` | **Documented exception**: `POST /mcp` is also an authorization point, so its route reads the request's `principal` (type-only), answers a short token with the same `rejectWithChallenge` the auth hook uses (`bearer.ts`, so the two can never word a `WWW-Authenticate` differently) and names the read scope for its route config (`READ_SCOPE`, `models/auth.ts`). Decisions stay in `logic/auth.ts`. |
 | `diplomat/http` → `logic/auth.ts`, `diplomat/mcp` → `logic/auth.ts` | **Documented exception**: the edges may call the pure *edge decisions* in `logic/auth.ts` — credential parsing, scopes (`hasScope`, `requiredMcpScope`, `scopeOfTool`), challenges (`bearerChallenge`, `resourceOrigin`), the metadata document (`protectedResourceMetadata`) — because they decide at the boundary what to read from headers and body and never touch I/O. Everything else stays behind a controller. |
 | `diplomat/http/hooks/` | The base `diplomat/*` rule, which in practice also allows the pure `logic/` predicates a route module may call (`routes/currencyRates.ts` does too) — no I/O. `hooks/` holds cross-cutting request interceptors (today `hooks/auth.ts`), registered by `server.ts` before any route; `routes/` holds the per-domain handlers. |
@@ -189,10 +193,22 @@ users               (id PK, username UNIQUE? — stored normalized (trimmed, NFK
                      role: admin|member, created_at, disabled_at?, version)
 sessions            (id PK, user_id FK→users ON DELETE CASCADE, token_hash UNIQUE — sha256 of the cookie
                      token, never the token — created_at, last_seen_at, expires_at, version)
-access_tokens       (id PK, user_id FK→users ON DELETE CASCADE, name, token_hash UNIQUE — sha256 of the `ftk_…`
-                     token, never the token — prefix (`ftk_` + first 6 chars of the random part, display only),
-                     scopes JSON array of `Scope` (`fintrack:read`|`fintrack:write`), created_at, last_used_at?,
-                     expires_at?, revoked_at? (the row is kept on revoke), version)
+access_tokens       (id PK, user_id FK→users ON DELETE CASCADE, kind: pat|stdio (default pat — what minted it: a
+                     person at the token page, or the stdio sign-in flow), client_name? and profile? (a stdio
+                     sign-in's self-reported client and its `FINTRACK_PROFILE`; null for a PAT), name,
+                     token_hash UNIQUE — sha256 of the `ftk_…` token, never the token — prefix (`ftk_` + first 6
+                     chars of the random part, display only), scopes JSON array of `Scope`
+                     (`fintrack:read`|`fintrack:write`), created_at, last_used_at?, expires_at? (always set for a
+                     stdio sign-in), revoked_at? (the row is kept on revoke), version)
+client_grants       (id PK, device_code_hash UNIQUE — sha256, the plaintext lives only in the asking process —
+                     user_code (normalized, 8 Crockford symbols; UNIQUE among `pending` rows only, a partial
+                     index), client_name, client_version (as the client reported them), profile, channel:
+                     stdio|cli (who asked — decides whether "this session only" is offered), hint_access? and
+                     hint_duration? (what `fintrack login` would like pre-selected), status:
+                     pending|approved|denied|redeemed|expired, user_id? FK→users ON DELETE CASCADE (whoever
+                     approved; null until then), scopes? JSON array of `Scope` and duration?
+                     (session|24h|7d|30d), both set by the approval, created_at, approved_at?, expires_at
+                     (created + 10 min), version)
 setup_codes         (id PK — the single fixed row `SETUP_CODE_ID`, replaced in place on each issue, code_hash UNIQUE — sha256, never the code — created_at, expires_at, used_at?,
                      version)
 
@@ -326,8 +342,8 @@ Seed data (currencies, categories, merchant rules) lives in `src/diplomat/db/see
 
 ## Authentication (ADR-033)
 
-Identity guards the **HTTP surface only** (`/api`, `/mcp`, `/ui`); stdio is trusted and acts as the owner.
-Authentication is **on by default on every surface**; `disabled` is an explicit, loopback-only opt-out.
+Identity guards every surface: the HTTP surface (`/api`, `/mcp`, `/ui`) and the stdio channel. Authentication is **on
+by default**; `disabled` is an explicit, loopback-only opt-out, and under it both HTTP and stdio act as the owner.
 `docs/auth.md` is the operator guide; this section is the as-built structure.
 
 **Config** (`config.ts`, validated together; invalid combinations are startup errors):
@@ -337,6 +353,8 @@ Authentication is **on by default on every surface**; `disabled` is an explicit,
 | `FINTRACK_AUTH` | `AuthMode` (`required` \| `disabled`). Default `DEFAULT_AUTH_MODE` (`models/auth.ts`) = `required` for **every** run, loopback included. `isExposed` — a non-loopback `HOST`, or `PUBLIC_URL`, or a `TRUST_PROXY` other than `false`/`0` — no longer picks the default; it only rejects an explicit `disabled` on such an instance. |
 | `PUBLIC_URL` | Optional `http(s)` **origin** (`new URL(v).origin === v`: no path, no trailing slash; empty = unset). `https` → cookie `Secure`. A CSRF expected origin. |
 | `TRUST_PROXY` | Optional; `true`/`false`/hop count/address list → Fastify `trustProxy`. |
+| `FINTRACK_PROFILE` | `ProfileSchema` (letters, digits, `.` `_` `-`, ≤ 64); default `DEFAULT_PROFILE`. Names which saved stdio sign-in a process uses. |
+| `FINTRACK_TOKEN` | Optional personal access token a stdio process signs in with. Not judged at startup — the stdio session checks it on every call. |
 
 `isLoopbackHost` (`common/net.ts`: `127.0.0.0/8`, `::1`, `localhost`) is the one loopback test, shared by config and the
 CSRF origin check.
@@ -345,7 +363,7 @@ CSRF origin check.
 Fastify instance, **before any route** (`server.ts`'s `registerHttpApp` — ordering is wiring), so it also guards a request no route matched. It
 sets `req.principal` (`models/auth.ts`'s `Principal` = `{ userId, role, scopes, via, tokenId? }`; typed in `diplomat/http/principal.ts`).
 `scopes` is a list of `Scope` (`fintrack:read`, `fintrack:write`; write implies read — `logic/auth.ts`'s `hasScope`); `via` is
-`session | token | owner` (`PrincipalVia`):
+`session | token | owner | stdio` (`PrincipalVia`; `stdio` = a stdio sign-in, see below):
 
 - auth `disabled` → `OWNER_PRINCIPAL` (every scope, `via: owner`), but only for a request that passes `logic/auth.ts`'s `isLoopbackRequest` (a loopback `Host`, and a loopback `Origin` if one is sent — the DNS-rebinding/cross-site guard; otherwise `403 forbidden_origin` on every route). The `Authorization` header is ignored. No auth, token or metadata routes are registered;
 - auth `required`, on `/api` and `/mcp` (`logic/auth.ts`'s `acceptsBearer`), **an `Authorization` header is authoritative** (`credentialOf`): it must be `Bearer ftk_…`, and `controllers/accessTokens.ts`'s `authenticateToken(sha256(token))` must find an unrevoked, unexpired token whose owner can log in — principal with the *token's* scopes, `via: token`. Anything else (another scheme, an unknown/revoked/expired token) is `401 invalid_token`, and **the cookie is never consulted** — a bad bearer does not fall back to a session. A bearer-authenticated request skips the CSRF check (no ambient credential);
@@ -362,16 +380,21 @@ outside the list is rejected without a credential (and, outside `/ui`, with a ch
 **Scopes — two sources, one rule.** REST: every `RouteDefinition` has a required `scope` (`READ_SCOPE`/`WRITE_SCOPE`,
 `models/auth.ts`); a unit test pins each to `defaultScopeForMethod`. MCP: every `registerTool` call declares
 `annotations.readOnlyHint` (`diplomat/mcp/annotations.ts`'s `READ_ONLY`/`MUTATING`); `logic/auth.ts`'s `scopeOfTool` derives
-the scope from it (`true` → read, anything else → write) and `diplomat/mcp/scopes.ts`'s `guardToolScopes` is the one place
+the scope from it (`true` → read, anything else → write) and `diplomat/mcp/scopes.ts`'s `guardScopes` is the one place
 that reads it: it wraps `server.registerTool`, **throws if a tool lacks a boolean hint**, records name → scope
-(`toolScopesOf`), and wraps each callback to re-check `extra.authInfo.scopes`. Resources and prompts are read. `POST /mcp`
+(`toolScopesOf`), and wraps each callback — and every resource and prompt callback, which need `read` — so it first asks
+the transport's **`PrincipalGate`** (`diplomat/mcp/gate.ts`) who is calling. The gate answers `granted` (with the whole `Principal` — user, role, scopes, `via`, token id — on every transport, so a handler that needs to know who is calling reads it from one place),
+`refused` (a structured `AppError`) or `not_signed_in` (plain instructions): HTTP's `authInfoGate` reads
+`extra.authInfo` (`authInfo.ts`'s `principalOf` rebuilds the principal from it) and fails closed when it is absent or not a whole principal, stdio's gate is its `StdioSession`, and `ownerGate` serves an explicit
+`FINTRACK_AUTH=disabled` run. A tool gets an `isError` result (JSON for `refused`, the plain text for `not_signed_in`); a
+resource or prompt gets a JSON-RPC `InvalidRequest` error with the same text. `initialize` and the three list requests are
+never wrapped. `POST /mcp`
 enforces twice: its route is declared `read` for the hook, a `preHandler` reads the parsed JSON-RPC body
 (`logic/auth.ts`'s `requiredMcpScope`: any `tools/call` of a write tool — or of a tool it cannot place — in a message or batch
 needs `write`) and answers `403 insufficient_scope` before any tool runs; the handler then hands the principal to the SDK
 transport as `req.raw.auth` (`diplomat/mcp/authInfo.ts`'s `AuthInfo`: `token` = the access-token *id*, `clientId`
-`pat:<id>` / `session` / `owner`, `scopes`), and each tool re-checks it (defence in depth; over HTTP a missing `authInfo`
-is refused, over stdio — trusted, no `authInfo` — it is allowed). A unit test builds the whole MCP server and lists the
-read/write split.
+`pat:<id>` / `session` / `owner`, `scopes`), and each tool, resource and prompt re-checks it through `authInfoGate` (defence in
+depth; a missing `authInfo` is refused). A unit test builds the whole MCP server and lists the read/write split.
 
 **Challenges** (RFC 6750 §3, MCP authorization): `logic/auth.ts`'s `bearerChallenge` is the only place a `WWW-Authenticate`
 value is built; `diplomat/http/bearer.ts`'s `rejectWithChallenge` resolves only the origin (`PUBLIC_URL`, else the loopback
@@ -387,13 +410,15 @@ neither `PUBLIC_URL` nor a loopback `Host` the answer is `404 resource_metadata_
 
 **Access tokens.** `controllers/accessTokens.ts` — `createToken` (mints `AuthSecrets.randomAccessToken()` = `TOKEN_PREFIX` +
 32 random bytes base64url; persists the sha256 and the display prefix; the plaintext is only in the flow's response),
-`listTokens` (metadata + `status`, never a hash), `revokeToken` (sets `revoked_at`, idempotent, `unknown_token` for an id that
-is not the caller's), `authenticateToken` (`logic/auth.ts`'s `evaluateToken` verdict; `last_used_at` rewritten at most every
-`SESSION_TOUCH_INTERVAL_MS`). Expiry choices are `TOKEN_EXPIRY_DAYS` (30/90/365 — no "never" for a new token; a legacy row with a null `expires_at` keeps authenticating and `tokenPages.ts` lists it as "No expiry (legacy)"). The pages are `routes/tokens.ts`
+`listTokens` (metadata + `status`, never a hash; both kinds), `revokeToken` (sets `revoked_at`, idempotent, `unknown_token` for an id that
+is not the caller's — one revoke for both kinds), `revokeSignInByHash` (`fintrack logout` and a "this session only" shutdown hold the credential, not a
+session; stdio kind only, idempotent), `authenticateToken(deps, hash, via)` (`logic/auth.ts`'s `evaluateToken` verdict; `last_used_at` rewritten at most every
+`SESSION_TOUCH_INTERVAL_MS`; **one authenticate path for both kinds** — a `stdio` token is admitted only when `via` is `stdio`, `tokenAdmitsVia`, so a credential
+lifted from the keychain is not also a key to `/api` and `/mcp`). Expiry choices are `TOKEN_EXPIRY_DAYS` (30/90/365 — no "never" for a new token; a legacy row with a null `expires_at` keeps authenticating and `tokenPages.ts` lists it as "No expiry (legacy)"). The pages are `routes/tokens.ts`
 (`GET|POST /ui/access/tokens` — creation re-asks the login password (step-up) and shares the login attempt limiter — and `POST /ui/access/tokens/:id/revoke`; server-rendered by `tokenPages.ts`, same CSP/no-store headers as the
 sign-in pages through `formPages.ts`) — **session-only**: browser HTML behind the cookie and the CSRF check, never reachable
 with a bearer (the hook does not accept one on `/ui`, and each route also insists on `via: session`). There is no `/api` or MCP
-way to manage tokens. The shell's sidebar links to the page only when auth is `required` (the `AUTH_CONTROLS_MARKER`, next to logout).
+way to manage tokens. The same page lists stdio sign-ins (`kind: stdio`: client as reported, profile, access, signed in, expires, last used) in a table of their own, with the same revoke. The shell's sidebar links to the page only when auth is `required` (the `AUTH_CONTROLS_MARKER`, next to logout).
 
 **CSRF.** After authentication, an unsafe method authenticated by the session cookie (not a bearer) must declare (`Origin`, else `Referer`)
 an origin in `allowedOrigins(PUBLIC_URL, Host)` — `PUBLIC_URL`, plus the request's own origin when its `Host` is
@@ -403,16 +428,18 @@ only reads the headers and translates; the decisions are pure functions in `logi
 
 **Flows** (`controllers/auth.ts`, rules in `logic/auth.ts`, all through `runEffects`):
 `issueSetupCode` (startup), `claimOwner` (`POST /ui/setup`), `claimOwnerLocally` and `resetPassword` (the CLI, below), `login`, `logout`, `authenticate` (every request;
-writes nothing unless the session is stale, `SESSION_TOUCH_INTERVAL_MS`), `pruneExpiredSessions` (startup), and `controllers/accessTokens.ts`'s `createToken`/`revokeToken`/`authenticateToken` (above).
+writes nothing unless the session is stale, `SESSION_TOUCH_INTERVAL_MS`), `pruneExpiredSessions` (startup), `controllers/accessTokens.ts`'s `createToken`/`revokeToken`/`revokeSignInByHash`/`authenticateToken` (above), and
+`controllers/grants.ts`'s stdio sign-in flows (next section).
 Hashing, randomness and the clock are injected (`AuthDeps.secrets`, `clock`, `newId`); `diplomat/auth/credentials.ts`
-supplies argon2id (OWASP first-choice parameters, named constants), the session/access-token/setup-code randomness and sha256. `adapters/auth.ts` adapts the four
-auth entities' batches once, in `authRuntime.ts`'s `bindAuthRunEffects`; their appliers are plain
+supplies argon2id (OWASP first-choice parameters, named constants), the session/access-token/setup-code/user-code/device-code randomness and sha256. `adapters/auth.ts` adapts the
+auth entities' batches once, in `authRuntime.ts`'s `bindAuthRunEffects` (five entities: user, session, setup code, access token, client grant); their appliers are plain
 `versionedTableApplier`s registered at the composition root. The login/setup/logout pages and routes are
 `diplomat/http/routes/auth.ts` (urlencoded body parsing lives only in that route scope, so `/api` keeps refusing it),
 with in-process per-IP/per-username throttling (`diplomat/http/rateLimiter.ts`).
 
-**CLI entrypoints.** `main.ts` hands `setup …` and `auth …` (`common/cli.ts`'s `CliCommand`) to `cli.ts`, which loads
-lazily and returns a process exit code. `authCli.ts` opens the database like the server — the same `loadConfig`,
+**CLI entrypoints.** `main.ts` hands any argument — `setup`, `auth`, `login`, `logout` (`common/cli.ts`'s `CliCommand`), `help`/`--help`, or
+anything else — to `cli.ts`, which loads lazily and returns a process exit code; an unknown command prints the usage and exits non-zero and **never
+falls through to starting a server**. `login` and `logout` are described under *Stdio sign-in* below. `authCli.ts` opens the database like the server — the same `loadConfig`,
 key resolution, `bootstrap` and migrations, so the owner row exists — over the engine context of
 `diplomat/db/engine.ts`'s `createEngineContext` (shared with `main.ts`) and `authRuntime.ts`'s `AUTH_APPLIERS` /
 `createAuthDeps`; it starts neither HTTP nor stdio. Commands: `auth setup` and the first step of `setup [client]` run
@@ -425,6 +452,46 @@ client config only if the claim succeeded; with no terminal and no `--password-s
 `diplomat/cli/prompt.ts` asks the password twice with no echo (`node:readline`, a muted output stream), three tries; a TTY is
 required unless the password is piped (`--password-stdin`, with `--username`) and stdin is never read when it is a terminal.
 Results go to stdout, prompts and errors to stderr; nothing prints a password.
+
+**Stdio sign-in.** A stdio process is spawned by whichever program the user pointed at it, so it acts as nobody until it
+holds a credential — except under an explicit `FINTRACK_AUTH=disabled`, where it is the owner.
+
+- *Credential, in this order* (`diplomat/mcp/stdioSession.ts`'s `createStdioSession`, built by `main.ts` when `prepareAuth` returns
+  `stdio` deps — i.e. auth `required` and the transport is stdio, even with `FINTRACK_HTTP=false`): **`FINTRACK_TOKEN`** (a failure
+  is an error state, never a fallback); a **keychain entry** (service `fintrack`, account `signin:<profile>:<dbId>` —
+  `logic/auth.ts`'s `keychainAccount`, `dbId` = first 12 hex characters of sha256 of the absolute `DB_PATH`; `diplomat/auth/signInStore.ts`
+  loads `@napi-rs/keyring` lazily and implements `controllers/deps.ts`'s `SignInStore`); else **none**. Every gated request
+  re-validates the credential through `authenticateToken(…, via: stdio)`, so revocation and expiry take effect on the next call;
+  a keychain entry that turns out invalid is deleted (only if it still holds that credential); a failed lookup is "could not check",
+  never a sign-out.
+- *Not signed in:* the first gated request starts ONE pending grant (reused until it is answered or runs out) and answers with the
+  `STDIO_MESSAGES.notSignedIn` text — `FinTrack: not signed in. Open <origin>/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.` (plus
+  `ownerUnclaimedHint` while the owner is unclaimed; `notSignedInWithoutHttp` instead of the link when `FINTRACK_HTTP=false`). The URL carries the
+  user code only; the device code, a token and every hash stay out of the URL and of every tool result. `<origin>` is `PUBLIC_URL`, else the sidecar this
+  process bound (`logic/auth.ts`'s `signInOrigin`, which names a non-loopback host only through `PUBLIC_URL`); when neither names a page, the session starts a **temporary
+  server of its own** (`StdioSessionOptions.temporaryServer` = `signInServer.ts`'s `startSignInServer`: a free `localhost` port, auth required, THIS database) on the first
+  not-signed-in request and closes it once the request is redeemed, denied or expired, and at shutdown. It never names the configured `HOST:PORT` it did not bind: whatever
+  listens there may have opened another database, and a grant written here would never validate there. With `FINTRACK_HTTP=false` there is no temporary server either. The
+  session polls `redeemGrant` every `GRANT_POLL_INTERVAL_MS` on an unref'd timer and on each call; a redeemed sign-in is saved to the keychain unless its duration is
+  `session`, which exists in memory alone and is revoked at shutdown (`session.close()`, best effort; the 12-hour cap covers a crash).
+- *The grant* (`controllers/grants.ts`; rules in `logic/auth.ts`): `startGrant` (device code returned once, only its sha256 stored; user code drawn
+  until no pending grant holds it), `approveGrant`/`denyGrant` (browser **session only**; the grant must be pending and unexpired; the approval binds the approving user, the chosen
+  scopes and duration, and `approved_at`; `session` is refused for a `cli` grant), `redeemGrant` (single use: it mints the `kind: stdio` token — expiry
+  `signInExpiry(approved_at, duration)`, absolute and capped at `MAX_SIGN_IN_DURATION_MS` — and marks the grant `redeemed` in the same batch, so a replay is refused by the version guard; `pending`/`denied`/`expired`/`invalid` are the other answers, the
+  terminal ones final), `findConsent` (the consent page's data and pre-selection: the asker's hint, else this user's `lastRedeemed` choice for this client and profile, else read-only/24 h),
+  `pruneExpiredGrants` (startup: unredeemed grants past their window are deleted, and so are redeemed ones superseded by a newer approval — `logic/auth.ts`'s `supersededGrants` keeps the newest per user, profile and client, the pre-selection's memory; a live pending or approved grant is never touched). The grant is a database row, so
+  it works across processes.
+- *The page* (`diplomat/http/routes/connect.ts`, `connectPages.ts`, `ui/connect.html`): `GET|POST /ui/connect`, behind the session and the CSRF check
+  (never public, never a bearer), the same headers and escaping as the other form pages, failed lookups throttled per IP
+  (`MAX_CODE_LOOKUP_FAILURES_PER_IP`). It shows the client name/version "as reported by the client" (cleaned by `wire/in/auth.ts`'s `clientInfoOf`), the profile, the request time, the code and the
+  warning; the radios come from the enums. An unknown, expired or answered code is the same neutral `invalid_grant` page.
+- *Terminal:* `src/loginCli.ts` — `fintrack login [--profile] [--duration] [--scope]` runs the same grant over the `cli` channel (flags only pre-select the page), polls, and keeps
+  the result in the keychain profile (revoking it again if the keychain refuses); `fintrack logout [--profile]` revokes the saved sign-in (`revokeSignInByHash`) and deletes the entry, idempotently;
+  `setup`'s last step offers the same flow for the client's profile. `src/signInServer.ts` starts the temporary loopback app (`buildHttpApp`, auth required, a free port of `localhost` — loopback only, and a host name of its own so its session cookie, keyed by host, never replaces another FinTrack's at `127.0.0.1`) that serves `/ui/connect` for the duration of the login — never a server already on `HOST:PORT`, which a healthy `/api/health` does not prove opened this database. The shared repos/appliers/runner assembly is `src/runtime.ts`'s `createRuntime` (also what `main.ts` uses).
+
+**Startup order** (`main.ts`, and every command that opens the database): `openDatabase` → `bootstrap` = **version guard** (`diplomat/db/versionGuard.ts`'s `assertDatabaseNotAhead`:
+the database's newest applied migration, `migrationJournal.ts`'s `lastAppliedMillis`, against the newest this build's journal ships — `logic/migration.ts`'s `isDatabaseAhead`; a database that is ahead throws
+`DatabaseAheadError` with `models/database.ts`'s `databaseAheadMessage` and nothing has been written) → safety copy (if a data-rewriting migration is pending) → migrate → seed → `prepareAuth` (identity deps; prune expired sessions and grants) → connect stdio → sidecar → announce the setup code.
 
 **Sessions.** Opaque 32-byte base64url token; `sha256(token)` stored. Sliding idle expiry
 (`SESSION_IDLE_TTL_MS`) capped by `SESSION_ABSOLUTE_MAX_MS` from creation; `last_seen_at`/`expires_at` rewritten at most
@@ -439,7 +506,7 @@ requires a session. The container `HEALTHCHECK` is `/api/health`.
 
 55 MCP tools (contract: `docs/mcp-tools.md`), most mirrored as REST routes, both thin over the same controllers — `list_budgets`/`get_budget_status` (Feature Design 015) now have REST parity (`GET /api/budgets`, `GET /api/budgets/status`); `create_budget`/`update_budget`/`delete_budget` and `find_correlations` (Feature Design 016) are MCP-only for now, no REST mirror yet. `set/list_exchange_rates` and `set_base_currency` (ADR-026 Phase 2) have full REST parity (`GET`/`POST /api/exchange-rates`, `POST /api/exchange-rates/bulk`, `GET /api/preferences`, `POST /api/settings/base-currency`). Client connections: `docs/mcp-clients.md`.
 
-**Scopes:** every tool declares `annotations.readOnlyHint` and needs `fintrack:read` (read-only) or `fintrack:write` over HTTP (`docs/mcp-tools.md` § Scopes per tool); stdio is trusted and unrestricted.
+**Scopes:** every tool declares `annotations.readOnlyHint` and needs `fintrack:read` (read-only) or `fintrack:write` (`docs/mcp-tools.md` § Scopes per tool). Over HTTP the scopes are the request's principal's; over stdio they are the signed-in credential's (a read-only stdio sign-in is refused a write tool with `insufficient_scope`), and an explicit `FINTRACK_AUTH=disabled` run is the owner with every scope. Resources and prompts need `fintrack:read`.
 
 **Transport:** controlled by `MCP_TRANSPORT` (zod enum, `config.ts`). Default is **`stdio`** — the client spawns the process; no port, no Fastify. Set `MCP_TRANSPORT=http` to start the Fastify server (REST + streamable HTTP MCP on `PORT`). Both transports connect the same `buildMcpServer(deps, version)` core; no domain code moves. (ADR-007)
 
@@ -456,7 +523,7 @@ matching its controller; the entrypoint (`server.ts`/`routes.ts`) never inlines 
 still a domain, mirroring its single-file controller (`controllers/aggregate.ts`/`summary.ts`). `resources.ts`
 (`registerResources`) and `prompts.ts` (`registerPrompts`) stay single cross-domain modules — few enough, and
 cross-cutting enough, not to warrant per-domain splitting. `respond.ts` holds the shared response helpers
-(`json`, `jsonError`, `fromResult`, `jsonResource`); `annotations.ts` (`READ_ONLY`/`MUTATING`), `scopes.ts` (`guardToolScopes`, `toolScopesOf`) and `authInfo.ts` carry the per-tool scope; `context.ts` defines `McpContext` (`{ deps, version,
+(`json`, `jsonError`, `fromResult`, `jsonResource`); `annotations.ts` (`READ_ONLY`/`MUTATING`), `scopes.ts` (`guardScopes`, `toolScopesOf`), `gate.ts` (the `PrincipalGate` each transport supplies) and `authInfo.ts` carry the per-tool scope; `stdioSession.ts` is the stdio channel's identity; `context.ts` defines `McpContext` (`{ deps, version,
 runEffects, runEffectsSequence, resetLocale }`), built once in `server.ts` and passed to every register call so
 no module carries the full parameter list. `server.ts` reduces to construction + aggregation: build the server,
 build `ctx`, call each `register…` once.
@@ -555,4 +622,4 @@ shape is in § Relational schema; decisions + rationale are in ADR-013 and ADR-0
 - ADR-031: the effect engine lives in its own repository and is consumed as the published `@rfc0/effect-runner` package (MIT, npmjs.com, semver-governed port) — FinTrack keeps only the SQLite adapter (`diplomat/db`) (accepted; complete)
 - ADR-032: Docker distribution — container image on GHCR, HTTP transport by default, SQLite on a volume; `HOST`, `FINTRACK_DB_KEY_FILE`, fail-fast key resolution and lazy keychain import (accepted; Phase 1 — container-ready runtime — complete, Phase 2 — image/CI/publish — complete)
 - ADR-033: authentication and multi-user — identity (owner row by migration, password login, sessions, setup code), personal access tokens, in-process OAuth 2.1 AS for MCP, per-user tenancy; phased (accepted; Phase 1 — identity: owner row, sessions, setup code, UI login, auth mode, minimal public surface — complete; Phase 2 — personal access tokens, scopes, challenges, Protected Resource Metadata — complete; Phases 3–4 pending)
-- ADR-034: authentication on by default (`FINTRACK_AUTH=required` everywhere), terminal owner claim inside `setup`, and browser sign-in for stdio sessions with chosen expiry; revises ADR-033 §1 (accepted; step 1 — auth by default, `setup`/`auth setup`/`auth reset-password`, PAT expiry without "never" — complete; step 2 — stdio sign-in — pending)
+- ADR-034: authentication on by default (`FINTRACK_AUTH=required` everywhere), terminal owner claim inside `setup`, and browser sign-in for stdio sessions with chosen expiry; revises ADR-033 §1 (accepted; step 1 — auth by default, `setup`/`auth setup`/`auth reset-password`, PAT expiry without "never" — and step 2 — stdio sign-in, `login`/`logout`, `/ui/connect`, the startup version guard — are implemented)

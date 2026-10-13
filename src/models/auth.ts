@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
+import { validation } from './error.js';
 import { Id } from './id.js';
+import { NPX_COMMAND } from './package.js';
+
+export { NPX_COMMAND, PACKAGE_NAME, PACKAGE_SPEC } from './package.js';
 
 /** Whether the HTTP surface demands a session. `disabled` is an explicit, loopback-only opt-out. */
 export const AuthMode = z.enum(['required', 'disabled']);
@@ -20,8 +24,8 @@ export const READ_SCOPE = Scope.enum['fintrack:read'];
 export const WRITE_SCOPE = Scope.enum['fintrack:write'];
 
 /** How a request authenticated, so the edge can tell a browser session from a bearer token from the trusted
- *  owner of a stdio / auth-disabled run. */
-export const PrincipalVia = z.enum(['session', 'token', 'owner']);
+ *  owner of an auth-disabled run, and a stdio sign-in (ADR-034) from either. */
+export const PrincipalVia = z.enum(['session', 'token', 'owner', 'stdio']);
 export type PrincipalVia = z.infer<typeof PrincipalVia>;
 
 /** The owner is inserted by migration on every database (ADR-033 §7) — this id must match the
@@ -35,13 +39,15 @@ export const USER_ENTITY_TAG = 'user';
 export const SESSION_ENTITY_TAG = 'session';
 export const SETUP_CODE_ENTITY_TAG = 'setup_code';
 export const ACCESS_TOKEN_ENTITY_TAG = 'access_token';
+export const CLIENT_GRANT_ENTITY_TAG = 'client_grant';
 /** There is at most ONE setup code: issuing replaces it in place (ADR-033 §2), so concurrent starters can
  *  never leave two valid codes — the loser of the race retries into an update. */
 export const SETUP_CODE_ID = 'setup-code';
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
-export const DAY_MS = 24 * 60 * MINUTE_MS;
+const HOUR_MS = 60 * MINUTE_MS;
+export const DAY_MS = 24 * HOUR_MS;
 
 /** A session dies after this long without being seen (sliding)… */
 export const SESSION_IDLE_TTL_MS = 7 * DAY_MS;
@@ -78,6 +84,7 @@ export const AUTH_ENTITY_TAGS: readonly string[] = [
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
   ACCESS_TOKEN_ENTITY_TAG,
+  CLIENT_GRANT_ENTITY_TAG,
 ];
 
 /** The HTTP surfaces a bearer token is accepted on. `/ui` is a browser surface and stays session-only. */
@@ -113,6 +120,151 @@ export const TOKEN_ACCESS_SCOPES: Readonly<Record<TokenAccess, readonly Scope[]>
   read: [READ_SCOPE],
   write: [READ_SCOPE, WRITE_SCOPE],
 };
+
+// ─── Stdio sign-in (ADR-034) ───────────────────────────────────────────────
+
+/** How long a stdio sign-in lasts, chosen by the person who approves it. `session` is kept in the stdio process's
+ *  memory only and never reaches the keychain; the others are saved. Counted absolutely from approval — use never
+ *  extends it. */
+export const SignInDuration = z.enum(['session', '24h', '7d', '30d']);
+export type SignInDuration = z.infer<typeof SignInDuration>;
+/** `fintrack login` runs in a shell that exits, so it has no "this session" to tie a sign-in to. */
+export const LoginDuration = SignInDuration.exclude([SignInDuration.enum.session]);
+export type LoginDuration = z.infer<typeof LoginDuration>;
+export const DEFAULT_SIGN_IN_DURATION = SignInDuration.enum['24h'];
+/** A "this session only" sign-in is revoked when its process exits; this cap covers a process that died instead. */
+export const SESSION_SIGN_IN_CAP_MS = 12 * HOUR_MS;
+export const SIGN_IN_DURATION_MS: Readonly<Record<SignInDuration, number>> = {
+  session: SESSION_SIGN_IN_CAP_MS,
+  '24h': DAY_MS,
+  '7d': 7 * DAY_MS,
+  '30d': 30 * DAY_MS,
+};
+/** The longest any sign-in may last (an admin may lower it after ADR-033 Phase 4, never raise it). */
+export const MAX_SIGN_IN_DURATION_MS = SIGN_IN_DURATION_MS['30d'];
+
+/** The device-style grant: the stdio process (or `fintrack login`) asks, a person approves in the browser. */
+export const GrantStatus = z.enum(['pending', 'approved', 'denied', 'redeemed', 'expired']);
+export type GrantStatus = z.infer<typeof GrantStatus>;
+/** Who asked: an MCP client over stdio, or `fintrack login` in a shell. Decides whether `session` is offered. */
+export const GrantChannel = z.enum(['stdio', 'cli']);
+export type GrantChannel = z.infer<typeof GrantChannel>;
+
+export const CLIENT_GRANT_TTL_MS = 10 * MINUTE_MS;
+/** How often a pending sign-in is checked for its approval. */
+export const GRANT_POLL_INTERVAL_MS = 2 * SECOND_MS;
+/** A user code is 8 Crockford base32 symbols (40 bits), shown `XXXX-XXXX`. */
+export const USER_CODE_LENGTH = 8;
+/** A fresh user code colliding with a still-pending one is astronomically unlikely; this bounds the retry anyway. */
+export const USER_CODE_ATTEMPTS = 5;
+
+export const CLIENT_NAME_MAX_LENGTH = 80;
+export const CLIENT_VERSION_MAX_LENGTH = 32;
+export const PROFILE_MAX_LENGTH = 64;
+export const DEFAULT_PROFILE = 'default';
+export const UNKNOWN_CLIENT_NAME = 'Unknown MCP client';
+export const UNKNOWN_CLIENT_VERSION = 'unknown';
+export const CLI_CLIENT_NAME = 'fintrack login';
+
+/** The consent page's wording for the memory-only duration: it names the client that asked, if it said who it was. */
+export const SESSION_ONLY_LABEL = {
+  named: (clientName: string) => `This ${clientName} session only`,
+  unnamed: 'This session only',
+} as const;
+
+/** `FINTRACK_PROFILE` names which saved sign-in a stdio process uses; it ends up in a keychain account name. */
+export const ProfileSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(PROFILE_MAX_LENGTH)
+  .regex(/^[A-Za-z0-9._-]+$/, 'profile may contain letters, digits and . _ -');
+
+export const TOKEN_ENV_VAR = 'FINTRACK_TOKEN';
+export const PROFILE_ENV_VAR = 'FINTRACK_PROFILE';
+
+/** The OS keychain entry of a saved sign-in: service `fintrack` (shared with the database key), account
+ *  `signin:<profile>:<dbId>` — `dbId` makes a development database and a production one keep apart. */
+export const KEYCHAIN_SERVICE = 'fintrack';
+export const SIGN_IN_ACCOUNT_PREFIX = 'signin';
+export const DB_ID_LENGTH = 12;
+
+/** The connect page: a one-segment path under `/ui`, reached from a link the stdio process prints. */
+export const CONNECT_PATH = `${UI_ROOT_PATH}/connect`;
+export const CONNECT_CODE_PARAM = 'code';
+
+export const ClientGrantEntitySchema = withPersistenceMeta(
+  z.object({
+    id: Id,
+    deviceCodeHash: z.string().describe('sha256 of the device code — the code itself lives only in the asking process'),
+    userCode: z.string().describe('Normalized (no dash, upper-case); shown as XXXX-XXXX'),
+    clientName: z.string().max(CLIENT_NAME_MAX_LENGTH),
+    clientVersion: z.string().max(CLIENT_VERSION_MAX_LENGTH),
+    profile: ProfileSchema,
+    channel: GrantChannel,
+    /** What the asker would like pre-selected on the consent page (`fintrack login --scope/--duration`). */
+    hintAccess: TokenAccess.nullable(),
+    hintDuration: SignInDuration.nullable(),
+    status: GrantStatus,
+    userId: Id.nullable().describe('The user who approved — null until approved'),
+    scopes: z.array(Scope).min(1).nullable(),
+    duration: SignInDuration.nullable(),
+    createdAt: z.string(),
+    approvedAt: z.string().nullable(),
+    expiresAt: z.string(),
+  }),
+);
+export type ClientGrantEntity = z.infer<typeof ClientGrantEntitySchema>;
+
+/** Who is asking, as the asking process reports it — shown to the approver as "reported by the client". */
+export type ClientInfo = { name: string; version: string };
+
+export type StartGrantInput = {
+  client: ClientInfo;
+  profile: string;
+  channel: GrantChannel;
+  hint?: { access?: TokenAccess; duration?: SignInDuration };
+};
+
+/** The device code is returned once, to the process that asked, and never stored. */
+export type StartedGrant = { deviceCode: string; userCode: string; expiresAt: string };
+
+/** What the consent page shows about a pending request. */
+export type GrantRequest = {
+  userCode: string;
+  clientName: string;
+  clientVersion: string;
+  profile: string;
+  channel: GrantChannel;
+  createdAt: string;
+  expiresAt: string;
+};
+
+/** The consent form's pre-selection: the asker's hint, else what this user chose last time, else the defaults. */
+export type GrantChoice = { access: TokenAccess; duration: SignInDuration };
+
+export type ApproveGrantInput = { userCode: string } & GrantChoice;
+
+export type SignedIn = {
+  token: string;
+  tokenId: string;
+  scopes: Scope[];
+  /** Who the new sign-in acts as — what the stdio gate hands every handler. */
+  principal: Principal;
+  duration: SignInDuration;
+  expiresAt: string;
+};
+
+/** What redeeming a device code answers. Only `signed_in` carries the (one-time) plaintext token. */
+export const RedeemKind = z.enum(['pending', 'denied', 'expired', 'invalid', 'signed_in']);
+export type RedeemKind = z.infer<typeof RedeemKind>;
+export type RedeemResult =
+  | { kind: Exclude<RedeemKind, typeof RedeemKind.enum.signed_in> }
+  | ({ kind: typeof RedeemKind.enum.signed_in } & SignedIn);
+
+/** What `logic/auth.ts`'s `redeemPlan` decides before anything is written: the four non-minting answers, or `mint`. */
+export const RedeemPlanKind = z.enum(['pending', 'denied', 'expired', 'invalid', 'mint']);
+export type RedeemPlanKind = z.infer<typeof RedeemPlanKind>;
 
 /** Where a login or setup lands when the caller named no (valid) destination. */
 export const DEFAULT_LANDING_PATH = UI_ROOT_PATH;
@@ -203,11 +355,22 @@ export const SetupCodeEntitySchema = withPersistenceMeta(
 );
 export type SetupCodeEntity = z.infer<typeof SetupCodeEntitySchema>;
 
-/** A personal access token (ADR-033 §3). Only `sha256(token)` and a display prefix are stored. */
+/** What minted an access token: a person at the token page (`pat`, ADR-033) or the stdio sign-in flow (`stdio`,
+ *  ADR-034). Both are the same row, authenticated, listed and revoked the same way. */
+export const AccessTokenKind = z.enum(['pat', 'stdio']);
+export type AccessTokenKind = z.infer<typeof AccessTokenKind>;
+
+/** A personal access token (ADR-033 §3) or a stdio sign-in (ADR-034 §3). Only `sha256(token)` and a display prefix
+ *  are stored. */
 export const AccessTokenEntitySchema = withPersistenceMeta(
   z.object({
     id: Id,
     userId: Id,
+    kind: AccessTokenKind,
+    /** The MCP client's self-reported name — a stdio sign-in only, `null` for a PAT. */
+    clientName: z.string().nullable(),
+    /** The `FINTRACK_PROFILE` this sign-in belongs to — a stdio sign-in only. */
+    profile: z.string().nullable(),
     name: z.string().min(1).max(TOKEN_NAME_MAX_LENGTH),
     tokenHash: z.string().describe('sha256 of the token — the token itself is never stored'),
     prefix: z.string().describe('`ftk_` + the first characters of the random part, for display only'),
@@ -289,11 +452,11 @@ export type AuthError =
   | { code: 'insufficient_scope'; scope: Scope }
   | { code: 'unknown_token'; id: string }
   | { code: 'session_required' }
+  | { code: 'invalid_grant' }
   | { code: 'resource_metadata_unavailable'; hint: string };
 
 /** The terminal route to the same owner claim as `/ui/setup` — shown wherever the setup code is. */
-export const PACKAGE_NAME = '@rafaelfcarneiro/fintrack';
-export const TERMINAL_SETUP_COMMAND = `npx ${PACKAGE_NAME} auth setup`;
+export const TERMINAL_SETUP_COMMAND = `${NPX_COMMAND} auth setup`;
 export const TERMINAL_SETUP_HINT = `or run \`${TERMINAL_SETUP_COMMAND}\` in a terminal`;
 
 export const AUTH_MESSAGES = {
@@ -313,12 +476,34 @@ export const AUTH_MESSAGES = {
   insufficientScope: 'The access token does not grant the scope this operation needs.',
   unknownToken: 'No such access token.',
   sessionRequired: 'Access tokens can only be managed from a signed-in browser session.',
+  invalidGrant: 'This sign-in request is not valid, has expired, or was already answered.',
   prmNeedsOrigin:
     'This instance cannot say what its own origin is — set PUBLIC_URL to its external URL to publish its ' +
     'Protected Resource Metadata.',
   nonLoopbackRequest:
     'Request host/origin is not loopback — FinTrack without authentication only answers 127.0.0.1, localhost or ' +
     '::1. To use another hostname, set PUBLIC_URL (which turns authentication on).',
+} as const;
+
+/** What a stdio session says when it cannot act as anyone (ADR-034 §2). One template per situation, built here so
+ *  the wording — and the pinned command in it — exists once. None of them may carry a secret: the link holds the
+ *  user code only, and a rejected `FINTRACK_TOKEN` is never echoed. */
+const SIGN_IN_PREFIX = 'FinTrack:';
+export const HTTP_ENV_VAR = 'FINTRACK_HTTP';
+export const AUTH_ENV_VAR = 'FINTRACK_AUTH';
+
+export const STDIO_MESSAGES = {
+  notSignedIn: (connectUrl: string, userCode: string) =>
+    `${SIGN_IN_PREFIX} not signed in. Open ${connectUrl} and confirm the code ${userCode}.`,
+  notSignedInWithoutHttp:
+    `${SIGN_IN_PREFIX} not signed in. The browser sign-in needs the HTTP dashboard (${HTTP_ENV_VAR}=false here): run ` +
+    `\`${NPX_COMMAND} login\` in a terminal, or set ${TOKEN_ENV_VAR} in this client's environment.`,
+  ownerUnclaimedHint: ` Owner not set up yet? Run \`${NPX_COMMAND} auth setup\`.`,
+  invalidEnvToken:
+    `${SIGN_IN_PREFIX} ${TOKEN_ENV_VAR} is not a valid access token (malformed, expired or revoked). Create a new one on ` +
+    `the Access page of the dashboard, or remove ${TOKEN_ENV_VAR} from this client's environment to sign in with ` +
+    `the browser instead.`,
+  cannotVerify: `${SIGN_IN_PREFIX} could not check the sign-in just now. Try again.`,
 } as const;
 
 export const authErrors = {
@@ -343,6 +528,10 @@ export const authErrors = {
   // Token management is for a person at a browser, never for a bearer token.
   sessionRequired: { code: 'session_required' } satisfies AuthError,
   unknownToken: (id: string): AuthError => ({ code: 'unknown_token', id }),
+  // A `fintrack login` request has no "session" to tie a sign-in to.
+  sessionDurationRefused: validation(['a sign-in requested by `fintrack login` cannot last "this session only"']),
+  // Unknown, expired, denied, already-approved or already-redeemed: indistinguishable, like a setup code.
+  invalidGrant: { code: 'invalid_grant' } satisfies AuthError,
   // No PUBLIC_URL and a non-loopback Host: the instance cannot name the resource it would describe.
   metadataUnavailable: {
     code: 'resource_metadata_unavailable',

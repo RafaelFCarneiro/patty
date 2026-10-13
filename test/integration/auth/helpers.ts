@@ -4,6 +4,13 @@ import { join } from 'node:path';
 import Fastify, { type LightMyRequestResponse } from 'fastify';
 import { afterEach } from 'vitest';
 import type { AuthDeps } from '../../../src/controllers/deps.js';
+import type { SignInServer, SignInStore } from '../../../src/controllers/deps.js';
+import { loadConfig } from '../../../src/config.js';
+import { startSignInServer } from '../../../src/signInServer.js';
+import { bindAuthRunEffects } from '../../../src/authRuntime.js';
+import { createStdioSession, type StdioSession } from '../../../src/diplomat/mcp/stdioSession.js';
+import type { GateOutcome } from '../../../src/diplomat/mcp/gate.js';
+import type { SignInDuration, TokenAccess } from '../../../src/models/auth.js';
 import { AuthMode } from '../../../src/models/auth.js';
 import { SESSION_COOKIE_NAME } from '../../../src/diplomat/http/cookies.js';
 import { buildApp, type AppContext } from '../app-builder.js';
@@ -151,3 +158,156 @@ export const toolCall = (name: string, args: Record<string, unknown> = {}, id = 
   method: 'tools/call',
   params: { name, arguments: args },
 });
+
+/** A keychain stand-in that remembers what was saved and how it was used — no OS keychain is ever touched. */
+export type MemoryStore = SignInStore & {
+  readonly saved: () => string | null;
+  readonly calls: { load: number; save: number; clear: number };
+};
+
+export const memoryStore = (initial: string | null = null, options: { refuseSave?: boolean } = {}): MemoryStore => {
+  let saved = initial;
+  const calls = { load: 0, save: 0, clear: 0 };
+  return {
+    saved: () => saved,
+    calls,
+    load: async () => {
+      calls.load += 1;
+      return saved;
+    },
+    save: async (token) => {
+      calls.save += 1;
+      if (options.refuseSave) return false;
+      saved = token;
+      return true;
+    },
+    clear: async () => {
+      calls.clear += 1;
+      saved = null;
+    },
+  };
+};
+
+export const SIGN_IN_ORIGIN = 'http://127.0.0.1:51737';
+const USER_CODE_IN_MESSAGE = /code=([0-9A-Z]{4}-[0-9A-Z]{4})/;
+
+/** The user code a not-signed-in message asks the person to confirm. */
+export const userCodeIn = (outcome: GateOutcome): string => {
+  const text = outcome.kind === 'not_signed_in' ? outcome.message : '';
+  const code = USER_CODE_IN_MESSAGE.exec(text)?.[1];
+  if (!code) throw new Error(`no sign-in code in: ${JSON.stringify(outcome)}`);
+  return code;
+};
+
+/** The person at `/ui/connect`: opens the link's page, then posts their decision, as a browser would. */
+export const answerConnect = (
+  ctx: AppContext,
+  cookie: string,
+  code: string,
+  decision: { decision: 'approve' | 'deny'; access?: TokenAccess; duration?: SignInDuration },
+) =>
+  ctx.app.inject({
+    method: 'POST',
+    url: '/ui/connect',
+    headers: browserHeaders(cookie),
+    payload: formBody({
+      code,
+      decision: decision.decision,
+      access: decision.access ?? 'read',
+      duration: decision.duration ?? '24h',
+    }),
+  });
+
+export const approveConnect = async (
+  ctx: AppContext,
+  cookie: string,
+  code: string,
+  choice: { access?: TokenAccess; duration?: SignInDuration } = {},
+) => {
+  const res = await answerConnect(ctx, cookie, code, { decision: 'approve', ...choice });
+  if (res.statusCode !== 200) throw new Error(`approval failed: ${res.statusCode} ${res.body}`);
+};
+
+/** A clock the test can push forward, to watch an expiry arrive. */
+export const movableClock = () => {
+  let offsetMs = 0;
+  return { now: () => new Date(Date.now() + offsetMs), advance: (ms: number) => void (offsetMs += ms) };
+};
+
+export type SessionOptions = {
+  envToken?: string;
+  store?: MemoryStore;
+  origin?: string | null;
+  clock?: () => Date;
+  clientInfo?: unknown;
+  run?: ReturnType<typeof bindAuthRunEffects>;
+  temporaryServer?: () => Promise<SignInServer>;
+};
+
+/** A stdio session wired to the test app's database, with an in-memory keychain and (optionally) a movable clock. */
+export const stdioSessionFor = (
+  ctx: AppContext,
+  options: SessionOptions = {},
+): { session: StdioSession; store: MemoryStore } => {
+  const store = options.store ?? memoryStore();
+  const base = authDepsOf(ctx);
+  const session = createStdioSession({
+    deps: { ...base, clock: options.clock ?? base.clock },
+    run: options.run ?? bindAuthRunEffects(ctx.runEffects),
+    profile: 'default',
+    envToken: options.envToken,
+    store,
+    origin: () => (options.origin === undefined ? SIGN_IN_ORIGIN : options.origin),
+    clientInfo: () => options.clientInfo ?? { name: 'Claude Desktop', version: '1.0.0' },
+    temporaryServer: options.temporaryServer,
+  });
+  return { session, store };
+};
+
+/** The real temporary sign-in server on the test app's own database, counted: how many started and closed. */
+export const countedTemporaryServer = (ctx: AppContext) => {
+  const counts = { started: 0, closed: 0 };
+  const origins: string[] = [];
+  const start = async (): Promise<SignInServer> => {
+    const env = { ...process.env, DB_PATH: '/tmp/fintrack-never-opened.db', FINTRACK_DB_KEY: 'c'.repeat(64) };
+    const server = await startSignInServer({ ...loadConfig(env), PUBLIC_URL: undefined }, ctx.db);
+    counts.started += 1;
+    origins.push(server.origin);
+    return {
+      origin: server.origin,
+      close: async () => {
+        counts.closed += 1;
+        await server.close();
+      },
+    };
+  };
+  return { start, counts, origins };
+};
+
+/** A browser at `origin`: log in as the owner, then answer a pending request — over real HTTP, like a person would. */
+export const answerAt = async (
+  origin: string,
+  code: string,
+  decision: { decision: 'approve' | 'deny'; access?: TokenAccess; duration?: SignInDuration },
+): Promise<number> => {
+  const headers = { 'content-type': 'application/x-www-form-urlencoded', origin };
+  const login = await fetch(`${origin}/ui/login`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers,
+    body: formBody({ username: USERNAME, password: PASSWORD }),
+  });
+  const cookie = login.headers.get('set-cookie')?.split(';')[0];
+  if (login.status !== 303 || !cookie) throw new Error(`login at ${origin} failed: ${login.status}`);
+  const answered = await fetch(`${origin}/ui/connect`, {
+    method: 'POST',
+    headers: { ...headers, cookie },
+    body: formBody({
+      code,
+      decision: decision.decision,
+      access: decision.access ?? 'read',
+      duration: decision.duration ?? '24h',
+    }),
+  });
+  return answered.status;
+};

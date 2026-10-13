@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FinTrack — connect a client</title>
+    <link rel="stylesheet" href="{{stylesheet}}" />
+  </head>
+  <body>
+    <main class="auth-card">
+      <h1>Connect a client</h1>
+      <p class="auth-lede">A program is asking to sign in to FinTrack as you.</p>
+      {{error}}
+      <dl class="connect-facts">
+        <dt>Client <span class="connect-note">(reported by the client)</span></dt>
+        <dd>{{clientName}} <span class="connect-note">{{clientVersion}}</span></dd>
+        <dt>Profile</dt>
+        <dd>{{profile}}</dd>
+        <dt>Requested</dt>
+        <dd>{{requestedAt}}</dd>
+        <dt>Code</dt>
+        <dd class="connect-code" data-testid="connect-code">{{userCode}}</dd>
+      </dl>
+      <p class="auth-warning" role="note">
+        Only approve if you just asked a Claude session on this machine to connect, and the code above is the one it
+        showed you.
+      </p>
+      <form class="auth-form connect-form" method="post" action="{{action}}">
+        <input type="hidden" name="code" value="{{userCode}}" />
+        <fieldset>
+          <legend>Access</legend>
+          {{accessOptions}}
+        </fieldset>
+        <fieldset>
+          <legend>Stay signed in for</legend>
+          {{durationOptions}}
+        </fieldset>
+        <button type="submit" name="decision" value="approve">Approve</button>
+        <button type="submit" name="decision" value="deny" class="connect-deny">Deny</button>
+      </form>
+    </main>
+  </body>
+</html>

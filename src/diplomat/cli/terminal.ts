@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
-import { PASSWORD_STDIN_FLAG } from '../../common/cli.js';
+import { EXIT_INTERRUPTED, PASSWORD_STDIN_FLAG } from '../../common/cli.js';
 import { text } from 'node:stream/consumers';
 
 /** A person at a keyboard, apart from `node:readline` so `prompt.ts` is testable without a pseudo-terminal. */
@@ -15,7 +15,6 @@ export const PROMPT_ABORTED_MESSAGE = 'cancelled';
 export const STDIN_IS_A_TERMINAL_MESSAGE = `--${PASSWORD_STDIN_FLAG} expects the password piped or redirected in, but stdin is a terminal`;
 
 const TRAILING_NEWLINE = /\r?\n$/;
-const SIGINT_EXIT_CODE = 130;
 
 export const printResult = (line: string): void => {
   process.stdout.write(`${line}\n`);
@@ -44,7 +43,7 @@ export const open = (): Terminal => {
   lines.once('SIGINT', () => {
     lines.close();
     process.stderr.write('\n');
-    process.exit(SIGINT_EXIT_CODE);
+    process.exit(EXIT_INTERRUPTED);
   });
 
   return {

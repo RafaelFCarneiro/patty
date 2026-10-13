@@ -383,12 +383,9 @@ describe('isLoopbackRequest — auth-disabled DNS-rebinding / cross-site guard',
     '127.0.0.1?x',
     'localhost.', // a trailing-dot FQDN is refused: fail closed
     '://',
-  ])(
-    'refuses a missing or malformed Host (%j)',
-    (host) => {
-      expect(isLoopbackRequest({ host, origin: undefined })).toBe(false);
-    },
-  );
+  ])('refuses a missing or malformed Host (%j)', (host) => {
+    expect(isLoopbackRequest({ host, origin: undefined })).toBe(false);
+  });
 
   it('does not require an Origin — native MCP clients, curl and stdio-adjacent tools send none', () => {
     expect(isLoopbackRequest({ host: '127.0.0.1:3001', origin: undefined })).toBe(true);
@@ -440,7 +437,7 @@ describe('setupBanner', () => {
   it('also names the terminal route, from the shared constant', () => {
     const banner = setupBanner({ code: 'ABCD', setupUrl: 'http://127.0.0.1:51737/ui/setup', expiresAt: 'later' });
     expect(banner).toContain(TERMINAL_SETUP_HINT);
-    expect(TERMINAL_SETUP_HINT).toBe('or run `npx @rafaelfcarneiro/fintrack auth setup` in a terminal');
+    expect(TERMINAL_SETUP_HINT).toBe('or run `npx @rafaelfcarneiro/fintrack@latest auth setup` in a terminal');
   });
 });
 

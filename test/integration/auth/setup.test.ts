@@ -302,3 +302,71 @@ describe('POST /ui/setup', () => {
     expect(ctx.announced.join('\n')).toContain(TERMINAL_SETUP_HINT);
   });
 });
+
+describe('prepareAuth — what the stdio channel signs in with (ADR-034)', () => {
+  it('hands the stdio session its identity deps when auth is required, even with no HTTP server', async () => {
+    const ctx = await createApp();
+    const prepared = await prepareAuth(
+      { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', FINTRACK_HTTP: false },
+      ctx.db,
+      ctx.runEffects,
+    );
+    expect(prepared.stdio).not.toBeNull();
+    expect(prepared.stdio?.deps.secrets.hashSecret).toBeTypeOf('function');
+    expect(prepared.auth.mode).toBe(AuthMode.enum.disabled); // nothing serves HTTP, so there are no sessions to guard
+  });
+
+  it('also does so beside the HTTP sidecar, which then guards its own surface', async () => {
+    const ctx = await createApp();
+    const prepared = await prepareAuth(
+      { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', FINTRACK_HTTP: true },
+      ctx.db,
+      ctx.runEffects,
+    );
+    expect(prepared.stdio).not.toBeNull();
+    expect(prepared.auth.mode).toBe(AuthMode.enum.required);
+  });
+
+  it('gives stdio nothing under an explicit FINTRACK_AUTH=disabled — it acts as the owner', async () => {
+    const ctx = await createApp();
+    const prepared = await prepareAuth(
+      { ...REQUIRED_AUTH, FINTRACK_AUTH: AuthMode.enum.disabled, MCP_TRANSPORT: 'stdio' },
+      ctx.db,
+      ctx.runEffects,
+    );
+    expect(prepared.stdio).toBeNull();
+  });
+
+  it('gives stdio nothing when the transport is HTTP', async () => {
+    const ctx = await createApp();
+    expect((await prepareAuth({ ...REQUIRED_AUTH, MCP_TRANSPORT: 'http' }, ctx.db, ctx.runEffects)).stdio).toBeNull();
+  });
+
+  it('prunes sign-in requests that ran out unanswered at startup, keeping the live and the redeemed', async () => {
+    const ctx = await createApp();
+    const row = (id: string, userCode: string, status: string, expiresAt: string) =>
+      sql`INSERT INTO client_grants (id, device_code_hash, user_code, client_name, client_version, profile, channel, status, created_at, expires_at, version)
+          VALUES (${id}, ${`hash-${id}`}, ${userCode}, 'c', '1', 'default', 'stdio', ${status}, '2020-01-01T00:00:00.000Z', ${expiresAt}, 0)`;
+    const future = new Date(Date.now() + 60_000).toISOString();
+    const past = '2020-01-01T00:10:00.000Z';
+    await ctx.db.run(row('stale-pending', 'AAAAAAAA', 'pending', past));
+    await ctx.db.run(row('stale-denied', 'BBBBBBBB', 'denied', past));
+    await ctx.db.run(row('stale-redeemed', 'CCCCCCCC', 'redeemed', past));
+    await ctx.db.run(row('live-pending', 'DDDDDDDD', 'pending', future));
+
+    await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.runEffects);
+
+    const kept = await ctx.db.all<{ id: string }>(sql`SELECT id FROM client_grants ORDER BY id`);
+    expect(kept.map((grant) => grant.id)).toEqual(['live-pending', 'stale-redeemed']);
+  });
+
+  it('never prunes anything under an explicit FINTRACK_AUTH=disabled', async () => {
+    const ctx = await createApp();
+    await ctx.db.run(
+      sql`INSERT INTO client_grants (id, device_code_hash, user_code, client_name, client_version, profile, channel, status, created_at, expires_at, version)
+          VALUES ('old', 'h', 'AAAAAAAA', 'c', '1', 'default', 'stdio', 'pending', '2020-01-01T00:00:00.000Z', '2020-01-01T00:10:00.000Z', 0)`,
+    );
+    await prepareAuth({ ...REQUIRED_AUTH, FINTRACK_AUTH: AuthMode.enum.disabled }, ctx.db, ctx.runEffects);
+    expect(await ctx.db.all(sql`SELECT 1 FROM client_grants`)).toHaveLength(1);
+  });
+});

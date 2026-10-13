@@ -11,6 +11,7 @@ import {
   PrincipalVia,
   Scope,
   UserRole,
+  AccessTokenKind,
   type AccessTokenEntity,
   type UserEntity,
   SESSION_TOUCH_INTERVAL_MS,
@@ -45,6 +46,9 @@ const claimedOwner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
 const tokenRow = (overrides: Partial<AccessTokenEntity> = {}): AccessTokenEntity => ({
   id: 't1',
   userId: OWNER_USER_ID,
+  kind: AccessTokenKind.enum.pat,
+  clientName: null,
+  profile: null,
   name: 'laptop',
   tokenHash: fakeHash(PLAINTEXT),
   prefix: 'ftk_AbCdEf',

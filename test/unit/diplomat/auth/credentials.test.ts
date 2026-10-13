@@ -4,8 +4,10 @@ import {
   hashPassword,
   hashSecret,
   randomAccessToken,
+  randomDeviceCode,
   randomSetupCode,
   randomToken,
+  randomUserCode,
   verifyPassword,
 } from '../../../../src/diplomat/auth/credentials.js';
 import { normalizeSetupCode } from '../../../../src/logic/auth.js';
@@ -52,6 +54,20 @@ describe('tokens and codes', () => {
       expect(code).toMatch(/^[0-9A-HJKMNP-TV-Z]{20}$/);
       expect(normalizeSetupCode(code)).toBe(code);
     }
+  });
+
+  it('mints 8-symbol sign-in user codes from the same alphabet, and they normalize to themselves', () => {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const code = randomUserCode();
+      expect(code).toMatch(/^[0-9A-HJKMNP-TV-Z]{8}$/);
+      expect(normalizeSetupCode(code)).toBe(code);
+    }
+  });
+
+  it('mints 256-bit base64url device codes that never repeat', () => {
+    const codes = new Set(Array.from({ length: 50 }, randomDeviceCode));
+    expect(codes.size).toBe(50);
+    for (const code of codes) expect(code).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
   it('hashes secrets with sha256 hex, deterministically', () => {

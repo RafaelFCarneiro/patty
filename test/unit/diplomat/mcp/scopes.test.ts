@@ -2,10 +2,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../../../src/controllers/deps.js';
-import { authInfoOf } from '../../../../src/diplomat/mcp/authInfo.js';
-import { guardToolScopes, toolScopesOf } from '../../../../src/diplomat/mcp/scopes.js';
+import { authInfoOf, principalOf } from '../../../../src/diplomat/mcp/authInfo.js';
+import { authInfoGate, GateKind, ownerGate, type PrincipalGate } from '../../../../src/diplomat/mcp/gate.js';
+import { guardScopes, toolScopesOf } from '../../../../src/diplomat/mcp/scopes.js';
 import { buildMcpServer } from '../../../../src/diplomat/mcp/server.js';
-import { OWNER_PRINCIPAL, PrincipalVia, Scope, UserRole } from '../../../../src/models/auth.js';
+import { OWNER_PRINCIPAL, PrincipalVia, Scope, UserRole, type Principal } from '../../../../src/models/auth.js';
 
 const READ = Scope.enum['fintrack:read'];
 const WRITE = Scope.enum['fintrack:write'];
@@ -16,15 +17,15 @@ const registeredTools = (server: McpServer): Registered =>
 
 const textOf = (result: { content: unknown }): string => JSON.stringify(result.content);
 
-describe('guardToolScopes', () => {
-  const guarded = (requireAuthInfo: boolean) => {
+describe('guardScopes', () => {
+  const guarded = (gate: PrincipalGate) => {
     const server = new McpServer({ name: 'test', version: '0' });
-    guardToolScopes(server, { requireAuthInfo });
+    guardScopes(server, { gate });
     return server;
   };
 
   it('refuses to register a tool that does not declare readOnlyHint', () => {
-    const server = guarded(false);
+    const server = guarded(ownerGate);
     expect(() =>
       server.registerTool('undeclared', { title: 'x', inputSchema: {} }, async () => ({ content: [] })),
     ).toThrow(/undeclared.*readOnlyHint/);
@@ -34,14 +35,14 @@ describe('guardToolScopes', () => {
   });
 
   it('derives each tool’s scope from its readOnlyHint', () => {
-    const server = guarded(false);
+    const server = guarded(ownerGate);
     server.registerTool('reads', { annotations: { readOnlyHint: true } }, async () => ({ content: [] }));
     server.registerTool('writes', { annotations: { readOnlyHint: false } }, async () => ({ content: [] }));
     expect(Object.fromEntries(toolScopesOf(server))).toEqual({ reads: READ, writes: WRITE });
   });
 
   it('runs the tool for a principal whose scopes cover it — with and without an input schema', async () => {
-    const server = guarded(true);
+    const server = guarded(authInfoGate);
     const withInput = vi.fn(async (args: { n: number }) => ({
       content: [{ type: 'text' as const, text: `n=${args.n}` }],
     }));
@@ -62,7 +63,7 @@ describe('guardToolScopes', () => {
   });
 
   it('answers insufficient_scope and never runs a write tool for a read-only token', async () => {
-    const server = guarded(true);
+    const server = guarded(authInfoGate);
     const run = vi.fn(async () => ({ content: [] }));
     server.registerTool('writes', { annotations: { readOnlyHint: false }, inputSchema: {} }, run);
     const readOnly = authInfoOf({
@@ -81,15 +82,15 @@ describe('guardToolScopes', () => {
   });
 
   it('lets a write token call a read tool (write implies read)', async () => {
-    const server = guarded(true);
+    const server = guarded(authInfoGate);
     server.registerTool('reads', { annotations: { readOnlyHint: true } }, async () => ({ content: [] }));
     const writer = authInfoOf({ ...OWNER_PRINCIPAL, scopes: [WRITE], via: PrincipalVia.enum.token, tokenId: 't2' });
     expect((await registeredTools(server).reads!.handler({ authInfo: writer })).isError).toBeUndefined();
   });
 
-  it('over HTTP, fails closed when no authInfo reached the tool; over stdio, trusts the absence', async () => {
-    const http = guarded(true);
-    const stdio = guarded(false);
+  it('over HTTP fails closed when no authInfo reached the tool; as the trusted owner it ignores that', async () => {
+    const http = guarded(authInfoGate);
+    const stdio = guarded(ownerGate);
     const run = vi.fn(async () => ({ content: [] }));
     for (const server of [http, stdio]) {
       server.registerTool('writes', { annotations: { readOnlyHint: false }, inputSchema: {} }, run);
@@ -114,7 +115,12 @@ describe('authInfoOf', () => {
       via: PrincipalVia.enum.token,
       tokenId: 'abc',
     });
-    expect(info).toEqual({ token: 'abc', clientId: 'pat:abc', scopes: [READ], extra: { userId: 'u1' } });
+    expect(info).toEqual({
+      token: 'abc',
+      clientId: 'pat:abc',
+      scopes: [READ],
+      extra: { userId: 'u1', role: UserRole.enum.admin, via: PrincipalVia.enum.token, tokenId: 'abc' },
+    });
   });
 
   it('names a session or owner request by how it authenticated, with every scope', () => {
@@ -156,6 +162,7 @@ describe('every registered MCP tool declares its scope', () => {
     (() => undefined) as unknown as RunEffects,
     (() => undefined) as unknown as RunEffectsSequence,
     () => undefined,
+    { gate: ownerGate },
   );
   const scopes = toolScopesOf(server);
   const names = [...scopes.keys()].sort();
@@ -211,5 +218,53 @@ describe('every registered MCP tool declares its scope', () => {
       'update_card_transaction',
       'update_credit_card',
     ]);
+  });
+});
+
+describe('principalOf — the inverse of authInfoOf', () => {
+  it.each([
+    OWNER_PRINCIPAL,
+    { userId: 'u1', role: UserRole.enum.member, scopes: [READ], via: PrincipalVia.enum.token, tokenId: 't1' },
+    { userId: 'u2', role: UserRole.enum.admin, scopes: [READ, WRITE], via: PrincipalVia.enum.stdio, tokenId: 's1' },
+    { userId: 'u3', role: UserRole.enum.admin, scopes: [READ, WRITE], via: PrincipalVia.enum.session },
+  ])('rebuilds the whole principal for %j', (principal) => {
+    expect(principalOf(authInfoOf(principal))).toEqual(principal);
+  });
+
+  it.each([
+    { scopes: [READ], extra: undefined },
+    { scopes: [READ], extra: { userId: 'u1' } },
+    { scopes: ['fintrack:admin'], extra: { userId: 'u1', role: 'admin', via: 'token' } },
+    { scopes: [READ], extra: { userId: 'u1', role: 'root', via: 'token' } },
+    { scopes: [READ], extra: { userId: '', role: 'admin', via: 'token' } },
+  ])('is null for something that is not a whole principal: %j', (authInfo) => {
+    expect(principalOf(authInfo)).toBeNull();
+  });
+});
+
+describe('the gates carry the full principal on every transport', () => {
+  const stdioPrincipal: Principal = {
+    userId: 'u2',
+    role: UserRole.enum.member,
+    scopes: [READ],
+    via: PrincipalVia.enum.stdio,
+    tokenId: 's1',
+  };
+
+  it('HTTP: authInfoGate rebuilds user, role, scopes, via and token id from authInfo', async () => {
+    expect(await authInfoGate({ authInfo: authInfoOf(stdioPrincipal) })).toEqual({
+      kind: GateKind.enum.granted,
+      principal: stdioPrincipal,
+    });
+  });
+
+  it('HTTP: refuses a missing or malformed authInfo — it fails closed, never trusts scopes alone', async () => {
+    const refused = { kind: GateKind.enum.refused, error: { code: 'unauthenticated' } };
+    expect(await authInfoGate({})).toEqual(refused);
+    expect(await authInfoGate({ authInfo: { scopes: [READ, WRITE], extra: { userId: 'u1' } } })).toEqual(refused);
+  });
+
+  it('owner: ownerGate grants OWNER_PRINCIPAL', async () => {
+    expect(await ownerGate({})).toEqual({ kind: GateKind.enum.granted, principal: OWNER_PRINCIPAL });
   });
 });

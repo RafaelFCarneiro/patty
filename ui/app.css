@@ -653,3 +653,65 @@ header, .dashboard-header {
 .sidebar-tokens {
     color: var(--text-muted);
 }
+
+/* --- Connect a client (ADR-034): /ui/connect, the consent page for a stdio / `fintrack login` sign-in --- */
+.connect-facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.4rem 1rem;
+    margin: 0 0 1.25rem;
+    font-size: 0.9rem;
+}
+
+.connect-facts dt {
+    color: var(--text-muted);
+}
+
+.connect-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere; /* a client may report a long name */
+}
+
+.connect-note {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.connect-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.15rem;
+    letter-spacing: 0.08em;
+}
+
+.connect-form fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+}
+
+.connect-form legend {
+    padding: 0 0.3rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.connect-form fieldset label {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--text-main);
+}
+
+.connect-form fieldset input {
+    padding: 0;
+}
+
+.auth-form button.connect-deny {
+    color: var(--text-main);
+    background: transparent;
+    border: 1px solid var(--panel-border);
+}

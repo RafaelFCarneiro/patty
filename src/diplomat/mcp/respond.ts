@@ -12,6 +12,12 @@ export const jsonError = (e: AppError) => ({
   isError: true,
 });
 
+/** A plain-text tool error — for an instruction a person must read (sign in), not a structured `AppError`. */
+export const textError = (message: string) => ({
+  content: [{ type: 'text' as const, text: message }],
+  isError: true,
+});
+
 export const fromResult = <T>(result: Result<T, AppError>) => result.match(json, jsonError);
 
 /** Shared by every static-URI JSON resource (`fintrack://openapi` and the Feature Design 018

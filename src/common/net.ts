@@ -14,7 +14,8 @@ export const IPV4_WILDCARD_HOST = '0.0.0.0';
 export const IPV6_WILDCARD_HOST = '::';
 const WILDCARD_HOSTS: ReadonlySet<string> = new Set([IPV4_WILDCARD_HOST, IPV6_WILDCARD_HOST]);
 
-const LOCALHOST_NAME = 'localhost';
+/** Browsers key cookies by host, not port — a second loopback name is how a temporary app gets cookies of its own. */
+export const LOCALHOST_NAME = 'localhost';
 const IPV6_LOOPBACK_HOST = '::1';
 const IPV4_LOOPBACK_BLOCK = /^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 const MAX_IPV4_OCTET = 255;

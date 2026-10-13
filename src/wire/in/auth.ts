@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import {
+  CLIENT_NAME_MAX_LENGTH,
+  CLIENT_VERSION_MAX_LENGTH,
+  CONNECT_CODE_PARAM,
   DEFAULT_LANDING_PATH,
+  SignInDuration,
+  UNKNOWN_CLIENT_NAME,
+  UNKNOWN_CLIENT_VERSION,
+  type ClientInfo,
   normalizeUsername,
   PASSWORD_MAX_LENGTH,
   PasswordSchema,
@@ -61,3 +68,45 @@ export const CreateTokenFormSchema = z.object({
   password: z.string().min(1, 'Enter your password to create a token.').max(PASSWORD_MAX_LENGTH),
 });
 export type CreateTokenForm = z.infer<typeof CreateTokenFormSchema>;
+
+// The code a person types or follows: lookups normalize it, so only its length is bounded here.
+const USER_CODE_INPUT_MAX_LENGTH = 32;
+
+/** `GET /ui/connect?code=…`. */
+export const ConnectQuerySchema = z.object({
+  [CONNECT_CODE_PARAM]: z.string().min(1).max(USER_CODE_INPUT_MAX_LENGTH).optional().catch(undefined),
+});
+
+export const ConnectDecision = z.enum(['approve', 'deny']);
+export type ConnectDecision = z.infer<typeof ConnectDecision>;
+
+/** `POST /ui/connect`: the consent form. */
+export const ConnectFormSchema = z.object({
+  [CONNECT_CODE_PARAM]: z.string().min(1).max(USER_CODE_INPUT_MAX_LENGTH),
+  decision: ConnectDecision,
+  access: TokenAccess,
+  duration: SignInDuration,
+});
+export type ConnectForm = z.infer<typeof ConnectFormSchema>;
+
+// `clientInfo` comes from whatever program spawned us and is shown to the approver, so it is cleaned, not trusted:
+// control characters become spaces, the length is bounded, and an unusable value falls back rather than failing
+// the sign-in. (It is escaped wherever it is rendered.)
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/g;
+const reported = (maxLength: number, fallback: string) =>
+  z
+    .string()
+    .optional()
+    .catch(undefined)
+    .transform((raw) => raw?.replace(CONTROL_CHARACTERS, ' ').trim().slice(0, maxLength) || fallback);
+
+const ClientInfoSchema = z.object({
+  name: reported(CLIENT_NAME_MAX_LENGTH, UNKNOWN_CLIENT_NAME),
+  version: reported(CLIENT_VERSION_MAX_LENGTH, UNKNOWN_CLIENT_VERSION),
+});
+
+export const clientInfoOf = (raw: unknown): ClientInfo =>
+  ClientInfoSchema.catch({
+    name: UNKNOWN_CLIENT_NAME,
+    version: UNKNOWN_CLIENT_VERSION,
+  }).parse(raw ?? {});

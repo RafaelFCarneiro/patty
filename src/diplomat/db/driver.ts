@@ -6,6 +6,7 @@ import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { EncryptionKey, type Config } from '../../config.js';
+import { KEYCHAIN_SERVICE } from '../../models/auth.js';
 import * as schema from './schema.js';
 
 export type Db = LibSQLDatabase<typeof schema>;
@@ -17,7 +18,6 @@ export type Db = LibSQLDatabase<typeof schema>;
  *  resolves. */
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-const KEYCHAIN_SERVICE = 'fintrack';
 const KEYCHAIN_ACCOUNT = 'db-encryption-key';
 
 // ADR-024: WAL lets readers (the HTTP sidecar) proceed without blocking the single writer, instead

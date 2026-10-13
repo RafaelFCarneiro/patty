@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 import { isLoopbackHost, LOOPBACK_HOST } from './common/net.js';
-import { AuthMode, DEFAULT_AUTH_MODE } from './models/auth.js';
+import { AuthMode, DEFAULT_AUTH_MODE, DEFAULT_PROFILE, ProfileSchema } from './models/auth.js';
 import { Locale } from './models/locale.js';
 
 export const McpTransport = z.enum(['stdio', 'http']);
@@ -85,6 +85,10 @@ const Env = z
     HOST: z.string().min(1).default(LOOPBACK_HOST),
     // `required` everywhere, loopback included; `disabled` is an explicit, loopback-only opt-out.
     FINTRACK_AUTH: z.preprocess(unsetWhenEmpty, AuthMode.default(DEFAULT_AUTH_MODE)),
+    // Which saved sign-in a stdio process uses, so two client configs on one machine can sign in as two users
+    // (ADR-034 §2); and the headless alternative to the browser sign-in — a personal access token in the env.
+    FINTRACK_PROFILE: z.preprocess(unsetWhenEmpty, ProfileSchema.default(DEFAULT_PROFILE)),
+    FINTRACK_TOKEN: optionalEnv(z.string()),
     // External origin of this instance behind a reverse proxy — the CSRF expected origin, and https
     // turns on the cookie `Secure` flag. Optional in Phase 1 (OAuth makes it mandatory in Phase 3).
     PUBLIC_URL: optionalEnv(PublicUrl),
@@ -118,4 +122,4 @@ const Env = z
 
 export type Config = z.infer<typeof Env>;
 
-export const loadConfig = (): Config => Env.parse(process.env);
+export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => Env.parse(env);

@@ -28,6 +28,7 @@ import {
   SETUP_CODE_ID,
   USER_ENTITY_TAG,
   UserRole,
+  AccessTokenKind,
   type AccessTokenEntity,
   type SessionEntity,
   type SetupCodeEntity,
@@ -49,6 +50,8 @@ const secrets: AuthSecrets = {
   randomToken: () => 'TOKEN',
   randomAccessToken: () => 'ftk_TOKEN',
   randomSetupCode: () => 'ABCDEFGHJKMNPQRSTVWX',
+  randomUserCode: () => 'ABCDEFGH',
+  randomDeviceCode: () => 'DEVICE',
   hashSecret: (secret) => `sha(${secret})`,
   dummyPasswordHash: fakeHash('never-typed'),
 };
@@ -94,6 +97,13 @@ const depsFor = ({ users = [], sessions = [], codes = [], tokens = [], now = NOW
       findByTokenHash: async (hash) => tokens.find((token) => token.tokenHash === hash) ?? null,
       findById: async (userId, id) => tokens.find((token) => token.userId === userId && token.id === id) ?? null,
       listByUser: async (userId) => tokens.filter((token) => token.userId === userId),
+    },
+    clientGrants: {
+      findByDeviceCodeHash: async () => null,
+      findPendingByUserCode: async () => null,
+      lastRedeemed: async () => null,
+      listExpired: async () => [],
+      listRedeemed: async () => [],
     },
     setupCodes: {
       findByHash: async (hash) => codes.find((code) => code.codeHash === hash) ?? null,
@@ -372,6 +382,9 @@ const otherUser = (): UserEntity => claimedOwner({ id: OTHER_USER_ID, username: 
 const tokenRow = (overrides: Partial<AccessTokenEntity> = {}): AccessTokenEntity => ({
   id: 't1',
   userId: OWNER_USER_ID,
+  kind: AccessTokenKind.enum.pat,
+  clientName: null,
+  profile: null,
   name: 'laptop',
   tokenHash: 'sha(ftk_T1)',
   prefix: 'ftk_T1',

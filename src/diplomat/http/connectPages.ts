@@ -1,0 +1,78 @@
+import * as R from 'remeda';
+import { SignInDuration, TokenAccess, type GrantChoice, type GrantRequest } from '../../models/auth.js';
+import { durationAllowedFor, sessionOnlyLabel } from '../../logic/auth.js';
+import { ACCESS_LABEL, errorBlock, escapeHtml, fillTemplate, formatMinute } from './authPages.js';
+import { CONNECT_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from './authPaths.js';
+import { readCached, UI_ROOT } from './uiFiles.js';
+
+const CONNECT_TEMPLATE_PATH = `${UI_ROOT}/connect.html`;
+const CONNECT_RESULT_TEMPLATE_PATH = `${UI_ROOT}/connectResult.html`;
+
+// Typed by the enum, so a new duration cannot exist without a label here — and the radio values the form posts are the
+// very values `ConnectFormSchema` accepts.
+const SAVED_DURATION_LABEL: Readonly<Record<Exclude<SignInDuration, typeof SignInDuration.enum.session>, string>> = {
+  '24h': '24 hours',
+  '7d': '7 days',
+  '30d': '30 days',
+};
+
+const durationLabel = (duration: SignInDuration, clientName: string): string =>
+  duration === SignInDuration.enum.session ? sessionOnlyLabel(clientName) : SAVED_DURATION_LABEL[duration];
+
+const radio = (name: string, value: string, label: string, checked: boolean): string =>
+  `<label><input type="radio" name="${name}" value="${escapeHtml(value)}"${checked ? ' checked' : ''} required />` +
+  `${escapeHtml(label)}</label>`;
+
+const accessOptions = (selected: TokenAccess): string =>
+  TokenAccess.options.map((access) => radio('access', access, ACCESS_LABEL[access], access === selected)).join('');
+
+// "This session only" is for a stdio process, which has a session to tie the sign-in to; `fintrack login`
+// does not (the choice would be refused, so it is not offered).
+const durationOptions = (request: GrantRequest, selected: SignInDuration): string =>
+  R.pipe(
+    SignInDuration.options,
+    R.filter((duration) => durationAllowedFor(request.channel, duration)),
+    R.map((duration) =>
+      radio('duration', duration, durationLabel(duration, request.clientName), duration === selected),
+    ),
+  ).join('');
+
+export const renderConnectPage = async (fields: {
+  request: GrantRequest;
+  choice: GrantChoice;
+  error?: string;
+}): Promise<string> =>
+  fillTemplate(await readCached(CONNECT_TEMPLATE_PATH), {
+    stylesheet: UI_APP_CSS_PATH,
+    action: CONNECT_PATH,
+    // Everything the client reported is escaped: it is whatever the spawning program chose to call itself.
+    clientName: escapeHtml(fields.request.clientName),
+    clientVersion: escapeHtml(fields.request.clientVersion),
+    profile: escapeHtml(fields.request.profile),
+    requestedAt: formatMinute(fields.request.createdAt),
+    userCode: escapeHtml(fields.request.userCode),
+    accessOptions: accessOptions(fields.choice.access),
+    durationOptions: durationOptions(fields.request, fields.choice.duration),
+    error: errorBlock(fields.error),
+  });
+
+const CLOSE_TAB_HINT = 'You can close this tab.';
+
+// Once a request is answered the page has nothing left to offer: a temporary server (`fintrack login`, or a stdio
+// process whose own dashboard could not start) closes as soon as the sign-in is picked up, so a link back to its
+// dashboards would be dead moments later. A page that is only an error keeps the way out while the server still lives.
+const nextStep = (answered: boolean): string =>
+  answered ? `<p>${CLOSE_TAB_HINT}</p>` : `<p><a href="${UI_ROOT_PATH}">Back to the dashboards</a></p>`;
+
+export const renderConnectResultPage = async (fields: {
+  heading: string;
+  message: string;
+  /** The request was approved or denied — nothing more to do here. */
+  answered?: boolean;
+}): Promise<string> =>
+  fillTemplate(await readCached(CONNECT_RESULT_TEMPLATE_PATH), {
+    stylesheet: UI_APP_CSS_PATH,
+    heading: escapeHtml(fields.heading),
+    message: escapeHtml(fields.message),
+    next: nextStep(fields.answered ?? false),
+  });

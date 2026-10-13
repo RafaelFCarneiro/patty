@@ -19,6 +19,7 @@ import type { RecurringRepo } from '../diplomat/db/repos/recurring.js';
 import type { SettingsRepo } from '../diplomat/db/repos/settings.js';
 import type { TagsRepo } from '../diplomat/db/repos/tags.js';
 import type { AccessTokensRepo } from '../diplomat/db/repos/accessTokens.js';
+import type { ClientGrantsRepo } from '../diplomat/db/repos/clientGrants.js';
 import type { SessionsRepo } from '../diplomat/db/repos/sessions.js';
 import type { SetupCodesRepo } from '../diplomat/db/repos/setupCodes.js';
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js';
@@ -60,6 +61,10 @@ export type AuthSecrets = {
   randomAccessToken: () => string;
   /** The raw characters of a fresh setup code, before display grouping. */
   randomSetupCode: () => string;
+  /** The raw characters of a fresh sign-in user code (8 symbols), before display grouping. */
+  randomUserCode: () => string;
+  /** A fresh device code (256 random bits, base64url) — held by the asking process, stored only as a hash. */
+  randomDeviceCode: () => string;
   /** sha256 of a secret — what is stored instead of the session token or setup code. */
   hashSecret: (secret: string) => string;
   /** A real hash nobody holds the password for — verified against when the user does not exist, so an
@@ -67,12 +72,27 @@ export type AuthSecrets = {
   dummyPasswordHash: string;
 };
 
+/** Where a saved stdio sign-in lives between runs — the OS keychain in production (ADR-034 §2). Keychain trouble
+ *  A refused write is reported by returning `false`, after which the sign-in lasts only as long as the process; an
+ *  unreadable store is `KeychainUnavailableError` from `load`, which each caller decides how to treat (the stdio
+ *  session carries on without a saved sign-in, `logout` refuses to claim a sign-out it could not check). */
+export type SignInStore = {
+  /** `null` = nothing saved. Throws `KeychainUnavailableError` when the keychain cannot be read at all. */
+  load: () => Promise<string | null>;
+  save: (token: string) => Promise<boolean>;
+  clear: () => Promise<void>;
+};
+
+/** Where the consent page is served while a sign-in waits: a temporary server this process started on its own. */
+export type SignInServer = { origin: string; close: () => Promise<void> };
+
 /** Identity dependencies (ADR-033): kept apart from `Deps` because auth is infrastructure the domain
  *  controllers never see — only `controllers/auth.ts` and the HTTP edge's auth hook use these. */
 export type AuthDeps = {
   users: UsersRepo;
   sessions: SessionsRepo;
   accessTokens: AccessTokensRepo;
+  clientGrants: ClientGrantsRepo;
   setupCodes: SetupCodesRepo;
   clock: () => Date;
   newId: () => string;

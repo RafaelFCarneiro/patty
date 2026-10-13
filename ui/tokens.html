@@ -13,7 +13,15 @@
         Personal access tokens let scripts and MCP clients call <code>/api</code> and <code>/mcp</code> with
         <code>Authorization: Bearer ftk_…</code>. <a href="{{dashboards}}">Back to the dashboards</a>
       </p>
-      {{error}} {{tokens}}
+      {{error}}
+      <h2>Claude sign-ins</h2>
+      <p class="auth-hint">
+        Each Claude session that signed in with the browser (<code>/ui/connect</code> or <code>fintrack login</code>).
+        Revoking one takes effect on that client's next call; they expire on their own.
+      </p>
+      {{signIns}}
+      <h2>Personal access tokens</h2>
+      {{tokens}}
       <h2>Create a token</h2>
       <form class="auth-form" method="post" action="{{action}}">
         <label

@@ -159,6 +159,15 @@ The PAT expiry option **"no expiry" is removed**, for consistency with §4. The 
 or 365 days. Existing never-expiring tokens keep working until revoked, and the UI flags them as "no expiry
 (legacy)".
 
+### 7. Printed commands are pinned, and an older build refuses a newer database
+
+Found in the field: an unpinned `npx` resolved to a stale global install, which did not know `auth setup`, started as a server and failed in an
+old seed against the newer schema. Two rules close both halves:
+
+- **Every command FinTrack prints or documents is `@latest`-pinned**, built from one constant (`NPX_COMMAND`); `npx` with no version prefers an installed copy.
+- **`bootstrap` refuses a database newer than the build** — its newest applied migration against the newest the build's journal ships — before the safety copy, migrations or
+  seeding, on every entrypoint that opens the database, and unknown CLI subcommands exit non-zero with usage instead of starting a server. The guard only protects builds that include it.
+
 ## Options considered
 
 - **Browser sign-in for stdio with chosen expiry (chosen).**
@@ -220,8 +229,20 @@ or 365 days. Existing never-expiring tokens keep working until revoked, and the 
 
 1. [x] Review/accept this ADR (accepted 2026-10-10).
 2. [x] Step 1 — auth on by default, terminal setup and reset, PAT expiry (branch `feat/auth-default-and-cli`).
-3. [ ] Step 2 — stdio browser sign-in with chosen expiry.
+3. [x] Step 2 — stdio browser sign-in with chosen expiry (branch `feat/stdio-sign-in`).
 4. [x] Update ADR-033 §1 and its Phase 4 notes to point here (done with step 1).
+
+**Implementation notes (step 2)** — decided while building, none of them changing a decision above:
+
+- A stdio sign-in is an `access_tokens` row (`kind: stdio`, plus `client_name` and `profile`), so there is one authenticate path, one revoke and one listing. It is
+  admitted **only on the stdio channel** (`PrincipalVia.stdio`): presented as a bearer on `/api` or `/mcp` it is `401`, so a credential copied from the keychain is not
+  also a key to the HTTP surface.
+- `client_grants` also records `approved_at` (the expiry is absolute from approval, and redemption can come minutes later), the `channel` that asked (`stdio` | `cli` —
+  "this session only" is offered only to a stdio client, and refused server-side for `fintrack login`), and the asker's `hint_access`/`hint_duration` (what
+  `fintrack login --scope/--duration` pre-select on the consent page; the person still chooses).
+- The consent page and the access listing live under `/ui/connect` and the existing `/ui/access/tokens` page (a stdio table above the personal access tokens): `/ui/access`
+  alone would collide with the one-segment dashboard namespace.
+- Startup refuses a database a newer build has migrated (the version guard) and every printed command is `@latest`-pinned — see `docs/releasing.md`.
 
 Both steps are feature-sized and security-sensitive. Each gets the DoD verification subagent plus a
 `security-review` pass. The verifier is charged with:
