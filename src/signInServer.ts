@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import { prepareAuth } from './authRuntime.js';
 import { version } from './common/buildVersion.js';
-import { httpOrigin, LOOPBACK_HOST } from './common/net.js';
+import { httpOrigin, LOCALHOST_NAME } from './common/net.js';
 import { McpTransport, type Config } from './config.js';
 import type { Db } from './diplomat/db/driver.js';
 import { AuthMode } from './models/auth.js';
@@ -42,7 +42,10 @@ export const startSignInServer = async (config: Config, db: Db): Promise<SignInS
     runtime.changeBus.subscribe,
     { logger: false, auth, trustProxy: config.TRUST_PROXY },
   );
-  await app.listen({ port: 0, host: LOOPBACK_HOST });
+  // Loopback only, but under the NAME `localhost`: the session cookie is keyed by host, not port, so on `127.0.0.1`
+  // this login would overwrite the cookie of any FinTrack already open there and sign its dashboard out.
+  // Fastify binds `localhost` to both its IPv4 and IPv6 loopback addresses.
+  await app.listen({ port: 0, host: LOCALHOST_NAME });
   const { port } = app.server.address() as AddressInfo;
-  return { origin: httpOrigin(LOOPBACK_HOST, port), close: () => app.close() };
+  return { origin: httpOrigin(LOCALHOST_NAME, port), close: () => app.close() };
 };

@@ -191,7 +191,8 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
         held = { token: stored, scopes: checked.principal.scopes, ephemeral: false };
         return granted(checked.principal.scopes);
       }
-      await store.clear();
+      // A concurrent `login` may have replaced the entry while the database was asked: drop only the one found invalid.
+      if ((await store.load()) === stored) await store.clear();
     }
     return askToSignIn();
   };

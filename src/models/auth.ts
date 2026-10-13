@@ -490,7 +490,7 @@ export const STDIO_MESSAGES = {
   notSignedInWithoutHttp:
     `${SIGN_IN_PREFIX} not signed in. The browser sign-in needs the HTTP dashboard (${HTTP_ENV_VAR}=false here): run ` +
     `\`${NPX_COMMAND} login\` in a terminal, or set ${TOKEN_ENV_VAR} in this client's environment.`,
-  ownerUnclaimedHint: ` Owner not set up yet? Run \`${NPX_COMMAND} setup\`.`,
+  ownerUnclaimedHint: ` Owner not set up yet? Run \`${NPX_COMMAND} auth setup\`.`,
   invalidEnvToken:
     `${SIGN_IN_PREFIX} ${TOKEN_ENV_VAR} is not a valid access token (malformed, expired or revoked). Create a new one on ` +
     `the Access page of the dashboard, or remove ${TOKEN_ENV_VAR} from this client's environment to sign in with ` +

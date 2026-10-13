@@ -103,7 +103,7 @@ describe('StdioSession — not signed in', () => {
     const { session } = stdioSessionFor(ctx);
     const outcome = await session.resolve();
     expect(outcome).toMatchObject({ kind: 'not_signed_in' });
-    expect(JSON.stringify(outcome)).toContain(`Owner not set up yet? Run \`${NPX_COMMAND} setup\`.`);
+    expect(JSON.stringify(outcome)).toContain(`Owner not set up yet? Run \`${NPX_COMMAND} auth setup\`.`);
   });
 
   it('says to use `login` or FINTRACK_TOKEN, with no link and no grant, when there is no HTTP server', async () => {
@@ -339,6 +339,26 @@ describe('StdioSession — restart and the keychain', () => {
     expect(granted(await mine.session.resolve())).toEqual([READ, WRITE]);
     expect(mine.store.saved()).toBe(theirs);
     expect(mine.store.calls.clear).toBe(0);
+  });
+
+  it('does not delete a newer sign-in saved by a concurrent login while the invalid one is checked', async () => {
+    const ctx = await createApp();
+    await claimOwner(ctx);
+    const newer = 'ftk_saved-by-a-concurrent-login';
+    const store = memoryStore('ftk_not-a-credential-anyone-issued');
+    const load = store.load.bind(store);
+    let loads = 0;
+    store.load = async () => {
+      loads += 1;
+      if (loads === 2) await store.save(newer); // lands after the first look, before the compare-before-clear
+      return load();
+    };
+    const { session } = stdioSessionFor(ctx, { store });
+
+    await session.resolve();
+
+    expect(store.saved()).toBe(newer);
+    expect(store.calls.clear).toBe(0);
   });
 
   it('flips to not signed in on the very next call once the sign-in is revoked', async () => {

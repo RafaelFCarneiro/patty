@@ -1,5 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { sql } from 'drizzle-orm';
+import { errAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import type { CliIo, Shell } from '../../../src/authCli.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
@@ -7,6 +8,7 @@ import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_OK } from '../../../src/common/cli
 import { loadConfig } from '../../../src/config.js';
 import type { Terminal } from '../../../src/diplomat/cli/terminal.js';
 import { LOGIN_MESSAGES, offerSignIn, runLogin, runLogout } from '../../../src/loginCli.js';
+import { conflict } from '../../../src/models/error.js';
 import { AUTH_MESSAGES, GRANT_POLL_INTERVAL_MS, NPX_COMMAND } from '../../../src/models/auth.js';
 import { startSignInServer } from '../../../src/signInServer.js';
 import type { AppContext } from '../app-builder.js';
@@ -204,6 +206,27 @@ describe('fintrack login', () => {
     expect(r.err).toEqual([AUTH_MESSAGES.ownerUnclaimed]);
     expect(AUTH_MESSAGES.ownerUnclaimed).toContain(`${NPX_COMMAND} auth setup`);
     expect(r.shell.startServer).not.toHaveBeenCalled();
+  });
+
+  it('says so — and does not claim a cleanup — when the keychain refuses AND the revocation fails', async () => {
+    const r = await rig({ store: memoryStore(null, { refuseSave: true }), whenWaiting: approve() });
+    const run = r.shell.run;
+    let failRevoke = false;
+    const store = r.storeFor('default');
+    const save = store.save.bind(store);
+    store.save = async (token) => {
+      failRevoke = true; // the very next write is the revocation
+      return save(token);
+    };
+    r.shell.run = ((flow: Parameters<typeof run>[0]) => (failRevoke ? errAsync(conflict) : run(flow))) as typeof run;
+
+    expect(await runLogin([], r.io)).toBe(EXIT_FAILURE);
+
+    expect(r.err).toContain(LOGIN_MESSAGES.keychainRefusedAndStillActive);
+    expect(r.err).not.toContain(LOGIN_MESSAGES.keychainRefused);
+    expect(await r.ctx.db.all(sql`SELECT revoked_at IS NOT NULL AS revoked FROM access_tokens`)).toEqual([
+      { revoked: 0 },
+    ]);
   });
 
   it('revokes the sign-in again when the keychain will not keep it (a secret nothing can find)', async () => {
@@ -426,7 +449,7 @@ describe('startSignInServer — where `fintrack login` sends the browser', () =>
     await claimOwner(ctx);
     const server = await startSignInServer(await configFor(0), ctx.db);
     try {
-      expect(server.origin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect(server.origin).toMatch(/^http:\/\/localhost:\d+$/);
       expect((await fetch(`${server.origin}/api/health`)).status).toBe(200);
       const anonymous = await fetch(`${server.origin}/ui/connect?code=ABCD-EFGH`, { redirect: 'manual' });
       expect(anonymous.status).toBe(303);
@@ -438,11 +461,11 @@ describe('startSignInServer — where `fintrack login` sends the browser', () =>
     await expect(fetch(`${server.origin}/api/health`)).rejects.toThrow();
   });
 
-  it('binds loopback only, whatever HOST is configured, and builds its origin from that', async () => {
+  it('serves loopback only, under the host name localhost (its own cookie), whatever HOST is', async () => {
     const ctx = await createApp();
     const server = await startSignInServer({ ...(await configFor(0)), HOST: '0.0.0.0' }, ctx.db);
     try {
-      expect(server.origin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect(server.origin).toMatch(/^http:\/\/localhost:\d+$/);
       expect((await fetch(`${server.origin}/api/health`)).status).toBe(200);
     } finally {
       await server.close();

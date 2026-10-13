@@ -194,7 +194,7 @@ So the sign-in happens outside the protocol, and what it produces is read from t
 1. Claude's first tool call (or resource read, or prompt) returns an ordinary error:
    *FinTrack: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.*
    (`initialize` and the tool/resource/prompt **lists** still work, so the client can show the server.) While the owner is
-   unclaimed it adds: *Owner not set up yet? Run `npx @rafaelfcarneiro/fintrack@latest setup`.* With `FINTRACK_HTTP=false` there is no
+   unclaimed it adds: *Owner not set up yet? Run `npx @rafaelfcarneiro/fintrack@latest auth setup`.* With `FINTRACK_HTTP=false` there is no
    page to link to, so it says to use `npx @rafaelfcarneiro/fintrack@latest login` or `FINTRACK_TOKEN` instead.
 2. You open the link. If you are not logged in you log in first and land on the same page. The page shows **the client's name and
    version ("reported by the client"), the profile, when it asked, and the code** — confirm the code is the one Claude showed —
@@ -258,7 +258,7 @@ npx @rafaelfcarneiro/fintrack@latest logout [--profile <p>]
 
 `login` runs the same flow from a terminal: it prints the link and the code, waits for you to approve, and saves the result to the keychain profile (if the keychain
 refuses, it revokes the sign-in again rather than leave a secret nothing can find). `--duration` and `--scope` only **pre-select** the page; you still choose. It needs
-no dashboard to be running: it **starts a temporary server of its own on a free loopback port for the length of the
+no dashboard to be running: it **starts a temporary server of its own on a free port of `localhost` (loopback only, and a host name of its own, so its session cookie never replaces that of a FinTrack open at `127.0.0.1` — cookies are keyed by host, not port) for the length of the
 login** (authentication required, the same database) and closes it afterwards — it never reuses a server already on `HOST:PORT`, which may have opened a different database. Ctrl-C cancels cleanly (exit 130). Under `FINTRACK_AUTH=disabled` there is nothing to sign in to and it says so.
 `logout` revokes the profile's saved sign-in and deletes the keychain entry; with nothing saved it says so and succeeds.
 

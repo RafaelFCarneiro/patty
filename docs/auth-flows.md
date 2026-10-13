@@ -505,7 +505,7 @@ sequenceDiagram
     Cli->>DB: open + bootstrap (the version guard runs first)
     Cli->>Cli: auth disabled? owner unclaimed? → say so, exit 1
     Cli->>SS: where is /ui/connect?
-    SS->>SS: start a temporary app on a free LOOPBACK port (authentication required, same database) — closed when the login ends
+    SS->>SS: start a temporary app on a free port of `localhost` (loopback only, its own cookie jar entry; authentication required, same database) — closed when the login ends
     SS-->>Cli: its origin (a server already running on HOST:PORT is not reused: it may have opened another database)
     Cli->>G: startGrant {fintrack login, version, profile, channel cli, hint scope + duration}
     Cli-->>Op: Open ORIGIN/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH. Waiting… (Ctrl-C cancels)

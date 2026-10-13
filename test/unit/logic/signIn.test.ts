@@ -414,7 +414,7 @@ describe('notSignedInMessage', () => {
 
   it('points an unclaimed owner at the pinned setup command', () => {
     const message = notSignedInMessage({ origin: ORIGIN, userCode: 'ABCD-EFGH', ownerUnclaimed: true });
-    expect(message).toContain(`Owner not set up yet? Run \`${NPX_COMMAND} setup\`.`);
+    expect(message).toContain(`Owner not set up yet? Run \`${NPX_COMMAND} auth setup\`.`);
     expect(NPX_COMMAND).toBe('npx @rafaelfcarneiro/fintrack@latest');
   });
 

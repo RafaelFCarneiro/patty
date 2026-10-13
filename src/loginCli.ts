@@ -34,6 +34,9 @@ export const LOGIN_MESSAGES = {
   keychainRefused:
     'The OS keychain would not keep the sign-in, so it was revoked again. Fix keychain access, or set ' +
     `${TOKEN_ENV_VAR} in the client instead.`,
+  keychainRefusedAndStillActive:
+    'The OS keychain would not keep the sign-in, and it could not be revoked either: revoke it now on the Access ' +
+    'page of the dashboard (/ui/access/tokens), or it stays valid until it expires.',
   signedOut: (profile: string) => `Signed out of profile "${profile}".`,
   notSignedIn: (profile: string) => `Not signed in on profile "${profile}".`,
   skippedNoTerminal: (profile: string) =>
@@ -73,8 +76,10 @@ const keep = async (io: CliIo, shell: Shell, profile: string, signedIn: SignedIn
     io.out(LOGIN_MESSAGES.signedIn(profile, accessOf(signedIn), signedIn.expiresAt));
     return SignInOutcome.enum.signed_in;
   }
-  await shell.run(() => revokeSignInByHash(shell.deps, shell.deps.secrets.hashSecret(signedIn.token)));
-  return ended(io, LOGIN_MESSAGES.keychainRefused, SignInOutcome.enum.failed);
+  const revoked = await shell.run(() => revokeSignInByHash(shell.deps, shell.deps.secrets.hashSecret(signedIn.token)));
+  // Never claim a cleanup that did not commit: an unrevoked credential nothing references is the case to shout about.
+  const message = revoked.isOk() ? LOGIN_MESSAGES.keychainRefused : LOGIN_MESSAGES.keychainRefusedAndStillActive;
+  return ended(io, message, SignInOutcome.enum.failed);
 };
 
 /**
