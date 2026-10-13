@@ -3,7 +3,7 @@ import { listCurrencies } from '../../../controllers/currencies.js';
 import { CurrencySchema } from '../../../models/money.js';
 import type { HttpContext } from '../context.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
-import { READ_SCOPE } from '../../../models/auth.js';
+import { READ_SCOPE } from '../../../models/auth/scope.js';
 
 const CURRENCIES_TAG = 'Currencies';
 

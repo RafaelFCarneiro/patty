@@ -1,7 +1,7 @@
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType, ZodTypeDef } from 'zod';
 import { PASSWORD_STDIN_FLAG } from '../../common/cli.js';
-import { PasswordSchema, UsernameSchema } from '../../models/auth.js';
+import { PasswordSchema, UsernameSchema } from '../../models/auth/password.js';
 import type { Terminal } from './terminal.js';
 
 export const MAX_PROMPT_ATTEMPTS = 3;

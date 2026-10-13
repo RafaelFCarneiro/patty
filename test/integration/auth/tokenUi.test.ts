@@ -1,7 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { accessTokens } from '../../../src/diplomat/db/schema.js';
 import { describe, expect, it } from 'vitest';
-import { AuthMode, OWNER_USER_ID, TokenAccess } from '../../../src/models/auth.js';
+import { AuthMode } from '../../../src/models/auth/mode.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { TokenAccess } from '../../../src/models/auth/token.js';
 import { CreateTokenFormSchema } from '../../../src/wire/in/auth.js';
 import {
   authDepsOf,

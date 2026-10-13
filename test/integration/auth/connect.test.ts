@@ -4,9 +4,9 @@ import {
   CLIENT_GRANT_TTL_MS,
   GrantChannel,
   MAX_SIGN_IN_DURATION_MS,
-  PrincipalVia,
   SignInDuration,
-} from '../../../src/models/auth.js';
+} from '../../../src/models/auth/grant.js';
+import { PrincipalVia } from '../../../src/models/auth/principal.js';
 import { startGrant } from '../../../src/controllers/grants.js';
 import { MAX_CODE_LOOKUP_FAILURES_PER_IP } from '../../../src/diplomat/http/rateLimiter.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';

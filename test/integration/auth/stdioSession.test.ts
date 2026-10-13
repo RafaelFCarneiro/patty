@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { KeychainUnavailableError } from '../../../src/common/keychain.js';
 import { conflict } from '../../../src/models/error.js';
-import { GRANT_POLL_INTERVAL_MS, NPX_COMMAND, STDIO_MESSAGES, type SignInDuration } from '../../../src/models/auth.js';
+import { type SignInDuration } from '../../../src/models/auth/grant.js';
+import { STDIO_MESSAGES } from '../../../src/models/auth/message.js';
+import { GRANT_POLL_INTERVAL_MS } from '../../../src/models/auth/signIn.js';
+import { NPX_COMMAND } from '../../../src/models/package.js';
 import type { GateOutcome } from '../../../src/diplomat/mcp/gate.js';
 import {
   answerConnect,

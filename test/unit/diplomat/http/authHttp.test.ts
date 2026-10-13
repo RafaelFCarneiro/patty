@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SESSION_ABSOLUTE_MAX_MS } from '../../../../src/models/auth.js';
+import { SESSION_ABSOLUTE_MAX_MS } from '../../../../src/models/auth/session.js';
 import { escapeHtml } from '../../../../src/diplomat/http/authPages.js';
 import {
   HEALTH_PATH,

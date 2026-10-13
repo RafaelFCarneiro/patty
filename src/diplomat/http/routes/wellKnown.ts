@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { httpStatus } from '../../../common/errors.js';
-import { protectedResourceMetadata, resourceOrigin } from '../../../logic/auth.js';
-import { authErrors, MCP_PRM_PATH, PRM_WELL_KNOWN_PATH, READ_SCOPE } from '../../../models/auth.js';
+import { protectedResourceMetadata } from '../../../logic/auth/bearer.js';
+import { resourceOrigin } from '../../../logic/auth/origin.js';
+import { MCP_PRM_PATH, PRM_WELL_KNOWN_PATH } from '../../../models/auth/bearer.js';
+import { authErrors } from '../../../models/auth/errors.js';
+import { READ_SCOPE } from '../../../models/auth/scope.js';
 import { CACHE_CONTROL_NO_CACHE } from '../respond.js';
 
 /**

@@ -1,11 +1,5 @@
-import {
-  API_PATH_PREFIX,
-  CONNECT_PATH,
-  MCP_PATH,
-  MCP_PRM_PATH,
-  PRM_WELL_KNOWN_PATH,
-  UI_ROOT_PATH,
-} from '../../models/auth.js';
+import { API_PATH_PREFIX, MCP_PATH, MCP_PRM_PATH, PRM_WELL_KNOWN_PATH } from '../../models/auth/bearer.js';
+import { CONNECT_PATH, UI_ROOT_PATH } from '../../models/auth/origin.js';
 
 /** Route paths of the HTTP surface that authentication itself needs to name — one home, so the auth
  *  hook, the auth routes, the UI routes and the health route can never disagree on a literal. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isDatabaseAhead } from '../../../src/logic/migration.js';
-import { NPX_COMMAND, PACKAGE_NAME } from '../../../src/models/auth.js';
+import { NPX_COMMAND, PACKAGE_NAME } from '../../../src/models/package.js';
 import { databaseAheadMessage, STALE_GLOBAL_CHECK_COMMAND } from '../../../src/models/database.js';
 
 const NEWEST_KNOWN = 1_791_571_168_273;

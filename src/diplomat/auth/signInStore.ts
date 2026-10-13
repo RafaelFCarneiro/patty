@@ -1,6 +1,6 @@
 import type { SignInStore } from '../../controllers/deps.js';
 import { KeychainUnavailableError } from '../../common/keychain.js';
-import { KEYCHAIN_SERVICE } from '../../models/auth.js';
+import { KEYCHAIN_SERVICE } from '../../models/auth/signIn.js';
 
 /** The OS keychain, one entry per profile and database (ADR-034 §2). */
 

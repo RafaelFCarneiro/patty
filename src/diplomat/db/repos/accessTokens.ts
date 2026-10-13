@@ -1,6 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 import * as accessTokenAdapters from '../../../adapters/accessTokens.js';
-import type { AccessTokenEntity } from '../../../models/auth.js';
+import type { AccessTokenEntity } from '../../../models/auth/token.js';
 import type { Db } from '../driver.js';
 import { accessTokens } from '../schema.js';
 import { versionedTableApplier } from '../effects.js';

@@ -6,7 +6,9 @@ import { authInfoOf, principalOf } from '../../../../src/diplomat/mcp/authInfo.j
 import { authInfoGate, GateKind, ownerGate, type PrincipalGate } from '../../../../src/diplomat/mcp/gate.js';
 import { guardScopes, toolScopesOf } from '../../../../src/diplomat/mcp/scopes.js';
 import { buildMcpServer } from '../../../../src/diplomat/mcp/server.js';
-import { OWNER_PRINCIPAL, PrincipalVia, Scope, UserRole, type Principal } from '../../../../src/models/auth.js';
+import { UserRole } from '../../../../src/models/auth/owner.js';
+import { OWNER_PRINCIPAL, type Principal, PrincipalVia } from '../../../../src/models/auth/principal.js';
+import { Scope } from '../../../../src/models/auth/scope.js';
 
 const READ = Scope.enum['fintrack:read'];
 const WRITE = Scope.enum['fintrack:write'];

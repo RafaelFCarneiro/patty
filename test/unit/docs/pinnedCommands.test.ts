@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { NPX_COMMAND, PACKAGE_NAME, PACKAGE_SPEC } from '../../../src/models/auth.js';
+import { NPX_COMMAND, PACKAGE_NAME, PACKAGE_SPEC } from '../../../src/models/package.js';
 
 /**
  * `npx` prefers an installed copy over the registry's when it is given no version, so an unpinned command can run a

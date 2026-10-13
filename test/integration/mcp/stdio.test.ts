@@ -7,7 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { McpTransport } from '../../../src/config.js';
-import { AuthMode } from '../../../src/models/auth.js';
+import { AuthMode } from '../../../src/models/auth/mode.js';
 import { callTool } from './helpers.js';
 
 // Fixed 64-char hex key — never touches the OS keychain

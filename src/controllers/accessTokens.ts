@@ -3,8 +3,8 @@ import * as R from 'remeda';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { AppError } from '../common/errors.js';
 import { okOr } from '../common/result.js';
+import { canLogin } from '../logic/auth/password.js';
 import {
-  canLogin,
   evaluateToken,
   newAccessToken,
   revokedToken,
@@ -12,18 +12,17 @@ import {
   tokenDisplayPrefix,
   tokenPrincipal,
   usedToken,
-} from '../logic/auth.js';
+} from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
+import { ACCESS_TOKEN_ENTITY_TAG } from '../models/auth/entity.js';
+import { authErrors } from '../models/auth/errors.js';
+import { type Principal, PrincipalVia } from '../models/auth/principal.js';
 import {
-  ACCESS_TOKEN_ENTITY_TAG,
   AccessTokenKind,
-  authErrors,
-  PrincipalVia,
   type AccessTokenSummary,
-  type CreatedAccessToken,
   type CreateTokenInput,
-  type Principal,
-} from '../models/auth.js';
+  type CreatedAccessToken,
+} from '../models/auth/token.js';
 import type { AuthDeps } from './deps.js';
 
 /** Mint a personal access token for `userId` (ADR-033 §3) after re-checking their password (step-up: a script in

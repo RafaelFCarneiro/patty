@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { IPV4_WILDCARD_HOST, IPV6_WILDCARD_HOST, LOOPBACK_HOST } from '../../src/common/net.js';
 import { loadConfig } from '../../src/config.js';
-import { AuthMode, DEFAULT_PROFILE } from '../../src/models/auth.js';
+import { AuthMode } from '../../src/models/auth/mode.js';
+import { DEFAULT_PROFILE } from '../../src/models/auth/signIn.js';
 
 const ORIGINAL_ENV = { ...process.env };
 const AUTH_VARS = [

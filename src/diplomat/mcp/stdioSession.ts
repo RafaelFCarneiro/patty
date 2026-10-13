@@ -4,17 +4,13 @@ import { authenticateToken, revokeSignInByHash } from '../../controllers/accessT
 import type { AuthDeps, RunEffects, SignInServer, SignInStore } from '../../controllers/deps.js';
 import { ownerNeedsSetup } from '../../controllers/auth.js';
 import { redeemGrant, startGrant } from '../../controllers/grants.js';
-import { isTokenShaped, notSignedInMessage, persistsToKeychain } from '../../logic/auth.js';
-import {
-  GRANT_POLL_INTERVAL_MS,
-  GrantChannel,
-  PrincipalVia,
-  RedeemKind,
-  STDIO_MESSAGES,
-  type ClientInfo,
-  type Principal,
-  type SignedIn,
-} from '../../models/auth.js';
+import { persistsToKeychain } from '../../logic/auth/grant.js';
+import { notSignedInMessage } from '../../logic/auth/message.js';
+import { isTokenShaped } from '../../logic/auth/token.js';
+import { type ClientInfo, GrantChannel, RedeemKind, type SignedIn } from '../../models/auth/grant.js';
+import { STDIO_MESSAGES } from '../../models/auth/message.js';
+import { type Principal, PrincipalVia } from '../../models/auth/principal.js';
+import { GRANT_POLL_INTERVAL_MS } from '../../models/auth/signIn.js';
 import { clientInfoOf } from '../../wire/in/auth.js';
 import { GateKind, type GateOutcome } from './gate.js';
 

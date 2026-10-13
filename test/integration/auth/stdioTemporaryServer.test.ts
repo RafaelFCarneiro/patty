@@ -2,7 +2,7 @@ import { errAsync } from 'neverthrow';
 import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { conflict } from '../../../src/models/error.js';
-import { STDIO_MESSAGES } from '../../../src/models/auth.js';
+import { STDIO_MESSAGES } from '../../../src/models/auth/message.js';
 import {
   answerAt,
   approveConnect,

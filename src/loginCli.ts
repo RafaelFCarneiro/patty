@@ -6,20 +6,15 @@ import { formatAppError } from './common/errors.js';
 import { ownerNeedsSetup } from './controllers/auth.js';
 import { revokeSignInByHash } from './controllers/accessTokens.js';
 import { redeemGrant, startGrant } from './controllers/grants.js';
-import { connectUrl, hasScope } from './logic/auth.js';
-import {
-  AUTH_ENV_VAR,
-  AUTH_MESSAGES,
-  CLI_CLIENT_NAME,
-  GRANT_POLL_INTERVAL_MS,
-  GrantChannel,
-  NPX_COMMAND,
-  RedeemKind,
-  TOKEN_ENV_VAR,
-  TokenAccess,
-  WRITE_SCOPE,
-  type SignedIn,
-} from './models/auth.js';
+import { connectUrl } from './logic/auth/origin.js';
+import { hasScope } from './logic/auth/scope.js';
+import { GrantChannel, RedeemKind, type SignedIn } from './models/auth/grant.js';
+import { AUTH_MESSAGES } from './models/auth/message.js';
+import { AUTH_ENV_VAR } from './models/auth/mode.js';
+import { WRITE_SCOPE } from './models/auth/scope.js';
+import { CLI_CLIENT_NAME, GRANT_POLL_INTERVAL_MS, TOKEN_ENV_VAR } from './models/auth/signIn.js';
+import { TokenAccess } from './models/auth/token.js';
+import { NPX_COMMAND } from './models/package.js';
 import { LoginOptionsSchema, LogoutOptionsSchema, type LoginOptions } from './wire/in/cli.js';
 
 export const LOGIN_MESSAGES = {

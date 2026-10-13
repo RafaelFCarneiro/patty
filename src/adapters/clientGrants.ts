@@ -1,5 +1,6 @@
 import * as persistence from '../logic/persistence.js';
-import { CLIENT_GRANT_ENTITY_TAG, ClientGrantEntitySchema, type ClientGrantEntity } from '../models/auth.js';
+import { CLIENT_GRANT_ENTITY_TAG } from '../models/auth/entity.js';
+import { type ClientGrantEntity, ClientGrantEntitySchema } from '../models/auth/grant.js';
 import type { ClientGrantRow } from '../wire/db/clientGrants.js';
 
 export const dbToModel = (row: ClientGrantRow): ClientGrantEntity => ClientGrantEntitySchema.parse(row);

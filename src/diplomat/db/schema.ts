@@ -11,15 +11,10 @@ import {
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import {
-  AccessTokenKind,
-  GrantChannel,
-  GrantStatus,
-  type Scope,
-  type SignInDuration,
-  type TokenAccess,
-  UserRole,
-} from '../../models/auth.js';
+import { GrantChannel, GrantStatus, type SignInDuration } from '../../models/auth/grant.js';
+import { UserRole } from '../../models/auth/owner.js';
+import { type Scope } from '../../models/auth/scope.js';
+import { AccessTokenKind, type TokenAccess } from '../../models/auth/token.js';
 import { BudgetPeriod } from '../../models/budget.js';
 import { DashboardSource } from '../../models/dashboard.js';
 import { Locale, LocaleSource } from '../../models/locale.js';

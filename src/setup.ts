@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from './common/cli.js';
-import { DEFAULT_PROFILE, NPX_COMMAND, PACKAGE_SPEC, PROFILE_ENV_VAR } from './models/auth.js';
+import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from './models/auth/signIn.js';
+import { NPX_COMMAND, PACKAGE_SPEC } from './models/package.js';
 
 // ---------------------------------------------------------------------------
 // Shared MCP entry shapes

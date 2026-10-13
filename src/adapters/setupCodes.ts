@@ -1,5 +1,6 @@
 import * as persistence from '../logic/persistence.js';
-import { SETUP_CODE_ENTITY_TAG, SetupCodeEntitySchema, type SetupCodeEntity } from '../models/auth.js';
+import { SETUP_CODE_ENTITY_TAG } from '../models/auth/entity.js';
+import { type SetupCodeEntity, SetupCodeEntitySchema } from '../models/auth/owner.js';
 import type { SetupCodeRow } from '../wire/db/setupCodes.js';
 
 export const dbToModel = (row: SetupCodeRow): SetupCodeEntity => SetupCodeEntitySchema.parse(row);

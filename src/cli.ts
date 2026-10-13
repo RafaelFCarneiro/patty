@@ -11,7 +11,7 @@ import {
 import { CliCommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG, SETUP_POSITIONALS } from './common/cli.js';
 import { DatabaseAheadError } from './diplomat/db/versionGuard.js';
 import { offerSignIn, runLogin, runLogout } from './loginCli.js';
-import { NPX_COMMAND } from './models/auth.js';
+import { NPX_COMMAND } from './models/package.js';
 import { runGuidedSetup } from './setup.js';
 import { SetupOptionsSchema } from './wire/in/cli.js';
 

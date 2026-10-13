@@ -4,7 +4,7 @@ import { AggregateSpendingInputSchema } from '../../../wire/in/aggregate.js';
 import type { HttpContext } from '../context.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, notFound404, parse, send, validation422 } from '../respond.js';
-import { READ_SCOPE } from '../../../models/auth.js';
+import { READ_SCOPE } from '../../../models/auth/scope.js';
 
 const AGGREGATE_TAG = 'Aggregate';
 

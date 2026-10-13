@@ -1,13 +1,9 @@
 import { z } from 'zod';
 import { PASSWORD_STDIN_FLAG } from '../../common/cli.js';
-import {
-  DEFAULT_PROFILE,
-  LoginDuration,
-  normalizeUsername,
-  ProfileSchema,
-  TokenAccess,
-  UsernameSchema,
-} from '../../models/auth.js';
+import { LoginDuration } from '../../models/auth/grant.js';
+import { UsernameSchema, normalizeUsername } from '../../models/auth/password.js';
+import { DEFAULT_PROFILE, ProfileSchema } from '../../models/auth/signIn.js';
+import { TokenAccess } from '../../models/auth/token.js';
 
 const OPTION_MAX_LENGTH = 256;
 

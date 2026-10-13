@@ -5,7 +5,7 @@ import { httpOrigin, LOCALHOST_NAME } from './common/net.js';
 import { McpTransport, type Config } from './config.js';
 import type { SignInServer } from './controllers/deps.js';
 import type { Db } from './diplomat/db/driver.js';
-import { AuthMode } from './models/auth.js';
+import { AuthMode } from './models/auth/mode.js';
 import { createRuntime } from './runtime.js';
 
 /** Lazy: Fastify and the whole route table load only when a login actually needs to serve the consent page. */

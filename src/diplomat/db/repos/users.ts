@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import * as userAdapters from '../../../adapters/users.js';
-import type { UserEntity } from '../../../models/auth.js';
+import type { UserEntity } from '../../../models/auth/owner.js';
 import type { Db } from '../driver.js';
 import { users } from '../schema.js';
 import { versionedTableApplier } from '../effects.js';

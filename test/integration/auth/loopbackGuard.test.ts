@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LOOPBACK_HOST } from '../../../src/common/net.js';
-import { AUTH_MESSAGES } from '../../../src/models/auth.js';
+import { AUTH_MESSAGES } from '../../../src/models/auth/message.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 import { concreteUrl, registeredRoutes } from './helpers.js';
 

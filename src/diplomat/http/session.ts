@@ -2,7 +2,8 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { httpStatus, type AppError } from '../../common/errors.js';
 import { authenticate } from '../../controllers/auth.js';
 import { authenticateToken } from '../../controllers/accessTokens.js';
-import { authErrors, PrincipalVia, type Principal } from '../../models/auth.js';
+import { authErrors } from '../../models/auth/errors.js';
+import { type Principal, PrincipalVia } from '../../models/auth/principal.js';
 import type { AuthRoutesContext } from './context.js';
 import { readCookie, SESSION_COOKIE_NAME } from './cookies.js';
 

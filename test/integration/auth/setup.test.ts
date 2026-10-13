@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { issueSetupCode } from '../../../src/controllers/auth.js';
 import { prepareAuth } from '../../../src/authRuntime.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
-import { AuthMode, OWNER_USER_ID, TERMINAL_SETUP_HINT } from '../../../src/models/auth.js';
+import { TERMINAL_SETUP_HINT } from '../../../src/models/auth/message.js';
+import { AuthMode } from '../../../src/models/auth/mode.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { REQUIRED_AUTH } from '../app-builder.js';
 import {
   authDepsOf,

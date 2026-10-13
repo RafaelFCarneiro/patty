@@ -1,6 +1,7 @@
 import * as R from 'remeda';
-import { SignInDuration, TokenAccess, type GrantChoice, type GrantRequest } from '../../models/auth.js';
-import { durationAllowedFor, sessionOnlyLabel } from '../../logic/auth.js';
+import { type GrantChoice, type GrantRequest, SignInDuration } from '../../models/auth/grant.js';
+import { TokenAccess } from '../../models/auth/token.js';
+import { durationAllowedFor, sessionOnlyLabel } from '../../logic/auth/grant.js';
 import { ACCESS_LABEL, errorBlock, escapeHtml, fillTemplate, formatMinute } from './authPages.js';
 import { CONNECT_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from './authPaths.js';
 import { readCached, UI_ROOT } from './uiFiles.js';

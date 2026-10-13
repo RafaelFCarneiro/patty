@@ -5,7 +5,8 @@ import { AUTH_POSITIONALS, EXIT_FAILURE, EXIT_OK, SETUP_POSITIONALS } from '../.
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
 import { PROMPT_MESSAGES } from '../../../src/diplomat/cli/prompt.js';
 import { accessTokens, sessions, users } from '../../../src/diplomat/db/schema.js';
-import { DEFAULT_PROFILE, OWNER_USER_ID, UserRole } from '../../../src/models/auth.js';
+import { OWNER_USER_ID, UserRole } from '../../../src/models/auth/owner.js';
+import { DEFAULT_PROFILE } from '../../../src/models/auth/signIn.js';
 import type { AppContext } from '../app-builder.js';
 import {
   authDepsOf,

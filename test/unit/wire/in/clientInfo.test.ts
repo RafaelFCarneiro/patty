@@ -4,7 +4,7 @@ import {
   CLIENT_VERSION_MAX_LENGTH,
   UNKNOWN_CLIENT_NAME,
   UNKNOWN_CLIENT_VERSION,
-} from '../../../../src/models/auth.js';
+} from '../../../../src/models/auth/signIn.js';
 import { clientInfoOf, ConnectFormSchema, ConnectQuerySchema } from '../../../../src/wire/in/auth.js';
 
 describe('clientInfoOf — what the spawning program says about itself is cleaned, not trusted', () => {

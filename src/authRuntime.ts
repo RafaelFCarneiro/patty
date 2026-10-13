@@ -14,15 +14,15 @@ import { setupCodeApplier, setupCodesRepo } from './diplomat/db/repos/setupCodes
 import { userApplier, usersRepo } from './diplomat/db/repos/users.js';
 import { SETUP_PATH } from './diplomat/http/authPaths.js';
 import { DISABLED_AUTH, type HttpAuth } from './diplomat/http/context.js';
-import { setupBanner } from './logic/auth.js';
+import { setupBanner } from './logic/auth/message.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
-  AuthMode,
   CLIENT_GRANT_ENTITY_TAG,
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
   USER_ENTITY_TAG,
-} from './models/auth.js';
+} from './models/auth/entity.js';
+import { AuthMode } from './models/auth/mode.js';
 
 /**
  * Lazily imports the credential primitives so `@node-rs/argon2`'s native module is never loaded unless

@@ -14,7 +14,7 @@ import { DeletedOut } from '../../../wire/out/common.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, invalidQueryResponse, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
-import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const CATEGORIES_TAG = 'Categories';
 

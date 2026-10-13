@@ -1,6 +1,6 @@
 import { and, desc, eq, lte, ne } from 'drizzle-orm';
 import * as clientGrantAdapters from '../../../adapters/clientGrants.js';
-import { GrantStatus, type ClientGrantEntity } from '../../../models/auth.js';
+import { type ClientGrantEntity, GrantStatus } from '../../../models/auth/grant.js';
 import type { Db } from '../driver.js';
 import { clientGrants } from '../schema.js';
 import { isUniqueConstraintViolation } from '../sqliteErrors.js';

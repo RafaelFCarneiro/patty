@@ -1,4 +1,4 @@
-import { SESSION_ABSOLUTE_MAX_MS } from '../../models/auth.js';
+import { SESSION_ABSOLUTE_MAX_MS } from '../../models/auth/session.js';
 
 /** The browser session cookie (ADR-033 §2). One name, used by the hook that reads it and the routes that
  *  set and clear it. */

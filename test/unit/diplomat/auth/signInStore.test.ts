@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KeychainUnavailableError } from '../../../../src/common/keychain.js';
-import { KEYCHAIN_SERVICE } from '../../../../src/models/auth.js';
+import { KEYCHAIN_SERVICE } from '../../../../src/models/auth/signIn.js';
 
 const keyring = vi.hoisted(() => {
   const state = { password: null as string | null, constructed: [] as Array<[string, string]>, failing: false };

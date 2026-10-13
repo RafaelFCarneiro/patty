@@ -34,7 +34,7 @@ import {
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
   USER_ENTITY_TAG,
-} from '../../src/models/auth.js';
+} from '../../src/models/auth/entity.js';
 import { ACCOUNT_ENTITY_TAG } from '../../src/models/account.js';
 import { BILL_ENTITY_TAG } from '../../src/models/bill.js';
 import { BUDGET_ENTITY_TAG } from '../../src/models/budget.js';
@@ -53,7 +53,7 @@ import { prepareAuth, type AuthConfig } from '../../src/authRuntime.js';
 import type { HttpAuth } from '../../src/diplomat/http/context.js';
 import { DISABLED_AUTH } from '../../src/diplomat/http/context.js';
 import { buildHttpApp, registerHttpApp } from '../../src/server.js';
-import { AuthMode } from '../../src/models/auth.js';
+import { AuthMode } from '../../src/models/auth/mode.js';
 import type { Db } from '../../src/diplomat/db/driver.js';
 import type { ApplierRegistry } from '../../src/diplomat/db/effects.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';

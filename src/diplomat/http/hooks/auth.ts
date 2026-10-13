@@ -1,23 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { ownerNeedsSetup } from '../../../controllers/auth.js';
-import {
-  acceptsBearer,
-  credentialOf,
-  csrfVerdict,
-  defaultScopeForMethod,
-  hasScope,
-  isLoopbackRequest,
-  preSessionCsrfVerdict,
-} from '../../../logic/auth.js';
-import {
-  AuthMode,
-  authErrors,
-  isUiPath,
-  OWNER_PRINCIPAL,
-  type CsrfRequest,
-  type Principal,
-} from '../../../models/auth.js';
+import { acceptsBearer, credentialOf } from '../../../logic/auth/bearer.js';
+import { csrfVerdict, isLoopbackRequest, preSessionCsrfVerdict } from '../../../logic/auth/origin.js';
+import { defaultScopeForMethod, hasScope } from '../../../logic/auth/scope.js';
+import { authErrors } from '../../../models/auth/errors.js';
+import { AuthMode } from '../../../models/auth/mode.js';
+import { type CsrfRequest, isUiPath } from '../../../models/auth/origin.js';
+import { OWNER_PRINCIPAL, type Principal } from '../../../models/auth/principal.js';
 import { safeNextPath } from '../../../wire/in/auth.js';
 import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from '../authPaths.js';
 import type { HttpAuth } from '../context.js';

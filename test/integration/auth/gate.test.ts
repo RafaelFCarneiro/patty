@@ -1,7 +1,10 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 import { PUBLIC_ROUTES } from '../../../src/diplomat/http/authPaths.js';
-import { ALL_SCOPES, AuthMode, OWNER_PRINCIPAL, PrincipalVia, UserRole } from '../../../src/models/auth.js';
+import { AuthMode } from '../../../src/models/auth/mode.js';
+import { UserRole } from '../../../src/models/auth/owner.js';
+import { OWNER_PRINCIPAL, PrincipalVia } from '../../../src/models/auth/principal.js';
+import { ALL_SCOPES } from '../../../src/models/auth/scope.js';
 import {
   claimOwner,
   FORM_HEADERS,

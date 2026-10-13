@@ -6,7 +6,8 @@ import { version } from './common/buildVersion.js';
 import { formatAppError } from './common/errors.js';
 import { AUTH_POSITIONALS, AuthSubcommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from './common/cli.js';
 import { loadConfig } from './config.js';
-import { claimRaceWinner, dbIdOf, keychainAccount, planOwnerClaim } from './logic/auth.js';
+import { dbIdOf, keychainAccount } from './logic/auth/keychain.js';
+import { claimRaceWinner, planOwnerClaim } from './logic/auth/owner.js';
 import { claimedOwnerOf, claimOwnerLocally, findResetTarget, resetPassword } from './controllers/auth.js';
 import type { AuthDeps, RunEffects, SignInServer, SignInStore } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
@@ -15,7 +16,9 @@ import { createEngineContext } from './diplomat/db/engine.js';
 import { collectNewCredentials, collectNewPassword, PROMPT_MESSAGES, type PromptIo } from './diplomat/cli/prompt.js';
 import * as tty from './diplomat/cli/terminal.js';
 import { keychainSignInStore } from './diplomat/auth/signInStore.js';
-import { AuthMode, NPX_COMMAND, type PasswordReset } from './models/auth.js';
+import { AuthMode } from './models/auth/mode.js';
+import { type PasswordReset } from './models/auth/password.js';
+import { NPX_COMMAND } from './models/package.js';
 import { ClaimOptionsSchema, ResetOptionsSchema, type ClaimOptions, type ResetOptions } from './wire/in/cli.js';
 
 /**

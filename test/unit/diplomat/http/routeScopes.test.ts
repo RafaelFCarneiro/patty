@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../../../src/controllers/deps.js';
 import { buildRouteDefinitions } from '../../../../src/diplomat/http/routes.js';
-import { defaultScopeForMethod } from '../../../../src/logic/auth.js';
-import { READ_SCOPE, Scope, WRITE_SCOPE } from '../../../../src/models/auth.js';
+import { defaultScopeForMethod } from '../../../../src/logic/auth/scope.js';
+import { READ_SCOPE, Scope, WRITE_SCOPE } from '../../../../src/models/auth/scope.js';
 
 const definitions = buildRouteDefinitions(
   {} as Deps,

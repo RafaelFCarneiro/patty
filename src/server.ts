@@ -4,7 +4,7 @@ import type { ChangeBus } from '@rfc0/effect-runner';
 import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from './common/net.js';
 import type { Deps, RunEffects, RunEffectsSequence } from './controllers/deps.js';
 import { DISABLED_AUTH, type HttpAuth } from './diplomat/http/context.js';
-import { AuthMode } from './models/auth.js';
+import { AuthMode } from './models/auth/mode.js';
 import { registerAuthHook } from './diplomat/http/hooks/auth.js';
 import { registerRoutes } from './diplomat/http/routes.js';
 import { registerMcpRoute } from './diplomat/mcp/route.js';

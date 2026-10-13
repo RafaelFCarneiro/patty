@@ -10,7 +10,9 @@ import { loadConfig } from '../../../src/config.js';
 import type { Terminal } from '../../../src/diplomat/cli/terminal.js';
 import { LOGIN_MESSAGES, offerSignIn, runLogin, runLogout } from '../../../src/loginCli.js';
 import { conflict } from '../../../src/models/error.js';
-import { AUTH_MESSAGES, GRANT_POLL_INTERVAL_MS, NPX_COMMAND } from '../../../src/models/auth.js';
+import { AUTH_MESSAGES } from '../../../src/models/auth/message.js';
+import { GRANT_POLL_INTERVAL_MS } from '../../../src/models/auth/signIn.js';
+import { NPX_COMMAND } from '../../../src/models/package.js';
 import { startSignInServer } from '../../../src/signInServer.js';
 import type { AppContext } from '../app-builder.js';
 import {

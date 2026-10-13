@@ -12,19 +12,18 @@ import {
   redeemGrant,
   startGrant,
 } from '../../../src/controllers/grants.js';
-import { sessionPrincipal, tokenPrincipal } from '../../../src/logic/auth.js';
+import { sessionPrincipal } from '../../../src/logic/auth/session.js';
+import { tokenPrincipal } from '../../../src/logic/auth/token.js';
+import { authErrors } from '../../../src/models/auth/errors.js';
 import {
-  AccessTokenKind,
-  authErrors,
   CLIENT_GRANT_TTL_MS,
   GrantChannel,
-  OWNER_PRINCIPAL,
-  OWNER_USER_ID,
-  PrincipalVia,
-  type Principal,
   type RedeemResult,
   type StartGrantInput,
-} from '../../../src/models/auth.js';
+} from '../../../src/models/auth/grant.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { OWNER_PRINCIPAL, type Principal, PrincipalVia } from '../../../src/models/auth/principal.js';
+import { AccessTokenKind } from '../../../src/models/auth/token.js';
 import { conflict } from '../../../src/models/error.js';
 import { authDepsOf, bearer, claimOwner, movableClock, useAuthApp } from './helpers.js';
 

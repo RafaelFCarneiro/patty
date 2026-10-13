@@ -7,7 +7,7 @@ import {
   type PromptIo,
 } from '../../../../src/diplomat/cli/prompt.js';
 import type { Terminal } from '../../../../src/diplomat/cli/terminal.js';
-import { PASSWORD_MIN_LENGTH } from '../../../../src/models/auth.js';
+import { PASSWORD_MIN_LENGTH } from '../../../../src/models/auth/password.js';
 
 const GOOD_PASSWORD = 'correct horse battery staple';
 

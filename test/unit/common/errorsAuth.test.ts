@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatAppError, httpStatus, type AppError } from '../../../src/common/errors.js';
-import { AUTH_MESSAGES, authErrors } from '../../../src/models/auth.js';
+import { authErrors } from '../../../src/models/auth/errors.js';
+import { AUTH_MESSAGES } from '../../../src/models/auth/message.js';
 
 describe('auth errors', () => {
   const CASES: Array<[AppError, number, string]> = [

@@ -10,8 +10,9 @@ import { startSignInServer } from '../../../src/signInServer.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
 import { createStdioSession, type StdioSession } from '../../../src/diplomat/mcp/stdioSession.js';
 import type { GateOutcome } from '../../../src/diplomat/mcp/gate.js';
-import type { SignInDuration, TokenAccess } from '../../../src/models/auth.js';
-import { AuthMode } from '../../../src/models/auth.js';
+import type { SignInDuration } from '../../../src/models/auth/grant.js';
+import type { TokenAccess } from '../../../src/models/auth/token.js';
+import { AuthMode } from '../../../src/models/auth/mode.js';
 import { SESSION_COOKIE_NAME } from '../../../src/diplomat/http/cookies.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 

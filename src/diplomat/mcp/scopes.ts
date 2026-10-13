@@ -1,8 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { formatAppError } from '../../common/errors.js';
-import { hasScope, scopeOfTool } from '../../logic/auth.js';
-import { authErrors, READ_SCOPE, type Scope } from '../../models/auth.js';
+import { hasScope, scopeOfTool } from '../../logic/auth/scope.js';
+import { authErrors } from '../../models/auth/errors.js';
+import { READ_SCOPE, type Scope } from '../../models/auth/scope.js';
 import { GateKind, type GateOutcome, type PrincipalGate } from './gate.js';
 import { jsonError, textError } from './respond.js';
 

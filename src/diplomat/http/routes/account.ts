@@ -35,7 +35,7 @@ import {
   send,
   validation422,
 } from '../respond.js';
-import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const ACCOUNTS_TAG = 'Accounts';
 

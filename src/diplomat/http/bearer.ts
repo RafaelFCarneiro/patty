@@ -1,7 +1,8 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { httpStatus } from '../../common/errors.js';
-import { bearerChallenge, resourceMetadataUrl, resourceOrigin } from '../../logic/auth.js';
-import type { ChallengeableError } from '../../models/auth.js';
+import { bearerChallenge, resourceMetadataUrl } from '../../logic/auth/bearer.js';
+import { resourceOrigin } from '../../logic/auth/origin.js';
+import type { ChallengeableError } from '../../models/auth/errors.js';
 
 const WWW_AUTHENTICATE = 'www-authenticate';
 

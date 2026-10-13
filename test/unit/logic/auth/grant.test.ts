@@ -1,59 +1,43 @@
 import { describe, expect, it } from 'vitest';
 import {
   approvedGrant,
-  connectUrl,
   consentChoice,
-  dbIdOf,
   deniedGrant,
   durationAllowedFor,
-  evaluateToken,
   expiredGrant,
   formatUserCode,
   grantRequestOf,
-  isActiveUser,
   isAnswerable,
-  isTokenShaped,
-  keychainAccount,
   newGrant,
   newStdioSignIn,
   normalizeUserCode,
-  notSignedInMessage,
   persistsToKeychain,
-  redeemedGrant,
   redeemPlan,
+  redeemedGrant,
   sessionOnlyLabel,
   signInExpiry,
-  signInOrigin,
   supersededGrants,
-  summarizeToken,
-  tokenAdmitsVia,
-  tokenPrincipal,
-} from '../../../src/logic/auth.js';
+} from '../../../../src/logic/auth/grant.js';
 import {
-  AccessTokenKind,
   CLIENT_GRANT_TTL_MS,
   GrantChannel,
   GrantStatus,
   MAX_SIGN_IN_DURATION_MS,
-  NPX_COMMAND,
-  PrincipalVia,
   SESSION_SIGN_IN_CAP_MS,
   SIGN_IN_DURATION_MS,
   SignInDuration,
-  STDIO_MESSAGES,
-  TOKEN_NAME_MAX_LENGTH,
-  UNKNOWN_CLIENT_NAME,
-  UserRole,
-  type AccessTokenEntity,
   type ClientGrantEntity,
-  type UserEntity,
-} from '../../../src/models/auth.js';
+} from '../../../../src/models/auth/grant.js';
+import { UNKNOWN_CLIENT_NAME } from '../../../../src/models/auth/signIn.js';
+import { AccessTokenKind, TOKEN_NAME_MAX_LENGTH } from '../../../../src/models/auth/token.js';
+
+const HOUR_MS = 60 * 60 * 1000;
+
+const READ = 'fintrack:read' as const;
 
 const NOW = new Date('2026-10-11T12:00:00.000Z');
-const HOUR_MS = 60 * 60 * 1000;
+
 const MINUTE_MS = 60 * 1000;
-const READ = 'fintrack:read' as const;
-const WRITE = 'fintrack:write' as const;
 
 const pendingGrant = (overrides: Partial<ClientGrantEntity> = {}): ClientGrantEntity => ({
   ...newGrant(
@@ -82,16 +66,7 @@ const approved = (overrides: Partial<ClientGrantEntity> = {}): ClientGrantEntity
   ...overrides,
 });
 
-const owner = (overrides: Partial<UserEntity> = {}): UserEntity => ({
-  id: 'user-owner',
-  username: 'rafael',
-  passwordHash: 'hash',
-  role: UserRole.enum.admin,
-  createdAt: NOW.toISOString(),
-  disabledAt: null,
-  version: 1,
-  ...overrides,
-});
+const WRITE = 'fintrack:write' as const;
 
 describe('signInExpiry — absolute from approval, never past the maximum', () => {
   const approvedAt = '2026-10-11T12:00:00.000Z';
@@ -316,163 +291,11 @@ describe('the sign-in token a redeemed grant becomes', () => {
   });
 });
 
-describe('who a token may act for', () => {
-  const stdioToken = (overrides: Partial<AccessTokenEntity> = {}): AccessTokenEntity => ({
-    id: 't1',
-    userId: 'user-owner',
-    kind: AccessTokenKind.enum.stdio,
-    clientName: 'Claude Desktop',
-    profile: 'default',
-    name: 'Claude Desktop (default)',
-    tokenHash: 'sha(x)',
-    prefix: 'ftk_abcdef',
-    scopes: [READ],
-    createdAt: NOW.toISOString(),
-    lastUsedAt: null,
-    expiresAt: new Date(NOW.getTime() + HOUR_MS).toISOString(),
-    revokedAt: null,
-    version: 0,
-    ...overrides,
-  });
-
-  it('admits a stdio sign-in only on the stdio channel, and a personal access token everywhere', () => {
-    expect(tokenAdmitsVia(stdioToken(), PrincipalVia.enum.stdio)).toBe(true);
-    expect(tokenAdmitsVia(stdioToken(), PrincipalVia.enum.token)).toBe(false);
-    expect(tokenAdmitsVia(stdioToken({ kind: AccessTokenKind.enum.pat }), PrincipalVia.enum.token)).toBe(true);
-    expect(tokenAdmitsVia(stdioToken({ kind: AccessTokenKind.enum.pat }), PrincipalVia.enum.stdio)).toBe(true);
-  });
-
-  it('judges a stdio sign-in valid on stdio and invalid when presented over HTTP', () => {
-    expect(evaluateToken(stdioToken(), owner(), NOW, PrincipalVia.enum.stdio).kind).toBe('valid');
-    expect(evaluateToken(stdioToken(), owner(), NOW).kind).toBe('invalid');
-  });
-
-  it('turns an expired or revoked sign-in invalid on the next look', () => {
-    const later = new Date(NOW.getTime() + 2 * HOUR_MS);
-    expect(evaluateToken(stdioToken(), owner(), later, PrincipalVia.enum.stdio).kind).toBe('invalid');
-    expect(
-      evaluateToken(stdioToken({ revokedAt: NOW.toISOString() }), owner(), NOW, PrincipalVia.enum.stdio).kind,
-    ).toBe('invalid');
-  });
-
-  it('acts as the channel it arrived on, with the token’s own scopes', () => {
-    expect(tokenPrincipal(stdioToken(), owner(), PrincipalVia.enum.stdio)).toEqual({
-      userId: 'user-owner',
-      role: UserRole.enum.admin,
-      scopes: [READ],
-      via: 'stdio',
-      tokenId: 't1',
-    });
-    expect(tokenPrincipal(stdioToken({ kind: AccessTokenKind.enum.pat }), owner()).via).toBe('token');
-  });
-
-  it('lists the client and profile of a sign-in, never its hash', () => {
-    const summary = summarizeToken(stdioToken(), NOW);
-    expect(summary).toMatchObject({
-      kind: 'stdio',
-      clientName: 'Claude Desktop',
-      profile: 'default',
-      status: 'active',
-    });
-    expect(summary).not.toHaveProperty('tokenHash');
-  });
-
-  it('only mints for a user who holds credentials and is not disabled', () => {
-    expect(isActiveUser(owner())).toBe(true);
-    expect(isActiveUser(owner({ passwordHash: null }))).toBe(false);
-    expect(isActiveUser(owner({ disabledAt: NOW.toISOString() }))).toBe(false);
-    expect(isActiveUser(null)).toBe(false);
-  });
-});
-
-describe('keychain account and token shape', () => {
-  it('keeps the first twelve characters of the database path hash', () => {
-    expect(dbIdOf('0123456789abcdef0123')).toBe('0123456789ab');
-  });
-
-  it('names the account signin:<profile>:<dbId>, so two databases or profiles never share one', () => {
-    expect(keychainAccount('default', 'aaaaaaaaaaaa')).toBe('signin:default:aaaaaaaaaaaa');
-    expect(keychainAccount('work', 'aaaaaaaaaaaa')).not.toBe(keychainAccount('work', 'bbbbbbbbbbbb'));
-    expect(keychainAccount('work', 'aaaaaaaaaaaa')).not.toBe(keychainAccount('home', 'aaaaaaaaaaaa'));
-  });
-
-  it('recognizes an ftk_ token of sane length and nothing else', () => {
-    expect(isTokenShaped('ftk_abcdef')).toBe(true);
-    expect(isTokenShaped('Bearer ftk_abc')).toBe(false);
-    expect(isTokenShaped('sk-secret')).toBe(false);
-    expect(isTokenShaped(`ftk_${'a'.repeat(300)}`)).toBe(false);
-  });
-});
-
-describe('notSignedInMessage', () => {
-  const ORIGIN = 'http://127.0.0.1:51737';
-
-  it('names the link and the code, and nothing but the user code travels in the URL', () => {
-    const message = notSignedInMessage({ origin: ORIGIN, userCode: 'ABCD-EFGH', ownerUnclaimed: false });
-    expect(message).toBe(
-      'FinTrack: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.',
-    );
-    expect(connectUrl(ORIGIN, 'ABCD-EFGH')).toBe('http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH');
-  });
-
-  it('points an unclaimed owner at the pinned setup command', () => {
-    const message = notSignedInMessage({ origin: ORIGIN, userCode: 'ABCD-EFGH', ownerUnclaimed: true });
-    expect(message).toContain(`Owner not set up yet? Run \`${NPX_COMMAND} auth setup\`.`);
-    expect(NPX_COMMAND).toBe('npx @rafaelfcarneiro/fintrack@latest');
-  });
-
-  it('without an HTTP server says to log in from a terminal or set FINTRACK_TOKEN, with no link', () => {
-    const message = notSignedInMessage({ origin: null, userCode: null, ownerUnclaimed: false });
-    expect(message).toBe(STDIO_MESSAGES.notSignedInWithoutHttp);
-    expect(message).toContain(`${NPX_COMMAND} login`);
-    expect(message).toContain('FINTRACK_TOKEN');
-    expect(message).not.toContain('/ui/connect');
-  });
-
-  it('has no unpinned npx command in any of its wording', () => {
-    const wording = [
-      STDIO_MESSAGES.notSignedInWithoutHttp,
-      STDIO_MESSAGES.ownerUnclaimedHint,
-      STDIO_MESSAGES.invalidEnvToken,
-    ].join('\n');
-    for (const [command] of wording.matchAll(/npx [^\s`]+/g))
-      expect(command).toBe('npx @rafaelfcarneiro/fintrack@latest');
-  });
-});
-
 describe('grantRequestOf never exposes secrets', () => {
   it('carries no hash or device code', () => {
     const request = grantRequestOf(pendingGrant());
     expect(JSON.stringify(request)).not.toContain('sha(device)');
     expect(request).not.toHaveProperty('deviceCodeHash');
-  });
-});
-
-describe('signInOrigin — what a stdio link may name from what the process already knows', () => {
-  const base = { httpEnabled: true, publicUrl: undefined, boundOrigin: null, host: '127.0.0.1' };
-
-  it('names nothing when there is no HTTP server', () => {
-    expect(signInOrigin({ ...base, httpEnabled: false, publicUrl: 'https://fin.example.com' })).toBeNull();
-  });
-
-  it('prefers PUBLIC_URL, then the origin THIS process bound', () => {
-    expect(signInOrigin({ ...base, publicUrl: 'https://fin.example.com', boundOrigin: 'http://127.0.0.1:1' })).toBe(
-      'https://fin.example.com',
-    );
-    expect(signInOrigin({ ...base, boundOrigin: 'http://127.0.0.1:54321' })).toBe('http://127.0.0.1:54321');
-  });
-
-  it('never falls back to the configured HOST:PORT — whatever listens there may have opened another database', () => {
-    expect(signInOrigin(base)).toBeNull();
-    expect(signInOrigin({ ...base, host: 'localhost' })).toBeNull();
-  });
-
-  it('names no non-loopback host without PUBLIC_URL — its POSTs would fail the CSRF origin check', () => {
-    expect(signInOrigin({ ...base, host: '0.0.0.0', boundOrigin: 'http://127.0.0.1:51737' })).toBeNull();
-    expect(signInOrigin({ ...base, host: 'fintrack.lan', boundOrigin: 'http://fintrack.lan:51737' })).toBeNull();
-    expect(signInOrigin({ ...base, host: '0.0.0.0', publicUrl: 'https://fin.example.com' })).toBe(
-      'https://fin.example.com',
-    );
   });
 });
 

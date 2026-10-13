@@ -1,16 +1,16 @@
 import * as R from 'remeda';
-import { hasScope } from '../../logic/auth.js';
+import { hasScope } from '../../logic/auth/scope.js';
+import { WRITE_SCOPE } from '../../models/auth/scope.js';
 import {
   AccessTokenKind,
+  type AccessTokenSummary,
   DEFAULT_TOKEN_EXPIRY,
   TOKEN_EXPIRY_DAYS,
   TOKEN_NAME_MAX_LENGTH,
   TokenAccess,
   TokenExpiry,
   TokenStatus,
-  WRITE_SCOPE,
-  type AccessTokenSummary,
-} from '../../models/auth.js';
+} from '../../models/auth/token.js';
 import { ACCESS_LABEL, errorBlock, escapeHtml, fillTemplate, formatMinute } from './authPages.js';
 import { TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from './authPaths.js';
 import { readCached, UI_ROOT } from './uiFiles.js';

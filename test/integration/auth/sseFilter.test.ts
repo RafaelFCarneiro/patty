@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LOOPBACK_HOST } from '../../../src/common/net.js';
 import { ACCOUNT_ENTITY_TAG } from '../../../src/models/account.js';
-import { SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from '../../../src/models/auth.js';
+import { SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from '../../../src/models/auth/entity.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 
 let tmpDir: string;
