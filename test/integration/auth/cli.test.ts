@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { okAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import { AUTH_HELP, parseClaimArgs, runAuthCommand } from '../../../src/diplomat/cli/commands/auth.js';
 import type { CliIo } from '../../../src/diplomat/cli/io.js';
@@ -39,21 +40,22 @@ const harness = (ctx: AppContext, input: { stdin?: string; terminal?: boolean } 
   const out: string[] = [];
   const err: string[] = [];
   const io: CliIo = {
-    openShell: async () => ({
-      deps: authDepsOf(ctx),
-      run: bindAuthRunEffects(ctx.runEffects),
-      close: () => undefined,
-      authRequired: true,
-      defaultProfile: DEFAULT_PROFILE,
-      signIn: () =>
-        createSignInInterpreter({
-          deps: authDepsOf(ctx),
-          run: bindAuthRunEffects(ctx.runEffects),
-          store: memoryStore(),
-          origin: () => null,
-          startPage: async () => ({ origin: LOOPBACK_ORIGIN, close: async () => undefined }),
-        }),
-    }),
+    openShell: () =>
+      okAsync({
+        deps: authDepsOf(ctx),
+        run: bindAuthRunEffects(ctx.runEffects),
+        close: () => undefined,
+        authRequired: true,
+        defaultProfile: DEFAULT_PROFILE,
+        signIn: () =>
+          createSignInInterpreter({
+            deps: authDepsOf(ctx),
+            run: bindAuthRunEffects(ctx.runEffects),
+            store: memoryStore(),
+            origin: () => null,
+            startPage: async () => ({ origin: LOOPBACK_ORIGIN, close: async () => undefined }),
+          }),
+      }),
     openTerminal: () => null,
     readPasswordFromStdin: async () => input.stdin ?? '',
     out: (line) => out.push(line),

@@ -644,7 +644,7 @@ describe('merchantSpendByCurrency', () => {
     expect(result).toEqual([{ currency: 'BRL', amount: 150 }]);
   });
 
-  it('equals the sum of every category group\'s categoryTotal from the actual shaped response', () => {
+  it("equals the sum of every category group's categoryTotal from the actual shaped response", () => {
     const rows = [
       merchantRow({ category: 'Food', merchantKey: 'a', spent: 60 }),
       merchantRow({ category: 'Food', merchantKey: 'b', spent: 40 }),

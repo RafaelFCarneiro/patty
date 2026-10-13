@@ -1,4 +1,5 @@
-import { KeychainUnavailableError } from '../../common/keychain.js';
+import { ok, type Result } from 'neverthrow';
+import type { KeychainFailure } from '../../models/auth/signIn.js';
 import { formatAppError } from '../../common/errors.js';
 import { authenticateToken, revokeSignInByHash } from '../../controllers/accessTokens.js';
 import { ownerNeedsSetup } from '../../controllers/auth.js';
@@ -56,12 +57,12 @@ export const createSignInInterpreter = (options: SignInInterpreterOptions): Sign
     await server?.close().catch(() => undefined);
   };
 
-  // An unreadable keychain is `KeychainUnavailableError`: whether it counts as "nothing saved" is the protocol's call
-  // (`tolerateUnreadable`); any other failure is not ours to swallow.
-  const loadSaved = (tolerateUnreadable: boolean): Promise<string | null> =>
-    store.load().catch((cause: unknown) => {
-      return tolerateUnreadable && cause instanceof KeychainUnavailableError ? null : Promise.reject(cause);
-    });
+  // An unreadable keychain is a `KeychainFailure`: whether it counts as "nothing saved" is the protocol's call
+  // (`tolerateUnreadable`); when it does not, the failure is reported back as an observation.
+  const loadSaved = async (tolerateUnreadable: boolean): Promise<Result<string | null, KeychainFailure>> => {
+    const loaded = await store.load();
+    return loaded.isErr() && tolerateUnreadable ? ok(null) : loaded;
+  };
 
   const checkResult = async (token: string): Promise<CheckResult> => {
     const result = await run(() => authenticateToken(deps, deps.secrets.hashSecret(token), PrincipalVia.enum.stdio));
@@ -101,10 +102,16 @@ export const createSignInInterpreter = (options: SignInInterpreterOptions): Sign
           result: await checkResult(effect.token),
         };
       case E.load_saved:
-        return { kind: O.saved_loaded, purpose: effect.purpose, token: await loadSaved(effect.tolerateUnreadable) };
-      case E.clear_saved_if:
-        if ((await loadSaved(effect.tolerateUnreadable)) === effect.token) await store.clear();
+        return (await loadSaved(effect.tolerateUnreadable)).match(
+          (token): SignInObservation => ({ kind: O.saved_loaded, purpose: effect.purpose, token }),
+          (): SignInObservation => ({ kind: O.saved_unreadable }),
+        );
+      case E.clear_saved_if: {
+        const loaded = await loadSaved(effect.tolerateUnreadable);
+        if (loaded.isErr()) return { kind: O.saved_unreadable };
+        if (loaded.value === effect.token) await store.clear();
         return { kind: O.saved_cleared, next: effect.next };
+      }
       case E.save_credential:
         return {
           kind: O.saved,

@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { okAsync } from 'neverthrow';
 import Fastify, { type LightMyRequestResponse } from 'fastify';
 import { afterEach } from 'vitest';
 import type { AuthDeps } from '../../../src/controllers/deps.js';
@@ -173,9 +174,9 @@ export const memoryStore = (initial: string | null = null, options: { refuseSave
   return {
     saved: () => saved,
     calls,
-    load: async () => {
+    load: () => {
       calls.load += 1;
-      return saved;
+      return okAsync(saved);
     },
     save: async (token) => {
       calls.save += 1;

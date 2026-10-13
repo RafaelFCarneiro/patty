@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { ClientConfigError } from '../../common/clientConfig.js';
+import { ok, Result } from 'neverthrow';
 import type { ClientConfig, ClientConfigs, ClientSetupReport } from '../../controllers/deps.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../models/auth/signIn.js';
+import { clientConfigFailures, type ClientConfigFailure } from '../../models/clientConfig.js';
 import { PACKAGE_SPEC } from '../../models/package.js';
 import {
   mergeMcpServersKey,
@@ -23,43 +24,35 @@ const INVALID_ROOT_MESSAGE = 'does not contain a JSON object at the root';
 const invalidConfigWarning = (path: string): string =>
   `fintrack setup: ${path} ${INVALID_ROOT_MESSAGE} — replacing it during setup.`;
 
-const failedToRead = (path: string, error: unknown): ClientConfigError =>
-  new ClientConfigError(
-    `fintrack setup: failed to read ${path}: ${error instanceof Error ? error.message : String(error)}`,
-  );
+const asCause = (cause: unknown): unknown => cause;
+
+// The throwing system calls, wrapped once: everything below this block is Results.
+const readText = Result.fromThrowable((path: string) => readFileSync(path, 'utf8'), asCause);
+const writeText = Result.fromThrowable((path: string, text: string) => {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, text, 'utf8');
+}, asCause);
+const parseJson = Result.fromThrowable((text: string): unknown => JSON.parse(text), asCause);
+
+type ConfigRead = { config: Record<string, unknown>; warnings: string[] };
 
 /** The config object in the file — `{}` for a missing, empty or unusable one, the last with a warning. */
-export const readJsonOrEmpty = (path: string): { config: Record<string, unknown>; warnings: string[] } => {
-  if (!existsSync(path)) return { config: {}, warnings: [] };
-
-  let content: string;
-  try {
-    content = readFileSync(path, 'utf8');
-  } catch (error) {
-    throw failedToRead(path, error);
-  }
-
-  try {
-    const trimmedContent = content.trim();
-    if (!trimmedContent) return { config: {}, warnings: [] };
-
-    const config = resolveConfigObject(JSON.parse(trimmedContent));
-    if (config) return { config, warnings: [] };
-    return { config: {}, warnings: [invalidConfigWarning(path)] };
-  } catch {
-    return { config: {}, warnings: [invalidConfigWarning(path)] };
-  }
+export const readJsonOrEmpty = (path: string): Result<ConfigRead, ClientConfigFailure> => {
+  if (!existsSync(path)) return ok({ config: {}, warnings: [] });
+  return readText(path)
+    .mapErr((cause) => clientConfigFailures.readFailed(path, cause))
+    .map((content): ConfigRead => {
+      const trimmed = content.trim();
+      if (!trimmed) return { config: {}, warnings: [] };
+      const config = parseJson(trimmed).map(resolveConfigObject).unwrapOr(null);
+      return config ? { config, warnings: [] } : { config: {}, warnings: [invalidConfigWarning(path)] };
+    });
 };
 
-const writeJson = (path: string, data: unknown): void => {
-  try {
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, JSON.stringify(data, null, 2) + '\n', 'utf8');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new ClientConfigError(`fintrack setup: failed to write ${path}: ${message}`);
-  }
-};
+const writeJson = (path: string, data: unknown): Result<void, ClientConfigFailure> =>
+  writeText(path, JSON.stringify(data, null, 2) + '\n').mapErr((cause) =>
+    clientConfigFailures.writeFailed(path, cause),
+  );
 
 // ---------------------------------------------------------------------------
 // Platform-aware config path helpers
@@ -88,18 +81,15 @@ const writeEntry = (
   merge: (existing: Record<string, unknown>, entry: Record<string, unknown>) => Record<string, unknown>,
   entry: Record<string, unknown>,
   next: string,
-): ClientSetupReport => {
-  const { config, warnings } = readJsonOrEmpty(configPath);
-  try {
-    writeJson(configPath, merge(config, entry));
-  } catch (cause) {
-    // What was raised while reading is still owed to the person, ahead of the failure.
-    throw cause instanceof ClientConfigError ? new ClientConfigError(cause.message, warnings) : cause;
-  }
-  return { warnings, lines: [`  Updated: ${configPath}`, next] };
-};
+): Result<ClientSetupReport, ClientConfigFailure> =>
+  readJsonOrEmpty(configPath).andThen(({ config, warnings }) =>
+    writeJson(configPath, merge(config, entry))
+      .map((): ClientSetupReport => ({ warnings, lines: [`  Updated: ${configPath}`, next] }))
+      // What was raised while reading is still owed to the person, ahead of the failure.
+      .mapErr((failure) => ({ ...failure, warnings })),
+  );
 
-const setupClaudeCode = (profile: string): ClientSetupReport =>
+const setupClaudeCode = (profile: string): Result<ClientSetupReport, ClientConfigFailure> =>
   writeEntry(
     join(home, '.claude', 'mcp.json'),
     mergeMcpServersKey,
@@ -107,7 +97,7 @@ const setupClaudeCode = (profile: string): ClientSetupReport =>
     '  Verify with: claude mcp list',
   );
 
-const setupClaudeDesktop = (profile: string): ClientSetupReport =>
+const setupClaudeDesktop = (profile: string): Result<ClientSetupReport, ClientConfigFailure> =>
   writeEntry(
     claudeDesktopConfigPath(),
     mergeMcpServersKey,
@@ -115,7 +105,7 @@ const setupClaudeDesktop = (profile: string): ClientSetupReport =>
     '  Fully quit and reopen Claude Desktop to apply.',
   );
 
-const setupCopilot = (profile: string): ClientSetupReport =>
+const setupCopilot = (profile: string): Result<ClientSetupReport, ClientConfigFailure> =>
   writeEntry(
     join(process.cwd(), '.vscode', 'mcp.json'),
     mergeServersKey,
@@ -123,7 +113,7 @@ const setupCopilot = (profile: string): ClientSetupReport =>
     '  Reload VS Code window (Cmd/Ctrl+Shift+P → "Developer: Reload Window") to apply.',
   );
 
-const setupAntigravity = (profile: string): ClientSetupReport =>
+const setupAntigravity = (profile: string): Result<ClientSetupReport, ClientConfigFailure> =>
   writeEntry(
     join(home, '.gemini', 'config', 'mcp_config.json'),
     mergeMcpServersKey,
@@ -132,10 +122,11 @@ const setupAntigravity = (profile: string): ClientSetupReport =>
   );
 
 // Codex CLI MCP configuration path and format is not yet stable: describe the snippet and let the user place it.
-const setupCodex = (profile: string): ClientSetupReport => ({
-  warnings: [],
-  lines: [
-    `  Codex CLI: add the following to your MCP config file:
+const setupCodex = (profile: string): Result<ClientSetupReport, ClientConfigFailure> =>
+  ok({
+    warnings: [],
+    lines: [
+      `  Codex CLI: add the following to your MCP config file:
 
   {
     "mcpServers": {
@@ -147,8 +138,8 @@ const setupCodex = (profile: string): ClientSetupReport => ({
   }
 
   Refer to the Codex CLI docs for the exact config file location.`,
-  ],
-});
+    ],
+  });
 
 // ---------------------------------------------------------------------------
 // Client registry

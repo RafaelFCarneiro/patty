@@ -3,6 +3,8 @@ import type { AppError } from '../common/errors.js';
 import type { StalenessThresholds } from '../logic/currencyRate.js';
 import type { FlowOutcome } from '@rfc0/effect-runner';
 import type { Presentation, SignInConfig, SignInObservation, SignInState } from '../models/auth/signInFlow.js';
+import type { ClientConfigFailure } from '../models/clientConfig.js';
+import type { KeychainFailure } from '../models/auth/signIn.js';
 import type { Locale } from '../models/locale.js';
 import type { AccountsRepo } from '../diplomat/db/repos/accounts.js';
 import type { BillsRepo } from '../diplomat/db/repos/bills.js';
@@ -75,11 +77,11 @@ export type AuthSecrets = {
 
 /** Where a saved stdio sign-in lives between runs — the OS keychain in production (ADR-034 §2). Keychain trouble
  *  A refused write is reported by returning `false`, after which the sign-in lasts only as long as the process; an
- *  unreadable store is `KeychainUnavailableError` from `load`, which each caller decides how to treat (the stdio
+ *  unreadable store is a `KeychainFailure` from `load`, which each caller decides how to treat (the stdio
  *  session carries on without a saved sign-in, `logout` refuses to claim a sign-out it could not check). */
 export type SignInStore = {
-  /** `null` = nothing saved. Throws `KeychainUnavailableError` when the keychain cannot be read at all. */
-  load: () => Promise<string | null>;
+  /** `null` = nothing saved; an error when the keychain cannot be read at all (as opposed to holding nothing). */
+  load: () => ResultAsync<string | null, KeychainFailure>;
   save: (token: string) => Promise<boolean>;
   clear: () => Promise<void>;
 };
@@ -99,8 +101,8 @@ export type ClientSetupReport = {
 export type ClientConfig = {
   label: string;
   /** Writes the entry that runs FinTrack as `profile` for this client (or, for one that cannot be written, describes
-   *  how to), and reports. Throws `ClientConfigError` when a file cannot be read or written. */
-  run: (profile: string) => ClientSetupReport;
+   *  how to), and reports — or says why a configuration file could not be read or written. */
+  run: (profile: string) => Result<ClientSetupReport, ClientConfigFailure>;
 };
 
 /** The clients `setup` can configure — the config files of Claude Code, Claude Desktop, VS Code…, behind one lookup. */

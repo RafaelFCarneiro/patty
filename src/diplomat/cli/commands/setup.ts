@@ -1,4 +1,4 @@
-import { ClientConfigError } from '../../../common/clientConfig.js';
+import { ClientConfigFailureCode, type ClientConfigFailure } from '../../../models/clientConfig.js';
 import { DEFAULT_PROFILE, PROFILE_ENV_VAR } from '../../../models/auth/signIn.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import { PASSWORD_STDIN_FLAG, SETUP_POSITIONALS, SetupOptionsSchema } from '../../../wire/in/cli.js';
@@ -11,6 +11,11 @@ const SETUP_FLAGS = {
   username: { type: 'string' },
   profile: { type: 'string' },
 } as const;
+
+const CONFIG_FAILURE_VERB: Readonly<Record<ClientConfigFailureCode, string>> = {
+  [ClientConfigFailureCode.enum.read_failed]: 'read',
+  [ClientConfigFailureCode.enum.write_failed]: 'write',
+};
 
 /** What `setup` says. The help text is also printed for `fintrack setup` with no tool. */
 export const SETUP_MESSAGES = {
@@ -44,6 +49,9 @@ Examples:
     `fintrack setup: unknown tool "${tool}"\n\nRun without arguments to see available tools.`,
   settingUp: (label: string) => `Setting up FinTrack MCP for ${label}...`,
   done: 'Done.',
+  /** Said when a client's configuration file could not be used: the same words whichever file it was. */
+  configFailure: (failure: ClientConfigFailure) =>
+    `fintrack setup: failed to ${CONFIG_FAILURE_VERB[failure.code]} ${failure.path}: ${failure.reason}`,
 } as const;
 
 /** What `setup` needs of the I/O: where to print, and the client config files. */
@@ -64,35 +72,37 @@ export const runSetup = (io: SetupIo, tool: string | undefined, profile: string 
   }
 
   io.out(SETUP_MESSAGES.settingUp(client.label));
-  try {
-    const report = client.run(profile);
-    report.warnings.forEach((warning) => io.err(warning));
-    report.lines.forEach((line) => io.out(line));
-  } catch (cause) {
-    if (!(cause instanceof ClientConfigError)) throw cause;
-    cause.warnings.forEach((warning) => io.err(warning));
-    io.err(cause.message);
-    return EXIT_FAILURE;
-  }
-  io.out(SETUP_MESSAGES.done);
-  return EXIT_OK;
+  return client.run(profile).match(
+    (report) => {
+      report.warnings.forEach((warning) => io.err(warning));
+      report.lines.forEach((line) => io.out(line));
+      io.out(SETUP_MESSAGES.done);
+      return EXIT_OK;
+    },
+    (failure) => {
+      failure.warnings.forEach((warning) => io.err(warning));
+      io.err(SETUP_MESSAGES.configFailure(failure));
+      return EXIT_FAILURE;
+    },
+  );
 };
 
 /** Claims the owner first, writes the client config only if that succeeded, then offers to sign the client in
- *  (ADR-034 §5.3). Help and an unknown tool never claim. */
+ *  (ADR-034 §5.3). Help and an unknown tool never claim. `claimOwner` and `signIn` answer the exit code to end with
+ *  (`EXIT_OK` to go on). */
 export const runGuidedSetup = async (
   io: SetupIo,
   tool: string | undefined,
-  claimOwner: () => Promise<boolean>,
-  signIn: (profile: string) => Promise<void> = async () => undefined,
+  claimOwner: () => Promise<number>,
+  signIn: (profile: string) => Promise<number | undefined> = async () => undefined,
   profile: string = DEFAULT_PROFILE,
 ): Promise<number> => {
   if (!tool || io.clients.find(tool) === undefined) return runSetup(io, tool, profile);
-  if (!(await claimOwner())) return EXIT_FAILURE;
+  const claimed = await claimOwner();
+  if (claimed !== EXIT_OK) return claimed;
   const written = runSetup(io, tool, profile);
   if (written !== EXIT_OK) return written;
-  await signIn(profile);
-  return EXIT_OK;
+  return (await signIn(profile)) ?? EXIT_OK;
 };
 
 export const runSetupCommand = async (args: readonly string[], io: CliIo): Promise<number> => {

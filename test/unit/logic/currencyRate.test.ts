@@ -253,14 +253,7 @@ describe('consolidateInCurrency', () => {
 
   it('a currency with no rate to the target is excluded (not fabricated) and listed with its reason', () => {
     const rates = [rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: NOW.toISOString() })];
-    const result = consolidateInCurrency(
-      [amount(BRL, 500), amount(BTC, 1)],
-      USD,
-      rates,
-      NOW,
-      OPTIONS.thresholds,
-      2,
-    );
+    const result = consolidateInCurrency([amount(BRL, 500), amount(BTC, 1)], USD, rates, NOW, OPTIONS.thresholds, 2);
     expect(result.total).toBe(100);
     expect(result.excluded).toEqual([{ currency: BTC, reason: 'no_rate' }]);
   });
@@ -272,14 +265,7 @@ describe('consolidateInCurrency', () => {
       rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: freshFiat }),
       rate({ fromCode: BTC, toCode: USD, rate: 60000, asOf: staleCrypto }),
     ];
-    const result = consolidateInCurrency(
-      [amount(BRL, 100), amount(BTC, 1)],
-      USD,
-      rates,
-      NOW,
-      OPTIONS.thresholds,
-      2,
-    );
+    const result = consolidateInCurrency([amount(BRL, 100), amount(BTC, 1)], USD, rates, NOW, OPTIONS.thresholds, 2);
     expect(result.stale).toBe(true);
   });
 
@@ -296,14 +282,7 @@ describe('consolidateInCurrency', () => {
       rate({ fromCode: BRL, toCode: USD, rate: 0.2, asOf: older }),
       rate({ fromCode: USDC, toCode: USD, rate: 1, asOf: newer }),
     ];
-    const result = consolidateInCurrency(
-      [amount(BRL, 100), amount(USDC, 100)],
-      USD,
-      rates,
-      NOW,
-      OPTIONS.thresholds,
-      2,
-    );
+    const result = consolidateInCurrency([amount(BRL, 100), amount(USDC, 100)], USD, rates, NOW, OPTIONS.thresholds, 2);
     expect(result.asOf).toBe(older);
   });
 

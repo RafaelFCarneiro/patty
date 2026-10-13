@@ -1,4 +1,5 @@
 import type { AddressInfo } from 'node:net';
+import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import { version } from '../common/buildVersion.js';
@@ -7,6 +8,7 @@ import { boot } from './boot.js';
 import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from '../common/net.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../controllers/deps.js';
 import { DISABLED_AUTH, type HttpAuth } from '../diplomat/http/context.js';
+import type { DatabaseAhead } from '../models/database.js';
 import { AuthMode } from '../models/auth/mode.js';
 import { registerAuthHook } from '../diplomat/http/hooks/auth.js';
 import { registerRoutes } from '../diplomat/http/routes.js';
@@ -129,36 +131,38 @@ export const startHttpSidecar = async (
  * only surface running — a bind failure here is fatal by design (there is no stdio fallback to keep the process alive),
  * handled by the entrypoint.
  */
-export const runHttp = async (config: Config): Promise<void> => {
-  const { runtime, prepared } = await boot(config);
-  const app = buildHttpApp(
-    runtime.deps,
-    version,
-    runtime.runEffects,
-    runtime.runEffectsSequence,
-    runtime.resetLocale,
-    runtime.changeBus.subscribe,
-    { auth: prepared.auth, trustProxy: config.TRUST_PROXY },
-  );
+export const runHttp = (config: Config): ResultAsync<void, DatabaseAhead> =>
+  safeTry(async function* () {
+    const { runtime, prepared } = yield* boot(config);
+    const app = buildHttpApp(
+      runtime.deps,
+      version,
+      runtime.runEffects,
+      runtime.runEffectsSequence,
+      runtime.resetLocale,
+      runtime.changeBus.subscribe,
+      { auth: prepared.auth, trustProxy: config.TRUST_PROXY },
+    );
 
-  // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.
-  let shuttingDown = false;
-  const shutdown = (): void => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    app
-      .close()
-      .catch((err: unknown) => app.log.error(err))
-      .finally(() => process.exit(0));
-  };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+    // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.
+    let shuttingDown = false;
+    const shutdown = (): void => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      app
+        .close()
+        .catch((err: unknown) => app.log.error(err))
+        .finally(() => process.exit(0));
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
 
-  await app.listen({ port: config.PORT, host: config.HOST });
-  // config.PORT may be 0 (OS-assigned); read back the address actually bound for the banner.
-  const boundPort = (app.server.address() as AddressInfo).port;
-  const origin = httpOrigin(config.HOST, boundPort);
-  // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe.
-  console.log(`fintrack: REST ${origin}/api · MCP ${origin}/mcp`);
-  await prepared.issueAndAnnounceSetup(origin);
-};
+    await app.listen({ port: config.PORT, host: config.HOST });
+    // config.PORT may be 0 (OS-assigned); read back the address actually bound for the banner.
+    const boundPort = (app.server.address() as AddressInfo).port;
+    const origin = httpOrigin(config.HOST, boundPort);
+    // eslint-disable-next-line no-console -- HTTP-mode banner; stdout safe.
+    console.log(`fintrack: REST ${origin}/api · MCP ${origin}/mcp`);
+    await prepared.issueAndAnnounceSetup(origin);
+    return ok(undefined);
+  });

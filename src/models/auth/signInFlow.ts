@@ -93,6 +93,7 @@ export const ObservationKind = z.enum([
   // The answer to an asking effect.
   'credential_checked',
   'saved_loaded',
+  'saved_unreadable',
   'saved_cleared',
   'owner_checked',
   'page_named',
@@ -125,6 +126,8 @@ export type SignInObservation =
       result: CheckResult;
     }
   | { kind: typeof ObservationKind.enum.saved_loaded; purpose: LoadPurpose; token: string | null }
+  /** The keychain could not be read where the protocol said it must be (`tolerateUnreadable: false`). */
+  | { kind: typeof ObservationKind.enum.saved_unreadable }
   | { kind: typeof ObservationKind.enum.saved_cleared; next: ClearNext }
   | {
       kind: typeof ObservationKind.enum.owner_checked;
@@ -221,6 +224,7 @@ export const PresentationKind = z.enum([
   'signed_out',
   'not_signed_in',
   'logout_failed',
+  'keychain_unavailable',
 ]);
 export type PresentationKind = z.infer<typeof PresentationKind>;
 
@@ -248,7 +252,8 @@ export type Presentation =
   | { kind: typeof PresentationKind.enum.keychain_refused_still_active }
   | { kind: typeof PresentationKind.enum.signed_out; profile: string }
   | { kind: typeof PresentationKind.enum.not_signed_in; profile: string }
-  | { kind: typeof PresentationKind.enum.logout_failed; reason: string };
+  | { kind: typeof PresentationKind.enum.logout_failed; reason: string }
+  | { kind: typeof PresentationKind.enum.keychain_unavailable };
 
 /** What one observation does to the state, and what the shell must do about it, in order. */
 export type SignInStep = { state: SignInState; effects: SignInEffect[] };

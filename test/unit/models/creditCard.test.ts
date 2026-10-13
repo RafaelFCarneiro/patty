@@ -31,11 +31,14 @@ describe('UpdateCardTransactionSchema — composes up from the minimal core (ADR
     expect(result.success).toBe(true);
   });
 
-  it('still accepts account — kept reachable so the controller can raise accountChangeRejectedForCard, ' +
-    'rather than a generic .strict() unrecognized-key error (ADR-019 watchpoint)', () => {
-    const result = UpdateCardTransactionSchema.safeParse({ id: 'tx-1', account: 'Nubank' });
-    expect(result.success).toBe(true);
-  });
+  it(
+    'still accepts account — kept reachable so the controller can raise accountChangeRejectedForCard, ' +
+      'rather than a generic .strict() unrecognized-key error (ADR-019 watchpoint)',
+    () => {
+      const result = UpdateCardTransactionSchema.safeParse({ id: 'tx-1', account: 'Nubank' });
+      expect(result.success).toBe(true);
+    },
+  );
 
   it('rejects a truly foreign field (.strict())', () => {
     const result = UpdateCardTransactionSchema.safeParse({ id: 'tx-1', notAField: true });

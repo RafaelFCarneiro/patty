@@ -1,48 +1,66 @@
+import { errAsync, ok, okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { runCli } from '../../../../src/diplomat/cli/commands.js';
-import { EXIT_INTERRUPTED, type CliIo } from '../../../../src/diplomat/cli/io.js';
-import { PromptInterruptedError, type Terminal } from '../../../../src/diplomat/cli/terminal.js';
+import { EXIT_FAILURE, EXIT_INTERRUPTED, type CliIo, type Shell } from '../../../../src/diplomat/cli/io.js';
+import { promptEnded, type PromptEnd, type Terminal } from '../../../../src/diplomat/cli/terminal.js';
+import { databaseAheadMessage, databaseErrors } from '../../../../src/models/database.js';
 
-const interruptedTerminal = (): Terminal => ({
-  ask: async () => {
-    throw new PromptInterruptedError();
-  },
-  askSecret: async () => {
-    throw new PromptInterruptedError();
-  },
+const endedTerminal = (how: PromptEnd): Terminal => ({
+  ask: () => errAsync(promptEnded(how)),
+  askSecret: () => errAsync(promptEnded(how)),
   tell: () => undefined,
   close: () => undefined,
 });
 
-const rig = () => {
+const rig = (terminal: Terminal) => {
   const out: string[] = [];
   const err: string[] = [];
   let shellClosed = false;
   const io: CliIo = {
     // An owner nobody has claimed: `setup` goes on to ask for a username.
-    openShell: async () =>
-      ({
+    openShell: () =>
+      okAsync({
         deps: { users: { findById: async () => null } },
         close: () => void (shellClosed = true),
-      }) as unknown as Awaited<ReturnType<CliIo['openShell']>>,
-    openTerminal: interruptedTerminal,
+      } as unknown as Shell),
+    openTerminal: () => terminal,
     readPasswordFromStdin: async () => '',
     out: (line) => out.push(line),
     err: (line) => err.push(line),
     version: '0.0.0-test',
     wait: async () => undefined,
     interruptSignal: () => new AbortController().signal,
-    clients: { find: () => ({ label: 'Stub', run: () => ({ warnings: [], lines: [] }) }) },
+    clients: { find: () => ({ label: 'Stub', run: () => ok({ warnings: [], lines: [] }) }) },
   };
   return { io, out, err, shellClosed: () => shellClosed };
 };
 
-describe('Ctrl-C at a prompt', () => {
-  it('ends the command with EXIT_INTERRUPTED, prints nothing more and closes the shell', async () => {
-    const { io, out, err, shellClosed } = rig();
+describe('a prompt that ends', () => {
+  it('Ctrl-C ends the command with EXIT_INTERRUPTED, prints nothing more and closes the shell', async () => {
+    const { io, out, err, shellClosed } = rig(endedTerminal('interrupted'));
     expect(await runCli(['setup', 'claude-code'], io)).toBe(EXIT_INTERRUPTED);
     expect(out).toEqual([]);
     expect(err).toEqual([]);
     expect(shellClosed()).toBe(true);
+  });
+
+  it('Ctrl-D is a failure with today’s one-line "cancelled" message', async () => {
+    const { io, out, err, shellClosed } = rig(endedTerminal('cancelled'));
+    expect(await runCli(['setup', 'claude-code'], io)).toBe(EXIT_FAILURE);
+    expect(out).toEqual([]);
+    expect(err).toEqual(['fintrack: cancelled']);
+    expect(shellClosed()).toBe(true);
+  });
+});
+
+describe('a database a newer build has migrated', () => {
+  it('says the one message on stderr and fails, for every command that opens the database', async () => {
+    for (const args of [['auth', 'setup'], ['login'], ['logout'], ['setup', 'claude-code']]) {
+      const { io, out, err } = rig(endedTerminal('cancelled'));
+      io.openShell = () => errAsync(databaseErrors.ahead('1.2.3'));
+      expect(await runCli(args, io), args.join(' ')).toBe(EXIT_FAILURE);
+      expect(out).toEqual([]);
+      expect(err).toEqual([databaseAheadMessage('1.2.3')]);
+    }
   });
 });

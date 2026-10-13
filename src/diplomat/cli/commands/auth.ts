@@ -17,7 +17,17 @@ import {
   type ClaimOptions,
   type ResetOptions,
 } from '../../../wire/in/cli.js';
-import { EXIT_FAILURE, EXIT_OK, exitCodeOf, fail, parseFlags, withShell, type CliIo } from '../io.js';
+import {
+  EXIT_FAILURE,
+  EXIT_OK,
+  exitCodeOf,
+  exitCodeOfPrompt,
+  fail,
+  failed,
+  parseFlags,
+  withShell,
+  type CliIo,
+} from '../io.js';
 import { CLI_MESSAGES } from '../messages.js';
 import { collectNewCredentials, collectNewPassword, type PromptIo } from '../prompt.js';
 
@@ -47,30 +57,35 @@ const withPromptIo = async <T>(
   }
 };
 
-/** `true` = the owner holds a login when this returns (claimed now or before); `false` = nothing was written. */
-export const ensureOwnerClaimed = (io: CliIo, options: ClaimOptions): Promise<boolean> =>
-  withShell(io, async (shell) => {
-    const plan = await ownerClaimPlan(shell.deps);
-    if (plan.kind === 'skip') {
-      io.out(CLI_MESSAGES.alreadyClaimed(plan.username));
-      return true;
-    }
+/** `EXIT_OK` = the owner holds a login when this returns (claimed now or before); anything else = nothing was
+ *  written, and is the exit code to end with. */
+export const ensureOwnerClaimed = (io: CliIo, options: ClaimOptions): Promise<number> =>
+  withShell(
+    io,
+    async (shell) => {
+      const plan = await ownerClaimPlan(shell.deps);
+      if (plan.kind === 'skip') {
+        io.out(CLI_MESSAGES.alreadyClaimed(plan.username));
+        return EXIT_OK;
+      }
 
-    const credentials = await withPromptIo(io, options, (promptIo) => collectNewCredentials(promptIo, options));
-    if (credentials.isErr()) return fail(io, credentials.error);
+      const credentials = await withPromptIo(io, options, (promptIo) => collectNewCredentials(promptIo, options));
+      if (credentials.isErr()) return exitCodeOfPrompt(io, credentials.error);
 
-    const claimed = await shell.run(() => claimOwnerLocally(shell.deps, credentials.value));
-    if (claimed.isOk()) {
-      io.out(CLI_MESSAGES.ownerClaimed(claimed.value.username));
-      return true;
-    }
-    const winner = await claimRaceWinnerOf(shell.deps, claimed.error);
-    if (winner) {
-      io.out(CLI_MESSAGES.alreadyClaimed(winner.username));
-      return true;
-    }
-    return fail(io, formatAppError(claimed.error));
-  });
+      const claimed = await shell.run(() => claimOwnerLocally(shell.deps, credentials.value));
+      if (claimed.isOk()) {
+        io.out(CLI_MESSAGES.ownerClaimed(claimed.value.username));
+        return EXIT_OK;
+      }
+      const winner = await claimRaceWinnerOf(shell.deps, claimed.error);
+      if (winner) {
+        io.out(CLI_MESSAGES.alreadyClaimed(winner.username));
+        return EXIT_OK;
+      }
+      return failed(io, formatAppError(claimed.error));
+    },
+    EXIT_FAILURE,
+  );
 
 const reportReset = (io: CliIo, reset: PasswordReset): void => {
   io.out(CLI_MESSAGES.passwordReset(reset));
@@ -78,25 +93,29 @@ const reportReset = (io: CliIo, reset: PasswordReset): void => {
   io.out(CLI_MESSAGES.tokensRevoked(reset.tokensRevoked));
 };
 
-const resetUserPassword = (io: CliIo, options: ResetOptions): Promise<boolean> =>
-  withShell(io, async (shell) => {
-    // Resolve the user before asking for anything: a typo'd `--user` should not cost a typed password.
-    const target = await findResetTarget(shell.deps, options.user);
-    if (target.isErr()) return fail(io, formatAppError(target.error));
+const resetUserPassword = (io: CliIo, options: ResetOptions): Promise<number> =>
+  withShell(
+    io,
+    async (shell) => {
+      // Resolve the user before asking for anything: a typo'd `--user` should not cost a typed password.
+      const target = await findResetTarget(shell.deps, options.user);
+      if (target.isErr()) return failed(io, formatAppError(target.error));
 
-    const password = await withPromptIo(io, options, (promptIo) => {
-      promptIo.terminal?.tell(CLI_MESSAGES.resetting(target.value.username));
-      return collectNewPassword(promptIo, options);
-    });
-    if (password.isErr()) return fail(io, password.error);
+      const password = await withPromptIo(io, options, (promptIo) => {
+        promptIo.terminal?.tell(CLI_MESSAGES.resetting(target.value.username));
+        return collectNewPassword(promptIo, options);
+      });
+      if (password.isErr()) return exitCodeOfPrompt(io, password.error);
 
-    const reset = await shell.run(() =>
-      resetPassword(shell.deps, { username: options.user, password: password.value }),
-    );
-    if (reset.isErr()) return fail(io, formatAppError(reset.error));
-    reportReset(io, reset.value);
-    return true;
-  });
+      const reset = await shell.run(() =>
+        resetPassword(shell.deps, { username: options.user, password: password.value }),
+      );
+      if (reset.isErr()) return failed(io, formatAppError(reset.error));
+      reportReset(io, reset.value);
+      return EXIT_OK;
+    },
+    EXIT_FAILURE,
+  );
 
 const CLAIM_FLAGS = { [PASSWORD_STDIN_FLAG]: { type: 'boolean' }, username: { type: 'string' } } as const;
 const RESET_FLAGS = { [PASSWORD_STDIN_FLAG]: { type: 'boolean' }, user: { type: 'string' } } as const;
@@ -120,9 +139,9 @@ export const runAuthCommand = async (args: readonly string[], io: CliIo): Promis
   if (subcommand.data === AuthSubcommand.enum.setup) {
     const parsed = parseClaimArgs(rest, AUTH_POSITIONALS);
     if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
-    return exitCodeOf(await ensureOwnerClaimed(io, parsed.options));
+    return ensureOwnerClaimed(io, parsed.options);
   }
   const parsed = parseFlags(rest, RESET_FLAGS, ResetOptionsSchema, AUTH_POSITIONALS);
   if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
-  return exitCodeOf(await resetUserPassword(io, parsed.options));
+  return resetUserPassword(io, parsed.options);
 };

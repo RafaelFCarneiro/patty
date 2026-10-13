@@ -62,7 +62,7 @@ describe('daysBetween', () => {
 });
 
 describe('lookbackFrom', () => {
-  it('rolls back N months from today\'s own month, day 01', () => {
+  it("rolls back N months from today's own month, day 01", () => {
     expect(lookbackFrom('2026-07-15', 6)).toBe('2026-01-01');
   });
 

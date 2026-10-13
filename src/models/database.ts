@@ -1,5 +1,12 @@
 import { NPX_COMMAND, PACKAGE_NAME } from './package.js';
 
+/** A database that a newer build has migrated: an expected failure, not an exception (ADR-034 §7). */
+export type DatabaseAhead = { code: 'database_ahead'; version: string };
+
+export const databaseErrors = {
+  ahead: (version: string): DatabaseAhead => ({ code: 'database_ahead', version }),
+};
+
 /** `npm ls -g` is the check for the stale global install that made an old build run in the first place. */
 export const STALE_GLOBAL_CHECK_COMMAND = `npm ls -g ${PACKAGE_NAME}`;
 

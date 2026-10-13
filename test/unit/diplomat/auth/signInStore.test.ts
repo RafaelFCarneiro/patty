@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { KeychainUnavailableError } from '../../../../src/common/keychain.js';
 import { KEYCHAIN_SERVICE } from '../../../../src/models/auth/signIn.js';
 
 const keyring = vi.hoisted(() => {
@@ -40,9 +39,9 @@ beforeEach(() => {
 describe('keychainSignInStore', () => {
   it('keeps a sign-in under service "fintrack" and the given account, and reads it back', async () => {
     const store = keychainSignInStore(ACCOUNT, () => undefined);
-    expect(await store.load()).toBeNull();
+    expect((await store.load())._unsafeUnwrap()).toBeNull();
     expect(await store.save('ftk_secret')).toBe(true);
-    expect(await store.load()).toBe('ftk_secret');
+    expect((await store.load())._unsafeUnwrap()).toBe('ftk_secret');
     expect(new Set(keyring.state.constructed.map(([service, account]) => `${service}|${account}`))).toEqual(
       new Set([`${KEYCHAIN_SERVICE}|${ACCOUNT}`]),
     );
@@ -53,15 +52,15 @@ describe('keychainSignInStore', () => {
     const store = keychainSignInStore(ACCOUNT, () => undefined);
     await store.save('ftk_secret');
     await store.clear();
-    expect(await store.load()).toBeNull();
+    expect((await store.load())._unsafeUnwrap()).toBeNull();
     await expect(store.clear()).resolves.toBeUndefined();
   });
 
-  it('tells an unreadable keychain apart from an empty one: missing is null, unreachable throws', async () => {
+  it('tells an unreadable keychain apart from an empty one: missing is null, unreachable is an error', async () => {
     const store = keychainSignInStore(ACCOUNT, () => undefined);
-    await expect(store.load()).resolves.toBeNull();
+    expect((await store.load())._unsafeUnwrap()).toBeNull();
     keyring.state.failing = true;
-    await expect(store.load()).rejects.toBeInstanceOf(KeychainUnavailableError);
+    expect((await store.load())._unsafeUnwrapErr()).toMatchObject({ code: 'keychain_unavailable' });
   });
 
   it('reports a keychain that refuses a write — without the secret — and says it did not save', async () => {

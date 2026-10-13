@@ -130,8 +130,7 @@ const makeSandboxBase = (
 
   // Deterministic stub, overriding the real formatMoney money.js just installed — assertions below
   // match literal strings and shouldn't depend on Intl locale data.
-  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) =>
-    `${currency} ${value}`;
+  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) => `${currency} ${value}`;
   return sandbox;
 };
 

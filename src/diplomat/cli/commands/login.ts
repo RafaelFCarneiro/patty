@@ -34,7 +34,7 @@ import {
   type Shell,
 } from '../io.js';
 import { CLI_MESSAGES } from '../messages.js';
-import { PromptInterruptedError } from '../terminal.js';
+import { PromptEnd } from '../terminal.js';
 
 export const LOGIN_MESSAGES = {
   authDisabled: `${AUTH_ENV_VAR}=disabled: stdio acts as the owner, so there is nothing to sign in to. Remove it to use sign-ins.`,
@@ -51,6 +51,8 @@ export const LOGIN_MESSAGES = {
   keychainRefusedAndStillActive:
     'The OS keychain would not keep the sign-in, and it could not be revoked either: revoke it now on the Access ' +
     'page of the dashboard (/ui/access/tokens), or it stays valid until it expires.',
+  keychainUnavailable:
+    'the OS keychain is unavailable, so whether this profile is signed in could not be checked — unlock it and try again',
   signedOut: (profile: string) => `Signed out of profile "${profile}".`,
   notSignedIn: (profile: string) => `Not signed in on profile "${profile}".`,
   skippedNoTerminal: (profile: string) =>
@@ -107,6 +109,8 @@ const render = (io: CliIo, presentation: Presentation): void => {
       return io.out(LOGIN_MESSAGES.signedOut(presentation.profile));
     case P.not_signed_in:
       return io.out(LOGIN_MESSAGES.notSignedIn(presentation.profile));
+    case P.keychain_unavailable:
+      return io.err(CLI_MESSAGES.failure(LOGIN_MESSAGES.keychainUnavailable));
     case P.logout_failed:
       return io.err(CLI_MESSAGES.failure(presentation.reason));
     case P.granted:
@@ -175,6 +179,7 @@ export const runLogin = async (args: readonly string[], io: CliIo): Promise<numb
     io,
     async (shell) =>
       EXIT_CODE_OF_STATE[(await signIn(io, shell, { profile: profile ?? shell.defaultProfile, duration, scope })).kind],
+    EXIT_FAILURE,
   );
 };
 
@@ -182,38 +187,46 @@ export const runLogin = async (args: readonly string[], io: CliIo): Promise<numb
 export const runLogout = async (args: readonly string[], io: CliIo): Promise<number> => {
   const parsed = parseFlags(args, LOGOUT_FLAGS, LogoutOptionsSchema, SIGN_IN_POSITIONALS);
   if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
-  return withShell(io, async (shell) => {
-    const profile = parsed.options.profile ?? shell.defaultProfile;
-    const state = await shell.signIn(profile).drive(
-      IDLE,
-      { kind: O.logout_requested },
-      configFor(io, shell, profile, undefined),
-      hooksFor(io, async () => undefined),
-    );
-    return EXIT_CODE_OF_STATE[state.kind];
-  });
+  return withShell(
+    io,
+    async (shell) => {
+      const profile = parsed.options.profile ?? shell.defaultProfile;
+      const state = await shell.signIn(profile).drive(
+        IDLE,
+        { kind: O.logout_requested },
+        configFor(io, shell, profile, undefined),
+        hooksFor(io, async () => undefined),
+      );
+      return EXIT_CODE_OF_STATE[state.kind];
+    },
+    EXIT_FAILURE,
+  );
 };
 
 /** `setup`'s last step (ADR-034 §5.3): offer to sign the client in now. Never fails the setup that wrote the config —
- *  a declined, denied or cancelled sign-in just leaves the first tool call to ask. */
-export const offerSignIn = async (io: CliIo, profile: string): Promise<void> => {
+ *  a declined, denied or cancelled sign-in just leaves the first tool call to ask. Answers `EXIT_INTERRUPTED` after
+ *  Ctrl-C at the question. */
+export const offerSignIn = async (io: CliIo, profile: string): Promise<number> => {
   const terminal = io.openTerminal();
   if (terminal === null) {
     io.out(LOGIN_MESSAGES.skippedNoTerminal(profile));
-    return;
+    return EXIT_OK;
   }
-  let declined = true;
-  try {
-    declined = ANSWERED_NO.test(await terminal.ask(LOGIN_MESSAGES.offer));
-  } catch (cause) {
-    // Ctrl-C ends the command; Ctrl-D at the question is treated as "not now".
-    if (cause instanceof PromptInterruptedError) throw cause;
-  } finally {
-    terminal.close();
-  }
-  if (declined) {
+  const answer = await terminal.ask(LOGIN_MESSAGES.offer);
+  terminal.close();
+  // Ctrl-D at the question is "not now"; Ctrl-C ends the command.
+  if (answer.isErr() && answer.error.how === PromptEnd.enum.interrupted) return EXIT_INTERRUPTED;
+  if (answer.isErr() || ANSWERED_NO.test(answer.value)) {
     io.out(LOGIN_MESSAGES.skippedByChoice(profile));
-    return;
+    return EXIT_OK;
   }
-  await withShell(io, (shell) => signIn(io, shell, { profile }));
+  const signedIn = await withShell(
+    io,
+    async (shell) => {
+      await signIn(io, shell, { profile });
+      return true;
+    },
+    false,
+  );
+  return signedIn ? EXIT_OK : EXIT_FAILURE;
 };

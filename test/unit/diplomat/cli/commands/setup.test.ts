@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClientConfigs } from '../../../../../src/controllers/deps.js';
+import { EXIT_FAILURE, EXIT_OK } from '../../../../../src/diplomat/cli/io.js';
 import { runSetup as runSetupFor } from '../../../../../src/diplomat/cli/commands/setup.js';
 import { clientConfigs } from '../../../../../src/diplomat/clientConfig/clients.js';
 import { STDIO_ENTRY, VSCODE_ENTRY } from '../../../../../src/diplomat/clientConfig/merge.js';
@@ -32,8 +33,8 @@ const importSetup = async () => {
     runSetup: (tool: string | undefined, profile?: string): number => run(io, tool, profile),
     runGuidedSetup: (
       tool: string | undefined,
-      claimOwner: () => Promise<boolean>,
-      signIn?: (profile: string) => Promise<void>,
+      claimOwner: () => Promise<number>,
+      signIn?: (profile: string) => Promise<number | undefined>,
       profile?: string,
     ) => runGuided(io, tool, claimOwner, signIn, profile),
   };
@@ -106,7 +107,7 @@ describe('runGuidedSetup (claim the owner, then write the config)', () => {
     const order: string[] = [];
     const claim = vi.fn(async () => {
       order.push(existsSync(claudeCodeConfig()) ? 'config-first' : 'claim');
-      return true;
+      return EXIT_OK;
     });
 
     expect(await runGuidedSetup('claude-code', claim)).toBe(0);
@@ -117,7 +118,7 @@ describe('runGuidedSetup (claim the owner, then write the config)', () => {
 
   it('writes no config at all when the claim fails (no terminal, bad input…)', async () => {
     const { runGuidedSetup } = await loadWithHome();
-    expect(await runGuidedSetup('claude-code', async () => false)).toBe(1);
+    expect(await runGuidedSetup('claude-code', async () => EXIT_FAILURE)).toBe(1);
     expect(existsSync(claudeCodeConfig())).toBe(false);
   });
 
@@ -126,9 +127,9 @@ describe('runGuidedSetup (claim the owner, then write the config)', () => {
     mkdirSync(join(homeDir, '.claude'), { recursive: true });
     writeFileSync(claudeCodeConfig(), JSON.stringify({ mcpServers: { other: { command: 'x' } }, theme: 'dark' }));
 
-    await runGuidedSetup('claude-code', async () => true);
+    await runGuidedSetup('claude-code', async () => EXIT_OK);
     const once = readFileSync(claudeCodeConfig(), 'utf8');
-    await runGuidedSetup('claude-code', async () => true);
+    await runGuidedSetup('claude-code', async () => EXIT_OK);
 
     expect(readFileSync(claudeCodeConfig(), 'utf8')).toBe(once);
     expect(JSON.parse(once)).toEqual({
@@ -142,7 +143,7 @@ describe('runGuidedSetup (claim the owner, then write the config)', () => {
     ['no-such-tool', 1],
   ] as const)('never claims for help or an unknown tool (%s)', async (tool, exitCode) => {
     const { runGuidedSetup, err } = await loadWithHome();
-    const claim = vi.fn(async () => true);
+    const claim = vi.fn(async () => EXIT_OK);
 
     expect(await runGuidedSetup(tool, claim)).toBe(exitCode);
     expect(claim).not.toHaveBeenCalled();
@@ -186,10 +187,11 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
     const order: string[] = [];
     const claim = async () => {
       order.push('claim');
-      return true;
+      return EXIT_OK;
     };
     const signIn = vi.fn(async (profile: string) => {
       order.push(existsSync(claudeCodeConfig()) ? `sign-in:${profile}` : 'sign-in-before-config');
+      return undefined;
     });
 
     expect(await runGuidedSetup('claude-code', claim, signIn)).toBe(0);
@@ -201,7 +203,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
     const { runGuidedSetup } = await loadWithHome();
     const signIn = vi.fn(async () => undefined);
 
-    await runGuidedSetup('claude-code', async () => true, signIn, 'work');
+    await runGuidedSetup('claude-code', async () => EXIT_OK, signIn, 'work');
 
     expect(JSON.parse(readFileSync(claudeCodeConfig(), 'utf8'))).toEqual({
       mcpServers: { fintrack: { ...STDIO_ENTRY, env: { FINTRACK_PROFILE: 'work' } } },
@@ -214,7 +216,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
 
     await runGuidedSetup(
       'copilot',
-      async () => true,
+      async () => EXIT_OK,
       async () => undefined,
       'work',
     );
@@ -224,7 +226,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
 
     await runGuidedSetup(
       'codex',
-      async () => true,
+      async () => EXIT_OK,
       async () => undefined,
       'work',
     );
@@ -235,7 +237,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
     const { runGuidedSetup } = await loadWithHome();
     await runGuidedSetup(
       'claude-code',
-      async () => true,
+      async () => EXIT_OK,
       async () => undefined,
     );
     expect(JSON.parse(readFileSync(claudeCodeConfig(), 'utf8')).mcpServers.fintrack).not.toHaveProperty('env');
@@ -244,7 +246,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
   it('does not offer a sign-in when the claim failed', async () => {
     const { runGuidedSetup } = await loadWithHome();
     const signIn = vi.fn(async () => undefined);
-    expect(await runGuidedSetup('claude-code', async () => false, signIn)).toBe(1);
+    expect(await runGuidedSetup('claude-code', async () => EXIT_FAILURE, signIn)).toBe(1);
     expect(signIn).not.toHaveBeenCalled();
   });
 
@@ -254,7 +256,7 @@ describe('runGuidedSetup — the sign-in step (ADR-034 §5.3)', () => {
   ] as const)('does not offer a sign-in for help or an unknown tool (%s)', async (tool, exitCode) => {
     const { runGuidedSetup } = await loadWithHome();
     const signIn = vi.fn(async () => undefined);
-    expect(await runGuidedSetup(tool, async () => true, signIn)).toBe(exitCode);
+    expect(await runGuidedSetup(tool, async () => EXIT_OK, signIn)).toBe(exitCode);
     expect(signIn).not.toHaveBeenCalled();
   });
 
@@ -290,7 +292,7 @@ describe('runGuidedSetup — a client config that cannot be read or written', ()
     const { runGuidedSetup, out, err } = await importSetup();
     const signIn = vi.fn(async () => undefined);
 
-    expect(await runGuidedSetup('claude-code', async () => true, signIn)).toBe(1);
+    expect(await runGuidedSetup('claude-code', async () => EXIT_OK, signIn)).toBe(1);
 
     expect(err).toHaveLength(1);
     expect(err[0]).toMatch(/^fintrack setup: failed to read .*mcp\.json: EISDIR:/);
@@ -345,7 +347,7 @@ describe('runGuidedSetup — everything a successful setup prints, in order', ()
     const log = vi.spyOn(console, 'log');
     const { runGuidedSetup, out, err } = await importSetup();
 
-    expect(await runGuidedSetup('claude-code', async () => true)).toBe(0);
+    expect(await runGuidedSetup('claude-code', async () => EXIT_OK)).toBe(0);
 
     expect(out).toEqual([
       'Setting up FinTrack MCP for Claude Code (CLI)...',
@@ -367,7 +369,7 @@ describe('runGuidedSetup — everything a successful setup prints, in order', ()
     writeFileSync(join(homeDir, '.claude', 'mcp.json'), '[]', 'utf8');
     const { runGuidedSetup, out, err } = await importSetup();
 
-    expect(await runGuidedSetup('claude-code', async () => true)).toBe(0);
+    expect(await runGuidedSetup('claude-code', async () => EXIT_OK)).toBe(0);
 
     expect(err).toEqual([expect.stringMatching(/mcp\.json does not contain a JSON object at the root/)]);
     expect(out).toHaveLength(4);

@@ -44,16 +44,14 @@ describe('window.formatMoney (ui/money.js)', () => {
   // Intl call silently flattens it to 2 decimals with no real symbol instead. That's the actual
   // gotcha isIsoCurrency (Intl.supportedValuesOf) exists to catch, beyond the simpler throw/no-throw case.
   it("doesn't silently flatten BTC to 2 decimals the way a bare Intl call does", () => {
-    const bareIntlResult = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'BTC' }).format(
-      0.12345678,
-    );
+    const bareIntlResult = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'BTC' }).format(0.12345678);
     expect(bareIntlResult).not.toContain('0.12345678'); // wrong: flattened to 2 decimals — and didn't throw
     expect(bareIntlResult).not.toContain('₿'); // wrong: no real symbol either
     const formatMoney = loadFormatMoney({ BTC: { code: 'BTC', symbol: '₿', name: 'Bitcoin', decimals: 8 } });
     expect(formatMoney(0.12345678, 'BTC')).toBe('₿ 0.12345678');
   });
 
-  it("formats a crypto amount with its own symbol + decimals from currency metadata, not a flat 2", () => {
+  it('formats a crypto amount with its own symbol + decimals from currency metadata, not a flat 2', () => {
     const formatMoney = loadFormatMoney({
       BTC: { code: 'BTC', symbol: '₿', name: 'Bitcoin', decimals: 8 },
       USDC: { code: 'USDC', symbol: 'USDC', name: 'USD Coin', decimals: 6 },

@@ -264,6 +264,7 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
   → translate Result. Nothing else.
 - db: parameterized SQL ONLY — use Drizzle's query builder or the `sql` template tag; never
   string-interpolate user input (security bug). Decode every row through `wire/db` + `adapters/` zod parsing.
+- Edge and shell expected failures follow the same Result convention as controllers: a `Result`/`ResultAsync` whose error is a plain discriminated object (`{ code, … }`), never a thrown `Error` subclass — a throwing third-party API (`node:fs`, the OS keychain, `readline`) is wrapped exactly once, at the adapter (`Result.fromThrowable` / `ResultAsync.fromPromise`), and only unexpected failures throw.
 - New MCP tools: rich `description` (the agent reads it!), `.describe()` on non-obvious fields,
   documented in `docs/mcp-tools.md` in the same change.
 

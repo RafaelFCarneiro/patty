@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
-import { DatabaseAheadError } from '../../../src/common/databaseAhead.js';
 
 /**
  * Two builds starting together: the older one passes the guard, the newer one then commits a migration, and the older
@@ -45,7 +44,7 @@ describe('the version guard is re-checked before seeding', () => {
       `\n--> statement-breakpoint\nINSERT INTO "${MIGRATIONS_TABLE}" (hash, created_at) VALUES ('newer-build', ${Date.now() + FAR_FUTURE_MS});`,
     );
 
-    await expect(bootstrap(db, folder)).rejects.toBeInstanceOf(DatabaseAheadError);
+    expect((await bootstrap(db, folder))._unsafeUnwrapErr().code).toBe('database_ahead');
 
     expect(await db.all(sql`SELECT 1 FROM currencies`)).toEqual([]); // never seeded
   });

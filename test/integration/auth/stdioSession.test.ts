@@ -1,7 +1,7 @@
-import { errAsync } from 'neverthrow';
+import { errAsync, ResultAsync } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sql } from 'drizzle-orm';
-import { KeychainUnavailableError } from '../../../src/common/keychain.js';
+import { keychainFailures } from '../../../src/models/auth/signIn.js';
 import { conflict } from '../../../src/models/error.js';
 import { type SignInDuration } from '../../../src/models/auth/grant.js';
 import { STDIO_MESSAGES } from '../../../src/models/auth/message.js';
@@ -334,9 +334,7 @@ describe('StdioSession — an unreadable keychain', () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
     const store = memoryStore(null, { refuseSave: true });
-    store.load = async () => {
-      throw new KeychainUnavailableError(new Error('locked'));
-    };
+    store.load = () => errAsync(keychainFailures.unavailable(new Error('locked')));
     const { session } = stdioSessionFor(ctx, { store });
 
     expect((await session.resolve()).kind).toBe('not_signed_in');
@@ -400,11 +398,14 @@ describe('StdioSession — restart and the keychain', () => {
     const store = memoryStore('ftk_not-a-credential-anyone-issued');
     const load = store.load.bind(store);
     let loads = 0;
-    store.load = async () => {
-      loads += 1;
-      if (loads === 2) await store.save(newer); // lands after the first look, before the compare-before-clear
-      return load();
-    };
+    store.load = () =>
+      ResultAsync.fromSafePromise(
+        (async () => {
+          loads += 1;
+          if (loads === 2) await store.save(newer); // lands after the first look, before the compare-before-clear
+          return (await load())._unsafeUnwrap();
+        })(),
+      );
     const { session } = stdioSessionFor(ctx, { store });
 
     await session.resolve();

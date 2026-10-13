@@ -1,4 +1,5 @@
 import { runEffects } from '@rfc0/effect-runner';
+import { err, ok, ResultAsync, type Result } from 'neverthrow';
 import { AUTH_APPLIERS, bindAuthRunEffects, createAuthDeps } from './auth.js';
 import { version } from '../common/buildVersion.js';
 import { loadConfig } from '../config.js';
@@ -7,8 +8,9 @@ import { runCli } from '../diplomat/cli/commands.js';
 import { type CliIo, type Shell } from '../diplomat/cli/io.js';
 import * as tty from '../diplomat/cli/terminal.js';
 import { bootstrap } from '../diplomat/db/bootstrap.js';
-import { closeDatabase, openDatabase } from '../diplomat/db/driver.js';
+import { closeDatabase, openDatabase, type Db } from '../diplomat/db/driver.js';
 import { createEngineContext } from '../diplomat/db/engine.js';
+import type { DatabaseAhead } from '../models/database.js';
 import { AuthMode } from '../models/auth/mode.js';
 import { createSignInFor } from './signIn/wiring.js';
 
@@ -18,19 +20,28 @@ import { createSignInFor } from './signIn/wiring.js';
  * against. Loaded lazily by `main.ts`, so a server start never pays for it.
  */
 
-const openShell = async (): Promise<Shell> => {
-  const config = loadConfig();
-  const db = await openDatabase(config);
+/** Bootstraps, closing the database when that fails — by refusal or by throwing. */
+const bootstrapOrClose = async (db: Db): Promise<Result<void, DatabaseAhead>> => {
   try {
-    await bootstrap(db);
+    return await bootstrap(db);
   } catch (cause) {
     closeDatabase(db);
     throw cause;
   }
+};
+
+const openShell = async (): Promise<Result<Shell, DatabaseAhead>> => {
+  const config = loadConfig();
+  const db = await openDatabase(config);
+  const bootstrapped = await bootstrapOrClose(db);
+  if (bootstrapped.isErr()) {
+    closeDatabase(db);
+    return err(bootstrapped.error);
+  }
   const engineContext = createEngineContext(db);
   const deps = await createAuthDeps(db);
   const run = bindAuthRunEffects((flow) => runEffects(engineContext, AUTH_APPLIERS, flow));
-  return {
+  return ok({
     deps,
     run,
     close: () => closeDatabase(db),
@@ -39,7 +50,7 @@ const openShell = async (): Promise<Shell> => {
     // `login` never reuses a server already on HOST:PORT: it names no page and serves its own, on this database.
     signIn: (profile) =>
       createSignInFor({ config, db, deps, run }, { profile, origin: () => null, canServePage: true }),
-  };
+  });
 };
 
 const waitOrAbort = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -61,7 +72,7 @@ const interruptSignal = (): AbortSignal => {
 };
 
 const defaultCliIo = (): CliIo => ({
-  openShell,
+  openShell: () => new ResultAsync(openShell()),
   openTerminal: () => (tty.isInteractive() ? tty.open() : null),
   readPasswordFromStdin: tty.readPasswordFromStdin,
   out: tty.printResult,

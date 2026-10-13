@@ -1,3 +1,4 @@
+import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import {
   collectNewCredentials,
@@ -6,7 +7,7 @@ import {
   PROMPT_MESSAGES,
   type PromptIo,
 } from '../../../../src/diplomat/cli/prompt.js';
-import type { Terminal } from '../../../../src/diplomat/cli/terminal.js';
+import { promptEnded, type PromptEnded, type Terminal } from '../../../../src/diplomat/cli/terminal.js';
 import { PASSWORD_MIN_LENGTH } from '../../../../src/models/auth/password.js';
 
 const GOOD_PASSWORD = 'correct horse battery staple';
@@ -19,14 +20,14 @@ const scriptedTerminal = (script: Script) => {
   const secret = [...(script.secret ?? [])];
   const asked: string[] = [];
   const told: string[] = [];
-  const next = (queue: string[]): string => {
+  const next = (queue: string[]): ResultAsync<string, PromptEnded> => {
     const answer = queue.shift();
     if (answer === undefined) throw new Error('the script ran out of answers — the code asked more than allowed');
-    return answer;
+    return okAsync(answer);
   };
   const terminal: Terminal = {
-    ask: async (question) => (asked.push(question), next(visible)),
-    askSecret: async (question) => (asked.push(question), next(secret)),
+    ask: (question) => (asked.push(question), next(visible)),
+    askSecret: (question) => (asked.push(question), next(secret)),
     tell: (message) => told.push(message),
     close: () => undefined,
   };
@@ -153,5 +154,35 @@ describe('collectNewPassword', () => {
     expect((await collectNewPassword(ioFor(null), { passwordStdin: false }))._unsafeUnwrapErr()).toBe(
       PROMPT_MESSAGES.noTerminal,
     );
+  });
+});
+
+describe('a prompt that ends (Ctrl-C, Ctrl-D)', () => {
+  const endingTerminal = (how: 'interrupted' | 'cancelled', after: string[]): Terminal => {
+    const answers = [...after];
+    const next = (): ResultAsync<string, PromptEnded> => {
+      const answer = answers.shift();
+      return answer === undefined ? errAsync(promptEnded(how)) : okAsync(answer);
+    };
+    return { ask: next, askSecret: next, tell: () => undefined, close: () => undefined };
+  };
+
+  it.each(['interrupted', 'cancelled'] as const)('is %s: reported as the error, never retried', async (how) => {
+    const result = await collectNewCredentials(ioFor(endingTerminal(how, [])), { passwordStdin: false });
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'prompt_ended', how });
+  });
+
+  it('ends the password step the same way, after the username was given', async () => {
+    const result = await collectNewCredentials(ioFor(endingTerminal('interrupted', ['rafael'])), {
+      passwordStdin: false,
+    });
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'prompt_ended', how: 'interrupted' });
+  });
+
+  it('is not an invalid answer: nothing is told to the person', async () => {
+    const told: string[] = [];
+    const terminal = { ...endingTerminal('cancelled', []), tell: (message: string) => void told.push(message) };
+    await collectNewPassword(ioFor(terminal), { passwordStdin: false });
+    expect(told).toEqual([]);
   });
 });

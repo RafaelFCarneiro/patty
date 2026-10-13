@@ -1,9 +1,12 @@
 import { parseArgs, type ParseArgsConfig } from 'node:util';
+import type { ResultAsync } from 'neverthrow';
 import type { ZodType, ZodTypeDef } from 'zod';
 import type { AuthDeps, ClientConfigs, RunEffects, SignInInterpreter } from '../../controllers/deps.js';
+import { reasonOf } from '../../models/error.js';
+import { databaseAheadMessage, type DatabaseAhead } from '../../models/database.js';
 import { CLI_MESSAGES } from './messages.js';
-import { PROMPT_MESSAGES } from './prompt.js';
-import type { Terminal } from './terminal.js';
+import { isPromptEnded, PROMPT_MESSAGES, type PromptFailure } from './prompt.js';
+import { PROMPT_ABORTED_MESSAGE, PromptEnd, type Terminal } from './terminal.js';
 
 export const EXIT_OK = 0;
 export const EXIT_FAILURE = 1;
@@ -29,7 +32,8 @@ export type Shell = {
 };
 
 export type CliIo = {
-  openShell: () => Promise<Shell>;
+  /** The database, opened and migrated — or why it cannot be used (a build older than the database). */
+  openShell: () => ResultAsync<Shell, DatabaseAhead>;
   openTerminal: () => Terminal | null;
   readPasswordFromStdin: () => Promise<string>;
   out: (line: string) => void;
@@ -44,8 +48,15 @@ export type CliIo = {
   clients: ClientConfigs;
 };
 
-export const withShell = async <T>(io: CliIo, work: (shell: Shell) => Promise<T>): Promise<T> => {
-  const shell = await io.openShell();
+/** Runs `work` on the opened shell and closes it. When the database is newer than this build, says so on stderr
+ *  (the one wording, `databaseAheadMessage`) and answers `whenUnavailable` without running anything. */
+export const withShell = async <T>(io: CliIo, work: (shell: Shell) => Promise<T>, whenUnavailable: T): Promise<T> => {
+  const opened = await io.openShell();
+  if (opened.isErr()) {
+    io.err(databaseAheadMessage(opened.error.version));
+    return whenUnavailable;
+  }
+  const shell = opened.value;
   try {
     return await work(shell);
   } finally {
@@ -56,6 +67,16 @@ export const withShell = async <T>(io: CliIo, work: (shell: Shell) => Promise<T>
 export const fail = (io: CliIo, reason: string): false => {
   io.err(CLI_MESSAGES.failure(reason));
   return false;
+};
+
+/** Says why on stderr and answers the failing exit code. */
+export const failed = (io: CliIo, reason: string): number => exitCodeOf(fail(io, reason));
+
+/** What a failed prompt answers: an invalid answer is a failure with its message; Ctrl-C is the interrupted exit
+ *  (the terminal has already said its newline); Ctrl-D reads as "cancelled", a failure. */
+export const exitCodeOfPrompt = (io: CliIo, failure: PromptFailure): number => {
+  if (!isPromptEnded(failure)) return failed(io, failure);
+  return failure.how === PromptEnd.enum.interrupted ? EXIT_INTERRUPTED : failed(io, PROMPT_ABORTED_MESSAGE);
 };
 
 export const exitCodeOf = (succeeded: boolean): number => (succeeded ? EXIT_OK : EXIT_FAILURE);
@@ -75,6 +96,6 @@ export const parseFlags = <T>(
       ? { positionals: parsed.positionals, options: decoded.data }
       : { error: decoded.error.issues[0]?.message ?? PROMPT_MESSAGES.invalidAnswer };
   } catch (cause) {
-    return { error: cause instanceof Error ? cause.message : String(cause) };
+    return { error: reasonOf(cause) };
   }
 };
