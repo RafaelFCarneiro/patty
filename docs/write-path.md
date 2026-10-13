@@ -195,7 +195,7 @@ and its failure isolation) is the package's to document — see the pointer abov
   grant's `redeemed` `update` in ONE batch — the version guard on that `update` is what makes the device code single-use: a
   second redeem built from the same stale read cannot commit, and the engine's retry re-reads a spent grant — plus, for an
   approved grant past its window, the `expired` `update` that settles it (terminal, written once); `pruneExpiredGrants` one
-  `delete` per unredeemed grant past its window.
+  `delete` per unredeemed grant past its window and per redeemed grant superseded by a newer approval for the same user, profile and client (never a live pending/approved one, never the newest redeemed per key).
 
 ### Outcomes and responses
 

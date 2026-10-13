@@ -30,7 +30,7 @@ afterEach(() => vi.useRealTimers());
 
 const granted = (outcome: GateOutcome): readonly string[] => {
   if (outcome.kind !== 'granted') throw new Error(`expected granted, got ${JSON.stringify(outcome)}`);
-  return outcome.scopes;
+  return outcome.principal.scopes;
 };
 
 const grantRows = (ctx: Awaited<ReturnType<typeof createApp>>) =>
@@ -231,6 +231,39 @@ describe('StdioSession — signing in', () => {
     const [token] = await ctx.db.all<{ user_id: string }>(sql`SELECT user_id FROM access_tokens`);
     expect(grant?.user_id).toBe('user-owner');
     expect(token?.user_id).toBe('user-owner');
+  });
+});
+
+describe('StdioSession — the principal it grants', () => {
+  const principalOf = (outcome: GateOutcome) => {
+    if (outcome.kind !== 'granted') throw new Error(`expected granted, got ${JSON.stringify(outcome)}`);
+    return outcome.principal;
+  };
+
+  it('is the whole principal (user, role, scopes, via stdio, token id), however the credential was found', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const first = stdioSessionFor(ctx);
+    await signInVia(ctx, cookie, first.session, { access: 'write' });
+    const [row] = await ctx.db.all<{ id: string }>(sql`SELECT id FROM access_tokens WHERE kind = 'stdio'`);
+    const expected = { userId: 'user-owner', role: 'admin', scopes: [READ, WRITE], via: 'stdio', tokenId: row!.id };
+
+    expect(principalOf(await first.session.resolve())).toEqual(expected); // adopted from the grant, then re-validated
+    const restarted = stdioSessionFor(ctx, { store: first.store });
+    expect(principalOf(await restarted.session.resolve())).toEqual(expected); // restored from the keychain
+
+    const { token, id } = await mintToken(ctx, cookie, { access: 'read' });
+    const viaEnv = stdioSessionFor(ctx, { envToken: token });
+    expect(principalOf(await viaEnv.session.resolve())).toEqual({ ...expected, scopes: [READ], tokenId: id });
+  });
+
+  it('is handed out right after the approval is redeemed, without a second lookup', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const { session } = stdioSessionFor(ctx);
+    const asked = await session.resolve();
+    await approveConnect(ctx, cookie, userCodeIn(asked), { access: 'read' });
+    expect(principalOf(await session.resolve())).toMatchObject({ userId: 'user-owner', via: 'stdio', scopes: [READ] });
   });
 });
 

@@ -499,4 +499,84 @@ describe('pruneExpiredGrants', () => {
     expect(statuses.map((row) => row.status).sort()).toEqual(['pending', 'redeemed']);
     expect(statuses.find((row) => row.status === 'pending')?.user_code).toBe(fresh.userCode.replace('-', ''));
   });
+
+  const redeem = async (
+    w: Awaited<ReturnType<typeof world>>,
+    input: StartGrantInput,
+    choice: { access: 'read' | 'write'; duration: '24h' | '7d' | '30d' },
+  ) => {
+    const started = await start(w, input);
+    await w.run(() => approveGrant(w.deps, w.session, { userCode: started.userCode, ...choice }));
+    await w.run(() => redeemGrant(w.deps, started.deviceCode));
+    await new Promise((resolve) => setTimeout(resolve, 3)); // distinct approval times
+    return started;
+  };
+
+  it('deletes redeemed grants superseded for the same client and profile, keeping the newest', async () => {
+    const w = await world();
+    await redeem(w, STDIO_REQUEST, { access: 'read', duration: '24h' });
+    await redeem(w, STDIO_REQUEST, { access: 'read', duration: '7d' });
+    await redeem(w, STDIO_REQUEST, { access: 'write', duration: '30d' });
+    await redeem(w, { ...STDIO_REQUEST, profile: 'work' }, { access: 'read', duration: '24h' });
+    await redeem(
+      w,
+      { ...STDIO_REQUEST, client: { name: 'VS Code', version: '1' } },
+      { access: 'read', duration: '24h' },
+    );
+
+    const pruned = await w.run(() => pruneExpiredGrants(w.deps));
+
+    expect(pruned._unsafeUnwrap()).toBe(2);
+    const left = await w.ctx.db.all<{ profile: string; client_name: string; duration: string }>(
+      sql`SELECT profile, client_name, duration FROM client_grants ORDER BY approved_at`,
+    );
+    expect(left).toHaveLength(3); // the newest per (profile, client): default/Claude Desktop, work, VS Code
+    expect(left.filter((row) => row.client_name === 'Claude Desktop' && row.profile === 'default')).toEqual([
+      { profile: 'default', client_name: 'Claude Desktop', duration: '30d' },
+    ]);
+  });
+
+  it('keeps what the consent form remembers: lastRedeemed still returns the kept row after a prune', async () => {
+    const w = await world();
+    await redeem(w, STDIO_REQUEST, { access: 'read', duration: '7d' });
+    await redeem(w, STDIO_REQUEST, { access: 'write', duration: '30d' });
+    const before = await w.deps.clientGrants.lastRedeemed(OWNER_USER_ID, 'default', 'Claude Desktop');
+
+    await w.run(() => pruneExpiredGrants(w.deps));
+
+    const after = await w.deps.clientGrants.lastRedeemed(OWNER_USER_ID, 'default', 'Claude Desktop');
+    expect(after?.id).toBe(before?.id);
+    expect(after).toMatchObject({ scopes: ['fintrack:read', 'fintrack:write'], duration: '30d' });
+  });
+
+  it('never touches a live pending or approved grant, whatever redeemed ones exist beside it', async () => {
+    const w = await world();
+    await redeem(w, STDIO_REQUEST, { access: 'read', duration: '24h' });
+    await redeem(w, STDIO_REQUEST, { access: 'read', duration: '7d' });
+    const pending = await start(w);
+    const approved = await start(w);
+    await w.run(() =>
+      approveGrant(w.deps, w.session, { userCode: approved.userCode, access: 'read', duration: '24h' }),
+    );
+
+    await w.run(() => pruneExpiredGrants(w.deps));
+
+    const codes = await w.ctx.db.all<{ status: string; user_code: string }>(
+      sql`SELECT status, user_code FROM client_grants WHERE status IN ('pending', 'approved') ORDER BY status`,
+    );
+    expect(codes).toEqual([
+      { status: 'approved', user_code: approved.userCode.replace('-', '') },
+      { status: 'pending', user_code: pending.userCode.replace('-', '') },
+    ]);
+    // …and the approved one can still be redeemed afterwards.
+    expect((await w.run(() => redeemGrant(w.deps, approved.deviceCode)))._unsafeUnwrap().kind).toBe('signed_in');
+  });
+
+  it('is idempotent: a second prune finds nothing more', async () => {
+    const w = await world();
+    await redeem(w, STDIO_REQUEST, { access: 'read', duration: '24h' });
+    await redeem(w, STDIO_REQUEST, { access: 'read', duration: '7d' });
+    expect((await w.run(() => pruneExpiredGrants(w.deps)))._unsafeUnwrap()).toBe(1);
+    expect((await w.run(() => pruneExpiredGrants(w.deps)))._unsafeUnwrap()).toBe(0);
+  });
 });

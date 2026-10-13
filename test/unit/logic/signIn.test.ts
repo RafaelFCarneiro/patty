@@ -21,8 +21,10 @@ import {
   persistsToKeychain,
   redeemedGrant,
   redeemPlan,
+  sessionOnlyLabel,
   signInExpiry,
   signInOrigin,
+  supersededGrants,
   summarizeToken,
   tokenAdmitsVia,
   tokenPrincipal,
@@ -40,6 +42,7 @@ import {
   SignInDuration,
   STDIO_MESSAGES,
   TOKEN_NAME_MAX_LENGTH,
+  UNKNOWN_CLIENT_NAME,
   UserRole,
   type AccessTokenEntity,
   type ClientGrantEntity,
@@ -445,34 +448,106 @@ describe('grantRequestOf never exposes secrets', () => {
   });
 });
 
-describe('signInOrigin — what origin a stdio sign-in link may name', () => {
-  const base = { httpEnabled: true, publicUrl: undefined, boundOrigin: null, host: '127.0.0.1', port: 51737 };
+describe('signInOrigin — what a stdio link may name from what the process already knows', () => {
+  const base = { httpEnabled: true, publicUrl: undefined, boundOrigin: null, host: '127.0.0.1' };
 
-  it('names no origin when there is no HTTP server', () => {
+  it('names nothing when there is no HTTP server', () => {
     expect(signInOrigin({ ...base, httpEnabled: false, publicUrl: 'https://fin.example.com' })).toBeNull();
   });
 
-  it('prefers PUBLIC_URL, then the origin the sidecar bound', () => {
+  it('prefers PUBLIC_URL, then the origin THIS process bound', () => {
     expect(signInOrigin({ ...base, publicUrl: 'https://fin.example.com', boundOrigin: 'http://127.0.0.1:1' })).toBe(
       'https://fin.example.com',
     );
     expect(signInOrigin({ ...base, boundOrigin: 'http://127.0.0.1:54321' })).toBe('http://127.0.0.1:54321');
   });
 
-  it('falls back to the configured address when the sidecar could not bind — another FinTrack may own the port', () => {
-    expect(signInOrigin(base)).toBe('http://127.0.0.1:51737');
+  it('never falls back to the configured HOST:PORT — whatever listens there may have opened another database', () => {
+    expect(signInOrigin(base)).toBeNull();
+    expect(signInOrigin({ ...base, host: 'localhost' })).toBeNull();
   });
 
   it('names no non-loopback host without PUBLIC_URL — its POSTs would fail the CSRF origin check', () => {
-    expect(signInOrigin({ ...base, host: '0.0.0.0' })).toBeNull();
+    expect(signInOrigin({ ...base, host: '0.0.0.0', boundOrigin: 'http://127.0.0.1:51737' })).toBeNull();
     expect(signInOrigin({ ...base, host: 'fintrack.lan', boundOrigin: 'http://fintrack.lan:51737' })).toBeNull();
     expect(signInOrigin({ ...base, host: '0.0.0.0', publicUrl: 'https://fin.example.com' })).toBe(
       'https://fin.example.com',
     );
   });
+});
 
-  it('never names a port-0 address before the sidecar has bound: that is no listener at all', () => {
-    expect(signInOrigin({ ...base, port: 0 })).toBeNull();
-    expect(signInOrigin({ ...base, port: 0, boundOrigin: 'http://127.0.0.1:54321' })).toBe('http://127.0.0.1:54321');
+describe('supersededGrants — which redeemed grants no longer matter', () => {
+  const redeemedAt = (
+    id: string,
+    approvedAt: string,
+    overrides: Partial<ClientGrantEntity> = {},
+  ): ClientGrantEntity => ({
+    ...approved({ id, approvedAt, userId: 'user-owner', status: GrantStatus.enum.redeemed }),
+    ...overrides,
+  });
+
+  it('keeps the newest approval per user, profile and client, and offers the older ones', () => {
+    const grants = [
+      redeemedAt('old', '2026-10-01T00:00:00.000Z'),
+      redeemedAt('newest', '2026-10-03T00:00:00.000Z'),
+      redeemedAt('middle', '2026-10-02T00:00:00.000Z'),
+    ];
+    expect(
+      supersededGrants(grants)
+        .map((grant) => grant.id)
+        .sort(),
+    ).toEqual(['middle', 'old']);
+  });
+
+  it('orders by approval, not by when the request was made', () => {
+    const grants = [
+      redeemedAt('requested-last-approved-first', '2026-10-01T00:00:00.000Z', {
+        createdAt: '2026-10-09T00:00:00.000Z',
+      }),
+      redeemedAt('requested-first-approved-last', '2026-10-05T00:00:00.000Z', {
+        createdAt: '2026-10-02T00:00:00.000Z',
+      }),
+    ];
+    expect(supersededGrants(grants).map((grant) => grant.id)).toEqual(['requested-last-approved-first']);
+  });
+
+  it('breaks a tie on the same approval instant by id, the same way the repository orders', () => {
+    const grants = [redeemedAt('a', '2026-10-01T00:00:00.000Z'), redeemedAt('b', '2026-10-01T00:00:00.000Z')];
+    expect(supersededGrants(grants).map((grant) => grant.id)).toEqual(['a']);
+    expect(supersededGrants([...grants].reverse()).map((grant) => grant.id)).toEqual(['a']);
+  });
+
+  it('keeps one per key: another profile, another client and another user each have their own', () => {
+    const grants = [
+      redeemedAt('a-old', '2026-10-01T00:00:00.000Z'),
+      redeemedAt('a-new', '2026-10-02T00:00:00.000Z'),
+      redeemedAt('work', '2026-10-01T00:00:00.000Z', { profile: 'work' }),
+      redeemedAt('vscode', '2026-10-01T00:00:00.000Z', { clientName: 'VS Code' }),
+      redeemedAt('ana', '2026-10-01T00:00:00.000Z', { userId: 'user-ana' }),
+    ];
+    expect(supersededGrants(grants).map((grant) => grant.id)).toEqual(['a-old']);
+  });
+
+  it('offers nothing when each key has a single grant, or none are given', () => {
+    expect(supersededGrants([redeemedAt('only', '2026-10-01T00:00:00.000Z')])).toEqual([]);
+    expect(supersededGrants([])).toEqual([]);
+  });
+
+  it('does not mistake keys whose parts would collide if joined by a separator', () => {
+    const grants = [
+      redeemedAt('x', '2026-10-01T00:00:00.000Z', { profile: 'a', clientName: 'b c' }),
+      redeemedAt('y', '2026-10-02T00:00:00.000Z', { profile: 'a b', clientName: 'c' }),
+    ];
+    expect(supersededGrants(grants)).toEqual([]);
+  });
+});
+
+describe('sessionOnlyLabel', () => {
+  it('names the client that asked', () => {
+    expect(sessionOnlyLabel('Claude Desktop')).toBe('This Claude Desktop session only');
+  });
+
+  it('falls back to a plain label for the unknown-client placeholder', () => {
+    expect(sessionOnlyLabel(UNKNOWN_CLIENT_NAME)).toBe('This session only');
   });
 });

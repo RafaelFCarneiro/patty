@@ -11,7 +11,7 @@ The operator guide is [`auth.md`](auth.md); the decision record is
 |---|---|---|
 | Config | `src/config.ts` | Reads `FINTRACK_AUTH` (default `required`) and refuses `disabled` on an exposed instance (`HOST` / `PUBLIC_URL` / `TRUST_PROXY`) |
 | VersionGuard | `src/diplomat/db/versionGuard.ts` (rule: `src/logic/migration.ts`) | First thing `bootstrap` does: refuses a database a newer build has migrated, before anything is copied, migrated, seeded or written |
-| Bootstrap | `src/diplomat/db/bootstrap.ts`, `safetyCopy.ts`, `migrationLock.ts` | Migrations, the owner row, the pre-migration backup |
+| Bootstrap | `src/diplomat/db/bootstrap.ts`, `safetyCopy.ts`, `migrationJournal.ts`, `migrationLock.ts` | Migrations, the owner row, the pre-migration backup |
 | AuthRuntime | `src/authRuntime.ts` | Builds the identity deps (shared with the CLI and the stdio session), prunes sessions and expired sign-in requests, issues and prints the setup code |
 | Cli | `src/cli.ts`, `src/authCli.ts`, `src/loginCli.ts`, `src/diplomat/cli/{prompt,terminal}.ts` | `fintrack setup [client]`, `auth setup`, `auth reset-password`, `login`, `logout`: opens the database like the server (no stdio), prompts with no echo, runs the controller flows; an unknown command prints the usage and exits non-zero |
 | SignInServer | `src/signInServer.ts` | Where `login` sends the browser: always a temporary loopback app of the login's own process, on a free port, for the length of the login |
@@ -257,12 +257,12 @@ flowchart TD
     A["/api or /mcp request<br/>with an Authorization header"] --> B{"Header is exactly<br/>Bearer ftk_… ?"}
     B -- "no: another scheme, empty,<br/>not our prefix" --> X1["401 invalid_token<br/>WWW-Authenticate: Bearer error=invalid_token, resource_metadata<br/>the cookie is NOT tried"]
     B -- yes --> C[sha256 token → access_tokens row → user]
-    C --> D{"Row exists, not revoked,<br/>not expired,<br/>owner claimed and enabled,<br/>kind admitted here (a personal access<br/>token; a stdio sign-in is stdio-only)?"}
+    C --> D{"Row exists, not revoked,<br/>not expired,<br/>owner claimed and enabled,<br/>kind admitted here (a personal access<br/>token, a stdio sign-in is stdio-only)?"}
     D -- no --> X1
     D -- yes --> E{"last_used_at older<br/>than 5 min?"}
     E -- yes --> F[UPDATE last_used_at — version-guarded] --> G
     E -- no --> G["principal = user with the TOKEN's scopes<br/>via = token, tokenId"]
-    G --> H{"Scope needed by the matched route<br/>(RouteDefinition.scope; POST /mcp: read)<br/>covered? write implies read"}
+    G --> H{"Scope needed by the matched route<br/>(RouteDefinition.scope, POST /mcp: read)<br/>covered? write implies read"}
     H -- no --> X2["403 insufficient_scope<br/>WWW-Authenticate: Bearer error=insufficient_scope, scope=fintrack:write, resource_metadata"]
     H -- yes --> I{"POST /mcp?"}
     I -- no --> Z[REST handler]
@@ -412,6 +412,9 @@ sequenceDiagram
 
     C->>S: tools/call (any tool) — or resources/read, prompts/get
     S->>S: no credential (diagram 9) → ask
+    opt neither PUBLIC_URL nor a sidecar this process bound names a page, and HTTP is on
+        S->>S: start a temporary server of its own (free localhost port, auth required, THIS database)
+    end
     S->>G: runEffects(startGrant {client name + version from initialize, profile, channel stdio})
     G->>G: device code = 256 random bits (returned once) · user code = 8 Crockford symbols, free among pending grants
     G->>DB: INSERT client_grant {sha256(device code), user code, status pending, expires in 10 min}
@@ -467,7 +470,7 @@ flowchart TD
     C -- no --> H{"Credential held in memory<br/>(this process's sign-in)?"}
     H -- yes --> I{Still valid?}
     I -- yes --> G
-    I -- "no: revoked / expired / user disabled" --> J["Forget it. A saved one is deleted from the keychain<br/>only if the keychain still holds THIS credential;<br/>a 'this session only' one never touched it"]
+    I -- "no: revoked / expired / user disabled" --> J["Forget it. A saved one is deleted from the keychain<br/>only if the keychain still holds THIS credential,<br/>a 'this session only' one never touched it"]
     H -- no --> K{"Saved sign-in in the keychain for<br/>this profile and database?"}
     J --> K
     K -- yes --> L{Still valid?}
@@ -486,7 +489,7 @@ flowchart TD
     G --> W{"Scope covers the request?<br/>read for resources, prompts and read-only tools"}
     W -- yes --> Y[Runs]
     W -- no --> X["tool error insufficient_scope<br/>(a resource / prompt: a JSON-RPC error)"]
-    Y --> AA["On shutdown: a 'this session only' sign-in is revoked (best effort;<br/>the 12-hour cap covers a crash)"]
+    Y --> AA["On shutdown: a 'this session only' sign-in is revoked (best effort,<br/>the 12-hour cap covers a crash)"]
 ```
 
 ## 10. `fintrack login` and `logout`
@@ -505,7 +508,7 @@ sequenceDiagram
     Cli->>DB: open + bootstrap (the version guard runs first)
     Cli->>Cli: auth disabled? owner unclaimed? → say so, exit 1
     Cli->>SS: where is /ui/connect?
-    SS->>SS: start a temporary app on a free port of `localhost` (loopback only, its own cookie jar entry; authentication required, same database) — closed when the login ends
+    SS->>SS: start a temporary app on a free port of `localhost` (loopback only, its own cookie jar entry, authentication required, same database) — closed when the login ends
     SS-->>Cli: its origin (a server already running on HOST:PORT is not reused: it may have opened another database)
     Cli->>G: startGrant {fintrack login, version, profile, channel cli, hint scope + duration}
     Cli-->>Op: Open ORIGIN/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH. Waiting… (Ctrl-C cancels)

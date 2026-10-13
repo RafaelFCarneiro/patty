@@ -2,11 +2,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../../../src/controllers/deps.js';
-import { authInfoOf } from '../../../../src/diplomat/mcp/authInfo.js';
-import { authInfoGate, ownerGate, type PrincipalGate } from '../../../../src/diplomat/mcp/gate.js';
+import { authInfoOf, principalOf } from '../../../../src/diplomat/mcp/authInfo.js';
+import { authInfoGate, GateKind, ownerGate, type PrincipalGate } from '../../../../src/diplomat/mcp/gate.js';
 import { guardScopes, toolScopesOf } from '../../../../src/diplomat/mcp/scopes.js';
 import { buildMcpServer } from '../../../../src/diplomat/mcp/server.js';
-import { OWNER_PRINCIPAL, PrincipalVia, Scope, UserRole } from '../../../../src/models/auth.js';
+import { OWNER_PRINCIPAL, PrincipalVia, Scope, UserRole, type Principal } from '../../../../src/models/auth.js';
 
 const READ = Scope.enum['fintrack:read'];
 const WRITE = Scope.enum['fintrack:write'];
@@ -115,7 +115,12 @@ describe('authInfoOf', () => {
       via: PrincipalVia.enum.token,
       tokenId: 'abc',
     });
-    expect(info).toEqual({ token: 'abc', clientId: 'pat:abc', scopes: [READ], extra: { userId: 'u1' } });
+    expect(info).toEqual({
+      token: 'abc',
+      clientId: 'pat:abc',
+      scopes: [READ],
+      extra: { userId: 'u1', role: UserRole.enum.admin, via: PrincipalVia.enum.token, tokenId: 'abc' },
+    });
   });
 
   it('names a session or owner request by how it authenticated, with every scope', () => {
@@ -213,5 +218,53 @@ describe('every registered MCP tool declares its scope', () => {
       'update_card_transaction',
       'update_credit_card',
     ]);
+  });
+});
+
+describe('principalOf — the inverse of authInfoOf', () => {
+  it.each([
+    OWNER_PRINCIPAL,
+    { userId: 'u1', role: UserRole.enum.member, scopes: [READ], via: PrincipalVia.enum.token, tokenId: 't1' },
+    { userId: 'u2', role: UserRole.enum.admin, scopes: [READ, WRITE], via: PrincipalVia.enum.stdio, tokenId: 's1' },
+    { userId: 'u3', role: UserRole.enum.admin, scopes: [READ, WRITE], via: PrincipalVia.enum.session },
+  ])('rebuilds the whole principal for %j', (principal) => {
+    expect(principalOf(authInfoOf(principal))).toEqual(principal);
+  });
+
+  it.each([
+    { scopes: [READ], extra: undefined },
+    { scopes: [READ], extra: { userId: 'u1' } },
+    { scopes: ['fintrack:admin'], extra: { userId: 'u1', role: 'admin', via: 'token' } },
+    { scopes: [READ], extra: { userId: 'u1', role: 'root', via: 'token' } },
+    { scopes: [READ], extra: { userId: '', role: 'admin', via: 'token' } },
+  ])('is null for something that is not a whole principal: %j', (authInfo) => {
+    expect(principalOf(authInfo)).toBeNull();
+  });
+});
+
+describe('the gates carry the full principal on every transport', () => {
+  const stdioPrincipal: Principal = {
+    userId: 'u2',
+    role: UserRole.enum.member,
+    scopes: [READ],
+    via: PrincipalVia.enum.stdio,
+    tokenId: 's1',
+  };
+
+  it('HTTP: authInfoGate rebuilds user, role, scopes, via and token id from authInfo', async () => {
+    expect(await authInfoGate({ authInfo: authInfoOf(stdioPrincipal) })).toEqual({
+      kind: GateKind.enum.granted,
+      principal: stdioPrincipal,
+    });
+  });
+
+  it('HTTP: refuses a missing or malformed authInfo — it fails closed, never trusts scopes alone', async () => {
+    const refused = { kind: GateKind.enum.refused, error: { code: 'unauthenticated' } };
+    expect(await authInfoGate({})).toEqual(refused);
+    expect(await authInfoGate({ authInfo: { scopes: [READ, WRITE], extra: { userId: 'u1' } } })).toEqual(refused);
+  });
+
+  it('owner: ownerGate grants OWNER_PRINCIPAL', async () => {
+    expect(await ownerGate({})).toEqual({ kind: GateKind.enum.granted, principal: OWNER_PRINCIPAL });
   });
 });

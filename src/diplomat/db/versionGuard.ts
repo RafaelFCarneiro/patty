@@ -3,7 +3,7 @@ import { version } from '../../common/buildVersion.js';
 import { isDatabaseAhead } from '../../logic/migration.js';
 import { databaseAheadMessage } from '../../models/database.js';
 import type { Db } from './driver.js';
-import { lastAppliedMillis, readJournal } from './safetyCopy.js';
+import { lastAppliedMillis, readJournal } from './migrationJournal.js';
 
 /** Thrown by `assertDatabaseNotAhead`; an entrypoint prints `message` as is (it is already a complete diagnosis). */
 export class DatabaseAheadError extends Error {

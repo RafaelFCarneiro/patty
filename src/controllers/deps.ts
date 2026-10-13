@@ -83,6 +83,9 @@ export type SignInStore = {
   clear: () => Promise<void>;
 };
 
+/** Where the consent page is served while a sign-in waits: a temporary server this process started on its own. */
+export type SignInServer = { origin: string; close: () => Promise<void> };
+
 /** Identity dependencies (ADR-033): kept apart from `Deps` because auth is infrastructure the domain
  *  controllers never see — only `controllers/auth.ts` and the HTTP edge's auth hook use these. */
 export type AuthDeps = {

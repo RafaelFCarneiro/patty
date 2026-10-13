@@ -16,6 +16,7 @@ import { connectStdio } from './diplomat/mcp/stdio.js';
 import { createStdioSession } from './diplomat/mcp/stdioSession.js';
 import { dbIdOf, keychainAccount, signInOrigin } from './logic/auth.js';
 import { createRuntime } from './runtime.js';
+import { startSignInServer } from './signInServer.js';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import type { HttpSidecar } from './server.js';
 
@@ -76,7 +77,8 @@ const main = async (): Promise<void> => {
   const { auth, issueAndAnnounceSetup } = prepared;
 
   if (config.MCP_TRANSPORT === McpTransport.enum.stdio) {
-    // Where the sign-in link points (decided in `logic/auth.ts`); the sidecar binds after the session exists.
+    // The page the sign-in link may name from what is known here (decided in `logic/auth.ts`); with none, the
+    // session serves `/ui/connect` itself from a temporary server on this database. The sidecar binds later.
     let boundOrigin: string | null = null;
     const linkOrigin = (): string | null =>
       signInOrigin({
@@ -84,7 +86,6 @@ const main = async (): Promise<void> => {
         publicUrl: config.PUBLIC_URL,
         boundOrigin,
         host: config.HOST,
-        port: config.PORT,
       });
 
     // The connected server reports who spawned it (`initialize`'s clientInfo); the session asks only when it needs to.
@@ -99,6 +100,7 @@ const main = async (): Promise<void> => {
             keychainAccount(config.FINTRACK_PROFILE, dbIdOf(prepared.stdio.deps.secrets.hashSecret(config.DB_PATH))),
           ),
           origin: linkOrigin,
+          temporaryServer: config.FINTRACK_HTTP ? () => startSignInServer(config, db) : undefined,
           clientInfo: () => connected.server?.server.getClientVersion(),
         })
       : undefined;

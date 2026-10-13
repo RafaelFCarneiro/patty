@@ -35,7 +35,7 @@ type Refusal = Exclude<GateOutcome, { kind: typeof GateKind.enum.granted }>;
 /** `null` = proceed; otherwise what to answer instead of running the callback. */
 const refusalOf = (outcome: GateOutcome, required: Scope): Refusal | null => {
   if (outcome.kind !== GateKind.enum.granted) return outcome;
-  return hasScope(outcome.scopes, required)
+  return hasScope(outcome.principal.scopes, required)
     ? null
     : { kind: GateKind.enum.refused, error: authErrors.insufficientScope(required) };
 };

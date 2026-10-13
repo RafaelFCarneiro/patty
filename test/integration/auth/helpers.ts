@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import Fastify, { type LightMyRequestResponse } from 'fastify';
 import { afterEach } from 'vitest';
 import type { AuthDeps } from '../../../src/controllers/deps.js';
-import type { SignInStore } from '../../../src/controllers/deps.js';
+import type { SignInServer, SignInStore } from '../../../src/controllers/deps.js';
+import { loadConfig } from '../../../src/config.js';
+import { startSignInServer } from '../../../src/signInServer.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
 import { createStdioSession, type StdioSession } from '../../../src/diplomat/mcp/stdioSession.js';
 import type { GateOutcome } from '../../../src/diplomat/mcp/gate.js';
@@ -239,6 +241,7 @@ export type SessionOptions = {
   clock?: () => Date;
   clientInfo?: unknown;
   run?: ReturnType<typeof bindAuthRunEffects>;
+  temporaryServer?: () => Promise<SignInServer>;
 };
 
 /** A stdio session wired to the test app's database, with an in-memory keychain and (optionally) a movable clock. */
@@ -256,6 +259,55 @@ export const stdioSessionFor = (
     store,
     origin: () => (options.origin === undefined ? SIGN_IN_ORIGIN : options.origin),
     clientInfo: () => options.clientInfo ?? { name: 'Claude Desktop', version: '1.0.0' },
+    temporaryServer: options.temporaryServer,
   });
   return { session, store };
+};
+
+/** The real temporary sign-in server on the test app's own database, counted: how many started and closed. */
+export const countedTemporaryServer = (ctx: AppContext) => {
+  const counts = { started: 0, closed: 0 };
+  const origins: string[] = [];
+  const start = async (): Promise<SignInServer> => {
+    const env = { ...process.env, DB_PATH: '/tmp/fintrack-never-opened.db', FINTRACK_DB_KEY: 'c'.repeat(64) };
+    const server = await startSignInServer({ ...loadConfig(env), PUBLIC_URL: undefined }, ctx.db);
+    counts.started += 1;
+    origins.push(server.origin);
+    return {
+      origin: server.origin,
+      close: async () => {
+        counts.closed += 1;
+        await server.close();
+      },
+    };
+  };
+  return { start, counts, origins };
+};
+
+/** A browser at `origin`: log in as the owner, then answer a pending request — over real HTTP, like a person would. */
+export const answerAt = async (
+  origin: string,
+  code: string,
+  decision: { decision: 'approve' | 'deny'; access?: TokenAccess; duration?: SignInDuration },
+): Promise<number> => {
+  const headers = { 'content-type': 'application/x-www-form-urlencoded', origin };
+  const login = await fetch(`${origin}/ui/login`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers,
+    body: formBody({ username: USERNAME, password: PASSWORD }),
+  });
+  const cookie = login.headers.get('set-cookie')?.split(';')[0];
+  if (login.status !== 303 || !cookie) throw new Error(`login at ${origin} failed: ${login.status}`);
+  const answered = await fetch(`${origin}/ui/connect`, {
+    method: 'POST',
+    headers: { ...headers, cookie },
+    body: formBody({
+      code,
+      decision: decision.decision,
+      access: decision.access ?? 'read',
+      duration: decision.duration ?? '24h',
+    }),
+  });
+  return answered.status;
 };

@@ -17,7 +17,9 @@ import {
   normalizeUserCode,
   redeemedGrant,
   redeemPlan,
+  supersededGrants,
   tokenDisplayPrefix,
+  tokenPrincipal,
 } from '../logic/auth.js';
 import * as persistence from '../logic/persistence.js';
 import {
@@ -176,6 +178,7 @@ export const redeemGrant = (deps: AuthDeps, deviceCode: string): ResultAsync<Flo
             token,
             tokenId: entity.id,
             scopes: entity.scopes,
+            principal: tokenPrincipal(entity, user, PrincipalVia.enum.stdio),
             duration: plan.grant.duration,
             expiresAt: entity.expiresAt,
           },
@@ -188,15 +191,18 @@ export const redeemGrant = (deps: AuthDeps, deviceCode: string): ResultAsync<Flo
     }
   });
 
-/** Startup housekeeping, like sessions: grants that ran out without being redeemed are deleted. Redeemed ones stay —
- *  they are the consent form's memory of the last choice. */
+/** Startup housekeeping, like sessions: grants that ran out without being redeemed are deleted, and so are redeemed
+ *  ones superseded by a newer approval for the same user, profile and client. The newest redeemed grant per key stays —
+ *  it is the consent form's memory of the last choice. A live pending or approved grant is never touched. */
 export const pruneExpiredGrants = (deps: AuthDeps): ResultAsync<FlowOutcome<number>, AppError> =>
   safeTry(async function* () {
     const expired = await deps.clientGrants.listExpired(deps.clock().toISOString());
+    const superseded = supersededGrants(await deps.clientGrants.listRedeemed());
+    const doomed = [...expired, ...superseded];
     return ok({
-      persist: R.map(expired, (grant: ClientGrantEntity) =>
+      persist: R.map(doomed, (grant: ClientGrantEntity) =>
         persistence.remove({ entity: CLIENT_GRANT_ENTITY_TAG, id: grant.id, version: grant.version }),
       ),
-      response: expired.length,
+      response: doomed.length,
     });
   });

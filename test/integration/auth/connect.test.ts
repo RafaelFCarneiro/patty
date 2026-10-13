@@ -85,6 +85,24 @@ describe('GET /ui/connect', () => {
     ]);
   });
 
+  it('words "this session only" after the client, escaped, with a plain fallback when it gave no name', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const named = await requestCode(ctx, { name: 'Claude Desktop', version: '1' });
+    const hostile = await requestCode(ctx, { name: '<b>Evil</b>', version: '1' });
+    const unnamed = await requestCode(ctx, {});
+
+    const labelOf = async (code: string) => (await getConnect(ctx, `?code=${code}`, { cookie })).body;
+
+    expect(await labelOf(named)).toContain('This Claude Desktop session only</label>');
+    const hostileBody = await labelOf(hostile);
+    expect(hostileBody).toContain('This &lt;b&gt;Evil&lt;/b&gt; session only</label>');
+    expect(hostileBody).not.toContain('<b>Evil</b>');
+    const unnamedBody = await labelOf(unnamed);
+    expect(unnamedBody).toContain('This session only</label>');
+    expect(unnamedBody).not.toContain('Unknown MCP client session');
+  });
+
   it('pre-selects what this person chose last time for this client', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
@@ -334,12 +352,21 @@ describe('POST /ui/connect', () => {
     expect(res.headers['cache-control']).toBe('no-store');
   });
 
-  it('keeps the dashboards link for a stdio request, whose sidecar stays up', async () => {
+  it('says "close this tab" for a stdio request too — its page may be a temporary one that closes', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);
-    const res = await answerConnect(ctx, cookie, await requestCode(ctx), { decision: 'approve' });
+    for (const decision of ['approve', 'deny'] as const) {
+      const res = await answerConnect(ctx, cookie, await requestCode(ctx), { decision });
+      expect(res.body).toContain('You can close this tab.');
+      expect(res.body).not.toContain('Back to the dashboards');
+    }
+  });
+
+  it('keeps the way back to the dashboards on a page that is only an error', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const res = await getConnect(ctx, '?code=ZZZZ-ZZZZ', { cookie });
     expect(res.body).toContain('Back to the dashboards');
-    expect(res.body).not.toContain('close this tab');
   });
 
   it('says "close this tab", not a dashboard link, for a `fintrack login` request', async () => {

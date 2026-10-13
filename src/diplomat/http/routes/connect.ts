@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { approveGrant, denyGrant, findConsent } from '../../../controllers/grants.js';
-import { AUTH_MESSAGES, authErrors, CONNECT_CODE_PARAM, type GrantChannel } from '../../../models/auth.js';
+import { AUTH_MESSAGES, authErrors, CONNECT_CODE_PARAM } from '../../../models/auth.js';
 import { validation } from '../../../models/error.js';
 import { ConnectDecision, ConnectFormSchema, ConnectQuerySchema } from '../../../wire/in/auth.js';
 import { CONNECT_PATH } from '../authPaths.js';
@@ -50,8 +50,8 @@ export const registerConnectRoutes = (app: FastifyInstance, ctx: AuthRoutesConte
     status: number,
     heading: string,
     message: string,
-    channel?: GrantChannel,
-  ) => page(reply, status, await renderConnectResultPage({ heading, message, channel }));
+    options: { answered?: boolean } = {},
+  ) => page(reply, status, await renderConnectResultPage({ heading, message, answered: options.answered }));
 
   const invalid = (reply: FastifyReply) => result(reply, INVALID_STATUS, HEADINGS.invalid, AUTH_MESSAGES.invalidGrant);
 
@@ -97,15 +97,14 @@ export const registerConnectRoutes = (app: FastifyInstance, ctx: AuthRoutesConte
       const principal = req.principal!;
       const consent = await lookUp(req.ip, principal.userId, code);
       if (consent === null) return invalid(reply);
-      const { channel } = consent.request;
       const answered =
         decision === ConnectDecision.enum.approve
           ? await ctx.runEffects(() => approveGrant(ctx.deps, principal, { userCode: code, access, duration }))
           : await ctx.runEffects(() => denyGrant(ctx.deps, principal, code));
       if (answered.isErr()) return failed(reply, req.ip, answered.error);
       return decision === ConnectDecision.enum.approve
-        ? result(reply, OK_STATUS, HEADINGS.approved, MESSAGES.approved, channel)
-        : result(reply, OK_STATUS, HEADINGS.denied, MESSAGES.denied, channel);
+        ? result(reply, OK_STATUS, HEADINGS.approved, MESSAGES.approved, { answered: true })
+        : result(reply, OK_STATUS, HEADINGS.denied, MESSAGES.denied, { answered: true });
     });
   });
 };

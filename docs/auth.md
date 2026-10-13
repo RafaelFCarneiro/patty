@@ -195,7 +195,9 @@ So the sign-in happens outside the protocol, and what it produces is read from t
    *FinTrack: not signed in. Open http://127.0.0.1:51737/ui/connect?code=ABCD-EFGH and confirm the code ABCD-EFGH.*
    (`initialize` and the tool/resource/prompt **lists** still work, so the client can show the server.) While the owner is
    unclaimed it adds: *Owner not set up yet? Run `npx @rafaelfcarneiro/fintrack@latest auth setup`.* With `FINTRACK_HTTP=false` there is no
-   page to link to, so it says to use `npx @rafaelfcarneiro/fintrack@latest login` or `FINTRACK_TOKEN` instead.
+   page to link to, so it says to use `npx @rafaelfcarneiro/fintrack@latest login` or `FINTRACK_TOKEN` instead. The link names this process's own dashboard (or `PUBLIC_URL`); if
+   that dashboard could not start — say another FinTrack already owns the port — the session serves the page itself from a **temporary server on a free `localhost` port, on this
+   database**, for as long as the request is pending (it never points at whatever else is listening on the configured port: that may have opened a different database).
 2. You open the link. If you are not logged in you log in first and land on the same page. The page shows **the client's name and
    version ("reported by the client"), the profile, when it asked, and the code** — confirm the code is the one Claude showed —
    and the warning *Only approve if you just asked a Claude session on this machine to connect.*
@@ -208,7 +210,7 @@ So the sign-in happens outside the protocol, and what it produces is read from t
 
 | Choice | Behavior |
 |---|---|
-| **This Claude session only** | Kept in the process's memory, **never written to the keychain**. Revoked when the process exits (best effort); capped at **12 hours** in case the process died without cleaning up. The next Claude session asks again. Not offered for `fintrack login`. |
+| **This session only** (worded after the client — "This Claude Desktop session only") | Kept in the process's memory, **never written to the keychain**. Revoked when the process exits (best effort); capped at **12 hours** in case the process died without cleaning up. The next Claude session asks again. Not offered for `fintrack login`. |
 | **24 hours** (default) | Saved in the OS keychain for the profile; expires 24 h after you approved. |
 | **7 days** | Saved in the keychain. |
 | **30 days** (the maximum) | Saved in the keychain. |

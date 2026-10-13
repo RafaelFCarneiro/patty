@@ -166,6 +166,12 @@ export const UNKNOWN_CLIENT_NAME = 'Unknown MCP client';
 export const UNKNOWN_CLIENT_VERSION = 'unknown';
 export const CLI_CLIENT_NAME = 'fintrack login';
 
+/** The consent page's wording for the memory-only duration: it names the client that asked, if it said who it was. */
+export const SESSION_ONLY_LABEL = {
+  named: (clientName: string) => `This ${clientName} session only`,
+  unnamed: 'This session only',
+} as const;
+
 /** `FINTRACK_PROFILE` names which saved sign-in a stdio process uses; it ends up in a keychain account name. */
 export const ProfileSchema = z
   .string()
@@ -243,6 +249,8 @@ export type SignedIn = {
   token: string;
   tokenId: string;
   scopes: Scope[];
+  /** Who the new sign-in acts as — what the stdio gate hands every handler. */
+  principal: Principal;
   duration: SignInDuration;
   expiresAt: string;
 };

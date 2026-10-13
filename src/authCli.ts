@@ -8,7 +8,7 @@ import { AUTH_POSITIONALS, AuthSubcommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN
 import { loadConfig } from './config.js';
 import { claimRaceWinner, dbIdOf, keychainAccount, planOwnerClaim } from './logic/auth.js';
 import { claimedOwnerOf, claimOwnerLocally, findResetTarget, resetPassword } from './controllers/auth.js';
-import type { AuthDeps, RunEffects, SignInStore } from './controllers/deps.js';
+import type { AuthDeps, RunEffects, SignInServer, SignInStore } from './controllers/deps.js';
 import { bootstrap } from './diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase } from './diplomat/db/driver.js';
 import { createEngineContext } from './diplomat/db/engine.js';
@@ -16,7 +16,6 @@ import { collectNewCredentials, collectNewPassword, PROMPT_MESSAGES, type Prompt
 import * as tty from './diplomat/cli/terminal.js';
 import { keychainSignInStore } from './diplomat/auth/signInStore.js';
 import { AuthMode, NPX_COMMAND, type PasswordReset } from './models/auth.js';
-import type { SignInServer } from './signInServer.js';
 import { ClaimOptionsSchema, ResetOptionsSchema, type ClaimOptions, type ResetOptions } from './wire/in/cli.js';
 
 /**

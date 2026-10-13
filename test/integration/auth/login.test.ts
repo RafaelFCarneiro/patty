@@ -432,10 +432,9 @@ describe('setup’s optional sign-in step', () => {
 
 describe('startSignInServer — where `fintrack login` sends the browser', () => {
   const configFor = async (port: number) => {
-    process.env['DB_PATH'] = '/tmp/fintrack-never-opened.db';
-    process.env['FINTRACK_DB_KEY'] = 'c'.repeat(64);
+    const env = { ...process.env, DB_PATH: '/tmp/fintrack-never-opened.db', FINTRACK_DB_KEY: 'c'.repeat(64) };
     return {
-      ...loadConfig(),
+      ...loadConfig(env),
       HOST: '127.0.0.1',
       PORT: port,
       PUBLIC_URL: undefined,

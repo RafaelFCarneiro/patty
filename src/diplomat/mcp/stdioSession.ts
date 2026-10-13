@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { KeychainUnavailableError } from '../../common/keychain.js';
 import { authenticateToken, revokeSignInByHash } from '../../controllers/accessTokens.js';
-import type { AuthDeps, RunEffects, SignInStore } from '../../controllers/deps.js';
+import type { AuthDeps, RunEffects, SignInServer, SignInStore } from '../../controllers/deps.js';
 import { ownerNeedsSetup } from '../../controllers/auth.js';
 import { redeemGrant, startGrant } from '../../controllers/grants.js';
 import { isTokenShaped, notSignedInMessage, persistsToKeychain } from '../../logic/auth.js';
@@ -43,16 +43,19 @@ export type StdioSessionOptions = {
   profile: string;
   envToken: string | undefined;
   store: SignInStore;
-  /** The origin serving `/ui/connect`, or `null` when there is no HTTP server (`FINTRACK_HTTP=false`). Asked at
-   *  use, because the sidecar binds after the session exists. */
+  /** The origin of a page this process can honestly name for `/ui/connect` — `PUBLIC_URL`, or the sidecar it bound — or
+   *  `null`. Asked at use, because the sidecar binds after the session exists. */
   origin: () => string | null;
+  /** How to serve `/ui/connect` when `origin()` names nothing: a temporary app of this process, on this database.
+   *  Absent when there is no HTTP at all (`FINTRACK_HTTP=false`): the message points to `login` / `FINTRACK_TOKEN`. */
+  temporaryServer?: () => Promise<SignInServer>;
   /** What the MCP client reported in `initialize` (`undefined` before it has). */
   clientInfo: () => unknown;
 };
 
 type Held = {
   token: string;
-  scopes: readonly string[];
+  principal: Principal;
   /** A "this session only" sign-in: it exists in this process's memory alone, never reaches the keychain, and is
    *  revoked when the process closes. */
   ephemeral: boolean;
@@ -70,7 +73,7 @@ type Checked =
 /** Where redeeming the pending request stands: signed in, still waiting, or no request left (answered or expired). */
 const RedemptionKind = z.enum(['signed_in', 'pending', 'gone']);
 
-const granted = (scopes: readonly string[]): GateOutcome => ({ kind: GateKind.enum.granted, scopes });
+const granted = (principal: Principal): GateOutcome => ({ kind: GateKind.enum.granted, principal });
 const notSignedIn = (message: string): GateOutcome => ({ kind: GateKind.enum.not_signed_in, message });
 
 export const createStdioSession = (options: StdioSessionOptions): StdioSession => {
@@ -78,6 +81,7 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
   let held: Held | null = null;
   let pending: Pending | null = null;
   let timer: NodeJS.Timeout | null = null;
+  let temporary: SignInServer | null = null;
 
   // Requests and the poll timer share `held`/`pending`, and a device code is single-use: one at a time.
   let queue: Promise<unknown> = Promise.resolve();
@@ -100,12 +104,20 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
     timer = null;
   };
 
+  /** The temporary page lives as long as the request it serves: closed once it is redeemed, denied or expired. */
+  const closeTemporaryServer = async (): Promise<void> => {
+    const server = temporary;
+    temporary = null;
+    await server?.close().catch(() => undefined);
+  };
+
   const adopt = async (signedIn: SignedIn): Promise<Held> => {
     // A sign-in the keychain would not keep lives in memory alone, so like "this session only" it is revoked at close.
     const ephemeral = !persistsToKeychain(signedIn.duration) || !(await store.save(signedIn.token));
-    held = { token: signedIn.token, scopes: signedIn.scopes, ephemeral };
+    held = { token: signedIn.token, principal: signedIn.principal, ephemeral };
     pending = null;
     stopPolling();
+    await closeTemporaryServer();
     return held;
   };
 
@@ -136,6 +148,7 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
     if (result.value.kind === RedeemKind.enum.pending) return { kind: RedemptionKind.enum.pending };
     pending = null;
     stopPolling();
+    await closeTemporaryServer();
     return { kind: RedemptionKind.enum.gone };
   };
 
@@ -147,8 +160,19 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
 
   const clientInfo = (): ClientInfo => clientInfoOf(options.clientInfo());
 
+  // A temporary server, once started, is the page its pending request was announced at, so it is named first.
+  const linkOrigin = (): string | null => temporary?.origin ?? options.origin();
+
+  /** The origin for a NEW request: one already nameable, else — when HTTP is on — a temporary server started now. */
+  const originForNewRequest = async (): Promise<string | null> => {
+    const named = linkOrigin();
+    if (named !== null || options.temporaryServer === undefined) return named;
+    temporary = await options.temporaryServer();
+    return temporary.origin;
+  };
+
   const instructions = async (): Promise<GateOutcome> => {
-    const origin = options.origin();
+    const origin = linkOrigin();
     return notSignedIn(
       notSignedInMessage({
         origin,
@@ -161,12 +185,23 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
   /** Not signed in: ask once and reuse the request until it is answered or runs out. */
   const askToSignIn = async (): Promise<GateOutcome> => {
     const redemption = await redeemPending();
-    if (redemption.kind === RedemptionKind.enum.signed_in) return granted(redemption.held.scopes);
-    if (redemption.kind === RedemptionKind.enum.gone && options.origin() !== null) {
+    if (redemption.kind === RedemptionKind.enum.signed_in) return granted(redemption.held.principal);
+    if (redemption.kind === RedemptionKind.enum.gone && (await originForNewRequest()) !== null) {
+      // Whatever goes wrong creating the request — an Err or a throw — the page it would have served is closed again:
+      // with no pending request there is no poll timer left to retire it.
       const started = await run(() =>
         startGrant(deps, { client: clientInfo(), profile: options.profile, channel: GrantChannel.enum.stdio }),
+      ).then(
+        (result) => result,
+        async (cause: unknown) => {
+          await closeTemporaryServer();
+          throw cause;
+        },
       );
-      if (started.isErr()) return notSignedIn(STDIO_MESSAGES.cannotVerify);
+      if (started.isErr()) {
+        await closeTemporaryServer();
+        return notSignedIn(STDIO_MESSAGES.cannotVerify);
+      }
       pending = { deviceCode: started.value.deviceCode, userCode: started.value.userCode };
     }
     if (pending !== null) startPolling();
@@ -178,14 +213,17 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
     const checked = await check(token);
     if (checked.kind === CheckKind.enum.failure) return notSignedIn(STDIO_MESSAGES.cannotVerify);
     return checked.kind === CheckKind.enum.ok
-      ? granted(checked.principal.scopes)
+      ? granted(checked.principal)
       : notSignedIn(STDIO_MESSAGES.invalidEnvToken);
   };
 
   const withSavedSignIn = async (): Promise<GateOutcome> => {
     if (held !== null) {
       const checked = await check(held.token);
-      if (checked.kind === CheckKind.enum.ok) return granted(checked.principal.scopes);
+      if (checked.kind === CheckKind.enum.ok) {
+        held = { ...held, principal: checked.principal };
+        return granted(checked.principal);
+      }
       if (checked.kind === CheckKind.enum.failure) return notSignedIn(STDIO_MESSAGES.cannotVerify);
       await forget(held);
     }
@@ -194,8 +232,8 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
       const checked = await check(stored);
       if (checked.kind === CheckKind.enum.failure) return notSignedIn(STDIO_MESSAGES.cannotVerify);
       if (checked.kind === CheckKind.enum.ok) {
-        held = { token: stored, scopes: checked.principal.scopes, ephemeral: false };
-        return granted(checked.principal.scopes);
+        held = { token: stored, principal: checked.principal, ephemeral: false };
+        return granted(checked.principal);
       }
       // A concurrent `login` may have replaced the entry while the database was asked: drop only the one found invalid.
       if ((await savedSignIn()) === stored) await store.clear();
@@ -214,6 +252,7 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
     close: () =>
       serially(async () => {
         stopPolling();
+        await closeTemporaryServer();
         if (held === null || !held.ephemeral) return;
         const { token } = held;
         held = null;

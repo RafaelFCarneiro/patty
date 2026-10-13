@@ -103,6 +103,7 @@ const depsFor = ({ users = [], sessions = [], codes = [], tokens = [], now = NOW
       findPendingByUserCode: async () => null,
       lastRedeemed: async () => null,
       listExpired: async () => [],
+      listRedeemed: async () => [],
     },
     setupCodes: {
       findByHash: async (hash) => codes.find((code) => code.codeHash === hash) ?? null,

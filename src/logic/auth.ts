@@ -1,5 +1,5 @@
 import * as R from 'remeda';
-import { HTTP_SCHEME_PREFIX, hostnameOfHostHeader, httpOrigin, isLoopbackHost } from '../common/net.js';
+import { HTTP_SCHEME_PREFIX, hostnameOfHostHeader, isLoopbackHost } from '../common/net.js';
 import {
   BEARER_HEADER,
   BEARER_METHOD_HEADER,
@@ -54,7 +54,9 @@ import {
   SIGN_IN_ACCOUNT_PREFIX,
   SIGN_IN_DURATION_MS,
   SignInDuration,
+  SESSION_ONLY_LABEL,
   STDIO_MESSAGES,
+  UNKNOWN_CLIENT_NAME,
   TOKEN_NAME_MAX_LENGTH,
   type ClaimedOwner,
   type ClaimedUserEntity,
@@ -415,7 +417,7 @@ export const revokedToken = (token: AccessTokenEntity, now: Date): AccessTokenEn
 });
 
 export const tokenPrincipal = (
-  token: AccessTokenEntity,
+  token: Pick<AccessTokenEntity, 'id' | 'scopes'>,
   user: UserEntity,
   via: PrincipalVia = PrincipalVia.enum.token,
 ): Principal => ({
@@ -593,25 +595,51 @@ export const keychainAccount = (profile: string, dbId: string): string =>
 export const isTokenShaped = (raw: string): boolean => raw.startsWith(TOKEN_PREFIX) && raw.length <= MAX_TOKEN_LENGTH;
 
 /**
- * The origin a stdio session's sign-in link names, or `null` when it cannot honestly name one (the message then says to
- * use `login` or `FINTRACK_TOKEN`): `PUBLIC_URL`; else the sidecar this process bound; else the configured `HOST:PORT`,
- * where another FinTrack process may own the port and serve `/ui/connect` from the same database — but never a port-0
- * address, which names no listener at all. Without `PUBLIC_URL`, a non-loopback host is never named either: the page's
- * cookie-authenticated POSTs trust only `PUBLIC_URL` or a loopback `Host` (CSRF), so that link could not complete.
+ * The origin a stdio session's sign-in link may name from what it already knows, or `null`: `PUBLIC_URL`, else the
+ * sidecar THIS process bound. Never a configured `HOST:PORT` it did not bind — whatever listens there may have opened a
+ * different database, so a grant written here would never validate there — and, without `PUBLIC_URL`, never a
+ * non-loopback host either: the page's cookie-authenticated POSTs trust only `PUBLIC_URL` or a loopback `Host` (CSRF).
+ * `null` with HTTP enabled means "serve it yourself" (the session starts a temporary server of its own); with HTTP off
+ * there is no page at all and the message says to use `login` or `FINTRACK_TOKEN`.
  */
 export const signInOrigin = (fields: {
   httpEnabled: boolean;
   publicUrl: string | undefined;
   boundOrigin: string | null;
   host: string;
-  port: number;
 }): string | null => {
   if (!fields.httpEnabled) return null;
   if (fields.publicUrl !== undefined) return fields.publicUrl;
-  if (!isLoopbackHost(fields.host)) return null;
-  if (fields.boundOrigin !== null) return fields.boundOrigin;
-  return fields.port === 0 ? null : httpOrigin(fields.host, fields.port);
+  return isLoopbackHost(fields.host) ? fields.boundOrigin : null;
 };
+
+/** What the consent form remembers a redeemed grant under: one slot per user, profile and client. */
+const consentMemoryKey = (grant: ClientGrantEntity): string =>
+  JSON.stringify([grant.userId, grant.profile, grant.clientName]);
+
+const newestApproval = (grants: readonly ClientGrantEntity[]): ClientGrantEntity | undefined =>
+  R.firstBy(grants, [(grant) => grant.approvedAt ?? '', 'desc'], [(grant) => grant.id, 'desc']);
+
+/**
+ * The redeemed grants that no longer matter: every one except the newest approval per user, profile and client — that
+ * one is the consent form's "last choice" (`lastRedeemed` picks it by the same rule). Pending and approved grants are
+ * not candidates at all; the caller only ever offers redeemed ones.
+ */
+export const supersededGrants = (redeemed: readonly ClientGrantEntity[]): ClientGrantEntity[] =>
+  R.pipe(
+    redeemed,
+    R.groupBy(consentMemoryKey),
+    R.values(),
+    R.filter(R.isDefined),
+    R.flatMap((group) => {
+      const kept = newestApproval(group);
+      return group.filter((grant) => grant.id !== kept?.id);
+    }),
+  );
+
+/** The label of the "this session only" duration for the client that is asking: "This Claude Desktop session only". */
+export const sessionOnlyLabel = (clientName: string): string =>
+  clientName === UNKNOWN_CLIENT_NAME ? SESSION_ONLY_LABEL.unnamed : SESSION_ONLY_LABEL.named(clientName);
 
 export const connectUrl = (origin: string, userCode: string): string =>
   `${origin}${CONNECT_PATH}?${CONNECT_CODE_PARAM}=${userCode}`;
