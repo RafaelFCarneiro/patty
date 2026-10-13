@@ -73,9 +73,11 @@ export type AuthSecrets = {
 };
 
 /** Where a saved stdio sign-in lives between runs — the OS keychain in production (ADR-034 §2). Keychain trouble
- *  never throws: an unreadable store is "nothing saved", and a refused write is reported by returning `false`, after
- *  which the sign-in lasts only as long as the process. */
+ *  A refused write is reported by returning `false`, after which the sign-in lasts only as long as the process; an
+ *  unreadable store is `KeychainUnavailableError` from `load`, which each caller decides how to treat (the stdio
+ *  session carries on without a saved sign-in, `logout` refuses to claim a sign-out it could not check). */
 export type SignInStore = {
+  /** `null` = nothing saved. Throws `KeychainUnavailableError` when the keychain cannot be read at all. */
   load: () => Promise<string | null>;
   save: (token: string) => Promise<boolean>;
   clear: () => Promise<void>;

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { KeychainUnavailableError } from '../../../../src/common/keychain.js';
 import { KEYCHAIN_SERVICE } from '../../../../src/models/auth.js';
 
 const keyring = vi.hoisted(() => {
@@ -56,9 +57,11 @@ describe('keychainSignInStore', () => {
     await expect(store.clear()).resolves.toBeUndefined();
   });
 
-  it('reads an unreachable keychain as "nothing saved" rather than throwing', async () => {
+  it('tells an unreadable keychain apart from an empty one: missing is null, unreachable throws', async () => {
+    const store = keychainSignInStore(ACCOUNT, () => undefined);
+    await expect(store.load()).resolves.toBeNull();
     keyring.state.failing = true;
-    await expect(keychainSignInStore(ACCOUNT, () => undefined).load()).resolves.toBeNull();
+    await expect(store.load()).rejects.toBeInstanceOf(KeychainUnavailableError);
   });
 
   it('reports a keychain that refuses a write — without the secret — and says it did not save', async () => {

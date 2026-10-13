@@ -1,6 +1,7 @@
 import { errAsync } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sql } from 'drizzle-orm';
+import { KeychainUnavailableError } from '../../../src/common/keychain.js';
 import { conflict } from '../../../src/models/error.js';
 import { GRANT_POLL_INTERVAL_MS, NPX_COMMAND, STDIO_MESSAGES, type SignInDuration } from '../../../src/models/auth.js';
 import type { GateOutcome } from '../../../src/diplomat/mcp/gate.js';
@@ -289,6 +290,21 @@ describe('StdioSession — a keychain that will not keep the sign-in', () => {
     await session.close();
 
     expect((await tokenRows(ctx))[0]?.revoked_at).not.toBeNull();
+  });
+});
+
+describe('StdioSession — an unreadable keychain', () => {
+  it('carries on as if nothing were saved: asks in the browser, and holds the sign-in in memory', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const store = memoryStore(null, { refuseSave: true });
+    store.load = async () => {
+      throw new KeychainUnavailableError(new Error('locked'));
+    };
+    const { session } = stdioSessionFor(ctx, { store });
+
+    expect((await session.resolve()).kind).toBe('not_signed_in');
+    expect(await signInVia(ctx, cookie, session)).toEqual([READ]);
   });
 });
 

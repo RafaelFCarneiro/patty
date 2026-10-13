@@ -1,4 +1,5 @@
 import type { SignInStore } from '../../controllers/deps.js';
+import { KeychainUnavailableError } from '../../common/keychain.js';
 import { KEYCHAIN_SERVICE } from '../../models/auth.js';
 
 /** The OS keychain, one entry per profile and database (ADR-034 §2). */
@@ -19,8 +20,8 @@ export const keychainSignInStore = (
   load: async () => {
     try {
       return (await entryFor(account)).getPassword() ?? null;
-    } catch {
-      return null;
+    } catch (cause) {
+      throw new KeychainUnavailableError(cause);
     }
   },
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { KeychainUnavailableError } from '../../common/keychain.js';
 import { authenticateToken, revokeSignInByHash } from '../../controllers/accessTokens.js';
 import type { AuthDeps, RunEffects, SignInStore } from '../../controllers/deps.js';
 import { ownerNeedsSetup } from '../../controllers/auth.js';
@@ -110,9 +111,14 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
 
   /** Drop a credential that turned out unusable. The keychain entry goes too — but only if it still holds this very
    *  credential: another process may have saved a fresh sign-in since. */
+  // An unreadable keychain is "nothing saved" here: the person is then asked in the browser, and a sign-in the
+  // keychain will not keep is held in memory only (and revoked at close).
+  const savedSignIn = (): Promise<string | null> =>
+    store.load().catch((cause: unknown) => (cause instanceof KeychainUnavailableError ? null : Promise.reject(cause)));
+
   const forget = async (credential: Held): Promise<void> => {
     held = null;
-    if (!credential.ephemeral && (await store.load()) === credential.token) await store.clear();
+    if (!credential.ephemeral && (await savedSignIn()) === credential.token) await store.clear();
   };
 
   type Redemption =
@@ -183,7 +189,7 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
       if (checked.kind === CheckKind.enum.failure) return notSignedIn(STDIO_MESSAGES.cannotVerify);
       await forget(held);
     }
-    const stored = await store.load();
+    const stored = await savedSignIn();
     if (stored !== null) {
       const checked = await check(stored);
       if (checked.kind === CheckKind.enum.failure) return notSignedIn(STDIO_MESSAGES.cannotVerify);
@@ -192,7 +198,7 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
         return granted(checked.principal.scopes);
       }
       // A concurrent `login` may have replaced the entry while the database was asked: drop only the one found invalid.
-      if ((await store.load()) === stored) await store.clear();
+      if ((await savedSignIn()) === stored) await store.clear();
     }
     return askToSignIn();
   };

@@ -11,7 +11,7 @@ import {
   WRITE_SCOPE,
   type AccessTokenSummary,
 } from '../../models/auth.js';
-import { errorBlock, escapeHtml, fillTemplate } from './authPages.js';
+import { ACCESS_LABEL, errorBlock, escapeHtml, fillTemplate, formatMinute } from './authPages.js';
 import { TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from './authPaths.js';
 import { readCached, UI_ROOT } from './uiFiles.js';
 
@@ -19,14 +19,6 @@ const TOKENS_TEMPLATE_PATH = `${UI_ROOT}/tokens.html`;
 const TOKEN_CREATED_TEMPLATE_PATH = `${UI_ROOT}/tokenCreated.html`;
 
 const NOT_YET = '—';
-const ISO_MINUTE_LENGTH = 16;
-
-// Typed by the enums, so a new access level or expiry cannot exist without a label here — and the <option> values
-// the form posts are the very values `CreateTokenFormSchema` accepts.
-const ACCESS_OPTION_LABEL: Readonly<Record<TokenAccess, string>> = {
-  read: 'Read only — list and query, never change anything',
-  write: 'Read and write — can also record, edit and delete',
-};
 
 // Only a token minted before ADR-034 §6 can have no expiry; it still works until revoked, and the list says so.
 const LEGACY_NO_EXPIRY_LABEL = 'No expiry (legacy)';
@@ -36,8 +28,7 @@ const expiryLabel = (expiry: TokenExpiry): string => `in ${TOKEN_EXPIRY_DAYS[exp
 const option = (value: string, label: string, selected = false): string =>
   `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
 
-const accessOptions = (): string =>
-  TokenAccess.options.map((access) => option(access, ACCESS_OPTION_LABEL[access])).join('');
+const accessOptions = (): string => TokenAccess.options.map((access) => option(access, ACCESS_LABEL[access])).join('');
 
 const expiryOptions = (): string =>
   R.pipe(
@@ -48,9 +39,7 @@ const expiryOptions = (): string =>
 
 const SCOPE_LABEL = { read: 'read only', write: 'read + write' } as const;
 
-/** `2026-10-09T12:34:56.000Z` → `2026-10-09 12:34 UTC`; absolute, so the page needs no script or locale. */
-const when = (iso: string | null, fallback: string): string =>
-  iso === null ? fallback : `${iso.slice(0, ISO_MINUTE_LENGTH).replace('T', ' ')} UTC`;
+const when = (iso: string | null, fallback: string): string => (iso === null ? fallback : formatMinute(iso));
 
 const accessOf = (token: AccessTokenSummary): string =>
   hasScope(token.scopes, WRITE_SCOPE) ? SCOPE_LABEL.write : SCOPE_LABEL.read;

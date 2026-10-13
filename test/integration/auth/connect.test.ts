@@ -204,6 +204,30 @@ describe('GET /ui/connect', () => {
     expect(blocked.body).not.toContain('name="decision"');
   });
 
+  it('holds the cap under a burst of concurrent guesses — each strike is taken before the awaited lookup', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const burst = await Promise.all(
+      Array.from({ length: MAX_CODE_LOOKUP_FAILURES_PER_IP * 3 }, () => getConnect(ctx, '?code=NOPE-NOPE', { cookie })),
+    );
+    const statuses = burst.map((res) => res.statusCode);
+    expect(statuses.filter((status) => status === 404)).toHaveLength(MAX_CODE_LOOKUP_FAILURES_PER_IP);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(MAX_CODE_LOOKUP_FAILURES_PER_IP * 2);
+  });
+
+  it('holds the cap under a burst of concurrent POST guesses too', async () => {
+    const ctx = await createApp();
+    const cookie = await claimOwner(ctx);
+    const burst = await Promise.all(
+      Array.from({ length: MAX_CODE_LOOKUP_FAILURES_PER_IP * 3 }, () =>
+        answerConnect(ctx, cookie, 'GUESS-GUESS', { decision: 'approve' }),
+      ),
+    );
+    const statuses = burst.map((res) => res.statusCode);
+    expect(statuses.filter((status) => status === 404)).toHaveLength(MAX_CODE_LOOKUP_FAILURES_PER_IP);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(MAX_CODE_LOOKUP_FAILURES_PER_IP * 2);
+  });
+
   it('does not count a successful lookup against the limit', async () => {
     const ctx = await createApp();
     const cookie = await claimOwner(ctx);

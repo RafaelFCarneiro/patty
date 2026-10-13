@@ -1,6 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import { sql } from 'drizzle-orm';
 import { errAsync } from 'neverthrow';
+import { KeychainUnavailableError } from '../../../src/common/keychain.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { CliIo, Shell } from '../../../src/authCli.js';
 import { bindAuthRunEffects } from '../../../src/authRuntime.js';
@@ -329,6 +330,20 @@ describe('fintrack logout', () => {
 
     expect(store.saved()).toBe(newer);
     expect(store.calls.clear).toBe(0);
+  });
+
+  it('fails — never "Not signed in" — when the keychain cannot be read, and revokes nothing', async () => {
+    const r = await signedInRig();
+    r.storeFor('default').load = async () => {
+      throw new KeychainUnavailableError(new Error('locked'));
+    };
+
+    await expect(runLogout([], r.io)).rejects.toBeInstanceOf(KeychainUnavailableError);
+
+    expect(r.out).toEqual([]);
+    expect(await r.ctx.db.all(sql`SELECT revoked_at IS NOT NULL AS revoked FROM access_tokens`)).toEqual([
+      { revoked: 0 },
+    ]);
   });
 
   it('does not revoke a personal access token someone put in the keychain — only a stdio sign-in', async () => {

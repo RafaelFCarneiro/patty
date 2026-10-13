@@ -53,18 +53,27 @@ export const registerConnectRoutes = (app: FastifyInstance, ctx: AuthRoutesConte
     channel?: GrantChannel,
   ) => page(reply, status, await renderConnectResultPage({ heading, message, channel }));
 
-  const invalid = (reply: FastifyReply, ip: string) => {
-    lookups.recordFailure(ip);
-    return result(reply, INVALID_STATUS, HEADINGS.invalid, AUTH_MESSAGES.invalidGrant);
-  };
+  const invalid = (reply: FastifyReply) => result(reply, INVALID_STATUS, HEADINGS.invalid, AUTH_MESSAGES.invalidGrant);
 
   const limited = (reply: FastifyReply) =>
     result(reply, RATE_LIMITED_STATUS, HEADINGS.limited, AUTH_MESSAGES.rateLimited);
 
   const failed = (reply: FastifyReply, ip: string, error: AppError) => {
-    if (error.code === authErrors.invalidGrant.code) return invalid(reply, ip);
+    if (error.code === authErrors.invalidGrant.code) {
+      lookups.recordFailure(ip); // answered by someone else between the lookup and the decision: a miss after all
+      return invalid(reply);
+    }
     const status = error.code === validation([]).code ? INVALID_FORM_STATUS : httpStatus(error);
     return result(reply, status, HEADINGS.invalid, AUTH_MESSAGES.tryAgain);
+  };
+
+  // The strike is taken BEFORE the awaited lookup and given back for a valid code: recording the miss only afterwards
+  // would let a burst of concurrent guesses all see an empty limiter (the login pages reserve the same way).
+  const lookUp = async (ip: string, userId: string, code: string) => {
+    lookups.recordFailure(ip);
+    const consent = await findConsent(ctx.deps, userId, code);
+    if (consent !== null) lookups.forgive(ip);
+    return consent;
   };
 
   void app.register(async (scope) => {
@@ -74,8 +83,8 @@ export const registerConnectRoutes = (app: FastifyInstance, ctx: AuthRoutesConte
     scope.get(CONNECT_PATH, async (req, reply) => {
       const code = ConnectQuerySchema.safeParse(req.query).data?.[CONNECT_CODE_PARAM];
       if (lookups.isLimited(req.ip)) return limited(reply);
-      const consent = code === undefined ? null : await findConsent(ctx.deps, req.principal!.userId, code);
-      if (consent === null) return invalid(reply, req.ip);
+      const consent = code === undefined ? null : await lookUp(req.ip, req.principal!.userId, code);
+      if (consent === null) return invalid(reply);
       return page(reply, OK_STATUS, await renderConnectPage(consent));
     });
 
@@ -86,8 +95,8 @@ export const registerConnectRoutes = (app: FastifyInstance, ctx: AuthRoutesConte
 
       const { decision, code, access, duration } = parsed.data;
       const principal = req.principal!;
-      const consent = await findConsent(ctx.deps, principal.userId, code);
-      if (consent === null) return invalid(reply, req.ip);
+      const consent = await lookUp(req.ip, principal.userId, code);
+      if (consent === null) return invalid(reply);
       const { channel } = consent.request;
       const answered =
         decision === ConnectDecision.enum.approve
