@@ -73,7 +73,7 @@ export const ClearNext = z.enum(['load_saved', 'ask', 'signed_out']);
 export type ClearNext = z.infer<typeof ClearNext>;
 
 /** Why a page is opened, why the owner is looked at, and why a credential is revoked. */
-export const PagePurpose = z.enum(['login', 'new_request']);
+export const PagePurpose = z.enum(['login', 'new_request', 'instructions']);
 export type PagePurpose = z.infer<typeof PagePurpose>;
 export const OwnerPurpose = z.enum(['login', 'instructions']);
 export type OwnerPurpose = z.infer<typeof OwnerPurpose>;
@@ -95,7 +95,7 @@ export const ObservationKind = z.enum([
   'saved_cleared',
   'owner_checked',
   'page_named',
-  'page_opened',
+  'page_served',
   'grant_started',
   'grant_failed',
   'redeemed',
@@ -131,8 +131,9 @@ export type SignInObservation =
       unclaimed: boolean;
       origin: string | null;
     }
-  | { kind: typeof ObservationKind.enum.page_named; origin: string | null }
-  | { kind: typeof ObservationKind.enum.page_opened; purpose: PagePurpose; origin: string | null }
+  /** What the process can name already (`null` for nothing), and whether it could serve a page of its own. */
+  | { kind: typeof ObservationKind.enum.page_named; purpose: PagePurpose; origin: string | null; canServe: boolean }
+  | { kind: typeof ObservationKind.enum.page_served; purpose: PagePurpose; origin: string | null }
   | { kind: typeof ObservationKind.enum.grant_started; deviceCode: string; userCode: string; origin: string }
   | { kind: typeof ObservationKind.enum.grant_failed; error: string }
   | { kind: typeof ObservationKind.enum.redeemed; then: Continuation; result: RedeemOutcome }
@@ -152,8 +153,8 @@ export const EffectKind = z.enum([
   'clear_saved_if',
   'save_credential',
   'revoke_credential',
-  'open_page',
   'name_page',
+  'serve_page',
   'start_grant',
   'redeem_grant',
   'check_owner',
@@ -173,8 +174,8 @@ export const ASKING_EFFECT_KINDS: ReadonlySet<EffectKind> = new Set([
   E.clear_saved_if,
   E.save_credential,
   E.revoke_credential,
-  E.open_page,
   E.name_page,
+  E.serve_page,
   E.start_grant,
   E.redeem_grant,
   E.check_owner,
@@ -187,9 +188,10 @@ export type SignInEffect =
   | { kind: typeof E.clear_saved_if; token: string; next: ClearNext; tolerateUnreadable: boolean }
   | { kind: typeof E.save_credential; signedIn: SignedIn; then: Continuation }
   | { kind: typeof E.revoke_credential; token: string; reason: RevokeReason }
-  /** The page the approver is sent to: one already nameable, else a temporary server of this process. */
-  | { kind: typeof E.open_page; purpose: PagePurpose }
-  | { kind: typeof E.name_page }
+  /** Which page the approver can be sent to: the origin this process can already name, if any. */
+  | { kind: typeof E.name_page; purpose: PagePurpose }
+  /** Start a temporary server of this process to serve it, when nothing names a page. */
+  | { kind: typeof E.serve_page; purpose: PagePurpose }
   | { kind: typeof E.start_grant; input: StartGrantInput; origin: string }
   | { kind: typeof E.redeem_grant; deviceCode: string; then: Continuation }
   | { kind: typeof E.check_owner; purpose: OwnerPurpose; origin: string | null }

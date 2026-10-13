@@ -94,7 +94,9 @@ const redeemedAs = (duration: SignInDuration, scopes: SignedIn['scopes'] = [READ
 const present = (presentation: Presentation): SignInEffect => ({ kind: E.present, presentation });
 const closePage: SignInEffect = { kind: E.close_page };
 const loadSaved: SignInEffect = { kind: E.load_saved, purpose: LoadPurpose.enum.resolve, tolerateUnreadable: true };
-const openPage = (purpose: PagePurpose): SignInEffect => ({ kind: E.open_page, purpose });
+const namePage = (purpose: PagePurpose): SignInEffect => ({ kind: E.name_page, purpose });
+const servePage = (purpose: PagePurpose): SignInEffect => ({ kind: E.serve_page, purpose });
+const INSTRUCTIONS = PagePurpose.enum.instructions;
 
 type Row = {
   name: string;
@@ -306,7 +308,7 @@ describe('the keychain, and what to do once it has been looked at', () => {
       stdio,
       {
         state: IDLE,
-        effects: [openPage(PagePurpose.enum.new_request)],
+        effects: [namePage(PagePurpose.enum.new_request)],
       },
     ),
     row(
@@ -356,7 +358,7 @@ describe('the keychain, and what to do once it has been looked at', () => {
       stdio,
       {
         state: IDLE,
-        effects: [openPage(PagePurpose.enum.new_request)],
+        effects: [namePage(PagePurpose.enum.new_request)],
       },
     ),
     row(
@@ -389,9 +391,9 @@ describe('the keychain, and what to do once it has been looked at', () => {
 describe('opening a page and starting the request', () => {
   const rows: Row[] = [
     row(
-      'a page was named → start the request there',
+      'a page that can already be named → start the request there',
       IDLE,
-      { kind: O.page_opened, purpose: PagePurpose.enum.new_request, origin: 'http://127.0.0.1:1' },
+      { kind: O.page_named, purpose: PagePurpose.enum.new_request, origin: 'http://127.0.0.1:1', canServe: true },
       stdio,
       {
         state: IDLE,
@@ -399,19 +401,40 @@ describe('opening a page and starting the request', () => {
       },
     ),
     row(
-      'no page at all for a stdio session → just say how else to sign in',
+      'nothing names a page but one can be served → serve it, from this process',
       IDLE,
-      { kind: O.page_opened, purpose: PagePurpose.enum.new_request, origin: null },
+      { kind: O.page_named, purpose: PagePurpose.enum.new_request, origin: null, canServe: true },
+      stdio,
+      { state: IDLE, effects: [servePage(PagePurpose.enum.new_request)] },
+    ),
+    row(
+      'nothing names a page and none can be served → just say how else to sign in',
+      IDLE,
+      { kind: O.page_named, purpose: PagePurpose.enum.new_request, origin: null, canServe: false },
+      stdio,
+      { state: IDLE, effects: [namePage(INSTRUCTIONS)] },
+    ),
+    row(
+      'a page that was served → start the request there',
+      IDLE,
+      { kind: O.page_served, purpose: PagePurpose.enum.new_request, origin: 'http://localhost:3' },
       stdio,
       {
         state: IDLE,
-        effects: [{ kind: E.name_page }],
+        effects: [{ kind: E.start_grant, input: GRANT_INPUT_STDIO, origin: 'http://localhost:3' }],
       },
+    ),
+    row(
+      'a page that could not be served → just say how else to sign in',
+      IDLE,
+      { kind: O.page_served, purpose: PagePurpose.enum.new_request, origin: null },
+      stdio,
+      { state: IDLE, effects: [namePage(INSTRUCTIONS)] },
     ),
     row(
       'login passes the hint it was given to the request',
       IDLE,
-      { kind: O.page_opened, purpose: PagePurpose.enum.login, origin: 'http://localhost:2' },
+      { kind: O.page_served, purpose: PagePurpose.enum.login, origin: 'http://localhost:2' },
       cli,
       {
         state: IDLE,
@@ -419,9 +442,16 @@ describe('opening a page and starting the request', () => {
       },
     ),
     row(
+      'login serves its own page: nothing is named for it',
+      IDLE,
+      { kind: O.page_named, purpose: PagePurpose.enum.login, origin: null, canServe: true },
+      cli,
+      { state: IDLE, effects: [servePage(PagePurpose.enum.login)] },
+    ),
+    row(
       'login cannot go on with no page',
       IDLE,
-      { kind: O.page_opened, purpose: PagePurpose.enum.login, origin: null },
+      { kind: O.page_named, purpose: PagePurpose.enum.login, origin: null, canServe: false },
       cli,
       {
         state: { kind: S.failed },
@@ -439,7 +469,7 @@ describe('opening a page and starting the request', () => {
         origin: 'http://127.0.0.1:1',
       },
       stdio,
-      { state: pending, effects: [{ kind: E.name_page }] },
+      { state: pending, effects: [namePage(INSTRUCTIONS)] },
     ),
     row(
       'login: a started request prints the link and the code, then waits',
@@ -490,7 +520,7 @@ describe('the owner, and the instructions', () => {
     row(
       'the page is named → the owner is looked at before the instructions are written',
       pending,
-      { kind: O.page_named, origin: 'http://127.0.0.1:1' },
+      { kind: O.page_named, purpose: INSTRUCTIONS, origin: 'http://127.0.0.1:1', canServe: true },
       stdio,
       {
         state: pending,
@@ -558,7 +588,7 @@ describe('the owner, and the instructions', () => {
       cli,
       {
         state: IDLE,
-        effects: [openPage(PagePurpose.enum.login)],
+        effects: [namePage(PagePurpose.enum.login)],
       },
     ),
   ];
@@ -578,7 +608,7 @@ describe('the answer to a request', () => {
     signedIn: signedInAs,
     then,
   });
-  const nextRequest = openPage(PagePurpose.enum.new_request);
+  const nextRequest = namePage(PagePurpose.enum.new_request);
 
   const rows: Row[] = [
     // stdio — a gated request asks again; the timer only retires what is spent.
@@ -587,14 +617,14 @@ describe('the answer to a request', () => {
       pending,
       redeemed(ASK, { kind: 'pending' }),
       stdio,
-      { state: pending, effects: [{ kind: E.name_page }] },
+      { state: pending, effects: [namePage(INSTRUCTIONS)] },
     ),
     row(
       'stdio ask: a failed lookup is treated as still pending',
       pending,
       redeemed(ASK, { kind: REDEEM_ERROR_KIND, error: 'busy' }),
       stdio,
-      { state: pending, effects: [{ kind: E.name_page }] },
+      { state: pending, effects: [namePage(INSTRUCTIONS)] },
     ),
     row('stdio ask: denied → page released, a fresh request', pending, redeemed(ASK, { kind: 'denied' }), stdio, {
       state: IDLE,
@@ -950,9 +980,11 @@ describe('the shape every step keeps', () => {
         origins.map((origin) => ({ kind: O.owner_checked, purpose, unclaimed, origin }) as SignInObservation),
       ),
     ),
-    ...origins.map((origin) => ({ kind: O.page_named, origin }) as SignInObservation),
     ...Object.values(PagePurpose.enum).flatMap((purpose) =>
-      origins.map((origin) => ({ kind: O.page_opened, purpose, origin }) as SignInObservation),
+      origins.flatMap((origin) => [
+        ...[true, false].map((canServe) => ({ kind: O.page_named, purpose, origin, canServe }) as SignInObservation),
+        { kind: O.page_served, purpose, origin } as SignInObservation,
+      ]),
     ),
     { kind: O.grant_started, deviceCode: 'd', userCode: 'ABCD-EFGH', origin: 'http://127.0.0.1:1' },
     { kind: O.grant_failed, error: 'boom' },

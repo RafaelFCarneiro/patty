@@ -1,5 +1,6 @@
 import { type ParseArgsConfig } from 'node:util';
 import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_OK, SIGN_IN_POSITIONALS } from '../../../common/cli.js';
+import type { SignInHooks } from '../../../controllers/deps.js';
 import { GrantChannel } from '../../../models/auth/grant.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
 import { AUTH_ENV_VAR } from '../../../models/auth/mode.js';
@@ -101,6 +102,12 @@ const render = (io: CliIo, presentation: Presentation): void => {
   }
 };
 
+const hooksFor = (io: CliIo, wait: SignInHooks['wait']): SignInHooks => ({
+  present: (presentation) => render(io, presentation),
+  wait,
+  progress: () => undefined,
+});
+
 const configFor = (io: CliIo, shell: Shell, profile: string, hint: SignInConfig['hint']): SignInConfig => ({
   channel: GrantChannel.enum.cli,
   profile,
@@ -123,20 +130,16 @@ const signIn = async (
   const interrupted = io.interruptSignal();
   const interpreter = shell.signIn(request.profile);
   const config = configFor(io, shell, request.profile, { access: request.scope, duration: request.duration });
-  const hooks = {
-    present: (presentation: Presentation) => render(io, presentation),
-    wait: (ms: number) => io.wait(ms, interrupted),
-    progress: () => undefined,
-  };
+  const hooks = hooksFor(io, (ms) => io.wait(ms, interrupted));
   const feed = (state: SignInState, observation: SignInObservation) =>
     interpreter.drive(state, observation, config, hooks);
+  // While a request is open the protocol is fed again each time it has finished waiting — unless Ctrl-C came.
+  const untilEnded = async (state: SignInState): Promise<SignInState> =>
+    state.kind === S.pending
+      ? untilEnded(await feed(state, { kind: interrupted.aborted ? O.interrupted : O.ticked }))
+      : state;
   try {
-    let state = await feed(IDLE, { kind: O.login_requested });
-    // While a request is open the loop looks again each time the protocol has finished waiting — unless Ctrl-C came.
-    while (state.kind === S.pending) {
-      state = await feed(state, { kind: interrupted.aborted ? O.interrupted : O.ticked });
-    }
-    return state;
+    return await untilEnded(await feed(IDLE, { kind: O.login_requested }));
   } finally {
     await interpreter.release();
   }
@@ -166,13 +169,12 @@ export const runLogout = async (args: readonly string[], io: CliIo): Promise<num
   if ('error' in parsed) return exitCodeOf(fail(io, parsed.error));
   return withShell(io, async (shell) => {
     const profile = parsed.options.profile ?? shell.defaultProfile;
-    const state = await shell
-      .signIn(profile)
-      .drive(IDLE, { kind: O.logout_requested }, configFor(io, shell, profile, undefined), {
-        present: (presentation) => render(io, presentation),
-        wait: async () => undefined,
-        progress: () => undefined,
-      });
+    const state = await shell.signIn(profile).drive(
+      IDLE,
+      { kind: O.logout_requested },
+      configFor(io, shell, profile, undefined),
+      hooksFor(io, async () => undefined),
+    );
     return EXIT_CODE_OF_STATE[state.kind];
   });
 };

@@ -7,10 +7,12 @@ import {
   claimedOwnerOf,
   claimOwner,
   claimOwnerLocally,
+  claimRaceWinnerOf,
   findResetTarget,
   issueSetupCode,
   login,
   logout,
+  ownerClaimPlan,
   ownerNeedsSetup,
   pruneExpiredSessions,
   resetPassword,
@@ -577,5 +579,24 @@ describe('claimedOwnerOf', () => {
     expect(await claimedOwnerOf(depsFor({ users: [unclaimedOwner()] }))).toBeNull();
     expect(await claimedOwnerOf(depsFor())).toBeNull();
     expect(await claimedOwnerOf(depsFor({ users: [claimedOwner()] }))).toEqual({ username: 'rafael' });
+  });
+});
+
+describe('ownerClaimPlan', () => {
+  it('claims while nobody holds the login, and skips an owner who already does', async () => {
+    expect(await ownerClaimPlan(depsFor({ users: [unclaimedOwner()] }))).toEqual({ kind: 'claim' });
+    expect(await ownerClaimPlan(depsFor({ users: [claimedOwner()] }))).toEqual({ kind: 'skip', username: 'rafael' });
+  });
+});
+
+describe('claimRaceWinnerOf', () => {
+  it('names the owner who won the race when the claim was refused as already taken', async () => {
+    const deps = depsFor({ users: [claimedOwner()] });
+    expect(await claimRaceWinnerOf(deps, authErrors.setupUnavailable)).toEqual({ username: 'rafael' });
+  });
+
+  it('names nobody for any other refusal', async () => {
+    const deps = depsFor({ users: [claimedOwner()] });
+    expect(await claimRaceWinnerOf(deps, authErrors.invalidSetupCode)).toBeNull();
   });
 });

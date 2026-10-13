@@ -11,13 +11,7 @@ import type {
   SignInStore,
 } from './controllers/deps.js';
 import { redeemGrant, startGrant } from './controllers/grants.js';
-import {
-  ASKING_EFFECT_KINDS,
-  CheckKind,
-  EffectKind,
-  ObservationKind,
-  REDEEM_ERROR_KIND,
-} from './models/auth/signInFlow.js';
+import { CheckKind, EffectKind, ObservationKind, REDEEM_ERROR_KIND } from './models/auth/signInFlow.js';
 import type { CheckResult, SignInEffect, SignInObservation } from './models/auth/signInFlow.js';
 import { nextStep } from './logic/auth/signInFlow.js';
 import { PrincipalVia } from './models/auth/principal.js';
@@ -51,11 +45,9 @@ export const createSignInInterpreter = (options: SignInInterpreterOptions): Sign
   // A temporary page, once started, is the page its pending request was announced at, so it is named first.
   const namedOrigin = (): string | null => temporary?.origin ?? options.origin();
 
-  const openPage = async (): Promise<string | null> => {
-    const named = namedOrigin();
-    if (named !== null || options.startPage === undefined) return named;
-    temporary = await options.startPage();
-    return temporary.origin;
+  const servePage = async (): Promise<string | null> => {
+    temporary = (await options.startPage?.()) ?? null;
+    return temporary?.origin ?? null;
   };
 
   const closePage = async (): Promise<void> => {
@@ -130,10 +122,15 @@ export const createSignInInterpreter = (options: SignInInterpreterOptions): Sign
           error: revoked.isErr() ? formatAppError(revoked.error) : null,
         };
       }
-      case E.open_page:
-        return { kind: O.page_opened, purpose: effect.purpose, origin: await openPage() };
       case E.name_page:
-        return { kind: O.page_named, origin: namedOrigin() };
+        return {
+          kind: O.page_named,
+          purpose: effect.purpose,
+          origin: namedOrigin(),
+          canServe: options.startPage !== undefined,
+        };
+      case E.serve_page:
+        return { kind: O.page_served, purpose: effect.purpose, origin: await servePage() };
       case E.start_grant:
         return startedGrant(effect);
       case E.redeem_grant: {
@@ -165,21 +162,23 @@ export const createSignInInterpreter = (options: SignInInterpreterOptions): Sign
     }
   };
 
+  // In order, one after the other. A step ends with at most one asking effect and it is the last, so the answer to
+  // hand back is the one the rest of the list ends in, if any.
+  const performAll = async (
+    effects: readonly SignInEffect[],
+    hooks: SignInHooks,
+  ): Promise<SignInObservation | undefined> => {
+    const [effect, ...rest] = effects;
+    if (effect === undefined) return undefined;
+    const answer = await perform(effect, hooks);
+    return (await performAll(rest, hooks)) ?? answer;
+  };
+
   const drive: SignInInterpreter['drive'] = async (state, observation, config, hooks) => {
-    let current = state;
-    let next: SignInObservation | undefined = observation;
-    while (next !== undefined) {
-      const step = nextStep(current, next, config);
-      current = step.state;
-      hooks.progress(current);
-      next = undefined;
-      for (const effect of step.effects) {
-        const answer = await perform(effect, hooks);
-        // An asking effect is the last of its step: its answer is the next observation.
-        if (ASKING_EFFECT_KINDS.has(effect.kind)) next = answer;
-      }
-    }
-    return current;
+    const step = nextStep(state, observation, config);
+    hooks.progress(step.state);
+    const answer = await performAll(step.effects, hooks);
+    return answer === undefined ? step.state : drive(step.state, answer, config, hooks);
   };
 
   return { drive, release: closePage };

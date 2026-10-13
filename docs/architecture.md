@@ -502,8 +502,8 @@ holds a credential — except under an explicit `FINTRACK_AUTH=disabled`, where 
   was asked to approve — the device code stays in memory), `signed_in` (the held credential, `ephemeral` when it lives in memory only, plus any request still
   open behind it) or one of the ends of a login (`denied`, `expired`, `cancelled`, `failed`). *Observations* are what an edge feeds (`requested`, `ticked`,
   `login_requested`, `logout_requested`, `interrupted`, `closed`, `errored`) and the answers to an effect (`credential_checked`, `saved_loaded`, `saved_cleared`,
-  `owner_checked`, `page_named`, `page_opened`, `grant_started`/`grant_failed`, `redeemed`, `saved`, `revoked`). *Effects* are data: the *asking* ones
-  (`check_credential`, `load_saved`, `clear_saved_if`, `save_credential`, `revoke_credential`, `open_page`, `name_page`, `start_grant`, `redeem_grant`,
+  `owner_checked`, `page_named`, `page_served`, `grant_started`/`grant_failed`, `redeemed`, `saved`, `revoked`). *Effects* are data: the *asking* ones
+  (`check_credential`, `load_saved`, `clear_saved_if`, `save_credential`, `revoke_credential`, `name_page`, `serve_page`, `start_grant`, `redeem_grant`,
   `check_owner`) are answered by exactly one observation and a step ends with at most one, last; the others are `close_page`, `wait` and `present` (what the edge
   tells the person: a `Presentation`, whose words the edge owns). The interpreter (`createSignInInterpreter`; `drive` feeds an observation and runs the effects
   until nothing is left, each answer fed straight back) is built at the composition root and injected as `controllers/deps.ts`'s `SignInInterpreter`; it executes and

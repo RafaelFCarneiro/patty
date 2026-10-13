@@ -195,12 +195,13 @@ const onCredentialChecked = (state: SignInState, observation: Observed<typeof O.
 // ─── Not signed in: ask once, reuse the request until it is answered or runs out ───────
 
 /** The page to name, or none at all when no HTTP server is involved. Always read right before it is shown. */
-const showInstructions = (state: SignInState): SignInStep => ask(state, { kind: E.name_page });
+const showInstructions = (state: SignInState): SignInStep =>
+  ask(state, { kind: E.name_page, purpose: PagePurpose.enum.instructions });
 
 const askToSignIn = (state: SignInState): SignInStep => {
   const pending = pendingOf(state);
   return pending === null
-    ? ask(state, { kind: E.open_page, purpose: PagePurpose.enum.new_request })
+    ? ask(state, { kind: E.name_page, purpose: PagePurpose.enum.new_request })
     : ask(state, { kind: E.redeem_grant, deviceCode: pending.deviceCode, then: Continuation.enum.ask });
 };
 
@@ -226,14 +227,29 @@ const onSavedCleared = (state: SignInState, observation: Observed<typeof O.saved
   }
 };
 
-const onPageOpened = (state: SignInState, observation: Observed<typeof O.page_opened>, config: SignInConfig) => {
-  const { origin } = observation;
-  if (origin !== null) return ask(state, { kind: E.start_grant, input: startInput(config), origin });
-  // No page to approve on: `login` cannot go on at all; a stdio session says how else to sign in.
-  return observation.purpose === PagePurpose.enum.login
+/** No page can be named or served: `login` cannot go on at all; a stdio session says how else to sign in. */
+const withoutPage = (state: SignInState, purpose: PagePurpose): SignInStep =>
+  purpose === PagePurpose.enum.login
     ? step({ kind: S.failed }, present(failedWith(STDIO_MESSAGES.notSignedInWithoutHttp)))
     : showInstructions(state);
+
+const startRequestAt = (state: SignInState, origin: string, config: SignInConfig): SignInStep =>
+  ask(state, { kind: E.start_grant, input: startInput(config), origin });
+
+const onPageNamed = (state: SignInState, observation: Observed<typeof O.page_named>, config: SignInConfig) => {
+  const { purpose, origin } = observation;
+  if (purpose === PagePurpose.enum.instructions) {
+    return ask(state, { kind: E.check_owner, purpose: OwnerPurpose.enum.instructions, origin });
+  }
+  if (origin !== null) return startRequestAt(state, origin, config);
+  // Nothing names a page: serve one from this process, if it can.
+  return observation.canServe ? ask(state, { kind: E.serve_page, purpose }) : withoutPage(state, purpose);
 };
+
+const onPageServed = (state: SignInState, observation: Observed<typeof O.page_served>, config: SignInConfig) =>
+  observation.origin === null
+    ? withoutPage(state, observation.purpose)
+    : startRequestAt(state, observation.origin, config);
 
 const onGrantStarted = (state: SignInState, observation: Observed<typeof O.grant_started>, config: SignInConfig) => {
   const next = withPending(state, { deviceCode: observation.deviceCode, userCode: observation.userCode });
@@ -254,14 +270,11 @@ const onGrantFailed = (state: SignInState, observation: Observed<typeof O.grant_
     ? step(state, { kind: E.close_page }, present({ kind: P.cannot_verify }))
     : ended(S.failed, failedWith(observation.error));
 
-const onPageNamed = (state: SignInState, observation: Observed<typeof O.page_named>) =>
-  ask(state, { kind: E.check_owner, purpose: OwnerPurpose.enum.instructions, origin: observation.origin });
-
 const onOwnerChecked = (state: SignInState, observation: Observed<typeof O.owner_checked>) => {
   if (observation.purpose === OwnerPurpose.enum.login) {
     return observation.unclaimed
       ? step({ kind: S.failed }, present({ kind: P.owner_unclaimed }))
-      : ask(state, { kind: E.open_page, purpose: PagePurpose.enum.login });
+      : ask(state, { kind: E.name_page, purpose: PagePurpose.enum.login });
   }
   const { origin } = observation;
   return tell(state, {
@@ -279,7 +292,7 @@ const gone = (state: SignInState, then: Continuation): SignInStep => {
   const next = withoutPending(state);
   const release: SignInEffect = { kind: E.close_page };
   return then === Continuation.enum.ask
-    ? step(next, release, { kind: E.open_page, purpose: PagePurpose.enum.new_request })
+    ? step(next, release, { kind: E.name_page, purpose: PagePurpose.enum.new_request })
     : step(next, release);
 };
 
@@ -421,9 +434,9 @@ export const nextStep = (state: SignInState, observation: SignInObservation, con
     case O.owner_checked:
       return onOwnerChecked(state, observation);
     case O.page_named:
-      return onPageNamed(state, observation);
-    case O.page_opened:
-      return onPageOpened(state, observation, config);
+      return onPageNamed(state, observation, config);
+    case O.page_served:
+      return onPageServed(state, observation, config);
     case O.grant_started:
       return onGrantStarted(state, observation, config);
     case O.grant_failed:

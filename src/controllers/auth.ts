@@ -5,11 +5,13 @@ import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
 import {
   claimedOwner,
+  claimRaceWinner,
   formatSetupCode,
   hasCredentials,
   isSetupCodeUsable,
   isUnclaimed,
   normalizeSetupCode,
+  planOwnerClaim,
   shouldIssueSetupCode,
   spentSetupCode,
 } from '../logic/auth/owner.js';
@@ -28,6 +30,7 @@ import { type AuthMode } from '../models/auth/mode.js';
 import {
   type ClaimedOwner,
   type ClaimedUserEntity,
+  type ClaimPlan,
   type IssuedSetupCode,
   OWNER_USER_ID,
   SETUP_CODE_ID,
@@ -247,6 +250,13 @@ export const claimedOwnerOf = async (deps: AuthDeps): Promise<ClaimedOwner | nul
   const owner = await deps.users.findById(OWNER_USER_ID);
   return owner !== null && hasCredentials(owner) ? { username: owner.username } : null;
 };
+
+/** Read-only: what a terminal claim should do now — claim, or leave alone an owner who already holds the login. */
+export const ownerClaimPlan = async (deps: AuthDeps): Promise<ClaimPlan> => planOwnerClaim(await claimedOwnerOf(deps));
+
+/** Read-only, after a refused claim: the owner who won the race for it, if that is why it was refused. */
+export const claimRaceWinnerOf = async (deps: AuthDeps, refusal: AppError): Promise<ClaimedOwner | null> =>
+  claimRaceWinner(refusal, await claimedOwnerOf(deps));
 
 /** Read-only: does the owner still need claiming? Drives the setup-vs-login redirect. */
 export const ownerNeedsSetup = async (deps: AuthDeps): Promise<boolean> =>

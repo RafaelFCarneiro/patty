@@ -1,7 +1,12 @@
 import { AUTH_POSITIONALS, AuthSubcommand, EXIT_FAILURE, EXIT_OK, PASSWORD_STDIN_FLAG } from '../../../common/cli.js';
 import { formatAppError } from '../../../common/errors.js';
-import { claimedOwnerOf, claimOwnerLocally, findResetTarget, resetPassword } from '../../../controllers/auth.js';
-import { claimRaceWinner, planOwnerClaim } from '../../../logic/auth/owner.js';
+import {
+  claimOwnerLocally,
+  claimRaceWinnerOf,
+  findResetTarget,
+  ownerClaimPlan,
+  resetPassword,
+} from '../../../controllers/auth.js';
 import { type PasswordReset } from '../../../models/auth/password.js';
 import { NPX_COMMAND } from '../../../models/package.js';
 import { ClaimOptionsSchema, ResetOptionsSchema, type ClaimOptions, type ResetOptions } from '../../../wire/in/cli.js';
@@ -38,7 +43,7 @@ const withPromptIo = async <T>(
 /** `true` = the owner holds a login when this returns (claimed now or before); `false` = nothing was written. */
 export const ensureOwnerClaimed = (io: CliIo, options: ClaimOptions): Promise<boolean> =>
   withShell(io, async (shell) => {
-    const plan = planOwnerClaim(await claimedOwnerOf(shell.deps));
+    const plan = await ownerClaimPlan(shell.deps);
     if (plan.kind === 'skip') {
       io.out(CLI_MESSAGES.alreadyClaimed(plan.username));
       return true;
@@ -52,7 +57,7 @@ export const ensureOwnerClaimed = (io: CliIo, options: ClaimOptions): Promise<bo
       io.out(CLI_MESSAGES.ownerClaimed(claimed.value.username));
       return true;
     }
-    const winner = claimRaceWinner(claimed.error, await claimedOwnerOf(shell.deps));
+    const winner = await claimRaceWinnerOf(shell.deps, claimed.error);
     if (winner) {
       io.out(CLI_MESSAGES.alreadyClaimed(winner.username));
       return true;
