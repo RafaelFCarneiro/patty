@@ -2,7 +2,9 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeF
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sql } from 'drizzle-orm';
+import { is, sql } from 'drizzle-orm';
+import { getTableConfig, SQLiteTable } from 'drizzle-orm/sqlite-core';
+import * as schema from '../../../src/diplomat/db/schema.js';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
@@ -333,6 +335,34 @@ describe('migration 0021 — tenancy data (ADR-033 §5, §7)', () => {
       await expect(assertOwnedRowsHaveKnownUsers(reader(db))).rejects.toThrow(
         /refusing to start.*accounts: 1.*categories: 1.*user_settings: 1/,
       );
+    });
+  });
+
+  describe('the integrity check covers every table that has an owner column', () => {
+    const tablesWithUserId = () =>
+      Object.values(schema)
+        .filter((table) => is(table, SQLiteTable))
+        .map((table) => getTableConfig(table as SQLiteTable))
+        .filter((config) => config.columns.some((column) => column.name === 'user_id'))
+        .map((config) => config.name);
+    // Identity tables also have a user_id (a login's owner, not tenancy) and are not tenant data.
+    const IDENTITY = ['sessions', 'access_tokens', 'client_grants'];
+
+    it('lists exactly the schema’s tenant tables, so a new owned table cannot be forgotten', () => {
+      const listed = [...OWNED_TABLES, ...SHARED_OR_OWNED_TABLES, 'user_settings'].sort();
+      expect(
+        tablesWithUserId()
+          .filter((name) => !IDENTITY.includes(name))
+          .sort(),
+      ).toEqual(listed);
+    });
+
+    it('flags a user’s category that became shared (owner missing at backfill), not a seeded default', async () => {
+      const db = await open();
+      await bootstrap(db);
+      expect(await findRowsWithoutKnownUser(reader(db))).toEqual({});
+      await db.run(sql`INSERT INTO categories (id, name, kind, user_id) VALUES ('cat-mine', 'Mine', 'expense', NULL)`);
+      expect(await findRowsWithoutKnownUser(reader(db))).toEqual({ categories: 1 });
     });
   });
 

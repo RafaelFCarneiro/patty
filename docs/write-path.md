@@ -142,7 +142,7 @@ scope adds is mechanical:
 - **update / delete** add `AND user_id = :me`, and an update never rewrites `user_id`. Another user's row — and a shared
   default, whose `user_id` is NULL — does not match, so the write fails exactly like a stale version
   (`VersionConflict`, three attempts, then `conflict`);
-- hand-written appliers follow the same rule: `userSettingsApplier` (keyed by `user_id`, no `id`),
+- hand-written appliers follow the same rule (`transactionTagApplier` is the one deliberate exception to "appliers read nothing": its two ownership SELECTs run inside the batch's transaction, because a link table has no owner column of its own to confine a write by): `userSettingsApplier` (keyed by `user_id`, no `id`),
   `merchantCategoryApplier` (writes only the user's `history` edge, conflicting only among their own edges),
   `transactionTagApplier` (the transaction and every tag must be the user's, else a no-op `applied: false`);
 - reference data with no owner (`merchantApplier`, `currencyRateApplier`) is registered as it is.

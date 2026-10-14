@@ -260,7 +260,7 @@ describe('who hears about a change (the change bus and /ui/events)', () => {
 
   it('delivers a change to its own user’s stream only', async () => {
     const baseUrl = await (async () => {
-      await ctx.app.listen({ port: 0, host: LOOPBACK_HOST });
+      if (!ctx.app.server.listening) await ctx.app.listen({ port: 0, host: LOOPBACK_HOST });
       return `http://${LOOPBACK_HOST}:${(ctx.app.server.address() as AddressInfo).port}`;
     })();
     const deps = authDepsOf(ctx);

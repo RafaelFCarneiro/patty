@@ -16,6 +16,7 @@ import {
   errorCodeOf,
   expectNoLeak,
   markersOf,
+  postMcp,
   readResource,
   seedTwoUsers,
   sharedDump,
@@ -638,17 +639,8 @@ describe('the surface under test is the whole surface', () => {
   });
 
   it('has an isolation case for every MCP resource the server lists', async () => {
-    const res = await ctx.app.inject({
-      method: 'POST',
-      url: '/mcp',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${b.token}`,
-      },
-      payload: { jsonrpc: '2.0', id: 9, method: 'resources/list' },
-    });
-    const listed = (res.json() as { result: { resources: Array<{ uri: string }> } }).result.resources.map((r) => r.uri);
+    const res = await postMcp(ctx.app, b, { jsonrpc: '2.0', id: 9, method: 'resources/list' });
+    const listed = (res.json as { result: { resources: Array<{ uri: string }> } }).result.resources.map((r) => r.uri);
     expect(Object.keys(RESOURCE_CASES).sort()).toEqual([...listed].sort());
   });
 

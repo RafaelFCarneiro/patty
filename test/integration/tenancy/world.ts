@@ -1,3 +1,4 @@
+import type { AddressInfo } from 'node:net';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { expect } from 'vitest';
@@ -350,41 +351,48 @@ const parseJson = (text: string): unknown => {
 };
 
 /** A tool call over `POST /mcp` with the actor's bearer token: the edge, the gate and the tool, for real. */
+/** `POST /mcp` over a real loopback socket. The MCP SDK's transport drains the request body on a timer against the
+ *  socket; light-my-request's fake one has no `destroySoon`, so `inject` would leave uncaught errors behind. */
+export const postMcp = async (
+  app: FastifyInstance,
+  actor: Actor,
+  payload: unknown,
+): Promise<{ status: number; json: any }> => {
+  if (!app.server.listening) await app.listen({ port: 0, host: '127.0.0.1' });
+  const { port } = app.server.address() as AddressInfo;
+  const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: 'POST',
+    headers: { ...MCP_HEADERS, ...bearer(actor.token) },
+    body: JSON.stringify(payload),
+  });
+  return { status: res.status, json: await res.json() };
+};
+
 export const callTool = async (
   app: FastifyInstance,
   actor: Actor,
   name: string,
   args: Record<string, unknown> = {},
 ): Promise<Outcome> => {
-  const res = await app.inject({
-    method: 'POST',
-    url: '/mcp',
-    headers: { ...MCP_HEADERS, ...bearer(actor.token) },
-    payload: toolCall(name, args),
-  });
-  const message = res.json() as {
+  const res = await postMcp(app, actor, toolCall(name, args));
+  const message = res.json as {
     result?: { isError?: boolean; content?: Array<{ text?: string }> };
     error?: { message?: string };
   };
-  const text = message.result?.content?.[0]?.text ?? message.error?.message ?? res.body;
+  const text = message.result?.content?.[0]?.text ?? message.error?.message ?? JSON.stringify(res.json);
   return {
     failed: message.result?.isError === true || message.error !== undefined,
-    status: res.statusCode,
+    status: res.status,
     payload: parseJson(text),
     text,
   };
 };
 
 export const readResource = async (app: FastifyInstance, actor: Actor, uri: string): Promise<Outcome> => {
-  const res = await app.inject({
-    method: 'POST',
-    url: '/mcp',
-    headers: { ...MCP_HEADERS, ...bearer(actor.token) },
-    payload: { jsonrpc: '2.0', id: 3, method: 'resources/read', params: { uri } },
-  });
-  const message = res.json() as { result?: { contents?: Array<{ text?: string }> }; error?: { message?: string } };
-  const text = message.result?.contents?.[0]?.text ?? message.error?.message ?? res.body;
-  return { failed: message.error !== undefined, status: res.statusCode, payload: parseJson(text), text };
+  const res = await postMcp(app, actor, { jsonrpc: '2.0', id: 3, method: 'resources/read', params: { uri } });
+  const message = res.json as { result?: { contents?: Array<{ text?: string }> }; error?: { message?: string } };
+  const text = message.result?.contents?.[0]?.text ?? message.error?.message ?? JSON.stringify(res.json);
+  return { failed: message.error !== undefined, status: res.status, payload: parseJson(text), text };
 };
 
 export const callRoute = async (

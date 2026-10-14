@@ -2,6 +2,7 @@ import type { InValue } from '@libsql/client';
 import { sql, type SQL } from 'drizzle-orm';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import * as R from 'remeda';
+import { DefaultCategoryId } from './seed/categories.js';
 import { z } from 'zod';
 
 /** What the post-migration check needs of a connection: run one statement, read its rows. A libsql `Transaction`
@@ -33,9 +34,21 @@ const dialect = new SQLiteSyncDialect();
 
 type Check = readonly [table: string, orphanCondition: SQL];
 
+/** A shared category (`user_id` NULL) must be one FinTrack seeds: had the owner been missing, the backfill would have
+ *  turned the owner's own categories into shared ones, and nothing else (no NOT NULL, no CHECK) would notice. */
+const SEEDED_CATEGORY_IDS = sql.join(
+  DefaultCategoryId.options.map((id) => sql`${id}`),
+  sql`, `,
+);
+
+const orphanConditionOf = (table: string): SQL =>
+  table === 'categories'
+    ? sql`(user_id IS NOT NULL AND NOT (${KNOWN_USER})) OR (user_id IS NULL AND id NOT IN (${SEEDED_CATEGORY_IDS}))`
+    : sql`user_id IS NOT NULL AND NOT (${KNOWN_USER})`;
+
 const checks: readonly Check[] = [
   ...OWNED_TABLES.map((table): Check => [table, sql`user_id IS NULL OR NOT (${KNOWN_USER})`]),
-  ...SHARED_OR_OWNED_TABLES.map((table): Check => [table, sql`user_id IS NOT NULL AND NOT (${KNOWN_USER})`]),
+  ...SHARED_OR_OWNED_TABLES.map((table): Check => [table, orphanConditionOf(table)]),
   ...USER_KEYED_TABLES.map((table): Check => [table, sql`NOT (${KNOWN_USER})`]),
 ];
 
