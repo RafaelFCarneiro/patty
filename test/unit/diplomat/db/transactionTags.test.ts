@@ -78,7 +78,7 @@ describe('transactionTagApplier', () => {
     expect(log.deletes).toBe(1);
   });
 
-  it('a transaction that is not the user’s (another user’s, or never inserted — a duplicate replay) is a no-op', async () => {
+  it('a transaction that is not the user’s (another’s, or a duplicate replay’s) is a no-op', async () => {
     const log: WriteLog = { deletes: 0, inserted: [] };
 
     const outcome = await applier.insert(stubTx(log, { transaction: false, tagIds: ['tag-a'] }), {
@@ -91,7 +91,7 @@ describe('transactionTagApplier', () => {
     expect(log.inserted).toEqual([]);
   });
 
-  it('a tag that is not the user’s links nothing — and clears nothing — even if the transaction is theirs', async () => {
+  it('a tag that is not the user’s links and clears nothing, even on the user’s own transaction', async () => {
     const log: WriteLog = { deletes: 0, inserted: [] };
 
     const outcome = await applier.insert(stubTx(log, ALL_OWNED(['tag-a'])), {
