@@ -295,10 +295,11 @@ baseline fragment, and self-check (fragment not full page; no embedded data; sam
 
 ## Live update — SSE, entity-tagged (ADR-027 Phase 3)
 
-**The change bus** comes from `@rfc0/effect-runner` (`createChangeBus({ onError })` returns `{ publish, subscribe }`);
-FinTrack owns only the SSE forwarding below and the wiring in `main.ts` / `test/integration/app-builder.ts`, which
-calls `createChangeBus` once and hands the bound `subscribe` down as a parameter — the same crossing pattern as
-`RunEffects`/`resetLocale`. A subscriber that throws is isolated by the bus and reported to its `onError` (a shared
+**The change bus** is FinTrack's own `UserChangeBus` (`composition/changeBus.ts`, ADR-033 §5): `publish({ userId, entities })`
+after a commit, `subscribe(listener)`. The composition root (`runtime.ts`) builds it once and hands `subscribe` down as a
+parameter — the same crossing pattern as `RunEffects`. `GET /ui/events` is the session user's stream: it forwards only the
+events whose `userId` is that user's (instance bookkeeping carries `null` and reaches no one), and refuses to open at all
+without a principal. A subscriber that throws is isolated by the bus and reported to its `onError` (a shared
 stderr reporter — never stdout, which carries the stdio MCP protocol, ADR-007); it can't fail the write that
 triggered it. No external broker: the MCP server, HTTP sidecar, and scheduler share one process (ADR-024), so an
 in-process bus is the whole mechanism.

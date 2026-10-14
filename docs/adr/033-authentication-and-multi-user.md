@@ -335,6 +335,8 @@ leads to it.** No path creates a second, empty user that the data doesn't belong
 3. [x] Phase 2 — personal access tokens, scopes, protected resource metadata.
 4. [ ] Phase 3 — in-process OAuth 2.1 AS for MCP; non-loopback exposure supported behind TLS.
 5. [ ] Phase 4 — multi-user tenancy.
+   - [x] Step 1 (`feat/tenancy-data`): `user_id` on every owned row (migration `0021_tenancy_data`, backfilled to the owner, with the safety copy and integrity check), user-scoped deps and appliers, per-user settings and change events, the isolation suite.
+   - [ ] Step 2 (`feat/user-management`): admin creates users by invitation; `fintrack key export` and the npm→Docker guide.
 
 Every phase is feature-sized (schema + multiple layers + security-sensitive). Each gets the DoD verification
 subagent, charged with checking that:

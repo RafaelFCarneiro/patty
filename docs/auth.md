@@ -523,7 +523,7 @@ snapshots the database next to itself with SQLite's own `VACUUM INTO`:
   lock the owner's login out for 15 minutes by spamming wrong passwords (the cost of not revealing which usernames
   exist). The setup-code and session machinery are unaffected.
 - **A restarted process forgetting rate-limit state.** The limiter is in memory.
-- **More than one person.** There is one user; a second login cannot exist yet.
+- **More than one person.** Still one user: a second login cannot be created yet (admin user management is the next step). The data layer is ready for it — every owned row carries `user_id` and every read and write goes through that user's scoped dependencies — but note what that isolation is: **logical (row-level) inside one encrypted database, not cryptographic.** There is one database key per instance; whoever holds the key and the volume (or the `.bak` files beside it) can read every user's data, and exchange rates are shared market data any signed-in user with write scope can refresh.
 - **Eavesdropping on a token.** A bearer sent over plain HTTP across a network can be read; use TLS (Phase 3 documents the proxy deployment).
 
 ## What comes next
