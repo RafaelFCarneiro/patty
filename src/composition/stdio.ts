@@ -18,24 +18,10 @@ import type { Runtime } from './runtime.js';
  */
 const loadHttpModule = () => import('./http.js');
 
-const maybeStartSidecar = async (
-  config: Config,
-  { deps, runEffects, runEffectsSequence, resetLocale, changeBus }: Runtime,
-  auth: HttpAuth,
-): Promise<HttpSidecar | null> => {
+const maybeStartSidecar = async (config: Config, runtime: Runtime, auth: HttpAuth): Promise<HttpSidecar | null> => {
   if (!config.FINTRACK_HTTP) return null;
   const { startHttpSidecar } = await loadHttpModule();
-  return startHttpSidecar(
-    deps,
-    version,
-    runEffects,
-    runEffectsSequence,
-    resetLocale,
-    changeBus.subscribe,
-    config.PORT,
-    config.HOST,
-    { auth, trustProxy: config.TRUST_PROXY },
-  );
+  return startHttpSidecar(runtime, version, config.PORT, config.HOST, { auth, trustProxy: config.TRUST_PROXY });
 };
 
 /**
@@ -45,7 +31,6 @@ const maybeStartSidecar = async (
 export const runStdio = (config: Config): ResultAsync<void, DatabaseAhead> =>
   safeTry(async function* () {
     const { runtime, prepared } = yield* boot(config);
-    const { deps, runEffects, runEffectsSequence, resetLocale } = runtime;
     const { auth, issueAndAnnounceSetup } = prepared;
 
     // The page the sign-in link may name from what is known here (decided in `logic/auth/origin.ts`); with none, the
@@ -69,14 +54,7 @@ export const runStdio = (config: Config): ResultAsync<void, DatabaseAhead> =>
         }
       : { mode: AuthMode.enum.disabled };
 
-    const { server, session } = await connectStdio(
-      deps,
-      version,
-      runEffects,
-      runEffectsSequence,
-      resetLocale,
-      stdioAuth,
-    );
+    const { server, session } = await connectStdio(runtime, version, stdioAuth);
 
     // A bind failure inside startHttpSidecar is caught there and is never fatal — the stdio server keeps working.
     const sidecar = await maybeStartSidecar(config, runtime, auth);

@@ -7,14 +7,13 @@ import {
   Locale,
   localeErrors,
   LocaleSource,
-  SETTINGS_ENTITY_TAG,
-  SETTINGS_SINGLETON_ID,
+  USER_SETTINGS_ENTITY_TAG,
   type BaseCurrencyPreferences,
   type LocalePreferences,
   type Preferences,
   type SetBaseCurrencyInput,
   type SetLocaleInput,
-  type SettingsEntity,
+  type UserSettingsEntity,
 } from '../models/locale.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { Deps } from './deps.js';
@@ -29,7 +28,7 @@ export const getPreferences = async (deps: Deps): Promise<Preferences> => {
   };
 };
 
-// The locale cache reset (main.ts's process-level cache) is shell bookkeeping, not a domain
+// The locale cache reset (the shell's per-user cache) is shell bookkeeping, not a domain
 // effect — the shell resets it after this flow's write commits, never from here.
 export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<FlowOutcome<LocalePreferences>, AppError> =>
   safeTry(async function* () {
@@ -42,20 +41,19 @@ export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<FlowOu
       return ok({ persist: [], response });
     }
 
-    const entity: Omit<SettingsEntity, 'version'> = {
-      id: SETTINGS_SINGLETON_ID,
+    const entity: Omit<UserSettingsEntity, 'version'> = {
       locale: input.locale,
       localeSource: input.source,
       baseCurrency: current?.baseCurrency ?? null,
     };
     const persist: Persistable[] = current
-      ? [persistence.update({ entity: SETTINGS_ENTITY_TAG, model: { ...entity, version: current.version } })]
-      : [persistence.insert({ entity: SETTINGS_ENTITY_TAG, model: entity })];
+      ? [persistence.update({ entity: USER_SETTINGS_ENTITY_TAG, model: { ...entity, version: current.version } })]
+      : [persistence.insert({ entity: USER_SETTINGS_ENTITY_TAG, model: entity })];
 
     return ok({ persist, response: { locale: input.locale, localeSource: input.source } });
   });
 
-/** Mirrors `setLocale`'s upsert-singleton shape — no guardrail to enforce (any `CurrencyCode` is a
+/** Mirrors `setLocale`'s upsert-the-user's-row shape — no guardrail to enforce (any `CurrencyCode` is a
  *  valid base currency), so unlike `setLocale` there is no `guard`/anti-churn step. */
 export const setBaseCurrency = (
   deps: Deps,
@@ -67,15 +65,14 @@ export const setBaseCurrency = (
       return ok({ persist: [], response: { baseCurrency: input.baseCurrency } });
     }
 
-    const entity: Omit<SettingsEntity, 'version'> = {
-      id: SETTINGS_SINGLETON_ID,
+    const entity: Omit<UserSettingsEntity, 'version'> = {
       locale: current?.locale ?? Locale.enum.en,
       localeSource: current?.localeSource ?? LocaleSource.enum.default,
       baseCurrency: input.baseCurrency,
     };
     const persist: Persistable[] = current
-      ? [persistence.update({ entity: SETTINGS_ENTITY_TAG, model: { ...entity, version: current.version } })]
-      : [persistence.insert({ entity: SETTINGS_ENTITY_TAG, model: entity })];
+      ? [persistence.update({ entity: USER_SETTINGS_ENTITY_TAG, model: { ...entity, version: current.version } })]
+      : [persistence.insert({ entity: USER_SETTINGS_ENTITY_TAG, model: entity })];
 
     return ok({ persist, response: { baseCurrency: input.baseCurrency } });
   });

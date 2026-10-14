@@ -1,14 +1,12 @@
 import { z } from 'zod';
 import { listCurrencies } from '../../../controllers/currencies.js';
 import { CurrencySchema } from '../../../models/money.js';
-import type { HttpContext } from '../context.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
 import { READ_SCOPE } from '../../../models/auth/scope.js';
 
 const CURRENCIES_TAG = 'Currencies';
 
-export const currencyRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps } = ctx;
+export const currencyRoutes = (): RouteDefinition[] => {
   return [
     {
       method: 'get',
@@ -17,7 +15,10 @@ export const currencyRoutes = (ctx: HttpContext): RouteDefinition[] => {
       tags: [CURRENCIES_TAG],
       summary: 'List currencies',
       responses: { 200: okResponse('Currencies', z.array(CurrencySchema)) },
-      handler: async () => listCurrencies(deps),
+      handler: async (_req, _reply, scope) => {
+        const { deps } = scope();
+        return listCurrencies(deps);
+      },
     },
   ];
 };

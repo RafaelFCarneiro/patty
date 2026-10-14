@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import type { categories } from '../../diplomat/db/schema.js';
 import { LocalizedNamesSchema } from '../../models/category.js';
+import type { WithoutOwner } from './tenancy.js';
 
 // Category row from a Drizzle select — derived from schema.ts (single source of truth).
-export type CategoryRow = typeof categories.$inferSelect;
+export type CategoryRow = WithoutOwner<typeof categories.$inferSelect>;
 
 // Sub-category row from the raw self-join SELECT (snake_case + joined parent_name).
 // Stays a hand schema until the raw reads are unified under drizzle-orm/zod (see migration issue).

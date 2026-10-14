@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LOOPBACK_HOST } from '../../../src/common/net.js';
 import { ACCOUNT_ENTITY_TAG } from '../../../src/models/account.js';
 import { SESSION_ENTITY_TAG, SETUP_CODE_ENTITY_TAG, USER_ENTITY_TAG } from '../../../src/models/auth/entity.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 
 let tmpDir: string;
@@ -35,16 +36,18 @@ const nextMessage = async (reader: ReadableStreamDefaultReader<Uint8Array>): Pro
   return buffer;
 };
 
-describe('GET /ui/events and auth bookkeeping', () => {
-  it('never forwards session/user/setup-code tags, and sends nothing when only those changed', async () => {
+describe('GET /ui/events and whose changes it forwards (ADR-033 §5)', () => {
+  it('forwards only its own user’s changes, never instance bookkeeping (session/user/setup-code)', async () => {
     const controller = new AbortController();
     const res = await fetch(`${baseUrl}/ui/events`, { signal: controller.signal });
     const reader = res.body!.getReader();
 
-    ctx.changeBus.publish([SESSION_ENTITY_TAG, USER_ENTITY_TAG, SETUP_CODE_ENTITY_TAG]);
-    ctx.changeBus.publish([SESSION_ENTITY_TAG, ACCOUNT_ENTITY_TAG]);
+    // Instance bookkeeping carries no user; another user's change carries theirs. Neither belongs to this stream.
+    ctx.changeBus.publish({ userId: null, entities: [SESSION_ENTITY_TAG, USER_ENTITY_TAG, SETUP_CODE_ENTITY_TAG] });
+    ctx.changeBus.publish({ userId: 'someone-else', entities: [ACCOUNT_ENTITY_TAG] });
+    ctx.changeBus.publish({ userId: OWNER_USER_ID, entities: [ACCOUNT_ENTITY_TAG] });
 
-    // The first message on the wire is the second publish, stripped of the auth tag — the first was dropped.
+    // The first message on the wire is the owner's: the two before it were dropped.
     const message = await nextMessage(reader);
     expect(message).toContain(`"entities":["${ACCOUNT_ENTITY_TAG}"]`);
     expect(message).not.toContain(SESSION_ENTITY_TAG);

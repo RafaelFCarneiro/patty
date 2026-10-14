@@ -9,7 +9,8 @@ import type { Db } from '../driver.js';
 import { bills } from '../schema.js';
 import { isUniqueConstraintViolation } from '../sqliteErrors.js';
 import { fullTxSelect } from '../queries/transactionSelect.js';
-import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
+import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
+import { ownedBy } from '../queries/scope.js';
 
 /** Includes `creditCardId`/`version` — for the FC/IS credit-card transaction flows' own
  *  read-decide step, which needs them to build a `Persistable`. Every other caller uses `toBill`
@@ -32,8 +33,10 @@ const toRawBill = (record: Record<string, unknown>): RawBill => {
 
 const toBill = (record: Record<string, unknown>): Bill => R.omit(toRawBill(record), ['creditCardId', 'version']);
 
-const fetchBillRow = async (db: Db, billId: string): Promise<Record<string, unknown> | undefined> => {
-  const [row] = await db.all<Record<string, unknown>>(sql`SELECT * FROM bills WHERE id = ${billId}`);
+const fetchBillRow = async (db: Db, userId: string, billId: string): Promise<Record<string, unknown> | undefined> => {
+  const [row] = await db.all<Record<string, unknown>>(
+    sql`SELECT * FROM bills WHERE ${ownedBy(userId)} AND id = ${billId}`,
+  );
   return row;
 };
 
@@ -54,18 +57,18 @@ export type BillsRepo = {
   findAllByCard: (cardId: string) => Promise<RawBill[]>;
 };
 
-export const billsRepo = (db: Db): BillsRepo => ({
+export const billsRepo = (db: Db, userId: string): BillsRepo => ({
   get: async (cardId, month, year) => {
     const [billRow] = await db.all<Record<string, unknown>>(sql`
       SELECT b.*, cc.name AS card_name
       FROM bills b JOIN credit_cards cc ON cc.id = b.credit_card_id
-      WHERE b.credit_card_id = ${cardId} AND b.month = ${month} AND b.year = ${year}
+      WHERE ${ownedBy(userId, 'b')} AND b.credit_card_id = ${cardId} AND b.month = ${month} AND b.year = ${year}
     `);
     if (!billRow) return null;
     const bill = toBill(billRow);
 
     const txRows = await db.all<Record<string, unknown>>(sql`
-      ${fullTxSelect(sql`t.bill_id = ${bill.id}`)}
+      ${fullTxSelect(userId, sql`t.bill_id = ${bill.id}`)}
       ORDER BY t.date
     `);
     return {
@@ -77,37 +80,42 @@ export const billsRepo = (db: Db): BillsRepo => ({
 
   findByCycle: async (cardId, month, year) => {
     const [row] = await db.all<Record<string, unknown>>(sql`
-      SELECT * FROM bills WHERE credit_card_id = ${cardId} AND month = ${month} AND year = ${year}
+      SELECT * FROM bills WHERE ${ownedBy(userId)} AND credit_card_id = ${cardId} AND month = ${month} AND year = ${year}
     `);
     return row ? toRawBill(row) : null;
   },
 
   findById: async (billId) => {
-    const row = await fetchBillRow(db, billId);
+    const row = await fetchBillRow(db, userId, billId);
     return row ? toRawBill(row) : null;
   },
 
   findAllByCard: async (cardId) => {
-    const rows = await db.all<Record<string, unknown>>(sql`SELECT * FROM bills WHERE credit_card_id = ${cardId}`);
+    const rows = await db.all<Record<string, unknown>>(
+      sql`SELECT * FROM bills WHERE ${ownedBy(userId)} AND credit_card_id = ${cardId}`,
+    );
     return rows.map(toRawBill);
   },
 });
 
-const versionedBillApplier = versionedTableApplier(bills);
+const versionedBillApplier = (userId: string): EntityApplier => ownedTableApplier(bills, userId);
 
 /** A bill is created by cycle (`UNIQUE(creditCardId, month, year)`), not by `id`, so a concurrent
  *  first purchase on the same cycle can raise a real unique-constraint error that
  *  `versionedTableApplier`'s id-scoped `onConflictDoNothing` doesn't swallow. Rethrown as
  *  `VersionConflict` to roll back and retry the flow instead of surfacing a raw 500 or a
  *  wrong-id no-op. `update`/`delete` stay plain. */
-export const billApplier: EntityApplier = {
-  ...versionedBillApplier,
-  insert: async (tx, model) => {
-    try {
-      return await versionedBillApplier.insert(tx, model);
-    } catch (cause) {
-      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-      throw cause;
-    }
-  },
+export const billApplier = (userId: string): EntityApplier => {
+  const applier = versionedBillApplier(userId);
+  return {
+    ...applier,
+    insert: async (tx, model) => {
+      try {
+        return await applier.insert(tx, model);
+      } catch (cause) {
+        if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
+        throw cause;
+      }
+    },
+  };
 };

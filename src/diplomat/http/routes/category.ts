@@ -11,15 +11,13 @@ import {
 import { CategorySchema, SubCategorySchema } from '../../../models/category.js';
 import * as wireInCategories from '../../../wire/in/categories.js';
 import { DeletedOut } from '../../../wire/out/common.js';
-import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, invalidQueryResponse, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
 import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const CATEGORIES_TAG = 'Categories';
 
-export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps, runEffects } = ctx;
+export const categoryRoutes = (): RouteDefinition[] => {
   return [
     {
       method: 'get',
@@ -28,7 +26,10 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
       tags: [CATEGORIES_TAG],
       summary: 'List categories',
       responses: { 200: okResponse('Categories', z.array(CategorySchema)) },
-      handler: async () => listCategories(deps),
+      handler: async (_req, _reply, scope) => {
+        const { deps } = scope();
+        return listCategories(deps);
+      },
     },
     {
       method: 'post',
@@ -38,7 +39,8 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Create category',
       request: { body: jsonBody(wireInCategories.CreateCategorySchema) },
       responses: { 201: okResponse('Category created', CategorySchema), 409: conflict409, 422: validation422 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const wireIn = parse(wireInCategories.CreateCategorySchema, req.body, reply);
         if (!wireIn) return reply;
         const flow = () =>
@@ -54,7 +56,8 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'List sub-categories',
       request: { query: wireInCategories.SubCategoriesQuerySchema },
       responses: { 200: okResponse('Sub-categories', z.array(SubCategorySchema)), 422: validation422 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps } = scope();
         const q = wireInCategories.SubCategoriesQuerySchema.safeParse(req.query);
         if (!q.success) return invalidQueryResponse(reply);
         return reply.send(await listSubCategories(deps, q.data.parentId));
@@ -73,7 +76,8 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const wireIn = parse(wireInCategories.CreateSubCategorySchema, req.body, reply);
         if (!wireIn) return reply;
         const flow = () => createSubCategory(deps, wireIn).map(categoryAdapters.outcomeToDb);
@@ -88,7 +92,8 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Delete category',
       request: { params: nameParam },
       responses: { 200: okResponse('Category deleted', DeletedOut), 404: notFound404, 409: conflict409 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { name } = req.params as { name: string };
         const flow = () => deleteCategory(deps, name).map(categoryAdapters.outcomeToDb);
         return send(reply, await runEffects(flow));
@@ -102,7 +107,8 @@ export const categoryRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Delete sub-category',
       request: { params: nameParam },
       responses: { 200: okResponse('Sub-category deleted', DeletedOut), 404: notFound404, 409: conflict409 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { name } = req.params as { name: string };
         const flow = () => deleteSubCategory(deps, name).map(categoryAdapters.outcomeToDb);
         return send(reply, await runEffects(flow));

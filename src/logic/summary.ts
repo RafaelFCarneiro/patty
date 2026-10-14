@@ -50,11 +50,7 @@ const _toCurrencySummary = (
   };
 };
 
-function toCurrencySummary(
-  entry: [string, SummaryRow[]],
-  locale: Locale,
-  decimalsFor: DecimalsFor,
-): CurrencySummary;
+function toCurrencySummary(entry: [string, SummaryRow[]], locale: Locale, decimalsFor: DecimalsFor): CurrencySummary;
 function toCurrencySummary(
   locale: Locale,
   decimalsFor: DecimalsFor,

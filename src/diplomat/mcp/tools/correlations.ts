@@ -17,8 +17,6 @@ import { fromResult } from '../respond.js';
 import { READ_ONLY } from '../annotations.js';
 
 export const registerCorrelationsTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps } = ctx;
-
   server.registerTool(
     'find_correlations',
     {
@@ -61,10 +59,10 @@ export const registerCorrelationsTools = (server: McpServer, ctx: McpContext): v
         'Optional `displayCurrency` adds a top-level `converted` block — `{ displayCurrency, total, stale, ' +
         'asOf, excluded }` — a read-time grand total converted against currency_rates (as_of-stamped, ' +
         'stale-flagged; a currency with no rate to `displayCurrency` is listed in `converted.excluded` and ' +
-        'left out of the total, never fabricated). Applies to `spending_shifts` (the reference month\'s ' +
+        "left out of the total, never fabricated). Applies to `spending_shifts` (the reference month's " +
         'effective expense spend per currency), `budget_fit` (committed — effective + pending — spend matched ' +
         'to a budget, the same measure get_budget_status converts, so the two surfaces agree), and ' +
-        '`merchant_concentration` (each currency\'s categoryTotal, summed once — not each merchant line). ' +
+        "`merchant_concentration` (each currency's categoryTotal, summed once — not each merchant line). " +
         '`recurring_candidates` is unaffected — its candidates are proposed rules, not per-currency spend ' +
         'totals. Per-currency/per-line results are unaffected either way.',
       inputSchema: {
@@ -78,6 +76,9 @@ export const registerCorrelationsTools = (server: McpServer, ctx: McpContext): v
         minOccurrences: FindCorrelationsSchema.shape.minOccurrences.default(DEFAULT_MIN_OCCURRENCES),
       },
     },
-    async (args) => fromResult(await findCorrelations(deps, args as ResolvedFindCorrelations)),
+    async (args, extra) => {
+      const { deps } = ctx.as(extra);
+      return fromResult(await findCorrelations(deps, args as ResolvedFindCorrelations));
+    },
   );
 };

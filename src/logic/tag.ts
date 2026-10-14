@@ -21,7 +21,11 @@ export const resolveTagIds = (names: readonly string[], allTags: readonly Tag[])
  *  in the same batch and so can't reflect it. */
 export const resolveTagNames = (names: readonly string[], allTags: readonly Tag[]): string[] => {
   const knownNames = new Set(allTags.map((tag) => tag.name));
-  return R.pipe(names, R.unique(), R.filter((name) => knownNames.has(name)));
+  return R.pipe(
+    names,
+    R.unique(),
+    R.filter((name) => knownNames.has(name)),
+  );
 };
 
 export const tagSetPersistable = (transactionId: string, tagIds: string[]): Persistable =>

@@ -5,15 +5,13 @@ import { CurrencyRateViewSchema, SetExchangeRateSchema } from '../../../models/c
 import * as currencyRateAdapters from '../../../adapters/currencyRates.js';
 import { SetExchangeRatesSchema } from '../../../wire/in/currencyRates.js';
 import { BulkSetExchangeRatesOut } from '../../../wire/out/currencyRates.js';
-import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { parse, send, validation422 } from '../respond.js';
 import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const EXCHANGE_RATES_TAG = 'Exchange rates';
 
-export const currencyRateRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps, runEffects, runEffectsSequence } = ctx;
+export const currencyRateRoutes = (): RouteDefinition[] => {
   return [
     {
       method: 'get',
@@ -22,7 +20,10 @@ export const currencyRateRoutes = (ctx: HttpContext): RouteDefinition[] => {
       tags: [EXCHANGE_RATES_TAG],
       summary: 'List exchange rates',
       responses: { 200: okResponse('Exchange rates', z.array(CurrencyRateViewSchema)) },
-      handler: async () => listExchangeRates(deps),
+      handler: async (_req, _reply, scope) => {
+        const { deps } = scope();
+        return listExchangeRates(deps);
+      },
     },
     {
       method: 'post',
@@ -32,7 +33,8 @@ export const currencyRateRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Set exchange rate (upsert)',
       request: { body: jsonBody(SetExchangeRateSchema) },
       responses: { 200: okResponse('Rate upserted', CurrencyRateViewSchema), 422: validation422 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const input = parse(SetExchangeRateSchema, req.body, reply);
         if (!input) return reply;
         const flow = () => setExchangeRate(deps, input).map(currencyRateAdapters.outcomeToDb);
@@ -47,7 +49,8 @@ export const currencyRateRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Set exchange rates (bulk upsert, partial success)',
       request: { body: jsonBody(SetExchangeRatesSchema) },
       responses: { 200: okResponse('Bulk upsert result', BulkSetExchangeRatesOut), 422: validation422 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffectsSequence } = scope();
         const input = parse(SetExchangeRatesSchema, req.body, reply);
         if (!input) return reply;
         const outcomes = await runEffectsSequence(

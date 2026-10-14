@@ -11,6 +11,7 @@ import type { Db } from './driver.js';
 import { HTML_FILE_EXTENSION, listDefaultDashboardFiles } from './repos/dashboards.js';
 import { categories, currencies, dashboards, merchantCategory, merchants } from './schema.js';
 import { migrateWithSafetyCopy } from './safetyCopy.js';
+import { assertOwnedRowsHaveKnownUsers } from './tenancyIntegrity.js';
 import { checkDatabaseNotAhead } from './versionGuard.js';
 import { CURRENCIES } from './seed/currencies.js';
 import { CATEGORIES } from './seed/categories.js';
@@ -109,7 +110,14 @@ const seedMerchantRules = async (db: Db): Promise<void> => {
 export const bootstrap = (db: Db, migrationsFolder = DEFAULT_MIGRATIONS_FOLDER): ResultAsync<void, DatabaseAhead> =>
   checkDatabaseNotAhead(db, migrationsFolder)
     .andThen(() =>
-      ResultAsync.fromSafePromise(migrateWithSafetyCopy(db, migrationsFolder, () => migrate(db, { migrationsFolder }))),
+      ResultAsync.fromSafePromise(
+        migrateWithSafetyCopy(
+          db,
+          migrationsFolder,
+          () => migrate(db, { migrationsFolder }),
+          assertOwnedRowsHaveKnownUsers,
+        ),
+      ),
     )
     // A newer build may have migrated between the first check and now (both starting at once): look again right before
     // the first seed write, so an older build never seeds into a schema it does not know.

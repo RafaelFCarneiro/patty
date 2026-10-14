@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve as resolvePath, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import * as R from 'remeda';
 import * as dashboardAdapters from '../../../adapters/dashboards.js';
 import {
@@ -13,17 +13,24 @@ import {
 import type { Db } from '../driver.js';
 import { dashboards } from '../schema.js';
 import { isUniqueConstraintViolation } from '../sqliteErrors.js';
-import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
+import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
+import { ownedWhere, visibleRows, visibleWhere } from '../queries/scope.js';
 
 /** Just enough to build a `Persistable` — presence + `id` + `version`, never the (potentially
  *  ~500KB) `html`. */
 export type DashboardRef = { id: string; version: number };
 
 export type DashboardsRepo = {
+  /** The user's own dashboard of that name, else the shared default of that name. */
   get: (name: string) => Promise<Dashboard | null>;
+  /** The user's OWN dashboard of that name — never a shared default, which no one may update or delete. */
   findRefByName: (name: string) => Promise<DashboardRef | null>;
-  // Full-row read (incl. html) — for rename, which must re-emit the whole row under a new name.
+  /** Whether a shared default (a bundled `file` dashboard) bears that name. */
+  isDefault: (name: string) => Promise<boolean>;
+  // Full-row read (incl. html) — for rename, which must re-emit the whole row under a new name. The user's own
+  // dashboard of that name, else the shared default (`shared: true`), so the flow can refuse to touch it.
   findByName: (name: string) => Promise<DashboardEntity | null>;
+  /** The defaults and the user's own, each name once: the user's own dashboard replaces a default of the same name. */
   list: () => Promise<DashboardListItem[]>;
 };
 
@@ -86,38 +93,66 @@ const resolveHtml = (row: ResolvableRow): Promise<string> => {
   return Promise.resolve(row.html);
 };
 
-export const dashboardsRepo = (db: Db): DashboardsRepo => ({
-  get: async (name) => {
-    const [row] = await db.select().from(dashboards).where(eq(dashboards.name, name)).limit(1);
-    if (!row) return null;
-    return dashboardAdapters.dbToModel(row, await resolveHtml(row));
-  },
-
-  findRefByName: async (name) => {
+export const dashboardsRepo = (db: Db, userId: string): DashboardsRepo => {
+  /** The visible row of that name, the user's own ahead of a shared default. */
+  const visibleByName = async (name: string) => {
     const [row] = await db
-      .select({ id: dashboards.id, version: dashboards.version })
+      .select()
       .from(dashboards)
-      .where(eq(dashboards.name, name))
+      .where(visibleWhere(dashboards.userId, userId, eq(dashboards.name, name)))
+      .orderBy(sql`${dashboards.userId} IS NULL`)
       .limit(1);
-    return row ?? null;
-  },
+    return row;
+  };
 
-  findByName: async (name) => {
-    const [row] = await db.select().from(dashboards).where(eq(dashboards.name, name)).limit(1);
-    if (!row) return null;
-    return dashboardAdapters.dbToEntity(row, await resolveHtml(row));
-  },
+  return {
+    get: async (name) => {
+      const row = await visibleByName(name);
+      return row ? dashboardAdapters.dbToModel(row, await resolveHtml(row)) : null;
+    },
 
-  list: async () => {
-    const rows = await db
-      .select({ name: dashboards.name, updatedAt: dashboards.updatedAt, source: dashboards.source })
-      .from(dashboards)
-      .orderBy(dashboards.name);
-    return rows.map(dashboardAdapters.dbToListItem);
-  },
-});
+    findRefByName: async (name) => {
+      const [row] = await db
+        .select({ id: dashboards.id, version: dashboards.version })
+        .from(dashboards)
+        .where(ownedWhere(dashboards.userId, userId, eq(dashboards.name, name)))
+        .limit(1);
+      return row ?? null;
+    },
 
-const versionedDashboardApplier = versionedTableApplier(dashboards);
+    isDefault: async (name) => {
+      const [row] = await db
+        .select({ id: dashboards.id })
+        .from(dashboards)
+        .where(and(isNull(dashboards.userId), eq(dashboards.name, name)))
+        .limit(1);
+      return row !== undefined;
+    },
+
+    findByName: async (name) => {
+      const row = await visibleByName(name);
+      return row ? dashboardAdapters.dbToEntity(row, await resolveHtml(row), row.userId === null) : null;
+    },
+
+    list: async () => {
+      const own = db.select({ name: dashboards.name }).from(dashboards).where(ownedWhere(dashboards.userId, userId));
+      const rows = await db
+        .select({ name: dashboards.name, updatedAt: dashboards.updatedAt, source: dashboards.source })
+        .from(dashboards)
+        .where(
+          and(
+            visibleRows(dashboards.userId, userId),
+            // A default hides behind the user's own dashboard of the same name.
+            sql`(${dashboards.userId} IS NOT NULL OR ${dashboards.name} NOT IN (${own}))`,
+          ),
+        )
+        .orderBy(dashboards.name);
+      return rows.map(dashboardAdapters.dbToListItem);
+    },
+  };
+};
+
+const versionedDashboardApplier = (userId: string): EntityApplier => ownedTableApplier(dashboards, userId);
 
 /** `dashboards.name` has its own `UNIQUE` constraint now that `id` is the primary key — a
  *  concurrent first save of the same brand-new name mints two different ids, both insert, and the
@@ -129,22 +164,25 @@ const versionedDashboardApplier = versionedTableApplier(dashboards);
  *  that changes `name` on an existing row, so a concurrent claim of the same `newName` can raise the
  *  identical `UNIQUE` violation there too; without it, the violation would surface as a raw
  *  exception instead of retrying into a clean `duplicate_name`. `delete` stays plain. */
-export const dashboardApplier: EntityApplier = {
-  ...versionedDashboardApplier,
-  insert: async (tx, model) => {
-    try {
-      return await versionedDashboardApplier.insert(tx, model);
-    } catch (cause) {
-      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-      throw cause;
-    }
-  },
-  update: async (tx, model) => {
-    try {
-      return await versionedDashboardApplier.update(tx, model);
-    } catch (cause) {
-      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-      throw cause;
-    }
-  },
+export const dashboardApplier = (userId: string): EntityApplier => {
+  const applier = versionedDashboardApplier(userId);
+  return {
+    ...applier,
+    insert: async (tx, model) => {
+      try {
+        return await applier.insert(tx, model);
+      } catch (cause) {
+        if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
+        throw cause;
+      }
+    },
+    update: async (tx, model) => {
+      try {
+        return await applier.update(tx, model);
+      } catch (cause) {
+        if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
+        throw cause;
+      }
+    },
+  };
 };

@@ -1,6 +1,6 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { Deps, RunEffects, RunEffectsSequence, SignInInterpreter } from '../../controllers/deps.js';
+import type { SignInInterpreter, Tenancy } from '../../controllers/deps.js';
 import { AuthMode } from '../../models/auth/mode.js';
 import { ownerGate } from './gate.js';
 import type { PrincipalGate } from './gate.js';
@@ -24,14 +24,7 @@ export type StdioConnection = { server: McpServer; session: StdioSession | undef
 
 /** Thin diplomat: connects the transport-agnostic MCP server to a stdio transport, gated by the channel's identity —
  *  a `StdioSession` that asks the connected client who it is, or the owner. */
-export const connectStdio = async (
-  deps: Deps,
-  version: string,
-  runEffects: RunEffects,
-  runEffectsSequence: RunEffectsSequence,
-  resetLocale: () => void,
-  auth: StdioAuth,
-): Promise<StdioConnection> => {
+export const connectStdio = async (tenancy: Tenancy, version: string, auth: StdioAuth): Promise<StdioConnection> => {
   // The connected server reports who spawned it (`initialize`'s clientInfo); the session asks only when it needs to.
   const session =
     auth.mode === AuthMode.enum.required
@@ -43,7 +36,7 @@ export const connectStdio = async (
         })
       : undefined;
   const gate: PrincipalGate = session ? () => session.resolve() : ownerGate;
-  const server = buildMcpServer(deps, version, runEffects, runEffectsSequence, resetLocale, { gate });
+  const server = buildMcpServer(tenancy, version, { gate });
   await server.connect(new StdioServerTransport());
   return { server, session };
 };

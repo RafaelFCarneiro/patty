@@ -1,8 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
+import type { Tenancy } from '../../controllers/deps.js';
+import { documentationContext } from '../http/context.js';
 import { buildOpenApiDocument } from '../http/openapi.js';
 import { buildRouteDefinitions } from '../http/routes.js';
-import type { McpContext } from './context.js';
+import { createMcpContext } from './context.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
 import { guardScopes, type ScopeGuardOptions } from './scopes.js';
@@ -24,24 +25,15 @@ import { registerTransferTools } from './tools/transfer.js';
 /** Thin diplomat: MCP tools delegate to the same controllers as HTTP. Aggregation only (ADR-025) —
  *  each domain's tools/resources/prompts are registered by their own module. */
 
-export const buildMcpServer = (
-  deps: Deps,
-  version: string,
-  runEffects: RunEffects,
-  runEffectsSequence: RunEffectsSequence,
-  resetLocale: () => void,
-  scopeGuard: ScopeGuardOptions,
-): McpServer => {
+export const buildMcpServer = (tenancy: Tenancy, version: string, scopeGuard: ScopeGuardOptions): McpServer => {
   const server = new McpServer({ name: 'fintrack', version });
   guardScopes(server, scopeGuard);
-  const ctx: McpContext = { deps, version, runEffects, runEffectsSequence, resetLocale };
+  const ctx = createMcpContext(tenancy, version);
 
   registerPrompts(server, ctx);
 
-  const openApiDocument = buildOpenApiDocument(
-    buildRouteDefinitions(deps, version, runEffects, runEffectsSequence),
-    version,
-  );
+  // The REST contract is documented from the same route list, built for documentation only: no request, no principal.
+  const openApiDocument = buildOpenApiDocument(buildRouteDefinitions(documentationContext(version)), version);
   registerResources(server, ctx, openApiDocument);
 
   registerAccountTools(server, ctx);

@@ -31,7 +31,6 @@ import * as wireInCreditCards from '../../../wire/in/creditCards.js';
 import { BillViewOut } from '../../../wire/out/bills.js';
 import { DeleteCreditCardResultOut } from '../../../wire/out/creditCards.js';
 import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../../../wire/out/transactions.js';
-import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, confirmQuery, idParam, nameParam, notFound404, parse, send, validation422 } from '../respond.js';
 import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
@@ -39,8 +38,7 @@ import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 const CREDIT_CARDS_TAG = 'CreditCards';
 const BILLS_TAG = 'Bills';
 
-export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps, runEffects, runEffectsSequence } = ctx;
+export const creditCardRoutes = (): RouteDefinition[] => {
   return [
     {
       method: 'post',
@@ -56,7 +54,8 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const wireIn = parse(wireInCreditCards.AddCardPurchaseSchema, req.body, reply);
         if (!wireIn) return reply;
         const model = creditCardAdapters.addCardPurchaseWireInToModel(wireIn);
@@ -82,7 +81,8 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Import a credit-card statement',
       request: { body: jsonBody(wireInCreditCards.ImportCardStatementSchema) },
       responses: { 201: okResponse('Import result', BulkResultOut), 422: validation422 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffectsSequence } = scope();
         const wireIn = parse(wireInCreditCards.ImportCardStatementSchema, req.body, reply);
         if (!wireIn) return reply;
         const model = creditCardAdapters.importCardStatementWireInToModel(wireIn);
@@ -102,7 +102,10 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
       tags: [CREDIT_CARDS_TAG],
       summary: 'List credit cards',
       responses: { 200: okResponse('Credit cards', z.array(CreditCardSchema)) },
-      handler: async () => listCreditCards(deps),
+      handler: async (_req, _reply, scope) => {
+        const { deps } = scope();
+        return listCreditCards(deps);
+      },
     },
     {
       method: 'post',
@@ -117,7 +120,8 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const wireIn = parse(wireInCreditCards.CreateCreditCardSchema, req.body, reply);
         if (!wireIn) return reply;
         const flow = () =>
@@ -140,7 +144,8 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { name } = req.params as { name: string };
         const wireIn = parse(wireInCreditCards.UpdateCreditCardSchema, { ...(req.body ?? {}), name }, reply);
         if (!wireIn) return reply;
@@ -163,7 +168,8 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
         404: notFound404,
         409: conflict409,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { name } = req.params as { name: string };
         const confirm = (req.query as { confirm?: string }).confirm === 'true';
         const flow = () =>
@@ -188,7 +194,8 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps } = scope();
         const input = parse(BillQuery, req.query, reply) as BillQueryType;
         if (!input) return reply;
         return send(reply, await getBill(deps, input));
@@ -202,7 +209,8 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Pay a credit card bill',
       request: { body: jsonBody(PayBill) },
       responses: { 200: okResponse('Bill paid', BillSchema), 404: notFound404, 409: conflict409, 422: validation422 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const input = parse(PayBill, req.body, reply) as PayBillType;
         if (!input) return reply;
         const flow = () =>
@@ -225,7 +233,8 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const input = parse(BillQuery, req.body, reply) as BillQueryType;
         if (!input) return reply;
         const flow = () =>
@@ -249,7 +258,8 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { id } = req.params as { id: string };
         const wireIn = parse(wireInCreditCards.UpdateCardTransactionSchema, { ...(req.body as object), id }, reply);
         if (!wireIn) return reply;
@@ -271,7 +281,8 @@ export const creditCardRoutes = (ctx: HttpContext): RouteDefinition[] => {
         404: notFound404,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { id } = req.params as { id: string };
         const confirm = (req.query as { confirm?: string }).confirm === 'true';
         const flow = () =>

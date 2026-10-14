@@ -15,6 +15,6 @@ export const boot = (config: Config) =>
     const db = await openDatabase(config);
     yield* bootstrap(db);
     const runtime = createRuntime(db, config);
-    const prepared = await prepareAuth(config, db, runtime.runEffects);
+    const prepared = await prepareAuth(config, db, runtime.authRunEffects);
     return ok({ db, runtime, prepared });
   });

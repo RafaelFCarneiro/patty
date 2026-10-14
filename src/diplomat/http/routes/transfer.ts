@@ -5,15 +5,13 @@ import { createTransfer } from '../../../controllers/account/transfer.js';
 import { TransactionSource } from '../../../models/transaction.js';
 import * as wireInAccounts from '../../../wire/in/accounts.js';
 import { TransferResultOut } from '../../../wire/out/transactions.js';
-import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, notFound404, parse, validation422 } from '../respond.js';
 import { WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const TRANSFERS_TAG = 'Transfers';
 
-export const transferRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps, runEffects } = ctx;
+export const transferRoutes = (): RouteDefinition[] => {
   return [
     {
       method: 'post',
@@ -29,7 +27,8 @@ export const transferRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const wireIn = parse(wireInAccounts.CreateTransferSchema, req.body, reply);
         if (!wireIn) return reply;
         const model = accountAdapters.transferWireInToModel(wireIn);

@@ -1,13 +1,13 @@
 import type { AddressInfo } from 'node:net';
 import { ok, safeTry, type ResultAsync } from 'neverthrow';
 import Fastify, { type FastifyInstance } from 'fastify';
-import type { ChangeBus } from '@rfc0/effect-runner';
 import { version } from '../common/buildVersion.js';
 import type { Config } from '../config.js';
 import { boot } from './boot.js';
 import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from '../common/net.js';
-import type { Deps, RunEffects, RunEffectsSequence } from '../controllers/deps.js';
-import { DISABLED_AUTH, type HttpAuth } from '../diplomat/http/context.js';
+import type { Tenancy } from '../controllers/deps.js';
+import { DISABLED_AUTH, type HttpAuth, type HttpContext } from '../diplomat/http/context.js';
+import type { UserChangeBus } from '../models/tenancy.js';
 import type { DatabaseAhead } from '../models/database.js';
 import { AuthMode } from '../models/auth/mode.js';
 import { registerAuthHook } from '../diplomat/http/hooks/auth.js';
@@ -20,6 +20,13 @@ const LOG_CENSOR = '[Redacted]';
 
 export const httpLoggerOptions = (enabled: boolean) =>
   enabled ? { redact: { paths: REDACTED_LOG_PATHS, censor: LOG_CENSOR } } : false;
+
+/** What the HTTP surface needs of the runtime: the factories that scope a request to its user, the probe's
+ *  dependencies and the change bus's `subscribe` — structurally what `Runtime` is, so a caller just passes it. */
+export type HttpSurface = Tenancy & {
+  publicDeps: HttpContext['publicDeps'];
+  changeBus: Pick<UserChangeBus, 'subscribe'>;
+};
 
 export type HttpOptions = {
   logger?: boolean;
@@ -34,15 +41,7 @@ export type HttpOptions = {
  * so neither edge depends on the other (docs/architecture.md dependency table) — only the
  * composition root is allowed to know about both.
  */
-export const buildHttpApp = (
-  deps: Deps,
-  version: string,
-  runEffects: RunEffects,
-  runEffectsSequence: RunEffectsSequence,
-  resetLocale: () => void,
-  subscribeToChanges: ChangeBus['subscribe'],
-  opts?: HttpOptions,
-): FastifyInstance => {
+export const buildHttpApp = (surface: HttpSurface, version: string, opts?: HttpOptions): FastifyInstance => {
   // ADR-027 Phase 3: GET /ui/events is a genuinely long-lived connection (SSE) — without this,
   // fastify.close() waits for it to end on its own, which it never does, hanging shutdown for as
   // long as any browser tab has a dashboard open.
@@ -51,7 +50,7 @@ export const buildHttpApp = (
     trustProxy: opts?.trustProxy,
     forceCloseConnections: true,
   });
-  registerHttpApp(app, deps, version, runEffects, runEffectsSequence, resetLocale, subscribeToChanges, opts?.auth);
+  registerHttpApp(app, surface, version, opts?.auth);
   return app;
 };
 
@@ -60,27 +59,15 @@ export const buildHttpApp = (
  *  test can attach an `onRoute` listener to the instance before the routes exist. */
 export const registerHttpApp = (
   app: FastifyInstance,
-  deps: Deps,
+  surface: HttpSurface,
   version: string,
-  runEffects: RunEffects,
-  runEffectsSequence: RunEffectsSequence,
-  resetLocale: () => void,
-  subscribeToChanges: ChangeBus['subscribe'],
   auth: HttpAuth = DISABLED_AUTH,
 ): void => {
   // Ordering is wiring: the auth hook goes on first, so it runs ahead of every route registered below and
   // also guards a request no route matches.
   registerAuthHook(app, auth);
-  registerRoutes(app, deps, version, runEffects, runEffectsSequence, subscribeToChanges, auth);
-  registerMcpRoute(
-    app,
-    deps,
-    version,
-    runEffects,
-    runEffectsSequence,
-    resetLocale,
-    auth.mode === AuthMode.enum.required ? auth.publicUrl : undefined,
-  );
+  registerRoutes(app, { ...surface, version }, surface.changeBus.subscribe, auth);
+  registerMcpRoute(app, surface, version, auth.mode === AuthMode.enum.required ? auth.publicUrl : undefined);
 };
 
 export type HttpSidecar = { app: FastifyInstance; listening: boolean };
@@ -93,20 +80,13 @@ export type HttpSidecar = { app: FastifyInstance; listening: boolean };
  * request logger is disabled for the same reason.
  */
 export const startHttpSidecar = async (
-  deps: Deps,
+  surface: HttpSurface,
   version: string,
-  runEffects: RunEffects,
-  runEffectsSequence: RunEffectsSequence,
-  resetLocale: () => void,
-  subscribeToChanges: ChangeBus['subscribe'],
   port: number,
   host: string = LOOPBACK_HOST,
   opts?: Pick<HttpOptions, 'trustProxy' | 'auth'>,
 ): Promise<HttpSidecar> => {
-  const app = buildHttpApp(deps, version, runEffects, runEffectsSequence, resetLocale, subscribeToChanges, {
-    ...opts,
-    logger: false,
-  });
+  const app = buildHttpApp(surface, version, { ...opts, logger: false });
   try {
     await app.listen({ port, host });
     // `port` may be 0 (OS-assigned); read back the address actually bound for the banner.
@@ -134,15 +114,7 @@ export const startHttpSidecar = async (
 export const runHttp = (config: Config): ResultAsync<void, DatabaseAhead> =>
   safeTry(async function* () {
     const { runtime, prepared } = yield* boot(config);
-    const app = buildHttpApp(
-      runtime.deps,
-      version,
-      runtime.runEffects,
-      runtime.runEffectsSequence,
-      runtime.resetLocale,
-      runtime.changeBus.subscribe,
-      { auth: prepared.auth, trustProxy: config.TRUST_PROXY },
-    );
+    const app = buildHttpApp(runtime, version, { auth: prepared.auth, trustProxy: config.TRUST_PROXY });
 
     // A repeated signal (or SIGINT followed by SIGTERM) must not double-close/double-exit.
     let shuttingDown = false;

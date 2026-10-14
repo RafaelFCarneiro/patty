@@ -5,6 +5,7 @@ import {
   assertCategoryNameAvailable,
   assertSubCategoryNameAvailable,
   isCategoryUnreferenced,
+  isSharedDefault,
   resolveAndSort,
   withKindLabel,
 } from '../logic/category.js';
@@ -18,6 +19,7 @@ import {
   type SubCategory,
 } from '../models/category.js';
 import { notFound } from '../models/error.js';
+import { sharedDefaultErrors } from '../models/tenancy.js';
 import type { FlowOutcome } from '@rfc0/effect-runner';
 import type { Deps } from './deps.js';
 import { resolveCategoryRef, resolveSubCategoryRef } from './resolve.js';
@@ -40,10 +42,11 @@ export const createCategory = (deps: Deps, input: CreateCategory): ResultAsync<F
 export const deleteCategory = (deps: Deps, name: string): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>
   safeTry(async function* () {
     const category = yield* resolveCategoryRef(deps, name);
+    const raw = yield* okOr(await deps.categories.findRawById(category.id), notFound('category', category.id, []));
+    yield* guard(!isSharedDefault(raw), sharedDefaultErrors.readOnly);
     const refs = await deps.categories.countReferences(category.id);
     yield* guard(isCategoryUnreferenced(refs), categoryErrors.inUse('category', category.name, refs));
 
-    const raw = yield* okOr(await deps.categories.findRawById(category.id), notFound('category', category.id, []));
     const persist = [persistence.remove({ entity: CATEGORY_ENTITY_TAG, id: raw.id, version: raw.version })];
     return ok({ persist, response: { deleted: true } });
   });
@@ -51,13 +54,14 @@ export const deleteCategory = (deps: Deps, name: string): ResultAsync<FlowOutcom
 export const deleteSubCategory = (deps: Deps, name: string): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>
   safeTry(async function* () {
     const subCategory = yield* resolveSubCategoryRef(deps, name);
-    const refs = await deps.subCategories.countReferences(subCategory.id);
-    yield* guard(isCategoryUnreferenced(refs), categoryErrors.inUse('sub_category', subCategory.name, refs));
-
     const raw = yield* okOr(
       await deps.categories.findRawById(subCategory.id),
       notFound('sub_category', subCategory.id, []),
     );
+    yield* guard(!isSharedDefault(raw), sharedDefaultErrors.readOnly);
+    const refs = await deps.subCategories.countReferences(subCategory.id);
+    yield* guard(isCategoryUnreferenced(refs), categoryErrors.inUse('sub_category', subCategory.name, refs));
+
     const persist = [persistence.remove({ entity: CATEGORY_ENTITY_TAG, id: raw.id, version: raw.version })];
     return ok({ persist, response: { deleted: true } });
   });

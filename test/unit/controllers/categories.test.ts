@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createCategory,
   createSubCategory,
@@ -9,6 +9,7 @@ import type { Deps } from '../../../src/controllers/deps.js';
 import { CATEGORY_ENTITY_TAG, CategoryKind, type Category, type SubCategory } from '../../../src/models/category.js';
 import { PersistOp } from '@rfc0/effect-runner';
 import { Locale } from '../../../src/models/locale.js';
+import { SHARED_DEFAULT_READ_ONLY_MESSAGE } from '../../../src/models/tenancy.js';
 
 const category = (overrides: Partial<Category> = {}): Category => ({
   id: 'cat-food',
@@ -34,7 +35,7 @@ const makeDeps = (overrides: Partial<Deps> = {}): Deps => ({
   categories: {
     list: async () => [category()],
     countReferences: async () => ({ transactions: 0, recurring: 0, subCategories: 0 }),
-    findRawById: async () => ({ id: 'cat-food', version: 5 }),
+    findRawById: async () => ({ id: 'cat-food', version: 5, shared: false }),
   } as unknown as Deps['categories'],
   subCategories: {
     list: async () => [subCategory()],
@@ -110,14 +111,12 @@ describe('deleteCategory — functional core (ADR-021 phase 3a)', () => {
     expect(outcome.response).toEqual({ deleted: true });
   });
 
-  it('rejects when referenced (in_use), never reading a raw version', async () => {
+  it('rejects when referenced (in_use)', async () => {
     const deps = makeDeps({
       categories: {
         list: async () => [category()],
         countReferences: async () => ({ transactions: 3, recurring: 0, subCategories: 0 }),
-        findRawById: async () => {
-          throw new Error('should not be called');
-        },
+        findRawById: async () => ({ id: 'cat-food', version: 5, shared: false }),
       } as unknown as Deps['categories'],
     });
 
@@ -130,6 +129,36 @@ describe('deleteCategory — functional core (ADR-021 phase 3a)', () => {
       name: 'Food',
       references: { transactions: 3, recurring: 0, subCategories: 0 },
     });
+  });
+});
+
+describe('shared defaults are read-only (ADR-033 §5)', () => {
+  it('refuses to delete a default category with the read-only message, before counting its references', async () => {
+    const countReferences = vi.fn();
+    const deps = makeDeps({
+      categories: {
+        list: async () => [category()],
+        countReferences,
+        findRawById: async () => ({ id: 'cat-food', version: 5, shared: true }),
+      } as unknown as Deps['categories'],
+    });
+
+    const result = await deleteCategory(deps, 'Food');
+
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'validation', issues: [SHARED_DEFAULT_READ_ONLY_MESSAGE] });
+    expect(countReferences).not.toHaveBeenCalled();
+  });
+
+  it('refuses to delete a default sub-category the same way', async () => {
+    const deps = makeDeps({
+      categories: {
+        findRawById: async () => ({ id: 'sub-bus', version: 1, shared: true }),
+      } as unknown as Deps['categories'],
+    });
+
+    const result = await deleteSubCategory(deps, 'Bus');
+
+    expect(result._unsafeUnwrapErr()).toEqual({ code: 'validation', issues: [SHARED_DEFAULT_READ_ONLY_MESSAGE] });
   });
 });
 
@@ -187,7 +216,9 @@ describe('createSubCategory — functional core (ADR-021 phase 3a)', () => {
 describe('deleteSubCategory — functional core (ADR-021 phase 3a)', () => {
   it('returns a version-guarded remove Persistable, reading version off the shared categories table', async () => {
     const deps = makeDeps({
-      categories: { findRawById: async () => ({ id: 'sub-bus', version: 1 }) } as unknown as Deps['categories'],
+      categories: {
+        findRawById: async () => ({ id: 'sub-bus', version: 1, shared: false }),
+      } as unknown as Deps['categories'],
     });
 
     const result = await deleteSubCategory(deps, 'Bus');

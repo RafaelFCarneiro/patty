@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { Locale, LocaleSource, SETTINGS_ENTITY_TAG, SETTINGS_SINGLETON_ID } from '../../../src/models/locale.js';
+import { Locale, LocaleSource, USER_SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { PersistOp } from '@rfc0/effect-runner';
 import { getPreferences, setBaseCurrency, setLocale } from '../../../src/controllers/settings.js';
 import type { Deps } from '../../../src/controllers/deps.js';
-import type { SettingsEntity } from '../../../src/models/locale.js';
+import type { UserSettingsEntity } from '../../../src/models/locale.js';
 
-const makeDeps = (stored?: SettingsEntity, envLocale?: Locale): Deps => ({
+const makeDeps = (stored?: UserSettingsEntity, envLocale?: Locale): Deps => ({
   settings: {
     getLocale: async () => stored,
   },
@@ -35,9 +35,8 @@ const storedRow = (
   locale: Locale,
   localeSource: LocaleSource,
   version = 0,
-  baseCurrency: SettingsEntity['baseCurrency'] = null,
-): SettingsEntity => ({
-  id: SETTINGS_SINGLETON_ID,
+  baseCurrency: UserSettingsEntity['baseCurrency'] = null,
+): UserSettingsEntity => ({
   locale,
   localeSource,
   baseCurrency,
@@ -99,9 +98,8 @@ describe('setLocale', () => {
     expect(outcome.persist).toEqual([
       {
         op: PersistOp.enum.insert,
-        entity: SETTINGS_ENTITY_TAG,
+        entity: USER_SETTINGS_ENTITY_TAG,
         model: {
-          id: SETTINGS_SINGLETON_ID,
           locale: Locale.enum.pt,
           localeSource: LocaleSource.enum.explicit,
           baseCurrency: null,
@@ -118,9 +116,8 @@ describe('setLocale', () => {
     expect(outcome.persist).toEqual([
       {
         op: PersistOp.enum.update,
-        entity: SETTINGS_ENTITY_TAG,
+        entity: USER_SETTINGS_ENTITY_TAG,
         model: {
-          id: SETTINGS_SINGLETON_ID,
           locale: Locale.enum.en,
           localeSource: LocaleSource.enum.explicit,
           baseCurrency: null,
@@ -137,9 +134,8 @@ describe('setLocale', () => {
     expect(outcome.persist).toEqual([
       {
         op: PersistOp.enum.update,
-        entity: SETTINGS_ENTITY_TAG,
+        entity: USER_SETTINGS_ENTITY_TAG,
         model: {
-          id: SETTINGS_SINGLETON_ID,
           locale: Locale.enum.en,
           localeSource: LocaleSource.enum.explicit,
           baseCurrency: CurrencyCode.enum.USDC,
@@ -180,9 +176,8 @@ describe('setBaseCurrency', () => {
     expect(outcome.persist).toEqual([
       {
         op: PersistOp.enum.insert,
-        entity: SETTINGS_ENTITY_TAG,
+        entity: USER_SETTINGS_ENTITY_TAG,
         model: {
-          id: SETTINGS_SINGLETON_ID,
           locale: Locale.enum.en,
           localeSource: LocaleSource.enum.default,
           baseCurrency: CurrencyCode.enum.BTC,
@@ -199,9 +194,8 @@ describe('setBaseCurrency', () => {
     expect(outcome.persist).toEqual([
       {
         op: PersistOp.enum.update,
-        entity: SETTINGS_ENTITY_TAG,
+        entity: USER_SETTINGS_ENTITY_TAG,
         model: {
-          id: SETTINGS_SINGLETON_ID,
           locale: Locale.enum.pt,
           localeSource: LocaleSource.enum.explicit,
           baseCurrency: CurrencyCode.enum.USD,

@@ -5,6 +5,7 @@ import { hasScope, scopeOfTool } from '../../logic/auth/scope.js';
 import { authErrors } from '../../models/auth/errors.js';
 import { READ_SCOPE, type Scope } from '../../models/auth/scope.js';
 import { GateKind, type GateOutcome, type PrincipalGate } from './gate.js';
+import type { CallerExtra } from './context.js';
 import { jsonError, textError } from './respond.js';
 
 /**
@@ -45,12 +46,20 @@ const refusalOf = (outcome: GateOutcome, required: Scope): Refusal | null => {
 const refusalText = (refusal: Refusal): string =>
   refusal.kind === GateKind.enum.not_signed_in ? refusal.message : formatAppError(refusal.error);
 
-/** The request context is always the callback's last argument (`(args, extra)`, `(uri, extra)`, or `(extra)`). */
+/** The request context is always the callback's last argument (`(args, extra)`, `(uri, extra)`, or `(extra)`). Once the
+ *  gate has granted the caller, the callback receives that context with the caller's principal on it
+ *  (`context.ts`'s `CallerExtra`) — the one way a callback learns whose data it may touch (ADR-033 §5). */
 const gated =
   (callback: Callback, required: Scope, options: ScopeGuardOptions, refuse: (refusal: Refusal) => unknown): Callback =>
   async (...args) => {
-    const refusal = refusalOf(await options.gate(args.at(-1)), required);
-    return refusal === null ? callback(...args) : refuse(refusal);
+    const extra = args.at(-1);
+    const outcome = await options.gate(extra);
+    const refusal = refusalOf(outcome, required);
+    if (refusal !== null || outcome.kind !== GateKind.enum.granted) {
+      return refuse(refusal ?? { kind: GateKind.enum.refused, error: authErrors.unauthenticated });
+    }
+    const caller: CallerExtra = { principal: outcome.principal };
+    return callback(...args.slice(0, -1), { ...(extra as object), ...caller });
   };
 
 const toolRefusal = (refusal: Refusal) =>

@@ -4,15 +4,13 @@ import { searchTransactions } from '../../../controllers/transaction/read.js';
 import { pageSchema } from '../../../models/page.js';
 import { TransactionViewSchema } from '../../../models/transaction.js';
 import * as wireInTransactions from '../../../wire/in/transactions.js';
-import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, idParam, notFound404, parse, send, validation422 } from '../respond.js';
 import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const TRANSACTIONS_TAG = 'Transactions';
 
-export const transactionRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps, runEffects } = ctx;
+export const transactionRoutes = (): RouteDefinition[] => {
   return [
     {
       method: 'post',
@@ -27,7 +25,8 @@ export const transactionRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { id } = req.params as { id: string };
         const wireIn = parse(wireInTransactions.ConfirmTransactionSchema, { ...(req.body ?? {}), id }, reply);
         if (!wireIn) return reply;
@@ -51,7 +50,8 @@ export const transactionRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps } = scope();
         const wireIn = parse(wireInTransactions.SearchTransactionsInputSchema, req.query, reply);
         if (!wireIn) return reply;
         return send(reply, await searchTransactions(deps, transactionAdapters.searchWireInToModel(wireIn)));

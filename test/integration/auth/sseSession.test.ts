@@ -3,12 +3,14 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import { registerUiRoutes } from '../../../src/diplomat/http/routes/ui.js';
 import { LOOPBACK_HOST } from '../../../src/common/net.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 import { claimOwner } from './helpers.js';
+import { OWNER_PRINCIPAL } from '../../../src/models/auth/principal.js';
+import '../../../src/diplomat/http/principal.js';
 
 const RECHECK_MS = 40;
 
@@ -57,6 +59,10 @@ describe('GET /ui/events with sessions required', () => {
 describe('GET /ui/events when the session check itself fails', () => {
   it('fails closed: the stream ends and nothing is left unhandled', async () => {
     const app = Fastify();
+    // What the auth hook does in a real app: the stream belongs to a user.
+    app.addHook('onRequest', async (req) => {
+      req.principal = OWNER_PRINCIPAL;
+    });
     registerUiRoutes(app, () => () => {}, {
       authControls: false,
       session: {
@@ -79,5 +85,19 @@ describe('GET /ui/events when the session check itself fails', () => {
     controller.abort();
     await app.close();
     expect(outcome).toBe('closed');
+  });
+});
+
+describe('GET /ui/events without a principal', () => {
+  it('opens no stream at all — a handler that reaches for a user without one fails closed, to nobody', async () => {
+    const app = Fastify();
+    const subscribed = vi.fn(() => () => {});
+    registerUiRoutes(app, subscribed, { authControls: false });
+    const res = await app.inject({ method: 'GET', url: '/ui/events' });
+    await app.close();
+
+    expect(res.statusCode).toBe(401);
+    expect(res.headers['content-type']).not.toContain('text/event-stream');
+    expect(subscribed).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { ChangeBus } from '@rfc0/effect-runner';
-import { AUTH_ENTITY_TAGS } from '../../../models/auth/entity.js';
+import type { UserChangeBus } from '../../../models/tenancy.js';
 import { LOGOUT_PATH, TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../authPaths.js';
 import { CACHE_CONTROL_NO_CACHE } from '../respond.js';
 import { HTML_CONTENT_TYPE, readCached, UI_ROOT } from '../uiFiles.js';
@@ -42,10 +41,14 @@ const serveUiFile = async (reply: FastifyReply, path: string, contentType: strin
  */
 const registerUiEventsRoute = (
   app: FastifyInstance,
-  subscribe: ChangeBus['subscribe'],
+  subscribe: UserChangeBus['subscribe'],
   session: SessionRecheck | undefined,
 ): void => {
   app.get(`${UI_ROOT_PATH}/events`, (req, reply) => {
+    // A stream is its user's: it forwards only the changes that user's own writes committed (ADR-033 §5). The auth hook
+    // always sets a principal here; a request without one gets nothing rather than everyone's events.
+    const userId = req.principal?.userId;
+    if (userId === undefined) return reply.status(401).send({ error: { code: 'unauthenticated' } });
     reply.hijack();
     reply.raw.writeHead(200, {
       'content-type': SSE_CONTENT_TYPE,
@@ -57,14 +60,14 @@ const registerUiEventsRoute = (
     // otherwise hang waiting for a response that was never actually sent.
     reply.raw.flushHeaders();
 
-    const unsubscribe = subscribe((entities) => {
+    const unsubscribe = subscribe((event) => {
+      // Someone else's change, or instance bookkeeping (a session touch, a login: `userId` null) — not this
+      // dashboard's business.
+      if (event.userId !== userId) return;
       // A publish can race a client disconnect that hasn't reached the 'close' handler below yet
       // — skip the write rather than push data onto a response that's already torn down.
       if (reply.raw.destroyed) return;
-      // Auth bookkeeping (a session touch, a login) is not a dashboard's business.
-      const visible = entities.filter((tag) => !AUTH_ENTITY_TAGS.includes(tag));
-      if (visible.length === 0) return;
-      reply.raw.write(`data: ${JSON.stringify({ entities: visible })}\n\n`);
+      reply.raw.write(`data: ${JSON.stringify({ entities: event.entities })}\n\n`);
     });
     // reply.raw (not req.raw), matching the other hijacked route in this codebase
     // (diplomat/mcp/route.ts) — this handler owns the response after hijack(), and it's the
@@ -103,7 +106,7 @@ export type SessionRecheck = { isActive: (req: FastifyRequest) => Promise<boolea
 
 export const registerUiRoutes = (
   app: FastifyInstance,
-  subscribeToChanges: ChangeBus['subscribe'],
+  subscribeToChanges: UserChangeBus['subscribe'],
   options: { authControls: boolean; session?: SessionRecheck } = { authControls: false },
 ): void => {
   const serveShell = async (_req: unknown, reply: FastifyReply) => {

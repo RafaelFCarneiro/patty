@@ -26,9 +26,7 @@ describe('resolvePromptPeriod', () => {
 
 describe('PeriodPromptArgsSchema', () => {
   const parse = (args: Record<string, string>) =>
-    Object.fromEntries(
-      Object.entries(PeriodPromptArgsSchema).map(([key, schema]) => [key, schema.parse(args[key])]),
-    );
+    Object.fromEntries(Object.entries(PeriodPromptArgsSchema).map(([key, schema]) => [key, schema.parse(args[key])]));
 
   it('coerces string month/year (protocol arguments are always strings)', () => {
     expect(parse({ month: '3', year: '2026' })).toEqual({ month: 3, year: 2026 });

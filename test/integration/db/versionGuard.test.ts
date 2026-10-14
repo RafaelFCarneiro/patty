@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
+import { migrate } from 'drizzle-orm/libsql/migrator';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
@@ -119,7 +120,7 @@ describe('the version guard (ADR-034 §7)', () => {
 
   it('lets a database behind this build proceed — and migrates it', async () => {
     const db = await open();
-    await bootstrap(db, olderBuild(2));
+    await migrate(db, { migrationsFolder: olderBuild(2) }); // an older build's schema, as it left it
     const behind = await db.all<{ n: number }>(sql`SELECT count(*) AS n FROM ${sql.identifier(MIGRATIONS_TABLE)}`);
 
     await bootstrap(db);

@@ -452,9 +452,9 @@ describe('auth disabled (the npm loopback default)', () => {
 
   it('serves no token pages and no resource metadata', async () => {
     const ctx = await createApp({ auth: { FINTRACK_AUTH: AuthMode.enum.disabled } });
-    expect(
-      (await ctx.app.inject({ method: 'POST', url: '/ui/access/tokens', headers: BASE_HEADERS })).statusCode,
-    ).toBe(404);
+    expect((await ctx.app.inject({ method: 'POST', url: '/ui/access/tokens', headers: BASE_HEADERS })).statusCode).toBe(
+      404,
+    );
     for (const url of ['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp']) {
       expect((await ctx.app.inject({ method: 'GET', url, headers: BASE_HEADERS })).statusCode, url).toBe(404);
     }

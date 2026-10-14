@@ -7,6 +7,7 @@ import { sql } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
+import { seedAsBefore } from './legacySeed.js';
 import { BUSY_TIMEOUT_MS, openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { DATA_REWRITING_MIGRATIONS } from '../../../src/diplomat/db/migrations.js';
 import { applyPendingMigrationsHolding, MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
@@ -39,6 +40,13 @@ const journalBeforeAuth = (folder: string): void => {
 
 const open = () => openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
 
+/** Bootstrap as the release before ADR-033 did it: its migrations, then its seed. (`bootstrap()` itself seeds with the
+ *  current code, which targets the current schema.) */
+const legacyBootstrap = async (db: Db, migrationsFolder: string): Promise<void> => {
+  await migrate(db, { migrationsFolder });
+  await seedAsBefore(db);
+};
+
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'fintrack-owner-migration-'));
   dbPath = join(tmpDir, 'fintrack.db');
@@ -56,9 +64,10 @@ afterEach(() => {
 
 type Row = Record<string, unknown>;
 
-// drizzle's bookkeeping, sqlite internals, the FTS shadow tables, and the tables this migration adds.
+// drizzle's bookkeeping, sqlite internals, the FTS shadow tables, the tables this migration adds — and the preferences
+// tables, which the tenancy migration (same startup) splits in two; `tenancyMigration.test.ts` owns that.
 const EXCLUDED_TABLES =
-  /^(__drizzle|sqlite_|transactions_fts|users$|sessions$|access_tokens$|setup_codes$|client_grants$)/;
+  /^(__drizzle|sqlite_|transactions_fts|users$|sessions$|access_tokens$|setup_codes$|client_grants$|settings$|user_settings$)/;
 
 /** Every table outside the auth ones and drizzle's bookkeeping, fully dumped and ordered — the database's
  *  domain content, to compare byte-for-byte before and after the migration. */
@@ -68,7 +77,10 @@ const domainDump = async (db: Db): Promise<Record<string, Row[]>> => {
   ).filter(({ name }) => !EXCLUDED_TABLES.test(name));
   const dump: Record<string, Row[]> = {};
   for (const { name } of tables) {
-    const rows = await db.all<Row>(sql`SELECT * FROM ${sql.identifier(name)}`);
+    // `user_id` is what the tenancy migration (same startup) adds to the owned tables; it is checked in its own test.
+    const rows = (await db.all<Row>(sql`SELECT * FROM ${sql.identifier(name)}`)).map(
+      ({ user_id: _owner, ...rest }) => rest,
+    );
     dump[name] = rows.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   }
   return dump;
@@ -109,7 +121,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
   it('inserts exactly one owner into an existing database and leaves every domain row untouched', async () => {
     const legacy = await open();
-    await bootstrap(legacy, preAuthFolder);
+    await legacyBootstrap(legacy, preAuthFolder);
     await seedDomainData(legacy);
     const beforeDump = await domainDump(legacy);
     const beforeBalances = [await balanceOf(legacy, 'acc-1'), await balanceOf(legacy, 'acc-2')];
@@ -130,7 +142,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
   it('writes a restricted .bak of the pre-migration database and says so on stderr', async () => {
     const legacy = await open();
-    await bootstrap(legacy, preAuthFolder);
+    await legacyBootstrap(legacy, preAuthFolder);
     await seedDomainData(legacy);
     const beforeDump = await domainDump(legacy);
 
@@ -151,7 +163,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
   it('snapshots committed rows another connection wrote that are still only in the WAL', async () => {
     const legacy = await open();
-    await bootstrap(legacy, preAuthFolder);
+    await legacyBootstrap(legacy, preAuthFolder);
     await seedDomainData(legacy);
     const otherProcess = await open();
     await otherProcess.run(
@@ -185,7 +197,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
     it('the backup is encrypted: no SQLite plaintext header, and the marker appears nowhere in its bytes', async () => {
       const legacy = await open();
-      await bootstrap(legacy, preAuthFolder);
+      await legacyBootstrap(legacy, preAuthFolder);
       await seedDomainData(legacy);
       await bootstrap(legacy);
 
@@ -197,7 +209,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
     it('the main database file holds the same row yet is encrypted too — like compared with like', async () => {
       const legacy = await open();
-      await bootstrap(legacy, preAuthFolder);
+      await legacyBootstrap(legacy, preAuthFolder);
       await seedDomainData(legacy);
       await bootstrap(legacy);
       await legacy.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`); // fold the WAL in so the main file holds the data
@@ -213,7 +225,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
   it('writes a standalone, encrypted backup: no sidecars, no temp file, unreadable without the key', async () => {
     const legacy = await open();
-    await bootstrap(legacy, preAuthFolder);
+    await legacyBootstrap(legacy, preAuthFolder);
     await seedDomainData(legacy);
     await bootstrap(legacy);
 
@@ -233,7 +245,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
   it('keeps the owner and writes no second backup when startup runs again', async () => {
     const legacy = await open();
-    await bootstrap(legacy, preAuthFolder);
+    await legacyBootstrap(legacy, preAuthFolder);
     await seedDomainData(legacy);
     await bootstrap(legacy);
     const backup = backupPath(dbPath, AUTH_MIGRATION_TAG);
@@ -258,9 +270,8 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
     };
     const tryWrite = async (client: Awaited<ReturnType<typeof intruder>>): Promise<string> => {
       try {
-        await client.execute(
-          `INSERT INTO accounts (id, name, type, initial_balance, currency, version) VALUES ('acc-intruder', 'Late', 'wallet', 1, 'USD', 0)`,
-        );
+        // A table no migration touches, so the same statement is valid before and after the upgrade.
+        await client.execute(`INSERT INTO merchants (key) VALUES ('intruder')`);
         return 'committed';
       } catch (cause) {
         return (cause as { code?: string }).code ?? 'unknown error';
@@ -269,7 +280,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
     it('refuses every other writer from the moment the snapshot starts until the migration has committed', async () => {
       const legacy = await open();
-      await bootstrap(legacy, preAuthFolder);
+      await legacyBootstrap(legacy, preAuthFolder);
       await seedDomainData(legacy);
       const other = await intruder();
       const reader = await intruder(); // its own connection: a read here must not pin the writer's WAL snapshot
@@ -294,7 +305,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
       /** A pre-auth database with the fixture data, at `path`. */
       const preAuthDatabase = async (path: string): Promise<Db> => {
         const db = await openAt(path);
-        await bootstrap(db, preAuthFolder);
+        await legacyBootstrap(db, preAuthFolder);
         await seedDomainData(db);
         return db;
       };
@@ -374,7 +385,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
     it('rolls everything back, and frees the lock, when the held step fails', async () => {
       const legacy = await open();
-      await bootstrap(legacy, preAuthFolder);
+      await legacyBootstrap(legacy, preAuthFolder);
       await seedDomainData(legacy);
       const other = await intruder();
 
@@ -390,7 +401,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
     it('rolls everything back, and surfaces the real error, when a migration statement fails part-way', async () => {
       const legacy = await open();
-      await bootstrap(legacy, preAuthFolder);
+      await legacyBootstrap(legacy, preAuthFolder);
       await seedDomainData(legacy);
       const other = await intruder();
       // The real migrations plus one more that fails AFTER 0018's DDL and owner insert have already run.
@@ -421,7 +432,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
     it('fails with a message an operator can act on when another process is holding a write transaction', async () => {
       const legacy = await open();
-      await bootstrap(legacy, preAuthFolder);
+      await legacyBootstrap(legacy, preAuthFolder);
       await seedDomainData(legacy);
       await legacy.run(sql`PRAGMA busy_timeout = 50`); // the first connection's wait, shortened for the test
       const holder = await intruder();
@@ -437,7 +448,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
 
     it('takes the real backup through the barrier: a late writer is refused while it is taken', async () => {
       const legacy = await open();
-      await bootstrap(legacy, preAuthFolder);
+      await legacyBootstrap(legacy, preAuthFolder);
       await seedDomainData(legacy);
       const other = await intruder();
       const refused: string[] = [];
@@ -449,14 +460,16 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
       await bootstrap(legacy);
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      expect(refused).toEqual(['SQLITE_BUSY']);
+      // One backup moment per data-rewriting migration pending (0018 and 0021 for this database); every one is held.
+      expect(refused.length).toBeGreaterThan(0);
+      expect(refused.every((outcome) => outcome === 'SQLITE_BUSY')).toBe(true);
       expect(existsSync(backupPath(dbPath, AUTH_MIGRATION_TAG))).toBe(true);
     });
   });
 
   it('keeps the pre-migration backup intact when two starters race (several stdio servers, ADR-024)', async () => {
     const legacy = await open();
-    await bootstrap(legacy, preAuthFolder);
+    await legacyBootstrap(legacy, preAuthFolder);
     await seedDomainData(legacy);
     const beforeDump = await domainDump(legacy);
     const first = await open();
@@ -474,7 +487,7 @@ describe('migration 0018 — the owner row (ADR-033 §7)', () => {
         .flat()
         .join(' ')
         .match(/backed up the database/g),
-    ).toHaveLength(1);
+    ).toHaveLength(DATA_REWRITING_MIGRATIONS.length); // one per rewriting migration, taken once — not once per starter
   });
 
   it('creates the owner on a brand-new database and takes no backup of nothing', async () => {

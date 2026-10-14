@@ -2,15 +2,17 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { confirmTransaction } from '../../../controllers/transaction/core.js';
 import { searchTransactions } from '../../../controllers/transaction/read.js';
 import { SortDirection } from '../../../models/page.js';
-import { ConfirmTransactionSchema, SearchTransactionsSchema, TransactionSortField } from '../../../models/transaction.js';
+import {
+  ConfirmTransactionSchema,
+  SearchTransactionsSchema,
+  TransactionSortField,
+} from '../../../models/transaction.js';
 import { outcomeToDb } from '../../../adapters/transactions.js';
 import type { McpContext } from '../context.js';
 import { fromResult } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerTransactionTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps, runEffects } = ctx;
-
   server.registerTool(
     'confirm_transaction',
     {
@@ -25,7 +27,8 @@ export const registerTransactionTools = (server: McpServer, ctx: McpContext): vo
         'If the transaction is already effective, this is a no-op.',
       inputSchema: ConfirmTransactionSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => confirmTransaction(deps, args).map(outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -51,6 +54,9 @@ export const registerTransactionTools = (server: McpServer, ctx: McpContext): vo
         dir: SearchTransactionsSchema.shape.dir.optional().default(SortDirection.enum.desc),
       },
     },
-    async (args) => fromResult(await searchTransactions(deps, args)),
+    async (args, extra) => {
+      const { deps } = ctx.as(extra);
+      return fromResult(await searchTransactions(deps, args));
+    },
   );
 };

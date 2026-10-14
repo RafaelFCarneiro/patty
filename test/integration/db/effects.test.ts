@@ -25,7 +25,7 @@ import { categoryApplier } from '../../../src/diplomat/db/repos/categories.js';
 import { creditCardApplier, creditCardsRepo } from '../../../src/diplomat/db/repos/creditCards.js';
 import { dashboardApplier, dashboardsRepo } from '../../../src/diplomat/db/repos/dashboards.js';
 import { merchantApplier, merchantCategoryApplier } from '../../../src/diplomat/db/repos/merchants.js';
-import { settingsApplier, settingsRepo } from '../../../src/diplomat/db/repos/settings.js';
+import { settingsRepo, userSettingsApplier } from '../../../src/diplomat/db/repos/settings.js';
 import { tagApplier } from '../../../src/diplomat/db/repos/tags.js';
 import { transactionApplier, transactionsRepo } from '../../../src/diplomat/db/repos/transactions.js';
 import { transactionTagApplier } from '../../../src/diplomat/db/repos/transactionTags.js';
@@ -36,13 +36,14 @@ import {
   creditCards,
   dashboards,
   merchantCategory,
-  settings,
   tags,
   transactionTags,
   transactions,
+  userSettings,
 } from '../../../src/diplomat/db/schema.js';
 import {
   missingIdempotencyKeyMessage,
+  ownedTableApplier,
   unexpectedIdempotencyKeyMessage,
   versionedTableApplier,
   type ApplierRegistry,
@@ -66,7 +67,7 @@ import { CATEGORY_ENTITY_TAG, CategoryKind } from '../../../src/models/category.
 import { CREDIT_CARD_ENTITY_TAG, type CreditCardEntity } from '../../../src/models/creditCard.js';
 import { DASHBOARD_ENTITY_TAG } from '../../../src/models/dashboard.js';
 import { conflict, validation } from '../../../src/models/error.js';
-import { Locale, LocaleSource, SETTINGS_ENTITY_TAG, SETTINGS_SINGLETON_ID } from '../../../src/models/locale.js';
+import { Locale, LocaleSource, USER_SETTINGS_ENTITY_TAG } from '../../../src/models/locale.js';
 import { MERCHANT_CATEGORY_ENTITY_TAG, MERCHANT_ENTITY_TAG } from '../../../src/models/merchant.js';
 import { CurrencyCode } from '../../../src/models/money.js';
 import { TAG_ENTITY_TAG } from '../../../src/models/tag.js';
@@ -80,8 +81,18 @@ import {
 } from '../../../src/models/transaction.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transactionTag.js';
 import type { TransactionRowEntity } from '../../../src/adapters/transactions.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 
 const TEST_KEY = 'e'.repeat(64);
+
+/** Raw fixture rows belong to the owner — except the shared defaults (a `file` dashboard, a `rule` merchant edge),
+ *  whose owner stays null. Test fixtures only, never the code under test. */
+const own = <T extends object>(row: T | T[]): never =>
+  (Array.isArray(row)
+    ? row.map((r) => own(r))
+    : ('source' in row && row.source === 'file') || ('origin' in row && row.origin === 'rule')
+      ? row
+      : { ...row, userId: OWNER_USER_ID }) as never;
 
 let tmpDir: string;
 let db: Db;
@@ -102,7 +113,7 @@ beforeEach(async () => {
   });
   runner = createTransactionRunner(db);
   await bootstrap(db);
-  registry = { [ACCOUNT_ENTITY_TAG]: accountApplier };
+  registry = { [ACCOUNT_ENTITY_TAG]: accountApplier(OWNER_USER_ID) };
 });
 
 afterEach(() => {
@@ -129,7 +140,7 @@ const insertOne = (model: AccountEntity) => () =>
  *  test. */
 const insertAccount = async (overrides: Partial<AccountEntity> = {}): Promise<AccountEntity> => {
   const account = newAccount(overrides);
-  await db.insert(accounts).values(account);
+  await db.insert(accounts).values(own(account));
   return account;
 };
 
@@ -139,27 +150,31 @@ const insertCreditCardWithAccount = async (
   paymentAccountId?: string,
 ): Promise<{ cardId: string; accountId: string; cardName: string }> => {
   const accountId = randomUUID();
-  await db.insert(accounts).values({
-    id: accountId,
-    name: 'Card account',
-    type: AccountType.enum.credit,
-    currency: CurrencyCode.enum.BRL,
-    initialBalance: 0,
-    version: 0,
-  });
+  await db.insert(accounts).values(
+    own({
+      id: accountId,
+      name: 'Card account',
+      type: AccountType.enum.credit,
+      currency: CurrencyCode.enum.BRL,
+      initialBalance: 0,
+      version: 0,
+    }),
+  );
 
   const cardId = randomUUID();
   const cardName = `Card ${cardId}`;
-  await db.insert(creditCards).values({
-    id: cardId,
-    name: cardName,
-    currency: CurrencyCode.enum.BRL,
-    closingDay: 28,
-    dueDay: 5,
-    accountId,
-    paymentAccountId: paymentAccountId ?? null,
-    version: 0,
-  });
+  await db.insert(creditCards).values(
+    own({
+      id: cardId,
+      name: cardName,
+      currency: CurrencyCode.enum.BRL,
+      closingDay: 28,
+      dueDay: 5,
+      accountId,
+      paymentAccountId: paymentAccountId ?? null,
+      version: 0,
+    }),
+  );
 
   return { cardId, accountId, cardName };
 };
@@ -170,16 +185,18 @@ const insertOpenBill = async (
   period: { month: number; year: number; closeDate: string; dueDate: string },
 ): Promise<{ id: string }> => {
   const id = randomUUID();
-  await db.insert(bills).values({
-    id,
-    creditCardId: cardId,
-    month: period.month,
-    year: period.year,
-    closeDate: period.closeDate,
-    dueDate: period.dueDate,
-    status: BillStatus.enum.open,
-    version: 0,
-  });
+  await db.insert(bills).values(
+    own({
+      id,
+      creditCardId: cardId,
+      month: period.month,
+      year: period.year,
+      closeDate: period.closeDate,
+      dueDate: period.dueDate,
+      status: BillStatus.enum.open,
+      version: 0,
+    }),
+  );
   return { id };
 };
 
@@ -187,29 +204,31 @@ const insertOpenBill = async (
  *  fixture using this, so unlike the real applier this never attaches any. */
 const insertTransaction = async (entity: Transaction, idempotencyKey: string): Promise<void> => {
   const { props, refs } = transactionAdapters.modelToDb(entity);
-  await db.insert(transactions).values({
-    id: props.id,
-    description: props.description,
-    amount: props.amount,
-    type: props.type,
-    status: props.status,
-    date: props.date,
-    currency: props.currency,
-    source: props.source,
-    idempotencyKey,
-    classificationMethod: props.classificationMethod,
-    confidence: props.confidence,
-    rawInput: props.rawInput ?? null,
-    note: props.note ?? null,
-    fromAccountId: refs.accountId,
-    toAccountId: refs.toAccountId,
-    creditCardId: refs.cardId,
-    billId: refs.billId,
-    categoryId: refs.categoryId,
-    subcategoryId: refs.subCategoryId,
-    merchantKey: refs.merchantKey,
-    version: 0,
-  });
+  await db.insert(transactions).values(
+    own({
+      id: props.id,
+      description: props.description,
+      amount: props.amount,
+      type: props.type,
+      status: props.status,
+      date: props.date,
+      currency: props.currency,
+      source: props.source,
+      idempotencyKey,
+      classificationMethod: props.classificationMethod,
+      confidence: props.confidence,
+      rawInput: props.rawInput ?? null,
+      note: props.note ?? null,
+      fromAccountId: refs.accountId,
+      toAccountId: refs.toAccountId,
+      creditCardId: refs.cardId,
+      billId: refs.billId,
+      categoryId: refs.categoryId,
+      subcategoryId: refs.subCategoryId,
+      merchantKey: refs.merchantKey,
+      version: 0,
+    }),
+  );
 };
 
 const readVersion = async (id: string): Promise<number | undefined> => {
@@ -353,7 +372,7 @@ describe('runEffects — generic versioned unit of work (ADR-021 phase 1)', () =
     // once, explicitly, at the diplomat handler (`accountAdapters.outcomeToDb`, called before
     // `runEffects` ever sees the batch) — never inside `diplomat/db`. This suite calls
     // `runEffects` directly, bypassing that handler-level step, so whatever `version` the test
-    // seeds here is exactly what lands in the row — proving `accountApplier` trusts its input
+    // seeds here is exactly what lands in the row — proving `accountApplier(OWNER_USER_ID)` trusts its input
     // rather than re-deriving it.
     const seed = newAccount({ version: 99 });
 
@@ -431,11 +450,11 @@ describe('runEffects — SQLITE_BUSY treated as a retryable physical conflict, b
   it('rolls back, re-invokes the flow, and succeeds once the lock clears — same recovery as a conflict', async () => {
     let calls = 0;
     const flakyApplier: EntityApplier = {
-      ...accountApplier,
+      ...accountApplier(OWNER_USER_ID),
       insert: async (tx, model) => {
         calls += 1;
         if (calls === 1) throw sqliteBusy();
-        return accountApplier.insert(tx, model);
+        return accountApplier(OWNER_USER_ID).insert(tx, model);
       },
     };
     const flakyRegistry: ApplierRegistry = { [ACCOUNT_ENTITY_TAG]: flakyApplier };
@@ -451,7 +470,7 @@ describe('runEffects — SQLITE_BUSY treated as a retryable physical conflict, b
   it('exhausts retries and surfaces the generic conflict error when SQLITE_BUSY never clears', async () => {
     let calls = 0;
     const alwaysBusyApplier: EntityApplier = {
-      ...accountApplier,
+      ...accountApplier(OWNER_USER_ID),
       insert: async () => {
         calls += 1;
         throw sqliteBusy();
@@ -629,7 +648,7 @@ describe('runEffectsSequence — sequence-of-independent-units mode (ADR-022 ste
 
 describe('versionedTableApplier — reusable for any id/version-shaped table, not just accounts', () => {
   it('applies insert then a versioned update against a completely unrelated table (tags)', async () => {
-    const tagApplier = versionedTableApplier(tags);
+    const tagApplier = ownedTableApplier(tags, OWNER_USER_ID);
     const tagRegistry: ApplierRegistry = { tag: tagApplier };
     const tagId = randomUUID();
 
@@ -658,7 +677,7 @@ describe('versionedTableApplier — reusable for any id/version-shaped table, no
   it('does not swallow a violation of a different unique column (tags.name) as an idempotent id-retry', async () => {
     // onConflictDoNothing is scoped to the `id` target so only a same-id retry is a no-op; a
     // genuine uniqueness violation on some other column must still surface as a real error.
-    const tagApplier = versionedTableApplier(tags);
+    const tagApplier = ownedTableApplier(tags, OWNER_USER_ID);
     const tagRegistry: ApplierRegistry = { tag: tagApplier };
     const name = `Tag ${randomUUID()}`;
 
@@ -739,7 +758,7 @@ const insertRow =
     });
 
 describe('transactionApplier — collapsed to a versionedTableApplier registration (ADR-023 step 3)', () => {
-  const transactionRegistry: ApplierRegistry = { [TRANSACTION_ENTITY_TAG]: transactionApplier };
+  const transactionRegistry: ApplierRegistry = { [TRANSACTION_ENTITY_TAG]: transactionApplier(OWNER_USER_ID) };
 
   it('insert reports applied:true and reads back the persisted, joined view for a brand-new transaction', async () => {
     const row = newTransactionRow();
@@ -914,17 +933,19 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
     const row = newTransactionRow();
     await runEffects({ runner, isTransientContention, conflictError }, transactionRegistry, insertRow(row));
     const { cardId } = await insertCreditCardWithAccount();
-    await db.insert(bills).values({
-      id: randomUUID(),
-      creditCardId: cardId,
-      month: 6,
-      year: 2026,
-      closeDate: '2026-06-28',
-      dueDate: '2026-07-05',
-      status: BillStatus.enum.paid,
-      paymentTransactionId: row.id,
-      version: 0,
-    });
+    await db.insert(bills).values(
+      own({
+        id: randomUUID(),
+        creditCardId: cardId,
+        month: 6,
+        year: 2026,
+        closeDate: '2026-06-28',
+        dueDate: '2026-07-05',
+        status: BillStatus.enum.paid,
+        paymentTransactionId: row.id,
+        version: 0,
+      }),
+    );
 
     let calls = 0;
     const flow = () => {
@@ -950,13 +971,13 @@ describe('transactionApplier — collapsed to a versionedTableApplier registrati
 
 describe('transactionTagApplier — set-replace addressed by the transaction id (ADR-023 steps 2–3)', () => {
   const tagLinksRegistry: ApplierRegistry = {
-    [TRANSACTION_ENTITY_TAG]: transactionApplier,
-    [TRANSACTION_TAG_ENTITY_TAG]: transactionTagApplier,
+    [TRANSACTION_ENTITY_TAG]: transactionApplier(OWNER_USER_ID),
+    [TRANSACTION_TAG_ENTITY_TAG]: transactionTagApplier(OWNER_USER_ID),
   };
 
   const seedTag = async (name: string): Promise<string> => {
     const id = randomUUID();
-    await db.insert(tags).values({ id, name, version: 0 });
+    await db.insert(tags).values(own({ id, name, version: 0 }));
     return id;
   };
 
@@ -1105,13 +1126,13 @@ describe('transactionTagApplier — set-replace addressed by the transaction id 
 
 describe('transactionApplier + transactionTagApplier — duplicate-insert tag semantics (ADR-023 step 3)', () => {
   const combinedRegistry: ApplierRegistry = {
-    [TRANSACTION_ENTITY_TAG]: transactionApplier,
-    [TRANSACTION_TAG_ENTITY_TAG]: transactionTagApplier,
+    [TRANSACTION_ENTITY_TAG]: transactionApplier(OWNER_USER_ID),
+    [TRANSACTION_TAG_ENTITY_TAG]: transactionTagApplier(OWNER_USER_ID),
   };
 
   const seedTag = async (name: string): Promise<string> => {
     const id = randomUUID();
-    await db.insert(tags).values({ id, name, version: 0 });
+    await db.insert(tags).values(own({ id, name, version: 0 }));
     return id;
   };
 
@@ -1250,14 +1271,16 @@ describe('merchantApplier — hand-written single-table applier for a key-only, 
 
 describe('merchantCategoryApplier — upsert-increment mechanics, single-table (ADR-021 phase 2a / ADR-023)', () => {
   const merchantRegistry: ApplierRegistry = {
-    [TRANSACTION_ENTITY_TAG]: transactionApplier,
+    [TRANSACTION_ENTITY_TAG]: transactionApplier(OWNER_USER_ID),
     [MERCHANT_ENTITY_TAG]: merchantApplier,
-    [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier,
+    [MERCHANT_CATEGORY_ENTITY_TAG]: merchantCategoryApplier(OWNER_USER_ID),
   };
 
   const seedCategory = async (): Promise<string> => {
     const categoryId = randomUUID();
-    await db.insert(categories).values({ id: categoryId, name: `Category ${categoryId}`, kind: 'both', version: 0 });
+    await db
+      .insert(categories)
+      .values(own({ id: categoryId, name: `Category ${categoryId}`, kind: 'both', version: 0 }));
     return categoryId;
   };
 
@@ -1321,39 +1344,62 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
     expect(edge?.weight).toBe(2);
   });
 
-  it('applies the delta it is handed on both insert and conflict paths; origin is insert-only', async () => {
+  it('applies the delta it is handed on both insert and conflict paths, to the user’s own edge', async () => {
     const categoryId = await seedCategory();
     const merchantKey = `merchant-${randomUUID()}`;
     await seedMerchant(merchantKey);
-    const insertEdge = (weightDelta: number, origin: 'rule' | 'history') =>
+    const insertEdge = (weightDelta: number) =>
       runEffects({ runner, isTransientContention, conflictError }, merchantRegistry, () =>
         okAsync({
           persist: [
             {
               op: PersistOp.enum.insert,
               entity: MERCHANT_CATEGORY_ENTITY_TAG,
-              model: { merchantKey, categoryId, weightDelta, origin },
+              model: { merchantKey, categoryId, weightDelta, origin: ClassificationMethod.enum.history },
             },
           ] as Persistable[],
           response: null,
         }),
       );
 
-    // First observed as a rule match, weight 5.
-    await insertEdge(5, ClassificationMethod.enum.rule);
-    let [edge] = await db.all<{ weight: number; origin: string }>(
-      sql`SELECT weight, origin FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
+    await insertEdge(5);
+    let [edge] = await db.all<{ weight: number; origin: string; user_id: string | null }>(
+      sql`SELECT weight, origin, user_id FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
     );
-    expect(edge).toEqual({ weight: 5, origin: ClassificationMethod.enum.rule });
+    expect(edge).toEqual({ weight: 5, origin: ClassificationMethod.enum.history, user_id: OWNER_USER_ID });
 
-    // A later user correction reinforces it as `history` — the delta lands, but `origin` is
-    // insert-only and is NOT overwritten on the conflict path (ADR-023 decision 2).
-    const result = await insertEdge(3, ClassificationMethod.enum.history);
-    expect(result.isOk()).toBe(true);
-    [edge] = await db.all<{ weight: number; origin: string }>(
-      sql`SELECT weight, origin FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
+    // A later correction reinforces it: the delta lands on the same edge, and origin is untouched (ADR-023 decision 2).
+    expect((await insertEdge(3)).isOk()).toBe(true);
+    [edge] = await db.all<{ weight: number; origin: string; user_id: string | null }>(
+      sql`SELECT weight, origin, user_id FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
     );
-    expect(edge).toEqual({ weight: 8, origin: ClassificationMethod.enum.rule });
+    expect(edge).toEqual({ weight: 8, origin: ClassificationMethod.enum.history, user_id: OWNER_USER_ID });
+  });
+
+  it('never writes a shared rule edge: a scoped runner offered one is refused by the schema', async () => {
+    const categoryId = await seedCategory();
+    const merchantKey = `merchant-${randomUUID()}`;
+    await seedMerchant(merchantKey);
+
+    await expect(
+      runEffects({ runner, isTransientContention, conflictError }, merchantRegistry, () =>
+        okAsync({
+          persist: [
+            {
+              op: PersistOp.enum.insert,
+              entity: MERCHANT_CATEGORY_ENTITY_TAG,
+              model: { merchantKey, categoryId, weightDelta: 3, origin: ClassificationMethod.enum.rule },
+            },
+          ] as Persistable[],
+          response: null,
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(
+      await db.all(
+        sql`SELECT 1 FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,
+      ),
+    ).toEqual([]);
   });
 
   it('composes atomically with its transaction update: both roll back together on a stale version', async () => {
@@ -1429,7 +1475,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
 });
 
 describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, not a raw throw (ADR-021 2b)', () => {
-  const billRegistry: ApplierRegistry = { [BILL_ENTITY_TAG]: billApplier };
+  const billRegistry: ApplierRegistry = { [BILL_ENTITY_TAG]: billApplier(OWNER_USER_ID) };
 
   const seedCard = async (): Promise<{ cardId: string }> => {
     const { cardId } = await insertCreditCardWithAccount();
@@ -1499,7 +1545,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
     const { cardId } = await seedCard();
     // Simulate "the other writer already committed" — a bill already exists for this cycle.
     const winner = newBillModel(cardId, { month: 9, year: 2026 });
-    await db.insert(bills).values({ ...winner, version: 0 });
+    await db.insert(bills).values(own({ ...winner, version: 0 }));
 
     let attempts = 0;
     const flow = () => {
@@ -1528,7 +1574,7 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
   it('a flow that re-reads on retry recovers: sees the winner and touches it instead of re-inserting', async () => {
     const { cardId } = await seedCard();
     const winner = newBillModel(cardId, { month: 10, year: 2026 });
-    await db.insert(bills).values({ ...winner, version: 0 });
+    await db.insert(bills).values(own({ ...winner, version: 0 }));
 
     let attempts = 0;
     const flow = () => {
@@ -1579,15 +1625,15 @@ describe('billApplier — cycle-uniqueness race surfaces as a generic conflict, 
 
 describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes the ADR-018 atomicity test)', () => {
   const fullRegistry: ApplierRegistry = {
-    [BILL_ENTITY_TAG]: billApplier,
-    [TRANSACTION_ENTITY_TAG]: transactionApplier,
+    [BILL_ENTITY_TAG]: billApplier(OWNER_USER_ID),
+    [TRANSACTION_ENTITY_TAG]: transactionApplier(OWNER_USER_ID),
   };
 
   const seedCardWithOpenBill = async (): Promise<{ deps: Deps; cardName: string }> => {
-    const accountsR = accountsRepo(db);
-    const creditCardsR = creditCardsRepo(db);
-    const billsR = billsRepo(db);
-    const transactionsR = transactionsRepo(db);
+    const accountsR = accountsRepo(db, OWNER_USER_ID);
+    const creditCardsR = creditCardsRepo(db, OWNER_USER_ID);
+    const billsR = billsRepo(db, OWNER_USER_ID);
+    const transactionsR = transactionsRepo(db, OWNER_USER_ID);
 
     const payerAccountId = randomUUID();
     await insertAccount({ id: payerAccountId, name: `Payer ${payerAccountId}`, initialBalance: 1000 });
@@ -1715,7 +1761,7 @@ describe('payBill — atomicity through the shell (ADR-021 phase 2c, supersedes 
 });
 
 describe('tagApplier — name-uniqueness race surfaces as a generic conflict (ADR-021 phase 3a)', () => {
-  const tagRegistry: ApplierRegistry = { [TAG_ENTITY_TAG]: tagApplier };
+  const tagRegistry: ApplierRegistry = { [TAG_ENTITY_TAG]: tagApplier(OWNER_USER_ID) };
 
   it('inserts a brand-new tag normally', async () => {
     const id = randomUUID();
@@ -1733,7 +1779,7 @@ describe('tagApplier — name-uniqueness race surfaces as a generic conflict (AD
 
   it('a concurrent create-same-name race exhausts retries to the generic conflict error, never a raw 500', async () => {
     const name = `Tag ${randomUUID()}`;
-    await db.insert(tags).values({ id: randomUUID(), name, version: 0 });
+    await db.insert(tags).values(own({ id: randomUUID(), name, version: 0 }));
 
     let attempts = 0;
     const flow = () => {
@@ -1759,9 +1805,11 @@ describe('dashboardsRepo.findByName — full-row read for rename (Feature Design
   it('returns the full entity, including id/version/html, for an existing dashboard', async () => {
     const id = randomUUID();
     const name = `dash-${randomUUID()}`;
-    await db.insert(dashboards).values({ id, name, html: '<html>full</html>', updatedAt: '2026-01-01', version: 2 });
+    await db
+      .insert(dashboards)
+      .values(own({ id, name, html: '<html>full</html>', updatedAt: '2026-01-01', version: 2 }));
 
-    const entity = await dashboardsRepo(db).findByName(name);
+    const entity = await dashboardsRepo(db, OWNER_USER_ID).findByName(name);
 
     expect(entity).toEqual({
       id,
@@ -1771,16 +1819,17 @@ describe('dashboardsRepo.findByName — full-row read for rename (Feature Design
       version: 2,
       source: 'inline',
       path: null,
+      shared: false,
     });
   });
 
   it('returns null for an unknown name', async () => {
-    expect(await dashboardsRepo(db).findByName(`dash-${randomUUID()}`)).toBeNull();
+    expect(await dashboardsRepo(db, OWNER_USER_ID).findByName(`dash-${randomUUID()}`)).toBeNull();
   });
 });
 
 describe('dashboardApplier — name-uniqueness race surfaces as a generic conflict, never a raw 500', () => {
-  const dashboardRegistry: ApplierRegistry = { [DASHBOARD_ENTITY_TAG]: dashboardApplier };
+  const dashboardRegistry: ApplierRegistry = { [DASHBOARD_ENTITY_TAG]: dashboardApplier(OWNER_USER_ID) };
 
   it('inserts a brand-new dashboard normally', async () => {
     const name = `dash-${randomUUID()}`;
@@ -1807,7 +1856,7 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
     const name = `dash-${randomUUID()}`;
     await db
       .insert(dashboards)
-      .values({ id: randomUUID(), name, html: '<html>winner</html>', updatedAt: '2026-01-01' });
+      .values(own({ id: randomUUID(), name, html: '<html>winner</html>', updatedAt: '2026-01-01' }));
 
     let attempts = 0;
     const flow = () => {
@@ -1837,7 +1886,7 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
 
   it("saveDashboard's own retry re-reads and takes the update path when a concurrent first save races it", async () => {
     const name = `dash-${randomUUID()}`;
-    const dashboardsR = dashboardsRepo(db);
+    const dashboardsR = dashboardsRepo(db, OWNER_USER_ID);
     const deps: Deps = {
       dashboards: dashboardsR,
       clock: () => new Date('2026-06-01T00:00:00.000Z'),
@@ -1849,7 +1898,7 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
     // Simulates a concurrent first save of the same brand-new name landing between saveDashboard's
     // own read (finding nothing, deciding "insert") and the shell applying that decision: the first
     // read still reports "absent" (so saveDashboard decides insert), but the racer's row is already
-    // in place by the time the shell's `dashboardApplier.insert` runs, so that insert hits a real
+    // in place by the time the shell's `dashboardApplier(OWNER_USER_ID).insert` runs, so that insert hits a real
     // UNIQUE conflict on `name` and the whole batch rolls back for a retry.
     const racingDashboards: Deps['dashboards'] = {
       ...dashboardsR,
@@ -1859,7 +1908,7 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
         if (reads === 1 && existingRef === null) {
           await db
             .insert(dashboards)
-            .values({ id: randomUUID(), name: n, html: '<html>racer</html>', updatedAt: '2026-05-01' });
+            .values(own({ id: randomUUID(), name: n, html: '<html>racer</html>', updatedAt: '2026-05-01' }));
           return null; // this read itself still predates the race — the decision is already stale
         }
         return existingRef;
@@ -1889,8 +1938,10 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
   it("renameDashboard's update retries on a concurrent newName claim and surfaces duplicate_name", async () => {
     const name = `dash-${randomUUID()}`;
     const newName = `dash-${randomUUID()}`;
-    await db.insert(dashboards).values({ id: randomUUID(), name, html: '<html>mine</html>', updatedAt: '2026-01-01' });
-    const dashboardsR = dashboardsRepo(db);
+    await db
+      .insert(dashboards)
+      .values(own({ id: randomUUID(), name, html: '<html>mine</html>', updatedAt: '2026-01-01' }));
+    const dashboardsR = dashboardsRepo(db, OWNER_USER_ID);
 
     let racerReads = 0;
     const racingDashboards: Deps['dashboards'] = {
@@ -1902,7 +1953,7 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
         if (racerReads === 1 && existingRef === null) {
           await db
             .insert(dashboards)
-            .values({ id: randomUUID(), name: newName, html: '<html>racer</html>', updatedAt: '2026-05-01' });
+            .values(own({ id: randomUUID(), name: newName, html: '<html>racer</html>', updatedAt: '2026-05-01' }));
           return null; // this read itself still predates the race — the decision is already stale
         }
         return existingRef;
@@ -1927,50 +1978,45 @@ describe('dashboardApplier — name-uniqueness race surfaces as a generic confli
   });
 });
 
-describe("settingsApplier — a concurrent first insert on the singleton retries, doesn't silently no-op", () => {
-  const settingsRegistry: ApplierRegistry = { [SETTINGS_ENTITY_TAG]: settingsApplier };
+describe("userSettingsApplier — a concurrent first insert for the same user retries, doesn't silently no-op", () => {
+  const settingsRegistry: ApplierRegistry = { [USER_SETTINGS_ENTITY_TAG]: userSettingsApplier(OWNER_USER_ID) };
+  const settingsEntity = (locale: Locale, localeSource: LocaleSource = LocaleSource.enum.explicit) => ({
+    locale,
+    localeSource,
+    baseCurrency: null,
+  });
 
-  it('inserts the singleton row normally when absent', async () => {
+  it('inserts the user’s preferences row normally when absent, stamped with that user', async () => {
     const result = await runEffects({ runner, isTransientContention, conflictError }, settingsRegistry, () =>
       okAsync({
         persist: [
-          {
-            op: PersistOp.enum.insert,
-            entity: SETTINGS_ENTITY_TAG,
-            model: { id: SETTINGS_SINGLETON_ID, locale: Locale.enum.en, localeSource: LocaleSource.enum.explicit },
-          },
+          { op: PersistOp.enum.insert, entity: USER_SETTINGS_ENTITY_TAG, model: settingsEntity(Locale.enum.en) },
         ] as Persistable[],
         response: null,
       }),
     );
     expect(result.isOk()).toBe(true);
     const [row] = await db.all<{ locale: string }>(
-      sql`SELECT locale FROM settings WHERE id = ${SETTINGS_SINGLETON_ID}`,
+      sql`SELECT locale FROM user_settings WHERE user_id = ${OWNER_USER_ID}`,
     );
     expect(row?.locale).toBe(Locale.enum.en);
   });
 
-  it('a concurrent first insert on the same singleton id retries rather than reporting a false success', async () => {
-    // versionedTableApplier's own insert scopes onConflictDoNothing to `id` — for a random-UUID
-    // entity that never actually collides, so this never fires. `settings.id` is always the same
-    // constant, so a genuine concurrent first-insert race silently no-ops here instead: without
-    // settingsApplier's own applied-check, the loser's flow would report success despite its value
-    // never landing. This asserts the wrapper turns that no-op into a retried conflict instead.
+  it('a concurrent first insert for the same user retries rather than reporting a false success', async () => {
+    // A user has exactly one row, so a genuine concurrent first-insert race collides on the key and would silently
+    // no-op: without userSettingsApplier's own applied-check, the loser's flow would report success despite its
+    // value never landing. This asserts the applier turns that no-op into a retried conflict instead.
     await db
-      .insert(settings)
-      .values({ id: SETTINGS_SINGLETON_ID, locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
+      .insert(userSettings)
+      .values({ userId: OWNER_USER_ID, locale: Locale.enum.pt, localeSource: LocaleSource.enum.explicit });
 
     let attempts = 0;
     const flow = () => {
       attempts += 1;
-      // A naive flow that never re-reads — always attempts a fresh insert of the singleton.
+      // A naive flow that never re-reads — always attempts a fresh insert of the user's row.
       return okAsync({
         persist: [
-          {
-            op: PersistOp.enum.insert,
-            entity: SETTINGS_ENTITY_TAG,
-            model: { id: SETTINGS_SINGLETON_ID, locale: Locale.enum.es, localeSource: LocaleSource.enum.explicit },
-          },
+          { op: PersistOp.enum.insert, entity: USER_SETTINGS_ENTITY_TAG, model: settingsEntity(Locale.enum.es) },
         ] as Persistable[],
         response: null,
       });
@@ -1982,13 +2028,13 @@ describe("settingsApplier — a concurrent first insert on the singleton retries
     expect(result._unsafeUnwrapErr()).toEqual({ code: 'conflict' });
     expect(attempts).toBe(MAX_RUN_EFFECTS_ATTEMPTS);
     const [row] = await db.all<{ locale: string }>(
-      sql`SELECT locale FROM settings WHERE id = ${SETTINGS_SINGLETON_ID}`,
+      sql`SELECT locale FROM user_settings WHERE user_id = ${OWNER_USER_ID}`,
     );
     expect(row?.locale).toBe(Locale.enum.pt); // the winner's value, never overwritten by the loser
   });
 
   it("setLocale's own retry re-reads and takes the update path when a concurrent first insert races it", async () => {
-    const settingsR = settingsRepo(db);
+    const settingsR = settingsRepo(db, OWNER_USER_ID);
     const deps = { settings: settingsR } as unknown as Deps;
 
     let reads = 0;
@@ -1998,8 +2044,8 @@ describe("settingsApplier — a concurrent first insert on the singleton retries
         const existing = await settingsR.getLocale();
         if (reads === 1 && !existing) {
           await db
-            .insert(settings)
-            .values({ id: SETTINGS_SINGLETON_ID, locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });
+            .insert(userSettings)
+            .values({ userId: OWNER_USER_ID, locale: Locale.enum.pt, localeSource: LocaleSource.enum.inferred });
           return undefined; // this read itself still predates the race — the decision is already stale
         }
         return existing;
@@ -2014,7 +2060,7 @@ describe("settingsApplier — a concurrent first insert on the singleton retries
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual({ locale: Locale.enum.es, localeSource: LocaleSource.enum.explicit });
     const rows = await db.all<{ locale: string; version: number }>(
-      sql`SELECT locale, version FROM settings WHERE id = ${SETTINGS_SINGLETON_ID}`,
+      sql`SELECT locale, version FROM user_settings WHERE user_id = ${OWNER_USER_ID}`,
     );
     expect(rows).toHaveLength(1); // exactly one row — the racer's insert, then this flow's update
     expect(rows[0]?.locale).toBe(Locale.enum.es);
@@ -2023,18 +2069,18 @@ describe("settingsApplier — a concurrent first insert on the singleton retries
 });
 
 describe('categoryApplier — plain mechanics; merchant_category cascades via schema FK (ADR-021 3a follow-up)', () => {
-  const categoryRegistry: ApplierRegistry = { [CATEGORY_ENTITY_TAG]: categoryApplier };
+  const categoryRegistry: ApplierRegistry = { [CATEGORY_ENTITY_TAG]: categoryApplier(OWNER_USER_ID) };
 
   const seedCategoryWithLearnedEdge = async (): Promise<string> => {
     const categoryId = randomUUID();
     await db
       .insert(categories)
-      .values({ id: categoryId, name: `Category ${categoryId}`, kind: CategoryKind.enum.both, version: 0 });
+      .values(own({ id: categoryId, name: `Category ${categoryId}`, kind: CategoryKind.enum.both, version: 0 }));
     const merchantKey = `merchant-${randomUUID()}`;
     await db.run(sql`INSERT INTO merchants (key) VALUES (${merchantKey})`);
     await db
       .insert(merchantCategory)
-      .values({ merchantKey, categoryId, weight: 1, origin: ClassificationMethod.enum.history });
+      .values(own({ merchantKey, categoryId, weight: 1, origin: ClassificationMethod.enum.history }));
     return categoryId;
   };
 
@@ -2042,7 +2088,7 @@ describe('categoryApplier — plain mechanics; merchant_category cascades via sc
     const categoryId = randomUUID();
     await db
       .insert(categories)
-      .values({ id: categoryId, name: `Category ${categoryId}`, kind: CategoryKind.enum.both, version: 0 });
+      .values(own({ id: categoryId, name: `Category ${categoryId}`, kind: CategoryKind.enum.both, version: 0 }));
 
     const result = await runEffects({ runner, isTransientContention, conflictError }, categoryRegistry, () =>
       okAsync({
@@ -2080,11 +2126,11 @@ describe('categoryApplier — plain mechanics; merchant_category cascades via sc
     const parentId = randomUUID();
     await db
       .insert(categories)
-      .values({ id: parentId, name: `Parent ${parentId}`, kind: CategoryKind.enum.both, version: 0 });
+      .values(own({ id: parentId, name: `Parent ${parentId}`, kind: CategoryKind.enum.both, version: 0 }));
     const subId = randomUUID();
     await db
       .insert(categories)
-      .values({ id: subId, name: `Sub ${subId}`, kind: CategoryKind.enum.both, parentId, version: 0 });
+      .values(own({ id: subId, name: `Sub ${subId}`, kind: CategoryKind.enum.both, parentId, version: 0 }));
 
     const result = await runEffects({ runner, isTransientContention, conflictError }, categoryRegistry, () =>
       okAsync({
@@ -2100,8 +2146,8 @@ describe('categoryApplier — plain mechanics; merchant_category cascades via sc
 
 describe('creditCardApplier — plain versioned mechanics, no cascade of its own (ADR-021 phase 3a follow-up)', () => {
   const cardRegistry: ApplierRegistry = {
-    [ACCOUNT_ENTITY_TAG]: accountApplier,
-    [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
+    [ACCOUNT_ENTITY_TAG]: accountApplier(OWNER_USER_ID),
+    [CREDIT_CARD_ENTITY_TAG]: creditCardApplier(OWNER_USER_ID),
   };
 
   const insertCardWithAccount = async (): Promise<{ cardId: string; accountId: string }> => {
@@ -2137,16 +2183,18 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
     // fixed lambda, not a re-reading flow) — surfacing as the generic conflict, not a raw FK
     // throw. See the deleteCreditCard describe block below for the real, domain-decided cascade.
     const { cardId, accountId } = await insertCardWithAccount();
-    await db.insert(bills).values({
-      id: randomUUID(),
-      creditCardId: cardId,
-      month: 6,
-      year: 2026,
-      closeDate: '2026-06-28',
-      dueDate: '2026-07-05',
-      status: BillStatus.enum.open,
-      version: 0,
-    });
+    await db.insert(bills).values(
+      own({
+        id: randomUUID(),
+        creditCardId: cardId,
+        month: 6,
+        year: 2026,
+        closeDate: '2026-06-28',
+        dueDate: '2026-07-05',
+        status: BillStatus.enum.open,
+        version: 0,
+      }),
+    );
 
     const result = await runEffects(
       { runner, isTransientContention, conflictError },
@@ -2195,7 +2243,7 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
     // card's own delete trips the bill's FK reference; that's caught and retried (rule 4) rather
     // than surfacing as a raw throw, and the retried flow picks the new bill up.
     const { cardId, accountId } = await insertCardWithAccount();
-    const raceRegistry: ApplierRegistry = { ...cardRegistry, [BILL_ENTITY_TAG]: billApplier };
+    const raceRegistry: ApplierRegistry = { ...cardRegistry, [BILL_ENTITY_TAG]: billApplier(OWNER_USER_ID) };
     const billId = randomUUID();
 
     let attempts = 0;
@@ -2203,16 +2251,18 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
       attempts += 1;
       if (attempts === 1) {
         return ResultAsync.fromSafePromise(
-          db.insert(bills).values({
-            id: billId,
-            creditCardId: cardId,
-            month: 6,
-            year: 2026,
-            closeDate: '2026-06-28',
-            dueDate: '2026-07-05',
-            status: BillStatus.enum.open,
-            version: 0,
-          }),
+          db.insert(bills).values(
+            own({
+              id: billId,
+              creditCardId: cardId,
+              month: 6,
+              year: 2026,
+              closeDate: '2026-06-28',
+              dueDate: '2026-07-05',
+              status: BillStatus.enum.open,
+              version: 0,
+            }),
+          ),
         ).map(() => ({
           persist: [
             { op: PersistOp.enum.delete, entity: CREDIT_CARD_ENTITY_TAG, id: cardId, version: 0 },
@@ -2279,17 +2329,17 @@ describe('creditCardApplier — plain versioned mechanics, no cascade of its own
 
 describe('deleteCreditCard — domain-decided cascade, applied atomically end to end (ADR-021 3a follow-up)', () => {
   const fullRegistry: ApplierRegistry = {
-    [ACCOUNT_ENTITY_TAG]: accountApplier,
-    [CREDIT_CARD_ENTITY_TAG]: creditCardApplier,
-    [BILL_ENTITY_TAG]: billApplier,
-    [TRANSACTION_ENTITY_TAG]: transactionApplier,
+    [ACCOUNT_ENTITY_TAG]: accountApplier(OWNER_USER_ID),
+    [CREDIT_CARD_ENTITY_TAG]: creditCardApplier(OWNER_USER_ID),
+    [BILL_ENTITY_TAG]: billApplier(OWNER_USER_ID),
+    [TRANSACTION_ENTITY_TAG]: transactionApplier(OWNER_USER_ID),
   };
 
   const seedCardWithBillsAndTransactions = async (): Promise<{ deps: Deps; cardName: string; payerId: string }> => {
-    const accountsR = accountsRepo(db);
-    const creditCardsR = creditCardsRepo(db);
-    const billsR = billsRepo(db);
-    const transactionsR = transactionsRepo(db);
+    const accountsR = accountsRepo(db, OWNER_USER_ID);
+    const creditCardsR = creditCardsRepo(db, OWNER_USER_ID);
+    const billsR = billsRepo(db, OWNER_USER_ID);
+    const transactionsR = transactionsRepo(db, OWNER_USER_ID);
 
     const payerId = randomUUID();
     await insertAccount({ id: payerId, name: `Payer ${payerId}`, initialBalance: 1000 });
@@ -2320,22 +2370,24 @@ describe('deleteCreditCard — domain-decided cascade, applied atomically end to
       `idem-${randomUUID()}`,
     );
     const tagId = randomUUID();
-    await db.insert(tags).values({ id: tagId, name: `Tag ${tagId}`, version: 0 });
+    await db.insert(tags).values(own({ id: tagId, name: `Tag ${tagId}`, version: 0 }));
     await db.insert(transactionTags).values({ transactionId: purchaseId, tagId });
 
     // A paid bill: its own purchase plus the payment transfer, wired both ways
     // (bill.payment_transaction_id <-> transfer.bill_id) exactly as payBill would leave it.
     const paidBillId = randomUUID();
-    await db.insert(bills).values({
-      id: paidBillId,
-      creditCardId: cardId,
-      month: 4,
-      year: 2026,
-      closeDate: '2026-04-28',
-      dueDate: '2026-05-05',
-      status: BillStatus.enum.paid,
-      version: 0,
-    });
+    await db.insert(bills).values(
+      own({
+        id: paidBillId,
+        creditCardId: cardId,
+        month: 4,
+        year: 2026,
+        closeDate: '2026-04-28',
+        dueDate: '2026-05-05',
+        status: BillStatus.enum.paid,
+        version: 0,
+      }),
+    );
     const paidPurchaseId = randomUUID();
     await insertTransaction(
       {

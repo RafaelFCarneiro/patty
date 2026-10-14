@@ -20,9 +20,10 @@ export const dbToModel = (row: DashboardRow, resolvedHtml: string): Dashboard =>
 export const dbToListItem = (row: Pick<DashboardRow, 'name' | 'updatedAt' | 'source'>): DashboardListItem =>
   DashboardListItemSchema.parse({ name: row.name, updatedAt: row.updatedAt, source: row.source });
 
-/** Read variant carrying `id`/`version`/`path` — for `findByName`'s full-row read, which rename needs to
+/** Read variant carrying `id`/`version`/`path` and whether the row is a shared default — for
+ *  `findByName`'s full-row read, which rename needs to
  *  build a version-guarded `Persistable` that preserves the row's source/path unchanged. */
-export const dbToEntity = (row: DashboardRow, resolvedHtml: string): DashboardEntity =>
+export const dbToEntity = (row: DashboardRow, resolvedHtml: string, shared: boolean): DashboardEntity =>
   DashboardEntitySchema.parse({
     id: row.id,
     name: row.name,
@@ -31,6 +32,7 @@ export const dbToEntity = (row: DashboardRow, resolvedHtml: string): DashboardEn
     version: row.version,
     source: row.source,
     path: row.path,
+    shared,
   });
 
 // Not the identity function (unlike most entities' modelToDb): a source: 'file' row's stored

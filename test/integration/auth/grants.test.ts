@@ -40,7 +40,7 @@ const world = async (overrides: Partial<AuthDeps> = {}) => {
   await claimOwner(ctx);
   const base = authDepsOf(ctx);
   const deps: AuthDeps = { ...base, ...overrides };
-  const run = bindAuthRunEffects(ctx.runEffects);
+  const run = bindAuthRunEffects(ctx.authRunEffects);
   const owner = (await deps.users.findById(OWNER_USER_ID))!;
   return { ctx, deps, run, session: sessionPrincipal(owner), owner };
 };

@@ -4,15 +4,13 @@ import { createTag, deleteTag, listTags } from '../../../controllers/tags.js';
 import { TagSchema } from '../../../models/tag.js';
 import { CreateTagSchema } from '../../../wire/in/tags.js';
 import { DeletedOut } from '../../../wire/out/common.js';
-import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, idParam, parse, send, validation422 } from '../respond.js';
 import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const TAGS_TAG = 'Tags';
 
-export const tagRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps, runEffects } = ctx;
+export const tagRoutes = (): RouteDefinition[] => {
   return [
     {
       method: 'get',
@@ -21,7 +19,10 @@ export const tagRoutes = (ctx: HttpContext): RouteDefinition[] => {
       tags: [TAGS_TAG],
       summary: 'List tags',
       responses: { 200: okResponse('Tags', z.array(TagSchema)) },
-      handler: async () => listTags(deps),
+      handler: async (_req, _reply, scope) => {
+        const { deps } = scope();
+        return listTags(deps);
+      },
     },
     {
       method: 'post',
@@ -31,7 +32,8 @@ export const tagRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Create tag',
       request: { body: jsonBody(CreateTagSchema) },
       responses: { 201: okResponse('Tag created', TagSchema), 409: conflict409, 422: validation422 },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const input = parse(CreateTagSchema, req.body, reply);
         if (!input) return reply;
         const flow = () => createTag(deps, input.name).map(tagAdapters.outcomeToDb);
@@ -46,7 +48,8 @@ export const tagRoutes = (ctx: HttpContext): RouteDefinition[] => {
       summary: 'Delete tag',
       request: { params: idParam },
       responses: { 200: okResponse('Tag deleted', DeletedOut) },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const { id } = req.params as { id: string };
         const flow = () => deleteTag(deps, id).map(tagAdapters.outcomeToDb);
         return send(reply, await runEffects(flow));

@@ -15,8 +15,6 @@ import { fromResult, json } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerCategoryTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps, runEffects } = ctx;
-
   server.registerTool(
     'create_category',
     {
@@ -25,7 +23,8 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
       description: 'Create a category. Prefer existing categories (list_categories) before creating new ones.',
       inputSchema: CreateCategorySchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => createCategory(deps, args).map(categoryAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -39,7 +38,10 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
       description: 'List all categories. Names are resolved to the active locale for default categories.',
       inputSchema: {},
     },
-    async () => json(await listCategories(deps)),
+    async (_args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await listCategories(deps));
+    },
   );
 
   server.registerTool(
@@ -52,7 +54,8 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
         'of their parent. Use list_categories to find the parent id. Names must be unique within the same parent.',
       inputSchema: CreateSubCategorySchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => createSubCategory(deps, args).map(categoryAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -68,7 +71,10 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
         parentId: z.string().optional().describe('Filter to sub-categories of this parent category id'),
       },
     },
-    async (args) => json(await listSubCategories(deps, args.parentId)),
+    async (args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await listSubCategories(deps, args.parentId));
+    },
   );
 
   server.registerTool(
@@ -82,7 +88,8 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
         "On success, also removes the category's learned merchant classification rules (re-learnable).",
       inputSchema: { name: z.string().min(1).describe('Category name') },
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => deleteCategory(deps, args.name).map(categoryAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -100,7 +107,8 @@ export const registerCategoryTools = (server: McpServer, ctx: McpContext): void 
         'On success, also removes learned merchant classification rules for this sub-category.',
       inputSchema: { name: z.string().min(1).describe('Sub-category name') },
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => deleteSubCategory(deps, args.name).map(categoryAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },

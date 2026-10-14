@@ -13,8 +13,6 @@ import { jsonResource } from './respond.js';
 /** The reference resources (Feature Design 018) plus the OpenAPI document — few and cross-domain,
  *  so they live in one module rather than one per domain (ADR-025). */
 export const registerResources = (server: McpServer, ctx: McpContext, openApiDocument: unknown): void => {
-  const { deps } = ctx;
-
   server.registerResource(
     'openapi',
     'fintrack://openapi',
@@ -25,7 +23,9 @@ export const registerResources = (server: McpServer, ctx: McpContext, openApiDoc
         'Read this before generating fetch() calls against /api endpoints (ADR-013).',
       mimeType: 'application/json',
     },
-    async (uri) => jsonResource(uri, openApiDocument),
+    async (uri) => {
+      return jsonResource(uri, openApiDocument);
+    },
   );
 
   server.registerResource(
@@ -39,7 +39,10 @@ export const registerResources = (server: McpServer, ctx: McpContext, openApiDoc
         'without a tool round-trip.',
       mimeType: 'application/json',
     },
-    async (uri) => jsonResource(uri, await listCategories(deps)),
+    async (uri, extra) => {
+      const { deps } = ctx.as(extra);
+      return jsonResource(uri, await listCategories(deps));
+    },
   );
 
   server.registerResource(
@@ -52,7 +55,10 @@ export const registerResources = (server: McpServer, ctx: McpContext, openApiDoc
         'resolve an account name without a tool round-trip.',
       mimeType: 'application/json',
     },
-    async (uri) => jsonResource(uri, await listAccounts(deps)),
+    async (uri, extra) => {
+      const { deps } = ctx.as(extra);
+      return jsonResource(uri, await listAccounts(deps));
+    },
   );
 
   server.registerResource(
@@ -66,7 +72,10 @@ export const registerResources = (server: McpServer, ctx: McpContext, openApiDoc
         'formatter must use the symbol + decimals given here instead of assuming 2 decimal places.',
       mimeType: 'application/json',
     },
-    async (uri) => jsonResource(uri, await listCurrencies(deps)),
+    async (uri, extra) => {
+      const { deps } = ctx.as(extra);
+      return jsonResource(uri, await listCurrencies(deps));
+    },
   );
 
   server.registerResource(
@@ -80,7 +89,10 @@ export const registerResources = (server: McpServer, ctx: McpContext, openApiDoc
         'cached and how fresh they are before deciding whether to refresh via set_exchange_rate(s).',
       mimeType: 'application/json',
     },
-    async (uri) => jsonResource(uri, await listExchangeRates(deps)),
+    async (uri, extra) => {
+      const { deps } = ctx.as(extra);
+      return jsonResource(uri, await listExchangeRates(deps));
+    },
   );
 
   server.registerResource(
@@ -92,7 +104,10 @@ export const registerResources = (server: McpServer, ctx: McpContext, openApiDoc
         'All tags — the same data list_tags returns. Read this to resolve a tag name without a tool round-trip.',
       mimeType: 'application/json',
     },
-    async (uri) => jsonResource(uri, await listTags(deps)),
+    async (uri, extra) => {
+      const { deps } = ctx.as(extra);
+      return jsonResource(uri, await listTags(deps));
+    },
   );
 
   server.registerResource(
@@ -105,7 +120,10 @@ export const registerResources = (server: McpServer, ctx: McpContext, openApiDoc
         'a tool round-trip.',
       mimeType: 'application/json',
     },
-    async (uri) => jsonResource(uri, await listCreditCards(deps)),
+    async (uri, extra) => {
+      const { deps } = ctx.as(extra);
+      return jsonResource(uri, await listCreditCards(deps));
+    },
   );
 
   server.registerResource(
@@ -120,6 +138,9 @@ export const registerResources = (server: McpServer, ctx: McpContext, openApiDoc
         'per-currency amounts. categoryName is null for a merchant whose transactions are all uncategorized.',
       mimeType: 'application/json',
     },
-    async (uri) => jsonResource(uri, await topMerchants(deps)),
+    async (uri, extra) => {
+      const { deps } = ctx.as(extra);
+      return jsonResource(uri, await topMerchants(deps));
+    },
   );
 };

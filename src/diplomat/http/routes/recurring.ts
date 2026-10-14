@@ -5,15 +5,13 @@ import { applyDueRecurring, createRecurring, listRecurring } from '../../../cont
 import { RecurringRuleViewSchema } from '../../../models/recurring.js';
 import * as wireInRecurring from '../../../wire/in/recurring.js';
 import { ApplyDueResultOut } from '../../../wire/out/recurring.js';
-import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, notFound404, parse, send, validation422 } from '../respond.js';
 import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const RECURRING_TAG = 'Recurring';
 
-export const recurringRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps, runEffects } = ctx;
+export const recurringRoutes = (): RouteDefinition[] => {
   return [
     {
       method: 'get',
@@ -22,7 +20,10 @@ export const recurringRoutes = (ctx: HttpContext): RouteDefinition[] => {
       tags: [RECURRING_TAG],
       summary: 'List recurring rules',
       responses: { 200: okResponse('Recurring rules', z.array(RecurringRuleViewSchema)) },
-      handler: async () => listRecurring(deps),
+      handler: async (_req, _reply, scope) => {
+        const { deps } = scope();
+        return listRecurring(deps);
+      },
     },
     {
       method: 'post',
@@ -37,7 +38,8 @@ export const recurringRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const wireIn = parse(wireInRecurring.CreateRecurringSchema, req.body, reply);
         if (!wireIn) return reply;
         const flow = () =>
@@ -57,7 +59,8 @@ export const recurringRoutes = (ctx: HttpContext): RouteDefinition[] => {
         409: conflict409,
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const q = wireInRecurring.ApplyDueBodySchema.safeParse(req.body ?? {});
         if (!q.success)
           return reply.status(422).send({ error: { code: 'validation', issues: ['invalid through date'] } });

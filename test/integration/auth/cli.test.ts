@@ -43,14 +43,14 @@ const harness = (ctx: AppContext, input: { stdin?: string; terminal?: boolean } 
     openShell: () =>
       okAsync({
         deps: authDepsOf(ctx),
-        run: bindAuthRunEffects(ctx.runEffects),
+        run: bindAuthRunEffects(ctx.authRunEffects),
         close: () => undefined,
         authRequired: true,
         defaultProfile: DEFAULT_PROFILE,
         signIn: () =>
           createSignInInterpreter({
             deps: authDepsOf(ctx),
-            run: bindAuthRunEffects(ctx.runEffects),
+            run: bindAuthRunEffects(ctx.authRunEffects),
             store: memoryStore(),
             origin: () => null,
             startPage: async () => ({ origin: LOOPBACK_ORIGIN, close: async () => undefined }),

@@ -59,7 +59,7 @@ describe('setup code issuance', () => {
   it('issues a fresh code on restart and invalidates the previous one', async () => {
     const ctx = await createApp();
     const first = codeFrom(ctx.announced);
-    const runAuth = bindAuthRunEffects(ctx.runEffects);
+    const runAuth = bindAuthRunEffects(ctx.authRunEffects);
     const restarted = await runAuth(() => issueSetupCode(authDepsOf(ctx), AuthMode.enum.required));
     const second = restarted._unsafeUnwrap()?.code;
 
@@ -75,7 +75,7 @@ describe('setup code issuance', () => {
 
   it('leaves exactly one valid code when a starter loses the race to issue (insert, then update)', async () => {
     const ctx = await createApp();
-    const run = bindAuthRunEffects(ctx.runEffects);
+    const run = bindAuthRunEffects(ctx.authRunEffects);
     const deps = authDepsOf(ctx);
     const issue = () => issueSetupCode(deps, AuthMode.enum.required);
 
@@ -98,7 +98,7 @@ describe('setup code issuance', () => {
 
   it('leaves exactly one valid code when a starter loses the race to replace it (stale update)', async () => {
     const ctx = await createApp();
-    const run = bindAuthRunEffects(ctx.runEffects);
+    const run = bindAuthRunEffects(ctx.authRunEffects);
     const deps = authDepsOf(ctx);
     const issue = () => issueSetupCode(deps, AuthMode.enum.required);
 
@@ -126,7 +126,7 @@ describe('setup code issuance', () => {
     const prepared = await prepareAuth(
       { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', FINTRACK_HTTP: false },
       ctx.db,
-      ctx.runEffects,
+      ctx.authRunEffects,
     );
     await prepared.issueAndAnnounceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
     expect(announced).toEqual([]);
@@ -137,7 +137,7 @@ describe('setup code issuance', () => {
     const ctx = await createApp();
     await claimOwner(ctx);
     const announced: string[] = [];
-    const prepared = await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.runEffects);
+    const prepared = await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.authRunEffects);
     await prepared.issueAndAnnounceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
     expect(announced).toEqual([]);
   });
@@ -155,7 +155,7 @@ describe('issuing and announcing the setup code', () => {
 
     // A second stdio process: prepares auth, then its sidecar fails to bind (the first owns the port), so
     // main.ts never calls issueAndAnnounceSetup.
-    await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.runEffects);
+    await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.authRunEffects);
 
     const response = await post(ctx, { code: printedByFirstProcess, username: USERNAME, password: PASSWORD });
     expect(response.statusCode).toBe(303); // the code the first process announced still works
@@ -164,7 +164,7 @@ describe('issuing and announcing the setup code', () => {
   it('prints once bound, naming the real origin — a PORT=0 instance has no usable URL before that', async () => {
     const ctx = await createApp();
     const announced: string[] = [];
-    const prepared = await prepareAuth({ ...REQUIRED_AUTH, PORT: 0 }, ctx.db, ctx.runEffects);
+    const prepared = await prepareAuth({ ...REQUIRED_AUTH, PORT: 0 }, ctx.db, ctx.authRunEffects);
     expect(announced).toEqual([]);
 
     await prepared.issueAndAnnounceSetup('http://127.0.0.1:54321', (message) => announced.push(message));
@@ -176,7 +176,7 @@ describe('issuing and announcing the setup code', () => {
   it('replaces the earlier code only at that point, and the new one works', async () => {
     const { ctx, printedByFirstProcess } = await withFirstProcessCode();
     const announced: string[] = [];
-    const prepared = await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.runEffects);
+    const prepared = await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.authRunEffects);
     await prepared.issueAndAnnounceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
 
     expect((await post(ctx, { code: printedByFirstProcess, username: USERNAME, password: PASSWORD })).statusCode).toBe(
@@ -193,7 +193,7 @@ describe('issuing and announcing the setup code', () => {
     const prepared = await prepareAuth(
       { ...REQUIRED_AUTH, PUBLIC_URL: 'https://fintrack.example.com' },
       ctx.db,
-      ctx.runEffects,
+      ctx.authRunEffects,
     );
     await prepared.issueAndAnnounceSetup('http://127.0.0.1:51737', (message) => announced.push(message));
     expect(announced[0]).toContain('https://fintrack.example.com/ui/setup');
@@ -311,7 +311,7 @@ describe('prepareAuth — what the stdio channel signs in with (ADR-034)', () =>
     const prepared = await prepareAuth(
       { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', FINTRACK_HTTP: false },
       ctx.db,
-      ctx.runEffects,
+      ctx.authRunEffects,
     );
     expect(prepared.stdio).not.toBeNull();
     expect(prepared.stdio?.signIn).toBeTypeOf('function');
@@ -323,7 +323,7 @@ describe('prepareAuth — what the stdio channel signs in with (ADR-034)', () =>
     const prepared = await prepareAuth(
       { ...REQUIRED_AUTH, MCP_TRANSPORT: 'stdio', FINTRACK_HTTP: true },
       ctx.db,
-      ctx.runEffects,
+      ctx.authRunEffects,
     );
     expect(prepared.stdio).not.toBeNull();
     expect(prepared.auth.mode).toBe(AuthMode.enum.required);
@@ -334,14 +334,16 @@ describe('prepareAuth — what the stdio channel signs in with (ADR-034)', () =>
     const prepared = await prepareAuth(
       { ...REQUIRED_AUTH, FINTRACK_AUTH: AuthMode.enum.disabled, MCP_TRANSPORT: 'stdio' },
       ctx.db,
-      ctx.runEffects,
+      ctx.authRunEffects,
     );
     expect(prepared.stdio).toBeNull();
   });
 
   it('gives stdio nothing when the transport is HTTP', async () => {
     const ctx = await createApp();
-    expect((await prepareAuth({ ...REQUIRED_AUTH, MCP_TRANSPORT: 'http' }, ctx.db, ctx.runEffects)).stdio).toBeNull();
+    expect(
+      (await prepareAuth({ ...REQUIRED_AUTH, MCP_TRANSPORT: 'http' }, ctx.db, ctx.authRunEffects)).stdio,
+    ).toBeNull();
   });
 
   it('prunes sign-in requests that ran out unanswered at startup, keeping the live and the redeemed', async () => {
@@ -356,7 +358,7 @@ describe('prepareAuth — what the stdio channel signs in with (ADR-034)', () =>
     await ctx.db.run(row('stale-redeemed', 'CCCCCCCC', 'redeemed', past));
     await ctx.db.run(row('live-pending', 'DDDDDDDD', 'pending', future));
 
-    await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.runEffects);
+    await prepareAuth(REQUIRED_AUTH, ctx.db, ctx.authRunEffects);
 
     const kept = await ctx.db.all<{ id: string }>(sql`SELECT id FROM client_grants ORDER BY id`);
     expect(kept.map((grant) => grant.id)).toEqual(['live-pending', 'stale-redeemed']);
@@ -368,7 +370,7 @@ describe('prepareAuth — what the stdio channel signs in with (ADR-034)', () =>
       sql`INSERT INTO client_grants (id, device_code_hash, user_code, client_name, client_version, profile, channel, status, created_at, expires_at, version)
           VALUES ('old', 'h', 'AAAAAAAA', 'c', '1', 'default', 'stdio', 'pending', '2020-01-01T00:00:00.000Z', '2020-01-01T00:10:00.000Z', 0)`,
     );
-    await prepareAuth({ ...REQUIRED_AUTH, FINTRACK_AUTH: AuthMode.enum.disabled }, ctx.db, ctx.runEffects);
+    await prepareAuth({ ...REQUIRED_AUTH, FINTRACK_AUTH: AuthMode.enum.disabled }, ctx.db, ctx.authRunEffects);
     expect(await ctx.db.all(sql`SELECT 1 FROM client_grants`)).toHaveLength(1);
   });
 });

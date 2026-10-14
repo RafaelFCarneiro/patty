@@ -8,8 +8,6 @@ import { fromResult, json } from '../respond.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerDashboardTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps, runEffects } = ctx;
-
   server.registerTool(
     'save_dashboard',
     {
@@ -29,7 +27,8 @@ export const registerDashboardTools = (server: McpServer, ctx: McpContext): void
         'has a syntax error — fix the reported issue and save again.',
       inputSchema: SaveDashboardSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => saveDashboard(deps, args.name, args.html).map(dashboardAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -43,7 +42,10 @@ export const registerDashboardTools = (server: McpServer, ctx: McpContext): void
       description: 'List saved dashboards by name and last-updated time (HTML content omitted).',
       inputSchema: {},
     },
-    async () => json(await listDashboards(deps)),
+    async (_args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await listDashboards(deps));
+    },
   );
 
   server.registerTool(
@@ -54,7 +56,8 @@ export const registerDashboardTools = (server: McpServer, ctx: McpContext): void
       description: 'Delete a dashboard by name. Idempotent — deleting an already-absent name is not an error.',
       inputSchema: { name: z.string().min(1).describe('Dashboard name') },
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => deleteDashboard(deps, args.name).map(dashboardAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -67,12 +70,13 @@ export const registerDashboardTools = (server: McpServer, ctx: McpContext): void
       title: 'Rename dashboard',
       description:
         'Rename a dashboard, preserving its content and identity. GET /api/dashboards/:newName serves it ' +
-        "afterward; GET /api/dashboards/:name (the old name) 404s. GET /ui/:name always serves the app " +
+        'afterward; GET /api/dashboards/:name (the old name) 404s. GET /ui/:name always serves the app ' +
         'shell regardless of name, so it does not reflect this — the shell resolves the dashboard ' +
         'client-side.',
       inputSchema: RenameDashboardSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => renameDashboard(deps, args.name, args.newName).map(dashboardAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
     },

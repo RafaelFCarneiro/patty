@@ -30,7 +30,12 @@ import {
   importCardStatementWireInToModel,
   updateCardTransactionWireInToModel,
 } from '../../../adapters/creditCards.js';
-import { bulkResultToWireOut, createResultToWireOut, deleteResultToWireOut, outcomeToDb } from '../../../adapters/transactions.js';
+import {
+  bulkResultToWireOut,
+  createResultToWireOut,
+  deleteResultToWireOut,
+  outcomeToDb,
+} from '../../../adapters/transactions.js';
 import { buildBulkResult } from '../../../controllers/transaction/bulk.js';
 import type { McpContext } from '../context.js';
 import { fromResult, json } from '../respond.js';
@@ -38,8 +43,6 @@ import { STATEMENT_IMPORT_RESULT_DESCRIPTION } from '../shared.js';
 import { MUTATING, READ_ONLY } from '../annotations.js';
 
 export const registerCreditCardTools = (server: McpServer, ctx: McpContext): void => {
-  const { deps, runEffects, runEffectsSequence } = ctx;
-
   server.registerTool(
     'import_card_statement',
     {
@@ -52,7 +55,8 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
         `bank/wallet statement. ${STATEMENT_IMPORT_RESULT_DESCRIPTION}`,
       inputSchema: ImportCardStatementSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffectsSequence } = ctx.as(extra);
       const plan = await importCardStatement(
         deps,
         importCardStatementWireInToModel(args),
@@ -82,7 +86,8 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
         'with add_account_expense/add_account_income but has no effect here.',
       inputSchema: AddCardPurchaseSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const model = addCardPurchaseWireInToModel(args);
       const flow = () =>
         addCardPurchase(deps, model, TransactionSource.enum.mcp).map(billAdapters.outcomeToDb).map(outcomeToDb);
@@ -101,7 +106,8 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
         'defaults to USD. The card auto-creates an internal credit account that tracks outstanding debt.',
       inputSchema: CreateCreditCardSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () =>
         createCreditCard(deps, args).map(accountAdapters.outcomeToDb).map(creditCardAdapters.outcomeToDb);
       return fromResult(await runEffects(flow));
@@ -111,7 +117,10 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
   server.registerTool(
     'list_credit_cards',
     { annotations: READ_ONLY, title: 'List credit cards', description: 'List all credit cards.', inputSchema: {} },
-    async () => json(await listCreditCards(deps)),
+    async (_args, extra) => {
+      const { deps } = ctx.as(extra);
+      return json(await listCreditCards(deps));
+    },
   );
 
   server.registerTool(
@@ -127,7 +136,8 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
         'rejected if it is a credit account or its currency does not match the card.',
       inputSchema: UpdateCreditCardSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () =>
         updateCreditCard(deps, creditCardAdapters.updateWireInToModel(args))
           .map(accountAdapters.outcomeToDb)
@@ -150,7 +160,8 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
         confirm: z.boolean().default(false).describe('Must be true to actually delete'),
       },
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () =>
         deleteCreditCard(deps, args)
           .map(creditCardAdapters.outcomeToDb)
@@ -170,7 +181,10 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
         'Get a card bill for a month: status (open/closed/paid), close/due dates, total, and its transactions.',
       inputSchema: BillQuerySchema.shape,
     },
-    async (args) => fromResult(await getBill(deps, args)),
+    async (args, extra) => {
+      const { deps } = ctx.as(extra);
+      return fromResult(await getBill(deps, args));
+    },
   );
 
   server.registerTool(
@@ -186,7 +200,8 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
         'future — the payment transfer is always effective and dated on/before today.',
       inputSchema: PayBillSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () =>
         payBill(deps, { ...args, source: TransactionSource.enum.mcp })
           .map(billAdapters.outcomeToDb)
@@ -205,7 +220,8 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
         'Idempotent — calling on a bill that is not paid is a no-op that returns it unchanged.',
       inputSchema: BillQuerySchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => revertBillPayment(deps, args).map(billAdapters.outcomeToDb).map(outcomeToDb);
       return fromResult(await runEffects(flow));
     },
@@ -234,7 +250,8 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
         'revert_bill_payment.',
       inputSchema: UpdateCardTransactionSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const model = updateCardTransactionWireInToModel(args);
       const flow = () => updateCardTransaction(deps, model).map(billAdapters.outcomeToDb).map(outcomeToDb);
       return fromResult(await runEffects(flow));
@@ -256,7 +273,8 @@ export const registerCreditCardTools = (server: McpServer, ctx: McpContext): voi
         'be deleted this way — rejected with a validation error pointing at revert_bill_payment.',
       inputSchema: DeleteTransactionSchema.shape,
     },
-    async (args) => {
+    async (args, extra) => {
+      const { deps, runEffects } = ctx.as(extra);
       const flow = () => deleteCardTransaction(deps, args).map(billAdapters.outcomeToDb).map(outcomeToDb);
       return fromResult((await runEffects(flow)).map(deleteResultToWireOut));
     },

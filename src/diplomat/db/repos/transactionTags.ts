@@ -1,6 +1,6 @@
-import { and, eq, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import type { TransactionTagSet } from '../../../models/transactionTag.js';
-import { transactionTags } from '../schema.js';
+import { tags, transactions, transactionTags } from '../schema.js';
 import { isForeignKeyConstraintViolation } from '../sqliteErrors.js';
 import type { EntityApplier, Tx } from '../effects.js';
 
@@ -20,15 +20,32 @@ const replaceLinks = async (tx: Tx, transactionId: string, tagIds: string[]): Pr
   await tx.delete(transactionTags).where(stale);
 };
 
-export const transactionTagApplier: EntityApplier = {
-  // Zero reads (ADR-023 decision 6): the set applies to the row id the core already named. An FK
-  // miss on the link insert means a referenced row doesn't exist — the signature of a
-  // duplicate-idempotency-key replay, whose transaction insert no-op'd and left the minted id
-  // uninserted — so the set is a no-op, reported as `applied: false`: a duplicate replay never
-  // touches the surviving row's tags. The same error-translation registration billApplier uses
-  // for its cycle-uniqueness race, not a decision.
+/** `transaction_tags` has no owner column: a link is owned through its two parents (ADR-033 §5), which a flow of one
+ *  user always names from that user's own rows. The applier checks it anyway — the transaction and every tag must
+ *  belong to the user — and treats a parent that is not theirs exactly like a parent that does not exist. */
+const belongsToUser = async (tx: Tx, userId: string, transactionId: string, tagIds: string[]): Promise<boolean> => {
+  const [transaction] = await tx
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(and(eq(transactions.id, transactionId), eq(transactions.userId, userId)));
+  if (!transaction) return false;
+  const distinct = [...new Set(tagIds)];
+  if (distinct.length === 0) return true;
+  const owned = await tx
+    .select({ id: tags.id })
+    .from(tags)
+    .where(and(inArray(tags.id, distinct), eq(tags.userId, userId)));
+  return owned.length === distinct.length;
+};
+
+export const transactionTagApplier = (userId: string): EntityApplier => ({
+  // Zero decisions (ADR-023 decision 6): the set applies to the row id the core already named. A parent that is
+  // missing — the signature of a duplicate-idempotency-key replay, whose transaction insert no-op'd and left the
+  // minted id uninserted — or that is not the user's own makes the set a no-op, reported as `applied: false`: a
+  // duplicate replay never touches the surviving row's tags, and a link can never join another user's rows.
   insert: async (tx, model) => {
     const { transactionId, tagIds } = model as TransactionTagSet;
+    if (!(await belongsToUser(tx, userId, transactionId, tagIds))) return { applied: false };
     try {
       await replaceLinks(tx, transactionId, tagIds);
       return { applied: true };
@@ -43,4 +60,4 @@ export const transactionTagApplier: EntityApplier = {
   delete: async () => {
     throw new Error('transactionTagApplier: delete is unsupported — links are removed via the transaction cascade');
   },
-};
+});

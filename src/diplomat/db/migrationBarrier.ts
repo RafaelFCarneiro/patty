@@ -1,4 +1,5 @@
 import type { Client } from '@libsql/client';
+import type { SqlReader } from './tenancyIntegrity.js';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { assertBusyTimeout, type Db } from './driver.js';
 import { isSqliteBusy } from './sqliteErrors.js';
@@ -26,11 +27,15 @@ type MigrationRow = { created_at: number | string | null };
  *
  * It mirrors `drizzle-orm/libsql`'s `migrate()` (foreign keys off, the same statements, the same
  * `__drizzle_migrations` rows), only with the lock taken first and held across `whileHeld`.
+ *
+ * `verify` runs after the last migration and before the commit, inside the same transaction: if it throws, everything
+ * the migrations did is rolled back and the database is exactly as it was (ADR-033 §7: refuse to start, write nothing).
  */
 export const applyPendingMigrationsHolding = async (
   db: Db,
   migrationsFolder: string,
   whileHeld: () => Promise<void>,
+  verify: (migrated: SqlReader) => Promise<void> = async () => undefined,
 ): Promise<void> => {
   // drizzle's libsql driver exposes the client it wraps at runtime; its type declaration does not.
   const { $client: client } = db as Db & { $client: Client };
@@ -56,6 +61,7 @@ export const applyPendingMigrationsHolding = async (
         args: [migration.hash, migration.folderMillis],
       });
     }
+    await verify(barrier);
     await barrier.commit();
   } catch (cause) {
     // Roll back, but never let a rollback that itself fails (SQLite already rolled back on a full disk or an I/O

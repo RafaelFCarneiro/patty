@@ -6,7 +6,8 @@ import { BudgetViewRowSchema, type BudgetViewRow } from '../../../wire/db/budget
 import type { Db } from '../driver.js';
 import { budgets } from '../schema.js';
 import { isUniqueConstraintViolation } from '../sqliteErrors.js';
-import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
+import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
+import { ownedBy, ownedWhere } from '../queries/scope.js';
 
 // Budgets target either a top-level category or a sub-category — both rows in `categories` — so
 // the display projection always joins the node plus its (possibly absent) parent. Mirrors
@@ -15,13 +16,14 @@ import { VersionConflict, versionedTableApplier, type EntityApplier } from '../e
 // `parent.names` travel alongside the raw names so the repo itself never has to decide a locale.
 // `node.id` (== `b.category_id`) travels too as `target_id`, needed to match spend against it in
 // `logic/budget.ts` now that this repo no longer joins `transactions` (ADR-028).
-const BUDGET_VIEW_SELECT = sql`
+const BUDGET_VIEW_SELECT = (userId: string) => sql`
   SELECT b.id, b.currency, b.limit_amount, b.period, b.version, node.id AS target_id,
          node.name AS node_name, node.names AS node_names, node.parent_id AS node_parent_id,
          parent.name AS parent_name, parent.names AS parent_names
   FROM budgets b
   JOIN categories node ON node.id = b.category_id
   LEFT JOIN categories parent ON parent.id = node.parent_id
+  WHERE ${ownedBy(userId, 'b')}
 `;
 
 export type BudgetsRepo = {
@@ -35,10 +37,10 @@ export type BudgetsRepo = {
   findById: (id: string) => Promise<BudgetEntity | null>;
 };
 
-export const budgetsRepo = (db: Db): BudgetsRepo => ({
+export const budgetsRepo = (db: Db, userId: string): BudgetsRepo => ({
   list: async () => {
     const rows = await db.all<Record<string, unknown>>(sql`
-      ${BUDGET_VIEW_SELECT}
+      ${BUDGET_VIEW_SELECT(userId)}
       ORDER BY COALESCE(parent.name, node.name), node.name
     `);
     return rows.map((r) => BudgetViewRowSchema.parse(r));
@@ -48,18 +50,28 @@ export const budgetsRepo = (db: Db): BudgetsRepo => ({
     const [row] = await db
       .select({ id: budgets.id })
       .from(budgets)
-      .where(and(eq(budgets.categoryId, categoryId), eq(budgets.currency, currency), eq(budgets.period, period)))
+      .where(
+        ownedWhere(
+          budgets.userId,
+          userId,
+          and(eq(budgets.categoryId, categoryId), eq(budgets.currency, currency), eq(budgets.period, period)),
+        ),
+      )
       .limit(1);
     return row !== undefined;
   },
 
   findById: async (id) => {
-    const [row] = await db.select().from(budgets).where(eq(budgets.id, id)).limit(1);
+    const [row] = await db
+      .select()
+      .from(budgets)
+      .where(ownedWhere(budgets.userId, userId, eq(budgets.id, id)))
+      .limit(1);
     return row ? budgetAdapters.dbToEntity(row) : null;
   },
 });
 
-const versionedBudgetApplier = versionedTableApplier(budgets);
+const versionedBudgetApplier = (userId: string): EntityApplier => ownedTableApplier(budgets, userId);
 
 /** `budgets` has the secondary `UNIQUE(category_id, currency, period)` beyond `createBudget`'s
  *  own pre-check (`findByTarget`, which only guards the common case) — a concurrent create of the
@@ -68,14 +80,17 @@ const versionedBudgetApplier = versionedTableApplier(budgets);
  *  retry's own `findByTarget` then sees the committed row and returns `duplicate_budget` instead of
  *  a raw 500. Structurally identical to `tagApplier`/`billApplier` (`update`/`delete` stay plain —
  *  neither touches the target/currency/period key). */
-export const budgetApplier: EntityApplier = {
-  ...versionedBudgetApplier,
-  insert: async (tx, model) => {
-    try {
-      return await versionedBudgetApplier.insert(tx, model);
-    } catch (cause) {
-      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-      throw cause;
-    }
-  },
+export const budgetApplier = (userId: string): EntityApplier => {
+  const applier = versionedBudgetApplier(userId);
+  return {
+    ...applier,
+    insert: async (tx, model) => {
+      try {
+        return await applier.insert(tx, model);
+      } catch (cause) {
+        if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
+        throw cause;
+      }
+    },
+  };
 };

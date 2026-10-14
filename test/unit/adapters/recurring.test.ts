@@ -72,9 +72,7 @@ describe('dbToEntity', () => {
   });
 
   it('maps null relation columns to undefined optionals', () => {
-    const rule = recurringAdapters.dbToEntity(
-      sqlRow({ account_id: null, category_id: null, merchant_key: null }),
-    );
+    const rule = recurringAdapters.dbToEntity(sqlRow({ account_id: null, category_id: null, merchant_key: null }));
     expect(rule.accountId).toBeUndefined();
     expect(rule.categoryId).toBeUndefined();
     expect(rule.merchantKey).toBeUndefined();

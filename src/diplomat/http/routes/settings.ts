@@ -2,15 +2,13 @@ import { getPreferences, setBaseCurrency } from '../../../controllers/settings.j
 import { PreferencesSchema } from '../../../models/locale.js';
 import * as settingsAdapters from '../../../adapters/settings.js';
 import { SetBaseCurrencySchema } from '../../../wire/in/settings.js';
-import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { parse, send, validation422 } from '../respond.js';
 import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const SETTINGS_TAG = 'Settings';
 
-export const settingsRoutes = (ctx: HttpContext): RouteDefinition[] => {
-  const { deps, runEffects } = ctx;
+export const settingsRoutes = (): RouteDefinition[] => {
   return [
     {
       method: 'get',
@@ -19,7 +17,10 @@ export const settingsRoutes = (ctx: HttpContext): RouteDefinition[] => {
       tags: [SETTINGS_TAG],
       summary: 'Get user preferences',
       responses: { 200: okResponse('Preferences', PreferencesSchema) },
-      handler: async () => getPreferences(deps),
+      handler: async (_req, _reply, scope) => {
+        const { deps } = scope();
+        return getPreferences(deps);
+      },
     },
     {
       method: 'post',
@@ -32,7 +33,8 @@ export const settingsRoutes = (ctx: HttpContext): RouteDefinition[] => {
         200: okResponse('Base currency updated', PreferencesSchema.pick({ baseCurrency: true })),
         422: validation422,
       },
-      handler: async (req, reply) => {
+      handler: async (req, reply, scope) => {
+        const { deps, runEffects } = scope();
         const input = parse(SetBaseCurrencySchema, req.body, reply);
         if (!input) return reply;
         const flow = () => setBaseCurrency(deps, input).map(settingsAdapters.outcomeToDb);

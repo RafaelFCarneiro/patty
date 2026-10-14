@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { ChangeBus } from '@rfc0/effect-runner';
-import type { Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
+import type { UserChangeBus } from '../../models/tenancy.js';
 import { AuthMode } from '../../models/auth/mode.js';
 import { READ_SCOPE } from '../../models/auth/scope.js';
 import { DISABLED_AUTH, type HttpAuth, type HttpContext } from './context.js';
@@ -40,31 +39,23 @@ import { resolvePrincipal } from './session.js';
  * resource `fintrack://openapi` documents the same list without ever mounting it — so there is
  * nowhere for the two surfaces to drift apart (ADR-013 Phase A).
  */
-export const buildRouteDefinitions = (
-  deps: Deps,
-  version: string,
-  runEffects: RunEffects,
-  runEffectsSequence: RunEffectsSequence,
-): RouteDefinition[] => {
-  const ctx: HttpContext = { deps, version, runEffects, runEffectsSequence };
-  return [
-    ...systemRoutes(ctx),
-    ...accountRoutes(ctx),
-    ...categoryRoutes(ctx),
-    ...creditCardRoutes(ctx),
-    ...currencyRoutes(ctx),
-    ...currencyRateRoutes(ctx),
-    ...settingsRoutes(ctx),
-    ...transferRoutes(ctx),
-    ...recurringRoutes(ctx),
-    ...transactionRoutes(ctx),
-    ...tagRoutes(ctx),
-    ...dashboardRoutes(ctx),
-    ...aggregateRoutes(ctx),
-    ...summaryRoutes(ctx),
-    ...budgetRoutes(ctx),
-  ];
-};
+export const buildRouteDefinitions = (ctx: HttpContext): RouteDefinition[] => [
+  ...systemRoutes(ctx),
+  ...accountRoutes(),
+  ...categoryRoutes(),
+  ...creditCardRoutes(),
+  ...currencyRoutes(),
+  ...currencyRateRoutes(),
+  ...settingsRoutes(),
+  ...transferRoutes(),
+  ...recurringRoutes(),
+  ...transactionRoutes(),
+  ...tagRoutes(),
+  ...dashboardRoutes(),
+  ...aggregateRoutes(),
+  ...summaryRoutes(),
+  ...budgetRoutes(),
+];
 
 // A long-lived stream is authenticated once, when it opens — so it asks again on this schedule.
 const sessionRecheck = (auth: Extract<HttpAuth, { mode: typeof AuthMode.enum.required }>): SessionRecheck => ({
@@ -77,15 +68,12 @@ const sessionRecheck = (auth: Extract<HttpAuth, { mode: typeof AuthMode.enum.req
 
 export const registerRoutes = (
   app: FastifyInstance,
-  deps: Deps,
-  version: string,
-  runEffects: RunEffects,
-  runEffectsSequence: RunEffectsSequence,
-  subscribeToChanges: ChangeBus['subscribe'],
+  ctx: HttpContext,
+  subscribeToChanges: UserChangeBus['subscribe'],
   auth: HttpAuth = DISABLED_AUTH,
 ): void => {
-  const definitions = buildRouteDefinitions(deps, version, runEffects, runEffectsSequence);
-  mountRoutes(app, definitions);
+  const definitions = buildRouteDefinitions(ctx);
+  mountRoutes(app, definitions, ctx);
 
   const authRequired = auth.mode === AuthMode.enum.required;
   registerUiRoutes(app, subscribeToChanges, {
@@ -100,7 +88,7 @@ export const registerRoutes = (
   }
 
   // Built from the same list just mounted; excluded from its own document by design.
-  const openApiDocument = buildOpenApiDocument(definitions, version);
+  const openApiDocument = buildOpenApiDocument(definitions, ctx.version);
   app.get('/api/openapi.json', { config: { scope: READ_SCOPE } }, async (_req, reply) =>
     reply.header('cache-control', CACHE_CONTROL_NO_CACHE).send(openApiDocument),
   );

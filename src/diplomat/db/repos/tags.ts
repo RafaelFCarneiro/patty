@@ -4,7 +4,8 @@ import type { Tag, TagEntity } from '../../../models/tag.js';
 import type { Db } from '../driver.js';
 import { tags } from '../schema.js';
 import { isUniqueConstraintViolation } from '../sqliteErrors.js';
-import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';
+import { VersionConflict, ownedTableApplier, type EntityApplier } from '../effects.js';
+import { ownedWhere } from '../queries/scope.js';
 
 export type TagsRepo = {
   list: () => Promise<Tag[]>;
@@ -13,24 +14,32 @@ export type TagsRepo = {
   findById: (id: string) => Promise<TagEntity | null>;
 };
 
-export const tagsRepo = (db: Db): TagsRepo => ({
+export const tagsRepo = (db: Db, userId: string): TagsRepo => ({
   list: async () => {
-    const rows = await db.select().from(tags).orderBy(tags.name);
+    const rows = await db.select().from(tags).where(ownedWhere(tags.userId, userId)).orderBy(tags.name);
     return rows.map(tagAdapters.dbToModel);
   },
 
   findByName: async (name) => {
-    const [row] = await db.select().from(tags).where(eq(tags.name, name)).limit(1);
+    const [row] = await db
+      .select()
+      .from(tags)
+      .where(ownedWhere(tags.userId, userId, eq(tags.name, name)))
+      .limit(1);
     return row ? tagAdapters.dbToModel(row) : null;
   },
 
   findById: async (id) => {
-    const [row] = await db.select().from(tags).where(eq(tags.id, id)).limit(1);
+    const [row] = await db
+      .select()
+      .from(tags)
+      .where(ownedWhere(tags.userId, userId, eq(tags.id, id)))
+      .limit(1);
     return row ? tagAdapters.dbToEntity(row) : null;
   },
 });
 
-const versionedTagApplier = versionedTableApplier(tags);
+const versionedTagApplier = (userId: string): EntityApplier => ownedTableApplier(tags, userId);
 
 /** `tags.name` has its own `UNIQUE` constraint beyond `createTag`'s pre-check
  *  (`assertTagNameAvailable`, which only guards the common case) — a concurrent same-name insert
@@ -38,14 +47,17 @@ const versionedTagApplier = versionedTableApplier(tags);
  *  `onConflictDoNothing` doesn't swallow. Recognized and rethrown as `VersionConflict`, rolling
  *  back and retrying — the retry's own `assertTagNameAvailable` then sees the committed row and
  *  returns `duplicate_name` instead of a raw 500. `update`/`delete` stay plain. */
-export const tagApplier: EntityApplier = {
-  ...versionedTagApplier,
-  insert: async (tx, model) => {
-    try {
-      return await versionedTagApplier.insert(tx, model);
-    } catch (cause) {
-      if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
-      throw cause;
-    }
-  },
+export const tagApplier = (userId: string): EntityApplier => {
+  const applier = versionedTagApplier(userId);
+  return {
+    ...applier,
+    insert: async (tx, model) => {
+      try {
+        return await applier.insert(tx, model);
+      } catch (cause) {
+        if (isUniqueConstraintViolation(cause)) throw new VersionConflict();
+        throw cause;
+      }
+    },
+  };
 };
