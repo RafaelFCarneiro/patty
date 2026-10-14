@@ -20,17 +20,17 @@ export type TokenExpiry = z.infer<typeof TokenExpiry>;
 /** What the token form preselects. */
 export const DEFAULT_TOKEN_EXPIRY = TokenExpiry.enum['90'];
 export const TOKEN_EXPIRY_DAYS: Readonly<Record<TokenExpiry, number>> = {
-  '30': 30,
-  '90': 90,
-  '365': 365,
+  [TokenExpiry.enum['30']]: 30,
+  [TokenExpiry.enum['90']]: 90,
+  [TokenExpiry.enum['365']]: 365,
 };
 
 /** The two access levels the token form offers; `write` includes `read`. */
 export const TokenAccess = z.enum(['read', 'write']);
 export type TokenAccess = z.infer<typeof TokenAccess>;
 export const TOKEN_ACCESS_SCOPES: Readonly<Record<TokenAccess, readonly Scope[]>> = {
-  read: [READ_SCOPE],
-  write: [READ_SCOPE, WRITE_SCOPE],
+  [TokenAccess.enum.read]: [READ_SCOPE],
+  [TokenAccess.enum.write]: [READ_SCOPE, WRITE_SCOPE],
 };
 
 /** What minted an access token: a person at the token page (`pat`, ADR-033) or the stdio sign-in flow (`stdio`,
