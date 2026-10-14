@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_SCOPES, AuthMode, AUTH_MESSAGES, MCP_PRM_PATH, PRM_WELL_KNOWN_PATH } from '../../../src/models/auth.js';
+import { MCP_PRM_PATH, PRM_WELL_KNOWN_PATH } from '../../../src/models/auth/bearer.js';
+import { AUTH_MESSAGES } from '../../../src/models/auth/message.js';
+import { AuthMode } from '../../../src/models/auth/mode.js';
+import { ALL_SCOPES } from '../../../src/models/auth/scope.js';
 import { claimOwner, LOOPBACK_HOST, LOOPBACK_ORIGIN, useAuthApp } from './helpers.js';
 
 const createApp = useAuthApp();

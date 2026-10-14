@@ -1,22 +1,14 @@
 import { z } from 'zod';
+import { type ClientInfo, SignInDuration } from '../../models/auth/grant.js';
+import { CONNECT_CODE_PARAM, DEFAULT_LANDING_PATH, isUiPath } from '../../models/auth/origin.js';
+import { PASSWORD_MAX_LENGTH, PasswordSchema, UsernameSchema, normalizeUsername } from '../../models/auth/password.js';
 import {
   CLIENT_NAME_MAX_LENGTH,
   CLIENT_VERSION_MAX_LENGTH,
-  CONNECT_CODE_PARAM,
-  DEFAULT_LANDING_PATH,
-  SignInDuration,
   UNKNOWN_CLIENT_NAME,
   UNKNOWN_CLIENT_VERSION,
-  type ClientInfo,
-  normalizeUsername,
-  PASSWORD_MAX_LENGTH,
-  PasswordSchema,
-  isUiPath,
-  TOKEN_NAME_MAX_LENGTH,
-  TokenAccess,
-  TokenExpiry,
-  UsernameSchema,
-} from '../../models/auth.js';
+} from '../../models/auth/signIn.js';
+import { TOKEN_NAME_MAX_LENGTH, TokenAccess, TokenExpiry } from '../../models/auth/token.js';
 
 // Login accepts whatever was typed (an unknown name must fail like a wrong password, not like bad
 // input); only the length is bounded so a body cannot be used to make argon2 chew on megabytes.

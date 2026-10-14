@@ -1,4 +1,5 @@
-import type { Principal, Scope } from '../../models/auth.js';
+import type { Principal } from '../../models/auth/principal.js';
+import type { Scope } from '../../models/auth/scope.js';
 
 declare module 'fastify' {
   interface FastifyRequest {

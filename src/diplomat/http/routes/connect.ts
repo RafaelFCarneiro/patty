@@ -1,7 +1,9 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { approveGrant, denyGrant, findConsent } from '../../../controllers/grants.js';
-import { AUTH_MESSAGES, authErrors, CONNECT_CODE_PARAM } from '../../../models/auth.js';
+import { authErrors } from '../../../models/auth/errors.js';
+import { AUTH_MESSAGES } from '../../../models/auth/message.js';
+import { CONNECT_CODE_PARAM } from '../../../models/auth/origin.js';
 import { validation } from '../../../models/error.js';
 import { ConnectDecision, ConnectFormSchema, ConnectQuerySchema } from '../../../wire/in/auth.js';
 import { CONNECT_PATH } from '../authPaths.js';

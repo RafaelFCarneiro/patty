@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { hash, verify } from '@node-rs/argon2';
 import type { AuthSecrets } from '../../controllers/deps.js';
-import { TOKEN_PREFIX, USER_CODE_LENGTH } from '../../models/auth.js';
+import { USER_CODE_LENGTH } from '../../models/auth/grant.js';
+import { TOKEN_PREFIX } from '../../models/auth/token.js';
 
 // OWASP Password Storage Cheat Sheet, first-choice argon2id parameters. `@node-rs/argon2` defaults to
 // argon2id when no algorithm is given (its `Algorithm` enum is not available at runtime to import).

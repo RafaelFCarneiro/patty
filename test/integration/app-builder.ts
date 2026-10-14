@@ -34,7 +34,7 @@ import {
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
   USER_ENTITY_TAG,
-} from '../../src/models/auth.js';
+} from '../../src/models/auth/entity.js';
 import { ACCOUNT_ENTITY_TAG } from '../../src/models/account.js';
 import { BILL_ENTITY_TAG } from '../../src/models/bill.js';
 import { BUDGET_ENTITY_TAG } from '../../src/models/budget.js';
@@ -49,11 +49,11 @@ import { TAG_ENTITY_TAG } from '../../src/models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from '../../src/models/transaction.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../../src/models/transactionTag.js';
 import { httpOrigin } from '../../src/common/net.js';
-import { prepareAuth, type AuthConfig } from '../../src/authRuntime.js';
+import { prepareAuth, type AuthConfig } from '../../src/composition/auth.js';
 import type { HttpAuth } from '../../src/diplomat/http/context.js';
 import { DISABLED_AUTH } from '../../src/diplomat/http/context.js';
-import { buildHttpApp, registerHttpApp } from '../../src/server.js';
-import { AuthMode } from '../../src/models/auth.js';
+import { buildHttpApp, registerHttpApp } from '../../src/composition/http.js';
+import { AuthMode } from '../../src/models/auth/mode.js';
 import type { Db } from '../../src/diplomat/db/driver.js';
 import type { ApplierRegistry } from '../../src/diplomat/db/effects.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
@@ -85,6 +85,12 @@ export const REQUIRED_AUTH: AuthConfig = {
   PORT: 51737,
   MCP_TRANSPORT: 'http',
   FINTRACK_HTTP: true,
+  // Only a stdio sign-in's temporary page reads these; the app builder never serves one.
+  DB_PATH: '/nonexistent/fintrack.db',
+  TRUST_PROXY: undefined,
+  FINTRACK_LOCALE: undefined,
+  FIAT_RATE_STALE_HOURS: 24,
+  CRYPTO_RATE_STALE_HOURS: 1,
 };
 
 export const buildApp = async (opts?: {

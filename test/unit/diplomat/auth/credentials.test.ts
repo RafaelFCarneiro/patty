@@ -10,8 +10,8 @@ import {
   randomUserCode,
   verifyPassword,
 } from '../../../../src/diplomat/auth/credentials.js';
-import { normalizeSetupCode } from '../../../../src/logic/auth.js';
-import { TOKEN_PREFIX } from '../../../../src/models/auth.js';
+import { normalizeSetupCode } from '../../../../src/logic/auth/owner.js';
+import { TOKEN_PREFIX } from '../../../../src/models/auth/token.js';
 
 describe('passwords', () => {
   it('hashes with argon2id at the OWASP first-choice parameters', async () => {

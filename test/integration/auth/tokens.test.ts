@@ -3,7 +3,10 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { AuthMode, MCP_PRM_PATH, OWNER_USER_ID, SESSION_TOUCH_INTERVAL_MS } from '../../../src/models/auth.js';
+import { MCP_PRM_PATH } from '../../../src/models/auth/bearer.js';
+import { AuthMode } from '../../../src/models/auth/mode.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
+import { SESSION_TOUCH_INTERVAL_MS } from '../../../src/models/auth/session.js';
 import {
   authDepsOf,
   bearer,

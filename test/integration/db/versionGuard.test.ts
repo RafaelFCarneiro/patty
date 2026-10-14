@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { closeDatabase, openDatabase, type Db } from '../../../src/diplomat/db/driver.js';
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
-import { DatabaseAheadError, assertDatabaseNotAhead } from '../../../src/diplomat/db/versionGuard.js';
-import { databaseAheadMessage } from '../../../src/models/database.js';
+import { checkDatabaseNotAhead } from '../../../src/diplomat/db/versionGuard.js';
+import { DatabaseAheadCode, databaseAheadMessage, databaseErrors } from '../../../src/models/database.js';
 
 const TEST_KEY = 'f'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -86,10 +86,10 @@ describe('the version guard (ADR-034 §7)', () => {
     const before = { counts: await rowCounts(db), file: fileFingerprint(), dir: readdirSync(tmpDir).sort() };
     const stale = olderBuild(1);
 
-    const refusal = await bootstrap(db, stale).catch((error: unknown) => error);
+    const refusal = (await bootstrap(db, stale))._unsafeUnwrapErr();
 
-    expect(refusal).toBeInstanceOf(DatabaseAheadError);
-    expect((refusal as Error).message).toBe(databaseAheadMessage(PACKAGE_VERSION));
+    expect(refusal).toEqual(databaseErrors.ahead(PACKAGE_VERSION));
+    expect(databaseAheadMessage(refusal.version)).toBe(databaseAheadMessage(PACKAGE_VERSION));
     await db.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`);
     expect(await rowCounts(db)).toEqual(before.counts);
     expect(await db.all(sql`SELECT 1 FROM currencies WHERE code = 'BTC'`)).toEqual([]); // not re-seeded
@@ -100,21 +100,21 @@ describe('the version guard (ADR-034 §7)', () => {
   it('refuses an older build several migrations behind just the same', async () => {
     const db = await open();
     await bootstrap(db);
-    await expect(bootstrap(db, olderBuild(5))).rejects.toBeInstanceOf(DatabaseAheadError);
+    expect((await bootstrap(db, olderBuild(5)))._unsafeUnwrapErr().code).toBe(DatabaseAheadCode.enum.database_ahead);
   });
 
   it('runs before the safety copy: no backup is made even though this build would have wanted one', async () => {
     const db = await open();
     await bootstrap(db);
-    await bootstrap(db, olderBuild(1)).catch(() => undefined);
+    await bootstrap(db, olderBuild(1));
     expect(readdirSync(tmpDir).filter((name) => name.includes('.bak'))).toEqual([]);
   });
 
   it('lets a database exactly at this build’s newest migration proceed', async () => {
     const db = await open();
     await bootstrap(db);
-    await expect(bootstrap(db)).resolves.toBeUndefined();
-    await expect(assertDatabaseNotAhead(db, REAL_MIGRATIONS_FOLDER)).resolves.toBeUndefined();
+    expect((await bootstrap(db)).isOk()).toBe(true);
+    expect((await checkDatabaseNotAhead(db, REAL_MIGRATIONS_FOLDER)).isOk()).toBe(true);
   });
 
   it('lets a database behind this build proceed — and migrates it', async () => {
@@ -130,8 +130,8 @@ describe('the version guard (ADR-034 §7)', () => {
 
   it('lets a brand-new database (no migrations table yet) proceed', async () => {
     const db = await open();
-    await expect(assertDatabaseNotAhead(db, REAL_MIGRATIONS_FOLDER)).resolves.toBeUndefined();
-    await expect(bootstrap(db)).resolves.toBeUndefined();
+    expect((await checkDatabaseNotAhead(db, REAL_MIGRATIONS_FOLDER)).isOk()).toBe(true);
+    expect((await bootstrap(db)).isOk()).toBe(true);
   });
 
   it('sees a database whose newest migration has a stamp this build has never heard of', async () => {
@@ -140,14 +140,15 @@ describe('the version guard (ADR-034 §7)', () => {
     await db.run(
       sql`INSERT INTO ${sql.identifier(MIGRATIONS_TABLE)} (hash, created_at) VALUES ('from-the-future', ${Date.now() + 10 * 365 * 24 * 3600 * 1000})`,
     );
-    await expect(bootstrap(db)).rejects.toThrow(databaseAheadMessage(PACKAGE_VERSION));
+    const refusal = (await bootstrap(db))._unsafeUnwrapErr();
+    expect(databaseAheadMessage(refusal.version)).toBe(databaseAheadMessage(PACKAGE_VERSION));
   });
 
   it('names no path and no key in what it says', async () => {
     const db = await open();
     await bootstrap(db);
-    const refusal = (await bootstrap(db, olderBuild(1)).catch((error: unknown) => error)) as Error;
-    expect(refusal.message).not.toContain(tmpDir);
-    expect(refusal.message).not.toContain(TEST_KEY);
+    const said = databaseAheadMessage((await bootstrap(db, olderBuild(1)))._unsafeUnwrapErr().version);
+    expect(said).not.toContain(tmpDir);
+    expect(said).not.toContain(TEST_KEY);
   });
 });

@@ -7,7 +7,7 @@ import * as wireInTransactions from '../../../wire/in/transactions.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { conflict409, idParam, notFound404, parse, send, validation422 } from '../respond.js';
-import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const TRANSACTIONS_TAG = 'Transactions';
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { authErrors, OWNER_PRINCIPAL, type Principal } from '../../models/auth.js';
+import { authErrors } from '../../models/auth/errors.js';
+import { OWNER_PRINCIPAL, type Principal } from '../../models/auth/principal.js';
 import type { AppError } from '../../common/errors.js';
 import { principalOf } from './authInfo.js';
 

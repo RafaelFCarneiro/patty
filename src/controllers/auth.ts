@@ -4,47 +4,48 @@ import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { AppError } from '../common/errors.js';
 import { guard, okOr } from '../common/result.js';
 import {
-  canLogin,
   claimedOwner,
-  evaluateSession,
+  claimRaceWinner,
   formatSetupCode,
   hasCredentials,
-  isLiveToken,
   isSetupCodeUsable,
   isUnclaimed,
-  newSession,
-  sessionPrincipal,
   normalizeSetupCode,
-  revokedToken,
+  planOwnerClaim,
   shouldIssueSetupCode,
   spentSetupCode,
-  touched,
-  withPasswordHash,
-} from '../logic/auth.js';
+} from '../logic/auth/owner.js';
+import { canLogin, withPasswordHash } from '../logic/auth/password.js';
+import { evaluateSession, newSession, sessionPrincipal, touched } from '../logic/auth/session.js';
+import { isLiveToken, revokedToken } from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
-  authErrors,
-  OWNER_USER_ID,
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
-  SETUP_CODE_ID,
   USER_ENTITY_TAG,
-  type AuthMode,
+} from '../models/auth/entity.js';
+import { authErrors } from '../models/auth/errors.js';
+import { type AuthMode } from '../models/auth/mode.js';
+import {
   type ClaimedOwner,
   type ClaimedUserEntity,
+  type ClaimPlan,
+  type IssuedSetupCode,
+  OWNER_USER_ID,
+  SETUP_CODE_ID,
+  SETUP_CODE_TTL_MS,
+  type UserEntity,
+} from '../models/auth/owner.js';
+import {
   type ClaimOwnerInput,
   type ClaimOwnerLocallyInput,
-  type IssuedSetupCode,
   type LoginInput,
   type PasswordReset,
-  type Principal,
   type ResetPasswordInput,
-  type SessionEntity,
-  type StartedSession,
-  type UserEntity,
-  SETUP_CODE_TTL_MS,
-} from '../models/auth.js';
+} from '../models/auth/password.js';
+import { type Principal } from '../models/auth/principal.js';
+import { type SessionEntity, type StartedSession } from '../models/auth/session.js';
 import type { AuthDeps } from './deps.js';
 
 const removeSession = (session: SessionEntity): Persistable =>
@@ -249,6 +250,13 @@ export const claimedOwnerOf = async (deps: AuthDeps): Promise<ClaimedOwner | nul
   const owner = await deps.users.findById(OWNER_USER_ID);
   return owner !== null && hasCredentials(owner) ? { username: owner.username } : null;
 };
+
+/** Read-only: what a terminal claim should do now — claim, or leave alone an owner who already holds the login. */
+export const ownerClaimPlan = async (deps: AuthDeps): Promise<ClaimPlan> => planOwnerClaim(await claimedOwnerOf(deps));
+
+/** Read-only, after a refused claim: the owner who won the race for it, if that is why it was refused. */
+export const claimRaceWinnerOf = async (deps: AuthDeps, refusal: AppError): Promise<ClaimedOwner | null> =>
+  claimRaceWinner(refusal, await claimedOwnerOf(deps));
 
 /** Read-only: does the owner still need claiming? Drives the setup-vs-login redirect. */
 export const ownerNeedsSetup = async (deps: AuthDeps): Promise<boolean> =>

@@ -1,11 +1,17 @@
 import { sql } from 'drizzle-orm';
+import { okAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
-import { AUTH_HELP, CLI_MESSAGES, parseClaimArgs, runAuthCommand, type CliIo } from '../../../src/authCli.js';
-import { AUTH_POSITIONALS, EXIT_FAILURE, EXIT_OK, SETUP_POSITIONALS } from '../../../src/common/cli.js';
-import { bindAuthRunEffects } from '../../../src/authRuntime.js';
+import { AUTH_HELP, parseClaimArgs, runAuthCommand } from '../../../src/diplomat/cli/commands/auth.js';
+import type { CliIo } from '../../../src/diplomat/cli/io.js';
+import { CLI_MESSAGES } from '../../../src/diplomat/cli/messages.js';
+import { EXIT_FAILURE, EXIT_OK } from '../../../src/diplomat/cli/io.js';
+import { AUTH_POSITIONALS, SETUP_POSITIONALS } from '../../../src/wire/in/cli.js';
+import { bindAuthRunEffects } from '../../../src/composition/auth.js';
+import { createSignInInterpreter } from '../../../src/composition/signIn/interpreter.js';
 import { PROMPT_MESSAGES } from '../../../src/diplomat/cli/prompt.js';
 import { accessTokens, sessions, users } from '../../../src/diplomat/db/schema.js';
-import { DEFAULT_PROFILE, OWNER_USER_ID, UserRole } from '../../../src/models/auth.js';
+import { OWNER_USER_ID, UserRole } from '../../../src/models/auth/owner.js';
+import { DEFAULT_PROFILE } from '../../../src/models/auth/signIn.js';
 import type { AppContext } from '../app-builder.js';
 import {
   authDepsOf,
@@ -34,15 +40,22 @@ const harness = (ctx: AppContext, input: { stdin?: string; terminal?: boolean } 
   const out: string[] = [];
   const err: string[] = [];
   const io: CliIo = {
-    openShell: async () => ({
-      deps: authDepsOf(ctx),
-      run: bindAuthRunEffects(ctx.runEffects),
-      close: () => undefined,
-      authRequired: true,
-      defaultProfile: DEFAULT_PROFILE,
-      store: () => memoryStore(),
-      startServer: async () => ({ origin: LOOPBACK_ORIGIN, close: async () => undefined }),
-    }),
+    openShell: () =>
+      okAsync({
+        deps: authDepsOf(ctx),
+        run: bindAuthRunEffects(ctx.runEffects),
+        close: () => undefined,
+        authRequired: true,
+        defaultProfile: DEFAULT_PROFILE,
+        signIn: () =>
+          createSignInInterpreter({
+            deps: authDepsOf(ctx),
+            run: bindAuthRunEffects(ctx.runEffects),
+            store: memoryStore(),
+            origin: () => null,
+            startPage: async () => ({ origin: LOOPBACK_ORIGIN, close: async () => undefined }),
+          }),
+      }),
     openTerminal: () => null,
     readPasswordFromStdin: async () => input.stdin ?? '',
     out: (line) => out.push(line),
@@ -50,6 +63,7 @@ const harness = (ctx: AppContext, input: { stdin?: string; terminal?: boolean } 
     version: '0.0.0-test',
     wait: async () => undefined,
     interruptSignal: () => new AbortController().signal,
+    clients: { find: () => undefined },
   };
   return { io, out, err, run: (...args) => runAuthCommand(args, io) };
 };

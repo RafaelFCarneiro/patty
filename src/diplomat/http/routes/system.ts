@@ -3,7 +3,7 @@ import { HealthOut, StatusOut } from '../../../wire/out/status.js';
 import type { HttpContext } from '../context.js';
 import { HEALTH_PATH } from '../authPaths.js';
 import { okResponse, type RouteDefinition } from '../openapi.js';
-import { READ_SCOPE } from '../../../models/auth.js';
+import { READ_SCOPE } from '../../../models/auth/scope.js';
 
 const SYSTEM_TAG = 'System';
 

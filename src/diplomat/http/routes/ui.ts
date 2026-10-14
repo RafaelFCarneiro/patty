@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
-import { AUTH_ENTITY_TAGS } from '../../../models/auth.js';
+import { AUTH_ENTITY_TAGS } from '../../../models/auth/entity.js';
 import { LOGOUT_PATH, TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../authPaths.js';
 import { CACHE_CONTROL_NO_CACHE } from '../respond.js';
 import { HTML_CONTENT_TYPE, readCached, UI_ROOT } from '../uiFiles.js';

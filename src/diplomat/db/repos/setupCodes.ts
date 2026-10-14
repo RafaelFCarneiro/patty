@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import * as setupCodeAdapters from '../../../adapters/setupCodes.js';
-import { SETUP_CODE_ID, type SetupCodeEntity } from '../../../models/auth.js';
+import { SETUP_CODE_ID, type SetupCodeEntity } from '../../../models/auth/owner.js';
 import type { Db } from '../driver.js';
 import { setupCodes } from '../schema.js';
 import { VersionConflict, versionedTableApplier, type EntityApplier } from '../effects.js';

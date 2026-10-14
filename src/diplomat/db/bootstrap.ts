@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { migrate } from 'drizzle-orm/libsql/migrator';
+import { ResultAsync } from 'neverthrow';
 import * as R from 'remeda';
+import type { DatabaseAhead } from '../../models/database.js';
 import { DashboardSource } from '../../models/dashboard.js';
 import { ClassificationMethod } from '../../models/transaction.js';
 import { normalizeMerchant } from '../../logic/merchant.js';
@@ -9,7 +11,7 @@ import type { Db } from './driver.js';
 import { HTML_FILE_EXTENSION, listDefaultDashboardFiles } from './repos/dashboards.js';
 import { categories, currencies, dashboards, merchantCategory, merchants } from './schema.js';
 import { migrateWithSafetyCopy } from './safetyCopy.js';
-import { assertDatabaseNotAhead } from './versionGuard.js';
+import { checkDatabaseNotAhead } from './versionGuard.js';
 import { CURRENCIES } from './seed/currencies.js';
 import { CATEGORIES } from './seed/categories.js';
 import { DEFAULT_MERCHANT_RULES } from './seed/merchantRules.js';
@@ -104,12 +106,17 @@ const seedMerchantRules = async (db: Db): Promise<void> => {
 /** Idempotent: refuses a database a newer build has migrated, then applies pending migrations (after a safety copy,
  *  if one rewrites existing data) and upserts seed data. Safe on every boot. The guard comes first — before the
  *  copy, the migrations and the seeding — so an older build writes nothing to a database it does not understand. */
-export const bootstrap = async (db: Db, migrationsFolder = DEFAULT_MIGRATIONS_FOLDER): Promise<void> => {
-  await assertDatabaseNotAhead(db, migrationsFolder);
-  await migrateWithSafetyCopy(db, migrationsFolder, () => migrate(db, { migrationsFolder }));
-  // A newer build may have migrated between the first check and now (both starting at once): look again right before
-  // the first seed write, so an older build never seeds into a schema it does not know.
-  await assertDatabaseNotAhead(db, migrationsFolder);
+export const bootstrap = (db: Db, migrationsFolder = DEFAULT_MIGRATIONS_FOLDER): ResultAsync<void, DatabaseAhead> =>
+  checkDatabaseNotAhead(db, migrationsFolder)
+    .andThen(() =>
+      ResultAsync.fromSafePromise(migrateWithSafetyCopy(db, migrationsFolder, () => migrate(db, { migrationsFolder }))),
+    )
+    // A newer build may have migrated between the first check and now (both starting at once): look again right before
+    // the first seed write, so an older build never seeds into a schema it does not know.
+    .andThen(() => checkDatabaseNotAhead(db, migrationsFolder))
+    .andThen(() => ResultAsync.fromSafePromise(seed(db)));
+
+const seed = async (db: Db): Promise<void> => {
   await seedCurrencies(db);
   await seedCategories(db);
   await seedMerchantRules(db);

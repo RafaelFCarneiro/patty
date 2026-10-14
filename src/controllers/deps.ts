@@ -2,6 +2,9 @@ import type { Result, ResultAsync } from 'neverthrow';
 import type { AppError } from '../common/errors.js';
 import type { StalenessThresholds } from '../logic/currencyRate.js';
 import type { FlowOutcome } from '@rfc0/effect-runner';
+import type { Presentation, SignInConfig, SignInObservation, SignInState } from '../models/auth/signInFlow.js';
+import type { ClientConfigFailure } from '../models/clientConfig.js';
+import type { KeychainFailure } from '../models/auth/signIn.js';
 import type { Locale } from '../models/locale.js';
 import type { AccountsRepo } from '../diplomat/db/repos/accounts.js';
 import type { BillsRepo } from '../diplomat/db/repos/bills.js';
@@ -74,17 +77,65 @@ export type AuthSecrets = {
 
 /** Where a saved stdio sign-in lives between runs — the OS keychain in production (ADR-034 §2). Keychain trouble
  *  A refused write is reported by returning `false`, after which the sign-in lasts only as long as the process; an
- *  unreadable store is `KeychainUnavailableError` from `load`, which each caller decides how to treat (the stdio
+ *  unreadable store is a `KeychainFailure` from `load`, which each caller decides how to treat (the stdio
  *  session carries on without a saved sign-in, `logout` refuses to claim a sign-out it could not check). */
 export type SignInStore = {
-  /** `null` = nothing saved. Throws `KeychainUnavailableError` when the keychain cannot be read at all. */
-  load: () => Promise<string | null>;
+  /** `null` = nothing saved; an error when the keychain cannot be read at all (as opposed to holding nothing). */
+  load: () => ResultAsync<string | null, KeychainFailure>;
   save: (token: string) => Promise<boolean>;
   clear: () => Promise<void>;
 };
 
 /** Where the consent page is served while a sign-in waits: a temporary server this process started on its own. */
 export type SignInServer = { origin: string; close: () => Promise<void> };
+
+/** What writing a client's configuration has to tell the person — never printed by the adapter itself. */
+export type ClientSetupReport = {
+  /** Printed first, on stderr: something was off in the file and has been replaced. */
+  warnings: readonly string[];
+  /** Printed after, on stdout, in order: what was written and what to do next. */
+  lines: readonly string[];
+};
+
+/** One MCP client whose configuration file `setup` knows how to write. */
+export type ClientConfig = {
+  label: string;
+  /** Writes the entry that runs FinTrack as `profile` for this client (or, for one that cannot be written, describes
+   *  how to), and reports — or says why a configuration file could not be read or written. */
+  run: (profile: string) => Result<ClientSetupReport, ClientConfigFailure>;
+};
+
+/** The clients `setup` can configure — the config files of Claude Code, Claude Desktop, VS Code…, behind one lookup. */
+export type ClientConfigs = {
+  /** The client named `tool` (trimmed, case-insensitive), or `undefined` for a name nothing answers to. */
+  find: (tool: string) => ClientConfig | undefined;
+};
+
+/** What the edge supplies each time it feeds the sign-in protocol: where facts for the person go, and how to wait. */
+export type SignInHooks = {
+  present: (presentation: Presentation) => void;
+  /** Resolves after `ms`, or sooner if the edge has reason to look again; an edge that paces itself returns now. */
+  wait: (ms: number) => Promise<void>;
+  /** The state after each step, so an edge that loses the drive to a throw still knows how far it got. */
+  progress: (state: SignInState) => void;
+};
+
+/**
+ * The imperative shell's capability to run the sign-in protocol (`logic/auth/signInFlow.ts` decides, this executes).
+ * `drive` feeds one observation and runs the effects it leads to — each answer fed straight back — until nothing is
+ * left to do, then returns the state. Not a controller (it executes effects, which controllers never do), and built at
+ * the composition root (`src/composition/signIn/interpreter.ts`) like `RunEffects`, so no edge imports another.
+ */
+export type SignInInterpreter = {
+  drive: (
+    state: SignInState,
+    observation: SignInObservation,
+    config: SignInConfig,
+    hooks: SignInHooks,
+  ) => Promise<SignInState>;
+  /** Close the temporary page, if one is open. Idempotent; for an edge that ends without the protocol finishing. */
+  release: () => Promise<void>;
+};
 
 /** Identity dependencies (ADR-033): kept apart from `Deps` because auth is infrastructure the domain
  *  controllers never see — only `controllers/auth.ts` and the HTTP edge's auth hook use these. */

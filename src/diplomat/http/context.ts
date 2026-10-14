@@ -1,4 +1,4 @@
-import { AuthMode } from '../../models/auth.js';
+import { AuthMode } from '../../models/auth/mode.js';
 import type { AuthDeps, Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
 
 /** Shared HTTP edge context (ADR-025) — built once in `routes.ts`, passed to every route module

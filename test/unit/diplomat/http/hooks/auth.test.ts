@@ -6,19 +6,14 @@ import { DISABLED_AUTH, type HttpAuth } from '../../../../../src/diplomat/http/c
 import { SESSION_COOKIE_NAME } from '../../../../../src/diplomat/http/cookies.js';
 import { registerAuthHook } from '../../../../../src/diplomat/http/hooks/auth.js';
 import { conflict } from '../../../../../src/models/error.js';
-import {
-  ALL_SCOPES,
-  AUTH_MESSAGES,
-  AuthMode,
-  OWNER_PRINCIPAL,
-  OWNER_USER_ID,
-  type Principal,
-  PrincipalVia,
-  UserRole,
-} from '../../../../../src/models/auth.js';
+import { AUTH_MESSAGES } from '../../../../../src/models/auth/message.js';
+import { AuthMode } from '../../../../../src/models/auth/mode.js';
+import { OWNER_USER_ID, UserRole } from '../../../../../src/models/auth/owner.js';
+import { OWNER_PRINCIPAL, type Principal, PrincipalVia } from '../../../../../src/models/auth/principal.js';
+import { ALL_SCOPES } from '../../../../../src/models/auth/scope.js';
 
 // The hook only translates: headers/route/cookie in, 401 / 403 / redirect / principal out. The decisions are
-// unit-tested in test/unit/logic/auth.test.ts; the whole stack is covered by test/integration/auth/*.
+// unit-tested in test/unit/logic/auth/*; the whole stack is covered by test/integration/auth/*.
 const apps: FastifyInstance[] = [];
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));

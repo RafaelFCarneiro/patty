@@ -7,7 +7,7 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { OpenAPIObject } from 'openapi3-ts/oas30';
 import { z } from 'zod';
-import type { Scope } from '../../models/auth.js';
+import type { Scope } from '../../models/auth/scope.js';
 
 /**
  * OpenAPI machinery shared by every REST route. routes.ts builds ONE array of route

@@ -1,5 +1,6 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import { PAT_CLIENT_ID_PREFIX, PrincipalSchema, type Principal } from '../../models/auth.js';
+import { type Principal, PrincipalSchema } from '../../models/auth/principal.js';
+import { PAT_CLIENT_ID_PREFIX } from '../../models/auth/token.js';
 
 /**
  * The SDK's `AuthInfo` for a request's principal, handed to the transport as `req.raw.auth` and echoed back to

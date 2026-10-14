@@ -7,10 +7,12 @@ import {
   claimedOwnerOf,
   claimOwner,
   claimOwnerLocally,
+  claimRaceWinnerOf,
   findResetTarget,
   issueSetupCode,
   login,
   logout,
+  ownerClaimPlan,
   ownerNeedsSetup,
   pruneExpiredSessions,
   resetPassword,
@@ -18,25 +20,28 @@ import {
 import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
 import {
   ACCESS_TOKEN_ENTITY_TAG,
-  ALL_SCOPES,
-  AuthMode,
-  authErrors,
-  PrincipalVia,
-  OWNER_USER_ID,
   SESSION_ENTITY_TAG,
   SETUP_CODE_ENTITY_TAG,
-  SETUP_CODE_ID,
   USER_ENTITY_TAG,
-  UserRole,
-  AccessTokenKind,
-  type AccessTokenEntity,
-  type SessionEntity,
+} from '../../../src/models/auth/entity.js';
+import { authErrors } from '../../../src/models/auth/errors.js';
+import { AuthMode } from '../../../src/models/auth/mode.js';
+import {
+  OWNER_USER_ID,
+  SETUP_CODE_ID,
+  SETUP_CODE_TTL_MS,
   type SetupCodeEntity,
   type UserEntity,
+  UserRole,
+} from '../../../src/models/auth/owner.js';
+import { PrincipalVia } from '../../../src/models/auth/principal.js';
+import { ALL_SCOPES } from '../../../src/models/auth/scope.js';
+import {
   SESSION_IDLE_TTL_MS,
   SESSION_TOUCH_INTERVAL_MS,
-  SETUP_CODE_TTL_MS,
-} from '../../../src/models/auth.js';
+  type SessionEntity,
+} from '../../../src/models/auth/session.js';
+import { type AccessTokenEntity, AccessTokenKind } from '../../../src/models/auth/token.js';
 
 const NOW = new Date('2026-10-07T12:00:00.000Z');
 const PASSWORD = 'correct horse battery staple';
@@ -574,5 +579,24 @@ describe('claimedOwnerOf', () => {
     expect(await claimedOwnerOf(depsFor({ users: [unclaimedOwner()] }))).toBeNull();
     expect(await claimedOwnerOf(depsFor())).toBeNull();
     expect(await claimedOwnerOf(depsFor({ users: [claimedOwner()] }))).toEqual({ username: 'rafael' });
+  });
+});
+
+describe('ownerClaimPlan', () => {
+  it('claims while nobody holds the login, and skips an owner who already does', async () => {
+    expect(await ownerClaimPlan(depsFor({ users: [unclaimedOwner()] }))).toEqual({ kind: 'claim' });
+    expect(await ownerClaimPlan(depsFor({ users: [claimedOwner()] }))).toEqual({ kind: 'skip', username: 'rafael' });
+  });
+});
+
+describe('claimRaceWinnerOf', () => {
+  it('names the owner who won the race when the claim was refused as already taken', async () => {
+    const deps = depsFor({ users: [claimedOwner()] });
+    expect(await claimRaceWinnerOf(deps, authErrors.setupUnavailable)).toEqual({ username: 'rafael' });
+  });
+
+  it('names nobody for any other refusal', async () => {
+    const deps = depsFor({ users: [claimedOwner()] });
+    expect(await claimRaceWinnerOf(deps, authErrors.invalidSetupCode)).toBeNull();
   });
 });

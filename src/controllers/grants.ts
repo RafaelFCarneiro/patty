@@ -10,36 +10,33 @@ import {
   durationAllowedFor,
   formatUserCode,
   grantRequestOf,
-  isActiveUser,
   isAnswerable,
   newGrant,
   newStdioSignIn,
   normalizeUserCode,
-  redeemedGrant,
   redeemPlan,
+  redeemedGrant,
   supersededGrants,
-  tokenDisplayPrefix,
-  tokenPrincipal,
-} from '../logic/auth.js';
+} from '../logic/auth/grant.js';
+import { isActiveUser } from '../logic/auth/owner.js';
+import { tokenDisplayPrefix, tokenPrincipal } from '../logic/auth/token.js';
 import * as persistence from '../logic/persistence.js';
+import { ACCESS_TOKEN_ENTITY_TAG, CLIENT_GRANT_ENTITY_TAG } from '../models/auth/entity.js';
+import { authErrors } from '../models/auth/errors.js';
 import {
-  ACCESS_TOKEN_ENTITY_TAG,
-  authErrors,
-  CLIENT_GRANT_ENTITY_TAG,
-  PrincipalVia,
-  RedeemKind,
-  RedeemPlanKind,
-  TOKEN_ACCESS_SCOPES,
-  USER_CODE_ATTEMPTS,
   type ApproveGrantInput,
   type ClientGrantEntity,
   type GrantChoice,
   type GrantRequest,
-  type Principal,
+  RedeemKind,
+  RedeemPlanKind,
   type RedeemResult,
-  type StartedGrant,
   type StartGrantInput,
-} from '../models/auth.js';
+  type StartedGrant,
+  USER_CODE_ATTEMPTS,
+} from '../models/auth/grant.js';
+import { type Principal, PrincipalVia } from '../models/auth/principal.js';
+import { TOKEN_ACCESS_SCOPES } from '../models/auth/token.js';
 import { conflict } from '../models/error.js';
 import type { AuthDeps } from './deps.js';
 

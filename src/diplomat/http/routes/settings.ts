@@ -5,7 +5,7 @@ import { SetBaseCurrencySchema } from '../../../wire/in/settings.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { parse, send, validation422 } from '../respond.js';
-import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const SETTINGS_TAG = 'Settings';
 

@@ -8,7 +8,7 @@ import { BulkSetExchangeRatesOut } from '../../../wire/out/currencyRates.js';
 import type { HttpContext } from '../context.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import { parse, send, validation422 } from '../respond.js';
-import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth.js';
+import { READ_SCOPE, WRITE_SCOPE } from '../../../models/auth/scope.js';
 
 const EXCHANGE_RATES_TAG = 'Exchange rates';
 

@@ -1,4 +1,13 @@
+import { z } from 'zod';
 import { NPX_COMMAND, PACKAGE_NAME } from './package.js';
+
+/** A database that a newer build has migrated: an expected failure, not an exception (ADR-034 §7). */
+export const DatabaseAheadCode = z.enum(['database_ahead']);
+export type DatabaseAhead = { code: typeof DatabaseAheadCode.enum.database_ahead; version: string };
+
+export const databaseErrors = {
+  ahead: (version: string): DatabaseAhead => ({ code: DatabaseAheadCode.enum.database_ahead, version }),
+};
 
 /** `npm ls -g` is the check for the stale global install that made an old build run in the first place. */
 export const STALE_GLOBAL_CHECK_COMMAND = `npm ls -g ${PACKAGE_NAME}`;

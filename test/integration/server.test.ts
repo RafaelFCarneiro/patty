@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { IPV4_WILDCARD_HOST, LOOPBACK_HOST } from '../../src/common/net.js';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../src/controllers/deps.js';
-import { startHttpSidecar, type HttpSidecar } from '../../src/server.js';
+import { startHttpSidecar, type HttpSidecar } from '../../src/composition/http.js';
 import { buildApp } from './app-builder.js';
 
 let tmpDir: string;

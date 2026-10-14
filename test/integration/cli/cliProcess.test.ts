@@ -5,15 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CLI_MESSAGES } from '../../../src/authCli.js';
+import { CLI_MESSAGES } from '../../../src/diplomat/cli/messages.js';
 import { verifyPassword } from '../../../src/diplomat/auth/credentials.js';
 import { closeDatabase, openDatabase } from '../../../src/diplomat/db/driver.js';
 import { PROMPT_MESSAGES } from '../../../src/diplomat/cli/prompt.js';
-import { STDIO_ENTRY } from '../../../src/setup.js';
+import { STDIO_ENTRY } from '../../../src/diplomat/clientConfig/merge.js';
 import { bootstrap } from '../../../src/diplomat/db/bootstrap.js';
 import { MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
-import { LOGIN_MESSAGES } from '../../../src/loginCli.js';
-import { USAGE } from '../../../src/cli.js';
+import { LOGIN_MESSAGES } from '../../../src/diplomat/cli/commands/login.js';
+import { USAGE } from '../../../src/diplomat/cli/commands.js';
 import { databaseAheadMessage } from '../../../src/models/database.js';
 
 /**

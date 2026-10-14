@@ -1,17 +1,21 @@
 import type { AddressInfo } from 'node:net';
 import { sql } from 'drizzle-orm';
-import { errAsync } from 'neverthrow';
-import { KeychainUnavailableError } from '../../../src/common/keychain.js';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
-import type { CliIo, Shell } from '../../../src/authCli.js';
-import { bindAuthRunEffects } from '../../../src/authRuntime.js';
-import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_OK } from '../../../src/common/cli.js';
+import type { CliIo, Shell } from '../../../src/diplomat/cli/io.js';
+import { bindAuthRunEffects } from '../../../src/composition/auth.js';
+import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_OK } from '../../../src/diplomat/cli/io.js';
 import { loadConfig } from '../../../src/config.js';
-import type { Terminal } from '../../../src/diplomat/cli/terminal.js';
-import { LOGIN_MESSAGES, offerSignIn, runLogin, runLogout } from '../../../src/loginCli.js';
+import type { PromptEnd, Terminal } from '../../../src/diplomat/cli/terminal.js';
+import { LOGIN_MESSAGES, offerSignIn, runLogin, runLogout } from '../../../src/diplomat/cli/commands/login.js';
+import { keychainFailures } from '../../../src/models/auth/signIn.js';
+import { promptEnded } from '../../../src/diplomat/cli/terminal.js';
 import { conflict } from '../../../src/models/error.js';
-import { AUTH_MESSAGES, GRANT_POLL_INTERVAL_MS, NPX_COMMAND } from '../../../src/models/auth.js';
-import { startSignInServer } from '../../../src/signInServer.js';
+import { AUTH_MESSAGES } from '../../../src/models/auth/message.js';
+import { GRANT_POLL_INTERVAL_MS } from '../../../src/models/auth/signIn.js';
+import { NPX_COMMAND } from '../../../src/models/package.js';
+import { createSignInInterpreter } from '../../../src/composition/signIn/interpreter.js';
+import { startSignInServer } from '../../../src/composition/signIn/server.js';
 import type { AppContext } from '../app-builder.js';
 import {
   authDepsOf,
@@ -50,18 +54,28 @@ const rig = async (setup: Setup = {}) => {
   };
   const interrupt = new AbortController();
   const server = { origin: LOOPBACK_ORIGIN, close: vi.fn(async () => undefined) };
-  const shell: Shell = {
+  const startServer = vi.fn(async () => server);
+  const shell: Shell & { startServer: typeof startServer } = {
     deps: authDepsOf(ctx),
     run: bindAuthRunEffects(ctx.runEffects),
     close: vi.fn(),
     authRequired: setup.authRequired ?? true,
     defaultProfile: setup.defaultProfile ?? 'default',
-    store: storeFor,
-    startServer: vi.fn(async () => server),
+    // The sign-in interpreter a real shell builds, over this rig's store and server; `run` is read at use, so a test
+    // can swap `shell.run` after the fact.
+    signIn: (profile) =>
+      createSignInInterpreter({
+        deps: shell.deps,
+        run: (flow) => shell.run(flow),
+        store: storeFor(profile),
+        origin: () => null,
+        startPage: startServer,
+      }),
+    startServer,
   };
   const waits: number[] = [];
   const io: CliIo = {
-    openShell: vi.fn(async () => shell),
+    openShell: vi.fn(() => okAsync(shell)),
     openTerminal: () => setup.terminal ?? null,
     readPasswordFromStdin: async () => '',
     out: (line) => out.push(line),
@@ -74,6 +88,7 @@ const rig = async (setup: Setup = {}) => {
       if (signal.aborted) return;
     },
     interruptSignal: () => interrupt.signal,
+    clients: { find: () => undefined },
   };
   return { ctx, cookie, out, err, io, shell, server, stores, storeFor, waits, interrupt };
 };
@@ -319,12 +334,15 @@ describe('fintrack logout', () => {
     const newer = 'ftk_saved-by-another-process';
     const load = store.load.bind(store);
     let loads = 0;
-    store.load = async () => {
-      loads += 1;
-      const token = await load();
-      if (loads === 1) await store.save(newer); // another `login` lands between our read and our delete
-      return token;
-    };
+    store.load = () =>
+      ResultAsync.fromSafePromise(
+        (async () => {
+          loads += 1;
+          const token = (await load())._unsafeUnwrap();
+          if (loads === 1) await store.save(newer); // another `login` lands between our read and our delete
+          return token;
+        })(),
+      );
 
     expect(await runLogout([], r.io)).toBe(EXIT_OK);
 
@@ -334,13 +352,12 @@ describe('fintrack logout', () => {
 
   it('fails — never "Not signed in" — when the keychain cannot be read, and revokes nothing', async () => {
     const r = await signedInRig();
-    r.storeFor('default').load = async () => {
-      throw new KeychainUnavailableError(new Error('locked'));
-    };
+    r.storeFor('default').load = () => errAsync(keychainFailures.unavailable(new Error('locked')));
 
-    await expect(runLogout([], r.io)).rejects.toBeInstanceOf(KeychainUnavailableError);
+    expect(await runLogout([], r.io)).toBe(EXIT_FAILURE);
 
     expect(r.out).toEqual([]);
+    expect(r.err).toEqual([`fintrack: ${LOGIN_MESSAGES.keychainUnavailable}`]);
     expect(await r.ctx.db.all(sql`SELECT revoked_at IS NOT NULL AS revoked FROM access_tokens`)).toEqual([
       { revoked: 0 },
     ]);
@@ -368,12 +385,11 @@ describe('setup’s optional sign-in step', () => {
     const asked: string[] = [];
     const closed = vi.fn();
     const terminal: Terminal = {
-      ask: async (question) => {
+      ask: (question) => {
         asked.push(question);
-        if (answer instanceof Error) throw answer;
-        return answer;
+        return answer instanceof Error ? errAsync(promptEnded(answer.message as PromptEnd)) : okAsync(answer);
       },
-      askSecret: async () => '',
+      askSecret: () => okAsync(''),
       tell: () => undefined,
       close: closed,
     };
@@ -411,6 +427,15 @@ describe('setup’s optional sign-in step', () => {
     expect(t.closed).toHaveBeenCalledOnce();
   });
 
+  it('ends the command on Ctrl-C at the question, touching nothing', async () => {
+    const t = terminalAnswering(new Error('interrupted'));
+    const r = await rig({ terminal: t.terminal });
+    await expect(offerSignIn(r.io, 'default')).resolves.toBe(EXIT_INTERRUPTED);
+    expect(r.out).toEqual([]);
+    expect(t.closed).toHaveBeenCalledOnce();
+    expect(r.io.openShell).not.toHaveBeenCalled();
+  });
+
   it('skips without a terminal, with a one-line hint naming the pinned command and the profile', async () => {
     const r = await rig({ terminal: null });
     await offerSignIn(r.io, 'work');
@@ -425,7 +450,7 @@ describe('setup’s optional sign-in step', () => {
       terminal: terminalAnswering('y').terminal,
       whenWaiting: async (code, ctx, cookie) => void (await answerConnect(ctx, cookie, code, { decision: 'deny' })),
     });
-    await expect(offerSignIn(r.io, 'default')).resolves.toBeUndefined();
+    await expect(offerSignIn(r.io, 'default')).resolves.toBe(EXIT_OK);
     expect(r.err).toContain(LOGIN_MESSAGES.denied);
   });
 });

@@ -4,18 +4,13 @@ import { describe, expect, it } from 'vitest';
 import type { AppError } from '../../../src/common/errors.js';
 import { authenticateToken, createToken, listTokens, revokeToken } from '../../../src/controllers/accessTokens.js';
 import type { AuthDeps, AuthSecrets } from '../../../src/controllers/deps.js';
-import {
-  ACCESS_TOKEN_ENTITY_TAG,
-  authErrors,
-  OWNER_USER_ID,
-  PrincipalVia,
-  Scope,
-  UserRole,
-  AccessTokenKind,
-  type AccessTokenEntity,
-  type UserEntity,
-  SESSION_TOUCH_INTERVAL_MS,
-} from '../../../src/models/auth.js';
+import { ACCESS_TOKEN_ENTITY_TAG } from '../../../src/models/auth/entity.js';
+import { authErrors } from '../../../src/models/auth/errors.js';
+import { OWNER_USER_ID, type UserEntity, UserRole } from '../../../src/models/auth/owner.js';
+import { PrincipalVia } from '../../../src/models/auth/principal.js';
+import { Scope } from '../../../src/models/auth/scope.js';
+import { SESSION_TOUCH_INTERVAL_MS } from '../../../src/models/auth/session.js';
+import { type AccessTokenEntity, AccessTokenKind } from '../../../src/models/auth/token.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 const READ = Scope.enum['fintrack:read'];

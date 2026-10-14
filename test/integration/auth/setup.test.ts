@@ -3,9 +3,11 @@ import { sql } from 'drizzle-orm';
 import { okAsync } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import { issueSetupCode } from '../../../src/controllers/auth.js';
-import { prepareAuth } from '../../../src/authRuntime.js';
-import { bindAuthRunEffects } from '../../../src/authRuntime.js';
-import { AuthMode, OWNER_USER_ID, TERMINAL_SETUP_HINT } from '../../../src/models/auth.js';
+import { prepareAuth } from '../../../src/composition/auth.js';
+import { bindAuthRunEffects } from '../../../src/composition/auth.js';
+import { TERMINAL_SETUP_HINT } from '../../../src/models/auth/message.js';
+import { AuthMode } from '../../../src/models/auth/mode.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 import { REQUIRED_AUTH } from '../app-builder.js';
 import {
   authDepsOf,
@@ -312,7 +314,7 @@ describe('prepareAuth — what the stdio channel signs in with (ADR-034)', () =>
       ctx.runEffects,
     );
     expect(prepared.stdio).not.toBeNull();
-    expect(prepared.stdio?.deps.secrets.hashSecret).toBeTypeOf('function');
+    expect(prepared.stdio?.signIn).toBeTypeOf('function');
     expect(prepared.auth.mode).toBe(AuthMode.enum.disabled); // nothing serves HTTP, so there are no sessions to guard
   });
 

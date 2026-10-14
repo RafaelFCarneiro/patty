@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_LANDING_PATH, normalizeUsername } from '../../../../src/models/auth.js';
+import { DEFAULT_LANDING_PATH } from '../../../../src/models/auth/origin.js';
+import { normalizeUsername } from '../../../../src/models/auth/password.js';
 import {
   CreateTokenFormSchema,
   LoginFormSchema,

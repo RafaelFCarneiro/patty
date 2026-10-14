@@ -2,7 +2,8 @@ import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 import { isLoopbackHost, LOOPBACK_HOST } from './common/net.js';
-import { AuthMode, DEFAULT_AUTH_MODE, DEFAULT_PROFILE, ProfileSchema } from './models/auth.js';
+import { AuthMode, DEFAULT_AUTH_MODE } from './models/auth/mode.js';
+import { DEFAULT_PROFILE, ProfileSchema } from './models/auth/signIn.js';
 import { Locale } from './models/locale.js';
 
 export const McpTransport = z.enum(['stdio', 'http']);

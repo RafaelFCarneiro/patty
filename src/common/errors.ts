@@ -1,4 +1,5 @@
-import { AUTH_MESSAGES, type AuthError } from '../models/auth.js';
+import { type AuthError } from '../models/auth/errors.js';
+import { AUTH_MESSAGES } from '../models/auth/message.js';
 import type { AccountError } from '../models/account.js';
 import type { BillError } from '../models/bill.js';
 import type { BudgetError } from '../models/budget.js';

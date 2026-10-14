@@ -1,12 +1,29 @@
+import { err, ok, ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
-import { EXIT_INTERRUPTED, PASSWORD_STDIN_FLAG } from '../../common/cli.js';
+import { PASSWORD_STDIN_FLAG } from '../../wire/in/cli.js';
 import { text } from 'node:stream/consumers';
+
+/** How a prompt ended without an answer: Ctrl-C, or the input closing (Ctrl-D). */
+export const PromptEnd = z.enum(['interrupted', 'cancelled']);
+export type PromptEnd = z.infer<typeof PromptEnd>;
+/** Why asking a person failed: the prompt ended before an answer came, or the answer is not valid. */
+export const PromptFailureCode = z.enum(['prompt_ended', 'invalid_answer']);
+export type PromptFailureCode = z.infer<typeof PromptFailureCode>;
+
+export type PromptEnded = { code: typeof PromptFailureCode.enum.prompt_ended; how: PromptEnd };
+export const promptEnded = (how: PromptEnd): PromptEnded => ({ code: PromptFailureCode.enum.prompt_ended, how });
+export type InvalidAnswer = { code: typeof PromptFailureCode.enum.invalid_answer; message: string };
+export const invalidAnswer = (message: string): InvalidAnswer => ({
+  code: PromptFailureCode.enum.invalid_answer,
+  message,
+});
 
 /** A person at a keyboard, apart from `node:readline` so `prompt.ts` is testable without a pseudo-terminal. */
 export type Terminal = {
-  ask: (question: string) => Promise<string>;
-  askSecret: (question: string) => Promise<string>;
+  ask: (question: string) => ResultAsync<string, PromptEnded>;
+  askSecret: (question: string) => ResultAsync<string, PromptEnded>;
   tell: (message: string) => void;
   close: () => void;
 };
@@ -26,9 +43,14 @@ export const printDiagnostic = (line: string): void => {
 
 export const isInteractive = (): boolean => process.stdin.isTTY === true;
 
-/** Prompts on stderr; a secret answer is swallowed by a muted stream. Ctrl-C exits; Ctrl-D rejects the question. */
+/**
+ * Prompts on stderr; a secret answer is swallowed by a muted stream. Ctrl-C ends the prompt as `interrupted`, Ctrl-D
+ * as `cancelled`; both are answers, not exceptions. Ctrl-C between prompts takes effect at the next prompt: a step
+ * already running (hashing, a claim) finishes — deliberately, so no write is cut in half.
+ */
 export const open = (): Terminal => {
   let muted = false;
+  let interrupted = false;
   const output = new Writable({
     write: (chunk: Buffer, encoding, callback) => {
       if (!muted) process.stderr.write(chunk, encoding);
@@ -36,27 +58,31 @@ export const open = (): Terminal => {
     },
   });
   const lines = createInterface({ input: process.stdin, output, terminal: true });
-  const closed = new Promise<never>((_resolve, reject) => {
-    lines.once('close', () => reject(new Error(PROMPT_ABORTED_MESSAGE)));
+  const ended = new Promise<PromptEnded>((resolve) => {
+    lines.once('close', () =>
+      resolve(promptEnded(interrupted ? PromptEnd.enum.interrupted : PromptEnd.enum.cancelled)),
+    );
   });
-  closed.catch(() => undefined);
   lines.once('SIGINT', () => {
+    interrupted = true;
     lines.close();
     process.stderr.write('\n');
-    process.exit(EXIT_INTERRUPTED);
   });
+  const answer = (pending: Promise<string>): ResultAsync<string, PromptEnded> =>
+    new ResultAsync(Promise.race([pending.then((line) => ok(line)), ended.then((end) => err(end))]));
 
   return {
-    ask: (question) => Promise.race([lines.question(question), closed]),
-    askSecret: async (question) => {
-      const answer = lines.question(question);
+    ask: (question) => answer(lines.question(question)),
+    askSecret: (question) => {
+      const pending = lines.question(question);
       muted = true;
-      try {
-        return await Promise.race([answer, closed]);
-      } finally {
-        muted = false;
-        process.stderr.write('\n');
-      }
+      const secret = answer(pending);
+      return new ResultAsync(
+        Promise.resolve(secret).finally(() => {
+          muted = false;
+          if (!interrupted) process.stderr.write('\n');
+        }),
+      );
     },
     tell: printDiagnostic,
     close: () => lines.close(),

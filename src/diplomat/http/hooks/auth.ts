@@ -1,23 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { ownerNeedsSetup } from '../../../controllers/auth.js';
-import {
-  acceptsBearer,
-  credentialOf,
-  csrfVerdict,
-  defaultScopeForMethod,
-  hasScope,
-  isLoopbackRequest,
-  preSessionCsrfVerdict,
-} from '../../../logic/auth.js';
-import {
-  AuthMode,
-  authErrors,
-  isUiPath,
-  OWNER_PRINCIPAL,
-  type CsrfRequest,
-  type Principal,
-} from '../../../models/auth.js';
+import { acceptsBearer, credentialOf } from '../../../logic/auth/bearer.js';
+import { csrfVerdict, isLoopbackRequest, preSessionCsrfVerdict } from '../../../logic/auth/origin.js';
+import { defaultScopeForMethod, hasScope } from '../../../logic/auth/scope.js';
+import { authErrors } from '../../../models/auth/errors.js';
+import { AuthMode } from '../../../models/auth/mode.js';
+import { type CsrfRequest, isUiPath } from '../../../models/auth/origin.js';
+import { OWNER_PRINCIPAL, type Principal } from '../../../models/auth/principal.js';
 import { safeNextPath } from '../../../wire/in/auth.js';
 import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from '../authPaths.js';
 import type { HttpAuth } from '../context.js';
@@ -26,8 +16,8 @@ import { resolveBearerPrincipal, resolvePrincipal, type Resolution } from '../se
 
 /**
  * The auth hook (ADR-033 §1, §2, §6): an inbound-edge request interceptor — read the headers, route pattern and
- * session cookie, ask `logic/auth.ts` and `controllers/auth.ts` for the decision, translate it to 401 / 403 /
- * redirect / `req.principal`. No policy lives here; `server.ts` registers it on the root instance BEFORE any
+ * session cookie, ask `logic/auth/` and `controllers/auth.ts` for the decision, translate it to 401 / 403 /
+ * redirect / `req.principal`. No policy lives here; `composition/http.ts` registers it on the root instance BEFORE any
  * route (ordering is wiring), so it also guards a request no route matches.
  *   - auth `disabled` (loopback)  → the owner — but only for a request that names a loopback `Host` (and
  *     `Origin`, if sent): anything else is a DNS-rebound or cross-site page and gets 403 on every route;

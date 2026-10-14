@@ -11,7 +11,7 @@ import { BUSY_TIMEOUT_MS, openDatabase, type Db } from '../../../src/diplomat/db
 import { DATA_REWRITING_MIGRATIONS } from '../../../src/diplomat/db/migrations.js';
 import { applyPendingMigrationsHolding, MIGRATIONS_TABLE } from '../../../src/diplomat/db/migrationBarrier.js';
 import { backupPath } from '../../../src/diplomat/db/safetyCopy.js';
-import { OWNER_USER_ID } from '../../../src/models/auth.js';
+import { OWNER_USER_ID } from '../../../src/models/auth/owner.js';
 
 const TEST_KEY = 'd'.repeat(64);
 const REAL_MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));

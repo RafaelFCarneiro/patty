@@ -1,17 +1,20 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { okAsync } from 'neverthrow';
 import Fastify, { type LightMyRequestResponse } from 'fastify';
 import { afterEach } from 'vitest';
 import type { AuthDeps } from '../../../src/controllers/deps.js';
 import type { SignInServer, SignInStore } from '../../../src/controllers/deps.js';
 import { loadConfig } from '../../../src/config.js';
-import { startSignInServer } from '../../../src/signInServer.js';
-import { bindAuthRunEffects } from '../../../src/authRuntime.js';
+import { createSignInInterpreter } from '../../../src/composition/signIn/interpreter.js';
+import { startSignInServer } from '../../../src/composition/signIn/server.js';
+import { bindAuthRunEffects } from '../../../src/composition/auth.js';
 import { createStdioSession, type StdioSession } from '../../../src/diplomat/mcp/stdioSession.js';
 import type { GateOutcome } from '../../../src/diplomat/mcp/gate.js';
-import type { SignInDuration, TokenAccess } from '../../../src/models/auth.js';
-import { AuthMode } from '../../../src/models/auth.js';
+import type { SignInDuration } from '../../../src/models/auth/grant.js';
+import type { TokenAccess } from '../../../src/models/auth/token.js';
+import { AuthMode } from '../../../src/models/auth/mode.js';
 import { SESSION_COOKIE_NAME } from '../../../src/diplomat/http/cookies.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 
@@ -171,9 +174,9 @@ export const memoryStore = (initial: string | null = null, options: { refuseSave
   return {
     saved: () => saved,
     calls,
-    load: async () => {
+    load: () => {
       calls.load += 1;
-      return saved;
+      return okAsync(saved);
     },
     save: async (token) => {
       calls.save += 1;
@@ -251,15 +254,18 @@ export const stdioSessionFor = (
 ): { session: StdioSession; store: MemoryStore } => {
   const store = options.store ?? memoryStore();
   const base = authDepsOf(ctx);
-  const session = createStdioSession({
+  const signIn = createSignInInterpreter({
     deps: { ...base, clock: options.clock ?? base.clock },
     run: options.run ?? bindAuthRunEffects(ctx.runEffects),
-    profile: 'default',
-    envToken: options.envToken,
     store,
     origin: () => (options.origin === undefined ? SIGN_IN_ORIGIN : options.origin),
+    startPage: options.temporaryServer,
+  });
+  const session = createStdioSession({
+    signIn,
+    profile: 'default',
+    envToken: options.envToken,
     clientInfo: () => options.clientInfo ?? { name: 'Claude Desktop', version: '1.0.0' },
-    temporaryServer: options.temporaryServer,
   });
   return { session, store };
 };

@@ -1,15 +1,17 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { formatAppError } from '../../common/errors.js';
-import { hasScope, scopeOfTool } from '../../logic/auth.js';
-import { authErrors, READ_SCOPE, type Scope } from '../../models/auth.js';
+import { hasScope, scopeOfTool } from '../../logic/auth/scope.js';
+import { authErrors } from '../../models/auth/errors.js';
+import { READ_SCOPE, type Scope } from '../../models/auth/scope.js';
 import { GateKind, type GateOutcome, type PrincipalGate } from './gate.js';
 import { jsonError, textError } from './respond.js';
 
 /**
  * Scope enforcement for MCP tools, resources and prompts (ADR-033 §3, ADR-034 §4). Every tool declares
- * `annotations.readOnlyHint`; its scope is derived from that one hint (`logic/auth.ts`'s `scopeOfTool`) and recorded
- * here, so there is a single source for both the HTTP edge's pre-check (`route.ts`) and the in-handler check below.
+ * `annotations.readOnlyHint`; its scope is derived from that one hint (`logic/auth/scope.ts`'s `scopeOfTool`) and
+ * recorded here, so there is a single source for both the HTTP edge's pre-check (`route.ts`) and the in-handler check
+ * below.
  * Resources and prompts only read, so they need `fintrack:read`.
  *
  * `guardScopes` wraps `server.registerTool`, `registerResource` and `registerPrompt`:

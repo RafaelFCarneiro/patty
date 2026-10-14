@@ -26,3 +26,6 @@ export const notFound = <E extends string>(entity: E, query: string, candidates:
 
 export const ambiguous = <E extends string>(entity: E, query: string, candidates: string[]) =>
   ({ code: `ambiguous_${entity}` as const, query, candidates }) as Ambiguous<E>;
+
+/** The words of whatever was thrown: an `Error`'s message, else the value as text. */
+export const reasonOf = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));

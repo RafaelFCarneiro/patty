@@ -1,6 +1,6 @@
 import { eq, lte } from 'drizzle-orm';
 import * as sessionAdapters from '../../../adapters/sessions.js';
-import type { SessionEntity } from '../../../models/auth.js';
+import type { SessionEntity } from '../../../models/auth/session.js';
 import type { Db } from '../driver.js';
 import { sessions } from '../schema.js';
 import { versionedTableApplier } from '../effects.js';

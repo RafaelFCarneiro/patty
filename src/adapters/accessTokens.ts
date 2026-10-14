@@ -1,5 +1,6 @@
 import * as persistence from '../logic/persistence.js';
-import { ACCESS_TOKEN_ENTITY_TAG, AccessTokenEntitySchema, type AccessTokenEntity } from '../models/auth.js';
+import { ACCESS_TOKEN_ENTITY_TAG } from '../models/auth/entity.js';
+import { type AccessTokenEntity, AccessTokenEntitySchema } from '../models/auth/token.js';
 import type { AccessTokenRow } from '../wire/db/accessTokens.js';
 
 export const dbToModel = (row: AccessTokenRow): AccessTokenEntity => AccessTokenEntitySchema.parse(row);

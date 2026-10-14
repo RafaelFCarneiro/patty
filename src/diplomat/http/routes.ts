@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import type { Deps, RunEffects, RunEffectsSequence } from '../../controllers/deps.js';
-import { AuthMode, READ_SCOPE } from '../../models/auth.js';
+import { AuthMode } from '../../models/auth/mode.js';
+import { READ_SCOPE } from '../../models/auth/scope.js';
 import { DISABLED_AUTH, type HttpAuth, type HttpContext } from './context.js';
 import { buildOpenApiDocument, mountRoutes, type RouteDefinition } from './openapi.js';
 import { CACHE_CONTROL_NO_CACHE } from './respond.js';
