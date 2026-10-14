@@ -7,7 +7,8 @@ import { boot } from './boot.js';
 import { httpOrigin, isPortInUse, LOOPBACK_HOST, portInUseReason } from '../common/net.js';
 import type { Tenancy } from '../controllers/deps.js';
 import { DISABLED_AUTH, type HttpAuth, type HttpContext } from '../diplomat/http/context.js';
-import type { UserChangeBus } from '../models/tenancy.js';
+import type { ChangeBus } from '@rfc0/effect-runner';
+import type { ChangeEvent } from '../models/tenancy.js';
 import type { DatabaseAhead } from '../models/database.js';
 import { AuthMode } from '../models/auth/mode.js';
 import { registerAuthHook } from '../diplomat/http/hooks/auth.js';
@@ -25,7 +26,7 @@ export const httpLoggerOptions = (enabled: boolean) =>
  *  dependencies and the change bus's `subscribe` — structurally what `Runtime` is, so a caller just passes it. */
 export type HttpSurface = Tenancy & {
   publicDeps: HttpContext['publicDeps'];
-  changeBus: Pick<UserChangeBus, 'subscribe'>;
+  changeBus: Pick<ChangeBus<ChangeEvent>, 'subscribe'>;
 };
 
 export type HttpOptions = {

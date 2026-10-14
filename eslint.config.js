@@ -62,6 +62,42 @@ export default tseslint.config(
     },
   },
   {
+    // The pure and orchestration layers are declarative (docs/code-quality.md, remeda table): no loops, no `let`, no
+    // `.push(`. The shell (`diplomat/**`) and the composition root (`composition/**`) do I/O and may be imperative.
+    // This restates the base `xs.filter(...)[0]` selector because a later `no-restricted-syntax` replaces, not merges.
+    files: ['src/logic/**/*.ts', 'src/controllers/**/*.ts', 'src/adapters/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "MemberExpression[computed=true][property.type='Literal'][property.value=0] > CallExpression[callee.property.name='filter']",
+          message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/code-quality.md remeda table).',
+        },
+        ...[
+          ['ForStatement', 'a `for` loop'],
+          ['ForOfStatement', 'a `for…of` loop'],
+          ['ForInStatement', 'a `for…in` loop'],
+          ['WhileStatement', 'a `while` loop'],
+          ['DoWhileStatement', 'a `do…while` loop'],
+        ].map(([selector, what]) => ({
+          selector,
+          message: `Avoid ${what} here — use R.map / R.filter / R.reduce / R.pipe or a pure helper (docs/code-quality.md remeda table).`,
+        })),
+        {
+          selector: 'VariableDeclaration[kind="let"]',
+          message:
+            'Avoid `let` here — use `const` and expressions (R.pipe, R.reduce, a scan; docs/code-quality.md remeda table).',
+        },
+        {
+          selector: 'CallExpression[callee.property.name="push"]',
+          message:
+            'Avoid `.push(` here — build the array as one expression (spread, R.map, R.flatMap; docs/code-quality.md remeda table).',
+        },
+      ],
+    },
+  },
+  {
     files: ['test/**/*.ts'],
     rules: {
       'max-len': [

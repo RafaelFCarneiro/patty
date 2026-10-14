@@ -4,12 +4,7 @@ import type { AppError } from '../common/errors.js';
 import { pickClassification } from '../logic/classify.js';
 import { normalizeMerchant, withMerchant } from '../logic/merchant.js';
 import * as persistence from '../logic/persistence.js';
-import {
-  MAX_RECURRING_OCCURRENCES_PER_RUN,
-  nextDue,
-  recurringIdempotencyKey,
-  withPeriodLabel,
-} from '../logic/recurring.js';
+import { dueSchedule, recurringIdempotencyKey, withPeriodLabel } from '../logic/recurring.js';
 import { toIsoDate } from '../logic/period.js';
 import { resolveCurrency } from '../logic/money.js';
 import { defaultStatusFor, viewFromOutcome } from '../logic/transaction.js';
@@ -67,10 +62,7 @@ export const createRecurring = (
       merchantKey,
     };
 
-    const persist = withMerchant(
-      [persistence.insert({ entity: RECURRING_ENTITY_TAG, model: rule })],
-      rule.merchantKey,
-    );
+    const persist = withMerchant([persistence.insert({ entity: RECURRING_ENTITY_TAG, model: rule })], rule.merchantKey);
     const response: RecurringRuleView = {
       ...rule,
       accountName: account?.name,
@@ -113,21 +105,17 @@ const buildOccurrenceEntity = (
  *  generic versioned update can apply it (rule 3/4). Always advances, even when no new occurrence
  *  gets inserted (an idempotent replay). */
 const planRule = (deps: Deps, rule: RecurringRuleEntity, through: string, today: string): RulePlan => {
-  const occurrences: RulePlan['occurrences'] = [];
-  let due = rule.nextDue;
-  for (let i = 0; i < MAX_RECURRING_OCCURRENCES_PER_RUN && due <= through; i++) {
-    occurrences.push({
-      rule: rule.description,
-      date: due,
-      persistable: persistence.insert({
-        entity: TRANSACTION_ENTITY_TAG,
-        model: buildOccurrenceEntity(deps, rule, due, today),
-        idempotencyKey: recurringIdempotencyKey(rule.id, due),
-      }),
-    });
-    due = nextDue(due, rule.period);
-  }
-  const advance = persistence.update({ entity: RECURRING_ENTITY_TAG, model: { ...rule, nextDue: due } });
+  const { dates, next } = dueSchedule(rule.nextDue, through, rule.period);
+  const occurrences: RulePlan['occurrences'] = dates.map((date) => ({
+    rule: rule.description,
+    date,
+    persistable: persistence.insert({
+      entity: TRANSACTION_ENTITY_TAG,
+      model: buildOccurrenceEntity(deps, rule, date, today),
+      idempotencyKey: recurringIdempotencyKey(rule.id, date),
+    }),
+  }));
+  const advance = persistence.update({ entity: RECURRING_ENTITY_TAG, model: { ...rule, nextDue: next } });
   return { occurrences, advance };
 };
 

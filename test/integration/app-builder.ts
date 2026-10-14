@@ -11,7 +11,8 @@ import { DISABLED_AUTH } from '../../src/diplomat/http/context.js';
 import { buildHttpApp, registerHttpApp } from '../../src/composition/http.js';
 import { AuthMode } from '../../src/models/auth/mode.js';
 import { OWNER_PRINCIPAL, type Principal } from '../../src/models/auth/principal.js';
-import type { UserChangeBus } from '../../src/models/tenancy.js';
+import type { ChangeBus } from '@rfc0/effect-runner';
+import type { ChangeEvent } from '../../src/models/tenancy.js';
 import type { Db } from '../../src/diplomat/db/driver.js';
 import {
   scopedFor,
@@ -30,7 +31,7 @@ export type AppContext = {
   version: string;
   runEffects: RunEffects;
   runEffectsSequence: RunEffectsSequence;
-  changeBus: UserChangeBus;
+  changeBus: ChangeBus<ChangeEvent>;
   /** Runs the identity flows (users, sessions, tokens…) — unscoped, as the composition root does. */
   authRunEffects: RunEffects;
   runtime: Runtime;

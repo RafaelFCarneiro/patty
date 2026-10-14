@@ -70,20 +70,19 @@ export const getAccountBalances = (
       ? [yield* resolutionToResult(resolveByName(candidates, filter.account), 'account')]
       : candidates;
 
-    const balances: AccountBalance[] = [];
-    for (const account of accounts) {
-      const parts = await deps.accounts.balanceParts(account.id);
-      const balance = computeBalance({ initialBalance: account.initialBalance, ...parts });
-
-      const projectedBalance = filter?.projectedAsOf
-        ? computeProjectedBalance(
-            balance,
-            await deps.transactions.pendingBalanceParts(account.id, filter.projectedAsOf),
-          )
-        : undefined;
-
-      balances.push({ ...account, ...parts, balance, projectedBalance });
-    }
+    const balances: AccountBalance[] = await Promise.all(
+      accounts.map(async (account) => {
+        const parts = await deps.accounts.balanceParts(account.id);
+        const balance = computeBalance({ initialBalance: account.initialBalance, ...parts });
+        const projectedBalance = filter?.projectedAsOf
+          ? computeProjectedBalance(
+              balance,
+              await deps.transactions.pendingBalanceParts(account.id, filter.projectedAsOf),
+            )
+          : undefined;
+        return { ...account, ...parts, balance, projectedBalance };
+      }),
+    );
 
     const [settingsRow, currencies, rates] = await Promise.all([
       deps.settings.getLocale(),
@@ -94,9 +93,7 @@ export const getAccountBalances = (
     const baseDecimals = decimalsLookup(currencies)(baseCurrency);
     const now = deps.clock();
 
-    const valued = balances.map((b) =>
-      valueAccount(b, baseCurrency, rates, now, baseDecimals, deps.rateStaleness),
-    );
+    const valued = balances.map((b) => valueAccount(b, baseCurrency, rates, now, baseDecimals, deps.rateStaleness));
     const consolidatedNetWorth = consolidateNetWorth(valued, baseCurrency, baseDecimals);
 
     return ok({ balances: valued, consolidatedNetWorth });

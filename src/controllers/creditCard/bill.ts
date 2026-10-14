@@ -156,13 +156,13 @@ export const revertBillPayment = (deps: Deps, input: BillQuery): ResultAsync<Flo
     );
 
     const { persistable: billUpdate, response } = buildClosedBillWrite(rawBill);
-    const persist: Persistable[] = [billUpdate];
 
     const paymentTx = await tryFindPaymentTransaction(deps, rawBill);
-    if (paymentTx) {
-      persist.push(
-        persistence.remove({ entity: TRANSACTION_ENTITY_TAG, id: paymentTx.id, version: paymentTx.version }),
-      );
-    }
+    const persist: Persistable[] = [
+      billUpdate,
+      ...(paymentTx
+        ? [persistence.remove({ entity: TRANSACTION_ENTITY_TAG, id: paymentTx.id, version: paymentTx.version })]
+        : []),
+    ];
     return ok({ persist, response });
   });

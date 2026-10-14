@@ -17,9 +17,3 @@ export const sharedDefaultErrors = {
  *  belongs to, so a subscriber hears only about its own user's data. `userId` is null for an instance-level change
  *  (identity bookkeeping), which no dashboard subscriber is ever told about. */
 export type ChangeEvent = { userId: string | null; entities: readonly string[] };
-
-/** The bound change bus: `publish` after a commit, `subscribe` to listen (the returned function unsubscribes). */
-export type UserChangeBus = {
-  publish: (event: ChangeEvent) => void;
-  subscribe: (listener: (event: ChangeEvent) => void) => () => void;
-};

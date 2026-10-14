@@ -41,3 +41,24 @@ export const recurringIdempotencyKey = (ruleId: string, due: string): string => 
 
 /** Bounds `applyDueRecurring`'s per-rule materialization loop to prevent runaway on ancient rules. */
 export const MAX_RECURRING_OCCURRENCES_PER_RUN = 36;
+
+export type DueSchedule = {
+  /** Every due date on or before `through`, oldest first, at most `max` of them. */
+  dates: readonly string[];
+  /** The first due date NOT materialized: after the last of `dates`, or `start` itself when none is due. */
+  next: string;
+};
+
+/** The occurrences a rule owes through `through`, and where it stands afterwards — pure, so the controller only maps
+ *  dates to writes. Capped at `max` (default `MAX_RECURRING_OCCURRENCES_PER_RUN`): an ancient rule catches up over
+ *  several runs rather than all at once, and `next` then names the first date still owed. */
+export const dueSchedule = (
+  start: string,
+  through: string,
+  period: RecurringPeriod,
+  max: number = MAX_RECURRING_OCCURRENCES_PER_RUN,
+): DueSchedule => {
+  const advance = (due: string, taken: readonly string[]): DueSchedule =>
+    taken.length < max && due <= through ? advance(nextDue(due, period), [...taken, due]) : { dates: taken, next: due };
+  return advance(start, []);
+};

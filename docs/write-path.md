@@ -114,9 +114,8 @@ and its failure isolation) is the package's to document — see the pointer abov
 - **The `ApplierRegistry`** is assembled once there, one `EntityApplier` per FinTrack entity tag.
 - **Typed `Tx`.** `diplomat/db/effects.ts` re-exports the package's `EntityApplier`/`ApplierRegistry`/`ReadBack`
   specialized with FinTrack's own `Tx`.
-- **Change bus.** `composition/runtime.ts` builds one `UserChangeBus` (`composition/changeBus.ts`) and gives each
-  runner a `publish` bound to its user — the engine's post-commit hook becomes `(entities) => bus.publish({ userId,
-  entities })` — so every event says whose change it is (`null` for the identity runner). It hands `changeBus.subscribe`
+- **Change bus.** `composition/runtime.ts` calls the package's `createChangeBus<ChangeEvent>({ onError })` once and gives each
+  runner `publishFor(userId)` = `(entities) => bus.publish({ userId, entities })` — the only FinTrack code on the bus — so every event says whose change it is (`null` for the identity runner). It hands `changeBus.subscribe`
   to the HTTP sidecar (SSE, `docs/ui.md`, which forwards only the stream's own user's events), and wires one shared
   stderr reporter (`reportChangeError`) as both the bus `onError` and the context's `onPublishError`. stderr only —
   stdout carries the stdio MCP protocol (ADR-007).

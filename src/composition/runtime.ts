@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { runEffects, runEffectsSequence } from '@rfc0/effect-runner';
+import { createChangeBus, runEffects, runEffectsSequence, type ChangeBus } from '@rfc0/effect-runner';
 import { AUTH_APPLIERS } from './auth.js';
-import { createUserChangeBus } from './changeBus.js';
 import type { Config } from '../config.js';
 import type { Deps, RunEffects, Tenancy } from '../controllers/deps.js';
 import type { Db } from '../diplomat/db/driver.js';
@@ -38,7 +37,7 @@ import { RECURRING_ENTITY_TAG } from '../models/recurring.js';
 import { TAG_ENTITY_TAG } from '../models/tag.js';
 import { TRANSACTION_ENTITY_TAG } from '../models/transaction.js';
 import { TRANSACTION_TAG_ENTITY_TAG } from '../models/transactionTag.js';
-import type { UserChangeBus } from '../models/tenancy.js';
+import type { ChangeEvent } from '../models/tenancy.js';
 
 /**
  * Composition root for everything a running FinTrack process needs on top of an open database: the repos the
@@ -56,7 +55,7 @@ export type Runtime = Tenancy & {
   publicDeps: Pick<Deps, 'health'>;
   /** Runs the identity flows (users, sessions, tokens, setup codes, sign-in grants) — not tied to a user's data. */
   authRunEffects: RunEffects;
-  changeBus: UserChangeBus;
+  changeBus: ChangeBus<ChangeEvent>;
 };
 
 export type RuntimeConfig = Pick<Config, 'FINTRACK_LOCALE' | 'FIAT_RATE_STALE_HOURS' | 'CRYPTO_RATE_STALE_HOURS'>;
@@ -96,7 +95,7 @@ export type RuntimeOptions = {
 export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOptions = {}): Runtime => {
   const onChangeError = options.onChangeError ?? reportChangeError;
   const localeResolver = createLocaleResolver(config.FINTRACK_LOCALE);
-  const changeBus = createUserChangeBus(onChangeError);
+  const changeBus = createChangeBus<ChangeEvent>({ onError: onChangeError });
   const engineContext = createEngineContext(db, onChangeError);
   const health = healthRepo(db);
 

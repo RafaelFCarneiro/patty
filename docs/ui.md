@@ -295,8 +295,8 @@ baseline fragment, and self-check (fragment not full page; no embedded data; sam
 
 ## Live update — SSE, entity-tagged (ADR-027 Phase 3)
 
-**The change bus** is FinTrack's own `UserChangeBus` (`composition/changeBus.ts`, ADR-033 §5): `publish({ userId, entities })`
-after a commit, `subscribe(listener)`. The composition root (`runtime.ts`) builds it once and hands `subscribe` down as a
+**The change bus** is `@rfc0/effect-runner`'s `createChangeBus<ChangeEvent>` (ADR-033 §5), `ChangeEvent` = `{ userId, entities }`: `publish(event)`
+after a commit, `subscribe(listener)`; publish-failure isolation is the package's. The composition root (`runtime.ts`) builds it once and hands `subscribe` down as a
 parameter — the same crossing pattern as `RunEffects`. `GET /ui/events` is the session user's stream: it forwards only the
 events whose `userId` is that user's (instance bookkeeping carries `null` and reaches no one), and refuses to open at all
 without a principal. A subscriber that throws is isolated by the bus and reported to its `onError` (a shared

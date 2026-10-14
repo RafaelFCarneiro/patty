@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { UserChangeBus } from '../../../models/tenancy.js';
+import type { ChangeBus } from '@rfc0/effect-runner';
+import type { ChangeEvent } from '../../../models/tenancy.js';
 import { LOGOUT_PATH, TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../authPaths.js';
 import { CACHE_CONTROL_NO_CACHE } from '../respond.js';
 import { HTML_CONTENT_TYPE, readCached, UI_ROOT } from '../uiFiles.js';
@@ -41,7 +42,7 @@ const serveUiFile = async (reply: FastifyReply, path: string, contentType: strin
  */
 const registerUiEventsRoute = (
   app: FastifyInstance,
-  subscribe: UserChangeBus['subscribe'],
+  subscribe: ChangeBus<ChangeEvent>['subscribe'],
   session: SessionRecheck | undefined,
 ): void => {
   app.get(`${UI_ROOT_PATH}/events`, (req, reply) => {
@@ -106,7 +107,7 @@ export type SessionRecheck = { isActive: (req: FastifyRequest) => Promise<boolea
 
 export const registerUiRoutes = (
   app: FastifyInstance,
-  subscribeToChanges: UserChangeBus['subscribe'],
+  subscribeToChanges: ChangeBus<ChangeEvent>['subscribe'],
   options: { authControls: boolean; session?: SessionRecheck } = { authControls: false },
 ): void => {
   const serveShell = async (_req: unknown, reply: FastifyReply) => {

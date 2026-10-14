@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import type { UserChangeBus } from '../../models/tenancy.js';
+import type { ChangeBus } from '@rfc0/effect-runner';
+import type { ChangeEvent } from '../../models/tenancy.js';
 import { AuthMode } from '../../models/auth/mode.js';
 import { READ_SCOPE } from '../../models/auth/scope.js';
 import { DISABLED_AUTH, type HttpAuth, type HttpContext } from './context.js';
@@ -69,7 +70,7 @@ const sessionRecheck = (auth: Extract<HttpAuth, { mode: typeof AuthMode.enum.req
 export const registerRoutes = (
   app: FastifyInstance,
   ctx: HttpContext,
-  subscribeToChanges: UserChangeBus['subscribe'],
+  subscribeToChanges: ChangeBus<ChangeEvent>['subscribe'],
   auth: HttpAuth = DISABLED_AUTH,
 ): void => {
   const definitions = buildRouteDefinitions(ctx);
