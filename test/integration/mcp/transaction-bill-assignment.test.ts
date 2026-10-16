@@ -306,9 +306,9 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
           billMonth: month,
           billYear: year,
         },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(explicitErr.error?.code).toBe('validation');
-      expect(explicitErr.error?.issues?.[0]).toContain('revert_bill_payment');
+      expect(explicitErr.error?.hint).toBe('use revert_bill_payment');
 
       // Same rejection via plain cycle auto-assignment (no explicit billMonth/billYear) — a
       // transaction dated inside the now-paid cycle must not silently attach either.
@@ -373,9 +373,9 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       const err = (await callToolError(client, {
         name: 'update_card_transaction',
         args: { id: openPurchase.transaction.id, billMonth: month, billYear: year },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(err.error?.code).toBe('validation');
-      expect(err.error?.issues?.[0]).toContain('revert_bill_payment');
+      expect(err.error?.hint).toBe('use revert_bill_payment');
     } finally {
       await transport.close();
     }
@@ -415,17 +415,17 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       const moveErr = (await callToolError(client, {
         name: 'update_card_transaction',
         args: { id: purchase.transaction.id, billMonth: nextCycle.month, billYear: nextCycle.year },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(moveErr.error?.code).toBe('validation');
-      expect(moveErr.error?.issues?.[0]).toContain('revert_bill_payment');
+      expect(moveErr.error?.hint).toBe('use revert_bill_payment');
 
       // Delete the (ordinary, non-payment-transfer) purchase — also rejected.
       const deleteErr = (await callToolError(client, {
         name: 'delete_card_transaction',
         args: { id: purchase.transaction.id, confirm: true },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(deleteErr.error?.code).toBe('validation');
-      expect(deleteErr.error?.issues?.[0]).toContain('revert_bill_payment');
+      expect(deleteErr.error?.hint).toBe('use revert_bill_payment');
 
       // It's still there, undeleted.
       const stillThere = (await searchTransactions(client, {
@@ -532,7 +532,7 @@ describe('MCP integration > transaction ↔ bill assignment (Design 012)', () =>
       const err = (await callToolError(client, {
         name: 'update_card_transaction',
         args: { id: purchase.transaction.id, account: bankName },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(err.error?.code).toBe('validation');
       expect(err.error?.issues?.[0]).toContain("card's own internal account");
 

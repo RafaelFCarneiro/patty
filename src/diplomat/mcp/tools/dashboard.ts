@@ -1,4 +1,4 @@
-import { ToolName } from '../../../models/tool.js';
+import { ToolName } from '../toolName.js';
 import { z } from 'zod';
 import { deleteDashboard, listDashboards, renameDashboard, saveDashboard } from '../../../controllers/dashboards.js';
 import { RenameDashboardSchema, SaveDashboardSchema } from '../../../models/dashboard.js';

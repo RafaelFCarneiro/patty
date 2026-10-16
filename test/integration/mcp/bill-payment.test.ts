@@ -573,9 +573,9 @@ describe('MCP integration > bill payment (Design 003)', () => {
       const err = (await callToolError(client, {
         name: 'delete_card_transaction',
         args: { id: paymentTransactionId, confirm: true },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(err.error?.code).toBe('validation');
-      expect(err.error?.issues?.[0]).toContain('revert_bill_payment');
+      expect(err.error?.hint).toBe('use revert_bill_payment');
 
       // It's still there, undeleted.
       const stillThere = (await searchTransactions(client, {
@@ -640,9 +640,9 @@ describe('MCP integration > bill payment (Design 003)', () => {
       const err = (await callToolError(client, {
         name: 'update_card_transaction',
         args: { id: paymentTransactionId, amount: 999 },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(err.error?.code).toBe('validation');
-      expect(err.error?.issues?.[0]).toContain('revert_bill_payment');
+      expect(err.error?.hint).toBe('use revert_bill_payment');
     } finally {
       await transport.close();
     }

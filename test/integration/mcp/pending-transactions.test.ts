@@ -220,9 +220,9 @@ describe('MCP integration > pending transactions', () => {
       const editErr = (await callToolError(client, {
         name: 'confirm_transaction',
         args: { id, amount: 999 },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(editErr.error?.code).toBe('validation');
-      expect(editErr.error?.issues?.[0]).toContain('update_account_transaction');
+      expect(editErr.error?.hint).toBe('use update_account_transaction');
 
       const confirmed = (await callTool(client, {
         name: 'confirm_transaction',

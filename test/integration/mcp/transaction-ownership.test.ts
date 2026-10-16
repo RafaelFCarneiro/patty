@@ -40,9 +40,9 @@ describe('MCP integration > transaction ownership guard (ADR-017/ADR-020)', () =
       const err = (await callToolError(client, {
         name: 'update_account_transaction',
         args: { id: purchase.transaction.id, description: 'Should be rejected' },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(err.error?.code).toBe('validation');
-      expect(err.error?.issues?.[0]).toContain('update_card_transaction');
+      expect(err.error?.hint).toBe('use update_card_transaction');
     } finally {
       await transport.close();
     }
@@ -68,9 +68,9 @@ describe('MCP integration > transaction ownership guard (ADR-017/ADR-020)', () =
       const err = (await callToolError(client, {
         name: 'update_card_transaction',
         args: { id: created.transaction.id, description: 'Should be rejected' },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(err.error?.code).toBe('validation');
-      expect(err.error?.issues?.[0]).toContain('update_account_transaction');
+      expect(err.error?.hint).toBe('use update_account_transaction');
     } finally {
       await transport.close();
     }
@@ -102,9 +102,9 @@ describe('MCP integration > transaction ownership guard (ADR-017/ADR-020)', () =
       const err = (await callToolError(client, {
         name: 'delete_account_transaction',
         args: { id: purchase.transaction.id, confirm: true },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(err.error?.code).toBe('validation');
-      expect(err.error?.issues?.[0]).toContain('delete_card_transaction');
+      expect(err.error?.hint).toBe('use delete_card_transaction');
     } finally {
       await transport.close();
     }
@@ -130,9 +130,9 @@ describe('MCP integration > transaction ownership guard (ADR-017/ADR-020)', () =
       const err = (await callToolError(client, {
         name: 'delete_card_transaction',
         args: { id: created.transaction.id, confirm: true },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(err.error?.code).toBe('validation');
-      expect(err.error?.issues?.[0]).toContain('delete_account_transaction');
+      expect(err.error?.hint).toBe('use delete_account_transaction');
     } finally {
       await transport.close();
     }

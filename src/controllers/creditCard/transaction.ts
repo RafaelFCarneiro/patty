@@ -43,7 +43,6 @@ import {
   type UpdateCardTransaction,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
-import { ToolName } from '../../models/tool.js';
 import { type FlowOutcome, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
 import {
   ClassificationMethod,
@@ -58,6 +57,7 @@ import {
   type TransactionSource,
   type TransactionView,
 } from '../../models/transaction.js';
+import { Remedy } from '../../models/remedy.js';
 import type { Deps } from '../deps.js';
 import { resolveCardRef, resolveDecimals, resolveLegAccounts, resolveTagLinks } from '../resolve.js';
 import type { StatementImportPlan } from '../transaction/bulk.js';
@@ -71,13 +71,13 @@ const assertCreditAccountLeg = (
 ): ResultAsync<boolean, AppError> =>
   resolveLegAccounts(deps, tx).map((legs) => legs.some((account) => account.type === AccountType.enum.credit));
 
-/** billId with no cardId is definitionally the bill-payment transfer (pay_bill's own row) — owned
- *  exclusively by pay_bill/revert_bill_payment. */
+/** billId with no cardId is definitionally the bill-payment transfer (the bill payment's own row) — owned
+ *  exclusively by paying/reverting the bill. */
 const resolveOwnCardId = (existing: Pick<TransactionView, 'cardId'>): Result<string, AppError> =>
   okOr(existing.cardId, cardErrors.paidBillImmutable);
 
 /** Version-guarded no-op update of a bill's current fields — a CAS guard: if a concurrent write
- *  (e.g. `pay_bill`) bumped the version first, the batch rolls back and retries. */
+ *  (e.g. a bill payment) bumped the version first, the batch rolls back and retries. */
 const touchBill = (bill: RawBill): Persistable =>
   persistence.update({ entity: BILL_ENTITY_TAG, model: billEntityFrom(bill) });
 
@@ -293,7 +293,7 @@ export const updateCardTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     const isCreditOwned = yield* assertCreditAccountLeg(deps, existing);
-    yield* guard(isCreditOwned, transactionErrors.wrongTool(ToolName.enum.update_account_transaction));
+    yield* guard(isCreditOwned, transactionErrors.wrongOperation(Remedy.enum.update_account_transaction));
     const cardId = yield* resolveOwnCardId(existing);
 
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
@@ -364,7 +364,7 @@ export const deleteCardTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     const isCreditOwned = yield* assertCreditAccountLeg(deps, existing);
-    yield* guard(isCreditOwned, transactionErrors.wrongTool(ToolName.enum.delete_account_transaction));
+    yield* guard(isCreditOwned, transactionErrors.wrongOperation(Remedy.enum.delete_account_transaction));
 
     const bill = existing.billId ? await deps.bills.findById(existing.billId) : null;
     yield* guard(!bill || !isBillPaid(bill), cardErrors.paidBillImmutable);

@@ -183,7 +183,7 @@ export const BudgetFitVerdict = z.enum(['realistic', 'unrealistic', 'generous'])
 export type BudgetFitVerdict = z.infer<typeof BudgetFitVerdict>;
 
 export const BudgetFitLineSchema = z.object({
-  id: Id.describe('Budget id (from create_budget/list_budgets) — pass to update_budget to apply suggestedLimit'),
+  id: Id.describe('Budget id — identifies the budget to update in order to apply suggestedLimit'),
   category: z.string().min(1).describe("Top-level category name — the sub-category's parent, when set"),
   subCategory: z
     .string()
@@ -222,7 +222,7 @@ export const BudgetFitResultSchema = z.object({
     .describe('Categories with an established (nonzero baseline) spend pattern but no budget at all'),
   converted: ConvertedTotalSchema.optional().describe(
     'Opt-in converted grand total of committed (effective + pending) spend matched to a budget, across every ' +
-      'currency — the same measure get_budget_status converts; present only when displayCurrency was supplied',
+      'currency — the same measure the budget status converts; present only when displayCurrency was supplied',
   ),
 });
 export type BudgetFitResult = z.infer<typeof BudgetFitResultSchema>;
@@ -283,13 +283,13 @@ export type RecurringCandidateInput = {
 };
 
 export const RecurringCandidateSchema = z.object({
-  merchant: z.string().min(1).describe('Normalized merchant key — pass as `merchant` to create_recurring'),
+  merchant: z.string().min(1).describe('Normalized merchant key — the `merchant` of the recurring rule to create'),
   typicalAmount: z.number().describe('Average amount across the qualifying occurrences'),
   currency: CurrencyCode,
   category: z.string().min(1).describe("Category of the merchant's most recent occurrence"),
   occurrences: z.number().int().describe('Number of qualifying transactions within the lookback window'),
   lastDate: IsoDate.describe('Date of the most recent occurrence'),
-  suggestedNextDue: IsoDate.describe("lastDate advanced one cadence — ready for create_recurring's startDate"),
+  suggestedNextDue: IsoDate.describe("lastDate advanced one cadence — ready to be the recurring rule's startDate"),
 });
 export type RecurringCandidate = z.infer<typeof RecurringCandidateSchema>;
 

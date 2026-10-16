@@ -1,3 +1,4 @@
+import { Remedy } from '../../../src/models/remedy.js';
 import { describe, expect, it } from 'vitest';
 import {
   ConfirmTransactionSchema,
@@ -79,9 +80,8 @@ describe('transactionErrors — confirm-with-edit (Design 014 phase B)', () => {
     }
   });
 
-  it('confirmEditNotAllowedForTransfer points at update_account_transaction and pay_bill/revert_bill_payment', () => {
+  it('confirmEditNotAllowedForTransfer names the account-transaction update as its remedy, in no edge’s words', () => {
     expect(transactionErrors.confirmEditNotAllowedForTransfer.code).toBe('validation');
-    expect(transactionErrors.confirmEditNotAllowedForTransfer.issues[0]).toContain('update_account_transaction');
-    expect(transactionErrors.confirmEditNotAllowedForTransfer.issues[0]).toContain('pay_bill');
+    expect(transactionErrors.confirmEditNotAllowedForTransfer.remedy).toBe(Remedy.enum.update_account_transaction);
   });
 });

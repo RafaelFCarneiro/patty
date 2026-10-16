@@ -8,6 +8,7 @@ import {
 import type { Deps } from '../../../../src/controllers/deps.js';
 import { PersistOp } from '@rfc0/effect-runner';
 import { ACCOUNT_ENTITY_TAG, AccountType, type Account, type AccountEntity } from '../../../../src/models/account.js';
+import { Remedy } from '../../../../src/models/remedy.js';
 import type { CurrencyRateEntity } from '../../../../src/models/currencyRate.js';
 import { CurrencyCode, type Currency } from '../../../../src/models/money.js';
 import { Locale } from '../../../../src/models/locale.js';
@@ -235,7 +236,17 @@ describe('updateAccount — functional core (ADR-021 phase 3a)', () => {
     const result = await updateAccount(deps, { name: 'Nubank', type: AccountType.enum.credit });
 
     expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().code).toBe('validation');
+    expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation', remedy: Remedy.enum.create_credit_card });
+  });
+
+  it('rejects updating an existing credit account, pointing at the card update', async () => {
+    const deps = makeDeps({
+      accounts: makeAccountsRepo({ list: async () => [account({ type: AccountType.enum.credit })] }),
+    });
+
+    const result = await updateAccount(deps, { name: 'Nubank' });
+
+    expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'validation', remedy: Remedy.enum.update_credit_card });
   });
 
   it('rejects a type change when transactions exist, before reading a raw version', async () => {

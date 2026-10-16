@@ -279,7 +279,7 @@ export function viewFromOutcome(...args: readonly unknown[]) {
 }
 
 /** `viewFromOutcome`, resolved against the transaction's own outcome by entity tag — a flow like
- *  `update_account_transaction`/`update_card_transaction` has no `created` flag to derive (an
+ *  an account/card transaction update has no `created` flag to derive (an
  *  update either lands or the whole unit of work fails as a `conflict` before any outcome is ever
  *  reported — rule 4 — so there's no duplicate-replay case to distinguish the way there is for an
  *  insert). */

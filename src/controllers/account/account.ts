@@ -30,6 +30,7 @@ import type {
 import { notFound } from '../../models/error.js';
 import { Locale } from '../../models/locale.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
+import { Remedy } from '../../models/remedy.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolutionToResult } from '../resolve.js';
 
@@ -49,7 +50,7 @@ export const listAccounts = async (deps: Deps, type?: AccountType): Promise<Acco
  *  response, are both the plain wire-shaped `Account`. */
 export const createAccount = (deps: Deps, input: CreateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
   safeTry(async function* () {
-    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected);
+    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected(Remedy.enum.create_credit_card));
     yield* guard(await assertNameAvailable(deps, input.name), accountErrors.duplicateName(input.name));
 
     const account: Account = { id: deps.newId(), ...input };
@@ -102,7 +103,7 @@ export const getAccountBalances = (
 export const deleteAccount = (deps: Deps, name: string): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>
   safeTry(async function* () {
     const account = yield* resolveAccountRef(deps, name);
-    yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected);
+    yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected(Remedy.enum.delete_credit_card));
     const refs = await deps.accounts.countReferences(account.id);
     yield* guard(isUnreferenced(refs), accountErrors.inUse(account.name, refs));
 
@@ -114,8 +115,8 @@ export const deleteAccount = (deps: Deps, name: string): ResultAsync<FlowOutcome
 export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<FlowOutcome<Account>, AppError> =>
   safeTry(async function* () {
     const account = yield* resolveAccountRef(deps, input.name);
-    yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected);
-    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected);
+    yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected(Remedy.enum.update_credit_card));
+    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected(Remedy.enum.create_credit_card));
 
     if (input.newName && input.newName.toLowerCase() !== account.name.toLowerCase()) {
       yield* guard(await assertNameAvailable(deps, input.newName), accountErrors.duplicateName(input.newName));

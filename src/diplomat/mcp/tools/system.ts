@@ -1,4 +1,4 @@
-import { ToolName } from '../../../models/tool.js';
+import { ToolName } from '../toolName.js';
 import { getPreferences, setBaseCurrency, setLocale } from '../../../controllers/settings.js';
 import { getStatus } from '../../../controllers/status.js';
 import { Locale, LocaleSource } from '../../../models/locale.js';

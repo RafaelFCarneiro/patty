@@ -628,7 +628,7 @@ inputSchema, annotations }, handle(args, scoped, ctx) }`), `ResourceDefinition` 
 **`register.ts`'s `registerDefinitions(server, ctx, { prompts, resources, tools })` is the one registrar**: it registers
 every definition on the server `guardScopes` wrapped, so none can bypass the scope guard, and resolves the caller's
 `Scoped` (`ctx.as(extra)`, `{ deps, runEffects, runEffectsSequence, resetLocale }`) once per call — a handler never sees
-`extra`. **Tool names** come from one zod enum, `ToolName` (`models/tool.ts`): the definitions, the redirect hints in
+`extra`. **Tool names** come from one zod enum, `ToolName` (`diplomat/mcp/toolName.ts` — the MCP edge's own vocabulary, imported by nothing outside `diplomat/mcp`, enforced by lint): the definitions, the redirect hints in
 domain errors, the scope-snapshot test and the `docs/mcp-tools.md` check (`test/unit/docs/mcpTools.test.ts`) all use it,
 and a unit test proves every name has exactly one definition. `respond.ts` holds the shared response helpers (`json`,
 `jsonError`, `fromResult`, `jsonResource`); `annotations.ts` (`READ_ONLY`/`MUTATING`), `scopes.ts` (`guardScopes`,
@@ -660,6 +660,17 @@ and `routes/wellKnown.ts`'s `registerProtectedResourceMetadataRoutes` (both like
 page is a named handler the registration function wires. `routes.ts` reduces to construction + aggregation:
 `buildRouteDefinitions` concatenates every domain's list into the one array `mountRoutes`/`buildOpenApiDocument`
 consume (§ OpenAPI contract), and `registerRoutes` mounts it, the UI shell/asset routes, and `/api/openapi.json`.
+
+**Edges own their vocabulary; domain errors are edge-neutral.** A domain error never names a tool, a route or a CLI
+command. When the fix for a rejected call is another operation, the error carries `remedy: Remedy` (`models/remedy.ts`,
+a zod enum of domain operations: `pay_bill`, `revert_bill_payment`, `create_`/`update_`/`delete_credit_card`,
+`update_`/`delete_account_transaction`, `update_`/`delete_card_transaction`) beside a neutral message (one constant per
+message, in the model); `formatAppError` stays neutral. Each edge translates at its reply: `diplomat/mcp/remedy.ts`
+holds a `satisfies Record<Remedy, ToolName>` table and answers `error.hint = "use <tool>"`; `diplomat/http/remedy.ts`
+holds a `satisfies Record<Remedy, { method, path }>` table that the route definitions themselves spread
+(`...REMEDY_ROUTE.pay_bill`, so each path is typed once) and `replyError` answers `error.hint = "use <METHOD /route>"`.
+The mechanism (`withRemedyHint`, `common/errors.ts`) drops `remedy` and adds `hint`; an error without a remedy is
+untouched. A new remedy fails typecheck until both edges map it.
 
 **Contract snapshots.** `test/unit/diplomat/http/__snapshots__/openapi.json` (the whole OpenAPI document) and
 `test/unit/diplomat/mcp/__snapshots__/surface.json` (`tools/list`, resources, templates, prompts) pin the edge's

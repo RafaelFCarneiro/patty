@@ -1,4 +1,4 @@
-import { ToolName } from '../../../models/tool.js';
+import { ToolName } from '../toolName.js';
 import { listExchangeRates, setExchangeRate } from '../../../controllers/currencyRates.js';
 import { buildBulkResult } from '../../../logic/currencyRate.js';
 import { SetExchangeRateSchema } from '../../../models/currencyRate.js';

@@ -5,11 +5,13 @@ import { httpStatus, type AppError } from '../../common/errors.js';
 import { ConfirmQuerySchema, IdParamSchema, NameParamSchema } from '../../wire/in/common.js';
 import { ConflictErrorOut, NotFoundErrorOut, ValidationErrorOut } from '../../wire/out/errors.js';
 import { okResponse } from './openapi.js';
+import { withRouteHint } from './remedy.js';
 
 /** Shared HTTP response helpers (ADR-025) — one implementation for every route module. */
 
 /** The one error reply shape: the error's HTTP status and `{ error }`. */
-export const replyError = (reply: FastifyReply, error: AppError) => reply.status(httpStatus(error)).send({ error });
+export const replyError = (reply: FastifyReply, error: AppError) =>
+  reply.status(httpStatus(error)).send({ error: withRouteHint(error) });
 
 export const send = <T>(reply: FastifyReply, result: Result<T, AppError>, okStatus = 200) =>
   result.match(

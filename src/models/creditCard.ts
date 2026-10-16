@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { BillQuerySchema } from './bill.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
-import { ToolName } from './tool.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import {
   CreateTransactionSchema,
@@ -10,7 +9,14 @@ import {
   STATEMENT_RAW_INPUT_DESCRIPTION,
   UpdateTransactionSchema,
 } from './transaction.js';
-import type { Ambiguous, DuplicateName, NotFound, ValidationError } from './error.js';
+import {
+  validationWithRemedy,
+  type Ambiguous,
+  type DuplicateName,
+  type NotFound,
+  type ValidationError,
+} from './error.js';
+import { Remedy } from './remedy.js';
 
 // `.describe()` is domain information — it states what each field is and represents.
 // Defaults split by intent: integrity defaults (a value that must exist for the entity to be
@@ -159,6 +165,9 @@ export const DELETE_CREDIT_CARD_CONFIRM_HINT =
 
 export type CardError = NotFound<'card'> | Ambiguous<'card'> | DuplicateName<'credit_card'> | ValidationError;
 
+const PAID_BILL_IMMUTABLE_MESSAGE =
+  'this bill is paid; its transactions cannot be added, removed, or reassigned — revert the bill payment first';
+
 export const cardErrors = {
   duplicateName: (name: string): CardError => ({ code: 'duplicate_name', entity: 'credit_card', name }),
   currencyMismatch: (cardCurrency: CurrencyCode, accountCurrency: CurrencyCode): CardError => ({
@@ -178,13 +187,10 @@ export const cardErrors = {
       'billMonth/billYear require a credit-card transaction; provide `card` (create) or the transaction must already have one (update)',
     ],
   } satisfies CardError,
-  paidBillImmutable: {
-    code: 'validation',
-    issues: [
-      'this bill is paid; its transactions cannot be added, removed, or reassigned — call ' +
-        `${ToolName.enum.revert_bill_payment} first`,
-    ],
-  } satisfies CardError,
+  paidBillImmutable: validationWithRemedy(
+    PAID_BILL_IMMUTABLE_MESSAGE,
+    Remedy.enum.revert_bill_payment,
+  ) satisfies CardError,
   accountChangeRejectedForCard: {
     code: 'validation',
     issues: ["cannot change the account of a card transaction; it is always funded by the card's own internal account"],

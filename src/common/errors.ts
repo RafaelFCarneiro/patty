@@ -10,6 +10,7 @@ import type { DashboardError } from '../models/dashboard.js';
 import type { Conflict } from '../models/error.js';
 import type { LocaleError } from '../models/locale.js';
 import type { TagError } from '../models/tag.js';
+import type { Remedy } from '../models/remedy.js';
 import type { TransactionError } from '../models/transaction.js';
 
 /** Expected domain failures, returned as `err(AppError)` from controllers. */
@@ -37,7 +38,10 @@ const formatCandidates = (e: { code: AppError['code']; query: string; candidates
 
 const formatHint = (e: { code: AppError['code']; hint: string }): string => withCode(e.code, e.hint);
 
-const formatMessage = (message: string) => (e: { code: AppError['code'] }): string => withCode(e.code, message);
+const formatMessage =
+  (message: string) =>
+  (e: { code: AppError['code'] }): string =>
+    withCode(e.code, message);
 
 const LOOKUP_FORMATTERS = {
   unknown_account: formatCandidates,
@@ -149,3 +153,17 @@ const HTTP_STATUS = {
 } as const satisfies Record<AppError['code'], number>;
 
 export const httpStatus = (e: AppError): number => HTTP_STATUS[e.code];
+
+/** An error as an edge shows it: a remedy replaced by the edge's own `hint`; every other error untouched. */
+type WithoutRemedy<E> = E extends unknown ? Omit<E, 'remedy'> : never;
+export type HintedError = WithoutRemedy<AppError> & { hint?: string };
+
+/**
+ * Where an error's `remedy` (a domain operation) becomes words: each edge passes the function that names that
+ * operation in its own vocabulary, so the domain never has to.
+ */
+export const withRemedyHint = (error: AppError, hintFor: (remedy: Remedy) => string): HintedError => {
+  if (!('remedy' in error) || error.remedy === undefined) return error;
+  const { remedy, ...rest } = error;
+  return { ...rest, hint: hintFor(remedy) };
+};
