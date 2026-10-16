@@ -1,0 +1,2713 @@
+{
+  "tools": [
+    {
+      "name": "add_account_expense",
+      "title": "Add account expense",
+      "description": "Record an expense from a bank account / wallet — the account aggregate's movement entry point (ADR-016). Resolves the account and category by name; when category is omitted, classifies via learned merchant→category associations and returns method + confidence (confirm with the user when confidence < 0.6). Idempotent automatically — a repeat call with the same account/description/date/amount/currency is deduped; pass discriminator to record a genuinely separate transaction that would otherwise look identical. Currency comes from the account, or the currency field (default USD). Omitting account records an unattached (e.g. cash) expense.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What was paid/received, e.g. \"Uber para o aeroporto\""
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Positive amount in full units (reais/dollars)"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "effective"
+            ],
+            "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed."
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "YYYY-MM-DD; defaults to today"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Category name; omit to auto-classify. Must match transaction type kind"
+          },
+          "subCategory": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sub-category name (implies its parent — do not set both)"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Transaction currency; resolved from account/card when omitted"
+          },
+          "discriminator": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+          },
+          "rawInput": {
+            "type": "string",
+            "description": "Original user phrasing, for audit"
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Free-form memo (observação)"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Labels to attach, e.g. [\"work\", \"travel\"]"
+          },
+          "account": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Account name, e.g. \"Nubank\""
+          }
+        },
+        "required": [
+          "description",
+          "amount"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "add_account_income",
+      "title": "Add account income",
+      "description": "Record income into a bank account / wallet — the account aggregate's movement entry point (ADR-016). Resolves the account and category by name; when category is omitted, classifies via learned merchant→category associations and returns method + confidence (confirm with the user when confidence < 0.6). Idempotent automatically — a repeat call with the same account/description/date/amount/currency is deduped; pass discriminator to record a genuinely separate transaction that would otherwise look identical. Currency comes from the account, or the currency field (default USD). Omitting account records an unattached income.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What was paid/received, e.g. \"Uber para o aeroporto\""
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Positive amount in full units (reais/dollars)"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "effective"
+            ],
+            "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed."
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "YYYY-MM-DD; defaults to today"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Category name; omit to auto-classify. Must match transaction type kind"
+          },
+          "subCategory": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sub-category name (implies its parent — do not set both)"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Transaction currency; resolved from account/card when omitted"
+          },
+          "discriminator": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+          },
+          "rawInput": {
+            "type": "string",
+            "description": "Original user phrasing, for audit"
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Free-form memo (observação)"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Labels to attach, e.g. [\"work\", \"travel\"]"
+          },
+          "account": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Account name, e.g. \"Nubank\""
+          }
+        },
+        "required": [
+          "description",
+          "amount"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "import_account_statement",
+      "title": "Import an account statement",
+      "description": "Import a bank/wallet statement (pasted text, CSV lines) — every item is an expense or income (per item's `type`) on the ONE account named at the top level (omit to record unattached, e.g. cash, movements) — the account aggregate's bulk entry point (ADR-017) — use import_card_statement instead for a credit-card statement. Each item is auto-classified and idempotent (key derived from date+description+amount when absent — re-importing is safe). Returns a per-item status: created, needs_review (low confidence — confirm categories with the user), duplicate, or error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "account": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Account name — every item in this statement belongs to this one account; omit for unattached (e.g. cash) movements"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "What was paid/received, e.g. \"Uber para o aeroporto\""
+                },
+                "amount": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Positive amount in full units (reais/dollars)"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "expense",
+                    "income"
+                  ],
+                  "description": "expense | income"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "effective"
+                  ],
+                  "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed."
+                },
+                "date": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "description": "YYYY-MM-DD; defaults to today"
+                },
+                "category": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Category name; omit to auto-classify. Must match transaction type kind"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "USD",
+                    "BRL",
+                    "USDC",
+                    "BTC"
+                  ],
+                  "description": "Transaction currency; resolved from account/card when omitted"
+                },
+                "discriminator": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+                },
+                "note": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000,
+                  "description": "Free-form memo (observação)"
+                }
+              },
+              "required": [
+                "description",
+                "amount",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "Statement lines to import"
+          },
+          "rawInput": {
+            "type": "string",
+            "description": "The original pasted statement text"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "update_account_transaction",
+      "title": "Update account transaction",
+      "description": "Update an account transaction by id (from search_transactions) — the account aggregate's update entry point (ADR-017/ADR-020). Owns transactions that involve no credit account: account expenses/income and ordinary transfers. Absent cardId/billId (returned by search_transactions/ TransactionView) is a reliable proxy for picking this tool, but TransactionView does not expose account types and the authoritative check is the leg account type; if unsure (e.g. an ordinary transfer's toAccountId), call the tool and follow the wrong-tool redirect. Calling this on a transaction that involves a credit account is rejected with a validation error redirecting to update_card_transaction. Only provided fields change. Setting category is a user correction (confidence 1, strengthens the merchant→category association). Changing account also updates currency to match it. Transfer transactions cannot have their type changed and cannot receive a category/subCategory (both rejected with a validation error).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Transaction id"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Updated description"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Updated amount in full units"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "description": "Updated movement type"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Updated date (YYYY-MM-DD)"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New category name (user correction). Do not set with subCategory"
+          },
+          "subCategory": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New sub-category name (implies parent; do not set with category)"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Free-form memo. Empty string clears; omit to leave unchanged"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Replaces the full tag set when provided; pass [] to remove all"
+          },
+          "account": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New account name"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_account_transaction",
+      "title": "Delete account transaction",
+      "description": "Delete an account transaction by id — the account aggregate's delete entry point (ADR-017/ADR-020). Owns transactions that involve no credit account (account expenses/income, ordinary transfers); calling this on a transaction that involves a credit account is rejected with a validation error redirecting to delete_card_transaction. Without confirm:true it is a DRY RUN returning what would be deleted — show it to the user and call again with confirm: true.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Transaction id"
+          },
+          "confirm": {
+            "type": "boolean",
+            "default": false,
+            "description": "Must be true to actually delete"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_account",
+      "title": "Create account",
+      "description": "Create a bank account / wallet. Type defaults to checking, currency to USD. Note: credit accounts are created automatically with a credit card (create_credit_card).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Account name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "checking",
+              "savings",
+              "wallet",
+              "investment",
+              "credit"
+            ],
+            "description": "checking | savings | wallet | investment (credit is card-managed)",
+            "default": "checking"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Account currency (ISO code); fixed once the account has activity",
+            "default": "USD"
+          },
+          "initialBalance": {
+            "type": "number",
+            "default": 0,
+            "description": "Balance at account creation; current balance is always derived"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_account_balances",
+      "title": "Get account balances",
+      "description": "Returns { balances, consolidatedNetWorth }. Each balance is derived: initialBalance + income − expenses + transfers in − transfers out, plus an optional converted block (read-time valuation against the base currency, with rate/asOf/stale — absent when no exchange rate is on file). consolidatedNetWorth sums every convertible balance in the base currency; accounts with no rate are listed in its excluded array. Optionally filter by account name or type.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "account": {
+            "type": "string",
+            "description": "Single account by name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "checking",
+              "savings",
+              "wallet",
+              "investment",
+              "credit"
+            ]
+          },
+          "projectedAsOf": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "YYYY-MM-DD. When provided, also returns projectedBalance = effective balance + pending transactions dated on/before this date. The effective balance is always included."
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_accounts",
+      "title": "List accounts",
+      "description": "List accounts with their currencies, optionally filtered by type (checking = conta corrente).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "checking",
+              "savings",
+              "wallet",
+              "investment",
+              "credit"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "update_account",
+      "title": "Update account",
+      "description": "Update a bank account. name (via newName) and initialBalance are always editable. type is only editable when the account has no transactions/transfers (and cannot be set to credit). currency is only editable when the account has no transactions/transfers, no recurring rules, and is not a credit card payment account. Credit accounts (card-managed) are rejected — use the card flow.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Account name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "checking",
+              "savings",
+              "wallet",
+              "investment",
+              "credit"
+            ],
+            "description": "checking | savings | wallet | investment (credit is card-managed)"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Account currency (ISO code); fixed once the account has activity"
+          },
+          "initialBalance": {
+            "type": "number",
+            "default": 0,
+            "description": "Balance at account creation; current balance is always derived"
+          },
+          "newName": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New account name"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_account",
+      "title": "Delete account",
+      "description": "Delete a bank account by name. Blocked if any transactions, transfers, recurring rules, or credit cards reference it — returns an in_use error with reference counts so you can guide the user to clear them first. Credit accounts (card-managed) are rejected — use delete_credit_card instead.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Account name"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "import_card_statement",
+      "title": "Import a credit-card statement",
+      "description": "Import a credit-card statement (pasted text, CSV lines) — every item is a purchase on the ONE card named at the top level, joining each item's cycle bill (fatura). Single-source: the credit-card aggregate's bulk entry point (ADR-017) — use import_account_statement instead for a bank/wallet statement. Each item is auto-classified and idempotent (key derived from date+description+amount when absent — re-importing is safe). Returns a per-item status: created, needs_review (low confidence — confirm categories with the user), duplicate, or error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Credit card name — every item in this statement is a purchase on this one card"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "What was paid/received, e.g. \"Uber para o aeroporto\""
+                },
+                "amount": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "Positive amount in full units (reais/dollars)"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "expense",
+                    "income"
+                  ],
+                  "description": "expense | income"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "effective"
+                  ],
+                  "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed."
+                },
+                "date": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "description": "YYYY-MM-DD; defaults to today"
+                },
+                "category": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Category name; omit to auto-classify. Must match transaction type kind"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "USD",
+                    "BRL",
+                    "USDC",
+                    "BTC"
+                  ],
+                  "description": "Transaction currency; resolved from account/card when omitted"
+                },
+                "discriminator": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+                },
+                "note": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000,
+                  "description": "Free-form memo (observação)"
+                },
+                "billMonth": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 12,
+                  "description": "Explicit target bill cycle month (1-12) for a card transaction; overrides cycle-based auto-assignment. Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet"
+                },
+                "billYear": {
+                  "type": "integer",
+                  "minimum": 2000,
+                  "maximum": 2100,
+                  "description": "Explicit target bill cycle year; provide with billMonth"
+                }
+              },
+              "required": [
+                "description",
+                "amount",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "Statement lines to import"
+          },
+          "rawInput": {
+            "type": "string",
+            "description": "The original pasted statement text"
+          }
+        },
+        "required": [
+          "card",
+          "items"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "add_card_purchase",
+      "title": "Add credit-card purchase",
+      "description": "Record a credit-card purchase, joining the cycle bill (fatura) — the credit-card aggregate's purchase entry point (ADR-016). Resolves the card and category by name; when category is omitted, classifies via learned merchant→category associations and returns method + confidence (confirm with the user when confidence < 0.6). Idempotent automatically — a repeat call with the same card/description/date/amount is deduped; pass discriminator to record a genuinely separate transaction that would otherwise look identical. Currency always comes from the card (a card's currency is fixed at creation) — the currency field is accepted for schema symmetry with add_account_expense/add_account_income but has no effect here.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What was paid/received, e.g. \"Uber para o aeroporto\""
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Positive amount in full units (reais/dollars)"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "description": "expense | income"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "effective"
+            ],
+            "description": "Omit for date-aware default (future → pending, today/past → effective). \"effective\" = cleared, counts in balances/summaries. \"pending\" = expected, excluded until confirmed."
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "YYYY-MM-DD; defaults to today"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Category name; omit to auto-classify. Must match transaction type kind"
+          },
+          "subCategory": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sub-category name (implies its parent — do not set both)"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Transaction currency; resolved from account/card when omitted"
+          },
+          "discriminator": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+          },
+          "rawInput": {
+            "type": "string",
+            "description": "Original user phrasing, for audit"
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Free-form memo (observação)"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Labels to attach, e.g. [\"work\", \"travel\"]"
+          },
+          "card": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Credit card name — joins the cycle bill"
+          },
+          "billMonth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Explicit target bill cycle month (1-12) for a card transaction; overrides cycle-based auto-assignment. Provide with billYear together; requires card. Auto-creates the bill if that cycle has none yet"
+          },
+          "billYear": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 2100,
+            "description": "Explicit target bill cycle year; provide with billMonth"
+          }
+        },
+        "required": [
+          "description",
+          "amount",
+          "type",
+          "card"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_credit_card",
+      "title": "Create credit card",
+      "description": "Create a credit card with its internal liability account (ADR-010). closingDay: day the fatura closes (transactions after it go to next month's bill). dueDay: payment due day. Currency defaults to USD. The card auto-creates an internal credit account that tracks outstanding debt.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Card display name"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Card currency (ISO code); fixed at creation",
+            "default": "USD"
+          },
+          "closingDay": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 28,
+            "description": "Day the bill (fatura) closes; transactions after it go to next month"
+          },
+          "dueDay": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 28,
+            "description": "Day the bill is due for payment"
+          },
+          "limit": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Credit limit"
+          },
+          "paymentAccount": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Default paying account name for bill payment"
+          }
+        },
+        "required": [
+          "name",
+          "closingDay",
+          "dueDay"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_credit_cards",
+      "title": "List credit cards",
+      "description": "List all credit cards.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "update_credit_card",
+      "title": "Update credit card",
+      "description": "Update a credit card. name identifies the card; newName renames it — the card's internal account (named \"Card: {name}\", ADR-010) is renamed in the same atomic write. limit/closingDay/dueDay are plain field updates (a closingDay/dueDay change only applies to future bill cycles; existing bills keep their own computed dates). paymentAccount is resolved and validated exactly like create_credit_card/pay_bill: rejected if it is a credit account or its currency does not match the card.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Card display name"
+          },
+          "closingDay": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 28,
+            "description": "Day the bill (fatura) closes; transactions after it go to next month"
+          },
+          "dueDay": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 28,
+            "description": "Day the bill is due for payment"
+          },
+          "limit": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Credit limit"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Rejected: a card's currency is fixed at creation. Sending this field returns a validation error rather than silently no-oping — present only so that error can be raised, not because the currency is changeable"
+          },
+          "newName": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New card name"
+          },
+          "paymentAccount": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New default paying account name for bill payment"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_credit_card",
+      "title": "Delete credit card",
+      "description": "Hard delete a credit card and everything associated: internal credit account, all purchases, bill payments, and bills. Without confirm:true it is a DRY RUN returning what would be deleted — show it to the user and call again with confirm: true. Irreversible.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Card name"
+          },
+          "confirm": {
+            "type": "boolean",
+            "default": false,
+            "description": "Must be true to actually delete"
+          }
+        },
+        "required": [
+          "card"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_bill",
+      "title": "Get credit card bill (fatura)",
+      "description": "Get a card bill for a month: status (open/closed/paid), close/due dates, total, and its transactions.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Credit card name"
+          },
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Billing cycle month (1–12)"
+          },
+          "year": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 2100,
+            "description": "Billing cycle year"
+          }
+        },
+        "required": [
+          "card",
+          "month",
+          "year"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "pay_bill",
+      "title": "Pay credit card bill",
+      "description": "Pay a credit card bill. Creates a canonical transfer (payer account → card internal account) for the full bill total, then marks the bill paid. Idempotent — re-calling on a paid bill is a no-op. Paying account resolution: explicit `account` → card default `paymentAccount` → error. Optional `paymentDate` (defaults to today) records when the payment occurred; it must not be in the future — the payment transfer is always effective and dated on/before today.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Credit card name"
+          },
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Billing cycle month (1–12)"
+          },
+          "year": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 2100,
+            "description": "Billing cycle year"
+          },
+          "account": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Paying account name (overrides card default)"
+          },
+          "paymentDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Date the payment occurred (defaults to today); must not be in the future"
+          }
+        },
+        "required": [
+          "card",
+          "month",
+          "year"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "revert_bill_payment",
+      "title": "Revert credit card bill payment",
+      "description": "Undo a bill payment: deletes the payment transfer and flips the bill back from paid to closed. Idempotent — calling on a bill that is not paid is a no-op that returns it unchanged.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Credit card name"
+          },
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Billing cycle month (1–12)"
+          },
+          "year": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 2100,
+            "description": "Billing cycle year"
+          }
+        },
+        "required": [
+          "card",
+          "month",
+          "year"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "update_card_transaction",
+      "title": "Update credit-card transaction",
+      "description": "Update a credit-card transaction by id (from search_transactions) — the credit-card aggregate's update entry point (ADR-017/ADR-020). Owns transactions that involve a credit account: card purchases and the bill-payment transfer. cardId/billId (returned by search_transactions/ TransactionView) are reliable proxies for picking this tool — only these two cases ever have a credit-account leg — but TransactionView does not expose account types, and the authoritative check is the leg account type; if unsure (e.g. a transfer's toAccountId), call the tool and follow the wrong-tool redirect. Calling this on a transaction with no credit-account leg is rejected with a validation error redirecting to update_account_transaction. Only provided fields change. Setting category is a user correction (confidence 1, strengthens the merchant→category association). account cannot be changed — a card purchase is always funded by the card's own internal liability account (ADR-010). billMonth+billYear reassigns to a different bill cycle (both required together); rejected with a validation error pointing at revert_bill_payment if the current or target bill is paid. The bill-payment transfer itself (billId set, no cardId) cannot be edited at all — it is owned exclusively by pay_bill/revert_bill_payment.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Transaction id"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Updated description"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Updated amount in full units"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "description": "Updated movement type"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Updated date (YYYY-MM-DD)"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New category name (user correction). Do not set with subCategory"
+          },
+          "subCategory": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New sub-category name (implies parent; do not set with category)"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Free-form memo. Empty string clears; omit to leave unchanged"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Replaces the full tag set when provided; pass [] to remove all"
+          },
+          "account": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Rejected: a card transaction is always funded by the card's own internal account. Sending this field returns a validation error rather than reassigning it — present only so that error can be raised, not because the account is changeable"
+          },
+          "billMonth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Reassign to this bill cycle month (1-12) — the transaction must already be a card transaction. Provide with billYear together. Rejected if the current or target bill is paid; auto-creates the target bill if that cycle has none yet"
+          },
+          "billYear": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 2100,
+            "description": "Reassignment target bill cycle year; provide with billMonth"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_card_transaction",
+      "title": "Delete credit-card transaction",
+      "description": "Delete a credit-card transaction by id — the credit-card aggregate's delete entry point (ADR-017/ADR-020). Owns transactions that involve a credit account (card purchases and the bill-payment transfer); calling this on a transaction with no credit-account leg is rejected with a validation error redirecting to delete_account_transaction. Without confirm:true it is a DRY RUN returning what would be deleted — show it to the user and call again with confirm: true. Any transaction on a paid bill (including the bill-payment transfer itself) cannot be deleted this way — rejected with a validation error pointing at revert_bill_payment.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Transaction id"
+          },
+          "confirm": {
+            "type": "boolean",
+            "default": false,
+            "description": "Must be true to actually delete"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "set_exchange_rate",
+      "title": "Set exchange rate",
+      "description": "FinTrack never fetches exchange rates itself (local-first, zero external calls — ADR-026). The AI agent is responsible for sourcing current rates (e.g. PTAX for fiat, a crypto price API) and upserting them here so read-time valuation has data to work with. Upserts one (from, to) rate: 1 unit of `from` = `rate` units of `to`, as of `asOf`. A pair that already has a stored rate is overwritten (latest wins) — this is not a history log.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Base currency — 1 unit of this equals `rate` units of `to`"
+          },
+          "to": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Quote currency — the unit `rate` is expressed in"
+          },
+          "rate": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "1 unit of `from` = `rate` units of `to`, as of `asOf`"
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp this rate was observed/sourced"
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Free-text provenance, e.g. \"PTAX\", \"coingecko\""
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "rate",
+          "asOf"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "set_exchange_rates",
+      "title": "Set exchange rates (bulk)",
+      "description": "FinTrack never fetches exchange rates itself (local-first, zero external calls — ADR-026). The AI agent is responsible for sourcing current rates (e.g. PTAX for fiat, a crypto price API) and upserting them here so read-time valuation has data to work with. Upserts several (from, to) rates in one call, same semantics as set_exchange_rate per item. Partial success: one pair's failure (e.g. from === to) does not block the others — check each item's status in the response.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "enum": [
+                    "USD",
+                    "BRL",
+                    "USDC",
+                    "BTC"
+                  ],
+                  "description": "Base currency — 1 unit of this equals `rate` units of `to`"
+                },
+                "to": {
+                  "type": "string",
+                  "enum": [
+                    "USD",
+                    "BRL",
+                    "USDC",
+                    "BTC"
+                  ],
+                  "description": "Quote currency — the unit `rate` is expressed in"
+                },
+                "rate": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "1 unit of `from` = `rate` units of `to`, as of `asOf`"
+                },
+                "asOf": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 timestamp this rate was observed/sourced"
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Free-text provenance, e.g. \"PTAX\", \"coingecko\""
+                }
+              },
+              "required": [
+                "from",
+                "to",
+                "rate",
+                "asOf"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 50
+          }
+        },
+        "required": [
+          "rates"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_exchange_rates",
+      "title": "List exchange rates",
+      "description": "All stored exchange rates, each with its own `asOf`. Staleness is not evaluated here — this is the raw cached table (ADR-026); use it to decide which pairs need refreshing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "confirm_transaction",
+      "title": "Confirm (clear) a pending transaction",
+      "description": "Mark a pending transaction as effective (cleared). Pending transactions are excluded from balances and spending summaries; confirming one makes it count. Optionally correct amount/date in the same call — account/card movements only, rejected for a transfer/bill-payment (a plain status-only confirm of one is still fine). The resolved date (the given date, or the existing date if omitted) must not be in the future. If the transaction is already effective, this is a no-op.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Transaction id (from search_transactions with status: \"pending\")"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Corrected amount, applied together with the confirm — account/card movements only, rejected for a transfer/bill-payment"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Corrected date (YYYY-MM-DD), applied together with the confirm — account/card movements only, rejected for a transfer/bill-payment; the resolved date (this, or the existing date if omitted) must not be in the future"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "search_transactions",
+      "title": "Search transactions",
+      "description": "Search transactions by period (month/year or from/to), type (including transfers), category/account name, or free text. With an account filter this is the full account statement (extrato): expenses, income, and transfers in either direction. Returns a page `{ items, nextCursor?, total? }` (ADR-014) — pass the previous `nextCursor` back as `cursor` to keep walking; `nextCursor` is absent on the last page. `sort`/`dir` must stay the same across a walk (they are bound to the cursor); set `includeTotal: true` on the first call only if you need the total count of matching transactions.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Filter by month (1-12), with year — alternative to from/to"
+          },
+          "year": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 2100,
+            "description": "Filter by year, with month — alternative to from/to"
+          },
+          "from": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Start date (inclusive, YYYY-MM-DD) — alternative to month/year"
+          },
+          "to": {
+            "$ref": "#/properties/from",
+            "description": "End date (exclusive, YYYY-MM-DD) — alternative to month/year"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "expense",
+              "income",
+              "transfer"
+            ],
+            "description": "Filter by type (expense/income/transfer)"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "effective"
+            ],
+            "description": "\"pending\" to list scheduled transactions; omit for all"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filter by category name"
+          },
+          "subCategory": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filter to transactions with this sub-category"
+          },
+          "account": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filter by account name"
+          },
+          "text": {
+            "type": "string",
+            "description": "Free-text search in description"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Filter to transactions having any of these tags"
+          },
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Opaque continuation token returned as `nextCursor` by a previous page"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Maximum results per page",
+            "default": 50
+          },
+          "includeTotal": {
+            "type": "boolean",
+            "description": "When true, include `total` — the count of all items matching the filters (costs an extra COUNT query). Default false"
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "date",
+              "amount"
+            ],
+            "description": "Field to sort by: date or amount. Default: date",
+            "default": "date"
+          },
+          "dir": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "description": "Sort direction: asc or desc. Default: desc",
+            "default": "desc"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_transfer",
+      "title": "Transfer between accounts",
+      "description": "Move value between two accounts (e.g. conta corrente → investimentos). Creates a transaction with type 'transfer' (FROM + TO accounts): debits one balance, credits the other, never appears in spending summaries, and shows in both account histories (search_transactions). Both accounts must share the same currency (FX not available yet). Idempotent automatically — a repeat call with the same from/to/description/date/amount is deduped; pass discriminator to record a genuinely separate transfer that would otherwise look identical.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Source account name"
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Destination account name"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Transfer amount in full units"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "effective"
+            ],
+            "description": "pending | effective; omit for date-aware default"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "YYYY-MM-DD; defaults to today"
+          },
+          "description": {
+            "type": "string",
+            "description": "e.g. \"aporte mensal\""
+          },
+          "discriminator": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Distinguishes genuinely-separate transactions that would otherwise be identical (e.g. two identical purchases the same day)"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "amount"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_budget",
+      "title": "Create budget",
+      "description": "Create a recurring monthly spending limit on a category or sub-category, in one currency (Feature Design 015). Provide exactly one of category/subCategory — a category budget rolls up its sub-categories' spend (the envelope behavior); a sub-category budget measures only its own spend, and also counts toward its parent's budget if one exists. Rejected for an income-kind category (a budget caps spending). Rejected as a duplicate if this exact (target, currency, period) already has a budget — use update_budget instead. Use get_budget_status to see spend-vs-limit.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Category name to budget — provide exactly one of category/subCategory"
+          },
+          "subCategory": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sub-category name to budget — provide exactly one of category/subCategory"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Currency this limit is denominated in and measured against"
+          },
+          "limit": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Spending limit for the period, full units of currency"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "monthly"
+            ],
+            "description": "How often the limit applies",
+            "default": "monthly"
+          }
+        },
+        "required": [
+          "currency",
+          "limit"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "update_budget",
+      "title": "Update budget",
+      "description": "Update a budget's limit and/or period, identified by its id (from create_budget/list_budgets).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Budget id, from create_budget or list_budgets"
+          },
+          "limit": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "New spending limit"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "monthly"
+            ],
+            "description": "New period"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_budget",
+      "title": "Delete budget",
+      "description": "Delete a budget by id. Idempotent — deleting an already-absent id is not an error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Budget id"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_budgets",
+      "title": "List budgets",
+      "description": "List all budgets (the limits themselves, no spend) — use get_budget_status for spend-vs-limit.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_budget_status",
+      "title": "Get budget status",
+      "description": "Spend-vs-limit for every budget in a month (Feature Design 015 phase 2, measurement revised by Feature Design 020) — grouped by top-level category so a category's own budget and each of its sub-categories' own budgets read as one coherent unit; no cross-currency total on the per-currency lines themselves (BRL and USD never mixed there). Reports two measures against each limit: `effective` (cleared spend only) and `committed` (effective + pending — the earmark-aware view of what's already spoken for); `pending` (committed - effective) is derived for convenience. Each measure carries `amount` and `pct` (amount / limit); both sums are expense-only, same-currency (income and transfers never count, even on a both-kind category); a category budget rolls up its sub-categories' spend, a sub-category budget measures only its own (and also counts toward its parent's, if the parent has a budget too). `remaining` (limit - committed.amount) can go negative when over budget — over-budget is reported, never an error. Optional displayCurrency adds a top-level converted block: a read-time grand total of committed spend across every budgeted category's currency, converted against currency_rates (as_of-stamped, stale-flagged; a currency with no rate to displayCurrency is listed in converted.excluded and left out of the total, never fabricated). A spend row counted toward both a sub-category budget and its rolled-up parent budget contributes to this total once, not twice. Per-currency/per-category lines are unaffected either way.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Month (1–12)"
+          },
+          "year": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 2100,
+            "description": "Calendar year"
+          },
+          "displayCurrency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Also return a converted grand total of committed spend in this currency"
+          }
+        },
+        "required": [
+          "month",
+          "year"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_recurring",
+      "title": "Create recurring rule",
+      "description": "Create a recurring transaction rule (salary, rent, subscription). Materialized by apply_due_recurring, each occurrence carrying the rule's merchant. `merchant` names it explicitly (e.g. \"Netflix\"); omit to derive it from `description` — either way it's normalized the same way a transaction's merchant is, so recurring spend shows up in merchant_concentration and reinforces classification like any other spend.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What this rule pays for (rent, salary, subscription…)"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Recurring amount in full units"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "description": "expense | income"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "weekly",
+              "monthly",
+              "yearly"
+            ],
+            "description": "How often the rule fires"
+          },
+          "startDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "First due date (YYYY-MM-DD)"
+          },
+          "account": {
+            "type": "string",
+            "description": "Account name (resolved by name match)"
+          },
+          "category": {
+            "type": "string",
+            "description": "Category name (resolved by name match)"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Currency (resolved from account if omitted)"
+          },
+          "merchant": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Merchant this rule pays (e.g. \"Netflix\", the landlord) — normalized the same way as a transaction description; omit to derive it from `description` instead"
+          }
+        },
+        "required": [
+          "description",
+          "amount",
+          "type",
+          "period",
+          "startDate"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_recurring",
+      "title": "List recurring rules",
+      "description": "List all recurring rules with next due dates.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "apply_due_recurring",
+      "title": "Apply due recurring rules",
+      "description": "Materialize transactions for every rule due on/before `through` (default: today). Past/present occurrences are created as effective; future occurrences are created as pending — so passing a future date pre-creates upcoming salary, rent, and subscriptions as pending, feeding projections without extra monthly effort. Idempotent — safe to call any time.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "through": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "YYYY-MM-DD horizon (default: today). Pass a future date to pre-create upcoming occurrences as pending."
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_category",
+      "title": "Create category",
+      "description": "Create a category. Prefer existing categories (list_categories) before creating new ones.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Category display name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "expense",
+              "income",
+              "both"
+            ],
+            "description": "expense | income | both — controls which transaction types may use this category",
+            "default": "expense"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_categories",
+      "title": "List categories",
+      "description": "List all categories. Names are resolved to the active locale for default categories.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_sub_category",
+      "title": "Create sub-category",
+      "description": "Create a sub-category under an existing category. Sub-categories inherit the kind (expense/income/both) of their parent. Use list_categories to find the parent id. Names must be unique within the same parent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sub-category display name"
+          },
+          "parentId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "ID of the parent category"
+          }
+        },
+        "required": [
+          "name",
+          "parentId"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_sub_categories",
+      "title": "List sub-categories",
+      "description": "List all sub-categories, optionally filtered by parent category id.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "parentId": {
+            "type": "string",
+            "description": "Filter to sub-categories of this parent category id"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_category",
+      "title": "Delete category",
+      "description": "Delete a category by name. Blocked if any transactions, recurring rules, or sub-categories reference it — returns an in_use error with reference counts so you can guide the user to clear them first. On success, also removes the category's learned merchant classification rules (re-learnable).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Category name"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_sub_category",
+      "title": "Delete sub-category",
+      "description": "Delete a sub-category by name. Blocked if any transactions, recurring rules, or child sub-categories reference it — returns an in_use error with reference counts. On success, also removes learned merchant classification rules for this sub-category.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sub-category name"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_tags",
+      "title": "List tags",
+      "description": "List all tags.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_tag",
+      "title": "Create tag",
+      "description": "Create a tag. Tags can be attached to transactions to label them (e.g. \"work\", \"travel\", \"reembolsável\").",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_tag",
+      "title": "Delete tag",
+      "description": "Delete a tag by id. Removes the tag and all its associations with transactions.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "save_dashboard",
+      "title": "Save dashboard",
+      "description": "Create or override a named dashboard: a content FRAGMENT you author (sections + an inline <script>, no <!doctype>/<html>/<head>/<style> root — the app shell at GET /ui already provides those and is what actually renders it, at GET /ui/:name) (ADR-013, fragment model ADR-027). Upsert semantics — saving to an existing name replaces it immediately, no rebuild or restart needed. CRITICAL: the fragment must NEVER embed financial data, secrets, or tokens inline — render layout/styling only and fetch data client-side from the documented /api endpoints (read the fintrack://openapi resource for the contract) on load, so the dashboard is always live and safe to share. Rejected (validation error) if the content is empty, still carries a full <!doctype>/<html> document root, an external <script src> reference (the shell already loads Chart.js once — a fragment carries zero external references of its own), or an inline <script> has a syntax error — fix the reported issue and save again.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Dashboard identifier, used as the /ui/:name path segment (e.g. \"overview\")"
+          },
+          "html": {
+            "type": "string",
+            "maxLength": 500000,
+            "description": "Content fragment (sections + script) rendered into the app shell's #content (GET /ui) — not a full HTML page: no <!doctype>/<html>/<head>/<style> root, the shell already provides those. Must fetch data from /api on load — never embeds financial data"
+          }
+        },
+        "required": [
+          "name",
+          "html"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_dashboards",
+      "title": "List dashboards",
+      "description": "List saved dashboards by name and last-updated time (HTML content omitted).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_dashboard",
+      "title": "Delete dashboard",
+      "description": "Delete a dashboard by name. Idempotent — deleting an already-absent name is not an error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Dashboard name"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "rename_dashboard",
+      "title": "Rename dashboard",
+      "description": "Rename a dashboard, preserving its content and identity. GET /api/dashboards/:newName serves it afterward; GET /api/dashboards/:name (the old name) 404s. GET /ui/:name always serves the app shell regardless of name, so it does not reflect this — the shell resolves the dashboard client-side.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Current dashboard name"
+          },
+          "newName": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New dashboard name"
+          }
+        },
+        "required": [
+          "name",
+          "newName"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "find_correlations",
+      "title": "Find correlations",
+      "description": "Analysis tool over spending patterns, discriminated by `analysis` (Feature Design 016). `spending_shifts`, `budget_fit`, and `merchant_concentration` take a reference `month`/`year`; `recurring_candidates` does not — it scans a rolling `lookbackMonths` window ending today instead. `spending_shifts`: what is up or down vs a trailing baseline, per (category, currency) — \"what's driving the change\" this month. `current` is the reference month's effective, expense-only total; `baseline` is the average monthly total over the preceding `baselineMonths`; `deltaPct` is the percentage change, `null` for a brand-new category with no baseline spend at all (reported with `direction: \"up\"`, not a divide-by-zero). Only categories at or above `minDeltaPct` are returned; a brand-new category with no baseline spend at all is always surfaced regardless of this threshold. Results are sorted by |deltaPct| descending. Sub-category spend rolls up into its parent category, same as aggregate_spending/budgets. Per-currency — BRL and USD are never mixed. `budget_fit`: closes the loop between insights and budgets — read-only, apply a suggestion yourself via create_budget/update_budget. `budgeted` has one line per existing budget: `baseline` (same trailing-average definition as spending_shifts) compared to the budget's own `limit` yields a `verdict` — \"realistic\" (baseline within tolerance of limit), \"unrealistic\" (baseline materially over limit — consistently over-budget, use `overPct`), or \"generous\" (baseline well under limit, use `slackPct`) — plus a `suggestedLimit` (baseline plus a small margin) you can pass straight to update_budget. `unbudgeted` lists categories with an established (nonzero baseline) spend pattern but no budget at all, each with a `suggestedLimit` ready for create_budget. `merchant_concentration`: within each category (or just one, via `category`), the top `topN` merchants by effective expense, each `share` (spent / categoryTotal, a 0-1 fraction) and `cumulativeShare` (running total in descending-spend order) — \"where within Food is my money actually going?\" `othersSpent` is categoryTotal minus the returned merchants, the long tail beyond `topN`. A transaction with no classified merchant groups under a localized \"Unknown\". `recurring_candidates`: merchants with a regular ~monthly cadence over the trailing `lookbackMonths` (default 6) that are not already backing a recurring rule (exact `merchant_key` match, Feature Design 017) — each candidate is a ready-to-confirm create_recurring shape: pass its `merchant`, `typicalAmount`, `currency`, `category`, and `suggestedNextDue` straight through as `merchant`/`amount`/`currency`/`category`/`startDate`. Requires at least `minOccurrences` (default 3) qualifying transactions at a consistent ~30-day gap and a stable amount — irregular gaps or amount drift disqualify a merchant. Optional `displayCurrency` adds a top-level `converted` block — `{ displayCurrency, total, stale, asOf, excluded }` — a read-time grand total converted against currency_rates (as_of-stamped, stale-flagged; a currency with no rate to `displayCurrency` is listed in `converted.excluded` and left out of the total, never fabricated). Applies to `spending_shifts` (the reference month's effective expense spend per currency), `budget_fit` (committed — effective + pending — spend matched to a budget, the same measure get_budget_status converts, so the two surfaces agree), and `merchant_concentration` (each currency's categoryTotal, summed once — not each merchant line). `recurring_candidates` is unaffected — its candidates are proposed rules, not per-currency spend totals. Per-currency/per-line results are unaffected either way.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "analysis": {
+            "type": "string",
+            "enum": [
+              "spending_shifts",
+              "budget_fit",
+              "merchant_concentration",
+              "recurring_candidates"
+            ],
+            "description": "Which correlation analysis to run"
+          },
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Reference month (1-12) — spending_shifts/budget_fit/merchant_concentration measure this month against its trailing baseline; not used by recurring_candidates"
+          },
+          "year": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 2100,
+            "description": "Reference year — not used by recurring_candidates"
+          },
+          "baselineMonths": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24,
+            "description": "Trailing window size in months averaged into the baseline (default 3)",
+            "default": 3
+          },
+          "minDeltaPct": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Only surface categories whose |deltaPct| is at least this percentage (default 20); a brand-new category with no baseline spend at all is always surfaced regardless of this threshold",
+            "default": 20
+          },
+          "slackPct": {
+            "type": "number",
+            "minimum": 0,
+            "description": "budget_fit: how far below the limit the baseline can sit before the budget is \"generous\" — percentage (default 20)",
+            "default": 20
+          },
+          "overPct": {
+            "type": "number",
+            "minimum": 0,
+            "description": "budget_fit: how far above the limit the baseline can sit before the budget is \"unrealistic\" — percentage (default 20)",
+            "default": 20
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "description": "merchant_concentration: restrict to a single category by name (default: every category)"
+          },
+          "topN": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "description": "merchant_concentration: top merchants to return per category (default 5)",
+            "default": 5
+          },
+          "lookbackMonths": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 36,
+            "description": "recurring_candidates: months of transaction history to scan for a recurring pattern, ending today (default 6)",
+            "default": 6
+          },
+          "minOccurrences": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 24,
+            "description": "recurring_candidates: minimum qualifying occurrences within the lookback window to flag a candidate (default 3)",
+            "default": 3
+          },
+          "displayCurrency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Also return a converted grand total in this currency for spending_shifts/budget_fit/merchant_concentration (recurring_candidates is unaffected — its candidates are proposed rules, not per-currency spend totals)"
+          }
+        },
+        "required": [
+          "analysis"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "aggregate_spending",
+      "title": "Aggregate spending",
+      "description": "Flexible spending aggregation: group transactions by category, account, tag, month, or merchant, measured as sum, count, or avg. Results are per-currency blocks with totals and percentages. Only effective, non-transfer transactions are counted. Provide a period via month+year or from/to date range. Optional displayCurrency adds a top-level converted block: a read-time grand total of the per-currency block totals, converted against currency_rates (as_of-stamped, stale-flagged; a currency with no rate to displayCurrency is listed in converted.excluded and left out of the total, never fabricated). Only attached when metric is sum — count/avg are not coherent cross-currency money totals. Per-currency lines are unaffected either way.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "groupBy": {
+            "type": "string",
+            "enum": [
+              "category",
+              "account",
+              "tag",
+              "month",
+              "merchant"
+            ],
+            "description": "Dimension to group by: category, account, tag, month, or merchant"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "sum",
+              "count",
+              "avg"
+            ],
+            "description": "Aggregation metric: sum, count, or avg of amount",
+            "default": "sum"
+          },
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Month (1–12)"
+          },
+          "year": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 2100,
+            "description": "Calendar year"
+          },
+          "from": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Start date (inclusive, YYYY-MM-DD) — alternative to month/year"
+          },
+          "to": {
+            "$ref": "#/properties/from",
+            "description": "End date (exclusive, YYYY-MM-DD) — alternative to month/year"
+          },
+          "account": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filter by account name"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filter by category name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "description": "Filter by movement type: expense or income"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Filter to transactions having any of these tags"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Return only the top-N rows per currency",
+            "default": 50
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "description": "Sort order by metric value: asc or desc",
+            "default": "desc"
+          },
+          "displayCurrency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Opt-in: also return a converted grand total of the per-currency block totals in this currency. Only attached when metric is sum — a block total is a genuine money quantity to convert; count/avg are not."
+          }
+        },
+        "required": [
+          "groupBy"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_spending_summary",
+      "title": "Get spending summary",
+      "description": "Income, expenses, balance and per-category totals for a month — grouped per currency (BRL/USD are never mixed). Optional displayCurrency adds a top-level converted block: a read-time grand total of expenses across currencies, converted against currency_rates (as_of-stamped, stale-flagged; a currency with no rate to displayCurrency is listed in converted.excluded and left out of the total, never fabricated). Per-currency lines are unaffected either way.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12
+          },
+          "year": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 2100
+          },
+          "displayCurrency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ],
+            "description": "Also return a converted grand total of expenses in this currency"
+          }
+        },
+        "required": [
+          "month",
+          "year"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "set_locale",
+      "title": "Set locale",
+      "description": "Set the display language for default categories (en/es/pt). The AI agent should call this when it detects the user's language from conversation — use source \"inferred\". When the user explicitly requests a locale change, use source \"explicit\". GUARDRAILS: (1) Anti-churn — only switch on a clear, sustained language change, not on isolated foreign words, merchant names, or proper nouns. (2) Respect explicit — if the current locale_source is \"explicit\", do not auto-switch with source \"inferred\"; the user must explicitly request the change. Use get_preferences to check the current locale and source.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "type": "string",
+            "enum": [
+              "en",
+              "es",
+              "pt"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "inferred",
+              "explicit"
+            ]
+          }
+        },
+        "required": [
+          "locale",
+          "source"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_preferences",
+      "title": "Get user preferences",
+      "description": "Returns the stored locale preference, locale_source, and the resolved base currency. Use this to check whether the user set the locale explicitly before attempting an inferred switch. Note: the FINTRACK_LOCALE env var can override the effective display locale used by list_categories; this tool reports the stored preference, not the effective override. base_currency is either an explicit override (set_base_currency) or derived from locale (pt→BRL, en/es→USD) when unset.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "set_base_currency",
+      "title": "Set base currency",
+      "description": "Set the explicit base currency — the default target for future read-time valuation (ADR-026). Unset, it's derived from locale (pt→BRL, en/es→USD); this tool overrides that derivation. Use get_preferences to check the currently resolved value.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "baseCurrency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "BRL",
+              "USDC",
+              "BTC"
+            ]
+          }
+        },
+        "required": [
+          "baseCurrency"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_status",
+      "title": "Get server status",
+      "description": "Returns server name, version, database reachability, and active locale. A convenience for tool-only callers (the AI agent / chat user) — complements the protocol-native initialize serverInfo (version) and ping (liveness), which are not accessible via tools.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "name": "openapi",
+      "title": "FinTrack OpenAPI contract",
+      "uri": "fintrack://openapi",
+      "description": "OpenAPI 3.0 document for the REST API (GET /api/openapi.json mirrors this). Read this before generating fetch() calls against /api endpoints (ADR-013).",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "categories",
+      "title": "Category taxonomy",
+      "uri": "fintrack://categories",
+      "description": "Top-level categories with locale-resolved display names and kind (expense/income/both) — the same data list_categories returns. Read this to resolve a category name before classifying a transaction, without a tool round-trip.",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "accounts",
+      "title": "Accounts",
+      "uri": "fintrack://accounts",
+      "description": "All accounts with name, type, and currency — the same data list_accounts returns. Read this to resolve an account name without a tool round-trip.",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "currencies",
+      "title": "Currencies",
+      "uri": "fintrack://currencies",
+      "description": "All currencies (fiat and crypto) with symbol and decimals — the same data GET /api/currencies returns. Read this to format an amount correctly: crypto codes (USDC, BTC) aren't ISO 4217, so a generic currency formatter must use the symbol + decimals given here instead of assuming 2 decimal places.",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "exchange-rates",
+      "title": "Exchange rates",
+      "uri": "fintrack://exchange-rates",
+      "description": "All cached exchange rates, each with its own as_of — the same data list_exchange_rates returns. FinTrack never fetches rates itself (local-first, ADR-026); read this to see which pairs are cached and how fresh they are before deciding whether to refresh via set_exchange_rate(s).",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "tags",
+      "title": "Tags",
+      "uri": "fintrack://tags",
+      "description": "All tags — the same data list_tags returns. Read this to resolve a tag name without a tool round-trip.",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "credit-cards",
+      "title": "Credit cards",
+      "uri": "fintrack://credit-cards",
+      "description": "All credit cards — the same data list_credit_cards returns. Read this to resolve a card name without a tool round-trip.",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "merchants-top",
+      "title": "Top merchants",
+      "uri": "fintrack://merchants/top",
+      "description": "The 20 merchants with the most effective, non-transfer transactions, each with the category it is most often classified into — the vocabulary of merchants the user actually deals with (e.g. \"iFood → Alimentação\"), by transaction frequency (not spend). Not a money report: no per-currency amounts. categoryName is null for a merchant whose transactions are all uncategorized.",
+      "mimeType": "application/json"
+    }
+  ],
+  "resourceTemplates": [],
+  "prompts": [
+    {
+      "name": "monthly_review",
+      "title": "Monthly financial review",
+      "description": "Synthesize a per-currency monthly review: spending summary, the biggest shifts vs baseline, budget fit, and recurring-payment candidates worth automating.",
+      "arguments": [
+        {
+          "name": "month",
+          "description": "Month (1-12) — default: the current month",
+          "required": false
+        },
+        {
+          "name": "year",
+          "description": "Calendar year — default: the current year",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "budget_checkup",
+      "title": "Budget checkup",
+      "description": "Report which budgets are on track, over, or generous, surface suggested limits and unbudgeted significant spend, and offer to apply the suggestions.",
+      "arguments": [
+        {
+          "name": "month",
+          "description": "Month (1-12) — default: the current month",
+          "required": false
+        },
+        {
+          "name": "year",
+          "description": "Calendar year — default: the current year",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "import_statement",
+      "title": "Import a statement",
+      "description": "Walk the user through pasting a card or account statement, importing it, and confirming any needs_review items.",
+      "arguments": [
+        {
+          "name": "source",
+          "description": "\"card\" or \"account\" — omit to ask the user which kind of statement they have",
+          "required": false
+        }
+      ]
+    }
+  ]
+}
