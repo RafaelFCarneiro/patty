@@ -609,38 +609,61 @@ requires a session. The container `HEALTHCHECK` is `/api/health`.
 
 ## Diplomat edge organization (ADR-025)
 
-Both diplomat edges are organized as per-domain registration/route modules mirroring `controllers/`, rather than
-one large file each. **The convention:** a new MCP tool/resource/prompt or HTTP route lives in the domain module
-matching its controller; the entrypoint (`server.ts`/`routes.ts`) never inlines a new registration.
+Both diplomat edges are organized as **one named definition per route/tool/resource/prompt**, grouped in per-domain
+modules mirroring `controllers/`, and registered generically. **The convention:** a new MCP tool/resource/prompt or HTTP
+route is a `const` in the domain module matching its controller, added to that module's exported list; the aggregators
+(`server.ts`, `routes.ts`) and the registrar never change. Definitions are declarative metadata plus a handler that
+only adapts args → model, builds the flow, runs it through the scoped runner and maps the result (~10 lines); longer
+is orchestration that belongs in a controller. `diplomat/http/**` and `diplomat/mcp/**` are held to the Function-shape
+limits (`eslint.config.js`: 40 lines, complexity 10, depth 3, 15 statements per function).
 
-**MCP — `diplomat/mcp`.** `tools/<domain>.ts` (`account`, `creditCard`, `transaction`, `transfer`, `budget`,
-`recurring`, `category`, `tag`, `dashboard`, `correlations`, `aggregate`, `summary`, `currencyRates`, `system`) each export a
-`register<Domain>Tools(server, ctx)` that registers exactly the tools whose controller lives in that domain —
-`aggregate`/`summary` get their own thin module for the same reason `correlations` does: a single-tool domain is
-still a domain, mirroring its single-file controller (`controllers/aggregate.ts`/`summary.ts`). `resources.ts`
-(`registerResources`) and `prompts.ts` (`registerPrompts`) stay single cross-domain modules — few enough, and
-cross-cutting enough, not to warrant per-domain splitting. `respond.ts` holds the shared response helpers
-(`json`, `jsonError`, `fromResult`, `jsonResource`); `annotations.ts` (`READ_ONLY`/`MUTATING`), `scopes.ts` (`guardScopes`, `toolScopesOf`), `gate.ts` (the `PrincipalGate` each transport supplies) and `authInfo.ts` carry the per-tool scope; `stdioSession.ts` is the stdio channel's identity (a presenter over the injected sign-in interpreter); `context.ts` defines `McpContext` (`{ version, as(extra) }` — `as` returns the caller's scoped `{ deps, runEffects, runEffectsSequence, resetLocale }`, built from the principal the scope guard put on the callback's `extra`), built once in `server.ts` and passed to every register call so
-no module carries the full parameter list. `server.ts` reduces to construction + aggregation: build the server,
-build `ctx`, call each `register…` once.
+**MCP — `diplomat/mcp`.** `definition.ts` defines `ToolDefinition` (`{ name: ToolName, config: { title, description,
+inputSchema, annotations }, handle(args, scoped, ctx) }`), `ResourceDefinition` and `PromptDefinition`, plus the
+`defineTool`/`definePrompt` helpers that infer `args` from the schema. `tools/<domain>.ts` (`account`, `creditCard`,
+`transaction`, `transfer`, `budget`, `recurring`, `category`, `tag`, `dashboard`, `correlations`, `aggregate`, `summary`,
+`currencyRates`, `system`) declare one `const <name>Tool = defineTool(…)` per tool and export the module's list
+(`accountTools`); long descriptions are named constants beside the definition (or a builder where parameterized);
+`tools/index.ts` concatenates the lists into `toolDefinitions` in `tools/list` order. `resources.ts`
+(`resourceDefinitions(openApiDocument)`) and `prompts.ts` (`promptDefinitions`) stay single cross-domain modules.
+**`register.ts`'s `registerDefinitions(server, ctx, { prompts, resources, tools })` is the one registrar**: it registers
+every definition on the server `guardScopes` wrapped, so none can bypass the scope guard, and resolves the caller's
+`Scoped` (`ctx.as(extra)`, `{ deps, runEffects, runEffectsSequence, resetLocale }`) once per call — a handler never sees
+`extra`. **Tool names** come from one zod enum, `ToolName` (`models/tool.ts`): the definitions, the redirect hints in
+domain errors, the scope-snapshot test and the `docs/mcp-tools.md` check (`test/unit/docs/mcpTools.test.ts`) all use it,
+and a unit test proves every name has exactly one definition. `respond.ts` holds the shared response helpers (`json`,
+`jsonError`, `fromResult`, `jsonResource`); `annotations.ts` (`READ_ONLY`/`MUTATING`), `scopes.ts` (`guardScopes`,
+`toolScopesOf`), `gate.ts` (the `PrincipalGate` each transport supplies) and `authInfo.ts` carry the per-tool scope;
+`stdioSession.ts` is the stdio channel's identity (a presenter over the injected sign-in interpreter, split into a serial
+queue, a poller and the feed step); `context.ts` defines `McpContext` (`{ version, as(extra) }`), built once in `server.ts`.
+`server.ts` reduces to construction + one `registerDefinitions` call.
 
-**HTTP — `diplomat/http`.** `hooks/<concern>.ts` holds cross-cutting request interceptors (`hooks/auth.ts`), registered
-by `composition/http.ts` before any route; `routes/<domain>.ts` (`account`, `category`, `creditCard` — including `Bills`
-alongside credit cards, same as the MCP side — `transfer`, `recurring`, `transaction`, `tag`, `currency`,
-`currencyRates`, `settings`, `dashboard`, `aggregate`, `summary`, `system`) each export a `<domain>Routes(): RouteDefinition[]` (only `system` takes the context — its health probe uses `publicDeps`); a handler is `(req, reply, scope)` and asks `scope()` for the caller's scoped dependencies — exactly the routes
-whose controller lives in that domain. Each module declares its own `<DOMAIN>_TAG` constant(s) for its OpenAPI
-tag(s) (`creditCard.ts` alone has two: `CreditCards` and `Bills`) rather than pulling from a shared enumeration,
-since no tag is used by more than one domain file. `respond.ts` holds the shared response helpers (`send`,
-`parse`) and OpenAPI response/param shorthands (`validation422`, `notFound404`, `conflict409`, `nameParam`,
-`idParam`, `confirmQuery`, `CACHE_CONTROL_NO_CACHE`); `context.ts` defines `HttpContext` (`{ deps, version,
-runEffects, runEffectsSequence }`), built once in `routes.ts` and passed to every route builder. `GET /ui`,
-`GET /ui/:name`, and `GET /ui/assets/{app.css,app.js,money.js}` — browser-facing HTML/asset routes, not
-`RouteDefinition`s (no OpenAPI entry) — are mounted by `routes/ui.ts`'s `registerUiRoutes(app)`, called from
-`registerRoutes` alongside `mountRoutes` (ADR-027 Phase 1; see § Dashboards / `/ui` surface). `routes/auth.ts`'s `registerAuthRoutes` (the `/ui/login`, `/ui/setup`, `/ui/logout` pages — browser HTML like `routes/ui.ts`,
-no OpenAPI entry; mounted only when auth is `required`) is called from `registerRoutes` too, as are `routes/tokens.ts`'s `registerTokenRoutes` (`/ui/access/tokens` pages, session-only) and `routes/wellKnown.ts`'s `registerProtectedResourceMetadataRoutes` (both likewise only when auth is `required`). `routes.ts`
-reduces to construction + aggregation: `buildRouteDefinitions` concatenates every domain's array into the one
-list `mountRoutes`/`buildOpenApiDocument` consume (§ OpenAPI contract), and `registerRoutes` mounts it, the UI
-shell/asset routes, and `/api/openapi.json`.
+**HTTP — `diplomat/http`.** `hooks/<concern>.ts` holds cross-cutting request interceptors (`hooks/auth.ts`, split into
+named steps — loopback owner, bearer, session, scope check), registered by `composition/http.ts` before any route;
+`routes/<domain>.ts` (`account`, `category`, `creditCard` — including `Bills` alongside credit cards, same as the MCP
+side — `transfer`, `recurring`, `transaction`, `tag`, `currency`, `currencyRates`, `settings`, `dashboard`, `aggregate`,
+`summary`, `system`) declare one `const <verb><Noun>Route: RouteDefinition` per route (method, path, scope, tags, summary,
+request/response schemas as declarative data, and a handler `(req, reply, scope)` that asks `scope()` for the caller's
+scoped dependencies) and export the module's list (`accountRoutes`). Only `system` is a function (`systemRoutes(ctx)`):
+its health probe uses `publicDeps` and status reports the version. Each module declares its own `<DOMAIN>_TAG`
+constant(s) for its OpenAPI tag(s) (`creditCard.ts` alone has two: `CreditCards` and `Bills`). `respond.ts` holds the
+shared reply and request helpers — `send`, `sendUpsert` (201 created / 200 replay), `parse`, `parseOrIssue`,
+`invalidQueryResponse`, `unprocessable` (the one 422 shape), `pathParam`, `isConfirmed` — and the OpenAPI shorthands
+(`validation422`, `notFound404`, `conflict409`, `nameParam`, `idParam`, `confirmQuery`, `CACHE_CONTROL_NO_CACHE`); no
+handler writes a `reply.status(4xx).send({ error })` literal. `context.ts` defines `HttpContext`, built once in
+`routes.ts`. `GET /ui`, `GET /ui/:name`, and `GET /ui/assets/{app.css,app.js,money.js}` — browser-facing HTML/asset
+routes, not `RouteDefinition`s (no OpenAPI entry) — are mounted by `routes/ui.ts`'s `registerUiRoutes(app)`, called from
+`registerRoutes` alongside `mountRoutes` (ADR-027 Phase 1; see § Dashboards / `/ui` surface), its live-update stream split
+into open / forward / session-recheck steps. `routes/auth.ts`'s `registerAuthRoutes` (the `/ui/login`, `/ui/setup`,
+`/ui/logout` pages — browser HTML like `routes/ui.ts`, no OpenAPI entry; mounted only when auth is `required`) is called
+from `registerRoutes` too, as are `routes/tokens.ts`'s `registerTokenRoutes` (`/ui/access/tokens` pages, session-only)
+and `routes/wellKnown.ts`'s `registerProtectedResourceMetadataRoutes` (both likewise only when auth is `required`); each
+page is a named handler the registration function wires. `routes.ts` reduces to construction + aggregation:
+`buildRouteDefinitions` concatenates every domain's list into the one array `mountRoutes`/`buildOpenApiDocument`
+consume (§ OpenAPI contract), and `registerRoutes` mounts it, the UI shell/asset routes, and `/api/openapi.json`.
+
+**Contract snapshots.** `test/unit/diplomat/http/__snapshots__/openapi.json` (the whole OpenAPI document) and
+`test/unit/diplomat/mcp/__snapshots__/surface.json` (`tools/list`, resources, templates, prompts) pin the edge's
+external contract, so reorganizing the edge cannot change it silently — a diff there is a behavior change.
 
 ## HTTP sidecar (ADR-013 Decision 7)
 
@@ -672,7 +695,7 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 ## Guided-workflow prompts (Feature Design 019)
 
-The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement` — text and registration in `diplomat/mcp/prompts.ts`'s `registerPrompts`, called from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome; no DB access, no controller.
+The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement` — text and definitions in `diplomat/mcp/prompts.ts`'s `registerPrompts`, called from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome; no DB access, no controller.
 
 ## Dashboards / `/ui` surface (ADR-013, ADR-027)
 

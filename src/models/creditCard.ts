@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { BillQuerySchema } from './bill.js';
 import { Id } from './id.js';
 import { CurrencyCode } from './money.js';
+import { ToolName } from './tool.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import {
   CreateTransactionSchema,
@@ -180,7 +181,8 @@ export const cardErrors = {
   paidBillImmutable: {
     code: 'validation',
     issues: [
-      'this bill is paid; its transactions cannot be added, removed, or reassigned — call revert_bill_payment first',
+      'this bill is paid; its transactions cannot be added, removed, or reassigned — call ' +
+        `${ToolName.enum.revert_bill_payment} first`,
     ],
   } satisfies CardError,
   accountChangeRejectedForCard: {

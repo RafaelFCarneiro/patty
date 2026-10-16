@@ -9,6 +9,7 @@ import { buildMcpServer } from '../../../../src/diplomat/mcp/server.js';
 import { UserRole } from '../../../../src/models/auth/owner.js';
 import { OWNER_PRINCIPAL, type Principal, PrincipalVia } from '../../../../src/models/auth/principal.js';
 import { Scope } from '../../../../src/models/auth/scope.js';
+import { ToolName } from '../../../../src/models/tool.js';
 
 const READ = Scope.enum['fintrack:read'];
 const WRITE = Scope.enum['fintrack:write'];
@@ -137,24 +138,24 @@ describe('authInfoOf', () => {
 // A reclassification of any tool is a reviewed diff of THESE lists — not a silent drift. Tools read their
 // scope from `annotations.readOnlyHint`, the single source (`logic/auth/scope.ts`'s `scopeOfTool`).
 const READ_TOOLS = [
-  'aggregate_spending',
-  'find_correlations',
-  'get_account_balances',
-  'get_bill',
-  'get_budget_status',
-  'get_preferences',
-  'get_spending_summary',
-  'get_status',
-  'list_accounts',
-  'list_budgets',
-  'list_categories',
-  'list_credit_cards',
-  'list_dashboards',
-  'list_exchange_rates',
-  'list_recurring',
-  'list_sub_categories',
-  'list_tags',
-  'search_transactions',
+  ToolName.enum.aggregate_spending,
+  ToolName.enum.find_correlations,
+  ToolName.enum.get_account_balances,
+  ToolName.enum.get_bill,
+  ToolName.enum.get_budget_status,
+  ToolName.enum.get_preferences,
+  ToolName.enum.get_spending_summary,
+  ToolName.enum.get_status,
+  ToolName.enum.list_accounts,
+  ToolName.enum.list_budgets,
+  ToolName.enum.list_categories,
+  ToolName.enum.list_credit_cards,
+  ToolName.enum.list_dashboards,
+  ToolName.enum.list_exchange_rates,
+  ToolName.enum.list_recurring,
+  ToolName.enum.list_sub_categories,
+  ToolName.enum.list_tags,
+  ToolName.enum.search_transactions,
 ];
 
 describe('every registered MCP tool declares its scope', () => {
@@ -163,7 +164,7 @@ describe('every registered MCP tool declares its scope', () => {
   const names = [...scopes.keys()].sort();
 
   it('registers the whole surface (a tool added without a hint cannot register at all)', () => {
-    expect(names).toHaveLength(55);
+    expect(names).toEqual([...ToolName.options].sort());
     for (const [name, tool] of Object.entries(registeredTools(server))) {
       const hint = (tool as unknown as { annotations?: { readOnlyHint?: unknown } }).annotations?.readOnlyHint;
       expect(typeof hint, name).toBe('boolean');
@@ -175,43 +176,43 @@ describe('every registered MCP tool declares its scope', () => {
     const writeTools = names.filter((name) => scopes.get(name) === WRITE);
     expect(readTools).toEqual(READ_TOOLS);
     expect(writeTools).toEqual([
-      'add_account_expense',
-      'add_account_income',
-      'add_card_purchase',
-      'apply_due_recurring',
-      'confirm_transaction',
-      'create_account',
-      'create_budget',
-      'create_category',
-      'create_credit_card',
-      'create_recurring',
-      'create_sub_category',
-      'create_tag',
-      'create_transfer',
-      'delete_account',
-      'delete_account_transaction',
-      'delete_budget',
-      'delete_card_transaction',
-      'delete_category',
-      'delete_credit_card',
-      'delete_dashboard',
-      'delete_sub_category',
-      'delete_tag',
-      'import_account_statement',
-      'import_card_statement',
-      'pay_bill',
-      'rename_dashboard',
-      'revert_bill_payment',
-      'save_dashboard',
-      'set_base_currency',
-      'set_exchange_rate',
-      'set_exchange_rates',
-      'set_locale',
-      'update_account',
-      'update_account_transaction',
-      'update_budget',
-      'update_card_transaction',
-      'update_credit_card',
+      ToolName.enum.add_account_expense,
+      ToolName.enum.add_account_income,
+      ToolName.enum.add_card_purchase,
+      ToolName.enum.apply_due_recurring,
+      ToolName.enum.confirm_transaction,
+      ToolName.enum.create_account,
+      ToolName.enum.create_budget,
+      ToolName.enum.create_category,
+      ToolName.enum.create_credit_card,
+      ToolName.enum.create_recurring,
+      ToolName.enum.create_sub_category,
+      ToolName.enum.create_tag,
+      ToolName.enum.create_transfer,
+      ToolName.enum.delete_account,
+      ToolName.enum.delete_account_transaction,
+      ToolName.enum.delete_budget,
+      ToolName.enum.delete_card_transaction,
+      ToolName.enum.delete_category,
+      ToolName.enum.delete_credit_card,
+      ToolName.enum.delete_dashboard,
+      ToolName.enum.delete_sub_category,
+      ToolName.enum.delete_tag,
+      ToolName.enum.import_account_statement,
+      ToolName.enum.import_card_statement,
+      ToolName.enum.pay_bill,
+      ToolName.enum.rename_dashboard,
+      ToolName.enum.revert_bill_payment,
+      ToolName.enum.save_dashboard,
+      ToolName.enum.set_base_currency,
+      ToolName.enum.set_exchange_rate,
+      ToolName.enum.set_exchange_rates,
+      ToolName.enum.set_locale,
+      ToolName.enum.update_account,
+      ToolName.enum.update_account_transaction,
+      ToolName.enum.update_budget,
+      ToolName.enum.update_card_transaction,
+      ToolName.enum.update_credit_card,
     ]);
   });
 });

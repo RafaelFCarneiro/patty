@@ -43,13 +43,13 @@ import {
   type UpdateCardTransaction,
 } from '../../models/creditCard.js';
 import { notFound } from '../../models/error.js';
+import { ToolName } from '../../models/tool.js';
 import { type FlowOutcome, type Persistable, type PersistOutcome } from '@rfc0/effect-runner';
 import {
   ClassificationMethod,
   DELETE_TRANSACTION_CONFIRM_HINT,
   TRANSACTION_ENTITY_TAG,
   transactionErrors,
-  TransactionTool,
   type ClassifiedUpsertResult,
   type ClassifyOutcome,
   type DeleteTransactionResult,
@@ -293,7 +293,7 @@ export const updateCardTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     const isCreditOwned = yield* assertCreditAccountLeg(deps, existing);
-    yield* guard(isCreditOwned, transactionErrors.wrongTool(TransactionTool.updateAccountTransaction));
+    yield* guard(isCreditOwned, transactionErrors.wrongTool(ToolName.enum.update_account_transaction));
     const cardId = yield* resolveOwnCardId(existing);
 
     yield* guard(assertExclusiveCategorySubCategory(input), transactionErrors.exclusiveCategorySubCategoryUpdate);
@@ -364,7 +364,7 @@ export const deleteCardTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     const isCreditOwned = yield* assertCreditAccountLeg(deps, existing);
-    yield* guard(isCreditOwned, transactionErrors.wrongTool(TransactionTool.deleteAccountTransaction));
+    yield* guard(isCreditOwned, transactionErrors.wrongTool(ToolName.enum.delete_account_transaction));
 
     const bill = existing.billId ? await deps.bills.findById(existing.billId) : null;
     yield* guard(!bill || !isBillPaid(bill), cardErrors.paidBillImmutable);
