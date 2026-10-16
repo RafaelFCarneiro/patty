@@ -289,6 +289,16 @@ describe('who hears about a change (the change bus and /ui/events)', () => {
     expect(heardB.received()).toContain('"entities":["budget"]');
     expect(heardA.received()).not.toContain('budget');
 
+    // …but a shared exchange rate moves everyone's valuations, so B refreshing one reaches A's stream too.
+    await callTool(ctx.app, b, 'set_exchange_rate', {
+      from: 'USD',
+      to: 'BRL',
+      rate: 5.5,
+      asOf: '2026-10-16T00:00:00.000Z',
+    });
+    await settle();
+    expect(heardA.received()).toContain('"entities":["currency_rate"]');
+
     controllerA.abort();
     controllerB.abort();
   });

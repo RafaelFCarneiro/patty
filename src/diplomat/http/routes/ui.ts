@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
-import type { ChangeEvent } from '../../../models/tenancy.js';
+import { SHARED_ENTITY_TAGS, type ChangeEvent } from '../../../models/tenancy.js';
 import { LOGOUT_PATH, TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../authPaths.js';
 import { CACHE_CONTROL_NO_CACHE } from '../respond.js';
 import { HTML_CONTENT_TYPE, readCached, UI_ROOT } from '../uiFiles.js';
@@ -61,12 +61,18 @@ const registerUiEventsRoute = (
     reply.raw.flushHeaders();
 
     const unsubscribe = subscribe((event) => {
-      // Another user's change, or instance bookkeeping (userId null).
-      if (event.userId !== userId) return;
+      // Own changes in full; another user's only where they are shared (userId null = bookkeeping, heard by no one).
+      const entities =
+        event.userId === userId
+          ? event.entities
+          : event.userId === null
+            ? []
+            : event.entities.filter((tag) => SHARED_ENTITY_TAGS.includes(tag));
+      if (entities.length === 0) return;
       // A publish can race a client disconnect that hasn't reached the 'close' handler below yet
       // — skip the write rather than push data onto a response that's already torn down.
       if (reply.raw.destroyed) return;
-      reply.raw.write(`data: ${JSON.stringify({ entities: event.entities })}\n\n`);
+      reply.raw.write(`data: ${JSON.stringify({ entities })}\n\n`);
     });
     // reply.raw (not req.raw), matching the other hijacked route in this codebase
     // (diplomat/mcp/route.ts) — this handler owns the response after hijack(), and it's the

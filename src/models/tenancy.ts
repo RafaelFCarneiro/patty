@@ -1,3 +1,4 @@
+import { CURRENCY_RATE_ENTITY_TAG } from './currencyRate.js';
 import { validation, type ValidationError } from './error.js';
 
 /** The one message every attempt to change a shared default answers with. */
@@ -11,3 +12,6 @@ export const sharedDefaultErrors = {
 
 /** A committed change: the entity tags touched and whose they are (`null` = instance bookkeeping, heard by no one). */
 export type ChangeEvent = { userId: string | null; entities: readonly string[] };
+
+/** Entities every user sees (rates move everyone's valuations): any user's change to them is heard by all. */
+export const SHARED_ENTITY_TAGS: readonly string[] = [CURRENCY_RATE_ENTITY_TAG];
