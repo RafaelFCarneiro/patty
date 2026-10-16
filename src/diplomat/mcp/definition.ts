@@ -2,7 +2,7 @@ import type { CallToolResult, GetPromptResult, ReadResourceResult } from '@model
 import type { z, ZodRawShape, ZodTypeAny } from 'zod';
 import type { Scoped } from '../../controllers/deps.js';
 import type { PromptName } from '../../models/prompts.js';
-import type { ToolName } from '../../models/tool.js';
+import type { ToolName } from './toolName.js';
 import type { MUTATING, READ_ONLY } from './annotations.js';
 import type { McpContext } from './context.js';
 

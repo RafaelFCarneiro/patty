@@ -14,7 +14,7 @@ import { guardScopes, toolScopesOf } from '../../../../src/diplomat/mcp/scopes.j
 import { toolDefinitions } from '../../../../src/diplomat/mcp/tools/index.js';
 import { OWNER_PRINCIPAL } from '../../../../src/models/auth/principal.js';
 import { PromptName } from '../../../../src/models/prompts.js';
-import { ToolName } from '../../../../src/models/tool.js';
+import { ToolName } from '../../../../src/diplomat/mcp/toolName.js';
 
 const sorted = (names: readonly string[]) => [...names].sort();
 

@@ -1,3 +1,4 @@
+import { Remedy } from '../../../../src/models/remedy.js';
 import { describe, expect, it } from 'vitest';
 import {
   addAccountExpense,
@@ -442,7 +443,7 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
-    expect((error as ValidationError).issues[0]).toContain('update_card_transaction');
+    expect((error as ValidationError).remedy).toBe(Remedy.enum.update_card_transaction);
   });
 
   it('deleteAccountTransaction rejects a tx with a credit leg, redirecting to delete_card_transaction', async () => {
@@ -458,7 +459,7 @@ describe('updateAccountTransaction / deleteAccountTransaction — ownership by a
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe('validation');
-    expect((error as ValidationError).issues[0]).toContain('delete_card_transaction');
+    expect((error as ValidationError).remedy).toBe(Remedy.enum.delete_card_transaction);
   });
 
   it('updateAccountTransaction returns a version-guarded update Persistable carrying the merged patch', async () => {

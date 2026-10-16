@@ -7,8 +7,8 @@ import { cursorSchema, PageRequestSchema, SortDirection } from './page.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { CursorKey } from './page.js';
 import type { CategoryKind } from './category.js';
-import type { ValidationError } from './error.js';
-import { ToolName } from './tool.js';
+import { validationWithRemedy, type ValidationError } from './error.js';
+import { Remedy } from './remedy.js';
 import type { LabelMap } from './locale.js';
 
 /** Whether the transaction has cleared or is still expected. Default is date-aware when omitted. */
@@ -262,7 +262,7 @@ export const ConfirmTransactionSchema = z.object({
 });
 export type ConfirmTransaction = z.infer<typeof ConfirmTransactionSchema>;
 
-/** Delete input shape (ADR-017): identical for delete_card_transaction and delete_account_transaction
+/** Delete input shape (ADR-017): identical for the card and account transaction deletes
  *  — delete carries zero aggregate-specific data, so unlike update it has no per-aggregate variant. */
 export const DeleteTransactionSchema = z.object({
   id: z.string().min(1).describe('Transaction id'),
@@ -400,6 +400,12 @@ export type TransactionError =
     }
   | ValidationError;
 
+const CONFIRM_EDIT_NOT_ALLOWED_MESSAGE =
+  "cannot edit amount/date of a transfer or bill-payment transaction at confirm — correct a transfer's " +
+  'amount/date by updating it, a bill payment by paying or reverting its bill, then confirm';
+const WRONG_OPERATION_MESSAGE =
+  'this transaction is not owned by this operation; use the one for its other aggregate instead';
+
 export const transactionErrors = {
   notFound: (id: string): TransactionError => ({
     code: 'unknown_transaction',
@@ -414,11 +420,9 @@ export const transactionErrors = {
     transactionType,
     categoryName,
     categoryKind,
-    // Phrased tool-agnostically: raised by update_card_transaction/update_account_transaction/
-    // add_card_purchase (all have a `type` field a hint could name directly) as well as
-    // add_account_expense/add_account_income (movement kind is the tool itself — no `type` field
-    // exists to "set"), so the hint names the remedy in terms every caller can act on, not just the
-    // ones with a settable field.
+    // Phrased flow-agnostically: raised by flows that have a settable `type` field (card purchase, updates) and by
+    // ones where the movement kind is the flow itself (account expense/income — no `type` to "set"), so the hint
+    // names the remedy in terms every caller can act on.
     hint: `Category "${categoryName}" is ${categoryKind}-only; use a matching category, or record this as ${categoryKind === 'income' ? 'income' : 'an expense'} instead`,
   }),
   exclusiveCategorySubCategory: {
@@ -442,19 +446,12 @@ export const transactionErrors = {
     code: 'validation',
     issues: [`cannot confirm: ${date} is in the future — an effective transaction's date is never in the future`],
   }),
-  confirmEditNotAllowedForTransfer: {
-    code: 'validation',
-    issues: [
-      "cannot edit amount/date of a transfer or bill-payment transaction at confirm — correct a transfer's " +
-        `amount/date via ${ToolName.enum.update_account_transaction}, a bill payment via ` +
-        `${ToolName.enum.pay_bill}/${ToolName.enum.revert_bill_payment}, then confirm`,
-    ],
-  } satisfies TransactionError,
-  // ADR-017 ownership guard: raised by whichever of the four aggregate-specific update/delete tools
-  // was called on a transaction it does not own — a guard, not a dispatcher (the caller re-addresses
-  // the tool named in the hint; nothing here re-routes on their behalf).
-  wrongTool: (correctTool: ToolName): TransactionError => ({
-    code: 'validation',
-    issues: [`this transaction is not owned by this tool; call ${correctTool} instead`],
-  }),
+  confirmEditNotAllowedForTransfer: validationWithRemedy(
+    CONFIRM_EDIT_NOT_ALLOWED_MESSAGE,
+    Remedy.enum.update_account_transaction,
+  ) satisfies TransactionError,
+  // ADR-017 ownership guard: raised by whichever of the four aggregate-specific update/delete operations
+  // was used on a transaction it does not own — a guard, not a dispatcher (the caller re-addresses
+  // the operation named by the remedy; nothing here re-routes on their behalf).
+  wrongOperation: (remedy: Remedy): TransactionError => validationWithRemedy(WRONG_OPERATION_MESSAGE, remedy),
 };

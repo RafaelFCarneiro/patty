@@ -48,7 +48,7 @@ import {
   type TransactionSource,
   type TransactionView,
 } from '../../models/transaction.js';
-import { ToolName } from '../../models/tool.js';
+import { Remedy } from '../../models/remedy.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveDecimals, resolveLegAccounts, resolveTagLinks } from '../resolve.js';
 import type { StatementImportPlan } from '../transaction/bulk.js';
@@ -203,7 +203,7 @@ export const importAccountStatement = async (
 /**
  * Update an account transaction: asserts every leg the target has is one of this aggregate's own
  * account types (`assertAccountOwnedLegs`) — a transaction with a leg outside that scope is
- * rejected with a redirect to `update_card_transaction` — then enforces transfer mutability, and
+ * rejected with a redirect to the card-transaction update — then enforces transfer mutability, and
  * merges the result onto `existing` to build the full desired end-state entity the shell applies
  * as a version-guarded update. Merchant learning (a correction strengthens the merchant→category
  * association) is composed into the SAME `persist` batch via `withMerchantLearning` — not a side
@@ -217,7 +217,7 @@ export const updateAccountTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     const isAccountOwned = yield* assertAccountOwnedLegs(deps, existing);
-    yield* guard(isAccountOwned, transactionErrors.wrongTool(ToolName.enum.update_card_transaction));
+    yield* guard(isAccountOwned, transactionErrors.wrongOperation(Remedy.enum.update_card_transaction));
     yield* guardTransferMutability(existing, input);
 
     const { account, effectiveType, categorySelection } = yield* decideTransactionUpdate(deps, input, existing);
@@ -279,7 +279,7 @@ export const deleteAccountTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     const isAccountOwned = yield* assertAccountOwnedLegs(deps, existing);
-    yield* guard(isAccountOwned, transactionErrors.wrongTool(ToolName.enum.delete_card_transaction));
+    yield* guard(isAccountOwned, transactionErrors.wrongOperation(Remedy.enum.delete_card_transaction));
 
     const locale = await deps.locale();
     const labeled = addLocalizedLabels(existing, locale);

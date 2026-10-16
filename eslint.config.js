@@ -105,6 +105,25 @@ export default tseslint.config(
     },
   },
   {
+    // An edge's vocabulary stays at that edge: tool names are the MCP edge's (docs/architecture.md § Diplomat edge organization).
+    files: ['src/**/*.ts', 'test/**/*.ts'],
+    ignores: ['src/diplomat/mcp/**', 'test/unit/diplomat/mcp/**', 'test/unit/docs/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/diplomat/mcp/toolName.js'],
+              message:
+                "ToolName is the MCP edge's vocabulary — a domain error carries a `Remedy`; diplomat/mcp translates it.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Function shape (docs/code-quality.md § Function shape): enforced per layer as each is brought under the limits.
     files: ['src/diplomat/http/**/*.ts', 'src/diplomat/mcp/**/*.ts'],
     rules: {

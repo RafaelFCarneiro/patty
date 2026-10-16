@@ -30,6 +30,7 @@ import * as wireInCreditCards from '../../../wire/in/creditCards.js';
 import { BillViewOut } from '../../../wire/out/bills.js';
 import { DeleteCreditCardResultOut } from '../../../wire/out/creditCards.js';
 import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../../../wire/out/transactions.js';
+import { REMEDY_ROUTE } from '../remedy.js';
 import { jsonBody, okResponse, type RouteDefinition } from '../openapi.js';
 import {
   conflict409,
@@ -114,9 +115,8 @@ const listCreditCardsRoute: RouteDefinition = {
 };
 
 const createCreditCardRoute: RouteDefinition = {
-  method: 'post',
+  ...REMEDY_ROUTE.create_credit_card,
   scope: WRITE_SCOPE,
-  path: '/api/credit-cards',
   tags: [CREDIT_CARDS_TAG],
   summary: 'Create credit card',
   request: { body: jsonBody(wireInCreditCards.CreateCreditCardSchema) },
@@ -139,9 +139,8 @@ const createCreditCardRoute: RouteDefinition = {
 };
 
 const updateCreditCardRoute: RouteDefinition = {
-  method: 'patch',
+  ...REMEDY_ROUTE.update_credit_card,
   scope: WRITE_SCOPE,
-  path: '/api/credit-cards/:name',
   tags: [CREDIT_CARDS_TAG],
   summary: 'Update credit card',
   request: { params: nameParam, body: jsonBody(wireInCreditCards.UpdateCreditCardSchema.omit({ name: true })) },
@@ -165,9 +164,8 @@ const updateCreditCardRoute: RouteDefinition = {
 };
 
 const deleteCreditCardRoute: RouteDefinition = {
-  method: 'delete',
+  ...REMEDY_ROUTE.delete_credit_card,
   scope: WRITE_SCOPE,
-  path: '/api/credit-cards/:name',
   tags: [CREDIT_CARDS_TAG],
   summary: 'Delete credit card',
   request: { params: nameParam, query: confirmQuery },
@@ -210,9 +208,8 @@ const getBillRoute: RouteDefinition = {
 };
 
 const payBillRoute: RouteDefinition = {
-  method: 'post',
+  ...REMEDY_ROUTE.pay_bill,
   scope: WRITE_SCOPE,
-  path: '/api/bills/pay',
   tags: [BILLS_TAG],
   summary: 'Pay a credit card bill',
   request: { body: jsonBody(PayBill) },
@@ -230,9 +227,8 @@ const payBillRoute: RouteDefinition = {
 };
 
 const revertBillPaymentRoute: RouteDefinition = {
-  method: 'post',
+  ...REMEDY_ROUTE.revert_bill_payment,
   scope: WRITE_SCOPE,
-  path: '/api/bills/revert',
   tags: [BILLS_TAG],
   summary: 'Revert a credit card bill payment',
   request: { body: jsonBody(BillQuery) },
@@ -253,9 +249,8 @@ const revertBillPaymentRoute: RouteDefinition = {
 };
 
 const updateCardTransactionRoute: RouteDefinition = {
-  method: 'patch',
+  ...REMEDY_ROUTE.update_card_transaction,
   scope: WRITE_SCOPE,
-  path: '/api/credit-cards/transactions/:id',
   tags: [CREDIT_CARDS_TAG],
   summary: 'Update a credit-card transaction',
   request: {
@@ -281,9 +276,8 @@ const updateCardTransactionRoute: RouteDefinition = {
 };
 
 const deleteCardTransactionRoute: RouteDefinition = {
-  method: 'delete',
+  ...REMEDY_ROUTE.delete_card_transaction,
   scope: WRITE_SCOPE,
-  path: '/api/credit-cards/transactions/:id',
   tags: [CREDIT_CARDS_TAG],
   summary: 'Delete a credit-card transaction',
   request: { params: idParam, query: confirmQuery },

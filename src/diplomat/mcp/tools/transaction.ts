@@ -1,4 +1,4 @@
-import { ToolName } from '../../../models/tool.js';
+import { ToolName } from '../toolName.js';
 import { confirmTransaction } from '../../../controllers/transaction/core.js';
 import { searchTransactions } from '../../../controllers/transaction/read.js';
 import { SortDirection } from '../../../models/page.js';

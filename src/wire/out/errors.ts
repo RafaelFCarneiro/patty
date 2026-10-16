@@ -36,7 +36,12 @@ const InUseErrorOut = z.object({
 
 // The generic validation shape (models/error.ts's ValidationError) — used by every domain's
 // `code: 'validation'` errors (accounts, categories, credit cards, transfers, ...).
-const GenericValidationErrorOut = z.object({ code: z.literal('validation'), issues: z.array(z.string()) });
+// `hint` (optional) names the operation to use instead, in the edge's own words ("use POST /api/bills/pay").
+const GenericValidationErrorOut = z.object({
+  code: z.literal('validation'),
+  issues: z.array(z.string()),
+  hint: z.string().optional(),
+});
 
 // conflict (models/error.ts's Conflict) — the versioned unit of work's generic optimistic-
 // concurrency failure (ADR-021); no business payload, by design.

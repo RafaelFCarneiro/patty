@@ -1,3 +1,4 @@
+import { Remedy } from '../../../src/models/remedy.js';
 import { describe, expect, it } from 'vitest';
 import {
   AddAccountMovementSchema,
@@ -11,10 +12,9 @@ import { CurrencyCode } from '../../../src/models/money.js';
 
 describe('accountErrors (colocated domain error payloads)', () => {
   it('creditRejected is a validation error mentioning the card flow', () => {
-    expect(accountErrors.creditRejected.code).toBe('validation');
-    if (accountErrors.creditRejected.code === 'validation') {
-      expect(accountErrors.creditRejected.issues[0]).toContain('credit card');
-    }
+    const error = accountErrors.creditRejected(Remedy.enum.create_credit_card);
+    expect(error).toMatchObject({ code: 'validation', remedy: Remedy.enum.create_credit_card });
+    if (error.code === 'validation') expect(error.issues[0]).toContain('credit card');
   });
 
   it('duplicateName carries the entity + name', () => {

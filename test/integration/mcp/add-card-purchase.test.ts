@@ -130,9 +130,9 @@ describe('MCP integration > add_card_purchase (ADR-016 step 2)', () => {
           billMonth: month,
           billYear: year,
         },
-      })) as { error?: { code?: string; issues?: string[] } };
+      })) as { error?: { code?: string; issues?: string[]; hint?: string } };
       expect(explicitErr.error?.code).toBe('validation');
-      expect(explicitErr.error?.issues?.[0]).toContain('revert_bill_payment');
+      expect(explicitErr.error?.hint).toBe('use revert_bill_payment');
 
       const autoErr = (await callToolError(client, {
         name: 'add_card_purchase',

@@ -1,5 +1,6 @@
 import type { Result } from 'neverthrow';
 import type { AppError } from '../../common/errors.js';
+import { withToolHint } from './remedy.js';
 
 /** Shared MCP tool response helpers (ADR-025) — one implementation for every tool module. */
 
@@ -8,7 +9,7 @@ export const json = (value: unknown) => ({
 });
 
 export const jsonError = (e: AppError) => ({
-  content: [{ type: 'text' as const, text: JSON.stringify({ error: e }, null, 2) }],
+  content: [{ type: 'text' as const, text: JSON.stringify({ error: withToolHint(e) }, null, 2) }],
   isError: true,
 });
 

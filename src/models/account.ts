@@ -3,7 +3,6 @@ import { Id } from './id.js';
 import { ConvertedValueSchema } from './currencyRate.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
-import { ToolName } from './tool.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import {
   CreateTransactionSchema,
@@ -13,7 +12,15 @@ import {
   TransactionStatus,
   UpdateTransactionSchema,
 } from './transaction.js';
-import type { Ambiguous, DuplicateName, InUse, NotFound, ValidationError } from './error.js';
+import {
+  validationWithRemedy,
+  type Ambiguous,
+  type DuplicateName,
+  type InUse,
+  type NotFound,
+  type ValidationError,
+} from './error.js';
+import { Remedy } from './remedy.js';
 import type { LabelMap } from './locale.js';
 
 export const AccountType = z.enum(['checking', 'savings', 'wallet', 'investment', 'credit']);
@@ -178,13 +185,14 @@ export type AccountError =
   | InUse<'account', AccountReferences>
   | ValidationError;
 
+const CREDIT_REJECTED_MESSAGE = 'credit accounts are managed by their credit card — use the card flow instead';
+const creditTransferFromMessage = (name: string): string =>
+  `cannot transfer from a credit account (${name}) — pay the card's bill instead`;
+const creditTransferToMessage = (name: string): string =>
+  `cannot transfer to a credit account (${name}) — pay the card's bill instead`;
+
 export const accountErrors = {
-  creditRejected: {
-    code: 'validation',
-    issues: [
-      'credit accounts are managed by their credit card — use the card flow instead (create_credit_card / delete_credit_card)',
-    ],
-  } satisfies AccountError,
+  creditRejected: (remedy: Remedy): AccountError => validationWithRemedy(CREDIT_REJECTED_MESSAGE, remedy),
   duplicateName: (name: string): AccountError => ({ code: 'duplicate_name', entity: 'account', name }),
   inUse: (name: string, references: AccountReferences): AccountError => ({
     code: 'in_use',
@@ -212,14 +220,10 @@ export const accountErrors = {
     code: 'validation',
     issues: ['cannot post directly to a credit account — use the card parameter instead'],
   } satisfies AccountError,
-  creditTransferFromRejected: (name: string): AccountError => ({
-    code: 'validation',
-    issues: [`cannot transfer from a credit account (${name}) — use ${ToolName.enum.pay_bill} instead`],
-  }),
-  creditTransferToRejected: (name: string): AccountError => ({
-    code: 'validation',
-    issues: [`cannot transfer to a credit account (${name}) — use ${ToolName.enum.pay_bill} instead`],
-  }),
+  creditTransferFromRejected: (name: string): AccountError =>
+    validationWithRemedy(creditTransferFromMessage(name), Remedy.enum.pay_bill),
+  creditTransferToRejected: (name: string): AccountError =>
+    validationWithRemedy(creditTransferToMessage(name), Remedy.enum.pay_bill),
   creditPaymentRejected: {
     code: 'validation',
     issues: ['payment account cannot be a credit account'],

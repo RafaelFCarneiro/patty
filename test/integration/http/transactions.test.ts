@@ -580,7 +580,7 @@ describe('PATCH /api/accounts/transactions/:id', () => {
       payload: { description: 'nope' },
     });
     expect(res.statusCode).toBe(422);
-    expect(res.json().error.issues[0]).toContain('update_card_transaction');
+    expect(res.json().error.hint).toBe('use PATCH /api/credit-cards/transactions/:id');
   });
 });
 
@@ -654,7 +654,7 @@ describe('PATCH /api/credit-cards/transactions/:id', () => {
       payload: { description: 'nope' },
     });
     expect(res.statusCode).toBe(422);
-    expect(res.json().error.issues[0]).toContain('update_account_transaction');
+    expect(res.json().error.hint).toBe('use PATCH /api/accounts/transactions/:id');
   });
 
   it('returns 404 for unknown transaction', async () => {
@@ -699,7 +699,7 @@ describe('DELETE /api/credit-cards/transactions/:id', () => {
     const id = createRes.json().transaction.id;
     const res = await inject({ method: 'DELETE', url: `/api/credit-cards/transactions/${id}?confirm=true` });
     expect(res.statusCode).toBe(422);
-    expect(res.json().error.issues[0]).toContain('delete_account_transaction');
+    expect(res.json().error.hint).toBe('use DELETE /api/accounts/transactions/:id');
   });
 
   it('returns 404 for unknown transaction', async () => {
@@ -870,7 +870,7 @@ describe('DELETE /api/accounts/transactions/:id', () => {
     const id = createRes.json().transaction.id;
     const res = await inject({ method: 'DELETE', url: `/api/accounts/transactions/${id}?confirm=true` });
     expect(res.statusCode).toBe(422);
-    expect(res.json().error.issues[0]).toContain('delete_card_transaction');
+    expect(res.json().error.hint).toBe('use DELETE /api/credit-cards/transactions/:id');
   });
 });
 

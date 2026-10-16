@@ -9,7 +9,7 @@ import { buildMcpServer } from '../../../../src/diplomat/mcp/server.js';
 import { UserRole } from '../../../../src/models/auth/owner.js';
 import { OWNER_PRINCIPAL, type Principal, PrincipalVia } from '../../../../src/models/auth/principal.js';
 import { Scope } from '../../../../src/models/auth/scope.js';
-import { ToolName } from '../../../../src/models/tool.js';
+import { ToolName } from '../../../../src/diplomat/mcp/toolName.js';
 
 const READ = Scope.enum['fintrack:read'];
 const WRITE = Scope.enum['fintrack:write'];

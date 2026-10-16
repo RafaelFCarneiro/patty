@@ -6,7 +6,7 @@ import { ownerGate } from '../../../src/diplomat/mcp/gate.js';
 import { toolScopesOf } from '../../../src/diplomat/mcp/scopes.js';
 import { buildMcpServer } from '../../../src/diplomat/mcp/server.js';
 import { READ_SCOPE, WRITE_SCOPE } from '../../../src/models/auth/scope.js';
-import { ToolName } from '../../../src/models/tool.js';
+import { ToolName } from '../../../src/diplomat/mcp/toolName.js';
 
 const DOC = readFileSync(join(import.meta.dirname, '..', '..', '..', 'docs', 'mcp-tools.md'), 'utf8');
 

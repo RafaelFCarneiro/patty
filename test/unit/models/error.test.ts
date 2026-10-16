@@ -1,3 +1,4 @@
+import { Remedy } from '../../../src/models/remedy.js';
 import { describe, expect, it } from 'vitest';
 import { ambiguous, notFound, validation } from '../../../src/models/error.js';
 import { accountErrors } from '../../../src/models/account.js';
@@ -111,7 +112,7 @@ describe('per-model error builders', () => {
 
   it('accountErrors.creditTransferFromRejected embeds the account name', () => {
     const err = accountErrors.creditTransferFromRejected('Nubank');
-    expect(err).toMatchObject({ code: 'validation' });
+    expect(err).toMatchObject({ code: 'validation', remedy: Remedy.enum.pay_bill });
     if (err.code === 'validation') {
       expect(err.issues[0]).toContain('Nubank');
       expect(err.issues[0]).toContain('from');
@@ -120,7 +121,7 @@ describe('per-model error builders', () => {
 
   it('accountErrors.creditTransferToRejected embeds the account name', () => {
     const err = accountErrors.creditTransferToRejected('Nubank');
-    expect(err).toMatchObject({ code: 'validation' });
+    expect(err).toMatchObject({ code: 'validation', remedy: Remedy.enum.pay_bill });
     if (err.code === 'validation') {
       expect(err.issues[0]).toContain('Nubank');
       expect(err.issues[0]).toContain('to');

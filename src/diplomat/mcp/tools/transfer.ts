@@ -1,4 +1,4 @@
-import { ToolName } from '../../../models/tool.js';
+import { ToolName } from '../toolName.js';
 import { createTransfer } from '../../../controllers/account/transfer.js';
 import { TransactionSource } from '../../../models/transaction.js';
 import { CreateTransferSchema } from '../../../wire/in/accounts.js';

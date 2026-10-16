@@ -21,6 +21,7 @@ import { TransactionSource, TransactionViewSchema } from '../../../models/transa
 import * as wireInAccounts from '../../../wire/in/accounts.js';
 import { DeletedOut } from '../../../wire/out/common.js';
 import { BulkResultOut, CreateTransactionOut, DeleteTransactionOut } from '../../../wire/out/transactions.js';
+import { REMEDY_ROUTE } from '../remedy.js';
 import { jsonBody, okResponse, type RouteDefinition, type RouteHandler } from '../openapi.js';
 import {
   conflict409,
@@ -211,9 +212,8 @@ const importAccountStatementRoute: RouteDefinition = {
 };
 
 const updateAccountTransactionRoute: RouteDefinition = {
-  method: 'patch',
+  ...REMEDY_ROUTE.update_account_transaction,
   scope: WRITE_SCOPE,
-  path: '/api/accounts/transactions/:id',
   tags: [ACCOUNTS_TAG],
   summary: 'Update an account transaction',
   request: {
@@ -238,9 +238,8 @@ const updateAccountTransactionRoute: RouteDefinition = {
 };
 
 const deleteAccountTransactionRoute: RouteDefinition = {
-  method: 'delete',
+  ...REMEDY_ROUTE.delete_account_transaction,
   scope: WRITE_SCOPE,
-  path: '/api/accounts/transactions/:id',
   tags: [ACCOUNTS_TAG],
   summary: 'Delete an account transaction',
   request: { params: idParam, query: confirmQuery },

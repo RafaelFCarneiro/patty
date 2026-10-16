@@ -207,6 +207,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -494,6 +497,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -965,6 +971,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -1345,6 +1354,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -1643,6 +1655,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -2416,6 +2431,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -3189,6 +3207,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -4013,6 +4034,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -4523,6 +4547,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -5077,6 +5104,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -5399,6 +5429,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -5542,6 +5575,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -5886,6 +5922,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -7141,6 +7180,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -7978,6 +8020,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -8449,6 +8494,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -8847,6 +8895,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -9720,6 +9771,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -10098,6 +10152,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -10466,6 +10523,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -10988,6 +11048,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -11542,6 +11605,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -11850,6 +11916,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -12118,6 +12187,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -12300,6 +12372,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -12978,6 +13053,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -13524,6 +13602,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -13920,6 +14001,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -14388,6 +14472,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -15041,6 +15128,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -15308,6 +15398,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -15537,6 +15630,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -16061,6 +16157,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -16668,6 +16767,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -16957,6 +17059,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -17381,6 +17486,9 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "hint": {
+                              "type": "string"
                             }
                           },
                           "required": [
