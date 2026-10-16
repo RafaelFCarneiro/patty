@@ -39,6 +39,11 @@ export type SignInInterpreterOptions = {
 const E = EffectKind.enum;
 const O = ObservationKind.enum;
 
+type Performer<K extends EffectKind> = (
+  effect: Extract<SignInEffect, { kind: K }>,
+  hooks: SignInHooks,
+) => Promise<SignInObservation | undefined>;
+
 export const createSignInInterpreter = (options: SignInInterpreterOptions): SignInInterpreter => {
   const { deps, run, store } = options;
   let temporary: SignInServer | null = null;
@@ -74,7 +79,7 @@ export const createSignInInterpreter = (options: SignInInterpreterOptions): Sign
 
   // Whatever goes wrong creating the request — an Err or a throw — the page it would have served is closed again:
   // with no pending request there is nothing left to retire it.
-  const startedGrant = async (effect: Extract<SignInEffect, { kind: typeof E.start_grant }>) => {
+  const startedGrant: Performer<typeof E.start_grant> = async (effect) => {
     const started = await run(() => startGrant(deps, effect.input)).then(
       (result) => result,
       async (cause: unknown) => {
@@ -92,82 +97,106 @@ export const createSignInInterpreter = (options: SignInInterpreterOptions): Sign
         } satisfies SignInObservation);
   };
 
-  const perform = async (effect: SignInEffect, hooks: SignInHooks): Promise<SignInObservation | undefined> => {
-    switch (effect.kind) {
-      case E.check_credential:
-        return {
-          kind: O.credential_checked,
-          source: effect.source,
-          token: effect.token,
-          result: await checkResult(effect.token),
-        };
-      case E.load_saved:
-        return (await loadSaved(effect.tolerateUnreadable)).match(
-          (token): SignInObservation => ({ kind: O.saved_loaded, purpose: effect.purpose, token }),
-          (): SignInObservation => ({ kind: O.saved_unreadable }),
-        );
-      case E.clear_saved_if: {
-        const loaded = await loadSaved(effect.tolerateUnreadable);
-        if (loaded.isErr()) return { kind: O.saved_unreadable };
-        if (loaded.value === effect.token) await store.clear();
-        return { kind: O.saved_cleared, next: effect.next };
-      }
-      case E.save_credential:
-        return {
-          kind: O.saved,
-          then: effect.then,
-          signedIn: effect.signedIn,
-          ok: await store.save(effect.signedIn.token),
-        };
-      case E.revoke_credential: {
-        const revoked = await run(() => revokeSignInByHash(deps, deps.secrets.hashSecret(effect.token)));
-        return {
-          kind: O.revoked,
-          reason: effect.reason,
-          token: effect.token,
-          ok: revoked.isOk(),
-          error: revoked.isErr() ? formatAppError(revoked.error) : null,
-        };
-      }
-      case E.name_page:
-        return {
-          kind: O.page_named,
-          purpose: effect.purpose,
-          origin: namedOrigin(),
-          canServe: options.startPage !== undefined,
-        };
-      case E.serve_page:
-        return { kind: O.page_served, purpose: effect.purpose, origin: await servePage() };
-      case E.start_grant:
-        return startedGrant(effect);
-      case E.redeem_grant: {
-        const redeemed = await run(() => redeemGrant(deps, effect.deviceCode));
-        return {
-          kind: O.redeemed,
-          then: effect.then,
-          result: redeemed.isErr()
-            ? { kind: REDEEM_ERROR_KIND, error: formatAppError(redeemed.error) }
-            : redeemed.value,
-        };
-      }
-      case E.check_owner:
-        return {
-          kind: O.owner_checked,
-          purpose: effect.purpose,
-          unclaimed: await ownerNeedsSetup(deps),
-          origin: effect.origin,
-        };
-      case E.close_page:
-        await closePage();
-        return undefined;
-      case E.wait:
-        await hooks.wait(effect.ms);
-        return undefined;
-      case E.present:
-        hooks.present(effect.presentation);
-        return undefined;
-    }
+  const performCheckCredential: Performer<typeof E.check_credential> = async (effect) => ({
+    kind: O.credential_checked,
+    source: effect.source,
+    token: effect.token,
+    result: await checkResult(effect.token),
+  });
+
+  const performLoadSaved: Performer<typeof E.load_saved> = async (effect) =>
+    (await loadSaved(effect.tolerateUnreadable)).match(
+      (token): SignInObservation => ({ kind: O.saved_loaded, purpose: effect.purpose, token }),
+      (): SignInObservation => ({ kind: O.saved_unreadable }),
+    );
+
+  const performClearSavedIf: Performer<typeof E.clear_saved_if> = async (effect) => {
+    const loaded = await loadSaved(effect.tolerateUnreadable);
+    if (loaded.isErr()) return { kind: O.saved_unreadable };
+    if (loaded.value === effect.token) await store.clear();
+    return { kind: O.saved_cleared, next: effect.next };
   };
+
+  const performSaveCredential: Performer<typeof E.save_credential> = async (effect) => ({
+    kind: O.saved,
+    then: effect.then,
+    signedIn: effect.signedIn,
+    ok: await store.save(effect.signedIn.token),
+  });
+
+  const performRevokeCredential: Performer<typeof E.revoke_credential> = async (effect) => {
+    const revoked = await run(() => revokeSignInByHash(deps, deps.secrets.hashSecret(effect.token)));
+    return {
+      kind: O.revoked,
+      reason: effect.reason,
+      token: effect.token,
+      ok: revoked.isOk(),
+      error: revoked.isErr() ? formatAppError(revoked.error) : null,
+    };
+  };
+
+  const performNamePage: Performer<typeof E.name_page> = async (effect) => ({
+    kind: O.page_named,
+    purpose: effect.purpose,
+    origin: namedOrigin(),
+    canServe: options.startPage !== undefined,
+  });
+
+  const performServePage: Performer<typeof E.serve_page> = async (effect) => ({
+    kind: O.page_served,
+    purpose: effect.purpose,
+    origin: await servePage(),
+  });
+
+  const performRedeemGrant: Performer<typeof E.redeem_grant> = async (effect) => {
+    const redeemed = await run(() => redeemGrant(deps, effect.deviceCode));
+    return {
+      kind: O.redeemed,
+      then: effect.then,
+      result: redeemed.isErr() ? { kind: REDEEM_ERROR_KIND, error: formatAppError(redeemed.error) } : redeemed.value,
+    };
+  };
+
+  const performCheckOwner: Performer<typeof E.check_owner> = async (effect) => ({
+    kind: O.owner_checked,
+    purpose: effect.purpose,
+    unclaimed: await ownerNeedsSetup(deps),
+    origin: effect.origin,
+  });
+
+  const performClosePage: Performer<typeof E.close_page> = async () => {
+    await closePage();
+    return undefined;
+  };
+
+  const performWait: Performer<typeof E.wait> = async (effect, hooks) => {
+    await hooks.wait(effect.ms);
+    return undefined;
+  };
+
+  const performPresent: Performer<typeof E.present> = async (effect, hooks) => {
+    hooks.present(effect.presentation);
+    return undefined;
+  };
+
+  const PERFORMERS = {
+    [E.check_credential]: performCheckCredential,
+    [E.load_saved]: performLoadSaved,
+    [E.clear_saved_if]: performClearSavedIf,
+    [E.save_credential]: performSaveCredential,
+    [E.revoke_credential]: performRevokeCredential,
+    [E.name_page]: performNamePage,
+    [E.serve_page]: performServePage,
+    [E.start_grant]: startedGrant,
+    [E.redeem_grant]: performRedeemGrant,
+    [E.check_owner]: performCheckOwner,
+    [E.close_page]: performClosePage,
+    [E.wait]: performWait,
+    [E.present]: performPresent,
+  } satisfies { [K in EffectKind]: Performer<K> };
+
+  const perform = (effect: SignInEffect, hooks: SignInHooks): Promise<SignInObservation | undefined> =>
+    (PERFORMERS[effect.kind] as Performer<EffectKind>)(effect, hooks);
 
   // In order, one after the other. A step ends with at most one asking effect and it is the last, so the answer to
   // hand back is the one the rest of the list ends in, if any.

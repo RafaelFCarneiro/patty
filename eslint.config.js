@@ -1,5 +1,12 @@
 import tseslint from 'typescript-eslint';
 
+/** Shared by every `no-restricted-syntax` block below (a later block replaces, not merges, the earlier one). */
+const SWITCH_TOO_LARGE = {
+  selector: 'SwitchStatement > SwitchCase:nth-child(7)',
+  message:
+    'More than 6 cases: use an exhaustive `satisfies Record<Kind, …>` table (docs/code-quality.md § Function shape)',
+};
+
 /**
  * Lean, high-signal lint config. It machine-enforces the *precisely lintable* slice of
  * `docs/code-quality.md` / `docs/code-style.md`. Judgment-based rules that can't be linted
@@ -41,6 +48,7 @@ export default tseslint.config(
             "MemberExpression[computed=true][property.type='Literal'][property.value=0] > CallExpression[callee.property.name='filter']",
           message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/code-quality.md remeda table).',
         },
+        SWITCH_TOO_LARGE,
       ],
       // ADR-007: in stdio mode stdout carries the MCP protocol — human logging must go to stderr.
       // console.error / console.warn (stderr) are allowed; console.log (stdout) is not.
@@ -62,7 +70,7 @@ export default tseslint.config(
     },
   },
   {
-    // Declarative layers: no loops, `let` or `.push(` (docs/code-quality.md remeda table). Restates the base filter()[0] selector because a later no-restricted-syntax replaces, not merges.
+    // Declarative layers: no loops, `let` or `.push(` (docs/code-quality.md remeda table). Restates the base filter()[0] and switch-size selectors because a later no-restricted-syntax replaces, not merges.
     files: ['src/logic/**/*.ts', 'src/controllers/**/*.ts', 'src/adapters/**/*.ts'],
     rules: {
       'no-restricted-syntax': [
@@ -72,6 +80,7 @@ export default tseslint.config(
             "MemberExpression[computed=true][property.type='Literal'][property.value=0] > CallExpression[callee.property.name='filter']",
           message: 'Avoid `xs.filter(...)[0]` — use R.find / R.firstBy (see docs/code-quality.md remeda table).',
         },
+        SWITCH_TOO_LARGE,
         ...[
           ['ForStatement', 'a `for` loop'],
           ['ForOfStatement', 'a `for…of` loop'],
