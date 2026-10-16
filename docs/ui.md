@@ -305,7 +305,7 @@ triggered it. No external broker: the MCP server, HTTP sidecar, and scheduler sh
 in-process bus is the whole mechanism.
 
 **The post-commit publish** is the package's (`runEffects`/`runEffectsSequence` publish the entity tags of a
-committed batch that wrote; see its [change-notification section](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.3.0/docs/architecture.md#change-notification)).
+committed batch that wrote; see its [change-notification section](https://github.com/RafaelFCarneiro/effect-runner/blob/v0.4.0/docs/architecture.md#change-notification)).
 FinTrack only subscribes: the tags in each SSE message are those the engine published.
 
 **`GET /ui/events`** (`registerUiEventsRoute`) is the shell's `EventSource` target. The handler calls
