@@ -27,6 +27,12 @@ const publishedText = SNAPSHOTS.map((path) =>
   JSON.stringify(JSON.parse(readFileSync(join(ROOT, 'test/unit/diplomat', path), 'utf8'))),
 ).join('\n');
 
+// Only prose can be published schema text: a bare name is also in the snapshot (as a tool's `name`), so never counts.
+const isPublishedText = (literal: string): boolean => {
+  const text = literal.slice(1, -1);
+  return /\s/.test(text) && publishedText.includes(JSON.stringify(text).slice(1, -1));
+};
+
 const NAMES = new RegExp(`\\b(?:${ToolName.options.join('|')})\\b`);
 const LITERAL = /'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\\n]|\\.)*`/g;
 const isComment = (line: string) => /^\s*(\/\/|\/\*|\*)/.test(line);
@@ -41,7 +47,7 @@ const offences = sourceFiles('src')
           ? []
           : (line.match(LITERAL) ?? [])
               .filter((literal) => NAMES.test(literal))
-              .filter((literal) => !publishedText.includes(JSON.stringify(literal.slice(1, -1)).slice(1, -1)))
+              .filter((literal) => !isPublishedText(literal))
               .map((literal) => `${relative(ROOT, join(ROOT, file))}:${index + 1} ${literal}`),
       ),
   );
