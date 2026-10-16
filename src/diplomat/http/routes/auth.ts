@@ -7,6 +7,7 @@ import { AUTH_MESSAGES } from '../../../models/auth/message.js';
 import { DEFAULT_LANDING_PATH } from '../../../models/auth/origin.js';
 import { validation } from '../../../models/error.js';
 import { LoginFormSchema, NextQuerySchema, SetupFormSchema } from '../../../wire/in/auth.js';
+import { replyError } from '../respond.js';
 import { renderLoginPage, renderSetupPage } from '../authPages.js';
 import { LOGIN_PATH, LOGOUT_PATH, SEE_OTHER, SETUP_PATH } from '../authPaths.js';
 import type { AuthRoutesContext } from '../context.js';
@@ -94,7 +95,7 @@ const submitLogout = (ctx: AuthRoutesContext) => async (req: FastifyRequest, rep
   const revoked = token ? await ctx.runEffects(() => logout(ctx.deps, ctx.deps.secrets.hashSecret(token))) : undefined;
   // The cookie is only cleared once the session row is really gone: reporting a logout that did not
   // commit would leave a still-valid token (possibly copied elsewhere) behind a "logged out" screen.
-  if (revoked?.isErr()) return reply.status(statusOf(revoked.error)).send({ error: revoked.error });
+  if (revoked?.isErr()) return replyError(reply, revoked.error);
   return reply.header('set-cookie', clearedSessionCookie(ctx.secureCookie)).redirect(LOGIN_PATH, SEE_OTHER);
 };
 

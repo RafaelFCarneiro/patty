@@ -8,10 +8,13 @@ import { okResponse } from './openapi.js';
 
 /** Shared HTTP response helpers (ADR-025) — one implementation for every route module. */
 
+/** The one error reply shape: the error's HTTP status and `{ error }`. */
+export const replyError = (reply: FastifyReply, error: AppError) => reply.status(httpStatus(error)).send({ error });
+
 export const send = <T>(reply: FastifyReply, result: Result<T, AppError>, okStatus = 200) =>
   result.match(
     (value) => reply.status(okStatus).send(value),
-    (e) => reply.status(httpStatus(e)).send({ error: e }),
+    (e) => replyError(reply, e),
   );
 
 /** The one 422 reply shape: `{ error: { code: 'validation', issues } }`. */
@@ -54,7 +57,7 @@ export const parseOrIssue = <S extends z.ZodTypeAny>(
 export const sendUpsert = <T extends { created: boolean }>(reply: FastifyReply, result: Result<T, AppError>) =>
   result.match(
     (value) => reply.status(value.created ? 201 : 200).send(value),
-    (e) => reply.status(httpStatus(e)).send({ error: e }),
+    (e) => replyError(reply, e),
   );
 
 /** A route's `:name` / `:id` path parameter. */

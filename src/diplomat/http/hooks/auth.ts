@@ -1,5 +1,4 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { httpStatus, type AppError } from '../../../common/errors.js';
 import { ownerNeedsSetup } from '../../../controllers/auth.js';
 import { acceptsBearer, credentialOf } from '../../../logic/auth/bearer.js';
 import { csrfVerdict, isLoopbackRequest, preSessionCsrfVerdict } from '../../../logic/auth/origin.js';
@@ -12,6 +11,7 @@ import { safeNextPath } from '../../../wire/in/auth.js';
 import { isPublicRoute, LOGIN_PATH, SEE_OTHER, SETUP_PATH } from '../authPaths.js';
 import type { HttpAuth } from '../context.js';
 import { rejectWithChallenge } from '../bearer.js';
+import { replyError as reject } from '../respond.js';
 import { resolveBearerPrincipal, resolvePrincipal, type Resolution } from '../session.js';
 
 /**
@@ -43,8 +43,6 @@ const csrfInput = (req: FastifyRequest, publicUrl: string | undefined): CsrfRequ
   origin: req.headers.origin,
   referer: req.headers.referer,
 });
-
-const reject = (reply: FastifyReply, error: AppError): FastifyReply => reply.status(httpStatus(error)).send({ error });
 
 const loginRedirectTarget = (req: FastifyRequest): string => {
   const next = safeNextPath(req.url);

@@ -9,6 +9,7 @@ import {
   parse,
   parseOrIssue,
   pathParam,
+  replyError,
   send,
   sendUpsert,
   unprocessable,
@@ -67,6 +68,12 @@ describe('the 422 reply shape', () => {
 });
 
 describe('result replies', () => {
+  it('replyError answers the error’s HTTP status and { error }', () => {
+    const { reply, sent } = fakeReply();
+    replyError(reply, unknownAccount());
+    expect(sent).toEqual({ status: 404, body: { error: unknownAccount() } });
+  });
+
   it('send maps a failure to its HTTP status and a success to the given one', () => {
     const failed = fakeReply();
     send(failed.reply, err(unknownAccount()));

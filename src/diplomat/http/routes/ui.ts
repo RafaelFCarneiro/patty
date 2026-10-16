@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import { SHARED_ENTITY_TAGS, type ChangeEvent } from '../../../models/tenancy.js';
 import { LOGOUT_PATH, TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../authPaths.js';
-import { CACHE_CONTROL_NO_CACHE } from '../respond.js';
+import { authErrors } from '../../../models/auth/errors.js';
+import { CACHE_CONTROL_NO_CACHE, replyError } from '../respond.js';
 import { HTML_CONTENT_TYPE, readCached, UI_ROOT } from '../uiFiles.js';
 
 const SHELL_PATH = `${UI_ROOT}/shell.html`;
@@ -96,7 +97,7 @@ const registerUiEventsRoute = (app: FastifyInstance, subscribe: ChangeSubscribe,
   app.get(`${UI_ROOT_PATH}/events`, (req, reply) => {
     // Without a principal, open no stream rather than everyone's events.
     const userId = req.principal?.userId;
-    if (userId === undefined) return reply.status(401).send({ error: { code: 'unauthenticated' } });
+    if (userId === undefined) return replyError(reply, authErrors.unauthenticated);
     openEventStream(reply);
     forwardChanges(reply, subscribe, userId);
     if (session) endWhenSessionLapses(req, reply, session);
