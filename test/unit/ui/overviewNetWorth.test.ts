@@ -130,8 +130,7 @@ const makeSandboxBase = (
 
   // Deterministic stub, overriding the real formatMoney money.js just installed — assertions below
   // match literal strings and shouldn't depend on Intl locale data.
-  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) =>
-    `${currency} ${value}`;
+  (sandbox.window as Record<string, unknown>).formatMoney = (value: number, currency: string) => `${currency} ${value}`;
   return sandbox;
 };
 
@@ -257,7 +256,7 @@ describe("initOverview's boot sequencing (ui/dashboards/overview.html)", () => {
 });
 
 describe('handleFintrackDataChanged (ui/dashboards/overview.html)', () => {
-  it('refetches on currency_rate and settings changes, not just transaction/account/category/recurring', () => {
+  it('refetches on currency_rate and userSettings changes, not just transaction/account/category/recurring', () => {
     const { sandbox } = loadOverviewSandbox();
     let callCount = 0;
     sandbox.loadDashboardData = () => {
@@ -266,7 +265,7 @@ describe('handleFintrackDataChanged (ui/dashboards/overview.html)', () => {
     const handle = sandbox.handleFintrackDataChanged as (entities: string[]) => void;
 
     handle(['currency_rate']);
-    handle(['settings']);
+    handle(['userSettings']);
     handle(['transaction']);
 
     expect(callCount).toBe(3);

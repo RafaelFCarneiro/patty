@@ -36,13 +36,12 @@ const nextMessage = async (reader: ReadableStreamDefaultReader<Uint8Array>): Pro
   return buffer;
 };
 
-describe('GET /ui/events and whose changes it forwards (ADR-033 §5)', () => {
+describe('GET /ui/events and whose changes it forwards', () => {
   it('forwards only its own user’s changes, never instance bookkeeping (session/user/setup-code)', async () => {
     const controller = new AbortController();
     const res = await fetch(`${baseUrl}/ui/events`, { signal: controller.signal });
     const reader = res.body!.getReader();
 
-    // Instance bookkeeping carries no user; another user's change carries theirs. Neither belongs to this stream.
     ctx.changeBus.publish({ userId: null, entities: [SESSION_ENTITY_TAG, USER_ENTITY_TAG, SETUP_CODE_ENTITY_TAG] });
     ctx.changeBus.publish({ userId: 'someone-else', entities: [ACCOUNT_ENTITY_TAG] });
     ctx.changeBus.publish({ userId: OWNER_USER_ID, entities: [ACCOUNT_ENTITY_TAG] });

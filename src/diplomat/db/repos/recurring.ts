@@ -8,8 +8,6 @@ import { ownedBy } from '../queries/scope.js';
 
 const RULE_FROM = sql`FROM recurring_rules r`;
 
-// Every read of rules is confined to the user's own (ADR-033 §5); the joined account and category are reached only
-// through that user's own references.
 const RULE_SELECT_BARE = (userId: string) =>
   sql`SELECT r.*, NULL AS account_name, NULL AS category_name ${RULE_FROM} WHERE ${ownedBy(userId, 'r')}`;
 

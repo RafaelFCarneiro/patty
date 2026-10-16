@@ -114,7 +114,6 @@ export const accountsRepo = (db: Db, userId: string): AccountsRepo => ({
  * The account entity's `EntityApplier` — how `runEffects` applies an account `Persistable`
  * without ever naming "account" itself. `accounts` follows the `id`/`version` convention, so this
  * is just `ownedTableApplier(accounts, userId)` — model→row adaptation already happened upstream,
- * before `runEffects` ever sees the batch, so this applier only ever writes the row it's handed
- * (stamped with, and confined to, `userId`).
+ * before `runEffects` ever sees the batch, so this applier only ever writes the row it's handed.
  */
 export const accountApplier = (userId: string): EntityApplier => ownedTableApplier(accounts, userId);

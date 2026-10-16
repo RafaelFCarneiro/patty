@@ -11,11 +11,7 @@ import { authDepsOf } from '../auth/helpers.js';
 import { buildApp, type AppContext } from '../app-builder.js';
 import { callRoute, callTool, dumpOf, seedTwoUsers, WORLD_A, WORLD_B, type Actor } from './world.js';
 
-/**
- * What the isolation suite does not read straight off a tool's answer (ADR-033 §5): the behaviours that make two users
- * on one instance feel like two instances — the same statement imported twice, what FinTrack has learned, who hears
- * about a change, each person's language and base currency, and whose recurring rules a call applies.
- */
+/** What makes two users on one instance feel like two instances: dedup, learning, events, preferences, recurring. */
 
 let tmpDir: string;
 let ctx: AppContext;
@@ -186,7 +182,6 @@ describe('language and base currency are each person’s own', () => {
   });
 
   it('forgets nothing it should remember and nothing it should not: the cache is per user', async () => {
-    // B's switch was reflected on B's very next read (cache reset for B), while A's cached language never moved.
     expect((await prefs(b)).locale).toBe('en');
     expect((await prefs(a)).locale).toBe('pt');
   });
@@ -243,7 +238,6 @@ describe('who hears about a change (the change bus and /ui/events)', () => {
     return res.body!.getReader();
   };
 
-  /** Collects everything a stream delivers, in the background, so no read is ever abandoned mid-flight. */
   const collect = (reader: ReadableStreamDefaultReader<Uint8Array>): { received: () => string } => {
     const decoder = new TextDecoder();
     let received = '';

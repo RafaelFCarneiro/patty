@@ -26,10 +26,8 @@ import type { AppContext } from '../app-builder.js';
 import { authDepsOf, bearer, INITIALIZE_REQUEST, MCP_HEADERS, toolCall } from '../auth/helpers.js';
 
 /**
- * Two users, each with a full set of their own data (ADR-033 §5). Everything of user X carries X's label in its
- * name ("ZZ-A Checking") and in its id ("acc-A-1"), so a leak anywhere is a substring match away. The rows are
- * inserted straight into the database — no product path creates a second user yet, and the fixtures must not depend
- * on the code under test.
+ * Two users with full sets of their own data, inserted straight into the database (no product path creates a second
+ * user yet). Everything of user X carries X's label in its name and id, so a leak is a substring match away.
  */
 export type World = {
   label: 'A' | 'B';

@@ -43,14 +43,15 @@ const snapshotTo = async (db: Db, destination: string): Promise<void> => {
   await db.run(sql`VACUUM INTO ${destination}`);
 };
 
+/** `verify` runs in that same transaction, before it commits. */
 /**
  * Applies `migrate` — taking the safety copy first when a data-rewriting migration is pending. Two layers:
  * the migration lock keeps other FinTrack STARTERS from interleaving their copies (and "is it still pending?" is
  * re-asked once it is held, so a late starter never backs up an already-migrated file); and the snapshot is taken
  * while this process holds SQLite's WRITE lock, with the migrations applied in that same transaction, so no
  * other writer — including a process already running on an older release — can commit between the snapshot and
- * the migration and be missing from the backup (`applyPendingMigrationsHolding`). `verify` is checked in that same
- * transaction, before it commits, so a migration that left the data inconsistent never takes effect.
+ * the migration and be missing from the backup (`applyPendingMigrationsHolding`).
+ * `verify` runs in that same transaction, before it commits.
  */
 export const migrateWithSafetyCopy = async (
   db: Db,

@@ -1,21 +1,12 @@
--- ADR-033 §5/§7 (Phase 4, step 1): tenancy for the data. Every user-owned row gets a user_id; the shared defaults keep it null.
---
--- DATA-REWRITING (listed in diplomat/db/migrations.ts): startup snapshots the database to <db>.pre-0021_tenancy_data.bak
--- and applies this file in the same write transaction, then checks that no owned row lacks a known user.
---
--- Everything that exists today belongs to the owner, inserted by 0018_auth_identity as 'user-owner' (OWNER_USER_ID). The
--- owner is looked up, never assumed: should that row be missing, the NOT NULL below fails and the whole migration rolls back.
---
--- SQLite can neither add a NOT NULL column that references another table nor drop a UNIQUE constraint in place, so each
--- table is rebuilt (create, copy, drop, rename) — with foreign keys OFF, as the migration runner arranges. The guard
--- below refuses to go on otherwise: dropping `transactions` with enforcement on would cascade away `transaction_tags`.
+-- Tenancy: every owned row gets a user_id, backfilled to the owner (looked up, so a missing owner fails NOT NULL and rolls back); shared defaults keep NULL.
+-- Tables are rebuilt because SQLite cannot add a NOT NULL foreign key or drop a UNIQUE in place. That needs foreign keys OFF: dropping
+-- `transactions` with them on would cascade away `transaction_tags`, so the guard below aborts otherwise.
 CREATE TABLE `__fk_guard` (`enforcement_is_off` integer NOT NULL);
 --> statement-breakpoint
 INSERT INTO `__fk_guard` SELECT CASE WHEN `foreign_keys` = 0 THEN 1 END FROM pragma_foreign_keys;
 --> statement-breakpoint
 DROP TABLE `__fk_guard`;
 --> statement-breakpoint
--- Per-user preferences: the owner's row comes from the singleton settings row, if one was ever written.
 CREATE TABLE `user_settings` (
 	`user_id` text PRIMARY KEY NOT NULL,
 	`locale` text DEFAULT 'en' NOT NULL,
@@ -40,7 +31,6 @@ DROP TABLE `settings`;
 --> statement-breakpoint
 ALTER TABLE `__new_settings` RENAME TO `settings`;
 --> statement-breakpoint
--- accounts: owned by a user.
 CREATE TABLE `__new_accounts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -59,7 +49,6 @@ DROP TABLE `accounts`;
 --> statement-breakpoint
 ALTER TABLE `__new_accounts` RENAME TO `accounts`;
 --> statement-breakpoint
--- credit_cards: owned by a user.
 CREATE TABLE `__new_credit_cards` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -83,7 +72,6 @@ DROP TABLE `credit_cards`;
 --> statement-breakpoint
 ALTER TABLE `__new_credit_cards` RENAME TO `credit_cards`;
 --> statement-breakpoint
--- bills: owned by a user.
 CREATE TABLE `__new_bills` (
 	`id` text PRIMARY KEY NOT NULL,
 	`credit_card_id` text NOT NULL,
@@ -108,7 +96,6 @@ ALTER TABLE `__new_bills` RENAME TO `bills`;
 --> statement-breakpoint
 CREATE UNIQUE INDEX `bills_card_month_year` ON `bills` (`credit_card_id`,`month`,`year`);
 --> statement-breakpoint
--- tags: owned by a user.
 CREATE TABLE `__new_tags` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -125,7 +112,6 @@ ALTER TABLE `__new_tags` RENAME TO `tags`;
 --> statement-breakpoint
 CREATE UNIQUE INDEX `tags_user_name` ON `tags` (`user_id`,`name`);
 --> statement-breakpoint
--- budgets: owned by a user.
 CREATE TABLE `__new_budgets` (
 	`id` text PRIMARY KEY NOT NULL,
 	`category_id` text NOT NULL,
@@ -147,7 +133,6 @@ ALTER TABLE `__new_budgets` RENAME TO `budgets`;
 --> statement-breakpoint
 CREATE UNIQUE INDEX `budgets_user_category_currency_period` ON `budgets` (`user_id`,`category_id`,`currency`,`period`);
 --> statement-breakpoint
--- recurring_rules: owned by a user.
 CREATE TABLE `__new_recurring_rules` (
 	`id` text PRIMARY KEY NOT NULL,
 	`description` text NOT NULL,
@@ -174,7 +159,6 @@ DROP TABLE `recurring_rules`;
 --> statement-breakpoint
 ALTER TABLE `__new_recurring_rules` RENAME TO `recurring_rules`;
 --> statement-breakpoint
--- transactions: owned by a user.
 CREATE TABLE `__new_transactions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`description` text NOT NULL,
@@ -216,9 +200,7 @@ DROP TABLE `transactions`;
 --> statement-breakpoint
 ALTER TABLE `__new_transactions` RENAME TO `transactions`;
 --> statement-breakpoint
--- transactions keep their rowid so the external-content FTS index (transactions_fts, keyed by rowid) stays valid.
--- Dropping the table dropped its three sync triggers (0001_fts5_search.sql); they come back after the indexes. The copy above ran
--- before them, so no row was indexed twice.
+-- rowid is preserved so the external-content FTS index stays valid; the sync triggers are recreated after the copy so no row is indexed twice.
 CREATE UNIQUE INDEX `transactions_user_idempotency_key` ON `transactions` (`user_id`,`idempotency_key`);
 --> statement-breakpoint
 CREATE INDEX `idx_transactions_user_date` ON `transactions` (`user_id`,`date`);
@@ -251,14 +233,12 @@ CREATE TRIGGER IF NOT EXISTS transactions_fts_delete
       VALUES ('delete', old.rowid, old.description);
   END;
 --> statement-breakpoint
--- categories: the 15 defaults FinTrack seeds stay shared (user_id null); every other category was made by a person — the owner.
--- The list is the seeded ids as of this migration (DefaultCategoryId); later seeds are shared by construction.
+-- the 15 seeded defaults stay shared; every other category is the owner's.
 ALTER TABLE `categories` ADD COLUMN `user_id` text REFERENCES `users`(`id`) ON UPDATE no action ON DELETE restrict;
 --> statement-breakpoint
 UPDATE `categories` SET `user_id` = (SELECT `id` FROM `users` WHERE `id` = 'user-owner') WHERE `id` NOT IN ('cat-food', 'cat-transport', 'cat-housing', 'cat-utilities', 'cat-health', 'cat-education', 'cat-leisure', 'cat-shopping', 'cat-subscriptions', 'cat-travel', 'cat-taxes', 'cat-salary', 'cat-extra-income', 'cat-investments', 'cat-other');
 --> statement-breakpoint
--- merchant_category: `rule` edges ship with FinTrack and stay shared; `history` edges were learned from the owner's corrections.
--- The (merchant_key, category_id) primary key becomes one unique index per audience, since NULLs are distinct in a UNIQUE index.
+-- `rule` edges stay shared, `history` edges are the owner's; the primary key becomes two partial unique indexes (NULLs are distinct in UNIQUE).
 CREATE TABLE `__new_merchant_category` (
 	`merchant_key` text NOT NULL,
 	`category_id` text NOT NULL,
@@ -283,7 +263,6 @@ CREATE UNIQUE INDEX `merchant_category_shared_key` ON `merchant_category` (`merc
 --> statement-breakpoint
 CREATE UNIQUE INDEX `merchant_category_user_key` ON `merchant_category` (`user_id`,`merchant_key`,`category_id`) WHERE `user_id` IS NOT NULL;
 --> statement-breakpoint
--- dashboards: the file-backed defaults stay shared; every saved (inline) dashboard is the owner's.
 CREATE TABLE `__new_dashboards` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,

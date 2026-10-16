@@ -44,7 +44,6 @@ export const assertCategoryNameAvailable = (categories: readonly Category[], nam
 export const assertSubCategoryNameAvailable = (siblings: readonly { name: string }[], name: string): boolean =>
   !hasSubCategoryNameCollision(siblings, name);
 
-/** One of the defaults FinTrack ships (ADR-033 §5) — shared by every user, so changeable by none. */
 export const isSharedDefault = (row: { shared: boolean }): boolean => row.shared;
 
 export const isCategoryUnreferenced = (refs: CategoryReferences): boolean =>

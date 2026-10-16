@@ -31,7 +31,7 @@ let dbPath: string;
 let preTenancyFolder: string;
 
 /** A copy of the real migrations whose journal stops just before the tenancy migration — a database as the last
- *  release before ADR-033 Phase 4 left it. */
+ *  release before tenancy left it. */
 const journalBeforeTenancy = (folder: string): void => {
   const journalPath = join(folder, 'meta', '_journal.json');
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: Array<{ tag: string }> };
@@ -160,7 +160,7 @@ const legacyDatabase = async (options: { withPreferences?: boolean } = {}): Prom
 
 const reader = (db: Db) => (db as Db & { $client: Parameters<typeof findRowsWithoutKnownUser>[0] }).$client;
 
-describe('migration 0021 — tenancy data (ADR-033 §5, §7)', () => {
+describe('migration 0021 — tenancy data', () => {
   it('is listed as data-rewriting, so the safety copy covers it', () => {
     expect(DATA_REWRITING_MIGRATIONS).toContain(TENANCY_MIGRATION_TAG);
   });
@@ -216,12 +216,10 @@ describe('migration 0021 — tenancy data (ADR-033 §5, §7)', () => {
 
     await bootstrap(db);
 
-    // Ignoring the new column (and `merchant_category`'s, whose only change is that column), the content is identical.
     const after = await domainDump(db, true);
     const beforeWithoutOwner = Object.fromEntries(
       Object.entries(before).map(([table, rows]) => [table, rows.map(({ user_id: _u, ...rest }) => rest)]),
     );
-    // Dashboards gained rows from the seed between the two dumps only if a file default was missing before.
     expect(after['transactions']).toEqual(beforeWithoutOwner['transactions']);
     expect(after['transaction_tags']).toEqual(beforeWithoutOwner['transaction_tags']);
     expect(after['accounts']).toEqual(beforeWithoutOwner['accounts']);
@@ -241,7 +239,6 @@ describe('migration 0021 — tenancy data (ADR-033 §5, §7)', () => {
         sql`SELECT from_account_id, SUM(amount) AS spent FROM transactions WHERE status = 'effective' GROUP BY from_account_id`,
       ),
     ).toEqual(balanceBefore);
-    // The external-content FTS index is keyed by rowid, which the rebuild preserves; the sync triggers are back.
     expect(await db.all(sql`SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH 'groceries'`)).toEqual(
       ftsBefore,
     );

@@ -26,9 +26,7 @@ import type { Scope } from '../../models/auth/scope.js';
 extendZodWithOpenApi(z);
 
 export type HttpMethod = 'get' | 'post' | 'patch' | 'delete';
-/** The request's user-scoped dependencies, asked for by the handler that needs them (ADR-033 §5). It throws when the
- *  request carries no principal — a handler that reaches for a user's data without one is a bug, and it fails closed
- *  rather than falling back to anyone. A public route (the health probe) simply never asks. */
+/** The request's user-scoped dependencies; throws without a principal (fails closed). Public routes never ask. */
 export type ScopeOf = () => Scoped;
 export type RouteHandler = (req: FastifyRequest, reply: FastifyReply, scope: ScopeOf) => unknown;
 export type RouteMeta = Omit<RouteConfig, 'method' | 'path'> & {
@@ -45,8 +43,6 @@ const toOpenApiPath = (fastifyPath: string): string => fastifyPath.replace(/:([A
 
 export const MISSING_PRINCIPAL_MESSAGE = 'fintrack: a route reached user data without an authenticated principal';
 
-/** Binds a handler to the tenancy: the principal the auth hook attached to the request becomes the user the handler's
- *  dependencies are scoped to. */
 const withScope =
   (tenancy: Tenancy, handler: RouteHandler) =>
   (req: FastifyRequest, reply: FastifyReply): unknown =>

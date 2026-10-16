@@ -40,8 +40,7 @@ const journalBeforeAuth = (folder: string): void => {
 
 const open = () => openDatabase({ DB_PATH: dbPath, FINTRACK_DB_KEY: TEST_KEY });
 
-/** Bootstrap as the release before ADR-033 did it: its migrations, then its seed. (`bootstrap()` itself seeds with the
- *  current code, which targets the current schema.) */
+/** Bootstrap as the pre-auth release did: its migrations, then its seed (bootstrap() seeds for the current schema). */
 const legacyBootstrap = async (db: Db, migrationsFolder: string): Promise<void> => {
   await migrate(db, { migrationsFolder });
   await seedAsBefore(db);
@@ -77,7 +76,6 @@ const domainDump = async (db: Db): Promise<Record<string, Row[]>> => {
   ).filter(({ name }) => !EXCLUDED_TABLES.test(name));
   const dump: Record<string, Row[]> = {};
   for (const { name } of tables) {
-    // `user_id` is what the tenancy migration (same startup) adds to the owned tables; it is checked in its own test.
     const rows = (await db.all<Row>(sql`SELECT * FROM ${sql.identifier(name)}`)).map(
       ({ user_id: _owner, ...rest }) => rest,
     );

@@ -62,9 +62,7 @@ export default tseslint.config(
     },
   },
   {
-    // The pure and orchestration layers are declarative (docs/code-quality.md, remeda table): no loops, no `let`, no
-    // `.push(`. The shell (`diplomat/**`) and the composition root (`composition/**`) do I/O and may be imperative.
-    // This restates the base `xs.filter(...)[0]` selector because a later `no-restricted-syntax` replaces, not merges.
+    // Declarative layers: no loops, `let` or `.push(` (docs/code-quality.md remeda table). Restates the base filter()[0] selector because a later no-restricted-syntax replaces, not merges.
     files: ['src/logic/**/*.ts', 'src/controllers/**/*.ts', 'src/adapters/**/*.ts'],
     rules: {
       'no-restricted-syntax': [

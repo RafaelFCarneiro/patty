@@ -29,12 +29,7 @@ import type { SetupCodesRepo } from '../diplomat/db/repos/setupCodes.js';
 import type { TransactionsRepo } from '../diplomat/db/repos/transactions.js';
 import type { UsersRepo } from '../diplomat/db/repos/users.js';
 
-/** Side-effect dependencies, injected so controllers stay testable.
- *
- *  Always the dependencies of ONE user (ADR-033 §5): every repo in it is already bound to that user — its reads see
- *  only the user's own rows plus the shared defaults, its writes (applied by the scoped `RunEffects`) are stamped with
- *  and confined to the user — and `locale` is that user's. A controller is handed these and nothing else, so it cannot
- *  reach another user's data, or forget to filter: there is no unscoped repo for it to call. */
+/** Side-effect dependencies, injected so controllers stay testable. One user's: every repo is already bound to them. */
 export type Deps = {
   accounts: AccountsRepo;
   bills: BillsRepo;
@@ -179,24 +174,15 @@ export type RunEffectsSequence = <I, T>(
   flowFor: (item: I) => () => ResultAsync<FlowOutcome<T>, AppError>,
 ) => Promise<Result<T, AppError>[]>;
 
-/**
- * Everything one request needs to act as one user: their `Deps`, the runner that applies their flows' writes, and the
- * bookkeeping the shell does after a write. Built per request from the principal by partial application — a plain
- * value, dropped when the request ends; nothing about "the current user" is stored between requests (ADR-033 §5).
- */
+/** What one request needs to act as one user, built per request; nothing about the user is stored between requests. */
 export type Scoped = {
   deps: Deps;
   runEffects: RunEffects;
   runEffectsSequence: RunEffectsSequence;
-  /** Forget the cached locale of this user (after their `set_locale` commits). */
   resetLocale: () => void;
 };
 
-/**
- * The composition root's factories (`composition/runtime.ts`): the only way an edge turns a principal into
- * something a controller can use. Each takes the principal the edge authenticated — an edge handler without one is
- * a bug and fails closed (`diplomat/http/scope.ts`, `diplomat/mcp/context.ts`).
- */
+/** Turns the authenticated principal into that user's scoped dependencies (built in composition/runtime.ts). */
 export type Tenancy = {
   depsFor: (principal: Principal) => Deps;
   runEffectsFor: (principal: Principal) => RunEffects;

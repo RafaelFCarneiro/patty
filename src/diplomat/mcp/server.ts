@@ -32,7 +32,6 @@ export const buildMcpServer = (tenancy: Tenancy, version: string, scopeGuard: Sc
 
   registerPrompts(server, ctx);
 
-  // The REST contract is documented from the same route list, built for documentation only: no request, no principal.
   const openApiDocument = buildOpenApiDocument(buildRouteDefinitions(documentationContext(version)), version);
   registerResources(server, ctx, openApiDocument);
 

@@ -58,7 +58,6 @@ export const toSearchFilters = (input: SearchTransactions, refs: ResolvedSearchR
 });
 
 export const buildCommonWhere = (filters: CommonFilters, userId: string): ReturnType<typeof sql>[] => {
-  // The user's own rows, always first: every transaction filter is composed on top of this.
   const conditions: ReturnType<typeof sql>[] = [ownedBy(userId, 't')];
   if (filters.from) conditions.push(sql`t.date >= ${filters.from}`);
   if (filters.to) conditions.push(sql`t.date < ${filters.to}`);

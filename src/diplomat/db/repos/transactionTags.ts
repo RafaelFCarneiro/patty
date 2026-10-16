@@ -20,9 +20,7 @@ const replaceLinks = async (tx: Tx, transactionId: string, tagIds: string[]): Pr
   await tx.delete(transactionTags).where(stale);
 };
 
-/** `transaction_tags` has no owner column: a link is owned through its two parents (ADR-033 §5), which a flow of one
- *  user always names from that user's own rows. The applier checks it anyway — the transaction and every tag must
- *  belong to the user — and treats a parent that is not theirs exactly like a parent that does not exist. */
+/** No owner column here, so the applier checks the transaction and every tag are the user's; else it is a no-op. */
 const belongsToUser = async (tx: Tx, userId: string, transactionId: string, tagIds: string[]): Promise<boolean> => {
   const [transaction] = await tx
     .select({ id: transactions.id })
@@ -39,10 +37,7 @@ const belongsToUser = async (tx: Tx, userId: string, transactionId: string, tagI
 };
 
 export const transactionTagApplier = (userId: string): EntityApplier => ({
-  // Zero decisions (ADR-023 decision 6): the set applies to the row id the core already named. A parent that is
-  // missing — the signature of a duplicate-idempotency-key replay, whose transaction insert no-op'd and left the
-  // minted id uninserted — or that is not the user's own makes the set a no-op, reported as `applied: false`: a
-  // duplicate replay never touches the surviving row's tags, and a link can never join another user's rows.
+  // A missing parent (a duplicate-key replay never inserted its id) or someone else's makes the set a no-op.
   insert: async (tx, model) => {
     const { transactionId, tagIds } = model as TransactionTagSet;
     if (!(await belongsToUser(tx, userId, transactionId, tagIds))) return { applied: false };

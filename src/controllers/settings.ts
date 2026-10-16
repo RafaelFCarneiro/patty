@@ -28,8 +28,8 @@ export const getPreferences = async (deps: Deps): Promise<Preferences> => {
   };
 };
 
-// The locale cache reset (the shell's per-user cache) is shell bookkeeping, not a domain
-// effect — the shell resets it after this flow's write commits, never from here.
+// The locale cache reset is shell bookkeeping, not a domain effect — the shell resets it after this flow's
+// write commits, never from here.
 export const setLocale = (deps: Deps, input: SetLocaleInput): ResultAsync<FlowOutcome<LocalePreferences>, AppError> =>
   safeTry(async function* () {
     const current = await deps.settings.getLocale();

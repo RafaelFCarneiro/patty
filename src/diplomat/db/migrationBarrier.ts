@@ -10,6 +10,7 @@ export const MIGRATIONS_TABLE = '__drizzle_migrations';
 
 type MigrationRow = { created_at: number | string | null };
 
+/** `verify` runs inside the same transaction, before the commit: if it throws, the whole upgrade rolls back. */
 /**
  * Applies every pending migration inside ONE SQLite write transaction (`BEGIN IMMEDIATE`) and runs `whileHeld`
  * after the write lock is taken and before anything changes. That lock is the barrier an ordinary writer — even
@@ -28,8 +29,8 @@ type MigrationRow = { created_at: number | string | null };
  * It mirrors `drizzle-orm/libsql`'s `migrate()` (foreign keys off, the same statements, the same
  * `__drizzle_migrations` rows), only with the lock taken first and held across `whileHeld`.
  *
- * `verify` runs after the last migration and before the commit, inside the same transaction: if it throws, everything
- * the migrations did is rolled back and the database is exactly as it was (ADR-033 §7: refuse to start, write nothing).
+ * `verify` runs after the last migration and before the commit, inside the same transaction: if it throws, the whole
+ * upgrade rolls back and the database is exactly as it was.
  */
 export const applyPendingMigrationsHolding = async (
   db: Db,

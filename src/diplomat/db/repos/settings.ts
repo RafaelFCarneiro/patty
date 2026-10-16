@@ -5,7 +5,6 @@ import { userSettings } from '../schema.js';
 import { VersionConflict, type EntityApplier } from '../effects.js';
 
 export type SettingsRepo = {
-  /** The user's preferences row, or `undefined` for one who has never stored any (the defaults apply). */
   getLocale: () => Promise<UserSettingsEntity | undefined>;
 };
 
@@ -22,14 +21,7 @@ export const settingsRepo = (db: Db, userId: string): SettingsRepo => ({
   },
 });
 
-/**
- * One row per user, keyed by `user_id` (no `id`), so this hand-written applier takes the place of
- * `ownedTableApplier`: it stamps the user on insert and confines an update to their row and version.
- *
- * An id collision on insert here IS the concurrent-first-insert race (two callers both reading "no row yet" and
- * deciding to insert), not a negligible chance event — so a collision must retry rather than silently no-op: the
- * loser's `setLocale` call would otherwise report success without its own value ever landing.
- */
+/** Keyed by `user_id`. A collision on insert is the concurrent-first-insert race: retry, don't silently no-op. */
 export const userSettingsApplier = (userId: string): EntityApplier => ({
   insert: async (tx, model) => {
     const { locale, localeSource, baseCurrency } = model as UserSettingsEntity;

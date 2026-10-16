@@ -14,12 +14,9 @@ import { sharedDefaultErrors } from '../models/tenancy.js';
 import type { FlowOutcome, Persistable } from '@rfc0/effect-runner';
 import type { Deps } from './deps.js';
 
-/** ADR-027 Phase 2 non-negotiable: `save_dashboard` always stores `source: inline`, `path: null` —
- *  a custom dashboard can never be file-backed, which closes the path-traversal surface entirely
- *  (only bootstrap's own directory scan ever sets `path`, never a caller-supplied value). Saving
- *  under a default's name does not touch the default (it is shared and read-only, ADR-033 §5): it
- *  creates the caller's own inline dashboard of that name, which then stands in for the default for
- *  that caller alone. */
+/** `save_dashboard` always stores `source: inline`, `path: null` — a custom dashboard can never be file-backed, which
+ *  closes the path-traversal surface (only bootstrap's directory scan ever sets `path`). Saving under a default's
+ *  name creates the caller's own copy; the default is untouched. */
 export const saveDashboard = (deps: Deps, name: string, html: string): ResultAsync<FlowOutcome<Dashboard>, AppError> =>
   safeTry(async function* () {
     const issues = findHtmlValidationIssues(html);
@@ -52,8 +49,7 @@ export const saveDashboard = (deps: Deps, name: string, html: string): ResultAsy
   });
 
 /** Delete by name is idempotent-by-design — a missing dashboard returns `{ deleted: false }` rather
- *  than an error, with an empty `persist` batch (no write). Mirrors `deleteTag`. A shared default is
- *  not the caller's to delete: it answers the read-only error instead. */
+ *  than an error, with an empty `persist` batch (no write). Mirrors `deleteTag`. A shared default is refused. */
 export const deleteDashboard = (deps: Deps, name: string): ResultAsync<FlowOutcome<{ deleted: boolean }>, AppError> =>
   safeTry(async function* () {
     const ref = await deps.dashboards.findRefByName(name);

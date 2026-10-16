@@ -46,8 +46,7 @@ export type CategoryWriteModel = {
 };
 
 /** Version-carrying read for `deleteCategory`/`deleteSubCategory` to build a version-guarded
- *  `delete` `Persistable`. `shared` marks one of the defaults every user sees (`user_id` null, ADR-033 §5), which no
- *  one may delete. */
+ *  `delete` `Persistable`. `shared`: a default every user sees (user_id null), which no one may delete. */
 export type CategoryVersion = { id: string; version: number; shared: boolean };
 
 /** Sub-category read projection — includes parent info joined from [:BELONGS_TO]->(:Category). */

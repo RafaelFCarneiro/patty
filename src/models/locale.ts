@@ -9,8 +9,6 @@ export type Locale = z.infer<typeof Locale>;
 export const LocaleSource = z.enum(['default', 'inferred', 'explicit']);
 export type LocaleSource = z.infer<typeof LocaleSource>;
 
-/** A user's preferences (`user_settings`, ADR-033 §5) — there is no id: the row is keyed by its user, whom the scoped
- *  applier supplies. What belongs to the whole instance lives in the `settings` singleton, which no flow writes yet. */
 export const USER_SETTINGS_ENTITY_TAG = 'userSettings';
 
 export const UserSettingsEntitySchema = withPersistenceMeta(

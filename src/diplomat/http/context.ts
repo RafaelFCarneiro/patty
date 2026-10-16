@@ -1,13 +1,9 @@
 import { AuthMode } from '../../models/auth/mode.js';
 import type { AuthDeps, Deps, RunEffects, Tenancy } from '../../controllers/deps.js';
 
-/** Shared HTTP edge context (ADR-025) — built once in `routes.ts`. A route module needing only the user's own
- *  dependencies takes no context at all: its handlers ask for them per request (`ScopeOf`, `openapi.ts`). What is
- *  here is what a request's user cannot change: the version, the factories that build a user's dependencies, and the
- *  unauthenticated probe's. */
+/** Shared HTTP edge context, built once in `routes.ts`; per-user dependencies are asked for per request instead. */
 export type HttpContext = Tenancy & {
   version: string;
-  /** The health probe's dependencies — no user's. */
   publicDeps: Pick<Deps, 'health'>;
 };
 
@@ -15,8 +11,7 @@ const DOCUMENTATION_ONLY = (): never => {
   throw new Error('fintrack: this HTTP context only documents the routes (OpenAPI) — it serves none');
 };
 
-/** A context for building the route list to DOCUMENT it (`fintrack://openapi`, which has no HTTP request and so no
- *  principal): the handlers are never invoked, and any attempt to would fail rather than reach a user's data. */
+/** Builds the route list for documentation only (no request, no principal); handlers must never run. */
 export const documentationContext = (version: string): HttpContext => ({
   version,
   publicDeps: { health: { reachable: DOCUMENTATION_ONLY } },

@@ -45,15 +45,12 @@ import type { ChangeEvent } from '../models/tenancy.js';
  * (`main.ts`) and by `fintrack login`, which serves the sign-in page from a temporary server of its own when none is
  * running — one assembly, so the two can never wire a flow differently.
  *
- * Tenancy (ADR-033 §5): nothing here is bound to a user. `depsFor(principal)` and the other factories build, for ONE
- * request, repos and appliers already bound to that principal's user by partial application, and the request drops
- * them when it ends. The only unscoped access is `authRunEffects` (the identity flows) and `publicDeps` (the
- * unauthenticated health probe) — which touch no user-owned table.
+ * Nothing here is bound to a user: `depsFor(principal)` and the other factories build, per request, repos and
+ * appliers bound to that principal's user. The only unscoped access is `authRunEffects` (identity flows) and
+ * `publicDeps` (the health probe), neither of which touches user-owned tables.
  */
 export type Runtime = Tenancy & {
-  /** The unauthenticated liveness probe's dependencies (ADR-033 §6): the database check, nothing of any user's. */
   publicDeps: Pick<Deps, 'health'>;
-  /** Runs the identity flows (users, sessions, tokens, setup codes, sign-in grants) — not tied to a user's data. */
   authRunEffects: RunEffects;
   changeBus: ChangeBus<ChangeEvent>;
 };
@@ -65,9 +62,7 @@ const reportChangeError = (cause: unknown): void => {
   console.error('[fintrack] change notification failed:', cause);
 };
 
-/** The appliers of one user: every owned entity's applier is built for that user, so a write the user's flow returns
- *  can only ever insert their rows and touch their rows. Shared reference data (exchange rates, the merchant
- *  dictionary) has no owner and is registered as it is. */
+/** Appliers built for one user; shared reference data (exchange rates, merchant dictionary) has no owner. */
 const applierRegistryFor = (userId: string): ApplierRegistry => ({
   [ACCOUNT_ENTITY_TAG]: accountApplier(userId),
   [TRANSACTION_ENTITY_TAG]: transactionApplier(userId),
@@ -86,9 +81,7 @@ const applierRegistryFor = (userId: string): ApplierRegistry => ({
 });
 
 export type RuntimeOptions = {
-  /** Where a failing change notification is reported (default: stderr). */
   onChangeError?: (cause: unknown) => void;
-  /** The time every request's dependencies read (default: the system clock); a test pins it for determinism. */
   clock?: () => Date;
 };
 
@@ -125,7 +118,6 @@ export const createRuntime = (db: Db, config: RuntimeConfig, options: RuntimeOpt
     };
   };
 
-  // A committed write is announced as that user's: the bus carries who it belongs to.
   const publishFor =
     (userId: string | null) =>
     (entities: readonly string[]): void =>

@@ -132,7 +132,7 @@ describe('deleteCategory — functional core (ADR-021 phase 3a)', () => {
   });
 });
 
-describe('shared defaults are read-only (ADR-033 §5)', () => {
+describe('shared defaults are read-only', () => {
   it('refuses to delete a default category with the read-only message, before counting its references', async () => {
     const countReferences = vi.fn();
     const deps = makeDeps({

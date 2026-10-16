@@ -33,18 +33,16 @@ const IDEMPOTENCY_KEY_COLUMN = 'idempotencyKey';
  *  `EntityApplier` instead. */
 type VersionedTable = SQLiteTable & { id: AnySQLiteColumn; version: AnySQLiteColumn };
 
-/** A versioned table that carries its owner (ADR-033 §5). */
 type OwnedTable = VersionedTable & { userId: AnySQLiteColumn };
 
 type VersionedTableConfig = {
   readBack?: ReadBack;
 };
 
-/** Everything an applier does for a user (ADR-033 §5): `insert` stamps the row with `userId`; `update` and `delete` add
- *  `AND user_id = :me` to their predicate, so another user's row — and a shared default, whose `user_id` is NULL —
- *  never matches and the write fails exactly like a stale version (`VersionConflict`, then the engine's retry and
- *  `conflict`). The row a flow hands an applier never carries `userId`: a flow cannot choose an owner, and an update
- *  cannot change it. */
+/**
+ * Scoped appliers stamp user_id on insert and add `AND user_id = :me` to update/delete, so another user's row (or a
+ * shared default, user_id NULL) never matches and fails like a stale version. A model's own userId is ignored.
+ */
 type OwnerScope = { userId: string };
 
 /**
@@ -73,7 +71,6 @@ const applierFor = <T extends VersionedTable>(
   const ownerColumn = owner ? columns['userId'] : undefined;
   if (owner && !ownerColumn) throw new Error('versionedTableApplier: an owner scope needs a "userId" column');
 
-  /** The predicate every write adds for a scoped applier — nothing, for a table that is not owned. */
   const ownedBy = (): SQL[] => (owner && ownerColumn ? [eq(ownerColumn, owner.userId)] : []);
 
   // The engine's one idempotency read: which row already holds the key a just-conflicted insert
@@ -99,12 +96,10 @@ const applierFor = <T extends VersionedTable>(
         throw new Error(unexpectedIdempotencyKeyMessage());
       }
       const given = model as Record<string, unknown> & { id: string };
-      // A scoped applier never takes the owner from the flow: whatever it carried, the row is the applier's user's.
       const row = owner ? R.omit(given, ['userId']) : given;
       const stamped = owner ? { ...row, userId: owner.userId } : row;
       const rowToInsert =
         keyColumn && idempotencyKey !== undefined ? { ...stamped, [IDEMPOTENCY_KEY_COLUMN]: idempotencyKey } : stamped;
-      // The key is unique per user (`UNIQUE(user_id, idempotency_key)`), so the conflict target names both columns.
       const keyTarget = ownerColumn && keyColumn ? [ownerColumn, keyColumn] : keyColumn;
       const result = await tx
         .insert(table)
@@ -124,7 +119,6 @@ const applierFor = <T extends VersionedTable>(
 
     update: async (tx, model) => {
       const row = model as Record<string, unknown> & { id: string; version: number };
-      // A scoped applier never lets an update move a row to another owner.
       const values = R.omit(row, owner ? ['id', 'version', 'userId'] : ['id', 'version']);
       const result = await tx
         .update(table)
@@ -149,13 +143,11 @@ const applierFor = <T extends VersionedTable>(
   };
 };
 
-/** For a table nobody owns (the shared reference tables). */
 export const versionedTableApplier = <T extends VersionedTable>(
   table: T,
   config: VersionedTableConfig = {},
 ): EntityApplier => applierFor(table, undefined, config);
 
-/** For a table whose rows belong to a user (ADR-033 §5): the applier of one user, built per request. */
 export const ownedTableApplier = <T extends OwnedTable>(
   table: T,
   userId: string,

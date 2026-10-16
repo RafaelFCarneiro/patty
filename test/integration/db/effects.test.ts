@@ -1368,7 +1368,7 @@ describe('merchantCategoryApplier — upsert-increment mechanics, single-table (
     );
     expect(edge).toEqual({ weight: 5, origin: ClassificationMethod.enum.history, user_id: OWNER_USER_ID });
 
-    // A later correction reinforces it: the delta lands on the same edge, and origin is untouched (ADR-023 decision 2).
+    // A later correction reinforces it: the delta lands on the same edge, and origin is untouched.
     expect((await insertEdge(3)).isOk()).toBe(true);
     [edge] = await db.all<{ weight: number; origin: string; user_id: string | null }>(
       sql`SELECT weight, origin, user_id FROM merchant_category WHERE merchant_key = ${merchantKey} AND category_id = ${categoryId}`,

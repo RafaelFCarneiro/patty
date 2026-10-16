@@ -21,16 +21,11 @@ import { ownedWhere, visibleRows, visibleWhere } from '../queries/scope.js';
 export type DashboardRef = { id: string; version: number };
 
 export type DashboardsRepo = {
-  /** The user's own dashboard of that name, else the shared default of that name. */
   get: (name: string) => Promise<Dashboard | null>;
-  /** The user's OWN dashboard of that name — never a shared default, which no one may update or delete. */
   findRefByName: (name: string) => Promise<DashboardRef | null>;
-  /** Whether a shared default (a bundled `file` dashboard) bears that name. */
   isDefault: (name: string) => Promise<boolean>;
-  // Full-row read (incl. html) — for rename, which must re-emit the whole row under a new name. The user's own
-  // dashboard of that name, else the shared default (`shared: true`), so the flow can refuse to touch it.
+  // Full-row read (incl. html) for rename; the user's own dashboard first, else the shared default (`shared: true`).
   findByName: (name: string) => Promise<DashboardEntity | null>;
-  /** The defaults and the user's own, each name once: the user's own dashboard replaces a default of the same name. */
   list: () => Promise<DashboardListItem[]>;
 };
 
@@ -94,7 +89,6 @@ const resolveHtml = (row: ResolvableRow): Promise<string> => {
 };
 
 export const dashboardsRepo = (db: Db, userId: string): DashboardsRepo => {
-  /** The visible row of that name, the user's own ahead of a shared default. */
   const visibleByName = async (name: string) => {
     const [row] = await db
       .select()
@@ -142,7 +136,6 @@ export const dashboardsRepo = (db: Db, userId: string): DashboardsRepo => {
         .where(
           and(
             visibleRows(dashboards.userId, userId),
-            // A default hides behind the user's own dashboard of the same name.
             sql`(${dashboards.userId} IS NOT NULL OR ${dashboards.name} NOT IN (${own}))`,
           ),
         )

@@ -20,8 +20,7 @@ export const dbToModel = (row: DashboardRow, resolvedHtml: string): Dashboard =>
 export const dbToListItem = (row: Pick<DashboardRow, 'name' | 'updatedAt' | 'source'>): DashboardListItem =>
   DashboardListItemSchema.parse({ name: row.name, updatedAt: row.updatedAt, source: row.source });
 
-/** Read variant carrying `id`/`version`/`path` and whether the row is a shared default — for
- *  `findByName`'s full-row read, which rename needs to
+/** Read variant carrying `id`/`version`/`path` and `shared` — for `findByName`'s full-row read, which rename needs to
  *  build a version-guarded `Persistable` that preserves the row's source/path unchanged. */
 export const dbToEntity = (row: DashboardRow, resolvedHtml: string, shared: boolean): DashboardEntity =>
   DashboardEntitySchema.parse({

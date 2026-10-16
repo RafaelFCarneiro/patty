@@ -14,8 +14,7 @@ export type SubCategoriesRepo = {
 };
 
 // Sub-categories are categories with a non-null parent_id.
-// We join to the parent to get parentName and kind.
-// Both the sub-category and its parent are among the user's visible categories (the defaults plus their own).
+// We join to the parent to get parentName and kind; both must be visible to the user.
 const SUB_SELECT = (userId: string) => sql`
   SELECT sc.id, sc.name, sc.parent_id, p.name AS parent_name, p.kind
   FROM categories sc

@@ -212,7 +212,6 @@ const toMerchantShares = (
   const shares = top.map((row) => (categoryTotal === 0 ? 0 : row.spent / categoryTotal));
   return top.map((row, index): MerchantShare => {
     const share = shares[index]!;
-    // A running total, left to right from zero — exactly the sum the previous loop accumulated.
     const cumulative = shares.slice(0, index + 1).reduce((total, each) => total + each, 0);
     return {
       merchant: resolveMerchantLabel(row.merchantKey, locale),

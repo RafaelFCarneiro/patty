@@ -21,12 +21,8 @@ import { TRANSACTION_TAG_ENTITY_TAG } from '../../../src/models/transactionTag.j
 import { dumpOf, seedTwoUsers, sharedDump, WORLD_A, WORLD_B } from './world.js';
 
 /**
- * The scoped appliers, on their own (ADR-033 §5). The isolation suite shows that no tool or route can NAME another
- * user's row, because the resolvers read only through scoped repos. This is the second line: even a flow handed
- * another user's id and the right version — a bug, a crafted request that slipped past a resolver — cannot write it.
- * A scoped runner stamps `user_id` on insert and adds `AND user_id = :me` to every update and delete, so another user's
- * row, and a shared default (`user_id` NULL), simply does not match: the write fails like a stale version, the engine
- * answers `conflict`.
+ * The scoped appliers on their own: even a flow handed another user's id and the right version cannot write it, nor a
+ * shared default. The write matches no row, so it fails like a stale version and the engine answers `conflict`.
  */
 
 let tmpDir: string;

@@ -5,10 +5,7 @@ import { ownedBy } from './scope.js';
  * Full transaction SELECT with all LEFT JOINs for name resolution and tag aggregation.
  * Shared by transactionsRepo and billsRepo so a joined column added in one place is
  * never missed in the other — both produce rows decoded by adapters/transactions.ts.
- *
- * Always confined to `userId`'s own transactions (ADR-033 §5): the predicate is part of the SELECT, not something a
- * caller adds, so no read of transactions can leave it out. The joined tables (accounts, cards, tags, categories) are
- * reached only through this user's own foreign keys.
+ * Always confined to `userId`'s transactions: the predicate is part of the SELECT, so no caller can leave it out.
  */
 export const fullTxSelect = (userId: string, whereClause: ReturnType<typeof sql>) => sql`
   SELECT t.*,

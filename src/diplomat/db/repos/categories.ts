@@ -22,8 +22,7 @@ export type CategoriesRepo = {
 };
 
 export const categoriesRepo = (db: Db, userId: string): CategoriesRepo => ({
-  /** Top-level categories only — sub-categories (parent_id set) belong to subCategoriesRepo. The shared defaults and
-   *  the user's own, nobody else's. */
+  /** Top-level categories only — sub-categories belong to subCategoriesRepo. */
   list: async (options) => {
     const query = db
       .select()

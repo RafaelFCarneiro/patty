@@ -21,8 +21,7 @@ import { Locale, LocaleSource } from '../../models/locale.js';
 import { RecurringPeriod } from '../../models/recurring.js';
 import { ClassificationMethod, TransactionStatus } from '../../models/transaction.js';
 
-// ADR-033 §5 tenancy. An owned row always names its user (RESTRICT: a user with data cannot be removed out from under
-// it); a shared-default row (the seeded categories, `rule` merchant edges, `file` dashboards) carries null instead.
+// Owned rows name their user (RESTRICT); shared defaults carry null.
 const ownerColumn = () =>
   text('user_id')
     .notNull()
@@ -102,15 +101,13 @@ export const merchantCategory = sqliteTable(
     userId: sharedOrOwnerColumn(),
   },
   (t) => [
-    // SQLite treats NULLs as distinct in a UNIQUE index, so the key of a shared `rule` edge (user_id null) and that of
-    // a user's `history` edge are two partial indexes, each unique among its own rows.
+    // NULLs are distinct in a UNIQUE index, hence one partial index per audience.
     uniqueIndex('merchant_category_shared_key')
       .on(t.merchantKey, t.categoryId)
       .where(sql`${t.userId} IS NULL`),
     uniqueIndex('merchant_category_user_key')
       .on(t.userId, t.merchantKey, t.categoryId)
       .where(sql`${t.userId} IS NOT NULL`),
-    // Rules ship with FinTrack and are shared; what a person teaches it is theirs.
     check(
       'merchant_category_origin_owner',
       sql`(${t.origin} = ${sql.raw(`'${ClassificationMethod.enum.rule}'`)} AND ${t.userId} IS NULL) OR (${t.origin} = ${sql.raw(`'${ClassificationMethod.enum.history}'`)} AND ${t.userId} IS NOT NULL)`,
@@ -177,7 +174,6 @@ export const transactions = sqliteTable(
     userId: ownerColumn(),
   },
   (t) => [
-    // The derivation of the key is unchanged (it names no user), so a statement two people import dedups per person.
     uniqueIndex('transactions_user_idempotency_key').on(t.userId, t.idempotencyKey),
     index('idx_transactions_user_date').on(t.userId, t.date),
     index('idx_transactions_date').on(t.date),
@@ -235,15 +231,13 @@ export const dashboards = sqliteTable(
     userId: sharedOrOwnerColumn(),
   },
   (t) => [
-    // Names are unique among the shared defaults and, separately, among each user's own dashboards (NULLs are distinct
-    // in a UNIQUE index, hence two partial ones). A user's dashboard may share a default's name: theirs wins for them.
+    // Unique among the shared defaults and, separately, among each user's own (partial indexes: NULLs are distinct).
     uniqueIndex('dashboards_shared_name')
       .on(t.name)
       .where(sql`${t.userId} IS NULL`),
     uniqueIndex('dashboards_user_name')
       .on(t.userId, t.name)
       .where(sql`${t.userId} IS NOT NULL`),
-    // The file-backed defaults ship with FinTrack and are shared; a saved dashboard is its author's.
     check(
       'dashboard_source_owner',
       sql`(${t.source} = 'file' AND ${t.userId} IS NULL) OR (${t.source} = 'inline' AND ${t.userId} IS NOT NULL)`,
@@ -275,14 +269,13 @@ export const budgets = sqliteTable(
   (t) => [uniqueIndex('budgets_user_category_currency_period').on(t.userId, t.categoryId, t.currency, t.period)],
 );
 
-// Instance-wide settings (one row, `id = 'singleton'`). Nothing is stored here today: a person's preferences moved to
-// `user_settings` with tenancy (ADR-033 §5), and what belongs to the whole instance gets its columns here.
+// Instance-wide settings (one row). Empty today; preferences live in user_settings.
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey().default('singleton'),
   version: integer('version').notNull().default(0),
 });
 
-// One row per user (ADR-033 §5, ADR-026/FD-021). A user with no row has the defaults.
+// One row per user; none means the defaults apply.
 export const userSettings = sqliteTable('user_settings', {
   userId: text('user_id')
     .primaryKey()

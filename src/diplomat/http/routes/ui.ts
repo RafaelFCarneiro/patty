@@ -46,8 +46,7 @@ const registerUiEventsRoute = (
   session: SessionRecheck | undefined,
 ): void => {
   app.get(`${UI_ROOT_PATH}/events`, (req, reply) => {
-    // A stream is its user's: it forwards only the changes that user's own writes committed (ADR-033 §5). The auth hook
-    // always sets a principal here; a request without one gets nothing rather than everyone's events.
+    // Without a principal, open no stream rather than everyone's events.
     const userId = req.principal?.userId;
     if (userId === undefined) return reply.status(401).send({ error: { code: 'unauthenticated' } });
     reply.hijack();
@@ -62,8 +61,7 @@ const registerUiEventsRoute = (
     reply.raw.flushHeaders();
 
     const unsubscribe = subscribe((event) => {
-      // Someone else's change, or instance bookkeeping (a session touch, a login: `userId` null) — not this
-      // dashboard's business.
+      // Another user's change, or instance bookkeeping (userId null).
       if (event.userId !== userId) return;
       // A publish can race a client disconnect that hasn't reached the 'close' handler below yet
       // — skip the write rather than push data onto a response that's already torn down.

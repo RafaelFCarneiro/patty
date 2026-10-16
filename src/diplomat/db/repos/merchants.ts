@@ -74,9 +74,8 @@ export type MerchantsRepo = {
 
 export const merchantsRepo = (db: Db, userId: string): MerchantsRepo => ({
   matchCandidates: async (normalizedDescription) => {
-    // The shared `rule` edges plus this user's own `history` edges — never another user's. An edge for the same
-    // (merchant, category) can exist twice, once of each audience; they are one edge to the classifier, so their
-    // weights add (as one row's weight did before tenancy) and the edge stays a `rule` if it ever was one.
+    // Shared `rule` edges plus this user's `history` edges; the same (merchant, category) may have one of each,
+    // so weights are summed.
     const rows = await db.all<Record<string, unknown>>(sql`
       SELECT mc.merchant_key AS "merchantKey", mc.category_id AS "categoryId",
              c.name AS "categoryName", SUM(mc.weight) AS weight,
@@ -117,11 +116,8 @@ export const merchantApplier: EntityApplier = {
 };
 
 /** Always an `insert` (no `id`/`version`) — `update`/`delete` are structurally unreachable. The
- *  `set` below deliberately omits `origin`: it must stay insert-only, so a reinforced edge keeps the origin it was
- *  first written with. */
+ *  `set` below deliberately omits `origin`: it must stay insert-only. Writes only the caller's own `history` edge. */
 export const merchantCategoryApplier = (userId: string): EntityApplier => ({
-  // What a user teaches FinTrack is that user's own `history` edge (stamped with, and conflicting only among, their
-  // own edges); the shared `rule` edges are never written through a scoped runner.
   insert: async (tx, model) => {
     const { merchantKey, categoryId, weightDelta, origin } = model as MerchantCategoryEdge;
     await tx

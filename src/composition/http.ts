@@ -22,8 +22,6 @@ const LOG_CENSOR = '[Redacted]';
 export const httpLoggerOptions = (enabled: boolean) =>
   enabled ? { redact: { paths: REDACTED_LOG_PATHS, censor: LOG_CENSOR } } : false;
 
-/** What the HTTP surface needs of the runtime: the factories that scope a request to its user, the probe's
- *  dependencies and the change bus's `subscribe` — structurally what `Runtime` is, so a caller just passes it. */
 export type HttpSurface = Tenancy & {
   publicDeps: HttpContext['publicDeps'];
   changeBus: Pick<ChangeBus<ChangeEvent>, 'subscribe'>;

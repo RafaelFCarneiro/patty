@@ -47,7 +47,7 @@ describe('createLocaleResolver', () => {
     expect(settings.getLocale).not.toHaveBeenCalled();
   });
 
-  it('keeps one cache entry per user: one person’s language never becomes another’s (ADR-033 §5)', async () => {
+  it('keeps one cache entry per user: one person’s language never becomes another’s', async () => {
     const portuguese = makeSettings(Locale.enum.pt);
     const spanish = makeSettings(Locale.enum.es);
     const { locale } = createLocaleResolver();

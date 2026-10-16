@@ -28,16 +28,10 @@ import {
 } from './world.js';
 
 /**
- * The isolation suite (ADR-033 §5, Phase 4 step 1): user B acts against user A's data through EVERY registered MCP
- * tool and EVERY REST route, over HTTP with real bearer tokens — the whole edge, the gate, the scoped dependencies and
- * the scoped appliers. Both registries are read from the product, so a tool or route added tomorrow fails the
- * coverage test below until it has a case here.
- *
- * Per call, as B:
- *   - it never returns A's data (a not-found error echoes only what B sent);
- *   - every A id or name B passes is "not found" — never "forbidden", so existence does not leak;
- *   - A's rows are byte-for-byte what they were (dumped before and after);
- *   - the shared defaults are what they were.
+ * User B acts against user A's data through every registered MCP tool, REST route and MCP resource, over HTTP with real
+ * bearer tokens. The registries are read from the product, so a new tool or route fails the coverage test until it has
+ * a case. Per call: nothing of A's is returned, A's ids and names are "not found" (never "forbidden"), and A's rows and
+ * the shared defaults are unchanged.
  */
 
 type Expected =
@@ -130,7 +124,7 @@ const TOOL_CASES: Record<string, ToolCase | ToolCase[]> = {
     args: (a) => ({ id: a.tx.cardPurchase, confirm: true }),
     expected: notFound('unknown_transaction'),
   },
-  // Exchange rates are shared market data (ADR-033 §5): any signed-in user reads and refreshes them.
+  // Exchange rates are shared market data: any signed-in user reads and refreshes them.
   set_exchange_rate: {
     args: () => ({ from: 'USD', to: 'BRL', rate: 5, asOf: '2026-10-01T00:00:00.000Z' }),
     expected: own,

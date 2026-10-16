@@ -117,7 +117,6 @@ export const deleteCreditCard = (
     return ok({ persist, response: { deleted: true as const, card: card.name } });
   });
 
-/** The account a card is paid from: it must exist, not be a credit account, and share the card's currency. */
 const resolvePaymentAccount = (deps: Deps, name: string, cardCurrency: CurrencyCode): ResultAsync<Account, AppError> =>
   safeTry(async function* () {
     const paymentAccount = yield* resolveAccountRef(deps, name);
@@ -129,8 +128,7 @@ const resolvePaymentAccount = (deps: Deps, name: string, cardCurrency: CurrencyC
     return ok(paymentAccount);
   });
 
-/** The update that renames a card's internal liability account to track the card's new name — name-checked only
- *  when the card was really renamed (the account's own name always follows the card's, Feature Design 014). */
+/** Name-checked only on a real rename; the internal account's name always tracks the card's. */
 const renameInternalAccount = (
   deps: Deps,
   card: CreditCard,

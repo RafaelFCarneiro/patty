@@ -46,9 +46,7 @@ const refusalOf = (outcome: GateOutcome, required: Scope): Refusal | null => {
 const refusalText = (refusal: Refusal): string =>
   refusal.kind === GateKind.enum.not_signed_in ? refusal.message : formatAppError(refusal.error);
 
-/** The request context is always the callback's last argument (`(args, extra)`, `(uri, extra)`, or `(extra)`). Once the
- *  gate has granted the caller, the callback receives that context with the caller's principal on it
- *  (`context.ts`'s `CallerExtra`) — the one way a callback learns whose data it may touch (ADR-033 §5). */
+/** The request context is the callback's last argument; once granted it carries the caller's principal. */
 const gated =
   (callback: Callback, required: Scope, options: ScopeGuardOptions, refuse: (refusal: Refusal) => unknown): Callback =>
   async (...args) => {
