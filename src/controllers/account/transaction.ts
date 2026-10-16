@@ -41,7 +41,6 @@ import {
   TRANSACTION_ENTITY_TAG,
   transactionErrors,
   MovementType,
-  TransactionTool,
   type ClassifiedUpsertResult,
   type ClassifyOutcome,
   type DeleteTransactionResult,
@@ -49,6 +48,7 @@ import {
   type TransactionSource,
   type TransactionView,
 } from '../../models/transaction.js';
+import { ToolName } from '../../models/tool.js';
 import type { Deps } from '../deps.js';
 import { resolveAccountRef, resolveDecimals, resolveLegAccounts, resolveTagLinks } from '../resolve.js';
 import type { StatementImportPlan } from '../transaction/bulk.js';
@@ -217,7 +217,7 @@ export const updateAccountTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     const isAccountOwned = yield* assertAccountOwnedLegs(deps, existing);
-    yield* guard(isAccountOwned, transactionErrors.wrongTool(TransactionTool.updateCardTransaction));
+    yield* guard(isAccountOwned, transactionErrors.wrongTool(ToolName.enum.update_card_transaction));
     yield* guardTransferMutability(existing, input);
 
     const { account, effectiveType, categorySelection } = yield* decideTransactionUpdate(deps, input, existing);
@@ -279,7 +279,7 @@ export const deleteAccountTransaction = (
   safeTry(async function* () {
     const existing = yield* okOr(await deps.transactions.getById(input.id), transactionErrors.notFound(input.id));
     const isAccountOwned = yield* assertAccountOwnedLegs(deps, existing);
-    yield* guard(isAccountOwned, transactionErrors.wrongTool(TransactionTool.deleteCardTransaction));
+    yield* guard(isAccountOwned, transactionErrors.wrongTool(ToolName.enum.delete_card_transaction));
 
     const locale = await deps.locale();
     const labeled = addLocalizedLabels(existing, locale);

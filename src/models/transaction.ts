@@ -8,6 +8,7 @@ import { withPersistenceMeta } from '@rfc0/effect-runner';
 import type { CursorKey } from './page.js';
 import type { CategoryKind } from './category.js';
 import type { ValidationError } from './error.js';
+import { ToolName } from './tool.js';
 import type { LabelMap } from './locale.js';
 
 /** Whether the transaction has cleared or is still expected. Default is date-aware when omitted. */
@@ -388,18 +389,6 @@ export type DeleteTransactionResult =
 export const DELETE_TRANSACTION_CONFIRM_HINT =
   'Destructive action: show the transaction to the user and call again with confirm: true.';
 
-/** MCP tool names for the aggregate-specific update/delete tools (ADR-017) — named once here and
- *  reused both at tool registration (diplomat/mcp/tools/{account,creditCard}.ts) and in the
- *  ownership-guard redirect hint (controllers/transaction/core.ts), rather than re-typed at each
- *  call site. */
-export const TransactionTool = {
-  updateCardTransaction: 'update_card_transaction',
-  deleteCardTransaction: 'delete_card_transaction',
-  updateAccountTransaction: 'update_account_transaction',
-  deleteAccountTransaction: 'delete_account_transaction',
-} as const;
-export type TransactionTool = (typeof TransactionTool)[keyof typeof TransactionTool];
-
 export type TransactionError =
   | { code: 'unknown_transaction'; id: string }
   | {
@@ -457,13 +446,14 @@ export const transactionErrors = {
     code: 'validation',
     issues: [
       "cannot edit amount/date of a transfer or bill-payment transaction at confirm — correct a transfer's " +
-        `amount/date via ${TransactionTool.updateAccountTransaction}, a bill payment via pay_bill/revert_bill_payment, then confirm`,
+        `amount/date via ${ToolName.enum.update_account_transaction}, a bill payment via ` +
+        `${ToolName.enum.pay_bill}/${ToolName.enum.revert_bill_payment}, then confirm`,
     ],
   } satisfies TransactionError,
   // ADR-017 ownership guard: raised by whichever of the four aggregate-specific update/delete tools
   // was called on a transaction it does not own — a guard, not a dispatcher (the caller re-addresses
   // the tool named in the hint; nothing here re-routes on their behalf).
-  wrongTool: (correctTool: TransactionTool): TransactionError => ({
+  wrongTool: (correctTool: ToolName): TransactionError => ({
     code: 'validation',
     issues: [`this transaction is not owned by this tool; call ${correctTool} instead`],
   }),

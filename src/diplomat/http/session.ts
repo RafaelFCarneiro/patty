@@ -1,11 +1,12 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { httpStatus, type AppError } from '../../common/errors.js';
+import type { AppError } from '../../common/errors.js';
 import { authenticate } from '../../controllers/auth.js';
 import { authenticateToken } from '../../controllers/accessTokens.js';
 import { authErrors } from '../../models/auth/errors.js';
 import { type Principal, PrincipalVia } from '../../models/auth/principal.js';
 import type { AuthRoutesContext } from './context.js';
 import { readCookie, SESSION_COOKIE_NAME } from './cookies.js';
+import { replyError } from './respond.js';
 
 /** `principal: null` = no (valid) credential; `failure` = the lookup itself failed (e.g. a write conflict). */
 export type Resolution = { principal: Principal | null } | { failure: AppError };
@@ -30,6 +31,4 @@ export const resolveBearerPrincipal = async (auth: AuthRoutesContext, token: str
  *  can never mint, widen or approve anything" is too important to rest on path routing alone, so each page that
  *  grants access also insists on a browser session. */
 export const requireSession = async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> =>
-  req.principal?.via === PrincipalVia.enum.session
-    ? undefined
-    : reply.status(httpStatus(authErrors.sessionRequired)).send({ error: authErrors.sessionRequired });
+  req.principal?.via === PrincipalVia.enum.session ? undefined : replyError(reply, authErrors.sessionRequired);

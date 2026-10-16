@@ -265,6 +265,36 @@ return currencies.map((currency) => { const mine = rows.filter(...); ... })  // 
 - db: parameterized SQL ONLY — use Drizzle's query builder or the `sql` template tag; never
   string-interpolate user input (security bug). Decode every row through `wire/db` + `adapters/` zod parsing.
 - Edge and shell expected failures follow the same Result convention as controllers: a `Result`/`ResultAsync` whose error is a plain discriminated object (`{ code, … }`), never a thrown `Error` subclass — a throwing third-party API (`node:fs`, the OS keychain, `readline`) is wrapped exactly once, at the adapter (`Result.fromThrowable` / `ResultAsync.fromPromise`), and only unexpected failures throw.
+- One named definition per route and per tool; the module exports the list and registration is generic
+  (`docs/architecture.md` § Diplomat edge organization). A handler is decode → delegate → map, ~10 lines:
+
+  ```ts
+  // ✅ DO — HTTP: metadata is data, the handler uses the shared helpers
+  const deleteTagRoute: RouteDefinition = {
+    method: 'delete', scope: WRITE_SCOPE, path: '/api/tags/:id', tags: [TAGS_TAG], summary: 'Delete tag',
+    request: { params: idParam }, responses: { 200: okResponse('Tag deleted', DeletedOut) },
+    handler: async (req, reply, scope) => {
+      const { deps, runEffects } = scope()
+      const flow = () => deleteTag(deps, pathParam(req, 'id')).map(tagAdapters.outcomeToDb)
+      return send(reply, await runEffects(flow))
+    },
+  }
+  export const tagRoutes = [listTagsRoute, createTagRoute, deleteTagRoute]
+
+  // ✅ DO — MCP: name from ToolName, long description a named constant, handler gets the scoped deps
+  const deleteTagTool = defineTool({
+    name: ToolName.enum.delete_tag,
+    config: { annotations: MUTATING, title: 'Delete tag', description: deleteTagDescription, inputSchema },
+    handle: async (args, { deps, runEffects }) =>
+      fromResult(await runEffects(() => deleteTag(deps, args.id).map(tagAdapters.outcomeToDb))),
+  })
+  export const tagTools = [listTagsTool, createTagTool, deleteTagTool]
+
+  // ❌ DON'T — an inline 422 literal, a bare tool name, a registration function wrapping every handler
+  if (!parsed.success) return reply.status(422).send({ error: { code: 'validation', issues: ['…'] } })
+  server.registerTool('delete_tag', { … }, async (args, extra) => { const { deps } = ctx.as(extra); … })
+  ```
+
 - New MCP tools: rich `description` (the agent reads it!), `.describe()` on non-obvious fields,
   documented in `docs/mcp-tools.md` in the same change.
 

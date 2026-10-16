@@ -3,6 +3,7 @@ import { Id } from './id.js';
 import { ConvertedValueSchema } from './currencyRate.js';
 import { CurrencyCode, Money } from './money.js';
 import { IsoDate } from './date.js';
+import { ToolName } from './tool.js';
 import { withPersistenceMeta } from '@rfc0/effect-runner';
 import {
   CreateTransactionSchema,
@@ -213,11 +214,11 @@ export const accountErrors = {
   } satisfies AccountError,
   creditTransferFromRejected: (name: string): AccountError => ({
     code: 'validation',
-    issues: [`cannot transfer from a credit account (${name}) — use pay_bill instead`],
+    issues: [`cannot transfer from a credit account (${name}) — use ${ToolName.enum.pay_bill} instead`],
   }),
   creditTransferToRejected: (name: string): AccountError => ({
     code: 'validation',
-    issues: [`cannot transfer to a credit account (${name}) — use pay_bill instead`],
+    issues: [`cannot transfer to a credit account (${name}) — use ${ToolName.enum.pay_bill} instead`],
   }),
   creditPaymentRejected: {
     code: 'validation',

@@ -1,8 +1,8 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { httpStatus } from '../../common/errors.js';
 import { bearerChallenge, resourceMetadataUrl } from '../../logic/auth/bearer.js';
 import { resourceOrigin } from '../../logic/auth/origin.js';
 import type { ChallengeableError } from '../../models/auth/errors.js';
+import { replyError } from './respond.js';
 
 const WWW_AUTHENTICATE = 'www-authenticate';
 
@@ -20,5 +20,5 @@ export const rejectWithChallenge = (
 ): FastifyReply => {
   const origin = resourceOrigin(publicUrl, req.headers.host);
   const metadataUrl = origin === null ? null : resourceMetadataUrl(origin);
-  return reply.header(WWW_AUTHENTICATE, bearerChallenge(error, metadataUrl)).status(httpStatus(error)).send({ error });
+  return replyError(reply.header(WWW_AUTHENTICATE, bearerChallenge(error, metadataUrl)), error);
 };

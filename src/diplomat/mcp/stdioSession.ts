@@ -69,61 +69,62 @@ const outcomeOf = (presentation: Presentation | undefined): GateOutcome => {
   }
 };
 
-export const createStdioSession = (options: StdioSessionOptions): StdioSession => {
-  const { signIn } = options;
-  let state: SignInState = IDLE;
-  let timer: NodeJS.Timeout | null = null;
-
-  // Requests and the poll timer share the state, and a device code is single-use: one at a time.
-  let queue: Promise<unknown> = Promise.resolve();
-  const serially = <T>(work: () => Promise<T>): Promise<T> => {
-    const next = queue.then(work);
-    queue = next.catch(() => undefined);
+// Requests and the poll timer share the sign-in state, and a device code is single-use: one at a time.
+const createSerialQueue = () => {
+  const queue = { tail: Promise.resolve() as Promise<unknown> };
+  return <T>(work: () => Promise<T>): Promise<T> => {
+    const next = queue.tail.then(work);
+    queue.tail = next.catch(() => undefined);
     return next;
   };
+};
 
-  const config = (): SignInConfig => ({
-    channel: GrantChannel.enum.stdio,
-    profile: options.profile,
-    client: clientInfoOf(options.clientInfo()),
-    authRequired: true,
-    envToken: options.envToken,
-  });
-
-  const stopPolling = (): void => {
-    if (timer !== null) clearInterval(timer);
-    timer = null;
+/** The timer runs exactly while a request is open. */
+const createPoller = (onTick: () => void) => {
+  const poller = { timer: null as NodeJS.Timeout | null };
+  const stop = (): void => {
+    if (poller.timer !== null) clearInterval(poller.timer);
+    poller.timer = null;
   };
-
-  const startPolling = (): void => {
-    if (timer !== null) return;
-    timer = setInterval(
-      () => void serially(() => feed({ kind: O.ticked })).catch(() => undefined),
-      GRANT_POLL_INTERVAL_MS,
-    );
-    timer.unref();
+  const start = (): void => {
+    if (poller.timer !== null) return;
+    poller.timer = setInterval(onTick, GRANT_POLL_INTERVAL_MS);
+    poller.timer.unref();
   };
+  return { stop, sync: (isPending: boolean): void => (isPending ? start() : stop()) };
+};
 
-  // The timer runs exactly while a request is open.
-  const syncPolling = (): void => (pendingOf(state) === null ? stopPolling() : startPolling());
+const signInConfig = (options: StdioSessionOptions): SignInConfig => ({
+  channel: GrantChannel.enum.stdio,
+  profile: options.profile,
+  client: clientInfoOf(options.clientInfo()),
+  authRequired: true,
+  envToken: options.envToken,
+});
+
+export const createStdioSession = (options: StdioSessionOptions): StdioSession => {
+  const flow = { state: IDLE as SignInState };
+  const serially = createSerialQueue();
+  const poller = createPoller(() => void serially(() => feed({ kind: O.ticked })).catch(() => undefined));
+  const syncPolling = (): void => poller.sync(pendingOf(flow.state) !== null);
 
   /** Feed one observation; the last thing the protocol said (if anything) comes back. */
   const feed = async (observation: SignInObservation): Promise<Presentation | undefined> => {
-    let said: Presentation | undefined;
+    const said = { last: undefined as Presentation | undefined };
     try {
-      await signIn.drive(state, observation, config(), {
-        present: (presentation) => void (said = presentation),
+      await options.signIn.drive(flow.state, observation, signInConfig(options), {
+        present: (presentation) => void (said.last = presentation),
         // The timer paces a stdio session; there is nothing to wait for inline.
         wait: async () => undefined,
         progress: (next) => {
-          state = next;
+          flow.state = next;
           syncPolling();
         },
       });
     } finally {
       syncPolling();
     }
-    return said;
+    return said.last;
   };
 
   return {
@@ -135,7 +136,7 @@ export const createStdioSession = (options: StdioSessionOptions): StdioSession =
 
     close: () =>
       serially(async () => {
-        stopPolling();
+        poller.stop();
         await feed({ kind: O.closed });
       }).catch(() => undefined),
   };

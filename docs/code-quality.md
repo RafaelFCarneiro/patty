@@ -276,7 +276,7 @@ reach for `import()` to "organize" code or defer work that isn't actually option
 
 Small functions with one level of branching read at a glance. The limits below are the targets the
 function-shape series enforces per layer, one PR at a time (the switch-size rule is already a lint error
-repo-wide; the rest are enforced as each layer is brought under them):
+repo-wide; the rest are enforced as each layer is brought under them — `diplomat/http` and `diplomat/mcp` so far):
 
 | Limit | Value |
 |---|---|
@@ -333,12 +333,19 @@ parses (`wire/in`), delegates to the controller and translates the result; the m
 
 ```ts
 // ✅ DO
-const createAccountTool = defineTool({ name, description, schema, handler: (args) => runCreateAccount(args) })
+const createAccountTool = defineTool({
+  name: ToolName.enum.create_account,
+  config: { annotations: MUTATING, title: 'Create account', description: createAccountDescription, inputSchema },
+  handle: async (args, { deps, runEffects }) => fromResult(await runEffects(() => createAccount(deps, args))),
+})
 export const accountTools = [createAccountTool, listAccountsTool]
 
 // ❌ DON'T — a registration function with every handler inlined in its body
 export const registerAccountTools = (server) => { server.tool('create_account', …, async (args) => { /* 60 lines */ }) /* … */ }
 ```
+
+The `diplomat/http` and `diplomat/mcp` folders are held to the four limits above by lint; a handler that outgrows them is
+orchestration that belongs in a controller (or a shared, named step), not a reason to disable the rule.
 
 ## Fail loudly at boundaries, trust internally
 

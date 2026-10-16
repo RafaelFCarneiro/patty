@@ -1,7 +1,7 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 import { createToken, listTokens, revokeToken } from '../../../controllers/accessTokens.js';
-import { httpStatus } from '../../../common/errors.js';
+import { httpStatus, type AppError } from '../../../common/errors.js';
 import { authErrors } from '../../../models/auth/errors.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
 import { validation } from '../../../models/error.js';
@@ -20,6 +20,53 @@ const RATE_LIMITED_STATUS = httpStatus(authErrors.rateLimited);
 
 const firstIssue = (error: z.ZodError): string => error.issues[0]?.message ?? AUTH_MESSAGES.tryAgain;
 
+type Limiter = ReturnType<typeof createAttemptLimiter>;
+
+const showTokens = async (
+  ctx: AuthRoutesContext,
+  reply: FastifyReply,
+  userId: string,
+  status: number,
+  error?: string,
+) => page(reply, status, await renderTokensPage({ tokens: await listTokens(ctx.deps, userId), error }));
+
+const listPage = (ctx: AuthRoutesContext) => (req: FastifyRequest, reply: FastifyReply) =>
+  showTokens(ctx, reply, req.principal!.userId, 200);
+
+// A wrong step-up password is a refused action inside a valid session; anything else is a generic failure.
+const refusalOf = (error: AppError): { status: number; message: string } =>
+  error.code === authErrors.invalidCredentials.code
+    ? { status: STEP_UP_REFUSED_STATUS, message: AUTH_MESSAGES.invalidPassword }
+    : { status: httpStatus(error), message: AUTH_MESSAGES.tryAgain };
+
+const createPage = (ctx: AuthRoutesContext, limiter: Limiter) => async (req: FastifyRequest, reply: FastifyReply) => {
+  const { userId } = req.principal!;
+  const parsed = CreateTokenFormSchema.safeParse(req.body);
+  if (!parsed.success) return showTokens(ctx, reply, userId, INVALID_FORM_STATUS, firstIssue(parsed.error));
+  if (limiter.isLimited(req.ip, userId)) {
+    return showTokens(ctx, reply, userId, RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
+  }
+  const created = await limiter.attempt(req.ip, userId, () =>
+    ctx.runEffects(() => createToken(ctx.deps, userId, parsed.data)),
+  );
+  if (created.isErr()) {
+    if (created.error.code !== authErrors.invalidCredentials.code) limiter.forgive(req.ip, userId);
+    const { status, message } = refusalOf(created.error);
+    return showTokens(ctx, reply, userId, status, message);
+  }
+  limiter.recordSuccess(req.ip, userId);
+  return page(reply, 200, await renderTokenCreatedPage(created.value));
+};
+
+const revokePage = (ctx: AuthRoutesContext) => async (req: FastifyRequest, reply: FastifyReply) => {
+  const { userId } = req.principal!;
+  const { id } = req.params as { id: string };
+  const revoked = await ctx.runEffects(() => revokeToken(ctx.deps, userId, id));
+  return revoked.isErr()
+    ? showTokens(ctx, reply, userId, httpStatus(revoked.error), AUTH_MESSAGES.unknownToken)
+    : reply.redirect(TOKENS_PATH, SEE_OTHER);
+};
+
 /**
  * `/ui/access/tokens` (ADR-033 §3): the personal-access-token pages. Browser HTML behind the session cookie and the
  * hook's CSRF check — a bearer token is never accepted on `/ui`, so a token can never mint, widen or revoke
@@ -27,59 +74,15 @@ const firstIssue = (error: z.ZodError): string => error.issues[0]?.message ?? AU
  * is rendered once, by the response to the create POST, and nowhere else.
  */
 export const registerTokenRoutes = (app: FastifyInstance, ctx: AuthRoutesContext): void => {
-  const showTokens = async (userId: string, status: number, error?: string) =>
-    renderTokensPage({ tokens: await listTokens(ctx.deps, userId), error }).then((html) => ({ status, html }));
-
   // Guessing the step-up password costs the same strikes as guessing it at /ui/login.
   const passwordLimiter = createAttemptLimiter();
+  const formRoute = { bodyLimit: FORM_BODY_LIMIT_BYTES };
 
   void app.register(async (scope) => {
     addFormParser(scope);
     scope.addHook('preHandler', requireSession);
-    const formRoute = { bodyLimit: FORM_BODY_LIMIT_BYTES };
-
-    scope.get(TOKENS_PATH, async (req, reply) => {
-      const { status, html } = await showTokens(req.principal!.userId, 200);
-      return page(reply, status, html);
-    });
-
-    scope.post(TOKENS_PATH, formRoute, async (req, reply) => {
-      const { userId } = req.principal!;
-      const parsed = CreateTokenFormSchema.safeParse(req.body);
-      if (!parsed.success) {
-        const { status, html } = await showTokens(userId, INVALID_FORM_STATUS, firstIssue(parsed.error));
-        return page(reply, status, html);
-      }
-      if (passwordLimiter.isLimited(req.ip, userId)) {
-        const { status, html } = await showTokens(userId, RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
-        return page(reply, status, html);
-      }
-      const created = await passwordLimiter.attempt(req.ip, userId, () =>
-        ctx.runEffects(() => createToken(ctx.deps, userId, parsed.data)),
-      );
-      if (created.isErr()) {
-        const wrongPassword = created.error.code === authErrors.invalidCredentials.code;
-        if (!wrongPassword) passwordLimiter.forgive(req.ip, userId);
-        const { status, html } = await showTokens(
-          userId,
-          wrongPassword ? STEP_UP_REFUSED_STATUS : httpStatus(created.error),
-          wrongPassword ? AUTH_MESSAGES.invalidPassword : AUTH_MESSAGES.tryAgain,
-        );
-        return page(reply, status, html);
-      }
-      passwordLimiter.recordSuccess(req.ip, userId);
-      return page(reply, 200, await renderTokenCreatedPage(created.value));
-    });
-
-    scope.post(TOKEN_REVOKE_PATH, formRoute, async (req, reply) => {
-      const { userId } = req.principal!;
-      const { id } = req.params as { id: string };
-      const revoked = await ctx.runEffects(() => revokeToken(ctx.deps, userId, id));
-      if (revoked.isErr()) {
-        const { status, html } = await showTokens(userId, httpStatus(revoked.error), AUTH_MESSAGES.unknownToken);
-        return page(reply, status, html);
-      }
-      return reply.redirect(TOKENS_PATH, SEE_OTHER);
-    });
+    scope.get(TOKENS_PATH, listPage(ctx));
+    scope.post(TOKENS_PATH, formRoute, createPage(ctx, passwordLimiter));
+    scope.post(TOKEN_REVOKE_PATH, formRoute, revokePage(ctx));
   });
 };

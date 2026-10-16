@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ChangeBus } from '@rfc0/effect-runner';
 import { SHARED_ENTITY_TAGS, type ChangeEvent } from '../../../models/tenancy.js';
 import { LOGOUT_PATH, TOKENS_PATH, UI_APP_CSS_PATH, UI_ROOT_PATH } from '../authPaths.js';
-import { CACHE_CONTROL_NO_CACHE } from '../respond.js';
+import { authErrors } from '../../../models/auth/errors.js';
+import { CACHE_CONTROL_NO_CACHE, replyError } from '../respond.js';
 import { HTML_CONTENT_TYPE, readCached, UI_ROOT } from '../uiFiles.js';
 
 const SHELL_PATH = `${UI_ROOT}/shell.html`;
@@ -30,6 +31,58 @@ const serveUiFile = async (reply: FastifyReply, path: string, contentType: strin
   return reply.header('cache-control', CACHE_CONTROL_NO_CACHE).type(contentType).send(content);
 };
 
+type ChangeSubscribe = ChangeBus<ChangeEvent>['subscribe'];
+
+// Own changes in full; another user's only where they are shared (userId null = bookkeeping, heard by no one).
+const entitiesFor = (event: ChangeEvent, userId: string) => {
+  if (event.userId === userId) return event.entities;
+  return event.userId === null ? [] : event.entities.filter((tag) => SHARED_ENTITY_TAGS.includes(tag));
+};
+
+const openEventStream = (reply: FastifyReply): void => {
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    'content-type': SSE_CONTENT_TYPE,
+    'cache-control': CACHE_CONTROL_NO_CACHE,
+    connection: 'keep-alive',
+  });
+  // writeHead() alone only sets internal state — Node doesn't put headers on the wire until the
+  // first write()/end() or an explicit flush, and a client with nothing yet to publish would
+  // otherwise hang waiting for a response that was never actually sent.
+  reply.raw.flushHeaders();
+};
+
+const forwardChanges = (reply: FastifyReply, subscribe: ChangeSubscribe, userId: string): void => {
+  const unsubscribe = subscribe((event) => {
+    const entities = entitiesFor(event, userId);
+    if (entities.length === 0) return;
+    // A publish can race a client disconnect that hasn't reached the 'close' handler below yet
+    // — skip the write rather than push data onto a response that's already torn down.
+    if (reply.raw.destroyed) return;
+    reply.raw.write(`data: ${JSON.stringify({ entities })}\n\n`);
+  });
+  // reply.raw (not req.raw), matching the other hijacked route in this codebase
+  // (diplomat/mcp/route.ts) — this handler owns the response after hijack(), and it's the
+  // response's own lifecycle this cleanup is guarding.
+  reply.raw.on('close', unsubscribe);
+};
+
+// With sessions on, the cookie was checked only when this stream opened. Logout, expiry or a disabled
+// user must end it too, or it would keep delivering change notifications to someone no longer signed in.
+const endWhenSessionLapses = (req: FastifyRequest, reply: FastifyReply, session: SessionRecheck): void => {
+  const recheck = setInterval(() => {
+    // Fail closed: a check that cannot be completed ends the stream rather than leaving it authorized.
+    void session
+      .isActive(req)
+      .catch(() => false)
+      .then((active) => {
+        if (!active) reply.raw.end();
+      });
+  }, session.everyMs ?? SSE_SESSION_RECHECK_MS);
+  recheck.unref();
+  reply.raw.on('close', () => clearInterval(recheck));
+};
+
 /**
  * Live update (ADR-027 Phase 3): the shell (`ui/app.js`) opens one long-lived `EventSource` here
  * for the life of the page; every message is `{"entities": [...]}` — the entity tags of a batch
@@ -40,60 +93,15 @@ const serveUiFile = async (reply: FastifyReply, path: string, contentType: strin
  * Not a `RouteDefinition` — same reasoning as the rest of this file: a browser-facing stream, not
  * part of the `/api` JSON contract.
  */
-const registerUiEventsRoute = (
-  app: FastifyInstance,
-  subscribe: ChangeBus<ChangeEvent>['subscribe'],
-  session: SessionRecheck | undefined,
-): void => {
+const registerUiEventsRoute = (app: FastifyInstance, subscribe: ChangeSubscribe, session?: SessionRecheck): void => {
   app.get(`${UI_ROOT_PATH}/events`, (req, reply) => {
     // Without a principal, open no stream rather than everyone's events.
     const userId = req.principal?.userId;
-    if (userId === undefined) return reply.status(401).send({ error: { code: 'unauthenticated' } });
-    reply.hijack();
-    reply.raw.writeHead(200, {
-      'content-type': SSE_CONTENT_TYPE,
-      'cache-control': CACHE_CONTROL_NO_CACHE,
-      connection: 'keep-alive',
-    });
-    // writeHead() alone only sets internal state — Node doesn't put headers on the wire until the
-    // first write()/end() or an explicit flush, and a client with nothing yet to publish would
-    // otherwise hang waiting for a response that was never actually sent.
-    reply.raw.flushHeaders();
-
-    const unsubscribe = subscribe((event) => {
-      // Own changes in full; another user's only where they are shared (userId null = bookkeeping, heard by no one).
-      const entities =
-        event.userId === userId
-          ? event.entities
-          : event.userId === null
-            ? []
-            : event.entities.filter((tag) => SHARED_ENTITY_TAGS.includes(tag));
-      if (entities.length === 0) return;
-      // A publish can race a client disconnect that hasn't reached the 'close' handler below yet
-      // — skip the write rather than push data onto a response that's already torn down.
-      if (reply.raw.destroyed) return;
-      reply.raw.write(`data: ${JSON.stringify({ entities })}\n\n`);
-    });
-    // reply.raw (not req.raw), matching the other hijacked route in this codebase
-    // (diplomat/mcp/route.ts) — this handler owns the response after hijack(), and it's the
-    // response's own lifecycle this cleanup is guarding.
-    reply.raw.on('close', unsubscribe);
-
-    // With sessions on, the cookie was checked only when this stream opened. Logout, expiry or a disabled
-    // user must end it too, or it would keep delivering change notifications to someone no longer signed in.
-    if (session) {
-      const recheck = setInterval(() => {
-        // Fail closed: a check that cannot be completed ends the stream rather than leaving it authorized.
-        void session
-          .isActive(req)
-          .catch(() => false)
-          .then((active) => {
-            if (!active) reply.raw.end();
-          });
-      }, session.everyMs ?? SSE_SESSION_RECHECK_MS);
-      recheck.unref();
-      reply.raw.on('close', () => clearInterval(recheck));
-    }
+    if (userId === undefined) return replyError(reply, authErrors.unauthenticated);
+    openEventStream(reply);
+    forwardChanges(reply, subscribe, userId);
+    if (session) endWhenSessionLapses(req, reply, session);
+    return undefined;
   });
 };
 

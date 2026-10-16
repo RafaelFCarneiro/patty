@@ -1,7 +1,9 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { httpStatus, type AppError } from '../../../common/errors.js';
 import { approveGrant, denyGrant, findConsent } from '../../../controllers/grants.js';
+import type { Principal } from '../../../models/auth/principal.js';
 import { authErrors } from '../../../models/auth/errors.js';
+import type { ApproveGrantInput } from '../../../models/auth/grant.js';
 import { AUTH_MESSAGES } from '../../../models/auth/message.js';
 import { CONNECT_CODE_PARAM } from '../../../models/auth/origin.js';
 import { validation } from '../../../models/error.js';
@@ -34,6 +36,78 @@ const MESSAGES = {
   denied: 'Denied. The client was not signed in.',
 } as const;
 
+type ConnectPages = {
+  ctx: AuthRoutesContext;
+  lookups: RateLimiter;
+};
+
+const result = async (
+  reply: FastifyReply,
+  status: number,
+  heading: string,
+  message: string,
+  options: { answered?: boolean } = {},
+) => page(reply, status, await renderConnectResultPage({ heading, message, answered: options.answered }));
+
+const invalid = (reply: FastifyReply) => result(reply, INVALID_STATUS, HEADINGS.invalid, AUTH_MESSAGES.invalidGrant);
+
+const limited = (reply: FastifyReply) =>
+  result(reply, RATE_LIMITED_STATUS, HEADINGS.limited, AUTH_MESSAGES.rateLimited);
+
+const failed = ({ lookups }: ConnectPages, reply: FastifyReply, ip: string, error: AppError) => {
+  if (error.code === authErrors.invalidGrant.code) {
+    lookups.recordFailure(ip); // answered by someone else between the lookup and the decision: a miss after all
+    return invalid(reply);
+  }
+  const status = error.code === validation([]).code ? INVALID_FORM_STATUS : httpStatus(error);
+  return result(reply, status, HEADINGS.invalid, AUTH_MESSAGES.tryAgain);
+};
+
+// The strike is taken BEFORE the awaited lookup and given back for a valid code: recording the miss only afterwards
+// would let a burst of concurrent guesses all see an empty limiter (the login pages reserve the same way).
+const lookUp = async ({ ctx, lookups }: ConnectPages, ip: string, userId: string, code: string) => {
+  lookups.recordFailure(ip);
+  const consent = await findConsent(ctx.deps, userId, code);
+  if (consent !== null) lookups.forgive(ip);
+  return consent;
+};
+
+const showConsent = (pages: ConnectPages) => async (req: FastifyRequest, reply: FastifyReply) => {
+  const code = ConnectQuerySchema.safeParse(req.query).data?.[CONNECT_CODE_PARAM];
+  if (pages.lookups.isLimited(req.ip)) return limited(reply);
+  const consent = code === undefined ? null : await lookUp(pages, req.ip, req.principal!.userId, code);
+  if (consent === null) return invalid(reply);
+  return page(reply, OK_STATUS, await renderConnectPage(consent));
+};
+
+const answerGrant = (
+  { ctx }: ConnectPages,
+  principal: Principal,
+  decision: ConnectDecision,
+  input: ApproveGrantInput,
+) =>
+  decision === ConnectDecision.enum.approve
+    ? ctx.runEffects(() => approveGrant(ctx.deps, principal, input))
+    : ctx.runEffects(() => denyGrant(ctx.deps, principal, input.userCode));
+
+const answeredPage = (reply: FastifyReply, decision: ConnectDecision) =>
+  decision === ConnectDecision.enum.approve
+    ? result(reply, OK_STATUS, HEADINGS.approved, MESSAGES.approved, { answered: true })
+    : result(reply, OK_STATUS, HEADINGS.denied, MESSAGES.denied, { answered: true });
+
+const submitDecision = (pages: ConnectPages) => async (req: FastifyRequest, reply: FastifyReply) => {
+  const parsed = ConnectFormSchema.safeParse(req.body);
+  if (!parsed.success) return result(reply, INVALID_FORM_STATUS, HEADINGS.invalid, AUTH_MESSAGES.tryAgain);
+  if (pages.lookups.isLimited(req.ip)) return limited(reply);
+
+  const { decision, code, access, duration } = parsed.data;
+  const principal = req.principal!;
+  const consent = await lookUp(pages, req.ip, principal.userId, code);
+  if (consent === null) return invalid(reply);
+  const answered = await answerGrant(pages, principal, decision, { userCode: code, access, duration });
+  return answered.isErr() ? failed(pages, reply, req.ip, answered.error) : answeredPage(reply, decision);
+};
+
 /**
  * `/ui/connect` (ADR-034 §3): the consent page for a stdio (or `fintrack login`) sign-in. Browser HTML behind the
  * session cookie and the hook's CSRF check — a link that merely carries a code grants nothing, and a bearer token can
@@ -41,72 +115,19 @@ const MESSAGES = {
  * or already-answered code all read the same, and a run of them from one address is throttled.
  */
 export const registerConnectRoutes = (app: FastifyInstance, ctx: AuthRoutesContext): void => {
-  const lookups: RateLimiter = createRateLimiter({
-    windowMs: LOGIN_ATTEMPT_WINDOW_MS,
-    maxFailures: MAX_CODE_LOOKUP_FAILURES_PER_IP,
-    now: Date.now,
-  });
-
-  const result = async (
-    reply: FastifyReply,
-    status: number,
-    heading: string,
-    message: string,
-    options: { answered?: boolean } = {},
-  ) => page(reply, status, await renderConnectResultPage({ heading, message, answered: options.answered }));
-
-  const invalid = (reply: FastifyReply) => result(reply, INVALID_STATUS, HEADINGS.invalid, AUTH_MESSAGES.invalidGrant);
-
-  const limited = (reply: FastifyReply) =>
-    result(reply, RATE_LIMITED_STATUS, HEADINGS.limited, AUTH_MESSAGES.rateLimited);
-
-  const failed = (reply: FastifyReply, ip: string, error: AppError) => {
-    if (error.code === authErrors.invalidGrant.code) {
-      lookups.recordFailure(ip); // answered by someone else between the lookup and the decision: a miss after all
-      return invalid(reply);
-    }
-    const status = error.code === validation([]).code ? INVALID_FORM_STATUS : httpStatus(error);
-    return result(reply, status, HEADINGS.invalid, AUTH_MESSAGES.tryAgain);
-  };
-
-  // The strike is taken BEFORE the awaited lookup and given back for a valid code: recording the miss only afterwards
-  // would let a burst of concurrent guesses all see an empty limiter (the login pages reserve the same way).
-  const lookUp = async (ip: string, userId: string, code: string) => {
-    lookups.recordFailure(ip);
-    const consent = await findConsent(ctx.deps, userId, code);
-    if (consent !== null) lookups.forgive(ip);
-    return consent;
+  const pages: ConnectPages = {
+    ctx,
+    lookups: createRateLimiter({
+      windowMs: LOGIN_ATTEMPT_WINDOW_MS,
+      maxFailures: MAX_CODE_LOOKUP_FAILURES_PER_IP,
+      now: Date.now,
+    }),
   };
 
   void app.register(async (scope) => {
     addFormParser(scope);
     scope.addHook('preHandler', requireSession);
-
-    scope.get(CONNECT_PATH, async (req, reply) => {
-      const code = ConnectQuerySchema.safeParse(req.query).data?.[CONNECT_CODE_PARAM];
-      if (lookups.isLimited(req.ip)) return limited(reply);
-      const consent = code === undefined ? null : await lookUp(req.ip, req.principal!.userId, code);
-      if (consent === null) return invalid(reply);
-      return page(reply, OK_STATUS, await renderConnectPage(consent));
-    });
-
-    scope.post(CONNECT_PATH, { bodyLimit: FORM_BODY_LIMIT_BYTES }, async (req, reply) => {
-      const parsed = ConnectFormSchema.safeParse(req.body);
-      if (!parsed.success) return result(reply, INVALID_FORM_STATUS, HEADINGS.invalid, AUTH_MESSAGES.tryAgain);
-      if (lookups.isLimited(req.ip)) return limited(reply);
-
-      const { decision, code, access, duration } = parsed.data;
-      const principal = req.principal!;
-      const consent = await lookUp(req.ip, principal.userId, code);
-      if (consent === null) return invalid(reply);
-      const answered =
-        decision === ConnectDecision.enum.approve
-          ? await ctx.runEffects(() => approveGrant(ctx.deps, principal, { userCode: code, access, duration }))
-          : await ctx.runEffects(() => denyGrant(ctx.deps, principal, code));
-      if (answered.isErr()) return failed(reply, req.ip, answered.error);
-      return decision === ConnectDecision.enum.approve
-        ? result(reply, OK_STATUS, HEADINGS.approved, MESSAGES.approved, { answered: true })
-        : result(reply, OK_STATUS, HEADINGS.denied, MESSAGES.denied, { answered: true });
-    });
+    scope.get(CONNECT_PATH, showConsent(pages));
+    scope.post(CONNECT_PATH, { bodyLimit: FORM_BODY_LIMIT_BYTES }, submitDecision(pages));
   });
 };
