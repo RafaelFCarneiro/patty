@@ -116,7 +116,7 @@ export const updateAccount = (deps: Deps, input: UpdateAccount): ResultAsync<Flo
   safeTry(async function* () {
     const account = yield* resolveAccountRef(deps, input.name);
     yield* guard(assertNonCreditType(account.type), accountErrors.creditRejected(Remedy.enum.update_credit_card));
-    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected(Remedy.enum.update_credit_card));
+    yield* guard(assertNonCreditType(input.type), accountErrors.creditRejected(Remedy.enum.create_credit_card));
 
     if (input.newName && input.newName.toLowerCase() !== account.name.toLowerCase()) {
       yield* guard(await assertNameAvailable(deps, input.newName), accountErrors.duplicateName(input.newName));
