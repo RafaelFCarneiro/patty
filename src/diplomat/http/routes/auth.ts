@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { claimOwner, login, logout, ownerNeedsSetup } from '../../../controllers/auth.js';
 import { httpStatus, type AppError } from '../../../common/errors.js';
@@ -36,6 +36,68 @@ const messageFor = (e: AppError): string => {
 
 const nextFrom = (query: unknown): string => NextQuerySchema.safeParse(query).data?.next ?? DEFAULT_LANDING_PATH;
 
+type Limiter = ReturnType<typeof createAttemptLimiter>;
+type Started = { token: string; expiresAt: string };
+
+const firstIssue = (error: z.ZodError): string => error.issues[0]?.message ?? AUTH_MESSAGES.tryAgain;
+
+const startSession = (ctx: AuthRoutesContext, reply: FastifyReply, started: Started, next: string) =>
+  reply.header('set-cookie', sessionCookie(started.token, ctx.secureCookie)).redirect(next, SEE_OTHER);
+
+const loginPage = (ctx: AuthRoutesContext) => async (req: FastifyRequest, reply: FastifyReply) =>
+  (await ownerNeedsSetup(ctx.deps))
+    ? reply.redirect(SETUP_PATH)
+    : page(reply, 200, await renderLoginPage({ next: nextFrom(req.query) }));
+
+const submitLogin = (ctx: AuthRoutesContext, limiter: Limiter) => async (req: FastifyRequest, reply: FastifyReply) => {
+  const parsed = LoginFormSchema.safeParse(req.body);
+  const next = parsed.success ? parsed.data.next : DEFAULT_LANDING_PATH;
+  const failLogin = async (status: number, error: string) =>
+    page(reply, status, await renderLoginPage({ next, error }));
+  if (!parsed.success) return failLogin(INVALID_FORM_STATUS, AUTH_MESSAGES.invalidCredentials);
+
+  const { username } = parsed.data;
+  if (limiter.isLimited(req.ip, username)) return failLogin(RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
+  // Reserve the strike before the slow verification: the check above and this take no await between
+  // them, so N concurrent guesses are counted as they arrive rather than all slipping past `isLimited`.
+  const result = await limiter.attempt(req.ip, username, () => ctx.runEffects(() => login(ctx.deps, parsed.data)));
+  if (result.isOk()) {
+    limiter.recordSuccess(req.ip, username);
+    return startSession(ctx, reply, result.value, next);
+  }
+  if (result.error.code !== authErrors.invalidCredentials.code) limiter.forgive(req.ip, username);
+  return failLogin(statusOf(result.error), messageFor(result.error));
+};
+
+const setupPage = (ctx: AuthRoutesContext) => async (_req: FastifyRequest, reply: FastifyReply) =>
+  (await ownerNeedsSetup(ctx.deps)) ? page(reply, 200, await renderSetupPage({})) : reply.redirect(LOGIN_PATH);
+
+const submitSetup = (ctx: AuthRoutesContext, limiter: Limiter) => async (req: FastifyRequest, reply: FastifyReply) => {
+  const failSetup = async (status: number, error: string) => page(reply, status, await renderSetupPage({ error }));
+  const parsed = SetupFormSchema.safeParse(req.body);
+  if (!parsed.success) return failSetup(INVALID_FORM_STATUS, firstIssue(parsed.error));
+
+  const { username } = parsed.data;
+  if (limiter.isLimited(req.ip, username)) return failSetup(RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
+
+  const result = await limiter.attempt(req.ip, username, () => ctx.runEffects(() => claimOwner(ctx.deps, parsed.data)));
+  if (result.isOk()) {
+    limiter.recordSuccess(req.ip, username);
+    return startSession(ctx, reply, result.value, DEFAULT_LANDING_PATH);
+  }
+  if (result.error.code !== authErrors.invalidSetupCode.code) limiter.forgive(req.ip, username);
+  return failSetup(statusOf(result.error), messageFor(result.error));
+};
+
+const submitLogout = (ctx: AuthRoutesContext) => async (req: FastifyRequest, reply: FastifyReply) => {
+  const token = readCookie(req.headers.cookie, SESSION_COOKIE_NAME);
+  const revoked = token ? await ctx.runEffects(() => logout(ctx.deps, ctx.deps.secrets.hashSecret(token))) : undefined;
+  // The cookie is only cleared once the session row is really gone: reporting a logout that did not
+  // commit would leave a still-valid token (possibly copied elsewhere) behind a "logged out" screen.
+  if (revoked?.isErr()) return reply.status(statusOf(revoked.error)).send({ error: revoked.error });
+  return reply.header('set-cookie', clearedSessionCookie(ctx.secureCookie)).redirect(LOGIN_PATH, SEE_OTHER);
+};
+
 /**
  * `/ui/login`, `/ui/setup`, `/ui/logout` (ADR-033 §2). Browser-facing HTML, not part of the `/api` JSON
  * contract, so — like `routes/ui.ts` — these are not `RouteDefinition`s. Thin: parse the form, throttle,
@@ -44,78 +106,14 @@ const nextFrom = (query: unknown): string => NextQuerySchema.safeParse(query).da
 export const registerAuthRoutes = (app: FastifyInstance, ctx: AuthRoutesContext): void => {
   const loginLimiter = createAttemptLimiter();
   const setupLimiter = createAttemptLimiter();
-
-  const startSession = (reply: FastifyReply, started: { token: string; expiresAt: string }, next: string) =>
-    reply.header('set-cookie', sessionCookie(started.token, ctx.secureCookie)).redirect(next, SEE_OTHER);
+  const formRoute = { bodyLimit: FORM_BODY_LIMIT_BYTES };
 
   void app.register(async (scope) => {
     addFormParser(scope);
-    const formRoute = { bodyLimit: FORM_BODY_LIMIT_BYTES };
-
-    scope.get(LOGIN_PATH, async (req, reply) =>
-      (await ownerNeedsSetup(ctx.deps))
-        ? reply.redirect(SETUP_PATH)
-        : page(reply, 200, await renderLoginPage({ next: nextFrom(req.query) })),
-    );
-
-    scope.post(LOGIN_PATH, formRoute, async (req, reply) => {
-      const parsed = LoginFormSchema.safeParse(req.body);
-      const next = parsed.success ? parsed.data.next : DEFAULT_LANDING_PATH;
-      const failLogin = async (status: number, error: string) =>
-        page(reply, status, await renderLoginPage({ next, error }));
-      if (!parsed.success) return failLogin(INVALID_FORM_STATUS, AUTH_MESSAGES.invalidCredentials);
-
-      const { username } = parsed.data;
-      if (loginLimiter.isLimited(req.ip, username)) {
-        return failLogin(RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
-      }
-      // Reserve the strike before the slow verification: the check above and this take no await between
-      // them, so N concurrent guesses are counted as they arrive rather than all slipping past `isLimited`.
-      const result = await loginLimiter.attempt(req.ip, username, () =>
-        ctx.runEffects(() => login(ctx.deps, parsed.data)),
-      );
-      if (result.isOk()) {
-        loginLimiter.recordSuccess(req.ip, username);
-        return startSession(reply, result.value, next);
-      }
-      if (result.error.code !== authErrors.invalidCredentials.code) loginLimiter.forgive(req.ip, username);
-      return failLogin(statusOf(result.error), messageFor(result.error));
-    });
-
-    scope.get(SETUP_PATH, async (_req, reply) =>
-      (await ownerNeedsSetup(ctx.deps)) ? page(reply, 200, await renderSetupPage({})) : reply.redirect(LOGIN_PATH),
-    );
-
-    scope.post(SETUP_PATH, formRoute, async (req, reply) => {
-      const failSetup = async (status: number, error: string) => page(reply, status, await renderSetupPage({ error }));
-      const parsed = SetupFormSchema.safeParse(req.body);
-      if (!parsed.success) return failSetup(INVALID_FORM_STATUS, firstIssue(parsed.error));
-
-      const { username } = parsed.data;
-      if (setupLimiter.isLimited(req.ip, username)) return failSetup(RATE_LIMITED_STATUS, AUTH_MESSAGES.rateLimited);
-
-      const result = await setupLimiter.attempt(req.ip, username, () =>
-        ctx.runEffects(() => claimOwner(ctx.deps, parsed.data)),
-      );
-      if (result.isOk()) {
-        setupLimiter.recordSuccess(req.ip, username);
-        return startSession(reply, result.value, DEFAULT_LANDING_PATH);
-      }
-      if (result.error.code !== authErrors.invalidSetupCode.code) setupLimiter.forgive(req.ip, username);
-      return failSetup(statusOf(result.error), messageFor(result.error));
-    });
-
-    scope.post(LOGOUT_PATH, async (req, reply) => {
-      const token = readCookie(req.headers.cookie, SESSION_COOKIE_NAME);
-      const revoked = token
-        ? await ctx.runEffects(() => logout(ctx.deps, ctx.deps.secrets.hashSecret(token)))
-        : undefined;
-      // The cookie is only cleared once the session row is really gone: reporting a logout that did not
-      // commit would leave a still-valid token (possibly copied elsewhere) behind a "logged out" screen.
-      if (revoked?.isErr()) return reply.status(statusOf(revoked.error)).send({ error: revoked.error });
-      return reply.header('set-cookie', clearedSessionCookie(ctx.secureCookie)).redirect(LOGIN_PATH, SEE_OTHER);
-    });
+    scope.get(LOGIN_PATH, loginPage(ctx));
+    scope.post(LOGIN_PATH, formRoute, submitLogin(ctx, loginLimiter));
+    scope.get(SETUP_PATH, setupPage(ctx));
+    scope.post(SETUP_PATH, formRoute, submitSetup(ctx, setupLimiter));
+    scope.post(LOGOUT_PATH, submitLogout(ctx));
   });
 };
-
-const firstIssue = (error: z.ZodError): string => error.issues[0]?.message ?? AUTH_MESSAGES.tryAgain;

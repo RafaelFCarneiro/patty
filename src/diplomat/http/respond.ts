@@ -1,4 +1,4 @@
-import type { FastifyReply } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Result } from 'neverthrow';
 import { z } from 'zod';
 import { httpStatus, type AppError } from '../../common/errors.js';
@@ -14,22 +14,55 @@ export const send = <T>(reply: FastifyReply, result: Result<T, AppError>, okStat
     (e) => reply.status(httpStatus(e)).send({ error: e }),
   );
 
+/** The one 422 reply shape: `{ error: { code: 'validation', issues } }`. */
+export const unprocessable = (reply: FastifyReply, issues: string[]) =>
+  reply.status(422).send({ error: { code: 'validation', issues } });
+
 export const parse = <S extends z.ZodTypeAny>(schema: S, body: unknown, reply: FastifyReply): z.output<S> | null => {
   const r = schema.safeParse(body);
   if (!r.success) {
-    reply.status(422).send({ error: { code: 'validation', issues: r.error.issues.map((i) => i.message) } });
+    unprocessable(
+      reply,
+      r.error.issues.map((i) => i.message),
+    );
     return null;
   }
   return r.data as z.output<S>;
 };
 
-// Some query-param handlers (routes/account.ts, routes/category.ts) report a fixed generic
-// message on a failed safeParse rather than `parse`'s per-field zod issues, since a query string
-// is already loosely typed at that point. Shared here since the message is otherwise duplicated
-// verbatim across those route modules.
+// Some handlers report one fixed message on a failed safeParse rather than `parse`'s per-field zod issues, since a
+// query string (or an optional body) is already loosely typed at that point.
 const INVALID_QUERY_ISSUE = 'invalid query';
-export const invalidQueryResponse = (reply: FastifyReply) =>
-  reply.status(422).send({ error: { code: 'validation', issues: [INVALID_QUERY_ISSUE] } });
+export const invalidQueryResponse = (reply: FastifyReply, issue = INVALID_QUERY_ISSUE) => unprocessable(reply, [issue]);
+
+/** `parse`, but a failure answers with one fixed `issue` instead of the per-field zod messages. */
+export const parseOrIssue = <S extends z.ZodTypeAny>(
+  schema: S,
+  input: unknown,
+  reply: FastifyReply,
+  issue: string,
+): z.output<S> | null => {
+  const r = schema.safeParse(input);
+  if (!r.success) {
+    invalidQueryResponse(reply, issue);
+    return null;
+  }
+  return r.data as z.output<S>;
+};
+
+/** 201 when the write created something, 200 on an idempotent replay. */
+export const sendUpsert = <T extends { created: boolean }>(reply: FastifyReply, result: Result<T, AppError>) =>
+  result.match(
+    (value) => reply.status(value.created ? 201 : 200).send(value),
+    (e) => reply.status(httpStatus(e)).send({ error: e }),
+  );
+
+/** A route's `:name` / `:id` path parameter. */
+export const pathParam = (req: FastifyRequest, key: 'name' | 'id'): string =>
+  (req.params as Record<typeof key, string>)[key];
+
+/** `?confirm=true` — the opt-in that turns a destructive route's dry-run preview into the real thing. */
+export const isConfirmed = (req: FastifyRequest): boolean => (req.query as { confirm?: string }).confirm === 'true';
 
 // OpenAPI response-config shorthands, reused across route modules — composed here (not in
 // openapi.ts) because they're built from wire/out/errors.js schemas, and openapi.ts stays

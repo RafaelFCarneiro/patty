@@ -7,27 +7,24 @@ import { READ_SCOPE } from '../../../models/auth/scope.js';
 
 const AGGREGATE_TAG = 'Aggregate';
 
-export const aggregateRoutes = (): RouteDefinition[] => {
-  return [
-    {
-      method: 'get',
-      scope: READ_SCOPE,
-      path: '/api/aggregate',
-      tags: [AGGREGATE_TAG],
-      summary: 'Aggregate spending',
-      request: { query: AggregateSpendingInputSchema },
-      responses: {
-        200: okResponse('Aggregated spending', AggregateResultSchema),
-        404: notFound404,
-        409: conflict409,
-        422: validation422,
-      },
-      handler: async (req, reply, scope) => {
-        const { deps } = scope();
-        const wireIn = parse(AggregateSpendingInputSchema, req.query, reply);
-        if (!wireIn) return reply;
-        return send(reply, await aggregateSpending(deps, wireIn));
-      },
-    },
-  ];
+const aggregateSpendingRoute: RouteDefinition = {
+  method: 'get',
+  scope: READ_SCOPE,
+  path: '/api/aggregate',
+  tags: [AGGREGATE_TAG],
+  summary: 'Aggregate spending',
+  request: { query: AggregateSpendingInputSchema },
+  responses: {
+    200: okResponse('Aggregated spending', AggregateResultSchema),
+    404: notFound404,
+    409: conflict409,
+    422: validation422,
+  },
+  handler: async (req, reply, scope) => {
+    const wireIn = parse(AggregateSpendingInputSchema, req.query, reply);
+    if (!wireIn) return reply;
+    return send(reply, await aggregateSpending(scope().deps, wireIn));
+  },
 };
+
+export const aggregateRoutes: RouteDefinition[] = [aggregateSpendingRoute];

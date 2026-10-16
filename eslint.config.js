@@ -105,6 +105,16 @@ export default tseslint.config(
     },
   },
   {
+    // Function shape (docs/code-quality.md § Function shape): enforced per layer as each is brought under the limits.
+    files: ['src/diplomat/http/**/*.ts', 'src/diplomat/mcp/**/*.ts'],
+    rules: {
+      'max-lines-per-function': ['error', { max: 40, skipBlankLines: true, skipComments: true }],
+      complexity: ['error', 10],
+      'max-depth': ['error', 3],
+      'max-statements': ['error', 15],
+    },
+  },
+  {
     files: ['test/**/*.ts'],
     rules: {
       'max-len': [

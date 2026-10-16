@@ -7,22 +7,19 @@ import { READ_SCOPE } from '../../../models/auth/scope.js';
 
 const SUMMARY_TAG = 'Summary';
 
-export const summaryRoutes = (): RouteDefinition[] => {
-  return [
-    {
-      method: 'get',
-      scope: READ_SCOPE,
-      path: '/api/summary',
-      tags: [SUMMARY_TAG],
-      summary: 'Get spending summary',
-      request: { query: SummaryQuerySchema },
-      responses: { 200: okResponse('Spending summary', SpendingSummaryOut), 422: validation422 },
-      handler: async (req, reply, scope) => {
-        const { deps } = scope();
-        const input = parse(SummaryQuerySchema, req.query, reply);
-        if (!input) return reply;
-        return reply.send(await getSpendingSummary(deps, input, input.displayCurrency));
-      },
-    },
-  ];
+const getSpendingSummaryRoute: RouteDefinition = {
+  method: 'get',
+  scope: READ_SCOPE,
+  path: '/api/summary',
+  tags: [SUMMARY_TAG],
+  summary: 'Get spending summary',
+  request: { query: SummaryQuerySchema },
+  responses: { 200: okResponse('Spending summary', SpendingSummaryOut), 422: validation422 },
+  handler: async (req, reply, scope) => {
+    const input = parse(SummaryQuerySchema, req.query, reply);
+    if (!input) return reply;
+    return reply.send(await getSpendingSummary(scope().deps, input, input.displayCurrency));
+  },
 };
+
+export const summaryRoutes: RouteDefinition[] = [getSpendingSummaryRoute];

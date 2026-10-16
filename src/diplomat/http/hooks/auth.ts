@@ -53,71 +53,76 @@ const loginRedirectTarget = (req: FastifyRequest): string => {
     : LOGIN_PATH;
 };
 
+type RequiredAuth = Extract<HttpAuth, { mode: typeof AuthMode.enum.required }>;
+
+const admitOwnerOnLoopback = async (req: FastifyRequest, reply: FastifyReply) => {
+  // Never echo the offending header back: the hint is a constant.
+  if (!isLoopbackRequest({ host: req.headers.host, origin: req.headers.origin })) {
+    return reject(reply, authErrors.nonLoopbackRequest);
+  }
+  req.principal = OWNER_PRINCIPAL;
+  return undefined;
+};
+
+const rejectUnauthenticated = async (auth: RequiredAuth, req: FastifyRequest, reply: FastifyReply) => {
+  if (!isUiPath(pathOf(req.url))) return rejectWithChallenge(req, reply, auth.publicUrl, authErrors.unauthenticated);
+  const target = (await ownerNeedsSetup(auth.deps)) ? SETUP_PATH : loginRedirectTarget(req);
+  return reply.redirect(target, SEE_OTHER);
+};
+
+// A route's declared scope (RouteDefinition.scope); a route that declares none falls back to the method rule.
+const requiredScope = (req: FastifyRequest) => req.routeOptions.config?.scope ?? defaultScopeForMethod(req.method);
+
+const admit = (auth: RequiredAuth, req: FastifyRequest, reply: FastifyReply, principal: Principal) => {
+  const required = requiredScope(req);
+  if (!hasScope(principal.scopes, required)) {
+    return rejectWithChallenge(req, reply, auth.publicUrl, authErrors.insufficientScope(required));
+  }
+  req.principal = principal;
+  return undefined;
+};
+
+const authenticateBearer = async (
+  auth: RequiredAuth,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  token: string | null,
+) => {
+  if (token === null) return rejectWithChallenge(req, reply, auth.publicUrl, authErrors.invalidToken);
+  const resolved: Resolution = await resolveBearerPrincipal(auth, token);
+  if ('failure' in resolved) return reject(reply, resolved.failure);
+  if (resolved.principal === null) return rejectWithChallenge(req, reply, auth.publicUrl, authErrors.invalidToken);
+  return admit(auth, req, reply, resolved.principal);
+};
+
+// Decide from the route the router actually matched (it decodes `/%61pi/…` to `/api/…`); the raw path only
+// for a request no route matched, where the answer is a 404 or a 401 anyway.
+const bearerCredentialOf = (req: FastifyRequest) =>
+  acceptsBearer(req.routeOptions.url ?? pathOf(req.url)) ? credentialOf(req.headers.authorization) : null;
+
+const authenticateSession = async (auth: RequiredAuth, req: FastifyRequest, reply: FastifyReply) => {
+  const resolved = await resolvePrincipal(auth, req);
+  if ('failure' in resolved) return reject(reply, resolved.failure);
+  if (resolved.principal === null) return rejectUnauthenticated(auth, req, reply);
+
+  // Cookie-authenticated, so unsafe methods (including POST /mcp) must come from our own origin.
+  const verdict = csrfVerdict(csrfInput(req, auth.publicUrl));
+  return verdict ? reject(reply, verdict) : admit(auth, req, reply, resolved.principal);
+};
+
+const guardRequest = (auth: RequiredAuth) => async (req: FastifyRequest, reply: FastifyReply) => {
+  if (isPublicRoute(req.routeOptions.url, req.method)) {
+    const verdict = preSessionCsrfVerdict(csrfInput(req, auth.publicUrl));
+    return verdict ? reject(reply, verdict) : undefined;
+  }
+  const credential = bearerCredentialOf(req);
+  if (credential !== null && credential.kind !== 'none') {
+    return authenticateBearer(auth, req, reply, credential.kind === 'bearer' ? credential.token : null);
+  }
+  return authenticateSession(auth, req, reply);
+};
+
 export const registerAuthHook = (app: FastifyInstance, auth: HttpAuth): void => {
   app.decorateRequest('principal', undefined);
-
-  if (auth.mode === AuthMode.enum.disabled) {
-    app.addHook('onRequest', async (req, reply) => {
-      // Never echo the offending header back: the hint is a constant.
-      if (!isLoopbackRequest({ host: req.headers.host, origin: req.headers.origin })) {
-        return reject(reply, authErrors.nonLoopbackRequest);
-      }
-      req.principal = OWNER_PRINCIPAL;
-      return undefined;
-    });
-    return;
-  }
-
-  const { deps, publicUrl } = auth;
-
-  const rejectUnauthenticated = async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply> => {
-    if (!isUiPath(pathOf(req.url))) return rejectWithChallenge(req, reply, publicUrl, authErrors.unauthenticated);
-    const target = (await ownerNeedsSetup(deps)) ? SETUP_PATH : loginRedirectTarget(req);
-    return reply.redirect(target, SEE_OTHER);
-  };
-
-  // A route's declared scope (RouteDefinition.scope); a route that declares none falls back to the method rule.
-  const requiredScope = (req: FastifyRequest) => req.routeOptions.config?.scope ?? defaultScopeForMethod(req.method);
-
-  const admit = (req: FastifyRequest, reply: FastifyReply, principal: Principal): FastifyReply | undefined => {
-    const required = requiredScope(req);
-    if (!hasScope(principal.scopes, required)) {
-      return rejectWithChallenge(req, reply, publicUrl, authErrors.insufficientScope(required));
-    }
-    req.principal = principal;
-    return undefined;
-  };
-
-  const authenticateBearer = async (req: FastifyRequest, reply: FastifyReply, token: string | null) => {
-    if (token === null) return rejectWithChallenge(req, reply, publicUrl, authErrors.invalidToken);
-    const resolved: Resolution = await resolveBearerPrincipal(auth, token);
-    if ('failure' in resolved) return reject(reply, resolved.failure);
-    if (resolved.principal === null) return rejectWithChallenge(req, reply, publicUrl, authErrors.invalidToken);
-    return admit(req, reply, resolved.principal);
-  };
-
-  app.addHook('onRequest', async (req, reply) => {
-    if (isPublicRoute(req.routeOptions.url, req.method)) {
-      const verdict = preSessionCsrfVerdict(csrfInput(req, publicUrl));
-      return verdict ? reject(reply, verdict) : undefined;
-    }
-
-    // Decide from the route the router actually matched (it decodes `/%61pi/…` to `/api/…`); the raw path only
-    // for a request no route matched, where the answer is a 404 or a 401 anyway.
-    if (acceptsBearer(req.routeOptions.url ?? pathOf(req.url))) {
-      const credential = credentialOf(req.headers.authorization);
-      if (credential.kind !== 'none') {
-        return authenticateBearer(req, reply, credential.kind === 'bearer' ? credential.token : null);
-      }
-    }
-
-    const resolved = await resolvePrincipal(auth, req);
-    if ('failure' in resolved) return reject(reply, resolved.failure);
-    if (resolved.principal === null) return rejectUnauthenticated(req, reply);
-
-    // Cookie-authenticated, so unsafe methods (including POST /mcp) must come from our own origin.
-    const verdict = csrfVerdict(csrfInput(req, publicUrl));
-    if (verdict) return reject(reply, verdict);
-    return admit(req, reply, resolved.principal);
-  });
+  app.addHook('onRequest', auth.mode === AuthMode.enum.disabled ? admitOwnerOnLoopback : guardRequest(auth));
 };
