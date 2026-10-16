@@ -287,7 +287,7 @@ repo-wide; the rest are enforced as each layer is brought under them):
 
 ### Exhaustive tables instead of big switches
 
-A `switch` of 7 or more cases (`SwitchStatement > SwitchCase:nth-child(7)`, lint) is a lookup in disguise. Write
+A `switch` of 7 or more `case`/`default` labels (`SwitchStatement > SwitchCase:nth-child(7)`, lint) is a lookup in disguise. Write
 the table: the `Record` key type makes the compiler reject a missing key, and the lookup is one line.
 
 ```ts
