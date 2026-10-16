@@ -272,6 +272,74 @@ const sidecar = config.FINTRACK_HTTP
 If there's no genuine runtime-conditional load-avoidance reason, just use a static import — don't
 reach for `import()` to "organize" code or defer work that isn't actually optional.
 
+## Function shape
+
+Small functions with one level of branching read at a glance. The limits below are the targets the
+function-shape series enforces per layer, one PR at a time (the switch-size rule is already a lint error
+repo-wide; the rest are enforced as each layer is brought under them):
+
+| Limit | Value |
+|---|---|
+| Lines per function (blank lines and comments excluded) | 40 |
+| Cyclomatic complexity | 10 |
+| Nesting depth | 3 |
+| Statements per function | 15 |
+
+### Exhaustive tables instead of big switches
+
+A `switch` of 7 or more `case`/`default` labels (`SwitchStatement > SwitchCase:nth-child(7)`, lint) is a lookup in disguise. Write
+the table: the `Record` key type makes the compiler reject a missing key, and the lookup is one line.
+
+```ts
+// ✅ DO — HTTP status as data; a new error code that is not listed fails typecheck
+const HTTP_STATUS = { unknown_account: 404, validation: 422 /* … */ } as const satisfies Record<AppError['code'], number>
+export const httpStatus = (e: AppError): number => HTTP_STATUS[e.code]
+
+// ✅ DO — each formatter receives its own narrowed error
+type Formatters = { [C in AppError['code']]: (e: Extract<AppError, { code: C }>) => string }
+const FORMATTERS: Formatters = { unknown_transaction: (e) => `${e.code}: ${e.id}` /* … */ }
+export const formatAppError = (e: AppError): string => (FORMATTERS[e.code] as (e: AppError) => string)(e)
+
+// ❌ DON'T — 34 `case` labels the compiler only checks through a `never` default
+switch (e.code) { case 'unknown_account': case 'unknown_category': /* … */ return 404 }
+```
+
+The one cast sits at the lookup because TypeScript cannot correlate `e.code` with the handler picked by it;
+the table's own type is what proves every key has a handler of the right shape. Split a long table by family
+(one `satisfies Formatters<…>` sub-table per family, spread into the whole) so no literal spans screens.
+
+### The controller sandwich
+
+A controller is three steps, each one a named call: **gather** (reads, I/O through `deps`), **decide** (one pure
+`logic/` call that returns a plan), **persist** (the plan → `{ persist, response }`). It should read in under ten
+lines; the rules live in the decide step, where they are unit-tested without mocks.
+
+```ts
+// ✅ DO
+export const payBill = (deps: Deps, input: PayBillInput) =>
+  safeTry(async function* () {
+    const facts = yield* gatherPayBillFacts(deps, input)   // gather
+    const plan = yield* planBillPayment(facts)             // decide (pure, logic/)
+    return ok(toOutcome(plan))                             // persist: plan → { persist, response }
+  })
+
+// ❌ DON'T — reads, rules and write-building interleaved in one body
+```
+
+### One named definition per tool / route
+
+Each MCP tool and HTTP route is its own named definition (`const createAccountTool = …`). Its handler only
+parses (`wire/in`), delegates to the controller and translates the result; the module's job is to export the list.
+
+```ts
+// ✅ DO
+const createAccountTool = defineTool({ name, description, schema, handler: (args) => runCreateAccount(args) })
+export const accountTools = [createAccountTool, listAccountsTool]
+
+// ❌ DON'T — a registration function with every handler inlined in its body
+export const registerAccountTools = (server) => { server.tool('create_account', …, async (args) => { /* 60 lines */ }) /* … */ }
+```
+
 ## Fail loudly at boundaries, trust internally
 
 - Validate with zod at every external boundary (HTTP, MCP, DB records). See `docs/code-style.md`.

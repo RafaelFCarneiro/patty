@@ -408,48 +408,36 @@ const onClosed = (state: SignInState): SignInStep => {
   return step(base, CLOSE_PAGE);
 };
 
-/** What happens next, given what was just seen. Total: an observation the state has no use for changes nothing. */
-export const nextStep = (state: SignInState, observation: SignInObservation, config: SignInConfig): SignInStep => {
-  switch (observation.kind) {
-    case O.requested:
-      return onRequested(state, config);
-    case O.ticked:
-      return onTicked(state);
-    case O.login_requested:
-      return onLoginRequested(config);
-    case O.logout_requested:
-      return onLogoutRequested();
-    case O.interrupted:
-      return onInterrupted(state);
-    case O.closed:
-      return onClosed(state);
-    case O.errored:
-      // An unexpected failure (the database is busy, the keychain misbehaves) is "could not check", never a sign-out:
-      // nothing is forgotten or deleted on the strength of an error we did not understand.
-      return tell(state, { kind: P.cannot_verify });
-    case O.credential_checked:
-      return onCredentialChecked(state, observation);
-    case O.saved_loaded:
-      return onSavedLoaded(state, observation, config);
-    case O.saved_unreadable:
-      return step({ kind: S.failed }, present({ kind: P.keychain_unreadable }));
-    case O.saved_cleared:
-      return onSavedCleared(state, observation, config);
-    case O.owner_checked:
-      return onOwnerChecked(state, observation);
-    case O.page_named:
-      return onPageNamed(state, observation, config);
-    case O.page_served:
-      return onPageServed(state, observation, config);
-    case O.grant_started:
-      return onGrantStarted(state, observation, config);
-    case O.grant_failed:
-      return onGrantFailed(state, observation, config);
-    case O.redeemed:
-      return onRedeemed(state, observation, config);
-    case O.saved:
-      return onSaved(state, observation, config);
-    case O.revoked:
-      return onRevoked(state, observation);
-  }
+type ObservationHandlers = {
+  [K in ObservationKind]: (state: SignInState, observation: Observed<K>, config: SignInConfig) => SignInStep;
 };
+
+type ObservationHandler = (state: SignInState, observation: SignInObservation, config: SignInConfig) => SignInStep;
+
+const OBSERVATION_HANDLERS = {
+  [O.requested]: (state, _observation, config) => onRequested(state, config),
+  [O.ticked]: onTicked,
+  [O.login_requested]: (_state, _observation, config) => onLoginRequested(config),
+  [O.logout_requested]: onLogoutRequested,
+  [O.interrupted]: onInterrupted,
+  [O.closed]: onClosed,
+  // An unexpected failure (the database is busy, the keychain misbehaves) is "could not check", never a sign-out:
+  // nothing is forgotten or deleted on the strength of an error we did not understand.
+  [O.errored]: (state) => tell(state, { kind: P.cannot_verify }),
+  [O.credential_checked]: onCredentialChecked,
+  [O.saved_loaded]: onSavedLoaded,
+  [O.saved_unreadable]: () => step({ kind: S.failed }, present({ kind: P.keychain_unreadable })),
+  [O.saved_cleared]: onSavedCleared,
+  [O.owner_checked]: onOwnerChecked,
+  [O.page_named]: onPageNamed,
+  [O.page_served]: onPageServed,
+  [O.grant_started]: onGrantStarted,
+  [O.grant_failed]: onGrantFailed,
+  [O.redeemed]: onRedeemed,
+  [O.saved]: onSaved,
+  [O.revoked]: onRevoked,
+} satisfies ObservationHandlers;
+
+/** What happens next, given what was just seen. Total: an observation the state has no use for changes nothing. */
+export const nextStep = (state: SignInState, observation: SignInObservation, config: SignInConfig): SignInStep =>
+  (OBSERVATION_HANDLERS[observation.kind] as ObservationHandler)(state, observation, config);

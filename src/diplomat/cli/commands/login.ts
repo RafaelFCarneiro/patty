@@ -80,46 +80,36 @@ const EXIT_CODE_OF_STATE: Readonly<Record<SignInStateKind, number>> = {
   [S.cancelled]: EXIT_INTERRUPTED,
 };
 
+type Renderer<K extends PresentationKind> = (io: CliIo, presentation: Extract<Presentation, { kind: K }>) => void;
+
+const renderNothing = (): void => undefined;
+
+const RENDERERS = {
+  [P.auth_disabled]: (io) => io.err(LOGIN_MESSAGES.authDisabled),
+  [P.owner_unclaimed]: (io) => io.err(AUTH_MESSAGES.ownerUnclaimed),
+  [P.open]: (io, presentation) => io.out(LOGIN_MESSAGES.open(presentation.url, presentation.code)),
+  [P.waiting]: (io) => io.out(LOGIN_MESSAGES.waiting),
+  [P.signed_in]: (io, presentation) =>
+    io.out(LOGIN_MESSAGES.signedIn(presentation.profile, presentation.access, presentation.expiresAt)),
+  [P.denied]: (io) => io.err(LOGIN_MESSAGES.denied),
+  [P.expired]: (io) => io.err(LOGIN_MESSAGES.expired),
+  [P.cancelled]: (io) => io.err(LOGIN_MESSAGES.cancelled),
+  [P.failed]: (io, presentation) => io.err(presentation.reason),
+  [P.keychain_refused]: (io) => io.err(LOGIN_MESSAGES.keychainRefused),
+  [P.keychain_refused_still_active]: (io) => io.err(LOGIN_MESSAGES.keychainRefusedAndStillActive),
+  [P.signed_out]: (io, presentation) => io.out(LOGIN_MESSAGES.signedOut(presentation.profile)),
+  [P.not_signed_in]: (io, presentation) => io.out(LOGIN_MESSAGES.notSignedIn(presentation.profile)),
+  [P.keychain_unreadable]: (io) => io.err(CLI_MESSAGES.failure(LOGIN_MESSAGES.keychainUnavailable)),
+  [P.logout_failed]: (io, presentation) => io.err(CLI_MESSAGES.failure(presentation.reason)),
+  [P.granted]: renderNothing,
+  [P.invalid_env_token]: renderNothing,
+  [P.cannot_verify]: renderNothing,
+  [P.instructions]: renderNothing,
+} satisfies { [K in PresentationKind]: Renderer<K> };
+
 /** The terminal lines for what the protocol said. A stdio-only presentation never reaches a terminal. */
-const render = (io: CliIo, presentation: Presentation): void => {
-  switch (presentation.kind) {
-    case P.auth_disabled:
-      return io.err(LOGIN_MESSAGES.authDisabled);
-    case P.owner_unclaimed:
-      return io.err(AUTH_MESSAGES.ownerUnclaimed);
-    case P.open:
-      return io.out(LOGIN_MESSAGES.open(presentation.url, presentation.code));
-    case P.waiting:
-      return io.out(LOGIN_MESSAGES.waiting);
-    case P.signed_in:
-      return io.out(LOGIN_MESSAGES.signedIn(presentation.profile, presentation.access, presentation.expiresAt));
-    case P.denied:
-      return io.err(LOGIN_MESSAGES.denied);
-    case P.expired:
-      return io.err(LOGIN_MESSAGES.expired);
-    case P.cancelled:
-      return io.err(LOGIN_MESSAGES.cancelled);
-    case P.failed:
-      return io.err(presentation.reason);
-    case P.keychain_refused:
-      return io.err(LOGIN_MESSAGES.keychainRefused);
-    case P.keychain_refused_still_active:
-      return io.err(LOGIN_MESSAGES.keychainRefusedAndStillActive);
-    case P.signed_out:
-      return io.out(LOGIN_MESSAGES.signedOut(presentation.profile));
-    case P.not_signed_in:
-      return io.out(LOGIN_MESSAGES.notSignedIn(presentation.profile));
-    case P.keychain_unreadable:
-      return io.err(CLI_MESSAGES.failure(LOGIN_MESSAGES.keychainUnavailable));
-    case P.logout_failed:
-      return io.err(CLI_MESSAGES.failure(presentation.reason));
-    case P.granted:
-    case P.invalid_env_token:
-    case P.cannot_verify:
-    case P.instructions:
-      return undefined;
-  }
-};
+const render = (io: CliIo, presentation: Presentation): void =>
+  (RENDERERS[presentation.kind] as Renderer<PresentationKind>)(io, presentation);
 
 const hooksFor = (io: CliIo, wait: SignInHooks['wait']): SignInHooks => ({
   present: (presentation) => render(io, presentation),

@@ -27,119 +27,125 @@ export type AppError =
   | AuthError
   | Conflict;
 
-export const formatAppError = (e: AppError): string => {
-  switch (e.code) {
-    case 'unknown_account':
-    case 'ambiguous_account':
-    case 'unknown_category':
-    case 'ambiguous_category':
-    case 'unknown_sub_category':
-    case 'ambiguous_sub_category':
-    case 'unknown_card':
-    case 'ambiguous_card':
-    case 'unknown_dashboard':
-    case 'unknown_budget':
-      return `${e.code}: "${e.query}" (candidates: ${e.candidates.join(', ')})`;
-    case 'validation':
-      return `${e.code}: ${e.issues.join(', ')}`;
-    case 'category_kind_mismatch':
-      return `${e.code}: ${e.hint}`;
-    case 'duplicate_name':
-      return `${e.code}: ${e.entity} "${e.name}"`;
-    case 'in_use':
-      return e.entity === 'account'
-        ? `${e.code}: ${e.entity} "${e.name}" (transactions: ${e.references.transactions}, recurring: ${e.references.recurring}, cards: ${e.references.cards})`
-        : `${e.code}: ${e.entity} "${e.name}" (transactions: ${e.references.transactions}, recurring: ${e.references.recurring}, subCategories: ${e.references.subCategories})`;
-    case 'unknown_transaction':
-      return `${e.code}: ${e.id}`;
-    case 'unknown_bill':
-      return `${e.code}: ${e.card} ${e.year}-${String(e.month).padStart(2, '0')}`;
-    case 'not_expense_category':
-      return `${e.code}: "${e.category}" is not an expense-eligible category`;
-    case 'duplicate_budget':
-      return `${e.code}: ${e.category}${e.subCategory ? `/${e.subCategory}` : ''} (${e.currency}, ${e.period})`;
-    case 'conflict':
-      return `${e.code}: concurrent update, please retry`;
-    case 'unauthenticated':
-      return `${e.code}: ${AUTH_MESSAGES.unauthenticated}`;
-    case 'invalid_credentials':
-      return `${e.code}: ${AUTH_MESSAGES.invalidCredentials}`;
-    case 'invalid_setup_code':
-      return `${e.code}: ${AUTH_MESSAGES.invalidSetupCode}`;
-    case 'setup_unavailable':
-      return `${e.code}: ${AUTH_MESSAGES.setupUnavailable}`;
-    case 'unknown_user':
-      return `${e.code}: ${AUTH_MESSAGES.unknownUser} (${e.username})`;
-    case 'owner_unclaimed':
-      return `${e.code}: ${AUTH_MESSAGES.ownerUnclaimed}`;
-    case 'rate_limited':
-      return `${e.code}: ${AUTH_MESSAGES.rateLimited}`;
-    case 'forbidden_origin':
-      return `${e.code}: ${e.hint}`;
-    case 'invalid_token':
-      return `${e.code}: ${AUTH_MESSAGES.invalidToken}`;
-    case 'insufficient_scope':
-      return `${e.code}: ${AUTH_MESSAGES.insufficientScope} (needs ${e.scope})`;
-    case 'unknown_token':
-      return `${e.code}: ${AUTH_MESSAGES.unknownToken} (${e.id})`;
-    case 'resource_metadata_unavailable':
-      return `${e.code}: ${e.hint}`;
-    case 'session_required':
-      return `${e.code}: ${AUTH_MESSAGES.sessionRequired}`;
-    case 'invalid_grant':
-      return `${e.code}: ${AUTH_MESSAGES.invalidGrant}`;
-    default: {
-      const _exhaustive: never = e;
-      throw new Error(`unmapped error code: ${JSON.stringify(_exhaustive)}`);
-    }
-  }
+type ErrorOf<C extends AppError['code']> = Extract<AppError, { code: C }>;
+type Formatters<C extends AppError['code']> = { [K in C]: (e: ErrorOf<K>) => string };
+
+const withCode = (code: AppError['code'], detail: string): string => `${code}: ${detail}`;
+
+const formatCandidates = (e: { code: AppError['code']; query: string; candidates: string[] }): string =>
+  withCode(e.code, `"${e.query}" (candidates: ${e.candidates.join(', ')})`);
+
+const formatHint = (e: { code: AppError['code']; hint: string }): string => withCode(e.code, e.hint);
+
+const formatMessage = (message: string) => (e: { code: AppError['code'] }): string => withCode(e.code, message);
+
+const LOOKUP_FORMATTERS = {
+  unknown_account: formatCandidates,
+  ambiguous_account: formatCandidates,
+  unknown_category: formatCandidates,
+  ambiguous_category: formatCandidates,
+  unknown_sub_category: formatCandidates,
+  ambiguous_sub_category: formatCandidates,
+  unknown_card: formatCandidates,
+  ambiguous_card: formatCandidates,
+  unknown_dashboard: formatCandidates,
+  unknown_budget: formatCandidates,
 };
 
-export const httpStatus = (e: AppError): number => {
-  switch (e.code) {
-    case 'unknown_account':
-    case 'unknown_category':
-    case 'unknown_sub_category':
-    case 'unknown_card':
-    case 'unknown_transaction':
-    case 'unknown_bill':
-    case 'unknown_dashboard':
-    case 'unknown_budget':
-    case 'unknown_token':
-    case 'unknown_user':
-    case 'invalid_grant':
-    case 'resource_metadata_unavailable':
-      return 404;
-    case 'unauthenticated':
-    case 'invalid_credentials':
-    case 'invalid_token':
-      return 401;
-    case 'invalid_setup_code':
-    case 'forbidden_origin':
-    case 'insufficient_scope':
-    case 'session_required':
-      return 403;
-    case 'rate_limited':
-      return 429;
-    case 'ambiguous_account':
-    case 'ambiguous_category':
-    case 'ambiguous_sub_category':
-    case 'ambiguous_card':
-    case 'duplicate_name':
-    case 'duplicate_budget':
-    case 'in_use':
-    case 'conflict':
-    case 'setup_unavailable':
-    case 'owner_unclaimed':
-      return 409;
-    case 'category_kind_mismatch':
-    case 'not_expense_category':
-      return 422;
-    case 'validation':
-      return 422;
-    default: {
-      const _exhaustive: never = e;
-      throw new Error(`unmapped error code: ${JSON.stringify(_exhaustive)}`);
-    }
-  }
+const DOMAIN_FORMATTERS = {
+  validation: (e) => withCode(e.code, e.issues.join(', ')),
+  category_kind_mismatch: formatHint,
+  duplicate_name: (e) => withCode(e.code, `${e.entity} "${e.name}"`),
+  in_use: (e) =>
+    e.entity === 'account'
+      ? `${e.code}: ${e.entity} "${e.name}" (transactions: ${e.references.transactions}, recurring: ${e.references.recurring}, cards: ${e.references.cards})`
+      : `${e.code}: ${e.entity} "${e.name}" (transactions: ${e.references.transactions}, recurring: ${e.references.recurring}, subCategories: ${e.references.subCategories})`,
+  unknown_transaction: (e) => withCode(e.code, e.id),
+  unknown_bill: (e) => withCode(e.code, `${e.card} ${e.year}-${String(e.month).padStart(2, '0')}`),
+  not_expense_category: (e) => withCode(e.code, `"${e.category}" is not an expense-eligible category`),
+  duplicate_budget: (e) =>
+    withCode(e.code, `${e.category}${e.subCategory ? `/${e.subCategory}` : ''} (${e.currency}, ${e.period})`),
+  conflict: formatMessage('concurrent update, please retry'),
+} satisfies Formatters<
+  | 'validation'
+  | 'category_kind_mismatch'
+  | 'duplicate_name'
+  | 'in_use'
+  | 'unknown_transaction'
+  | 'unknown_bill'
+  | 'not_expense_category'
+  | 'duplicate_budget'
+  | 'conflict'
+>;
+
+const AUTH_FORMATTERS = {
+  unauthenticated: formatMessage(AUTH_MESSAGES.unauthenticated),
+  invalid_credentials: formatMessage(AUTH_MESSAGES.invalidCredentials),
+  invalid_setup_code: formatMessage(AUTH_MESSAGES.invalidSetupCode),
+  setup_unavailable: formatMessage(AUTH_MESSAGES.setupUnavailable),
+  unknown_user: (e) => withCode(e.code, `${AUTH_MESSAGES.unknownUser} (${e.username})`),
+  owner_unclaimed: formatMessage(AUTH_MESSAGES.ownerUnclaimed),
+  rate_limited: formatMessage(AUTH_MESSAGES.rateLimited),
+  forbidden_origin: formatHint,
+  invalid_token: formatMessage(AUTH_MESSAGES.invalidToken),
+  insufficient_scope: (e) => withCode(e.code, `${AUTH_MESSAGES.insufficientScope} (needs ${e.scope})`),
+  unknown_token: (e) => withCode(e.code, `${AUTH_MESSAGES.unknownToken} (${e.id})`),
+  resource_metadata_unavailable: formatHint,
+  session_required: formatMessage(AUTH_MESSAGES.sessionRequired),
+  invalid_grant: formatMessage(AUTH_MESSAGES.invalidGrant),
+} satisfies Formatters<AuthError['code']>;
+
+const FORMATTERS: Formatters<AppError['code']> = {
+  ...LOOKUP_FORMATTERS,
+  ...DOMAIN_FORMATTERS,
+  ...AUTH_FORMATTERS,
 };
+
+export const formatAppError = (e: AppError): string => (FORMATTERS[e.code] as (e: AppError) => string)(e);
+
+const STATUS = {
+  notFound: 404,
+  unauthorized: 401,
+  forbidden: 403,
+  tooManyRequests: 429,
+  conflict: 409,
+  unprocessable: 422,
+} as const;
+
+const HTTP_STATUS = {
+  unknown_account: STATUS.notFound,
+  unknown_category: STATUS.notFound,
+  unknown_sub_category: STATUS.notFound,
+  unknown_card: STATUS.notFound,
+  unknown_transaction: STATUS.notFound,
+  unknown_bill: STATUS.notFound,
+  unknown_dashboard: STATUS.notFound,
+  unknown_budget: STATUS.notFound,
+  unknown_token: STATUS.notFound,
+  unknown_user: STATUS.notFound,
+  invalid_grant: STATUS.notFound,
+  resource_metadata_unavailable: STATUS.notFound,
+  unauthenticated: STATUS.unauthorized,
+  invalid_credentials: STATUS.unauthorized,
+  invalid_token: STATUS.unauthorized,
+  invalid_setup_code: STATUS.forbidden,
+  forbidden_origin: STATUS.forbidden,
+  insufficient_scope: STATUS.forbidden,
+  session_required: STATUS.forbidden,
+  rate_limited: STATUS.tooManyRequests,
+  ambiguous_account: STATUS.conflict,
+  ambiguous_category: STATUS.conflict,
+  ambiguous_sub_category: STATUS.conflict,
+  ambiguous_card: STATUS.conflict,
+  duplicate_name: STATUS.conflict,
+  duplicate_budget: STATUS.conflict,
+  in_use: STATUS.conflict,
+  conflict: STATUS.conflict,
+  setup_unavailable: STATUS.conflict,
+  owner_unclaimed: STATUS.conflict,
+  category_kind_mismatch: STATUS.unprocessable,
+  not_expense_category: STATUS.unprocessable,
+  validation: STATUS.unprocessable,
+} as const satisfies Record<AppError['code'], number>;
+
+export const httpStatus = (e: AppError): number => HTTP_STATUS[e.code];
