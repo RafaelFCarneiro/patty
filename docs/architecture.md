@@ -695,7 +695,7 @@ The same document is exposed as the MCP resource `fintrack://openapi` (`diplomat
 
 ## Guided-workflow prompts (Feature Design 019)
 
-The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement` — text and definitions in `diplomat/mcp/prompts.ts`'s `registerPrompts`, called from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome; no DB access, no controller.
+The MCP surface also includes `server.registerPrompt` templates (`monthly_review`, `budget_checkup`, `import_statement` — text and definitions in `diplomat/mcp/prompts.ts`'s `promptDefinitions`, registered by `registerDefinitions` from `buildMcpServer`): orchestration prose, not a new data path. Each returns a `{ messages }` result instructing the model which existing tools to call and how to narrate the outcome; no DB access, no controller.
 
 ## Dashboards / `/ui` surface (ADR-013, ADR-027)
 

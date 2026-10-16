@@ -46,6 +46,7 @@ const setExchangeRatesTool = defineTool({
     description: setExchangeRatesDescription,
     inputSchema: SetExchangeRatesSchema.shape,
   },
+  // Orchestration (plan → run each item → bulk result) that belongs in a controller; kept as one named step here.
   handle: async (args, { deps, runEffectsSequence }) => {
     const outcomes = await runEffectsSequence(
       args.rates,

@@ -91,6 +91,7 @@ const importAccountStatementTool = defineTool({
     description: importAccountStatementDescription,
     inputSchema: ImportAccountStatementSchema.shape,
   },
+  // Orchestration (plan → run each item → bulk result) that belongs in a controller; kept as one named step here.
   handle: async (args, { deps, runEffectsSequence }) => {
     const model = accountAdapters.importAccountStatementWireInToModel(args);
     const plan = await importAccountStatement(deps, model, TransactionSource.enum.import);

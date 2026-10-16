@@ -46,6 +46,7 @@ const setExchangeRatesRoute: RouteDefinition = {
   summary: 'Set exchange rates (bulk upsert, partial success)',
   request: { body: jsonBody(SetExchangeRatesSchema) },
   responses: { 200: okResponse('Bulk upsert result', BulkSetExchangeRatesOut), 422: validation422 },
+  // Orchestration (plan → run each item → bulk result) that belongs in a controller; kept as one named step here.
   handler: async (req, reply, scope) => {
     const { deps, runEffectsSequence } = scope();
     const input = parse(SetExchangeRatesSchema, req.body, reply);

@@ -56,6 +56,7 @@ const importCardStatementTool = defineTool({
     description: importCardStatementDescription,
     inputSchema: ImportCardStatementSchema.shape,
   },
+  // Orchestration (plan → run each item → bulk result) that belongs in a controller; kept as one named step here.
   handle: async (args, { deps, runEffectsSequence }) => {
     const plan = await importCardStatement(deps, importCardStatementWireInToModel(args), TransactionSource.enum.import);
     const outcomes = await runEffectsSequence(
